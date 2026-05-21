@@ -73,7 +73,7 @@ jobs:
       RATE_LIMIT_WINDOW_MS: 60000
       RUN_DB_TESTS: 1
       RUN_REDIS_TESTS: 1
-      USE_LOCAL_TEST_DATABASE: 'true'
+      USE_LOCAL_TEST_DATABASE: 'false'
       ENABLE_MCP_SERVER: 'true'
 
     steps:
