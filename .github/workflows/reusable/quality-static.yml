@@ -54,8 +54,10 @@ jobs:
       - name: Outbound contract tests (nock, offline)
         run: pnpm test:contract
 
-      # Property tests run in the `fast` shard of reusable/test-with-db.yml.
-      # Keep them out of this static slice to avoid duplicate work on every PR.
+      - name: Property tests (bounded)
+        env:
+          FAST_CHECK_NUM_RUNS: 50
+        run: pnpm test:property
 
       - name: Route catalog in sync
         run: pnpm routes:catalog:check
