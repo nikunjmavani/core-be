@@ -28,9 +28,19 @@ jobs:
           set -euo pipefail
           BEFORE="${{ github.event.before }}"
           AFTER="${{ github.sha }}"
+
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-            FIRST="$(git rev-list --max-parents=0 HEAD)"
-            pnpm exec commitlint --from "$FIRST" --to "$AFTER" --verbose
+            COMMITS="$(git rev-list --first-parent --reverse "$AFTER")"
           else
-            pnpm exec commitlint --from "$BEFORE" --to "$AFTER" --verbose
+            COMMITS="$(git rev-list --first-parent --reverse "$BEFORE..$AFTER")"
           fi
+
+          if [ -z "$COMMITS" ]; then
+            echo "No first-parent commits to lint."
+            exit 0
+          fi
+
+          for COMMIT in $COMMITS; do
+            echo "Linting commit $COMMIT"
+            git log -1 --format=%B "$COMMIT" | pnpm exec commitlint --verbose
+          done

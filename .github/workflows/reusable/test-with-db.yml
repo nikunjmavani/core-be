@@ -92,7 +92,7 @@ jobs:
           retention-days: 14
 
       - name: Send test result email
-        if: always() && secrets.RESEND_API_KEY != '' && secrets.TEST_REPORT_EMAIL_TO != ''
+        if: always() && env.RESEND_API_KEY != '' && env.TEST_REPORT_EMAIL_TO != ''
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           TEST_REPORT_EMAIL_TO: ${{ secrets.TEST_REPORT_EMAIL_TO }}
