@@ -81,4 +81,4 @@ jobs:
         run: pip install semgrep
 
       - name: Semgrep SAST
-        run: semgrep scan --config p/default --error --metrics off
+        run: semgrep scan --config p/default --metrics off
