@@ -45,6 +45,7 @@ Postgres schema changes require **both** a co-located Drizzle `*.schema.ts` and 
    pnpm typecheck
    ```
 7. **Seeds**: if new tables need reference/demo data, invoke **seed-maintainer**.
+8. **DBML diagram** (`docs/database/core-be.dbml`): regenerated automatically by the local `.husky/pre-commit` hook whenever `migrations/*.sql` is staged (`pnpm tool:generate-dbdiagram` → `git add`). The diagram captures columns, primary keys, foreign keys (with `ON DELETE` actions), unique constraints, RLS rules, and partitioning. It is **local only** — no CI check enforces it. Run `pnpm tool:generate-dbdiagram` manually if you want to preview the output before committing.
 
 ## Drizzle Kit (optional)
 

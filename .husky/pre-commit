@@ -9,12 +9,9 @@ pnpm typecheck
 # 3. Domain structure (canonical layout, routes)
 pnpm validate:domain
 
-# 4. Route catalog + registry (regenerate when route sources change)
-STAGED_ROUTES=$(git diff --cached --name-only -- 'src/domains/**/*.routes.ts' || true)
-if [ -n "$STAGED_ROUTES" ]; then
-  pnpm routes:catalog
-  git add docs/routes.txt
-fi
+# 4. Route catalog + registry (always regenerate locally before commit)
+pnpm routes:catalog
+git add docs/routes.txt
 pnpm routes:catalog:check
 
 # 4b. OpenAPI + Postman drift (when route or OpenAPI generator inputs change)
@@ -33,6 +30,12 @@ fi
 STAGED_MIGRATION_SQL=$(git diff --cached --name-only | grep -E '^migrations/.*\.sql$' || true)
 if [ -n "$STAGED_MIGRATION_SQL" ]; then
   pnpm db:migrate:lint
+fi
+
+# 5b. Regenerate docs/database/core-be.dbml from migrations/*.sql (local only — not enforced in CI)
+if [ -n "$STAGED_MIGRATION_SQL" ]; then
+  pnpm tool:generate-dbdiagram
+  git add docs/database/core-be.dbml
 fi
 
 # 6. Env example in sync with schema (same as CI; report-only, no --fix)

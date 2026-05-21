@@ -2,6 +2,14 @@
 /**
  * Generates docs/database/core-be.dbml (dbdiagram.io / DBML) by replaying migrations/*.sql in order.
  *
+ * Captured artifacts:
+ *  - Columns (name, type, nullability, identity/auto-increment)
+ *  - Primary keys (inline single-column, inline composite via CONSTRAINT, ALTER TABLE ADD PRIMARY KEY)
+ *  - Foreign keys (inline REFERENCES, ALTER TABLE ADD CONSTRAINT ... FOREIGN KEY ... REFERENCES ...)
+ *  - Unique constraints (inline UNIQUE on a single column, inline CONSTRAINT ... UNIQUE (col))
+ *  - Row-level security (ENABLE / FORCE ROW LEVEL SECURITY, CREATE POLICY)
+ *  - Partitioning (PARTITION BY RANGE (col))
+ *
  * DBML reference: https://dbml.dbdiagram.io/docs
  * Import file at: https://dbdiagram.io/
  *
@@ -104,7 +112,9 @@ function parseColumnDefinitionLine(line: string): {
     lower.startsWith('constraint ') ||
     lower.startsWith('primary key') ||
     lower.startsWith('unique (') ||
+    lower.startsWith('unique(') ||
     lower.startsWith('check ') ||
+    lower.startsWith('foreign key') ||
     lower === ')' ||
     lower.startsWith('like ')
   ) {
@@ -175,6 +185,13 @@ function getOrCreateTable(schema: string, table: string): TableDefinition {
   return existing;
 }
 
+function parseColumnNameList(rawList: string): string[] {
+  return rawList
+    .split(',')
+    .map((column) => column.trim().replaceAll('"', ''))
+    .filter(Boolean);
+}
+
 function applyCreateTableBody(schema: string, table: string, body: string): void {
   const tableDefinition = getOrCreateTable(schema, table);
   for (const line of body.split('\n')) {
@@ -188,6 +205,40 @@ function applyCreateTableBody(schema: string, table: string, body: string): void
       });
     }
   }
+
+  // Inline composite primary key, both with and without the CONSTRAINT keyword:
+  //   CONSTRAINT pk_role_permissions PRIMARY KEY ("role_id","permission_code")
+  //   PRIMARY KEY ("id","created_at")
+  const inlinePrimaryKeyPattern =
+    /(?:constraint\s+"?[a-z_][a-z0-9_]*"?\s+)?primary\s+key\s*\(\s*([^)]+)\s*\)/gi;
+  let primaryKeyMatch: RegExpExecArray | null;
+  while ((primaryKeyMatch = inlinePrimaryKeyPattern.exec(body)) !== null) {
+    if (!primaryKeyMatch[1]) continue;
+    const columns = parseColumnNameList(primaryKeyMatch[1]);
+    if (columns.length === 0) continue;
+    // Skip the inline column-level "PRIMARY KEY" already captured during column parsing.
+    if (columns.length === 1 && tableDefinition.columns.get(columns[0] ?? '')?.primaryKey) {
+      continue;
+    }
+    tableDefinition.compositePrimaryKey = columns;
+  }
+
+  // Inline UNIQUE constraints (single-column form only):
+  //   CONSTRAINT sessions_public_id_unique UNIQUE("public_id")
+  //   UNIQUE("token_hash")
+  const inlineUniquePattern =
+    /(?:constraint\s+"?[a-z_][a-z0-9_]*"?\s+)?unique\s*\(\s*([^)]+)\s*\)/gi;
+  let uniqueMatch: RegExpExecArray | null;
+  while ((uniqueMatch = inlineUniquePattern.exec(body)) !== null) {
+    if (!uniqueMatch[1]) continue;
+    const columns = parseColumnNameList(uniqueMatch[1]);
+    if (columns.length !== 1) continue;
+    const columnName = columns[0];
+    if (!columnName) continue;
+    const column = tableDefinition.columns.get(columnName);
+    if (column) column.unique = true;
+  }
+
   const partitionMatch = body.match(/partition\s+by\s+range\s*\(\s*([a-z_]+)\s*\)/i);
   if (partitionMatch?.[1]) {
     tableDefinition.partitionedBy = partitionMatch[1];
@@ -250,8 +301,10 @@ function processMigrationSql(sql: string): void {
     }
   }
 
+  // ALTER TABLE schema.table ADD PRIMARY KEY (col1, col2)
+  // ALTER TABLE schema.table ADD CONSTRAINT name PRIMARY KEY (col1, col2)
   const compositePrimaryKeyPattern =
-    /alter\s+table\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s+add\s+primary\s+key\s*\(\s*([^)]+)\s*\)/gi;
+    /alter\s+table\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s+add\s+(?:constraint\s+"?[a-z_][a-z0-9_]*"?\s+)?primary\s+key\s*\(\s*([^)]+)\s*\)/gi;
   let compositePrimaryKeyMatch: RegExpExecArray | null;
   while ((compositePrimaryKeyMatch = compositePrimaryKeyPattern.exec(sql)) !== null) {
     if (
@@ -265,10 +318,51 @@ function processMigrationSql(sql: string): void {
       compositePrimaryKeyMatch[1],
       compositePrimaryKeyMatch[2],
     );
-    tableDefinition.compositePrimaryKey = compositePrimaryKeyMatch[3]
-      .split(',')
-      .map((column) => column.trim().replaceAll('"', ''))
-      .filter(Boolean);
+    tableDefinition.compositePrimaryKey = parseColumnNameList(compositePrimaryKeyMatch[3]);
+  }
+
+  // ALTER TABLE schema.table ADD CONSTRAINT name FOREIGN KEY (col)
+  //   REFERENCES schema.table (col) [ON DELETE action] [ON UPDATE action];
+  // Drizzle Kit emits this form for every relation; the inline `REFERENCES` form is rare here.
+  const alterForeignKeyPattern =
+    /alter\s+table\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s+add\s+(?:constraint\s+"?[a-z_][a-z0-9_]*"?\s+)?foreign\s+key\s*\(\s*"?([a-z_][a-z0-9_]*)"?\s*\)\s+references\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s*\(\s*"?([a-z_][a-z0-9_]*)"?\s*\)([^;]*);/gi;
+  let alterForeignKeyMatch: RegExpExecArray | null;
+  while ((alterForeignKeyMatch = alterForeignKeyPattern.exec(sql)) !== null) {
+    const sourceSchema = alterForeignKeyMatch[1];
+    const sourceTable = alterForeignKeyMatch[2];
+    const sourceColumn = alterForeignKeyMatch[3];
+    const targetSchema = alterForeignKeyMatch[4];
+    const targetTable = alterForeignKeyMatch[5];
+    const targetColumn = alterForeignKeyMatch[6];
+    const remainder = alterForeignKeyMatch[7] ?? '';
+    if (
+      !sourceSchema ||
+      !sourceTable ||
+      !sourceColumn ||
+      !targetSchema ||
+      !targetTable ||
+      !targetColumn
+    ) {
+      continue;
+    }
+    const reference: ForeignKeyReference = { targetSchema, targetTable, targetColumn };
+    const onDeleteMatch = remainder.match(
+      /on\s+delete\s+(cascade|restrict|no\s+action|set\s+null|set\s+default)/i,
+    );
+    if (onDeleteMatch?.[1]) {
+      reference.onDelete = onDeleteMatch[1].toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+    const tableDefinition = getOrCreateTable(sourceSchema, sourceTable);
+    const isDuplicate = tableDefinition.foreignKeys.some(
+      (existing) =>
+        existing.column === sourceColumn &&
+        existing.reference.targetSchema === targetSchema &&
+        existing.reference.targetTable === targetTable &&
+        existing.reference.targetColumn === targetColumn,
+    );
+    if (!isDuplicate) {
+      tableDefinition.foreignKeys.push({ column: sourceColumn, reference });
+    }
   }
 
   const partitionPattern =
@@ -350,6 +444,7 @@ function renderDbml(): string {
   const lines: string[] = [
     '// Generated by pnpm tool:generate-dbdiagram — do not edit by hand',
     '// Replay of migrations/*.sql in filename order (cumulative schema).',
+    '// Captures: columns, primary keys, foreign keys (Ref:), unique constraints, RLS rules, partitioning.',
     '// Import at https://dbdiagram.io (DBML): https://dbml.dbdiagram.io/docs',
     '',
     'Project core_be {',
@@ -453,8 +548,12 @@ async function main(): Promise<void> {
   await mkdir(path.dirname(OUTPUT_PATH), { recursive: true });
   const dbml = renderDbml();
   await writeFile(OUTPUT_PATH, dbml, 'utf8');
+  const foreignKeyCount = [...tables.values()].reduce(
+    (total, definition) => total + definition.foreignKeys.length,
+    0,
+  );
   console.log(
-    `Wrote ${OUTPUT_PATH} (${tables.size} tables from ${migrationFiles.length} migrations)`,
+    `Wrote ${OUTPUT_PATH} (${tables.size} tables, ${foreignKeyCount} foreign keys from ${migrationFiles.length} migrations)`,
   );
 }
 
