@@ -84,7 +84,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=core-be-worker
 
       - name: Scan API image with Trivy
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@v0.34.0
         with:
           image-ref: core-be:ci
           format: table
@@ -93,7 +93,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Scan worker image with Trivy
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@v0.34.0
         with:
           image-ref: core-be-worker:ci
           format: table
@@ -157,9 +157,12 @@ jobs:
             -e DATABASE_URL="$DATABASE_URL" \
             -e REDIS_URL="$REDIS_URL" \
             -e JWT_SECRET=test-jwt-secret-min-32-chars-xxxxxxxx \
+            -e JWT_PRIVATE_KEY=test-private-key \
+            -e JWT_PUBLIC_KEY=test-public-key \
             -e ALLOWED_ORIGINS=http://localhost:3000 \
             -e AUDIT_RETENTION_DAYS=90 \
             -e AUTH_SESSION_RETENTION_DAYS=30 \
+            -e SECRETS_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 \
             core-be:ci
           timeout 90 bash -c 'until curl -sf http://localhost:3000/health/ready; do sleep 2; done'
           docker logs core-be-health --tail 50
