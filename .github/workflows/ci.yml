@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   changes:
@@ -46,8 +47,8 @@ jobs:
               - 'vitest.chaos.config.ts'
               - 'vitest.contract.config.ts'
               - 'tooling/**'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/reusable/**'
+              - '.github/actions/**'
+              - '.github/workflows/**'
             docker:
               - 'Dockerfile'
               - 'Dockerfile.worker'
@@ -70,6 +71,7 @@ jobs:
       always() &&
       (needs.changes.outputs.docs-only != 'true' || github.event_name == 'push')
     uses: ./.github/workflows/reusable/quality-static.yml
+    secrets: inherit
 
   test:
     name: Test (Postgres + Redis)
@@ -107,7 +109,7 @@ jobs:
     if: |
       always() &&
       needs.quality.result == 'success' &&
-      (needs.changes.outputs.docker == 'true' || github.event_name == 'push')
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docker == 'true' || github.event_name == 'push')
     uses: ./.github/workflows/reusable/docker-build-verify.yml
     secrets: inherit
 

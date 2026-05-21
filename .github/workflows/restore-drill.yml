@@ -44,7 +44,6 @@ jobs:
   restore-integration:
     name: Restore branch — migrate and integration smoke
     needs: checklist
-    if: ${{ secrets.NEON_DRILL_DATABASE_URL != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -70,19 +69,23 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node and pnpm
+        if: env.NEON_DRILL_DATABASE_URL != ''
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Mark restore window start
+        if: env.NEON_DRILL_DATABASE_URL != ''
         run: echo "RESTORE_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Run migrations on restored branch
+        if: env.NEON_DRILL_DATABASE_URL != ''
         run: pnpm db:migrate
 
       - name: Integration smoke on restored database
+        if: env.NEON_DRILL_DATABASE_URL != ''
         run: pnpm test:integration -- --run src/domains/auth/__tests__/integration/auth.integration.test.ts
 
       - name: Record restore duration and assert RTO
-        if: always()
+        if: always() && env.NEON_DRILL_DATABASE_URL != ''
         run: |
           set -euo pipefail
           restore_end_epoch=$(date +%s)
