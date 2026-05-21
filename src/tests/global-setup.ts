@@ -15,6 +15,11 @@ export default async function globalSetup(): Promise<void> {
     return;
   }
 
+  /** fast-check property slice — pure validators, no DB. See `pnpm test:property`. */
+  if (process.env.PROPERTY_TESTS_ONLY === 'true') {
+    return;
+  }
+
   if (process.env.USE_LOCAL_TEST_DATABASE === 'true') {
     process.env.DATABASE_URL =
       process.env.TEST_DATABASE_URL ?? 'postgresql://core:core@localhost:5432/core';
