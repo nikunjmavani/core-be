@@ -45,7 +45,7 @@ export interface EnvironmentVariables {
   RATE_LIMIT_MAX: string;
   RATE_LIMIT_WINDOW_MS: string;
   AUDIT_RETENTION_DAYS: string;
-  SESSION_RETENTION_DAYS: string;
+  AUTH_SESSION_RETENTION_DAYS: string;
   TOMBSTONE_RETENTION_DAYS?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM_ADDRESS?: string;

@@ -12,12 +12,14 @@ vi.mock('@/shared/config/env.config.js', () => ({
   env: {
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
-    SESSION_MAX_AGE_DAYS: 7,
+    AUTH_SESSION_MAX_AGE_DAYS: 7,
+    COOKIE_SECURE: false,
   },
   getEnv: () => ({
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
-    SESSION_MAX_AGE_DAYS: 7,
+    AUTH_SESSION_MAX_AGE_DAYS: 7,
+    COOKIE_SECURE: false,
   }),
 }));
 
@@ -398,10 +400,10 @@ describe('createAuthController', () => {
     expect(responsePayload.data).toHaveProperty('message');
   });
 
-  it('login uses secure session cookies in production', async () => {
+  it('login uses secure session cookies when COOKIE_SECURE is enabled', async () => {
     const { env } = await import('@/shared/config/env.config.js');
-    const previousNodeEnvironment = env.NODE_ENV;
-    Object.assign(env, { NODE_ENV: 'production' });
+    const previousCookieSecure = env.COOKIE_SECURE;
+    Object.assign(env, { COOKIE_SECURE: true });
     const reply = mockReply();
     await controller.login(
       mockRequest({ body: { email: 'a@b.com', password: 'pass' }, ip: undefined }),
@@ -412,7 +414,7 @@ describe('createAuthController', () => {
       expect.any(String),
       expect.objectContaining({ secure: true }),
     );
-    Object.assign(env, { NODE_ENV: previousNodeEnvironment });
+    Object.assign(env, { COOKIE_SECURE: previousCookieSecure });
   });
 
   it('oauthRedirect uses i18next fallback when request.t is absent', async () => {

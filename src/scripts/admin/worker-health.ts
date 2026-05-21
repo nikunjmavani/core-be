@@ -6,7 +6,7 @@
 import '@/shared/config/load-env-files.js';
 import { env } from '@/shared/config/env.config.js';
 
-const healthHost = env.HOST === '0.0.0.0' ? '127.0.0.1' : env.HOST;
+const healthHost = env.HTTP_BIND_HOST === '0.0.0.0' ? '127.0.0.1' : env.HTTP_BIND_HOST;
 const liveProbeUrl = `http://${healthHost}:${String(env.WORKER_HEALTH_PORT)}/health/live`;
 
 try {

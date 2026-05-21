@@ -56,7 +56,7 @@ Only after both confirms will provisioning run. You can abort at any time.
 | **Railway**                       | [railway.app → Tokens](https://railway.app/account/tokens)                                                                                                                                                                      | `RAILWAY_TOKEN`                                          |
 | **Postman**                       | [Postman → API Keys](https://go.postman.co/settings/me/api-keys), [Workspaces](https://go.postman.co/workspaces)                                                                                                                | `POSTMAN_API_KEY`, `POSTMAN_WORKSPACE_ID`                |
 
-`<env>` = `dev`, `qa`, or `prod` (per environment).
+`<env>` = `development` or `production` (full names — short aliases `dev`/`prod` are also accepted by setup tooling).
 
 ---
 

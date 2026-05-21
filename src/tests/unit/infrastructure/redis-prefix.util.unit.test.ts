@@ -19,7 +19,7 @@ describe('resolveRedisKeyPrefix', () => {
   });
 
   it('uses REDIS_KEY_PREFIX override and ensures trailing colon', () => {
-    process.env.REDIS_KEY_PREFIX = 'myapp:qa';
-    expect(resolveRedisKeyPrefix()).toBe('myapp:qa:');
+    process.env.REDIS_KEY_PREFIX = 'myapp:development';
+    expect(resolveRedisKeyPrefix()).toBe('myapp:development:');
   });
 });

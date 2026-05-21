@@ -27,12 +27,13 @@ Single reference for local setup, Git workflow, and testing. **Want one document
 
 ```mermaid
 flowchart LR
-  A[Clone and pnpm install] --> B[Copy .env.example to .env]
-  B --> C[Start Postgres and Redis]
-  C --> D[pnpm db:migrate]
-  D --> E[Optional: pnpm db:seed or db:seed:full]
-  E --> F[pnpm dev]
-  E --> G[pnpm dev:worker]
+  A[Clone and pnpm install] --> B[pnpm env:init]
+  B --> C[Edit .env.development]
+  C --> D[Start Postgres and Redis]
+  D --> E[pnpm db:migrate]
+  E --> F[Optional: pnpm db:seed or db:seed:full]
+  F --> G[pnpm dev]
+  F --> H[pnpm dev:worker]
 ```
 
 ### 1.1 Clone and install
@@ -45,15 +46,35 @@ pnpm install
 
 ### 1.2 Environment variables
 
-Env files live at **project root only** (no `env/` directory). Copy the example and edit locally:
+Env files live at **project root only**. There is exactly one committed
+template — `.env.example` — and one gitignored file per environment created
+by `pnpm env:init`:
 
 ```bash
-cp .env.example .env
-# Optional: overrides (secrets) — same keys as .env; wins over .env at runtime
-cp .env.local.example .env.local
+pnpm env:init                       # creates .env.development + .env.production
+$EDITOR .env.development            # fill in real values
 ```
 
-Set at least: **DATABASE_URL**, **REDIS_URL**, **JWT_SECRET** (min 32 chars). See [.env.example](../../.env.example), [.env.local.example](../../.env.local.example), and [credentials-and-env.md](../integrations/credentials-and-env.md) for optional services. Committed templates: `.env.example`, `.env.local.example`. Gitignored: `.env`, `.env.local`.
+`.env.example` is split into two top-level halves (`# GitHub Secrets ###`,
+`# GitHub Variables ###`). The section a key sits in IS its classification —
+`pnpm env:sync <environment>` later pushes each half to the matching GitHub
+Environment via `gh secret set` or `gh api .../variables`. See
+[environment-variables.md](../deployment/runbooks/environment-variables.md)
+for the full lifecycle, and [credentials-and-env.md](../integrations/credentials-and-env.md)
+for per-provider credential acquisition.
+
+Set at least: **DATABASE_URL**, **REDIS_URL**, **JWT_SECRET** (min 32 chars),
+**SECRETS_ENCRYPTION_KEY** (64 hex chars), **JWT_PRIVATE_KEY** /
+**JWT_PUBLIC_KEY** (RS256 PEM pair). The runtime loader
+(`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV}` — defaults
+to `.env.development` when `NODE_ENV` is unset, with a safety-net fallback
+to `.env.development` for `NODE_ENV=test`.
+
+| File               | Status         | Purpose                                                                          |
+| ------------------ | -------------- | -------------------------------------------------------------------------------- |
+| `.env.example`     | committed      | Single template; every schema key lives here under the right half + sub-section. |
+| `.env.development` | **gitignored** | Local + dev-environment values; source of truth for `pnpm env:sync development`. |
+| `.env.production`  | **gitignored** | Production values; source of truth for `pnpm env:sync production`.               |
 
 ### 1.3 Database and Redis
 
@@ -101,7 +122,7 @@ Typical local `.env`: `NODE_ENV=local`, `LOG_LEVEL=debug`, `ALLOWED_ORIGINS=http
 
 ## 2. Git workflow and branch strategy
 
-Long-lived branches: **`dev`** → **`qa`** → **`main`**. Short-lived branches use `feature/`, `fix/`, `hotfix/`, etc. (from `dev`, except hotfixes from `main`).
+Long-lived branches: **`dev`** → **`main`**. Short-lived branches use `feature/`, `fix/`, `hotfix/`, etc. (from `dev`, except hotfixes from `main`).
 
 **Full detail** (branch naming, PR flow, hotfixes, protected branches): **[git-workflow.md](../process/git-workflow.md)**.
 
@@ -142,7 +163,7 @@ Full k6 scenarios: [load-testing.md](../reference/testing/load-testing.md) and [
 That document includes:
 
 - What runs in CI (quality, test, API smoke, security, chaos, Docker, docs, PR checks)
-- Branch-to-environment mapping (dev → development, qa → QA, main → production)
+- Branch-to-environment mapping (dev → development, main → production)
 - Deploy flow (validate → build → GitHub env → Railway)
 - **Where you need which token** (local `.env`, GitHub environment secrets, Railway)
 - First-time setup checklist

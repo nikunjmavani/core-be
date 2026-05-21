@@ -12,6 +12,12 @@ const environmentSchema = z.object({
   name: z.string().min(1),
   label: z.string().min(1),
   nodeEnvironment: z.enum(['development', 'production']),
+  // `branch` is the git branch whose pushes deploy to this environment.
+  // `protected` mirrors the GitHub branch-protection status used by deploy
+  // gates (`development` and `production` are protected by default;
+  // ephemeral / preview environments may set `protected: false`).
+  branch: z.string().min(1),
+  protected: z.boolean(),
   isDefault: z.boolean().optional(),
 });
 

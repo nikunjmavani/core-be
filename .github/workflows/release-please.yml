@@ -1,13 +1,23 @@
 # Release-please: conventional commits → release PR (CHANGELOG + version bump) → merge → GitHub Release + tag.
 # Uses the maintained googleapis/release-please-action (see https://github.com/googleapis/release-please).
-# Runs on push to main. Use RELEASE_PLEASE_TOKEN (PAT) so merging the release PR triggers CI.
+#
+# Two release channels — each tracks its own version via a dedicated manifest so they never collide:
+#   - main (production): stable releases (e.g. v2.1.0).
+#                        Config: .release-please-config.json, manifest: .release-please-manifest.json.
+#   - dev (development): pre-releases (e.g. v2.1.0-dev.0) — `prerelease: true` + `prerelease-type: dev`.
+#                        Config: .release-please-config.dev.json, manifest: .release-please-manifest-dev.json.
+#
+# GitHub Releases (both stable and prerelease) emit a `release: published` event that triggers
+# release-sbom.yml, so dev pre-releases also get a CycloneDX SBOM attached.
+#
+# Uses RELEASE_PLEASE_TOKEN (PAT) so merging the release PR triggers downstream CI.
 # See docs/deployment/ci-cd/cicd-and-deployment.md (§4 Release and versioning).
 
 name: Release Please
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 permissions:
   contents: write
@@ -16,13 +26,23 @@ permissions:
 
 jobs:
   release-please:
-    name: Release Please
+    name: Release Please (${{ github.ref_name }})
     runs-on: ubuntu-latest
     steps:
-      - name: Run release-please
-        id: release
+      - name: Run release-please (main — stable)
+        if: github.ref_name == 'main'
         uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          target-branch: main
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - name: Run release-please (dev — prerelease)
+        if: github.ref_name == 'dev'
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          target-branch: dev
+          config-file: .release-please-config.dev.json
+          manifest-file: .release-please-manifest-dev.json

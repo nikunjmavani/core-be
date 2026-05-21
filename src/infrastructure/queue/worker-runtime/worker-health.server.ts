@@ -42,7 +42,7 @@ function resolveAuthorizationHeader(
 function authorizeMetricsRequest(authorizationHeader: string | string[] | undefined): boolean {
   const resolvedAuthorizationHeader = resolveAuthorizationHeader(authorizationHeader);
   const environment = getEnv();
-  const bearerToken = environment.METRICS_BEARER_TOKEN;
+  const bearerToken = environment.METRICS_SCRAPE_TOKEN;
   if (environment.NODE_ENV === 'production' && environment.METRICS_ENABLED) {
     return Boolean(bearerToken && isBearerTokenValid(resolvedAuthorizationHeader, bearerToken));
   }
@@ -168,10 +168,10 @@ export async function startWorkerHealthServer(): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     healthServer?.once('error', reject);
-    healthServer?.listen(port, env.HOST, () => resolve());
+    healthServer?.listen(port, env.HTTP_BIND_HOST, () => resolve());
   });
 
-  logger.info({ port, host: env.HOST }, 'worker.health.server.started');
+  logger.info({ port, host: env.HTTP_BIND_HOST }, 'worker.health.server.started');
 }
 
 export async function stopWorkerHealthServer(): Promise<void> {

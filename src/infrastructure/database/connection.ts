@@ -21,26 +21,28 @@ export function isNeonPoolerConnection(databaseUrl: string): boolean {
 export function buildPostgresOptions(databaseUrl: string) {
   const sslMode = parseSslMode(databaseUrl);
   const strictVerification =
-    sslMode === 'verify-ca' || sslMode === 'verify-full' || env.DB_SSL_REJECT_UNAUTHORIZED === true;
+    sslMode === 'verify-ca' ||
+    sslMode === 'verify-full' ||
+    env.DATABASE_SSL_REJECT_UNAUTHORIZED === true;
 
-  const sslEnabled =
-    sslMode === 'disable' ? false : sslMode !== null || env.NODE_ENV === 'production';
+  const sslEnabled = sslMode === 'disable' ? false : sslMode !== null || env.DATABASE_SSL_ENABLED;
 
   const ssl = sslEnabled ? { rejectUnauthorized: strictVerification } : false;
 
   /**
-   * When DB_RLS_SCOPED_CONTEXTS is enabled (production hardening item 2), the per-request
+   * When DATABASE_RLS_SCOPED_CONTEXTS is enabled (production hardening item 2), the per-request
    * `SET LOCAL statement_timeout` middleware is bypassed, so the connection-level value
    * must be tight enough to cap runaway HTTP queries (default 5s). When the flag is off,
-   * the per-connection cap stays at `DB_STATEMENT_TIMEOUT_MS` (30s default) and per-request
+   * the per-connection cap stays at `DATABASE_STATEMENT_TIMEOUT_MS` (30s default) and per-request
    * `SET LOCAL` provides the tighter per-HTTP-request budget.
    */
-  const connectionStatementTimeoutMs = env.DB_RLS_SCOPED_CONTEXTS
-    ? env.DB_HTTP_STATEMENT_TIMEOUT_MS > 0
-      ? env.DB_HTTP_STATEMENT_TIMEOUT_MS
-      : (env.DB_STATEMENT_TIMEOUT_MS ?? THIRTY_SECONDS_MS)
-    : (env.DB_STATEMENT_TIMEOUT_MS ?? THIRTY_SECONDS_MS);
-  const idleInTransactionTimeoutMs = env.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS ?? THIRTY_SECONDS_MS;
+  const connectionStatementTimeoutMs = env.DATABASE_RLS_SCOPED_CONTEXTS
+    ? env.DATABASE_HTTP_STATEMENT_TIMEOUT_MS > 0
+      ? env.DATABASE_HTTP_STATEMENT_TIMEOUT_MS
+      : (env.DATABASE_STATEMENT_TIMEOUT_MS ?? THIRTY_SECONDS_MS)
+    : (env.DATABASE_STATEMENT_TIMEOUT_MS ?? THIRTY_SECONDS_MS);
+  const idleInTransactionTimeoutMs =
+    env.DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS ?? THIRTY_SECONDS_MS;
 
   const connectionParameters: Record<string, string> = {
     statement_timeout: String(connectionStatementTimeoutMs),
@@ -48,10 +50,10 @@ export function buildPostgresOptions(databaseUrl: string) {
   };
 
   return {
-    max: env.DB_MAX ?? 10,
-    idle_timeout: env.DB_IDLE_TIMEOUT ?? 30,
-    connect_timeout: env.DB_CONNECT_TIMEOUT ?? 10,
-    max_lifetime: env.DB_MAX_LIFETIME ?? 1800,
+    max: env.DATABASE_POOL_MAX ?? 10,
+    idle_timeout: env.DATABASE_POOL_IDLE_TIMEOUT_SECONDS ?? 30,
+    connect_timeout: env.DATABASE_POOL_CONNECT_TIMEOUT_SECONDS ?? 10,
+    max_lifetime: env.DATABASE_POOL_MAX_LIFETIME_SECONDS ?? 1800,
     ssl,
     connection: connectionParameters,
     ...(isNeonPoolerConnection(databaseUrl) ? { prepare: false as const } : {}),

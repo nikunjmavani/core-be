@@ -9,8 +9,8 @@ const mockTransaction = vi.fn();
 vi.mock('@/shared/config/env.config.js', () => ({
   env: {
     LOG_LEVEL: 'silent',
-    DB_HTTP_STATEMENT_TIMEOUT_MS: 5_000,
-    DB_RLS_SCOPED_CONTEXTS: false,
+    DATABASE_HTTP_STATEMENT_TIMEOUT_MS: 5_000,
+    DATABASE_RLS_SCOPED_CONTEXTS: false,
   },
 }));
 

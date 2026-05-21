@@ -226,7 +226,7 @@ export class WebauthnService {
       role: resolveAccessTokenRoleForUser(user.email, user.status),
     });
     const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
-    const sessionMaxAgeDays = env.SESSION_MAX_AGE_DAYS;
+    const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
     const expiresAt = new Date(Date.now() + sessionMaxAgeDays * MILLISECONDS_PER_DAY);
     const authSession = await this.authSessionService.createSessionForUser(
       user.public_id,

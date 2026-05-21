@@ -150,7 +150,7 @@ export function getScheduledJobs(): ScheduledJob[] {
       queueName: SESSION_CLEANUP_QUEUE_NAME,
       schedulerId: 'daily-session-cleanup',
       jobName: 'cleanup-sessions',
-      cronPattern: env.SESSION_CLEANUP_CRON ?? DEFAULT_SESSION_CLEANUP_CRON,
+      cronPattern: env.AUTH_SESSION_CLEANUP_CRON ?? DEFAULT_SESSION_CLEANUP_CRON,
     }),
     withSchedulerTimezone(timezone, {
       queueName: STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME,

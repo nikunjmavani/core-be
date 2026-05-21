@@ -1,6 +1,7 @@
 /**
  * Writes .env.<environmentName> files at project root with values from provisioned state.
- * Use these files to push secrets to GitHub Environment secrets (e.g. gh secret set --env dev).
+ * Use these files to push secrets to GitHub Environment secrets
+ * (e.g. `gh secret set --env development`).
  * Structure and key order follow .env.example for easy reference.
  */
 import { writeFileSync } from 'node:fs';
@@ -28,7 +29,7 @@ const ENV_SECTIONS: Array<{ comment: string; keys: (keyof EnvironmentVariables)[
   { comment: 'Rate Limiting', keys: ['RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS'] },
   {
     comment: 'Data retention (days before scheduled cleanup workers delete old data)',
-    keys: ['AUDIT_RETENTION_DAYS', 'SESSION_RETENTION_DAYS'],
+    keys: ['AUDIT_RETENTION_DAYS', 'AUTH_SESSION_RETENTION_DAYS'],
   },
   {
     comment: 'Email (Resend)',

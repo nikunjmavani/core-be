@@ -73,7 +73,7 @@ For layout, layers, routes, events, and Drizzle conventions, follow **[core-be-s
 
 - Update docs, types, OpenAPI locale keys, and examples when behavior changes.
 - Do not add unsolicited markdown files or README sections.
-- **After each task**, consult **[skill-index](../skills/skill-index/SKILL.md)** once and run only the skills listed for the files you changed (routes → route-catalog, env → env-example-sync, hand-written docs → docs-maintainer, etc.). Do not invoke overlapping skills separately.
+- **After each task**, consult **[skill-index](../skills/skill-index/SKILL.md)** once and run only the skills listed for the files you changed (routes → route-catalog, env → env-schema-add, hand-written docs → docs-maintainer, etc.). Do not invoke overlapping skills separately.
 
 ## Output behavior
 

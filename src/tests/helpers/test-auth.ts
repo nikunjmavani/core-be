@@ -20,7 +20,7 @@ async function persistActiveSessionForToken(userPublicId: string, token: string)
     return;
   }
   const tokenHash = createHash('sha256').update(token).digest('hex');
-  const expiresAt = new Date(Date.now() + env.SESSION_MAX_AGE_DAYS * MILLISECONDS_PER_DAY);
+  const expiresAt = new Date(Date.now() + env.AUTH_SESSION_MAX_AGE_DAYS * MILLISECONDS_PER_DAY);
   const sessionRepository = new AuthSessionRepository();
   await sessionRepository.create({
     user_id: user.id,
@@ -73,7 +73,7 @@ export async function generateTestTokenWithActiveSession(
     role: options?.role ?? 'user',
   });
   const tokenHash = createHash('sha256').update(token).digest('hex');
-  const expiresAt = new Date(Date.now() + env.SESSION_MAX_AGE_DAYS * MILLISECONDS_PER_DAY);
+  const expiresAt = new Date(Date.now() + env.AUTH_SESSION_MAX_AGE_DAYS * MILLISECONDS_PER_DAY);
   await application.authDomain.authSessionService.createSessionForUser(userPublicId, {
     token_hash: tokenHash,
     ip_address: '127.0.0.1',

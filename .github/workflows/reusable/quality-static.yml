@@ -42,17 +42,15 @@ jobs:
       - name: Outbound contract tests (nock, offline)
         run: pnpm test:contract
 
-      - name: Property tests (bounded fast-check)
-        run: pnpm test:property
-        env:
-          FAST_CHECK_NUM_RUNS: 100
+      # Property tests run in the `fast` shard of reusable/test-with-db.yml.
+      # Keep them out of this static slice to avoid duplicate work on every PR.
 
       - name: Route catalog in sync
         run: pnpm routes:catalog:check
 
       - name: Env example in sync with schema
         run: |
-          pnpm tool:sync-env-example || (echo "::error::.env.example / .env.local.example is out of sync with env schema. See log above. Run pnpm tool:sync-env-example (with --fix if needed)." && exit 1)
+          pnpm tool:sync-env-example || (echo "::error::.env.example is out of sync with env schema or is missing the # GitHub Secrets / # GitHub Variables top-level halves. See log above. Run pnpm tool:sync-env-example (with --fix if needed)." && exit 1)
 
       - name: Migration safety lint
         run: pnpm db:migrate:lint

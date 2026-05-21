@@ -10,7 +10,7 @@ Application-level encryption for short secrets at rest (MFA TOTP seeds, webhook 
 openssl rand -hex 32
 ```
 
-- **Required in production.** Boot fails when `NODE_ENV=production` and the key is missing.
+- **Required in every runtime.** Boot fails when the key is missing; `NODE_ENV` is metadata only.
 - Do not derive this key from `JWT_SECRET` or `RESPONSE_ENCRYPTION_KEY`.
 
 ## Rotation

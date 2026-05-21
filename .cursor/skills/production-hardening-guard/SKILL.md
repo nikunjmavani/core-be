@@ -27,7 +27,7 @@ Enforce production-readiness checks across the codebase. Verifies security heade
 ### Database
 
 - [ ] Connection pool configured (max, idle_timeout, connect_timeout, max_lifetime)
-- [ ] `DEPLOYMENT_PROCESS_COUNT` set in production; `assertPostgresConnectionBudget()` passes at startup
+- [ ] `DEPLOYMENT_TOTAL_REPLICA_COUNT` set in production; `assertPostgresConnectionBudget()` passes at startup
 - [ ] SSL enabled in production (`rejectUnauthorized: true`)
 - [ ] Transaction timeout via `withTransaction()` (default 10s)
 - [ ] No raw SQL in domain code (use Drizzle query builder)

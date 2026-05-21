@@ -1,6 +1,6 @@
 # Setup Automation (One-Command Provisioning)
 
-One-command infrastructure setup that provisions Neon, Redis Cloud, AWS S3, Sentry, Railway, GitHub secrets, and more across multiple environments (dev, qa, prod). Includes double confirmation, pre-existence checks, and atomic rollback on failure.
+One-command infrastructure setup that provisions Neon, Redis Cloud, AWS S3, Sentry, Railway, GitHub secrets, and more across multiple environments (development, production). Includes double confirmation, pre-existence checks, and atomic rollback on failure.
 
 **Config:** `tooling/setup.config.json` (committed). **Secrets:** `.env.setup` at project root (env-style, gitignored); each variable has a comment with the URL to get the key.
 
@@ -8,7 +8,7 @@ One-command infrastructure setup that provisions Neon, Redis Cloud, AWS S3, Sent
 
 ## Infrastructure before auto-deploy
 
-**Auto-deploy needs this infra in place first.** Deploy workflows (push to dev/qa/main) expect GitHub environment secrets, Railway services, Postgres, and Redis to exist. Run infrastructure setup before relying on CI/CD deploy.
+**Auto-deploy needs this infra in place first.** Deploy workflows (push to dev/main) expect GitHub environment secrets, Railway services, Postgres, and Redis to exist. Run infrastructure setup before relying on CI/CD deploy.
 
 ```mermaid
 flowchart LR
@@ -18,7 +18,7 @@ flowchart LR
   end
 
   subgraph deploy [Then deploy works]
-    Push[Push to dev / qa / main]
+    Push[Push to dev / main]
     CI[Deploy workflow]
   end
 
@@ -38,11 +38,11 @@ flowchart LR
 | `pnpm setup:infra:check`            | Health check. Verifies all provisioned resources are reachable. Run after setup or when debugging.                                                                                                                                                                                                                      |
 | `pnpm setup:infra:status`           | Status report. Reads `.setup-state.json` and shows what is provisioned vs missing per environment. No API calls.                                                                                                                                                                                                        |
 | `pnpm setup:infra:update`           | Re-sync secrets to GitHub. Use after rotating a key in `.env.setup`.                                                                                                                                                                                                                                                    |
-| `pnpm setup:infra:revert`           | Teardown one environment (dev / qa / prod). Prompts for env, then deletes Neon branch, Redis, S3, Railway service. Double confirmation required. Use before re-running setup.                                                                                                                                           |
-| `pnpm setup:infra:export-env`       | Write `.env.<environment>` files (e.g. `.env.dev`, `.env.production`) from current state. Use these to push secrets to GitHub Environment secrets. Run after provisioning or anytime to regenerate.                                                                                                                     |
+| `pnpm setup:infra:revert`           | Teardown one environment (development / production). Prompts for env, then deletes Neon branch, Redis, S3, Railway service. Double confirmation required. Use before re-running setup.                                                                                                                                  |
+| `pnpm setup:infra:export-env`       | Write `.env.<environment>` files (e.g. `.env.development`, `.env.production`) from current state. Use these to push secrets to GitHub Environment secrets. Run after provisioning or anytime to regenerate.                                                                                                             |
 | `pnpm validate:github-environments` | Drift check: compare `.github/environments/*.json` (required reviewers, branch policy) vs GitHub API. Requires `gh auth login`. Use `--check` explicitly or via this script.                                                                                                                                            |
-| `pnpm validate:github-env`          | Drift check **plus** validate GitHub environment secrets (all variables from `.env.example`). Uses `CONFIG` (default: `dev`). Run with `CONFIG=qa` or `CONFIG=prod` per branch. `SKIP_GITHUB_ENV=1` skips GitHub API calls.                                                                                              |
-| `pnpm setup:push-retention-secrets` | Set `AUDIT_RETENTION_DAYS` and `SESSION_RETENTION_DAYS` on GitHub environments (dev, qa, production). Requires `gh auth login`. Optional `CONFIG=dev`; override days via env vars.                                                                                                                                      |
+| `pnpm validate:github-env`          | Drift check **plus** validate GitHub environment secrets (all variables from `.env.example`). Uses `CONFIG` (default: `development`). Run with `CONFIG=production` per branch. `SKIP_GITHUB_ENV=1` skips GitHub API calls.                                                                                              |
+| `pnpm setup:push-retention-secrets` | Set `AUDIT_RETENTION_DAYS` and `AUTH_SESSION_RETENTION_DAYS` on GitHub environments (development, production). Requires `gh auth login`. Optional `CONFIG=development`; override days via env vars.                                                                                                                     |
 
 ---
 
@@ -54,15 +54,15 @@ flowchart LR
 4. Pre-existence check runs; if any resource already exists, abort and run `pnpm setup:infra:revert` first.
 5. Provisioning runs atomically; on any failure, everything created so far is rolled back.
 6. Migrations and seed run on the default environment.
-7. **Environment files:** Setup writes `.env.<environment>` (e.g. `.env.dev`, `.env.production`) at project root. Each file contains the same keys as `.env.example`, filled with values for that environment. Use them to push secrets to GitHub Environment secrets (e.g. `gh secret set NAME --env dev --body-file .env.dev` or set each key manually). These files are gitignored (`.env.*`); do not commit them.
+7. **Environment files:** Setup writes `.env.<environment>` (e.g. `.env.development`, `.env.production`) at project root. Each file contains the same keys as `.env.example`, filled with values for that environment. Use them to push secrets to GitHub Environment secrets (e.g. `gh secret set NAME --env development --body-file .env.development` or set each key manually). These files are gitignored (`.env.*`); do not commit them.
 
 ---
 
 ## Environment files (`.env.<environment>`)
 
-After `pnpm setup:infra` completes, it writes one file per environment: `.env.dev`, `.env.staging`, `.env.production`, etc. (matching the `environments` in `setup.config.json`). Each file has the same structure and key order as `.env.example`, so you can:
+After `pnpm setup:infra` completes, it writes one file per environment: `.env.development`, `.env.production`, etc. (matching the `environments` in `setup.config.json`). Each file has the same structure and key order as `.env.example`, so you can:
 
-- **Push to GitHub:** Set GitHub Environment secrets from the file (e.g. for `dev`: use `.env.dev` to set each variable in GitHub → Settings → Environments → dev → Environment secrets).
+- **Push to GitHub:** Set GitHub Environment secrets from the file (e.g. for `development`: use `.env.development` to set each variable in GitHub → Settings → Environments → development → Environment secrets).
 - **Regenerate anytime:** Run `pnpm setup:infra:export-env` to regenerate all `.env.<environment>` files from current `setup.config.json`, `.env.setup`, and `.setup-state.json`.
 
 Do not commit these files (they contain secrets); `.env.*` is in `.gitignore` (except `.env.example`).
@@ -73,7 +73,7 @@ Do not commit these files (they contain secrets); `.env.*` is in `.gitignore` (e
 
 | Variable | Purpose                                                                                                      |
 | -------- | ------------------------------------------------------------------------------------------------------------ |
-| `CONFIG` | Environment to validate (e.g. `dev`, `qa`, `prod`). Default: `dev`. Maps to GitHub env: dev, qa, production. |
+| `CONFIG` | Environment to validate (full name preferred — `development`, `production`; aliases `dev`/`prod` are accepted and resolve to the same full names). Default: `development`. |
 
 ---
 

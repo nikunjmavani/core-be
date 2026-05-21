@@ -14,20 +14,20 @@ What is **in place today** for production signals, and what is **deferred**. For
 | Idempotency cardinality     | Repeatable BullMQ job `idempotency-cardinality`                     | Bounded Redis SCAN + log / Sentry thresholds (`IDEMPOTENCY_CARDINALITY_*`)                           |
 | DB pool exhaustion          | API process poll (`db-pool-metrics.ts`)                             | Sentry `database.pool.exhaustion.*` — independent of `METRICS_ENABLED`; see [resource-limits.md](resource-limits.md) |
 | Queue inspection (optional) | Bull Board at `/admin/queues`                                       | `ENABLE_QUEUE_DASHBOARD=true` + super_admin JWT — see [bull-board.md](../../reference/runtime/bull-board.md) |
-| **Prometheus metrics** | `GET /metrics` on API + worker (`WORKER_HEALTH_PORT`)              | **On by default in production** (`METRICS_ENABLED` defaults true); bearer auth required — see [Prometheus](#prometheus-opt-in) below |
+| **Prometheus metrics** | `GET /metrics` on API + worker (`WORKER_HEALTH_PORT`)              | **On by default** (`METRICS_ENABLED` defaults true); bearer auth required — see [Prometheus](#prometheus-opt-in) below |
 
 ---
 
 ## Prometheus (opt-in)
 
-Code is in place (`prom-client`). In **`NODE_ENV=production`**, `METRICS_ENABLED` defaults to **`true`** (set `METRICS_ENABLED=false` to disable). Configure a scraper (Grafana Alloy, Prometheus, etc.) and set `METRICS_BEARER_TOKEN` (min 32 chars). No in-repo Grafana/Prometheus server.
+Code is in place (`prom-client`). `METRICS_ENABLED` defaults to **`true`** in every runtime (set `METRICS_ENABLED=false` to disable). Configure a scraper (Grafana Alloy, Prometheus, etc.) and set `METRICS_SCRAPE_TOKEN` (min 32 chars). No in-repo Grafana/Prometheus server.
 
 ### Enable
 
 | Variable | Purpose |
 | -------- | ------- |
 | `METRICS_ENABLED` | `true` — exposes `GET /metrics` on API and worker health server |
-| `METRICS_BEARER_TOKEN` | Required in production when metrics enabled (min 32 chars); send `Authorization: Bearer …` on scrape |
+| `METRICS_SCRAPE_TOKEN` | Required when metrics are enabled (min 32 chars); send `Authorization: Bearer …` on scrape |
 
 ### Scrape targets
 

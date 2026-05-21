@@ -77,8 +77,9 @@
     "drizzle",
     "elitedev",
     "fastify",
-    "i18next",
     "gitleaks",
+    "hostnames",
+    "i18next",
     "loadtest",
     "modelcontextprotocol",
     "multilang",
@@ -86,8 +87,12 @@
     "optimalbits",
     "otplib",
     "passwordless",
+    "pgbouncer",
+    "Pino",
+    "pooler",
     "postmanv",
     "semgrep",
+    "TOTP",
     "toxiproxy",
     "tsparser"
   ]

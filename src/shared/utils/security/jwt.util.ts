@@ -117,10 +117,7 @@ async function resolveVerifyKeyForToken(token: string): Promise<{
 
   if (algorithm === 'RS256') {
     const environment = getEnv();
-    const keyIdentifier = header.kid ?? environment.JWT_SIGNING_KID;
-    const publicKeyPem =
-      // eslint-disable-next-line security/detect-object-injection -- keyIdentifier comes from a validated JWT header.
-      (keyIdentifier && environment.JWT_PUBLIC_KEYS?.[keyIdentifier]) ?? environment.JWT_PUBLIC_KEY;
+    const publicKeyPem = environment.JWT_PUBLIC_KEY;
     if (!publicKeyPem) {
       throw new Error('No public key configured for JWT verification');
     }

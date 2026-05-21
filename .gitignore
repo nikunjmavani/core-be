@@ -8,16 +8,11 @@ node_modules/
 # Build
 dist/
 
-# Environment: root only — .env (local, never commit); .env.example (committed)
-.env
-.env.local
-.env.development
-.env.production
-.env.*
+# Environment: only `.env.example` is committed.
+# `.env.<environment>` files are gitignored copies created by `pnpm env:init` and pushed
+# to GitHub Environments via `pnpm env:sync <environment>`.
+.env*
 !.env.example
-!.env.local.example
-!.env.development.example
-!.env.production.example
 
 # IDE
 .vscode/*
@@ -75,5 +70,4 @@ reports/
 
 # Setup automation (secrets + provisioned state)
 tooling/setup.secrets.json
-.env.setup
 .setup-state.json

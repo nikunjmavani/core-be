@@ -11,22 +11,21 @@ vi.mock('@fastify/cors', () => ({
 
 vi.mock('@/shared/config/env.config.js', () => ({
   env: {
-    NODE_ENV: 'production',
     ALLOWED_ORIGINS: '',
   },
 }));
 
 import corsMiddleware from '@/shared/middlewares/cors.middleware.js';
 
-describe('cors.middleware (production)', () => {
+describe('cors.middleware (required origins)', () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('throws when ALLOWED_ORIGINS is empty in production', async () => {
+  it('throws when ALLOWED_ORIGINS is empty in any environment', async () => {
     const application = Fastify();
     await expect(application.register(corsMiddleware)).rejects.toThrow(
-      'ALLOWED_ORIGINS must be set in production',
+      'ALLOWED_ORIGINS must contain at least one origin',
     );
   });
 });

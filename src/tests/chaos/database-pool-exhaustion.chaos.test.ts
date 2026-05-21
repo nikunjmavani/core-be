@@ -17,7 +17,7 @@ import { withOrganizationDatabaseContext } from '@/infrastructure/database/conte
 describe('Chaos resilience: database pool stays available under bursty scoped-context load', () => {
   it('processes a burst of scoped-context units of work and concurrent autocommit queries without 5xx-equivalent failures', async () => {
     const organizationPublicId = 'chaos-pool-org';
-    const poolMax = env.DB_MAX ?? 10;
+    const poolMax = env.DATABASE_POOL_MAX ?? 10;
     const burstSize = Math.max(poolMax * 2, 20);
 
     const scopedUnitsOfWork = Array.from({ length: burstSize }, (_, index) =>

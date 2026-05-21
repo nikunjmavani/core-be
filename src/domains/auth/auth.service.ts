@@ -84,7 +84,7 @@ export class AuthService {
     });
 
     const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
-    const sessionMaxAgeDays = env.SESSION_MAX_AGE_DAYS;
+    const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
     const expiresAt = new Date(Date.now() + sessionMaxAgeDays * 86_400_000);
 
     const session = await this.authSessionService.createSessionForUser(

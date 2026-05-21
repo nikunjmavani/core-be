@@ -40,8 +40,8 @@ async function main() {
   registerPostgresPoolMetrics();
 
   const app = await buildApp();
-  await app.listen({ port: env.PORT, host: env.HOST });
-  logger.info({ host: env.HOST, port: env.PORT }, 'Server listening');
+  await app.listen({ port: env.PORT, host: env.HTTP_BIND_HOST });
+  logger.info({ host: env.HTTP_BIND_HOST, port: env.PORT }, 'Server listening');
 }
 
 main().catch((error) => {

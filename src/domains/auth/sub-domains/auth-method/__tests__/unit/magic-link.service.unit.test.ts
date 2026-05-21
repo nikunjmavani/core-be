@@ -18,12 +18,15 @@ vi.mock('@/core/events/event-bus.js', () => ({
   }),
 }));
 
+import { eventBus } from '@/core/events/event-bus.js';
+import { AUTH_EVENT } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
+
 vi.mock('@/shared/utils/text/email.util.js', () => ({
   isDisposableEmailBlocked: vi.fn(() => false),
 }));
 
 vi.mock('@/shared/config/env.config.js', () => ({
-  env: { NODE_ENV: 'test', SESSION_MAX_AGE_DAYS: 7 },
+  env: { NODE_ENV: 'test', AUTH_SESSION_MAX_AGE_DAYS: 7 },
 }));
 
 vi.mock('@/shared/utils/security/jwt.util.js', () => ({
@@ -79,7 +82,13 @@ describe('MagicLinkService', () => {
     vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
     const result = await service.send({ email: user.email });
     expect(verificationTokenRepository.create).toHaveBeenCalled();
-    expect(result.token).toBeDefined();
+    /** Raw token never leaves via the result — only via the event payload. */
+    expect(result).not.toHaveProperty('token');
+    expect(vi.mocked(eventBus.emit)).toHaveBeenCalledTimes(1);
+    const emittedEvent = vi.mocked(eventBus.emit).mock.calls[0]?.[0];
+    expect(emittedEvent?.type).toBe(AUTH_EVENT.MAGIC_LINK_REQUESTED);
+    const emittedPayload = emittedEvent?.payload as { magic_link_token: string };
+    expect(emittedPayload.magic_link_token).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('send rejects disposable email addresses', async () => {
@@ -112,18 +121,6 @@ describe('MagicLinkService', () => {
     } as never);
     vi.mocked(userService.findById).mockResolvedValue(null);
     await expect(service.verify({ token: 'raw' }, '127.0.0.1')).rejects.toThrow();
-  });
-
-  it('send omits raw token in production environment', async () => {
-    const { env } = await import('@/shared/config/env.config.js');
-    const originalNodeEnvironment = env.NODE_ENV;
-    Object.assign(env, { NODE_ENV: 'production' });
-    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
-
-    const result = await service.send({ email: user.email });
-
-    expect(result.token).toBeUndefined();
-    Object.assign(env, { NODE_ENV: originalNodeEnvironment });
   });
 
   it('verify rejects invalid or expired magic link tokens', async () => {

@@ -9,8 +9,8 @@ const mockTransaction = vi.fn(async (callback: (transaction: unknown) => Promise
 vi.mock('@/shared/config/env.config.js', () => ({
   env: {
     LOG_LEVEL: 'silent',
-    DB_HTTP_STATEMENT_TIMEOUT_MS: 5_000,
-    DB_RLS_SCOPED_CONTEXTS: true,
+    DATABASE_HTTP_STATEMENT_TIMEOUT_MS: 5_000,
+    DATABASE_RLS_SCOPED_CONTEXTS: true,
   },
 }));
 
@@ -29,7 +29,7 @@ vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => 
   },
 }));
 
-describe('DB_RLS_SCOPED_CONTEXTS bypass for both pinning middlewares (production hardening item 2)', () => {
+describe('DATABASE_RLS_SCOPED_CONTEXTS bypass for both pinning middlewares (production hardening item 2)', () => {
   it('organization-rls-transaction middleware never opens a transaction when flag is on', async () => {
     const { default: organizationRlsMiddleware } =
       await import('@/shared/middlewares/organization-rls-transaction.middleware.js');

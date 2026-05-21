@@ -11,7 +11,6 @@ vi.mock('@fastify/cors', () => ({
 
 vi.mock('@/shared/config/env.config.js', () => ({
   env: {
-    NODE_ENV: 'test',
     ALLOWED_ORIGINS: undefined,
   },
 }));
@@ -23,14 +22,11 @@ describe('cors.middleware (empty origins)', () => {
     vi.clearAllMocks();
   });
 
-  it('registers CORS with origin disabled when ALLOWED_ORIGINS is unset outside production', async () => {
+  it('throws when ALLOWED_ORIGINS is unset in any environment', async () => {
     const application = Fastify();
-    await application.register(corsMiddleware);
-    await application.ready();
-
-    const firstCall = fastifyCorsPlugin.mock.calls[0] as unknown[] | undefined;
-    const corsOptions = (firstCall?.[1] ?? {}) as { origin: false | string[] };
-    expect(corsOptions.origin).toBe(false);
-    await application.close();
+    await expect(application.register(corsMiddleware)).rejects.toThrow(
+      'ALLOWED_ORIGINS must contain at least one origin',
+    );
+    expect(fastifyCorsPlugin).not.toHaveBeenCalled();
   });
 });

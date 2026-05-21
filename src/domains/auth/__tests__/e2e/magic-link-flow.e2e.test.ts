@@ -5,6 +5,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { injectUnauthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { seedMagicLinkVerificationToken } from '@/domains/auth/__tests__/factories/magic-link-token.factory.js';
+import { captureNextMagicLinkToken } from '@/tests/helpers/magic-link.helper.js';
 import type { FastifyInstance } from 'fastify';
 
 describe('Auth e2e: magic link flow', () => {
@@ -35,20 +36,25 @@ describe('Auth e2e: magic link flow', () => {
   it('send → verify sets session cookie and returns access token', async () => {
     const user = await createTestUser({ email: 'magic-link-flow@example.com' });
 
+    /** Subscribe BEFORE the send so the handler is registered when the event fires. */
+    const tokenPromise = captureNextMagicLinkToken(user.email);
     const sendResponse = await injectUnauthenticated(app, {
       method: 'POST',
       url: testApiPath('/auth/magic-link/send'),
       payload: { email: user.email },
     });
     expect(sendResponse.statusCode).toBe(200);
+    const sendBody = sendResponse.json() as { data: { token?: unknown } };
+    /** Raw token is never returned in the API response — only via the event payload. */
+    expect(sendBody.data.token).toBeUndefined();
 
-    const sendBody = sendResponse.json() as { data: { token?: string } };
-    expect(sendBody.data.token).toBeDefined();
+    const rawMagicLinkToken = await tokenPromise;
+    expect(rawMagicLinkToken).toMatch(/^[0-9a-f]{64}$/);
 
     const verifyResponse = await injectUnauthenticated(app, {
       method: 'POST',
       url: testApiPath('/auth/magic-link/verify'),
-      payload: { token: sendBody.data.token },
+      payload: { token: rawMagicLinkToken },
     });
     expect(verifyResponse.statusCode).toBe(200);
     expect((verifyResponse.json() as { data: Record<string, unknown> }).data).toHaveProperty(

@@ -124,9 +124,9 @@ The `runtime` stage sets `ENV NODE_ENV=production`. Override at `docker run` / c
 
 | `NODE_ENV`   | Use in container? | Notes                                                                                                                                                     |
 | ------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `production` | Default in image  | Requires `JWT_PRIVATE_KEY` + `JWT_PUBLIC_KEY` (RS256), retention vars, and full deploy secrets — see [env schema](../../src/shared/config/env-schema.ts). |
+| `production` | Default in image  | Requires `JWT_PRIVATE_KEY` + `JWT_PUBLIC_KEY` (RS256), `SECRETS_ENCRYPTION_KEY`, `ALLOWED_ORIGINS`, retention vars, and full deploy secrets — see [env schema](../../src/shared/config/env-schema.ts). |
 | `local`      | Do not use        | [`logger.util.ts`](../../src/shared/utils/infrastructure/logger.util.ts) loads `pino-pretty`, which is **not** in the prod image → startup crash.                        |
-| `test`       | Smoke / CI        | `JWT_SECRET` (HS256), `AUDIT_RETENTION_DAYS`, `SESSION_RETENTION_DAYS` — same as [CI docker-run](../../.github/workflows/ci.yml).                         |
+| `test`       | Smoke / CI        | Uses the same RS256 + encryption env contract, with test fixtures supplied by CI/setup — same as [CI docker-run](../../.github/workflows/ci.yml).                         |
 
 ### Compose smoke profile (recommended)
 
@@ -157,7 +157,7 @@ docker run --rm -p 3000:3000 \
   -e REDIS_URL=redis://host.docker.internal:6379 \
   -e JWT_SECRET=test-jwt-secret-min-32-chars-xxxxxxxx \
   -e ALLOWED_ORIGINS=http://localhost:3000 \
-  -e AUDIT_RETENTION_DAYS=90 -e SESSION_RETENTION_DAYS=30 \
+  -e AUDIT_RETENTION_DAYS=90 -e AUTH_SESSION_RETENTION_DAYS=30 \
   core-be:local
 ```
 
@@ -188,7 +188,7 @@ Adds roughly 3–8 minutes to PR checks. See [cicd-and-deployment.md](ci-cd/cicd
 
 ## When you change routes
 
-1. `pnpm routes:catalog` — updates catalog + registry (pre-commit when `*.routes.ts` staged).
+1. `pnpm routes:catalog` — updates catalog + registry (local pre-commit always regenerates and stages `docs/routes.txt`).
 2. `pnpm docs:generate:multilang` — updates OpenAPI (or `pnpm docs:check` in CI).
 3. Rebuild the API image so MCP resources stay current.
 

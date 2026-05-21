@@ -17,7 +17,7 @@ describe('deploy-env-sync.util', () => {
   it('lists METRICS_* keys from env schema', () => {
     const names = metricsEnvironmentVariableNames();
     expect(names).toContain('METRICS_ENABLED');
-    expect(names).toContain('METRICS_BEARER_TOKEN');
+    expect(names).toContain('METRICS_SCRAPE_TOKEN');
     expect(names.every((name) => name.startsWith('METRICS_'))).toBe(true);
   });
 
@@ -25,7 +25,7 @@ describe('deploy-env-sync.util', () => {
     const workflowContent = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf-8');
     const railwayVariables = parseRailwaySyncVariableNames(workflowContent);
     expect(railwayVariables).toContain('METRICS_ENABLED');
-    expect(railwayVariables).toContain('METRICS_BEARER_TOKEN');
+    expect(railwayVariables).toContain('METRICS_SCRAPE_TOKEN');
     expect(railwayVariables).toContain('DATABASE_URL');
   });
 
@@ -45,7 +45,7 @@ describe('deploy-env-sync.util', () => {
       done
     `;
     const validation = validateMetricsDeploySync(workflowContent);
-    expect(validation.missingFromRailwaySyncLoop).toContain('METRICS_BEARER_TOKEN');
+    expect(validation.missingFromRailwaySyncLoop).toContain('METRICS_SCRAPE_TOKEN');
     expect(metricsDeploySyncHasErrors(validation)).toBe(true);
   });
 

@@ -21,7 +21,7 @@ let consecutiveClusterWarnPolls = 0;
 let consecutiveClusterCriticalPolls = 0;
 
 function resolvePoolMaxConnections(): number {
-  return env.DB_MAX ?? DEFAULT_POOL_MAX_CONNECTIONS;
+  return env.DATABASE_POOL_MAX ?? DEFAULT_POOL_MAX_CONNECTIONS;
 }
 
 export function resetPoolExhaustionAlertStateForTests(): void {
@@ -35,8 +35,8 @@ function evaluateActiveCheckoutPressure(
   activeCheckouts: number,
   poolMaxConnections: number,
 ): PoolPressureLevel {
-  const criticalThreshold = Math.ceil(poolMaxConnections * env.DB_POOL_ACTIVE_CRITICAL_RATIO);
-  const warnThreshold = Math.ceil(poolMaxConnections * env.DB_POOL_ACTIVE_WARN_RATIO);
+  const criticalThreshold = Math.ceil(poolMaxConnections * env.DATABASE_POOL_ACTIVE_CRITICAL_RATIO);
+  const warnThreshold = Math.ceil(poolMaxConnections * env.DATABASE_POOL_ACTIVE_WARN_RATIO);
 
   if (activeCheckouts >= criticalThreshold) {
     return 'critical';
@@ -56,9 +56,11 @@ function evaluateClusterPressure(
   }
 
   const criticalThreshold = Math.ceil(
-    allowedApplicationConnections * env.DB_POOL_CLUSTER_CRITICAL_RATIO,
+    allowedApplicationConnections * env.DATABASE_POOL_CLUSTER_CRITICAL_RATIO,
   );
-  const warnThreshold = Math.ceil(allowedApplicationConnections * env.DB_POOL_CLUSTER_WARN_RATIO);
+  const warnThreshold = Math.ceil(
+    allowedApplicationConnections * env.DATABASE_POOL_CLUSTER_WARN_RATIO,
+  );
 
   if (clusterActiveConnections >= criticalThreshold) {
     return 'critical';
@@ -77,7 +79,7 @@ function bumpConsecutivePolls(current: number, isOverThreshold: boolean): number
 }
 
 function shouldEmitAlert(consecutivePolls: number): boolean {
-  return consecutivePolls >= env.DB_POOL_ALERT_CONSECUTIVE_POLLS;
+  return consecutivePolls >= env.DATABASE_POOL_ALERT_CONSECUTIVE_POLLS;
 }
 
 function emitPoolExhaustionAlert(parameters: {
@@ -98,7 +100,7 @@ function emitPoolExhaustionAlert(parameters: {
 
 /**
  * Evaluates in-process org RLS checkout pressure and optional cluster-wide pg_stat_activity counts.
- * Emits Sentry messages after consecutive over-threshold polls (see DB_POOL_ALERT_CONSECUTIVE_POLLS).
+ * Emits Sentry messages after consecutive over-threshold polls (see DATABASE_POOL_ALERT_CONSECUTIVE_POLLS).
  */
 export function evaluatePoolExhaustionAndAlert(parameters: {
   clusterActiveConnections: number;
@@ -140,7 +142,7 @@ export function evaluatePoolExhaustionAndAlert(parameters: {
         signal: 'active_organization_rls_checkouts',
         activeOrganizationRlsCheckouts,
         poolMaxConnections,
-        criticalRatio: env.DB_POOL_ACTIVE_CRITICAL_RATIO,
+        criticalRatio: env.DATABASE_POOL_ACTIVE_CRITICAL_RATIO,
       },
     });
     consecutiveActiveCriticalPolls = 0;
@@ -152,7 +154,7 @@ export function evaluatePoolExhaustionAndAlert(parameters: {
         signal: 'active_organization_rls_checkouts',
         activeOrganizationRlsCheckouts,
         poolMaxConnections,
-        warnRatio: env.DB_POOL_ACTIVE_WARN_RATIO,
+        warnRatio: env.DATABASE_POOL_ACTIVE_WARN_RATIO,
       },
     });
     consecutiveActiveWarnPolls = 0;
@@ -166,7 +168,7 @@ export function evaluatePoolExhaustionAndAlert(parameters: {
         signal: 'cluster_pg_stat_activity',
         clusterActiveConnections: parameters.clusterActiveConnections,
         allowedApplicationConnections: parameters.allowedApplicationConnections,
-        criticalRatio: env.DB_POOL_CLUSTER_CRITICAL_RATIO,
+        criticalRatio: env.DATABASE_POOL_CLUSTER_CRITICAL_RATIO,
       },
     });
     consecutiveClusterCriticalPolls = 0;
@@ -178,7 +180,7 @@ export function evaluatePoolExhaustionAndAlert(parameters: {
         signal: 'cluster_pg_stat_activity',
         clusterActiveConnections: parameters.clusterActiveConnections,
         allowedApplicationConnections: parameters.allowedApplicationConnections,
-        warnRatio: env.DB_POOL_CLUSTER_WARN_RATIO,
+        warnRatio: env.DATABASE_POOL_CLUSTER_WARN_RATIO,
       },
     });
     consecutiveClusterWarnPolls = 0;

@@ -54,7 +54,7 @@ function getHealth(
 }
 
 describe('worker-health.server', () => {
-  const host = env.HOST === '0.0.0.0' ? '127.0.0.1' : env.HOST;
+  const host = env.HTTP_BIND_HOST === '0.0.0.0' ? '127.0.0.1' : env.HTTP_BIND_HOST;
   const baseUrl = `http://${host}:${env.WORKER_HEALTH_PORT}`;
   const liveUrl = `${baseUrl}/health/live`;
   const metricsUrl = `${baseUrl}/metrics`;
@@ -100,9 +100,9 @@ describe('worker-health.server', () => {
     expect(JSON.parse(response.body)).toMatchObject({ status: 'stalled', service: 'worker' });
   });
 
-  it('returns 401 on /metrics without bearer token when METRICS_BEARER_TOKEN is set', async () => {
+  it('returns 401 on /metrics without bearer token when METRICS_SCRAPE_TOKEN is set', async () => {
     vi.stubEnv('METRICS_ENABLED', 'true');
-    vi.stubEnv('METRICS_BEARER_TOKEN', 'test-metrics-bearer-token-min-32-chars');
+    vi.stubEnv('METRICS_SCRAPE_TOKEN', 'test-metrics-bearer-token-min-32-chars');
     resetEnvCacheForTests();
     markWorkerHealthReady(1);
 
@@ -113,7 +113,7 @@ describe('worker-health.server', () => {
   it('returns Prometheus text on /metrics with valid bearer token', async () => {
     const bearerToken = 'test-metrics-bearer-token-min-32-chars';
     vi.stubEnv('METRICS_ENABLED', 'true');
-    vi.stubEnv('METRICS_BEARER_TOKEN', bearerToken);
+    vi.stubEnv('METRICS_SCRAPE_TOKEN', bearerToken);
     resetEnvCacheForTests();
     markWorkerHealthReady(1);
 

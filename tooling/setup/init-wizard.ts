@@ -17,30 +17,55 @@ const SETUP_CONFIG_PATH = resolve(import.meta.dirname, '../setup.config.json');
 const DEFAULT_PROJECT_NAME = 'core-be';
 const DEFAULT_DISPLAY_NAME = 'Core Backend';
 const DEFAULT_ORGANIZATION = 'my-org';
-const DEFAULT_ENVIRONMENTS = 'dev,alpha,beta,staging,production';
+const DEFAULT_ENVIRONMENTS = 'development,production';
+
+/**
+ * Canonical environment → git branch mapping. Always use full names
+ * (`development`, `production`) for environments; branches stay short
+ * (`dev`, `main`). Add new entries here when an environment is introduced.
+ */
+const DEFAULT_BRANCH_FOR_ENVIRONMENT: Record<string, string> = {
+  development: 'dev',
+  production: 'main',
+};
+
+/**
+ * Whether the branch backing this environment is protected by default
+ * (required-checks, restricted pushes, etc.). `development` and `production`
+ * are protected; preview / ephemeral environments default to unprotected.
+ */
+const DEFAULT_PROTECTED_FOR_ENVIRONMENT: Record<string, boolean> = {
+  development: true,
+  production: true,
+};
+
+function isProductionEnvironmentName(name: string): boolean {
+  return name === 'production';
+}
+
+function labelForEnvironmentName(name: string): string {
+  if (name === 'development') return 'Development';
+  if (name === 'production') return 'Production';
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+function defaultBranchForEnvironmentName(name: string): string {
+  return DEFAULT_BRANCH_FOR_ENVIRONMENT[name] ?? name;
+}
+
+function defaultProtectedForEnvironmentName(name: string): boolean {
+  return DEFAULT_PROTECTED_FOR_ENVIRONMENT[name] ?? false;
+}
 
 function buildEnvironmentsFromNames(names: string[]): SetupConfig['environments'] {
-  return names.map((name, index) => {
-    const isPrd =
-      name === 'production' ||
-      name === 'prod' ||
-      name === 'prd' ||
-      name.toLowerCase() === 'production';
-    const label =
-      name === 'dev'
-        ? 'Development'
-        : name === 'qa'
-          ? 'QA / Staging'
-          : name === 'production' || name === 'prod' || name === 'prd'
-            ? 'Production'
-            : name.charAt(0).toUpperCase() + name.slice(1);
-    return {
-      name,
-      label,
-      nodeEnvironment: isPrd ? 'production' : 'development',
-      isDefault: index === 0,
-    };
-  });
+  return names.map((name, index) => ({
+    name,
+    label: labelForEnvironmentName(name),
+    nodeEnvironment: isProductionEnvironmentName(name) ? 'production' : 'development',
+    branch: defaultBranchForEnvironmentName(name),
+    protected: defaultProtectedForEnvironmentName(name),
+    isDefault: index === 0,
+  }));
 }
 
 function buildConfig(
@@ -57,20 +82,20 @@ function buildConfig(
   const sampleRates: Record<string, { traces: number; profile: number }> = {};
 
   for (const name of environmentNames) {
-    rateLimitMax[name] = name === 'dev' ? 10000 : name === 'qa' ? 1000 : 100;
-    frontendUrl[name] =
-      name === 'dev'
-        ? 'http://localhost:3000'
-        : name === 'production' || name === 'prod' || name === 'prd'
-          ? 'https://app.example.com'
-          : `https://${name}.example.com`;
+    const isProduction = isProductionEnvironmentName(name);
+    const isDevelopment = name === 'development';
+    rateLimitMax[name] = isDevelopment ? 10000 : isProduction ? 100 : 1000;
+    frontendUrl[name] = isDevelopment
+      ? 'http://localhost:3000'
+      : isProduction
+        ? 'https://app.example.com'
+        : `https://${name}.example.com`;
     allowedOrigins[name] = frontendUrl[name];
-    sampleRates[name] =
-      name === 'dev'
-        ? { traces: 1, profile: 1 }
-        : name === 'production' || name === 'prod' || name === 'prd'
-          ? { traces: 0.1, profile: 0.1 }
-          : { traces: 0.5, profile: 0.5 };
+    sampleRates[name] = isDevelopment
+      ? { traces: 1, profile: 1 }
+      : isProduction
+        ? { traces: 0.1, profile: 0.1 }
+        : { traces: 0.5, profile: 0.5 };
   }
 
   return {
@@ -160,7 +185,7 @@ export async function runInitWizard(): Promise<void> {
   );
   const envInput = await questionWithDefault(
     readline,
-    'Environments (comma-separated, e.g. dev,alpha,beta,staging,production)',
+    'Environments (comma-separated, full names — e.g. development,production)',
     defaultEnvironments,
   );
 
@@ -183,7 +208,7 @@ export async function runInitWizard(): Promise<void> {
 
   if (environmentNames.length === 0) {
     logger.error(
-      'At least one environment is required (e.g. dev or dev,alpha,beta,staging,production).',
+      'At least one environment is required (full names — e.g. development or development,production).',
     );
     process.exit(1);
   }

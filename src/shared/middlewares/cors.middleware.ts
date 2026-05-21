@@ -7,13 +7,12 @@ import { parseAllowedOriginsList } from '@/shared/utils/security/allowed-origins
 const corsMiddleware: FastifyPluginAsync = async (app) => {
   const origins = parseAllowedOriginsList(env.ALLOWED_ORIGINS);
 
-  // In production, ALLOWED_ORIGINS must be explicitly set
-  if (env.NODE_ENV === 'production' && origins.length === 0) {
-    throw new Error('ALLOWED_ORIGINS must be set in production');
+  if (origins.length === 0) {
+    throw new Error('ALLOWED_ORIGINS must contain at least one origin');
   }
 
   await app.register(fastifyCors, {
-    origin: origins.length === 0 ? false : origins,
+    origin: origins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [

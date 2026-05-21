@@ -316,7 +316,7 @@ const PREVIEW_PROVIDERS: Array<{
   {
     enabledCheck: (config) => config.providers.stripe.enabled,
     provider: 'Stripe',
-    detail: 'Secret key per env (dev/qa/prod)',
+    detail: 'Secret key per env (development/production)',
     url: 'https://dashboard.stripe.com/test/apikeys',
     configKey: 'stripe.<env>.secretKey',
   },

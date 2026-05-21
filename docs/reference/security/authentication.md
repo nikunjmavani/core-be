@@ -39,15 +39,15 @@ Default is `CAPTCHA_PROVIDER=disabled` (no CAPTCHA). In `development` / `test`, 
 
 ## Magic-link environment safety
 
-`MagicLinkService.send` returns the raw magic-link token in the JSON body only when `NODE_ENV !== 'production'` (for local API testing). Misconfigured staging must not run with `NODE_ENV=development` and a public `FRONTEND_URL`.
+`MagicLinkService.send` **never** returns the raw magic-link token in the JSON body. The token leaves the service only via the `AUTH_EVENT.MAGIC_LINK_REQUESTED` event payload (consumed by the mail handler) and the resulting email URL — identical behavior across every environment.
 
 | Guard | When it runs |
 | ----- | ------------- |
-| Zod `NODE_ENV` enum | Boot — rejects values such as `staging` (not in `local`, `development`, `production`, `test`) |
-| Zod `FRONTEND_URL` refine | Boot — when `NODE_ENV` is not `production`, `FRONTEND_URL` must be unset or use `localhost` / `127.0.0.1` |
-| `assertMagicLinkEnvironmentSafe()` | Boot (`getEnv`, `buildApp`) — same rules with an explicit operator-facing error |
+| Zod `FRONTEND_URL` refine | Boot — when set, `FRONTEND_URL` must be a valid `http(s)` URL |
 
-**Deployed environments (Railway, staging, production):** set `NODE_ENV=production`. The API and worker process exit on startup if `NODE_ENV=staging` or a non-local `FRONTEND_URL` is paired with a non-production `NODE_ENV`.
+**Test code path:** tests subscribe to `AUTH_EVENT.MAGIC_LINK_REQUESTED` via the `captureNextMagicLinkToken(email)` helper in `src/tests/helpers/magic-link.helper.ts` to obtain the raw token for assertions.
+
+**Deployed environments (Railway development, production):** any valid public `FRONTEND_URL` is accepted. The previous environment-based inline-token leak and its localhost-only `FRONTEND_URL` restriction have been removed.
 
 ## WebAuthn (passkeys)
 

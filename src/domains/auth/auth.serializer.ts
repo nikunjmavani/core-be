@@ -10,11 +10,10 @@ export const AuthSerializer = {
   mfaRequired(data: { mfa_required: true; mfa_session_token: string }) {
     return data;
   },
-  magicLinkSent(data: { message: string; expires_in_minutes: number; token?: string }) {
+  magicLinkSent(data: { message: string; expires_in_minutes: number }) {
     return {
       message: data.message,
       expires_in_minutes: data.expires_in_minutes,
-      ...(data.token !== undefined ? { token: data.token } : {}),
     };
   },
   mfaVerified(data: { verified: boolean }) {

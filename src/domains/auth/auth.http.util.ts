@@ -19,24 +19,22 @@ export function generateCsrfToken(): string {
 }
 
 export function getSessionCookieOptions() {
-  const useSecureCookie = env.NODE_ENV === 'production' || env.NODE_ENV === 'staging';
   return {
     httpOnly: true,
-    secure: useSecureCookie,
+    secure: env.COOKIE_SECURE,
     sameSite: 'strict' as const,
     path: '/api/v1/auth',
-    maxAge: env.SESSION_MAX_AGE_DAYS * SECONDS_PER_DAY,
+    maxAge: env.AUTH_SESSION_MAX_AGE_DAYS * SECONDS_PER_DAY,
   };
 }
 
 export function getCsrfCookieOptions() {
-  const useSecureCookie = env.NODE_ENV === 'production' || env.NODE_ENV === 'staging';
   return {
     httpOnly: false,
-    secure: useSecureCookie,
+    secure: env.COOKIE_SECURE,
     sameSite: 'strict' as const,
     path: '/api/v1/auth',
-    maxAge: env.SESSION_MAX_AGE_DAYS * SECONDS_PER_DAY,
+    maxAge: env.AUTH_SESSION_MAX_AGE_DAYS * SECONDS_PER_DAY,
   };
 }
 

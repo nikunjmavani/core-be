@@ -99,7 +99,7 @@ export default [
       ],
     },
   },
-  // Production hardening item 2 (DB_RLS_SCOPED_CONTEXTS): never call Stripe / S3 / Resend
+  // Production hardening item 2 (DATABASE_RLS_SCOPED_CONTEXTS): never call Stripe / S3 / Resend
   // SDK methods inside a withOrganizationDatabaseContext / withOrganizationContext callback —
   // such work holds a pool checkout across network I/O and re-creates the failure mode the
   // RLS unpin was meant to fix. Phase: short tx -> external call -> short tx.

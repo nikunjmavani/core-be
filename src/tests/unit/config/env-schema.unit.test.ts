@@ -8,15 +8,22 @@ const productionRedisTopology = {
   REDIS_URL: 'redis://shared.example.upstash.io:6379',
 };
 
-const productionRequiredBase = {
+const commonRequiredBase = {
   DATABASE_URL: DATABASE_URL_FIXTURE,
+  REDIS_URL: REDIS_URL_FIXTURE,
   JWT_SECRET: 'a'.repeat(32),
-  NODE_ENV: 'production',
   JWT_PRIVATE_KEY: 'private',
   JWT_PUBLIC_KEY: 'public',
+  ALLOWED_ORIGINS: 'http://localhost:3000',
+  METRICS_SCRAPE_TOKEN: 'b'.repeat(32),
   SECRETS_ENCRYPTION_KEY: 'a'.repeat(64),
   AUDIT_RETENTION_DAYS: '30',
-  SESSION_RETENTION_DAYS: '30',
+  AUTH_SESSION_RETENTION_DAYS: '30',
+};
+
+const productionRequiredBase = {
+  ...commonRequiredBase,
+  NODE_ENV: 'production',
   ...productionRedisTopology,
 };
 
@@ -27,7 +34,7 @@ describe('env-schema', () => {
     expect(envSchemaKeys).toContain('JWT_SECRET');
   });
 
-  it('applies DB_HTTP_STATEMENT_TIMEOUT_MS and pool alert defaults', () => {
+  it('applies DATABASE_HTTP_STATEMENT_TIMEOUT_MS and pool alert defaults', () => {
     const parsed = envSchema.safeParse({
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
@@ -35,14 +42,14 @@ describe('env-schema', () => {
       JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       AUDIT_RETENTION_DAYS: '30',
-      SESSION_RETENTION_DAYS: '30',
+      AUTH_SESSION_RETENTION_DAYS: '30',
     });
 
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.DB_HTTP_STATEMENT_TIMEOUT_MS).toBe(5_000);
-      expect(parsed.data.DB_POOL_ACTIVE_WARN_RATIO).toBe(0.8);
-      expect(parsed.data.DB_POOL_ALERT_POLL_INTERVAL_MS).toBe(5_000);
+      expect(parsed.data.DATABASE_HTTP_STATEMENT_TIMEOUT_MS).toBe(5_000);
+      expect(parsed.data.DATABASE_POOL_ACTIVE_WARN_RATIO).toBe(0.8);
+      expect(parsed.data.DATABASE_POOL_ALERT_POLL_INTERVAL_MS).toBe(5_000);
     }
   });
 
@@ -59,7 +66,7 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.PORT).toBe(4000);
-      expect(parsed.data.SESSION_MAX_AGE_DAYS).toBe(7);
+      expect(parsed.data.AUTH_SESSION_MAX_AGE_DAYS).toBe(7);
     }
   });
 
@@ -71,7 +78,7 @@ describe('env-schema', () => {
       JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       AUDIT_RETENTION_DAYS: '30',
-      SESSION_RETENTION_DAYS: '30',
+      AUTH_SESSION_RETENTION_DAYS: '30',
       TRUST_PROXY: '1',
     });
 
@@ -105,12 +112,8 @@ describe('env-schema', () => {
 
   it('coerces optional boolean-like env strings', () => {
     const disposableAllowed = envSchema.safeParse({
-      DATABASE_URL: DATABASE_URL_FIXTURE,
-      REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
+      ...commonRequiredBase,
       NODE_ENV: 'test',
-      AUDIT_RETENTION_DAYS: '30',
-      SESSION_RETENTION_DAYS: '30',
       BLOCK_DISPOSABLE_EMAIL: 'false',
       SCHEDULER_ENABLED: '0',
     });
@@ -203,11 +206,11 @@ describe('env-schema', () => {
       JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       AUDIT_RETENTION_DAYS: '30',
-      SESSION_RETENTION_DAYS: '30',
+      AUTH_SESSION_RETENTION_DAYS: '30',
       ENABLE_MCP_SERVER: 'true',
       ENABLE_API_REFERENCE: 'true',
       ENABLE_QUEUE_DASHBOARD: '1',
-      DB_SSL_REJECT_UNAUTHORIZED: 'true',
+      DATABASE_SSL_REJECT_UNAUTHORIZED: 'true',
     });
 
     expect(parsed.success).toBe(true);
@@ -215,7 +218,7 @@ describe('env-schema', () => {
       expect(parsed.data.ENABLE_MCP_SERVER).toBe(true);
       expect(parsed.data.ENABLE_API_REFERENCE).toBe(true);
       expect(parsed.data.ENABLE_QUEUE_DASHBOARD).toBe(true);
-      expect(parsed.data.DB_SSL_REJECT_UNAUTHORIZED).toBe(true);
+      expect(parsed.data.DATABASE_SSL_REJECT_UNAUTHORIZED).toBe(true);
     }
   });
 
@@ -248,12 +251,8 @@ describe('env-schema', () => {
 
   it('allows single Redis host when NODE_ENV is local', () => {
     const parsed = envSchema.safeParse({
-      DATABASE_URL: DATABASE_URL_FIXTURE,
-      REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
+      ...commonRequiredBase,
       NODE_ENV: 'local',
-      AUDIT_RETENTION_DAYS: '30',
-      SESSION_RETENTION_DAYS: '30',
     });
 
     expect(parsed.success).toBe(true);
@@ -276,35 +275,32 @@ describe('env-schema', () => {
     expect(withKey.success).toBe(true);
   });
 
-  it('requires METRICS_BEARER_TOKEN in production when METRICS_ENABLED is true', () => {
+  it('requires METRICS_SCRAPE_TOKEN whenever METRICS_ENABLED is true', () => {
     const productionWithMetrics = {
       ...productionRequiredBase,
       METRICS_ENABLED: 'true',
+      METRICS_SCRAPE_TOKEN: undefined,
     };
 
     const missingToken = envSchema.safeParse(productionWithMetrics);
     expect(missingToken.success).toBe(false);
     if (!missingToken.success) {
       expect(
-        missingToken.error.issues.some((issue) => issue.path[0] === 'METRICS_BEARER_TOKEN'),
+        missingToken.error.issues.some((issue) => issue.path[0] === 'METRICS_SCRAPE_TOKEN'),
       ).toBe(true);
     }
 
     const withToken = envSchema.safeParse({
       ...productionWithMetrics,
-      METRICS_BEARER_TOKEN: 'b'.repeat(32),
+      METRICS_SCRAPE_TOKEN: 'b'.repeat(32),
     });
     expect(withToken.success).toBe(true);
   });
 
   it('accepts NODE_ENV staging for secure cookies and staging deploys', () => {
     const parsed = envSchema.safeParse({
-      DATABASE_URL: DATABASE_URL_FIXTURE,
-      REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
+      ...commonRequiredBase,
       NODE_ENV: 'staging',
-      AUDIT_RETENTION_DAYS: '30',
-      SESSION_RETENTION_DAYS: '30',
     });
 
     expect(parsed.success).toBe(true);
@@ -313,34 +309,41 @@ describe('env-schema', () => {
     }
   });
 
-  it('rejects non-local FRONTEND_URL when NODE_ENV is not production', () => {
+  it('accepts a public FRONTEND_URL across all NODE_ENV values (magic-link inline-token leak removed)', () => {
+    /**
+     * Previously, non-production runtimes were forced to use a localhost
+     * FRONTEND_URL because the magic-link service inlined the raw token in
+     * API responses. That leak has been eliminated, so deployed non-production
+     * environments may now use real public URLs identical to production.
+     */
+    const parsedDevelopment = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      FRONTEND_URL: 'https://staging.example.com',
+    });
+    expect(parsedDevelopment.success).toBe(true);
+
+    const parsedLocalhost = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      FRONTEND_URL: 'http://localhost:3000',
+    });
+    expect(parsedLocalhost.success).toBe(true);
+  });
+
+  it('rejects FRONTEND_URL that is not a valid http(s) URL', () => {
     const parsed = envSchema.safeParse({
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
       JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'development',
-      FRONTEND_URL: 'https://staging.example.com',
+      FRONTEND_URL: 'not-a-url',
       AUDIT_RETENTION_DAYS: '30',
-      SESSION_RETENTION_DAYS: '30',
+      AUTH_SESSION_RETENTION_DAYS: '30',
     });
-
     expect(parsed.success).toBe(false);
     if (!parsed.success) {
       expect(parsed.error.flatten().fieldErrors.FRONTEND_URL).toBeDefined();
     }
-  });
-
-  it('allows localhost FRONTEND_URL when NODE_ENV is development', () => {
-    const parsed = envSchema.safeParse({
-      DATABASE_URL: DATABASE_URL_FIXTURE,
-      REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
-      NODE_ENV: 'development',
-      FRONTEND_URL: 'http://localhost:3000',
-      AUDIT_RETENTION_DAYS: '30',
-      SESSION_RETENTION_DAYS: '30',
-    });
-
-    expect(parsed.success).toBe(true);
   });
 });

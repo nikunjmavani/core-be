@@ -57,20 +57,20 @@ function settleOrganizationRlsTransaction(request: FastifyRequest, reply: Fastif
  * When `tenant.middleware` has set `request.organizationId`, pins every Drizzle query for
  * the rest of that HTTP request to a single pooled checkout wrapped in `BEGIN` with
  * `SET LOCAL app.current_organization_id` so Row-Level Security policies observe the
- * same GUC as the handler (fixes cross-connection RLS drift when `DB_MAX` > 1).
+ * same GUC as the handler (fixes cross-connection RLS drift when `DATABASE_POOL_MAX` > 1).
  *
  * The outer transaction commits on `onResponse` when status < 400; 4xx/5xx roll back.
  *
  * Pool pressure: this holds one checkout for the full request — keep handlers fast; org routes
  * without X-Organization-Id use autocommit per query instead.
  *
- * Bypassed entirely when `DB_RLS_SCOPED_CONTEXTS=true` (production hardening item 2). In that
+ * Bypassed entirely when `DATABASE_RLS_SCOPED_CONTEXTS=true` (production hardening item 2). In that
  * mode services are expected to wrap their unit-of-work in `withOrganizationDatabaseContext`.
  */
 const organizationRlsTransactionMiddlewarePlugin: FastifyPluginAsync = async (application) => {
-  if (env.DB_RLS_SCOPED_CONTEXTS) {
+  if (env.DATABASE_RLS_SCOPED_CONTEXTS) {
     logger.info(
-      'organization-rls-transaction-middleware.disabled: DB_RLS_SCOPED_CONTEXTS=true; using scoped withOrganizationDatabaseContext path',
+      'organization-rls-transaction-middleware.disabled: DATABASE_RLS_SCOPED_CONTEXTS=true; using scoped withOrganizationDatabaseContext path',
     );
     return;
   }
@@ -92,7 +92,7 @@ const organizationRlsTransactionMiddlewarePlugin: FastifyPluginAsync = async (ap
       done();
     };
 
-    const statementTimeoutMs = env.DB_HTTP_STATEMENT_TIMEOUT_MS;
+    const statementTimeoutMs = env.DATABASE_HTTP_STATEMENT_TIMEOUT_MS;
 
     organizationRlsCheckoutHeld.set(request, true);
     incrementOrganizationRlsCheckoutCount();

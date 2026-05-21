@@ -3,9 +3,15 @@ import * as logger from '../logger.util.js';
 import { buildEnvironmentVariables } from '../build-env-vars.js';
 import type { SetupConfig, SetupSecrets, SetupState, ProviderResult } from '../types.js';
 
+/**
+ * Maps short CLI aliases (`dev`, `prod`) to canonical full GitHub Environment
+ * names (`development`, `production`). Always use full names downstream — the
+ * `gh secret set --env <name>` calls and the `.github/environments/*.json`
+ * files are keyed by the canonical name.
+ */
 const GITHUB_ENV_MAP: Record<string, string> = {
-  dev: 'dev',
-  qa: 'qa',
+  dev: 'development',
+  development: 'development',
   prod: 'production',
   production: 'production',
 };
@@ -76,7 +82,7 @@ export async function provision(
       setSecretNames.push('POSTMAN_WORKSPACE_ID');
     }
 
-    // Per-environment secrets (GitHub Environments: dev, qa, production)
+    // Per-environment secrets (GitHub Environments: development, production)
     const railwayServices = state.railway?.services ?? {};
     for (const environmentName of environments) {
       const ghEnv = GITHUB_ENV_MAP[environmentName] ?? environmentName;

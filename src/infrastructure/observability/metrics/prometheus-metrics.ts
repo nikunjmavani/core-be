@@ -77,7 +77,7 @@ function registerOn(registry: Registry): void {
 
   postgresPoolMaxConnections = new Gauge({
     name: 'postgres_pool_max_connections',
-    help: 'Configured postgres.js pool max connections (DB_MAX)',
+    help: 'Configured postgres.js pool max connections (DATABASE_POOL_MAX)',
     registers: [registry],
   });
 

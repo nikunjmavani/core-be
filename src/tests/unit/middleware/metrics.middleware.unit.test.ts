@@ -4,8 +4,9 @@ import { resetEnvCacheForTests } from '@/shared/config/env.config.js';
 
 describe('metrics.middleware', () => {
   const originalMetricsEnabled = process.env.METRICS_ENABLED;
-  const originalMetricsBearer = process.env.METRICS_BEARER_TOKEN;
+  const originalMetricsBearer = process.env.METRICS_SCRAPE_TOKEN;
   const originalNodeEnv = process.env.NODE_ENV;
+  const METRICS_TOKEN_FIXTURE = 'metrics-token-fixture-minimum-32-chars';
 
   beforeEach(() => {
     vi.resetModules();
@@ -22,9 +23,9 @@ describe('metrics.middleware', () => {
       process.env.METRICS_ENABLED = originalMetricsEnabled;
     }
     if (originalMetricsBearer === undefined) {
-      delete process.env.METRICS_BEARER_TOKEN;
+      delete process.env.METRICS_SCRAPE_TOKEN;
     } else {
-      process.env.METRICS_BEARER_TOKEN = originalMetricsBearer;
+      process.env.METRICS_SCRAPE_TOKEN = originalMetricsBearer;
     }
     process.env.NODE_ENV = originalNodeEnv;
     resetEnvCacheForTests();
@@ -42,13 +43,13 @@ describe('metrics.middleware', () => {
     await application.close();
   });
 
-  it('requires bearer token in production when METRICS_BEARER_TOKEN is set', async () => {
+  it('requires bearer token whenever metrics are enabled', async () => {
     process.env.METRICS_ENABLED = 'true';
     resetEnvCacheForTests();
     vi.doMock('@/shared/config/env.config.js', () => ({
       getEnv: () => ({
-        NODE_ENV: 'production',
-        METRICS_BEARER_TOKEN: 'metrics-secret',
+        METRICS_ENABLED: true,
+        METRICS_SCRAPE_TOKEN: METRICS_TOKEN_FIXTURE,
       }),
       resetEnvCacheForTests: () => {},
     }));
@@ -67,16 +68,15 @@ describe('metrics.middleware', () => {
     const authorized = await application.inject({
       method: 'GET',
       url: '/metrics',
-      headers: { authorization: 'Bearer metrics-secret' },
+      headers: { authorization: `Bearer ${METRICS_TOKEN_FIXTURE}` },
     });
     expect(authorized.statusCode).toBe(200);
     await application.close();
   });
 
-  it('returns Prometheus text when METRICS_ENABLED is true', async () => {
+  it('returns Prometheus text when METRICS_ENABLED is true and bearer token is valid', async () => {
     process.env.METRICS_ENABLED = 'true';
-    process.env.NODE_ENV = 'test';
-    delete process.env.METRICS_BEARER_TOKEN;
+    process.env.METRICS_SCRAPE_TOKEN = METRICS_TOKEN_FIXTURE;
     resetEnvCacheForTests();
     vi.doMock('@/infrastructure/observability/metrics/metrics.js', () => ({
       isMetricsEnabled: () => true,
@@ -87,7 +87,11 @@ describe('metrics.middleware', () => {
       await import('@/shared/middlewares/metrics.middleware.js');
     const application = Fastify();
     await application.register(metricsMiddleware);
-    const response = await application.inject({ method: 'GET', url: '/metrics' });
+    const response = await application.inject({
+      method: 'GET',
+      url: '/metrics',
+      headers: { authorization: `Bearer ${METRICS_TOKEN_FIXTURE}` },
+    });
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toContain('text/plain');
     expect(response.body).toContain('process_cpu');

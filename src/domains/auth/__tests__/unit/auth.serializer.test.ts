@@ -9,13 +9,22 @@ describe('AuthSerializer', () => {
     });
   });
 
-  it('magicLinkSent shapes response with message and expiry', () => {
-    const payload = { message: 'sent', expires_in_minutes: 15, token: 't' };
+  it('magicLinkSent shapes response with message and expiry (token never returned)', () => {
+    const payload = { message: 'sent', expires_in_minutes: 15 };
     expect(AuthSerializer.magicLinkSent(payload)).toStrictEqual({
       message: 'sent',
       expires_in_minutes: 15,
-      token: 't',
     });
+    /**
+     * Defense-in-depth: even if a `token` slips through the typed boundary,
+     * the serializer must not forward it. Verifies the leak removal.
+     */
+    const stray = AuthSerializer.magicLinkSent({
+      message: 'sent',
+      expires_in_minutes: 15,
+      ...({ token: 'should-not-leak' } as Record<string, unknown>),
+    });
+    expect(stray).not.toHaveProperty('token');
   });
 
   it('mfaVerified returns verified flag', () => {

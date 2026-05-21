@@ -41,12 +41,12 @@ function settleRequestStatementTimeoutTransaction(
  * Pins non-org HTTP requests to a short-lived transaction with `SET LOCAL statement_timeout`
  * when org RLS middleware did not already open a pinned checkout.
  *
- * Bypassed entirely when `DB_RLS_SCOPED_CONTEXTS=true` (production hardening item 2). In that
+ * Bypassed entirely when `DATABASE_RLS_SCOPED_CONTEXTS=true` (production hardening item 2). In that
  * mode `statement_timeout` is enforced at the postgres.js connection level via
- * `DB_HTTP_STATEMENT_TIMEOUT_MS` so no per-request transaction is required.
+ * `DATABASE_HTTP_STATEMENT_TIMEOUT_MS` so no per-request transaction is required.
  */
 const requestStatementTimeoutMiddlewarePlugin: FastifyPluginAsync = async (application) => {
-  if (env.DB_RLS_SCOPED_CONTEXTS) {
+  if (env.DATABASE_RLS_SCOPED_CONTEXTS) {
     return;
   }
   application.addHook('onRequest', (request: FastifyRequest, _reply, done) => {
@@ -71,7 +71,7 @@ const requestStatementTimeoutMiddlewarePlugin: FastifyPluginAsync = async (appli
       return;
     }
 
-    const statementTimeoutMs = env.DB_HTTP_STATEMENT_TIMEOUT_MS;
+    const statementTimeoutMs = env.DATABASE_HTTP_STATEMENT_TIMEOUT_MS;
     if (statementTimeoutMs <= 0) {
       done();
       return;

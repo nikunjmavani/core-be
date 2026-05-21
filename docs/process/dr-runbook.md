@@ -70,7 +70,7 @@ flowchart TD
 ### 3. Application (Railway)
 
 1. Redeploy latest known-good image from `main` (or previous green deployment).
-2. Confirm secrets: `JWT_*`, `STRIPE_*`, `SENTRY_DSN`, `ALLOWED_ORIGINS`, `DATABASE_URL`, `REDIS_URL`, `DEPLOYMENT_PROCESS_COUNT`.
+2. Confirm secrets: `JWT_*`, `STRIPE_*`, `SENTRY_DSN`, `ALLOWED_ORIGINS`, `DATABASE_URL`, `REDIS_URL`, `DEPLOYMENT_TOTAL_REPLICA_COUNT`.
 3. Scale workers to normal count ([worker-scaling.md](../deployment/runbooks/worker-scaling.md)).
 4. Hit `GET /health/ready` until 200 with all dependencies available.
 

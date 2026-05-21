@@ -21,7 +21,7 @@ export function buildEnvironmentVariables(
 
   const variables: EnvironmentVariables = {
     PORT: String(config.app.port),
-    HOST: config.app.host,
+    HTTP_BIND_HOST: config.app.host,
     NODE_ENV: environment?.nodeEnvironment ?? 'development',
     LOG_LEVEL: environment?.nodeEnvironment === 'production' ? 'info' : 'debug',
     DATABASE_URL: state.neon?.branches?.[environmentName]?.databaseUrl ?? '',
@@ -32,7 +32,7 @@ export function buildEnvironmentVariables(
     RATE_LIMIT_MAX: String(config.app.rateLimitMax[environmentName] ?? 100),
     RATE_LIMIT_WINDOW_MS: String(config.app.rateLimitWindowMs),
     AUDIT_RETENTION_DAYS: DEFAULT_AUDIT_RETENTION_DAYS,
-    SESSION_RETENTION_DAYS: DEFAULT_SESSION_RETENTION_DAYS,
+    AUTH_SESSION_RETENTION_DAYS: DEFAULT_SESSION_RETENTION_DAYS,
   };
 
   if (config.providers.resend.enabled && secrets.resend.apiKey) {

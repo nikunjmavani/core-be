@@ -39,7 +39,7 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 | Doc                                                    | Description                                                                     |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------- |
 | [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md) | **Single CI/CD reference** — CI jobs, deploy, release-please, tokens, diagrams. |
-| [branch-protection.md](ci-cd/branch-protection.md)     | Required checks for `main` / `dev` / `qa`.                                      |
+| [branch-protection.md](ci-cd/branch-protection.md)     | Required checks for `main` / `dev`.                                             |
 
 ### [runbooks/](runbooks/)
 

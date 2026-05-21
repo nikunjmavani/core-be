@@ -5,6 +5,7 @@ import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import type { MagicLinkSendResult } from '@/domains/auth/auth.types.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionRepository } from '../auth-session/auth-session.repository.js';
 import type { VerificationTokenRepository } from './verification-token.repository.js';
@@ -24,15 +25,15 @@ export class MagicLinkService {
     private readonly verificationTokenRepository: VerificationTokenRepository,
   ) {}
 
-  /** Create a magic link token and send it via email (or return token in non-production). */
-  async send(
-    body: unknown,
-    _context?: { requestId?: string },
-  ): Promise<{
-    messageKey: string;
-    expires_in_minutes: number;
-    token?: string;
-  }> {
+  /**
+   * Create a magic link token and dispatch it to the user via email.
+   *
+   * The raw token is never returned to the caller in any environment — it leaves
+   * the service only through the `AUTH_EVENT.MAGIC_LINK_REQUESTED` event payload
+   * (consumed by the mail handler). Tests capture the token by subscribing to
+   * that event via `captureNextMagicLinkToken` in `src/tests/helpers/magic-link.helper.ts`.
+   */
+  async send(body: unknown, _context?: { requestId?: string }): Promise<MagicLinkSendResult> {
     const parsed = validateMagicLinkSend(body);
     if (isDisposableEmailBlocked(parsed.email)) {
       throw new ValidationError('errors:disposableEmail', undefined, undefined, [
@@ -68,17 +69,10 @@ export class MagicLinkService {
       timestamp: new Date(),
     });
 
-    const result: { messageKey: string; expires_in_minutes: number; token?: string } = {
+    return {
       messageKey: 'success:magicLinkEmailSent',
       expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
     };
-
-    // Only return raw token in non-production for API testing
-    if (env.NODE_ENV !== 'production') {
-      result.token = rawToken;
-    }
-
-    return result;
   }
 
   /** Verify magic link token, create session, return JWT + session_public_id. */
@@ -97,7 +91,7 @@ export class MagicLinkService {
     const user = await this.userService.findById(record.user_id);
     if (!user) throw new UnauthorizedError('errors:userNotFound');
 
-    const sessionMaxAgeDays = env.SESSION_MAX_AGE_DAYS;
+    const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
     const expiresAt = new Date(Date.now() + sessionMaxAgeDays * 86_400_000);
 
     const jsonWebToken = await signAccessToken({

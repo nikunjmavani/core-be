@@ -68,7 +68,7 @@ describe('jwt.util', () => {
     vi.useRealTimers();
   });
 
-  describe('RS256 kid and multi-key verify', () => {
+  describe('RS256 single-key verify', () => {
     const keyPairA = generateRsaPemKeyPair();
     const keyPairB = generateRsaPemKeyPair();
 
@@ -76,16 +76,12 @@ describe('jwt.util', () => {
       process.env.JWT_PRIVATE_KEY = keyPairA.privateKey;
       process.env.JWT_PUBLIC_KEY = keyPairA.publicKey;
       process.env.JWT_SIGNING_KID = 'key-a';
-      delete process.env.JWT_PUBLIC_KEYS;
       resetEnvCacheForTests();
       resetJwtCachesForTests();
     });
 
     afterEach(() => {
-      delete process.env.JWT_PRIVATE_KEY;
-      delete process.env.JWT_PUBLIC_KEY;
       delete process.env.JWT_SIGNING_KID;
-      delete process.env.JWT_PUBLIC_KEYS;
       resetEnvCacheForTests();
       resetJwtCachesForTests();
     });
@@ -97,32 +93,15 @@ describe('jwt.util', () => {
       expect(header.kid).toBe('key-a');
     });
 
-    it('verifies with the matching public key for kid', async () => {
+    it('verifies with the configured public key', async () => {
       const token = await signAccessToken({ userId: 'user-rs256-verify' });
       const payload = await verifyAccessToken(token);
       expect(payload.userId).toBe('user-rs256-verify');
     });
 
-    it('verifies during rotation when an older kid remains in JWT_PUBLIC_KEYS', async () => {
-      const token = await signAccessToken({ userId: 'user-rotation' });
-      process.env.JWT_PUBLIC_KEYS = JSON.stringify({
-        'key-a': keyPairA.publicKey,
-        'key-b': keyPairB.publicKey,
-      });
-      delete process.env.JWT_PUBLIC_KEY;
-      resetEnvCacheForTests();
-      resetJwtCachesForTests();
-
-      const payload = await verifyAccessToken(token);
-      expect(payload.userId).toBe('user-rotation');
-    });
-
-    it('rejects when no configured public key matches the token', async () => {
-      const token = await signAccessToken({ userId: 'user-no-key' });
-      process.env.JWT_PUBLIC_KEYS = JSON.stringify({
-        'key-b': keyPairB.publicKey,
-      });
-      delete process.env.JWT_PUBLIC_KEY;
+    it('rejects when JWT_PUBLIC_KEY is replaced by a different keypair', async () => {
+      const token = await signAccessToken({ userId: 'user-mismatched-key' });
+      process.env.JWT_PUBLIC_KEY = keyPairB.publicKey;
       resetEnvCacheForTests();
       resetJwtCachesForTests();
 
@@ -132,15 +111,15 @@ describe('jwt.util', () => {
 
   describe('algorithm-confusion and claim validation', () => {
     const sharedSecret = 'test-jwt-secret-min-32-chars-xxxxxxxx';
+    const keyPair = generateRsaPemKeyPair();
     const encoder = new TextEncoder();
     const now = Math.floor(Date.now() / 1000);
 
     beforeEach(() => {
       process.env.JWT_SECRET = sharedSecret;
-      delete process.env.JWT_PRIVATE_KEY;
-      delete process.env.JWT_PUBLIC_KEY;
+      process.env.JWT_PRIVATE_KEY = keyPair.privateKey;
+      process.env.JWT_PUBLIC_KEY = keyPair.publicKey;
       delete process.env.JWT_SIGNING_KID;
-      delete process.env.JWT_PUBLIC_KEYS;
       resetEnvCacheForTests();
       resetJwtCachesForTests();
     });

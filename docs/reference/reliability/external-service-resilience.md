@@ -21,7 +21,7 @@ OAuth provider `fetch` calls (Google/GitHub) are **not** circuit-wrapped today.
 
 ## External calls and database transactions
 
-With `DB_RLS_SCOPED_CONTEXTS=true` (default), HTTP handlers do **not** pin a Postgres checkout for the full request. Still avoid awaiting Stripe / S3 / Resend inside `withOrganizationDatabaseContext` / `withTransaction` callbacks — network latency should not run while a DB transaction is open.
+With `DATABASE_RLS_SCOPED_CONTEXTS=true` (default), HTTP handlers do **not** pin a Postgres checkout for the full request. Still avoid awaiting Stripe / S3 / Resend inside `withOrganizationDatabaseContext` / `withTransaction` callbacks — network latency should not run while a DB transaction is open.
 
 **Pattern:** resolve provider state first (or after DB writes), then call external APIs outside the scoped DB wrapper. Subscription create already calls `paymentProvider.createSubscription` before `repository.create`.
 

@@ -7,7 +7,7 @@ core-be uses **two Redis surfaces**:
 | **Cache** | `REDIS_URL` | Permission cache, idempotency, rate limits, OAuth/MFA/WebAuthn state, circuit breakers |
 | **BullMQ** | `REDIS_URL` by default | Mail, notifications, webhooks, Stripe webhook, retention workers, DLQ |
 
-**Current topology:** all Redis-backed workloads intentionally share one managed Redis instance for dev, qa, and production. `REDIS_BULLMQ_URL` remains an optional override, but production validation expects it to be unset or point at the same endpoint as `REDIS_URL`.
+**Current topology:** all Redis-backed workloads intentionally share one managed Redis instance for development and production. `REDIS_BULLMQ_URL` remains an optional override, but production validation expects it to be unset or point at the same endpoint as `REDIS_URL`.
 
 ---
 
@@ -35,7 +35,7 @@ Mitigation for the current single-instance topology: use a plan with enough memo
 
 Set `REDIS_KEY_PREFIX` when multiple environments share one Redis instance to avoid queue/cache cross-pollination. BullMQ `prefix` and ioredis `keyPrefix` both use [`resolveRedisKeyPrefix()`](../../../src/infrastructure/cache/redis-prefix.util.ts).
 
-Boot validation when `NODE_ENV=production`:
+Boot validation in every runtime:
 
 - `REDIS_BULLMQ_URL` may be omitted.
 - If set, it must point to the same Redis endpoint as `REDIS_URL` for the current single-instance deployment.
@@ -82,7 +82,7 @@ A startup **warning** is logged when BullMQ is configured to use a separate Redi
 Complete **before** deploying the single-instance topology:
 
 1. Confirm one managed Redis instance exists per environment and `REDIS_URL` points to it.
-2. Remove `REDIS_BULLMQ_URL` from GitHub `dev`, `qa`, and `production` environment secrets, or set it equal to `REDIS_URL` during transition.
+2. Remove `REDIS_BULLMQ_URL` from GitHub `development` and `production` environment secrets, or set it equal to `REDIS_URL` during transition.
 3. Rolling restart API and worker services so the shared URL is loaded.
 4. Verify `GET /health/ready` — `redis` and `bullmq` should be `connected`.
 5. **Job migration:** queued jobs on a previous separate BullMQ Redis instance are **not** copied automatically. Drain workers or accept a brief maintenance window before cutover.

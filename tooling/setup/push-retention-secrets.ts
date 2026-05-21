@@ -1,11 +1,11 @@
 /**
- * Push AUDIT_RETENTION_DAYS and SESSION_RETENTION_DAYS to GitHub Environment secrets.
+ * Push AUDIT_RETENTION_DAYS and AUTH_SESSION_RETENTION_DAYS to GitHub Environment secrets.
  * Requires: gh auth login (or GH_TOKEN with repo + secrets scope).
  *
  * Usage:
  *   pnpm setup:push-retention-secrets
- *   CONFIG=dev pnpm setup:push-retention-secrets
- *   AUDIT_RETENTION_DAYS=90 SESSION_RETENTION_DAYS=30 pnpm setup:push-retention-secrets
+ *   CONFIG=development pnpm setup:push-retention-secrets
+ *   AUDIT_RETENTION_DAYS=90 AUTH_SESSION_RETENTION_DAYS=30 pnpm setup:push-retention-secrets
  */
 import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -13,14 +13,20 @@ import { resolve } from 'node:path';
 
 const CONFIG_PATH = resolve(import.meta.dirname, '../setup.config.json');
 
+/**
+ * Maps short CLI aliases (`dev`, `prod`) to canonical full GitHub Environment
+ * names (`development`, `production`). Always use full names downstream — the
+ * `gh secret set --env <name>` calls and the `.github/environments/*.json`
+ * files are keyed by the canonical name.
+ */
 const GITHUB_ENV_MAP: Record<string, string> = {
-  dev: 'dev',
-  qa: 'qa',
+  dev: 'development',
+  development: 'development',
   prod: 'production',
   production: 'production',
 };
 
-const ALL_GITHUB_ENVIRONMENTS = ['dev', 'qa', 'production'] as const;
+const ALL_GITHUB_ENVIRONMENTS = ['development', 'production'] as const;
 
 function loadRepository(): string {
   if (existsSync(CONFIG_PATH)) {
@@ -66,7 +72,7 @@ function setGitHubEnvironmentSecret(
 
 function main(): void {
   const auditRetentionDays = process.env.AUDIT_RETENTION_DAYS ?? '90';
-  const sessionRetentionDays = process.env.SESSION_RETENTION_DAYS ?? '30';
+  const sessionRetentionDays = process.env.AUTH_SESSION_RETENTION_DAYS ?? '30';
   const configFilter = process.env.CONFIG;
 
   let repository: string;
@@ -87,7 +93,7 @@ function main(): void {
 
   const secrets = [
     { name: 'AUDIT_RETENTION_DAYS', value: auditRetentionDays },
-    { name: 'SESSION_RETENTION_DAYS', value: sessionRetentionDays },
+    { name: 'AUTH_SESSION_RETENTION_DAYS', value: sessionRetentionDays },
   ] as const;
 
   console.log(`Repository: ${repository}`);

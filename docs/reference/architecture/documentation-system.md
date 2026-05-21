@@ -46,7 +46,7 @@ flowchart LR
 | Chaos testing | [chaos-testing.md](../reliability/chaos-testing.md) | chaos-test-maintainer | Toxiproxy setup, scenarios |
 | Contract tests | [contract-tests.md](../testing/contract-tests.md) | contract-test-maintainer | Stripe/Resend/S3 fixtures |
 | Load testing | [load-testing.md](../testing/load-testing.md) | structure-maintainer | k6 scenarios, npm scripts |
-| Env / credentials | [integrations/credentials-and-env.md](../../integrations/credentials-and-env.md) | env-example-sync | User-facing env documentation |
+| Env / credentials | [integrations/credentials-and-env.md](../../integrations/credentials-and-env.md) | env-schema-add | User-facing env documentation |
 | Doc index / links | [docs/README.md](../../README.md) | docs-maintainer | New/renamed/moved hand-written doc |
 | New requirements | [requirement-intake.md](../../getting-started/requirement-intake.md) | skill-index | New requirement types or skill order |
 | This system | documentation-system.md | docs-maintainer, structure-maintainer | Ownership map or workflow changes |

@@ -12,7 +12,6 @@ These branches represent environments and use simple, standard names.
 | -------- | --------------------------------- | ---------------------------- |
 | **main** | Production-ready code             | Stable, fully tested code    |
 | **dev**  | Integration branch for developers | Latest development changes   |
-| **qa**   | Testing branch for QA team        | Code ready for QA validation |
 
 ---
 
@@ -58,10 +57,6 @@ flowchart TB
     main[main]
   end
 
-  subgraph qa_env [QA]
-    qa[qa]
-  end
-
   subgraph dev_env [Development]
     dev[dev]
   end
@@ -74,12 +69,11 @@ flowchart TB
 
   feature --> dev
   fix --> dev
-  dev --> qa
-  qa --> main
+  dev --> main
   hotfix --> main
 ```
 
-**Merge order:** feature/... → dev → qa → main
+**Merge order:** feature/... → dev → main
 
 ---
 
@@ -113,24 +107,19 @@ git push origin feature/ai-stream-response
 - **Target branch:** `dev` (for feature/fix/refactor branches).
 - PR title must follow conventional commits (e.g. `feat: add AI streaming response`).
 - CI runs automatically (quality, tests, security, Docker build). All must pass.
-- **Protected branches:** Required checks and merge rules for `main`, `dev`, and `qa` are documented in [branch-protection.md](../deployment/ci-cd/branch-protection.md).
+- **Protected branches:** Required checks and merge rules for `main` and `dev` are documented in [branch-protection.md](../deployment/ci-cd/branch-protection.md).
 - After review and approval, merge into `dev`.
 
-### 5. Promote to QA
+### 5. Promote to production
 
-- Open a PR **dev → qa** when a set of changes is ready for QA.
-- After merge, QA environment deploys (Railway). Run smoke and QA tests.
-
-### 6. Promote to production
-
-- Open a PR **qa → main** when QA has signed off.
+- Open a PR **dev → main** when changes are ready for production.
 - After merge, production deploys (Railway). Ensure migrations and runbook steps are done.
 
 ### Hotfix (production fix)
 
 - Branch from **main**: `git checkout main && git pull && git checkout -b hotfix/payment-crash`.
 - Fix, commit, push. Open PR **hotfix/... → main**.
-- After merge, deploy to production. Then merge **main → dev** (and optionally **main → qa**) to keep long-lived branches in sync.
+- After merge, deploy to production. Then merge **main → dev** to keep long-lived branches in sync.
 
 ---
 
@@ -153,8 +142,8 @@ git push origin feature/ai-stream-response
 
 ## Summary
 
-**Long-lived branches:** main, dev, qa
+**Long-lived branches:** main, dev
 
 **Short-lived branches:** feature/short-description, fix/short-description, refactor/short-description, docs/..., test/..., chore/..., hotfix/...
 
-**PR flow:** feature → dev → qa → main. CI runs on every PR; deployments to Railway trigger on push to dev (development), qa (QA), and main (production).
+**PR flow:** feature → dev → main. CI runs on every PR; deployments to Railway trigger on push to dev (development) and main (production).

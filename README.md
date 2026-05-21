@@ -25,7 +25,7 @@ Node.js API with Fastify, Drizzle ORM, and BullMQ.
 - **Documentation index:** [docs/README.md](docs/README.md) — docs by folder (`getting-started`, `process`, `deployment` → `setup/` · `ci-cd/` · `runbooks/`, `integrations`, `reference`, `reviews`); deployment hub: [docs/deployment/README.md](docs/deployment/README.md).
 - **One-command automated setup:** **[docs/deployment/setup/setup-automation.md](docs/deployment/setup/setup-automation.md)** — `pnpm setup:infra` provisions Neon, Redis, S3, Sentry, Railway, GitHub. Double confirm, atomic rollback, `setup:infra:revert` to tear down.
 - **Manual CLI setup:** [docs/deployment/setup/railway-github-cli-setup.md](docs/deployment/setup/railway-github-cli-setup.md) — set up Railway + GitHub via CLI (no automated provisioning).
-- **General reference:** [docs/getting-started/setup.md](docs/getting-started/setup.md) — local setup, Git workflow, testing. CI/CD and deployment: [docs/deployment/ci-cd/cicd-and-deployment.md](docs/deployment/ci-cd/cicd-and-deployment.md). Branch protection / required checks (`main`, `dev`, `qa`): [docs/deployment/ci-cd/branch-protection.md](docs/deployment/ci-cd/branch-protection.md).
+- **General reference:** [docs/getting-started/setup.md](docs/getting-started/setup.md) — local setup, Git workflow, testing. CI/CD and deployment: [docs/deployment/ci-cd/cicd-and-deployment.md](docs/deployment/ci-cd/cicd-and-deployment.md). Branch protection / required checks (`main`, `dev`): [docs/deployment/ci-cd/branch-protection.md](docs/deployment/ci-cd/branch-protection.md).
 - **Cursor cloud agents:** [docs/integrations/cursor-cloud-agent-environment.md](docs/integrations/cursor-cloud-agent-environment.md) — optional `Dockerfile.agent` for full dev dependencies in agent environments (production image remains [`Dockerfile`](Dockerfile)).
 
 ## New requirements
@@ -315,17 +315,20 @@ pnpm install
 
 ### 2. Environment Variables
 
-Env files live at **project root only** (no `env/` directory). Copy the example and edit locally:
+Env files live at **project root only** (no `env/` directory). Bootstrap one file per environment from the committed template:
 
 ```bash
-cp .env.example .env
-# Optional: machine-specific or secret overrides (loaded after `.env`)
-cp .env.local.example .env.local
+pnpm env:init                # creates .env.development + .env.production
+# Then edit each .env.<environment> file with real values.
 ```
 
-Provide your managed Postgres and Redis connection strings in `DATABASE_URL` and `REDIS_URL`. Set `JWT_SECRET` (min 32 chars). Committed templates: `.env.example`, `.env.local.example`. Gitignored: `.env`, `.env.local`.
+`pnpm env:init` copies `.env.example` → `.env.development` and `.env.production` (both
+gitignored). For local dev, edit `.env.development` and run with `NODE_ENV=development`
+(default). Provide your managed Postgres and Redis connection strings in `DATABASE_URL`
+and `REDIS_URL`. Set `JWT_SECRET` (min 32 chars). Committed template: `.env.example`.
+Gitignored: every `.env.*` file.
 
-For one-command automated setup (Neon, Redis, S3, Sentry, Railway, GitHub), see [docs/deployment/setup/setup-automation.md](docs/deployment/setup/setup-automation.md). Edit `tooling/setup.config.json`, run `pnpm setup:infra`. **Infrastructure must be ready before auto-deploy** (push to dev/qa/main) can succeed.
+For one-command automated setup (Neon, Redis, S3, Sentry, Railway, GitHub), see [docs/deployment/setup/setup-automation.md](docs/deployment/setup/setup-automation.md). Edit `tooling/setup.config.json`, run `pnpm setup:infra`. **Infrastructure must be ready before auto-deploy** (push to dev/main) can succeed.
 
 ### 3. Apply Migrations
 
@@ -343,7 +346,7 @@ Server is available at `http://localhost:3000`.
 
 ## Git workflow and branch strategy
 
-We use **main**, **dev**, and **qa** as long-lived branches. Work happens on short-lived branches (e.g. `feature/ai-stream-response`, `fix/login-error`) created from **dev**. Merge flow: feature → dev → qa → main. PR titles must follow [Conventional Commits](https://www.conventionalcommits.org/). Full branch naming, types, and step-by-step PR flow: **[docs/process/git-workflow.md](docs/process/git-workflow.md)**.
+We use **main** and **dev** as long-lived branches. Work happens on short-lived branches (e.g. `feature/ai-stream-response`, `fix/login-error`) created from **dev**. Merge flow: feature → dev → main. PR titles must follow [Conventional Commits](https://www.conventionalcommits.org/). Full branch naming, types, and step-by-step PR flow: **[docs/process/git-workflow.md](docs/process/git-workflow.md)**.
 
 ## Testing (when to run each)
 
@@ -366,7 +369,7 @@ We use **main**, **dev**, and **qa** as long-lived branches. Work happens on sho
 
 ## CI/CD and deployment
 
-**Single document:** [docs/deployment/ci-cd/cicd-and-deployment.md](docs/deployment/ci-cd/cicd-and-deployment.md) — CI pipeline (quality, test, security, Docker, docs, PR checks), branch-to-environment mapping (dev/qa/main → Railway), deploy flow, **where you need which token**, and first-time setup checklist. Includes diagrams.
+**Single document:** [docs/deployment/ci-cd/cicd-and-deployment.md](docs/deployment/ci-cd/cicd-and-deployment.md) — CI pipeline (quality, test, security, Docker, docs, PR checks), branch-to-environment mapping (dev/main → Railway), deploy flow, **where you need which token**, and first-time setup checklist. Includes diagrams.
 
 **Memory and quotas:** Align Railway / Kubernetes limits with **`NODE_OPTIONS=--max-old-space-size`** (`NODE_OPTIONS` synced from GitHub when set) — [docs/deployment/runbooks/resource-limits.md](docs/deployment/runbooks/resource-limits.md).
 
@@ -390,7 +393,7 @@ For a full step-by-step runbook (local dev → validate → build → run → de
    - Optional: `pnpm db:seed` (minimal) or `pnpm db:seed:full` (demo + common flows). Seed data is route-aligned; do not use seed in production for real data.
 
 5. **Deploy**
-   - Deploy workflows run on push to **dev**, **qa**, and **main** (see [CI/CD and deployment](#cicd-and-deployment)). API and worker deploy to Railway; env from GitHub. Ensure Postgres and Redis are available and migrations are run. Full detail: [docs/deployment/ci-cd/cicd-and-deployment.md](docs/deployment/ci-cd/cicd-and-deployment.md).
+   - Deploy workflows run on push to **dev** and **main** (see [CI/CD and deployment](#cicd-and-deployment)). API and worker deploy to Railway; env from GitHub. Ensure Postgres and Redis are available and migrations are run. Full detail: [docs/deployment/ci-cd/cicd-and-deployment.md](docs/deployment/ci-cd/cicd-and-deployment.md).
 
 See `.cursor/skills/production-hardening-guard/SKILL.md` for the full production checklist.
 

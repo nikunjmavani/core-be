@@ -1,20 +1,21 @@
-import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  driftResultsHaveIssues,
-  validateGitHubEnvironmentsDrift,
-} from './github-environments.js';
-
-const ENV_EXAMPLE_PATH = resolve(import.meta.dirname, '../../.env.example');
+  envSchemaConditionallyRequiredKeys,
+  envSchemaRequiredKeys,
+} from '@/shared/config/env-schema.js';
+import { driftResultsHaveIssues, validateGitHubEnvironmentsDrift } from './github-environments.js';
 
 /**
  * GitHub Environments that map to hosted deployments. Each one must carry an explicit
  * Postgres connection budget so `assertPostgresConnectionBudget()` can validate sizing
  * against `max_connections` at API/worker startup.
+ *
+ * Canonical mapping (see docs/deployment/runbooks/add-new-environment.md):
+ *   main branch → production
+ *   dev branch  → development
  */
-const DEPLOYMENT_COUNT_REQUIRED_ENVIRONMENTS = new Set<string>(['dev', 'qa', 'production']);
+const DEPLOYMENT_COUNT_REQUIRED_ENVIRONMENTS = new Set<string>(['development', 'production']);
 
 export type DeploymentCountIssue =
   | { readonly kind: 'missing' }
@@ -22,8 +23,8 @@ export type DeploymentCountIssue =
 
 /**
  * Apply the either-or rule used by `assertPostgresConnectionBudget`:
- * `DEPLOYMENT_PROCESS_COUNT` OR both `DEPLOYMENT_API_PROCESS_COUNT` and
- * `DEPLOYMENT_WORKER_PROCESS_COUNT` must be present in the environment secrets.
+ * `DEPLOYMENT_TOTAL_REPLICA_COUNT` OR both `DEPLOYMENT_API_REPLICA_COUNT` and
+ * `DEPLOYMENT_WORKER_REPLICA_COUNT` must be present in the environment secrets.
  */
 export function validateDeploymentProcessCountSecrets(
   environment: string,
@@ -34,9 +35,9 @@ export function validateDeploymentProcessCountSecrets(
   }
 
   const secrets = new Set(secretNames);
-  const hasTotal = secrets.has('DEPLOYMENT_PROCESS_COUNT');
-  const hasApi = secrets.has('DEPLOYMENT_API_PROCESS_COUNT');
-  const hasWorker = secrets.has('DEPLOYMENT_WORKER_PROCESS_COUNT');
+  const hasTotal = secrets.has('DEPLOYMENT_TOTAL_REPLICA_COUNT');
+  const hasApi = secrets.has('DEPLOYMENT_API_REPLICA_COUNT');
+  const hasWorker = secrets.has('DEPLOYMENT_WORKER_REPLICA_COUNT');
 
   if (hasTotal || (hasApi && hasWorker)) {
     return undefined;
@@ -49,38 +50,55 @@ export function validateDeploymentProcessCountSecrets(
   return { kind: 'missing' };
 }
 
-function parseRequiredVariables(): string[] {
-  const content = readFileSync(ENV_EXAMPLE_PATH, 'utf-8');
-  const variables: string[] = [];
-
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    const match = trimmed.match(/^([A-Z_][A-Z0-9_]*)=/);
-    if (match?.[1]) {
-      variables.push(match[1]);
-    }
-  }
-
-  return variables;
+/**
+ * Required variables are sourced directly from the Zod env schema — any key without
+ * `.optional()` and without `.default()`. This replaces the previous behavior of
+ * treating every uncommented line in `.env.example` as required, which falsely flagged
+ * optional integrations (Stripe, OAuth, S3) when they were not used.
+ */
+function getRequiredVariables(): string[] {
+  return [...envSchemaRequiredKeys];
 }
 
-function getGitHubEnvironmentSecretNames(environment: string): string[] {
+function fetchGitHubResource(
+  environment: string,
+  resource: 'secrets' | 'variables',
+  jqPath: string,
+): string[] {
   try {
+    // `--paginate` is required: the GitHub REST API caps each page at 30 entries, so
+    // without pagination the validator silently misses anything past the first page.
     const output = execSync(
-      `gh api repos/:owner/:repo/environments/${environment}/secrets --jq '.secrets[].name'`,
-      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 15000 },
+      `gh api --paginate repos/:owner/:repo/environments/${environment}/${resource} --jq '${jqPath}'`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 30000 },
     );
     return output
       .trim()
       .split('\n')
-      .map((name) => name.trim())
+      .map((entry) => entry.trim())
       .filter(Boolean);
   } catch (commandError) {
     const message = commandError instanceof Error ? commandError.message : String(commandError);
-    throw new Error(`Failed to fetch GitHub environment secrets for "${environment}": ${message}`);
+    throw new Error(
+      `Failed to fetch GitHub environment ${resource} for "${environment}": ${message}`,
+    );
   }
+}
+
+function getGitHubEnvironmentSecretNames(environment: string): string[] {
+  return fetchGitHubResource(environment, 'secrets', '.secrets[].name');
+}
+
+function getGitHubEnvironmentVariableEntries(
+  environment: string,
+): { name: string; value: string }[] {
+  // `gh api` returns full {name,value} objects for variables (unlike secrets).
+  // Use compact JSON per line — null-byte / control-char delimiters break `child_process`.
+  const raw = fetchGitHubResource(environment, 'variables', '.variables[] | {name, value} | @json');
+  return raw.map((entry) => {
+    const parsed = JSON.parse(entry) as { name?: string; value?: string };
+    return { name: parsed.name ?? '', value: parsed.value ?? '' };
+  });
 }
 
 function validateGitHubEnvironmentProtectionDrift(): boolean {
@@ -108,37 +126,66 @@ function main(): void {
     console.log('');
   }
 
-  const config = process.env['CONFIG'] ?? 'dev';
+  const config = process.env['CONFIG'] ?? 'development';
   const ghEnvMap: Record<string, string> = {
-    dev: 'dev',
-    qa: 'qa',
+    dev: 'development',
+    development: 'development',
     prod: 'production',
     production: 'production',
   };
   const environment = ghEnvMap[config] ?? config;
 
   console.log(`Validating GitHub environment: ${environment}`);
-  console.log('Required variables source: .env.example');
+  console.log('Required variables source: Zod env schema (src/shared/config/env-schema.ts)');
   console.log('');
 
-  const requiredVariables = parseRequiredVariables();
-  console.log(`Required variables: ${requiredVariables.length}`);
+  const requiredVariables = getRequiredVariables();
+  console.log(`Required schema keys: ${requiredVariables.length}`);
 
-  let ghVariables: string[];
+  let secretNames: string[];
+  let variableEntries: { name: string; value: string }[];
   try {
-    ghVariables = getGitHubEnvironmentSecretNames(environment);
+    secretNames = getGitHubEnvironmentSecretNames(environment);
+    variableEntries = getGitHubEnvironmentVariableEntries(environment);
   } catch (fetchError) {
     console.error(fetchError instanceof Error ? fetchError.message : String(fetchError));
     process.exit(1);
   }
 
-  console.log(`GitHub environment variables: ${ghVariables.length}`);
+  const variableNames = variableEntries.map((entry) => entry.name);
+  const allPresent = [...secretNames, ...variableNames];
+  const variableValues = new Map(variableEntries.map((entry) => [entry.name, entry.value]));
+
+  console.log(`GitHub secrets:   ${secretNames.length}`);
+  console.log(`GitHub variables: ${variableNames.length}`);
+  console.log(`Total present:    ${allPresent.length}`);
   console.log('');
 
-  const missingVariables = requiredVariables.filter((variable) => !ghVariables.includes(variable));
-  const deploymentCountIssue = validateDeploymentProcessCountSecrets(environment, ghVariables);
+  const missingVariables = requiredVariables.filter((variable) => !allPresent.includes(variable));
+  const deploymentCountIssue = validateDeploymentProcessCountSecrets(environment, allPresent);
 
-  if (missingVariables.length === 0 && deploymentCountIssue === undefined) {
+  // Conditional keys: gate the warning by reading the controlling variable when possible.
+  const missingConditional = envSchemaConditionallyRequiredKeys.filter((entry) => {
+    if (allPresent.includes(entry.key)) return false;
+    if (entry.key === 'CAPTCHA_SECRET') {
+      const provider = variableValues.get('CAPTCHA_PROVIDER');
+      // Only required when CAPTCHA_PROVIDER is explicitly `turnstile`.
+      // Schema default is `disabled`; absence ⇒ disabled ⇒ no warning.
+      return provider === 'turnstile';
+    }
+    if (entry.key === 'METRICS_SCRAPE_TOKEN') {
+      const metricsEnabled = variableValues.get('METRICS_ENABLED');
+      // METRICS_ENABLED schema default is true; warn unless explicitly disabled.
+      return metricsEnabled !== 'false' && metricsEnabled !== '0';
+    }
+    return true;
+  });
+
+  if (
+    missingVariables.length === 0 &&
+    deploymentCountIssue === undefined &&
+    missingConditional.length === 0
+  ) {
     console.log(
       `All ${requiredVariables.length} required variables are present in GitHub environment "${environment}".`,
     );
@@ -162,14 +209,14 @@ function main(): void {
     if (deploymentCountIssue.kind === 'partial-split') {
       console.error(
         `GitHub environment "${environment}" sets DEPLOYMENT_${deploymentCountIssue.present}_PROCESS_COUNT ` +
-          'without its counterpart. Set both DEPLOYMENT_API_PROCESS_COUNT and DEPLOYMENT_WORKER_PROCESS_COUNT, ' +
-          'or use the DEPLOYMENT_PROCESS_COUNT shorthand instead.',
+          'without its counterpart. Set both DEPLOYMENT_API_REPLICA_COUNT and DEPLOYMENT_WORKER_REPLICA_COUNT, ' +
+          'or use the DEPLOYMENT_TOTAL_REPLICA_COUNT shorthand instead.',
       );
     } else {
       console.error(
         `GitHub environment "${environment}" is missing the Postgres connection-budget secret(s). ` +
-          'Set DEPLOYMENT_PROCESS_COUNT (api_replicas + worker_replicas) or both ' +
-          'DEPLOYMENT_API_PROCESS_COUNT and DEPLOYMENT_WORKER_PROCESS_COUNT so deploy-railway.yml ' +
+          'Set DEPLOYMENT_TOTAL_REPLICA_COUNT (api_replicas + worker_replicas) or both ' +
+          'DEPLOYMENT_API_REPLICA_COUNT and DEPLOYMENT_WORKER_REPLICA_COUNT so deploy-railway.yml ' +
           'forwards them and assertPostgresConnectionBudget() can validate sizing at startup.',
       );
     }
@@ -178,14 +225,34 @@ function main(): void {
     console.log('');
   }
 
+  if (missingConditional.length > 0) {
+    console.warn(
+      `${missingConditional.length} conditionally-required secret(s) missing from GitHub environment "${environment}":`,
+    );
+    console.log('');
+    for (const entry of missingConditional) {
+      console.warn(`  ${entry.key}  (required when ${entry.condition})`);
+    }
+    console.log('');
+  }
+
   console.log(
-    'To fix, add secrets in GitHub: Settings → Environments →',
+    'To fix, add secrets or variables in GitHub: Settings → Environments →',
     environment,
-    '→ Environment secrets',
+    '→ Environment secrets / Environment variables',
+  );
+  console.log(
+    'See docs/reference/architecture/env-naming-conventions.md for the secret-vs-variable classification.',
   );
   console.log('');
 
-  process.exit(1);
+  // Hard fail only on missing strictly-required schema keys or deployment count issues.
+  // Conditional keys are warnings since their requirement depends on flags whose values
+  // GitHub does not expose (gh API returns secret *names* only).
+  if (missingVariables.length > 0 || deploymentCountIssue !== undefined) {
+    process.exit(1);
+  }
+  process.exit(0);
 }
 
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);

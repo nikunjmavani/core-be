@@ -10,7 +10,7 @@ const LOCAL_DEFAULT_API_PROCESS_COUNT = 1;
 const LOCAL_DEFAULT_WORKER_PROCESS_COUNT = 1;
 
 export type AssertConnectionBudgetOptions = {
-  /** When true, validates WORKER_CONCURRENCY against DB_MAX minus retention worker slots. */
+  /** When true, validates WORKER_CONCURRENCY against DATABASE_POOL_MAX minus retention worker slots. */
   readonly assertWorkerConcurrency?: boolean;
 };
 
@@ -27,7 +27,7 @@ type ResolvedDeploymentCounts =
     };
 
 function resolvePoolMaxConnections(): number {
-  return env.DB_MAX ?? DEFAULT_POOL_MAX_CONNECTIONS;
+  return env.DATABASE_POOL_MAX ?? DEFAULT_POOL_MAX_CONNECTIONS;
 }
 
 export async function resolvePostgresMaxConnections(): Promise<number> {
@@ -70,15 +70,15 @@ function isHostedDeployment(): boolean {
 }
 
 function resolveDeploymentCounts(): ResolvedDeploymentCounts | undefined {
-  const apiExplicit = env.DEPLOYMENT_API_PROCESS_COUNT;
-  const workerExplicit = env.DEPLOYMENT_WORKER_PROCESS_COUNT;
+  const apiExplicit = env.DEPLOYMENT_API_REPLICA_COUNT;
+  const workerExplicit = env.DEPLOYMENT_WORKER_REPLICA_COUNT;
   const hasPartialSplit =
     (apiExplicit !== undefined && workerExplicit === undefined) ||
     (apiExplicit === undefined && workerExplicit !== undefined);
 
   if (hasPartialSplit) {
     throw new Error(
-      'DEPLOYMENT_API_PROCESS_COUNT and DEPLOYMENT_WORKER_PROCESS_COUNT must both be set when using either',
+      'DEPLOYMENT_API_REPLICA_COUNT and DEPLOYMENT_WORKER_REPLICA_COUNT must both be set when using either',
     );
   }
 
@@ -91,7 +91,7 @@ function resolveDeploymentCounts(): ResolvedDeploymentCounts | undefined {
     };
   }
 
-  const total = env.DEPLOYMENT_PROCESS_COUNT;
+  const total = env.DEPLOYMENT_TOTAL_REPLICA_COUNT;
   if (total !== undefined) {
     return { kind: 'total', totalProcessCount: total };
   }
@@ -129,10 +129,10 @@ function buildDeploymentBudgetErrorMessage(parameters: {
 }): string {
   return (
     `Postgres connection budget exceeded: ${parameters.deploymentSummary} requires ` +
-    `${parameters.requiredConnections} pool connections at DB_MAX ${parameters.poolMaxConnections}, ` +
+    `${parameters.requiredConnections} pool connections at DATABASE_POOL_MAX ${parameters.poolMaxConnections}, ` +
     `but only ${parameters.allowedApplicationConnections} are available ` +
     `(max_connections ${parameters.postgresMaxConnections} − reserved ${parameters.reservedConnections}). ` +
-    'Set DEPLOYMENT_PROCESS_COUNT or DEPLOYMENT_API_PROCESS_COUNT / DEPLOYMENT_WORKER_PROCESS_COUNT, DB_MAX, ' +
+    'Set DEPLOYMENT_TOTAL_REPLICA_COUNT or DEPLOYMENT_API_REPLICA_COUNT / DEPLOYMENT_WORKER_REPLICA_COUNT, DATABASE_POOL_MAX, ' +
     'POSTGRES_MAX_CONNECTIONS, or POSTGRES_RESERVED_CONNECTIONS. ' +
     'See docs/deployment/runbooks/resource-limits.md'
   );
@@ -143,10 +143,10 @@ function formatDeploymentSummary(
   poolMaxConnections: number,
 ): string {
   if (counts.kind === 'total') {
-    return `${counts.totalProcessCount} processes × DB_MAX ${poolMaxConnections}`;
+    return `${counts.totalProcessCount} processes × DATABASE_POOL_MAX ${poolMaxConnections}`;
   }
 
-  return `${counts.apiProcessCount} API + ${counts.workerProcessCount} worker processes × DB_MAX ${poolMaxConnections}`;
+  return `${counts.apiProcessCount} API + ${counts.workerProcessCount} worker processes × DATABASE_POOL_MAX ${poolMaxConnections}`;
 }
 
 /** Application connection headroom: max_connections minus reserved admin/migration slots. */
@@ -215,7 +215,7 @@ export async function assertPostgresConnectionBudget(
     );
   } else if (isHostedDeployment()) {
     throw new Error(
-      'DEPLOYMENT_PROCESS_COUNT (or DEPLOYMENT_API_PROCESS_COUNT + DEPLOYMENT_WORKER_PROCESS_COUNT) ' +
+      'DEPLOYMENT_TOTAL_REPLICA_COUNT (or DEPLOYMENT_API_REPLICA_COUNT + DEPLOYMENT_WORKER_REPLICA_COUNT) ' +
         'is required for hosted deployments (production, or any environment with RAILWAY_GIT_COMMIT_SHA / ' +
         'KUBERNETES_SERVICE_HOST set) to validate Postgres connection budget. ' +
         'Set the secret in the GitHub Environment so deploy-railway.yml forwards it to the service. ' +
@@ -228,9 +228,9 @@ export async function assertPostgresConnectionBudget(
     const maxWorkerConcurrency = poolMaxConnections - RETENTION_WORKER_POOL_SLOT_RESERVE;
     if (workerConcurrency > maxWorkerConcurrency) {
       throw new Error(
-        `WORKER_CONCURRENCY (${workerConcurrency}) exceeds DB_MAX (${poolMaxConnections}) minus ` +
+        `WORKER_CONCURRENCY (${workerConcurrency}) exceeds DATABASE_POOL_MAX (${poolMaxConnections}) minus ` +
           `${RETENTION_WORKER_POOL_SLOT_RESERVE} retention worker slots (max ${maxWorkerConcurrency}). ` +
-          'Raise DB_MAX on the worker service or lower WORKER_CONCURRENCY.',
+          'Raise DATABASE_POOL_MAX on the worker service or lower WORKER_CONCURRENCY.',
       );
     }
   }

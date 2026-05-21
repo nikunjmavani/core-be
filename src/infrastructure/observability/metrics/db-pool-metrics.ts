@@ -78,13 +78,13 @@ async function resolveAllowedApplicationConnectionsCached(): Promise<number> {
 
 /** Pool gauge refresh and exhaustion alert interval (default from env). */
 export function resolvePostgresPoolPollIntervalMs(): number {
-  return getEnv().DB_POOL_ALERT_POLL_INTERVAL_MS;
+  return getEnv().DATABASE_POOL_ALERT_POLL_INTERVAL_MS;
 }
 
 let poolMonitoringInterval: ReturnType<typeof setInterval> | null = null;
 
 export async function refreshPostgresPoolMetrics(): Promise<void> {
-  const maxConnections = getEnv().DB_MAX ?? 10;
+  const maxConnections = getEnv().DATABASE_POOL_MAX ?? 10;
   let samples: PoolCountRow[] = [];
   let liveMetricsAvailable = false;
 

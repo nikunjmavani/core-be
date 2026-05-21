@@ -113,9 +113,9 @@ describe('github-environments.util', () => {
       driftResultsHaveIssues([
         { environment: 'production', configPath: 'production.json', issues: [] },
         {
-          environment: 'qa',
-          configPath: 'qa.json',
-          issues: [{ kind: 'mismatch', environment: 'qa', detail: 'example' }],
+          environment: 'development',
+          configPath: 'development.json',
+          issues: [{ kind: 'mismatch', environment: 'development', detail: 'example' }],
         },
       ]),
     ).toBe(true);

@@ -2,7 +2,7 @@ import { withOrganizationContext } from '@/infrastructure/database/contexts/tena
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 
 /**
- * Scoped RLS helper for the post-`DB_RLS_SCOPED_CONTEXTS` migration (production hardening item 2).
+ * Scoped RLS helper for the post-`DATABASE_RLS_SCOPED_CONTEXTS` migration (production hardening item 2).
  *
  * Opens a short Drizzle transaction, sets `app.current_organization_id` via `SET LOCAL`, and
  * runs `callback` with a pinned `databaseHandle`. When the caller is already inside a worker

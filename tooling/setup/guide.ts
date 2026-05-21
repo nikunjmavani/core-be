@@ -147,9 +147,9 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
       ],
       instructions: [
         '1. Log in to Stripe Dashboard',
-        '2. For dev/qa: Use the TEST mode keys (toggle "Test mode" on)',
+        '2. For development: Use the TEST mode keys (toggle "Test mode" on)',
         '   Copy the Secret key (starts with sk_test_...)',
-        '3. For prod: Switch to LIVE mode',
+        '3. For production: Switch to LIVE mode',
         '   Copy the Secret key (starts with sk_live_...)',
         '4. For webhooks: Go to Developers → Webhooks → Add endpoint',
         '   (Leave webhook secrets empty for now — they are created later)',

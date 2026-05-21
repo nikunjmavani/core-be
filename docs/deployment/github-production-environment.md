@@ -9,7 +9,6 @@ How **production** deploys are gated in GitHub Actions when using [deploy-railwa
 | GitHub Environment | Branch trigger (`workflow_run` after CI) | Railway target |
 | ------------------ | ---------------------------------------- | -------------- |
 | `production` | `main` | Production API + worker services |
-| `qa` | `qa` | QA stack |
 | `dev` | `dev` | Development stack |
 
 Manual dispatch (`workflow_dispatch`) can target any of the three via the `target` input.
@@ -22,9 +21,9 @@ Configure in **Settings → Environments → production**:
 
 1. **Required reviewers** — at least one team member (platform or release manager) must approve before the deploy job runs.
 2. **Deployment branches** — restrict to `main` only (optional but recommended).
-3. **Environment secrets** — `DATABASE_URL`, `RAILWAY_TOKEN`, `JWT_SECRET`, etc. per [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md). Do not reuse dev/qa secrets.
+3. **Environment secrets** — `DATABASE_URL`, `RAILWAY_TOKEN`, `JWT_SECRET`, etc. per [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md). Do not reuse dev secrets.
 
-The deploy workflow sets `environment: ${{ needs.resolve-environment.outputs.environment }}` on the deploy job, so GitHub enforces reviewers **only** when the resolved environment is `production` (or when you add reviewers to qa/dev).
+The deploy workflow sets `environment: ${{ needs.resolve-environment.outputs.environment }}` on the deploy job, so GitHub enforces reviewers **only** when the resolved environment is `production` (or when you add reviewers to development).
 
 ---
 

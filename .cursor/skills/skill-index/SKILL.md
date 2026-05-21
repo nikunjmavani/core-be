@@ -34,7 +34,7 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | path-to-production-gate        | `.cursor/skills/path-to-production-gate/SKILL.md`                         |
 | i18n-message-guard             | `.cursor/skills/i18n-message-guard/SKILL.md`                              |
 | openapi-multilingual           | `.cursor/skills/openapi-multilingual/SKILL.md`                            |
-| env-example-sync               | `.cursor/skills/env-example-sync/SKILL.md`                                |
+| env-schema-add                 | `.cursor/skills/env-schema-add/SKILL.md`                                  |
 | ide-productivity-guard         | `.cursor/skills/ide-productivity-guard/SKILL.md`                          |
 | docs-maintainer                | `.cursor/skills/docs-maintainer/SKILL.md`                                 |
 | docs-audit                     | `.cursor/skills/docs-audit/SKILL.md`                                      |
@@ -71,7 +71,7 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | Changed k6 scenarios, load-test scripts, or load-test docs                                                                                                                                                      | **structure-maintainer** (keep `docs/reference/testing/load-testing.md` and `src/tests/load/k6/README.md` in sync) | `.cursor/skills/structure-maintainer/SKILL.md`                    |
 | Added/edited user-facing message or translation key in errors, validators, services, controllers, constants, or locales                                                                                         | **i18n-message-guard**                                                                                     | `.cursor/skills/i18n-message-guard/SKILL.md`                      |
 | Added/changed OpenAPI locale files or multilingual OpenAPI (src/shared/locales/\*/openapi.json, docs:generate:multilang)                                                                                        | **openapi-multilingual**                                                                                   | `.cursor/skills/openapi-multilingual/SKILL.md`                    |
-| Changed env schema (`src/shared/config/env-schema.ts`) or `.env.example` / `.env.local.example`                                                                                                                                        | **env-example-sync**                                                                                       | `.cursor/skills/env-example-sync/SKILL.md`                        |
+| Changed env schema (`src/shared/config/env-schema.ts`) or `.env.example`                                                                                                                                                          | **env-schema-add**                                                                                         | `.cursor/skills/env-schema-add/SKILL.md`                          |
 | Changed `.vscode/extensions.json` or `.vscode/settings.json`                                                                                                                                                    | **ide-productivity-guard**                                                                                 | `.cursor/skills/ide-productivity-guard/SKILL.md`                  |
 | Added/renamed/moved a doc under `docs/` (hand-written .md); changed `docs/deployment/ci-cd/branch-protection.md` or `.github/rulesets/*.json`; or changed CI job `name:` fields referenced in branch protection | **docs-maintainer**                                                                                        | `.cursor/skills/docs-maintainer/SKILL.md`                         |
 | User asks to "review docs" or "audit documentation"                                                                                                                                                             | **docs-audit**                                                                                             | `.cursor/skills/docs-audit/SKILL.md`                              |
@@ -159,10 +159,10 @@ After completing any task, scan the changes and invoke matching skills:
 - **Trigger**: added or changed `src/shared/locales/*/openapi.json`; added a new locale for OpenAPI; or changed OpenAPI generation to use new locale keys
 - **Action**: read and follow `openapi-multilingual` — keep all locale files in sync (same keys), run `pnpm docs:generate:multilang` after changes
 
-### Env example sync
+### Env schema add
 
-- **Trigger**: added or removed env vars in `src/shared/config/env-schema.ts`, or edited `.env.example` / `.env.local.example`
-- **Action**: read and follow `env-example-sync` — run `pnpm tool:sync-env-example` (and `--fix` if needed), then add the printed "Environment variable changes" snippet to the PR description
+- **Trigger**: added, renamed, or removed env vars in `src/shared/config/env-schema.ts`, or edited `.env.example`
+- **Action**: read and follow `env-schema-add` — place the key under the correct `# GitHub Secrets` / `# GitHub Variables` half in `.env.example` (section IS classification), run `pnpm tool:sync-env-example`, regenerate operator templates with `pnpm env:init --force`, and `pnpm env:sync <env> --dry-run` for each hosted environment. Paste the PR description snippet.
 
 ### IDE productivity guard
 
@@ -240,7 +240,7 @@ The following `.cursor/rules/*.mdc` files auto-invoke skills based on file globs
 | `new-requirement-intake.mdc`              | `docs/getting-started/requirement-intake.md`                                                                                                                                        | skill-index + intake doc (run skills per requirement type)                 |
 | `path-to-production-gate.mdc`             | `docs/deployment/runbooks/runbook-dev-to-production.md`                                                                                                                             | path-to-production-gate (full review, plan, user review before production) |
 | `before-commit-guard-sync.mdc`            | `.husky/pre-commit`, `package.json`; or user reports failed commit / fix pre-commit                                                                                                 | before-commit-guard (guard runs on git commit; fix failing steps)          |
-| `env-example-sync.mdc`                    | `src/shared/config/env-schema.ts`, `.env.example`, `.env.local.example`                                                                                                                                   | env-example-sync                                                           |
+| `env-schema-add-sync.mdc`                 | `src/shared/config/env-schema.ts`, `.env.example`                                                                                                                                                   | env-schema-add                                                             |
 | `ide-productivity-guard-sync.mdc`         | `.vscode/extensions.json`, `.vscode/settings.json`                                                                                                                                  | ide-productivity-guard                                                     |
 | `docs-maintainer-sync.mdc`                | `docs/**/*.md` (hand-written; excludes generated openapi/postman/routes)                                                                                                            | docs-maintainer                                                            |
 | `sql-design-guard-sync.mdc`               | `src/domains/**/*.schema.ts`                                                                                                                                                        | sql-design-guard                                                           |

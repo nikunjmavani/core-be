@@ -10,7 +10,7 @@ Get the current PR to **mergeable + green CI + review comments addressed**.
 ## Preconditions
 
 - Use `gh` for PR status, checks, and comments.
-- Default branch: `main` (also `dev`, `qa` for CI — see `.github/workflows/ci.yml`).
+- Default branch: `main` (also `dev` for CI — see `.github/workflows/ci.yml`).
 
 ## Workflow
 

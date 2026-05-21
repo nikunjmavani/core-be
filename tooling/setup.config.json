@@ -6,9 +6,11 @@
   },
   "environments": [
     {
-      "name": "dev",
+      "name": "development",
       "label": "Development",
       "nodeEnvironment": "development",
+      "branch": "dev",
+      "protected": true,
       "isDefault": true
     }
   ],
@@ -37,7 +39,7 @@
       "project": "core-be",
       "platform": "node",
       "sampleRates": {
-        "dev": {
+        "development": {
           "traces": 1,
           "profile": 1
         }
@@ -74,14 +76,14 @@
     "port": 3000,
     "host": "0.0.0.0",
     "rateLimitMax": {
-      "dev": 10000
+      "development": 10000
     },
     "rateLimitWindowMs": 60000,
     "frontendUrl": {
-      "dev": "http://localhost:3000"
+      "development": "http://localhost:3000"
     },
     "allowedOrigins": {
-      "dev": "http://localhost:3000"
+      "development": "http://localhost:3000"
     }
   }
 }

@@ -22,7 +22,7 @@ export function createSessionCleanupWorker(): WorkerHandle {
   const worker = new Worker(
     SESSION_CLEANUP_QUEUE_NAME,
     async () => {
-      const retentionDays = env.SESSION_RETENTION_DAYS;
+      const retentionDays = env.AUTH_SESSION_RETENTION_DAYS;
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 

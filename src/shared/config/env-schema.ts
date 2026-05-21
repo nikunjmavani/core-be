@@ -9,10 +9,18 @@ const nodeEnvSchema = z
   .enum(['local', 'development', 'staging', 'production', 'test'])
   .default('local');
 
+const booleanString = (defaultValue: 'true' | 'false') =>
+  z
+    .string()
+    .optional()
+    .default(defaultValue)
+    .transform((value) => value === 'true' || value === '1');
+
 const envSchemaBase = z.object({
   // Server
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  HOST: z.string().min(1).default('0.0.0.0'),
+  /** Fastify HTTP bind address (worker health server also binds here). */
+  HTTP_BIND_HOST: z.string().min(1).default('0.0.0.0'),
   NODE_ENV: nodeEnvSchema,
   LOG_LEVEL: z.string().min(1).default('info'),
   /** When true, Fastify trusts X-Forwarded-* from the reverse proxy (required behind LB). */
@@ -47,61 +55,24 @@ const envSchemaBase = z.object({
 
   // Auth
   JWT_SECRET: z.string().min(32),
-  JWT_PRIVATE_KEY: z.string().optional(), // RS256 PEM private key (production)
-  JWT_PUBLIC_KEY: z.string().optional(), // RS256 PEM public key (production)
+  /** RS256 PEM private key. Required in every runtime; NODE_ENV is metadata only. */
+  JWT_PRIVATE_KEY: z.string().min(1),
+  /** RS256 PEM public key. Required in every runtime; NODE_ENV is metadata only. */
+  JWT_PUBLIC_KEY: z.string().min(1),
   /** Key id in JWT header when signing with RS256 (default: `default`). */
   JWT_SIGNING_KID: z.string().min(1).optional().default('default'),
-  /**
-   * Optional JSON map of kid → SPKI PEM for multi-key verify during rotation.
-   * When omitted, `JWT_PUBLIC_KEY` is used under `JWT_SIGNING_KID`.
-   */
-  JWT_PUBLIC_KEYS: z
-    .string()
-    .optional()
-    .transform((value, context) => {
-      if (value === undefined || value.trim() === '') {
-        return undefined;
-      }
-      try {
-        const parsed: unknown = JSON.parse(value);
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-          context.addIssue({
-            code: 'custom',
-            message: 'JWT_PUBLIC_KEYS must be a JSON object of kid → PEM string',
-          });
-          return z.NEVER;
-        }
-        const record: Record<string, string> = {};
-        for (const [kid, pem] of Object.entries(parsed)) {
-          if (typeof pem !== 'string' || pem.trim().length === 0) {
-            context.addIssue({
-              code: 'custom',
-              message: `JWT_PUBLIC_KEYS entry "${kid}" must be a non-empty PEM string`,
-            });
-            return z.NEVER;
-          }
-          // eslint-disable-next-line security/detect-object-injection -- kid from Object.entries iteration of parsed JSON.
-          record[kid] = pem;
-        }
-        return record;
-      } catch {
-        context.addIssue({
-          code: 'custom',
-          message: 'JWT_PUBLIC_KEYS must be valid JSON',
-        });
-        return z.NEVER;
-      }
-    }),
   /** Comma-separated emails that receive super_admin in JWT on login/refresh (platform ops). */
   GLOBAL_ADMIN_EMAILS: z.string().optional(),
   /** Shorter access-token TTL (seconds) for GLOBAL_ADMIN_EMAILS super_admin JWTs. Default 300 (5 min). */
   GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
 
   // Session
-  SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).default(7),
+  AUTH_SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).default(7),
+  /** Secure flag for session + CSRF cookies. Set false only for plaintext local loops. */
+  COOKIE_SECURE: booleanString('true'),
 
-  // CORS (required in production — comma-separated origins)
-  ALLOWED_ORIGINS: z.string().optional(),
+  // CORS (comma-separated origins; required in every runtime)
+  ALLOWED_ORIGINS: z.string().min(1),
 
   /** WebAuthn RP ID (hostname). Defaults to first ALLOWED_ORIGINS hostname or localhost. */
   WEBAUTHN_RP_ID: z.string().min(1).optional(),
@@ -157,15 +128,11 @@ const envSchemaBase = z.object({
 
   /**
    * When true, exposes GET /metrics (Prometheus text format).
-   * Defaults to true in production when unset; false otherwise.
+   * NODE_ENV is metadata only; disable explicitly with METRICS_ENABLED=false.
    */
-  METRICS_ENABLED: z
-    .string()
-    .optional()
-    .default(process.env.NODE_ENV === 'production' ? 'true' : 'false')
-    .transform((value) => value === 'true' || value === '1'),
-  /** Bearer token required for /metrics when METRICS_ENABLED in production (min 32 chars). */
-  METRICS_BEARER_TOKEN: z.string().min(32).optional(),
+  METRICS_ENABLED: booleanString('true'),
+  /** Bearer token a Prometheus scraper sends when scraping /metrics. Required when METRICS_ENABLED=true (min 32 chars). */
+  METRICS_SCRAPE_TOKEN: z.string().min(32).optional(),
   /** OTLP HTTP traces endpoint base URL (e.g. https://otel.example.com). Appends /v1/traces when omitted. */
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   /** OpenTelemetry service.name override (defaults: core-be-api / core-be-worker). */
@@ -201,27 +168,31 @@ const envSchemaBase = z.object({
     .min(60_000)
     .max(3_600_000)
     .default(300_000),
-  DB_MAX: z.coerce.number().int().min(1).optional(),
+  /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. */
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).optional(),
   /** Connections reserved for admin, migrations, and monitoring (subtracted from Postgres max_connections). */
   POSTGRES_RESERVED_CONNECTIONS: z.coerce.number().int().min(1).default(10),
   /** Override when SHOW max_connections is unavailable or wrong (e.g. behind pooler). */
   POSTGRES_MAX_CONNECTIONS: z.coerce.number().int().min(1).optional(),
-  /** API replicas + worker replicas — shorthand when split counts are not set. */
-  DEPLOYMENT_PROCESS_COUNT: z.coerce.number().int().min(1).optional(),
-  /** API service replica count for connection budget. */
-  DEPLOYMENT_API_PROCESS_COUNT: z.coerce.number().int().min(1).optional(),
-  /** Worker service replica count for connection budget. */
-  DEPLOYMENT_WORKER_PROCESS_COUNT: z.coerce.number().int().min(1).optional(),
-  DB_IDLE_TIMEOUT: z.coerce.number().int().min(1).optional(),
-  DB_CONNECT_TIMEOUT: z.coerce.number().int().min(1).optional(),
-  DB_MAX_LIFETIME: z.coerce.number().int().min(60).optional(),
+  /** Shorthand: api_replicas + worker_replicas. Used when split counts (API/WORKER) are not set. */
+  DEPLOYMENT_TOTAL_REPLICA_COUNT: z.coerce.number().int().min(1).optional(),
+  /** API service replica count for the Postgres connection budget. */
+  DEPLOYMENT_API_REPLICA_COUNT: z.coerce.number().int().min(1).optional(),
+  /** Worker service replica count for the Postgres connection budget. */
+  DEPLOYMENT_WORKER_REPLICA_COUNT: z.coerce.number().int().min(1).optional(),
+  /** postgres-js `idle_timeout` (seconds). */
+  DATABASE_POOL_IDLE_TIMEOUT_SECONDS: z.coerce.number().int().min(1).optional(),
+  /** postgres-js `connect_timeout` (seconds). */
+  DATABASE_POOL_CONNECT_TIMEOUT_SECONDS: z.coerce.number().int().min(1).optional(),
+  /** postgres-js `max_lifetime` (seconds). */
+  DATABASE_POOL_MAX_LIFETIME_SECONDS: z.coerce.number().int().min(60).optional(),
   /** Per-connection statement_timeout (ms). Caps runaway queries; 0 disables. Default: 30000. */
-  DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
   /**
    * Per-request SET LOCAL statement_timeout (ms) for HTTP handlers (org RLS and non-org pinned tx).
-   * Tighter than DB_STATEMENT_TIMEOUT_MS to release pool slots faster. Default: 5000. 0 disables SET LOCAL.
+   * Tighter than DATABASE_STATEMENT_TIMEOUT_MS to release pool slots faster. Default: 5000. 0 disables SET LOCAL.
    */
-  DB_HTTP_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(0).default(5_000),
+  DATABASE_HTTP_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(0).default(5_000),
   /**
    * Rollout flag for scoped RLS contexts (item 2 of the production hardening plan). When true,
    * the per-HTTP-request `organization-rls-transaction` + `request-statement-timeout` pinning
@@ -232,29 +203,36 @@ const envSchemaBase = z.object({
    * Roll out per-route or per-environment. See `docs/reference/data/migrations.md` and the
    * RLS unpin chaos test for the migration sequencing.
    */
-  DB_RLS_SCOPED_CONTEXTS: z.coerce.boolean().default(true),
+  DATABASE_RLS_SCOPED_CONTEXTS: z.coerce.boolean().default(true),
   /** Per-connection idle_in_transaction_session_timeout (ms). Caps stuck transactions; 0 disables. Default: 30000. */
-  DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
-  /** Warn when in-process org RLS checkouts reach this fraction of DB_MAX (default 0.8). */
-  DB_POOL_ACTIVE_WARN_RATIO: z.coerce.number().min(0).max(1).default(0.8),
-  /** Critical alert when in-process org RLS checkouts reach this fraction of DB_MAX (default 0.95). */
-  DB_POOL_ACTIVE_CRITICAL_RATIO: z.coerce.number().min(0).max(1).default(0.95),
+  DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
+  /** Warn when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.8). */
+  DATABASE_POOL_ACTIVE_WARN_RATIO: z.coerce.number().min(0).max(1).default(0.8),
+  /** Critical alert when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.95). */
+  DATABASE_POOL_ACTIVE_CRITICAL_RATIO: z.coerce.number().min(0).max(1).default(0.95),
   /** Warn when cluster-wide active connections (pg_stat_activity) reach this fraction of allowed budget. */
-  DB_POOL_CLUSTER_WARN_RATIO: z.coerce.number().min(0).max(1).default(0.8),
+  DATABASE_POOL_CLUSTER_WARN_RATIO: z.coerce.number().min(0).max(1).default(0.8),
   /** Critical cluster pool pressure ratio (default 0.95). */
-  DB_POOL_CLUSTER_CRITICAL_RATIO: z.coerce.number().min(0).max(1).default(0.95),
+  DATABASE_POOL_CLUSTER_CRITICAL_RATIO: z.coerce.number().min(0).max(1).default(0.95),
   /** Poll interval for pool exhaustion sampling and optional Prometheus gauges (ms). Default: 5000. */
-  DB_POOL_ALERT_POLL_INTERVAL_MS: z.coerce.number().int().min(1_000).max(60_000).default(5_000),
+  DATABASE_POOL_ALERT_POLL_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(60_000)
+    .default(5_000),
   /** Consecutive over-threshold polls before emitting pool exhaustion alerts (default 2). */
-  DB_POOL_ALERT_CONSECUTIVE_POLLS: z.coerce.number().int().min(1).max(10).default(2),
+  DATABASE_POOL_ALERT_CONSECUTIVE_POLLS: z.coerce.number().int().min(1).max(10).default(2),
+  /** Enable Postgres TLS by default. Set false only for plaintext local Docker/test databases. */
+  DATABASE_SSL_ENABLED: booleanString('true'),
   /** When true, Postgres client verifies server TLS certificate (strict). Ignored when DATABASE_URL uses sslmode=verify-ca|verify-full (always strict). */
-  DB_SSL_REJECT_UNAUTHORIZED: z.coerce.boolean().optional(),
+  DATABASE_SSL_REJECT_UNAUTHORIZED: z.coerce.boolean().optional(),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1).optional(),
 
   // Data retention (days to keep audit logs / revoked sessions before cleanup)
   AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1),
   NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
-  SESSION_RETENTION_DAYS: z.coerce.number().int().min(1),
+  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1),
   /** Tombstoned-row TTL before purge workers hard-delete (default avoids mandatory deploy secret). */
   TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
   /** Terminal Stripe webhook ledger rows older than this are purged (failed rows kept for replay). */
@@ -269,7 +247,7 @@ const envSchemaBase = z.object({
   /** Interpret cron patterns in this IANA timezone; omit for server default. */
   SCHEDULER_TIMEZONE: z.string().min(1).optional(),
   AUDIT_RETENTION_CRON: z.string().min(1).optional(),
-  SESSION_CLEANUP_CRON: z.string().min(1).optional(),
+  AUTH_SESSION_CLEANUP_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RETENTION_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
   STRIPE_WEBHOOK_EVENT_RECLAIM_CRON: z.string().min(1).optional(),
@@ -309,13 +287,10 @@ const envSchemaBase = z.object({
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
   /**
-   * When false (default in production), Bull Board mutation APIs return 403; GET remains available.
+   * When false, Bull Board mutation APIs return 403; GET remains available.
+   * Enable explicitly for trusted local/admin-only environments.
    */
-  ENABLE_QUEUE_DASHBOARD_MUTATIONS: z
-    .string()
-    .optional()
-    .default(process.env.NODE_ENV === 'production' ? 'false' : 'true')
-    .transform((v) => v === 'true' || v === '1'),
+  ENABLE_QUEUE_DASHBOARD_MUTATIONS: booleanString('false'),
 
   // CAPTCHA (Cloudflare Turnstile on public auth routes)
   /** `turnstile` enforces X-Captcha-Token; `disabled` skips verification. */
@@ -350,27 +325,13 @@ const envSchemaBase = z.object({
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
   RESPONSE_ENCRYPTION_KEY: z.string().length(64).optional(), // 64 hex chars = 32 bytes for AES-256
-  /** AES-256-GCM key for MFA/webhook secrets at rest (64 hex chars). Required in production. */
+  /** AES-256-GCM key for MFA/webhook secrets at rest (64 hex chars). Required in every runtime. */
   SECRETS_ENCRYPTION_KEY: z
     .string()
-    .regex(/^[0-9a-f]{64}$/i, 'SECRETS_ENCRYPTION_KEY must be 64 hex characters (32 bytes)')
-    .optional(),
+    .regex(/^[0-9a-f]{64}$/i, 'SECRETS_ENCRYPTION_KEY must be 64 hex characters (32 bytes)'),
 });
 
 export const envSchema = envSchemaBase
-  .refine(
-    (data) => {
-      if (data.NODE_ENV === 'production') {
-        return Boolean(data.JWT_PRIVATE_KEY && data.JWT_PUBLIC_KEY);
-      }
-      return true;
-    },
-    {
-      message:
-        'In production, JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be set (RS256 required for production)',
-      path: ['JWT_PRIVATE_KEY'],
-    },
-  )
   .refine(
     (data) =>
       data.IDEMPOTENCY_CARDINALITY_CRITICAL_THRESHOLD >=
@@ -383,15 +344,14 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      if (data.NODE_ENV === 'production' && data.METRICS_ENABLED) {
-        return Boolean(data.METRICS_BEARER_TOKEN && data.METRICS_BEARER_TOKEN.length >= 32);
+      if (data.METRICS_ENABLED) {
+        return Boolean(data.METRICS_SCRAPE_TOKEN && data.METRICS_SCRAPE_TOKEN.length >= 32);
       }
       return true;
     },
     {
-      message:
-        'When NODE_ENV=production and METRICS_ENABLED=true, METRICS_BEARER_TOKEN (min 32 chars) is required',
-      path: ['METRICS_BEARER_TOKEN'],
+      message: 'When METRICS_ENABLED=true, METRICS_SCRAPE_TOKEN (min 32 chars) is required',
+      path: ['METRICS_SCRAPE_TOKEN'],
     },
   )
   .refine(
@@ -408,49 +368,35 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      if (data.NODE_ENV === 'production') {
-        return Boolean(data.SECRETS_ENCRYPTION_KEY);
-      }
-      return true;
-    },
-    {
-      message: 'SECRETS_ENCRYPTION_KEY (64 hex chars) is required in production',
-      path: ['SECRETS_ENCRYPTION_KEY'],
-    },
-  )
-  .refine(
-    (data) => {
-      if (data.NODE_ENV !== 'production') {
-        return true;
-      }
       return validateProductionRedisTopology(data.REDIS_URL, data.REDIS_BULLMQ_URL);
     },
     {
       message:
-        'In production, REDIS_BULLMQ_URL must be unset or point to the same Redis endpoint as REDIS_URL (see docs/deployment/runbooks/redis-topology.md)',
+        'REDIS_BULLMQ_URL must be unset or point to the same Redis endpoint as REDIS_URL (see docs/deployment/runbooks/redis-topology.md)',
       path: ['REDIS_BULLMQ_URL'],
     },
   )
   .refine(
     (data) => {
       /**
-       * Magic-link token safety: when NODE_ENV is not production, FRONTEND_URL must be
-       * a localhost address. Non-production runtimes inline the magic-link token in API
-       * responses for local development, so a public FRONTEND_URL would leak tokens.
+       * `FRONTEND_URL` must be a valid http(s) URL whenever it is set. The previous
+       * localhost-only restriction for non-production environments existed because
+       * the magic-link service inlined the raw token in API responses outside
+       * production. That leak has been removed (see `magic-link.service.ts`), so
+       * any deployed environment may now use a real public `FRONTEND_URL`.
        */
-      if (data.NODE_ENV === 'production' || !data.FRONTEND_URL) {
+      if (!data.FRONTEND_URL) {
         return true;
       }
       try {
-        const hostname = new URL(data.FRONTEND_URL).hostname;
-        return hostname === 'localhost' || hostname === '127.0.0.1';
+        const parsed = new URL(data.FRONTEND_URL);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
       } catch {
         return false;
       }
     },
     {
-      message:
-        'FRONTEND_URL must be a localhost or 127.0.0.1 URL when NODE_ENV is not production (magic-link tokens are exposed in non-prod responses).',
+      message: 'FRONTEND_URL must be a valid http(s) URL.',
       path: ['FRONTEND_URL'],
     },
   );
@@ -459,3 +405,50 @@ export const envSchema = envSchemaBase
 export const envSchemaKeys = Object.keys(envSchemaBase.shape) as (keyof z.infer<
   typeof envSchema
 >)[];
+
+/**
+ * Keys whose schema entry has no default and is not marked `.optional()`. These must
+ * always be present at runtime — the app Zod-rejects on first request otherwise.
+ *
+ * Used by `tooling/setup/validate-github-env.ts` to assert deploy-target secrets
+ * against the schema instead of treating every uncommented `.env.example` line as
+ * required (which would also flag optional integrations like Stripe / OAuth / S3).
+ */
+export const envSchemaRequiredKeys: readonly string[] = Object.entries(envSchemaBase.shape)
+  .filter(([, schema]) => !(schema as z.ZodTypeAny).isOptional())
+  .map(([key]) => key);
+
+/**
+ * Keys that are syntactically optional in the schema but become effectively required
+ * under common runtime conditions enforced by `.refine()` clauses. Tooling surfaces
+ * these as warnings (not hard errors) since they depend on other flag values that
+ * deploy validators cannot inspect directly (GitHub only exposes secret *names*).
+ */
+export const envSchemaConditionallyRequiredKeys: ReadonlyArray<{
+  readonly key: string;
+  readonly condition: string;
+}> = [
+  {
+    key: 'METRICS_SCRAPE_TOKEN',
+    condition: 'METRICS_ENABLED=true (schema default; explicit METRICS_ENABLED=false opts out)',
+  },
+  {
+    key: 'CAPTCHA_SECRET',
+    condition: 'CAPTCHA_PROVIDER=turnstile (schema default is `disabled`)',
+  },
+];
+
+/* ---------------------------------------------------------------------------
+ * GitHub Secret vs Variable classification
+ * ---------------------------------------------------------------------------
+ *
+ * The classification lives entirely in `.env.example`: every key sits under
+ * either the "GitHub Secrets" half (pushed via `gh secret set`) or the
+ * "GitHub Variables" half (pushed via `gh api .../variables`). `pnpm env:init`
+ * mirrors that structure into each `.env.<environment>`, and `pnpm env:sync`
+ * reads the same structure when pushing.
+ *
+ * When you add a new env var: add it to this schema AND to the correct half
+ * of `.env.example`. The `env-schema-add` skill walks through which half +
+ * sub-section to pick.
+ * --------------------------------------------------------------------------- */

@@ -62,10 +62,17 @@ Uses `@scalar/cli` (`scalar document validate`) against `OPENAPI_SPEC_PATH` (def
 
 ---
 
-## Hosted uploads (CI on `main`)
+## Hosted uploads (CI after merge)
 
-| Target | Command | Secrets / env |
-| ------ | ------- | ------------- |
+On **push** to **`dev`** or **`main`** (after Quality passes), CI regenerates specs and uploads to the matching **GitHub Environment** secrets:
+
+| Branch | GitHub Environment | Typical `SCALAR_SLUG` |
+| ------ | ------------------ | --------------------- |
+| `dev` | `development` | `core-be-dev` |
+| `main` | `production` | `core-be` |
+
+| Target | Command | Secrets / env (per GitHub Environment) |
+| ------ | ------- | -------------------------------------- |
 | Postman workspace | `pnpm docs:upload` | `POSTMAN_API_KEY`, `POSTMAN_WORKSPACE_ID` |
 | Scalar Registry | `pnpm docs:upload:scalar` | `SCALAR_API_KEY`, `SCALAR_NAMESPACE`; optional `SCALAR_SLUG` (default `core-be`) |
 | Both | `pnpm docs:upload:hosted` | All of the above |
@@ -86,7 +93,9 @@ pnpm docs:validate:openapi     # Scalar CLI validation
 pnpm docs:upload:hosted        # Postman + Scalar Registry (needs secrets)
 ```
 
-CI ([`.github/workflows/reusable/docs-generate.yml`](../../../.github/workflows/reusable/docs-generate.yml)) runs `docs:all`, `docs:validate:openapi`, and on `main` uploads to Postman and Scalar Registry.
+**Before merge (PR):** `pnpm routes:catalog:check` and `pnpm docs:check` run in **CI / Quality & static security** (required on PRs to `dev`, `main`). Pre-commit also regenerates `docs/routes.txt` when routes change.
+
+**After merge (push):** CI ([`.github/workflows/reusable/docs-generate.yml`](../../../.github/workflows/reusable/docs-generate.yml)) runs `docs:all`, `docs:validate:openapi`, then uploads to Postman and Scalar Registry when environment secrets are set.
 
 ---
 

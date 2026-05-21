@@ -7,7 +7,7 @@ Thank you for improving this backend. This document stays short—use **[CLAUDE.
 - **Node.js** — version in [`.nvmrc`](.nvmrc) (project expects Node 24 per `package.json` `engines`)
 - **pnpm** — package manager used by this repo
 - **Docker** — Postgres and Redis (see [`docker-compose.yml`](docker-compose.yml))
-- **Environment** — copy example vars: `cp .env.example .env` and fill values; optional `cp .env.local.example .env.local` for overrides (loaded after `.env`)
+- **Environment** — bootstrap per-env files: `pnpm env:init` creates `.env.development` and `.env.production` from `.env.example`. Fill in real values for the environment you're working with (defaults to `NODE_ENV=development` → `.env.development`).
 
 ## Local setup
 
@@ -44,7 +44,7 @@ Committed files at the project root (not directories) group as follows:
 | Quality            | `eslint.config.mjs`, `.prettierrc`, `.editorconfig`, `vitest*.config.ts`                           |
 | Data               | `drizzle.config.ts`, `migrations/`                                                                 |
 | Containers         | `Dockerfile`, `Dockerfile.worker`, `Dockerfile.agent`, `docker-bake.hcl`, `docker-compose.yml`     |
-| Env                | `.env.example`, `.env.local.example` (committed); `.env`, `.env.local`, other `.env*` gitignored   |
+| Env                | `.env.example` (committed); every `.env.*` per-environment file gitignored                        |
 | Policy / community | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `CHANGELOG.md` |
 
 Application code, human docs, and automation live under `src/`, `docs/`, and `tooling/` respectively.
@@ -67,7 +67,7 @@ Use prefixes such as:
 
 ## Commits and releases
 
-Commits should follow **[Conventional Commits](https://www.conventionalcommits.org/)** (e.g. `feat:`, `fix:`, `feat!:` for breaking changes). **[Release Please](.github/workflows/release-please.yml)** on `main` uses that history for changelog and versioning.
+Commits should follow **[Conventional Commits](https://www.conventionalcommits.org/)** (e.g. `feat:`, `fix:`, `feat!:` for breaking changes). **[Release Please](.github/workflows/release-please.yml)** uses that history for changelog and versioning on both release channels: `main` produces stable releases (e.g. `v2.1.0`); `dev` produces pre-releases (e.g. `v2.1.0-dev.0`). Each channel tracks its own version via a dedicated manifest, so they never collide.
 
 ## Git hooks (Husky)
 
@@ -120,7 +120,7 @@ Errors and API messages must use i18n keys—see **[`.cursor/skills/i18n-message
 
 ## GitHub repository setup (maintainers)
 
-**Deploy secrets (per environment: `dev`, `qa`, `production`):** besides `RAILWAY_SERVICE_ID` (API), optionally set `RAILWAY_WORKER_SERVICE_ID` for the BullMQ worker service and `DATABASE_MIGRATION_URL` when migrations use an elevated DB user. Deploy workflows run `pnpm db:migrate` before `railway up`.
+**Deploy secrets (per environment: `development`, `production`):** besides `RAILWAY_SERVICE_ID` (API), optionally set `RAILWAY_WORKER_SERVICE_ID` for the BullMQ worker service and `DATABASE_MIGRATION_URL` when migrations use an elevated DB user. Deploy workflows run `pnpm db:migrate` before `railway up`.
 
 Completing this once avoids broken defaults for contributors:
 

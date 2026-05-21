@@ -1,6 +1,7 @@
 /**
  * Must stay free of `@/` path alias — env must be deterministic before Vitest resolves application modules.
- * Loads `.env` then `.env.local` from project root (same as API).
+ * Loads `.env.${NODE_ENV}` (defaulting to `.env.development`) from project root via the shared
+ * loader, same as the API and worker entrypoints.
  */
 import '../../shared/config/load-env-files.js';
 
@@ -20,7 +21,7 @@ process.env.RUN_DB_TESTS ||= '1';
 process.env.USE_LOCAL_TEST_DATABASE = 'false';
 
 process.env.PORT ??= '3000';
-process.env.HOST = '127.0.0.1';
+process.env.HTTP_BIND_HOST = '127.0.0.1';
 process.env.LOG_LEVEL ??= 'warn';
 process.env.JWT_SECRET ||= 'test-jwt-secret-min-32-chars-xxxxxxxx';
 process.env.ALLOWED_ORIGINS ??= 'http://localhost:3000';

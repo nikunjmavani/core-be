@@ -46,10 +46,13 @@ export function validateMetricsDeploySync(
   );
 
   const missingFromWorkflowSecrets = schemaMetricsVariables.filter((name) => {
-    const secretReferencePattern = new RegExp(
-      `${name}:\\s*\\$\\{\\{\\s*secrets\\.${name}\\s*\\}\\}`,
+    // Accept either GitHub Secret (`secrets.X`) or GitHub Variable (`vars.X`) references.
+    // The secrets-vs-variables split is documented in
+    // `docs/reference/architecture/env-naming-conventions.md`.
+    const referencePattern = new RegExp(
+      `${name}:\\s*\\$\\{\\{\\s*(?:secrets|vars)\\.${name}\\s*\\}\\}`,
     );
-    return !secretReferencePattern.test(deployWorkflowContent);
+    return !referencePattern.test(deployWorkflowContent);
   });
 
   return {

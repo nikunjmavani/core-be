@@ -21,7 +21,6 @@ export function createAuthMagicLinkHandlers({
         AuthSerializer.magicLinkSent({
           message: translated.message,
           expires_in_minutes: data.expires_in_minutes,
-          ...(data.token !== undefined ? { token: data.token } : {}),
         }),
         getRequestIdentifier(request),
       );

@@ -33,7 +33,7 @@ Tracks the domain-layout consistency program: route metadata, validators, docs, 
 | --- | ---------------------------------------------------------- | ------ | --------------------------------------------------------- |
 | 2.1 | Inverse route parity test                                  | Done   | `captureRegisteredRoutes` + allowlist for `/admin/queues` |
 | 2.2 | Route allowlist                                            | Done   | Bull Board only; MCP in catalog                           |
-| 2.3 | Pre-commit auto-`routes:catalog` when `*.routes.ts` staged | Done   | `.husky/pre-commit`                                       |
+| 2.3 | Local pre-commit auto-`routes:catalog` on every commit     | Done   | `.husky/pre-commit`                                       |
 | 2.4 | `validate:domain --strict` in CI + `ci:local`              | Done   | `pnpm validate:domain:strict`                             |
 | 2.5 | MCP routes in generated catalog                            | Done   | `GET`/`POST` `/api/v1/mcp`                                |
 | 2.6 | Targeted domain e2e tests                                  | Done   | Audit pagination, upload, billing webhook                 |

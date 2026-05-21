@@ -121,7 +121,7 @@ pnpm ci:local                  # full PR gate
 | P3-04 | Billing `userId` naming cleanup | Low value vs churn; full-names rule elsewhere (legacy billing-document tables removed — no longer applicable) |
 | P3-20 | Enterprise SAML / DR / data residency doc section | Captured as gaps in main audit §11; no new doc section |
 | P2-26 | Prometheus required in prod | **Done** — `METRICS_ENABLED` defaults true in production; see [observability runbook](../deployment/runbooks/observability.md) |
-| Audit medium/low (2026-05-20) | CAPTCHA, PaymentProvider port, k6 expansion, system-table RLS, Redis prefix, queue dashboard read-only, `DB_RLS_SCOPED_CONTEXTS` default, tenant HTTP tests, idempotency 409 regression | **Done in code** — see remediation PR |
+| Audit medium/low (2026-05-20) | CAPTCHA, PaymentProvider port, k6 expansion, system-table RLS, Redis prefix, queue dashboard read-only, `DATABASE_RLS_SCOPED_CONTEXTS` default, tenant HTTP tests, idempotency 409 regression | **Done in code** — see remediation PR |
 | Audit #4 (Redis single instance) | Cache + idempotency + BullMQ on one node | **Accepted for now** (2026-05-20) — production uses one shared Redis instance; setup emits only `REDIS_URL`; [redis-topology.md](../deployment/runbooks/redis-topology.md) |
 | P3-13 | Chaos/load as release checklist only | Advisory; documented in runbook |
 | Audit #13 | MCP SDK in prod `dependencies` | **Done** — `optionalDependencies` + dynamic SDK load; `validate:mcp-optional-dependency`; Docker `--no-optional` by default |
@@ -141,7 +141,7 @@ pnpm ci:local                  # full PR gate
 | (security) | MFA/webhook plaintext | P0-03, P0-04 |
 | (security) | Header/path org mismatch | P0-07 |
 | 3 | Tenant HTTP tests billing/upload | P1-10 (extended; not full route matrix) |
-| 4 | Redis single instance (cache + BullMQ) | Accepted for now: one shared Redis instance across dev, qa, and production |
+| 4 | Redis single instance (cache + BullMQ) | Accepted for now: one shared Redis instance across development and production |
 | 9 | Circuit breakers audited (Stripe / Resend / S3) | SDK import CI guard (`external-sdk-coverage.global.test.ts`), ESLint allowlist, `CircuitBreakerOpenError`, mail/stripe-webhook custom backoff, Resend transient retry — [external-service-resilience.md](../reference/reliability/external-service-resilience.md) |
 
 When remediation is complete, add a short **“Remediation (2026-05-18)”** section to the audit or mark items satisfied in Top 20 — do not rewrite historical narrative.

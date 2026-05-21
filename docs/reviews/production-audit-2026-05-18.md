@@ -13,7 +13,7 @@
 | **Overall** | **79** | Strong foundations; gaps are mostly scale, observability depth, and a few API/security edges |
 | Security | 82 | RLS FORCE, JWT RS256 prod, MCP/dashboard gated; BullMQ payload validation and numeric API IDs are gaps |
 | Reliability | 80 | DLQ, graceful shutdown, Stripe idempotency ledger; org-scoped RLS txn holds pool slots per request |
-| Scalability | 72 | Default `DB_MAX=10`, per-request pinned transactions, limited load-test route coverage |
+| Scalability | 72 | Default `DATABASE_POOL_MAX=10`, per-request pinned transactions, limited load-test route coverage |
 | Maintainability | 86 | Domain layout, skills, CI gates, route catalog; a few large services |
 | DevOps | 88 | Multi-job CI, Trivy, HEALTHCHECK, non-root image |
 | Testing | 81 | 90%/95% coverage thresholds, RLS matrix; HTTP tenant-isolation suite thin on billing/upload |
@@ -57,7 +57,7 @@ Before broad production traffic or enterprise onboarding:
 
 1. Add **Zod parse** (or shared schema) at BullMQ `queue.add` boundaries for all job types ([mail](#issue-bullmq-no-zod), [stripe-webhook](#issue-bullmq-no-zod), [notification](#issue-bullmq-no-zod), [webhook-delivery](#issue-bullmq-no-zod)).
 2. Extend **`tenant-isolation.security.test.ts`** (or catalog-driven security tests) to **billing** subscription and **upload** list routes.
-3. Document and load-test **org RLS transaction** pool impact; tune `DB_MAX` / connection limits on Railway per [resource-limits runbook](../deployment/runbooks/resource-limits.md).
+3. Document and load-test **org RLS transaction** pool impact; tune `DATABASE_POOL_MAX` / connection limits on Railway per [resource-limits runbook](../deployment/runbooks/resource-limits.md).
 4. Add **`public_id`** to organization-notification-policy (migration + serializer) or document numeric ID as intentional with rate limits.
 5. Reconcile **deploy env** with observability deferral (remove stale `METRICS_*` if still in workflow).
 
@@ -274,7 +274,7 @@ High
 Scalability
 
 #### Current Problem
-When `X-Organization-Id` is set, `organizationRlsTransactionMiddleware` pins one Postgres checkout for the **entire** request (BEGIN + SET LOCAL until response). Under high concurrency this exhausts `DB_MAX` (default 10) faster than autocommit-per-query handlers.
+When `X-Organization-Id` is set, `organizationRlsTransactionMiddleware` pins one Postgres checkout for the **entire** request (BEGIN + SET LOCAL until response). Under high concurrency this exhausts `DATABASE_POOL_MAX` (default 10) faster than autocommit-per-query handlers.
 
 #### Evidence
 [`organization-rls-transaction.middleware.ts`](../../src/shared/middlewares/organization-rls-transaction.middleware.ts) lines 49–58 comment and implementation.
@@ -283,7 +283,7 @@ When `X-Organization-Id` is set, `organizationRlsTransactionMiddleware` pins one
 503s / timeouts when pool saturated; slow handlers block slots for 30s statement timeout.
 
 #### Recommended Fix
-Load-test org-scoped routes; increase `DB_MAX` and Railway Postgres limits; keep handlers short; consider narrowing middleware to routes that truly need RLS GUC on same connection.
+Load-test org-scoped routes; increase `DATABASE_POOL_MAX` and Railway Postgres limits; keep handlers short; consider narrowing middleware to routes that truly need RLS GUC on same connection.
 
 #### Implementation Priority
 Before scale
@@ -455,16 +455,16 @@ Medium
 Performance
 
 #### Current Problem
-`DB_MAX` defaults to 10 per API process. Combined with per-request RLS transactions, effective concurrency is low.
+`DATABASE_POOL_MAX` defaults to 10 per API process. Combined with per-request RLS transactions, effective concurrency is low.
 
 #### Evidence
-[`connection.ts`](../../src/infrastructure/database/connection.ts) line 48: `max: env.DB_MAX ?? 10`.
+[`connection.ts`](../../src/infrastructure/database/connection.ts) line 48: `max: env.DATABASE_POOL_MAX ?? 10`.
 
 #### Production Risk
 Latency spikes under parallel org users.
 
 #### Recommended Fix
-Set `DB_MAX` per Railway instance size; horizontal scale API replicas; monitor pool wait time in logs.
+Set `DATABASE_POOL_MAX` per Railway instance size; horizontal scale API replicas; monitor pool wait time in logs.
 
 #### Implementation Priority
 Before scale
@@ -589,7 +589,7 @@ Medium
 Observability
 
 #### Current Problem
-~~Prometheus removed~~ — **resolved in code (2026-05-20):** `prom-client`, `GET /metrics` on API and worker (`startWorkerHealthServer` in `src/worker.ts`), audit metrics (`event_loop_lag_ms`, `pg_pool_*`, `http_request_duration_seconds`, `bullmq_jobs_waiting`). **`METRICS_ENABLED` defaults true in production**; set **`METRICS_BEARER_TOKEN`** and configure an external scraper (Grafana Alloy / Prometheus).
+~~Prometheus removed~~ — **resolved in code (2026-05-20):** `prom-client`, `GET /metrics` on API and worker (`startWorkerHealthServer` in `src/worker.ts`), audit metrics (`event_loop_lag_ms`, `pg_pool_*`, `http_request_duration_seconds`, `bullmq_jobs_waiting`). **`METRICS_ENABLED` defaults true in production**; set **`METRICS_SCRAPE_TOKEN`** and configure an external scraper (Grafana Alloy / Prometheus).
 
 #### Evidence
 [observability.md](../deployment/runbooks/observability.md); [`src/infrastructure/observability/`](../../src/infrastructure/observability/).
@@ -598,7 +598,7 @@ Observability
 No scrape-based SLOs until env + external Prometheus/Grafana are enabled.
 
 #### Recommended Fix
-Set `METRICS_ENABLED=true` and `METRICS_BEARER_TOKEN` on API + worker; configure platform scraper. See observability runbook § Prometheus (opt-in).
+Set `METRICS_ENABLED=true` and `METRICS_SCRAPE_TOKEN` on API + worker; configure platform scraper. See observability runbook § Prometheus (opt-in).
 
 #### Implementation Priority
 Before scale (ops enablement only)
@@ -710,7 +710,7 @@ Small
 | -------- | ------- | ------------ | ---------- |
 | **Duplicate Stripe webhook** | Stripe retries same `event.id` | Double subscription state | `tryClaimEvent` ledger + monotonic `last_stripe_event_created_at` |
 | **Queue explosion** | Webhook fan-out / mail backlog | Redis memory, slow workers | DLQ depth worker; rate limits; `removeOnComplete` limits in queue options |
-| **DB pool exhaustion** | Traffic spike + RLS txn per request | All org routes 503 | Tune `DB_MAX`, scale replicas, shorten handlers |
+| **DB pool exhaustion** | Traffic spike + RLS txn per request | All org routes 503 | Tune `DATABASE_POOL_MAX`, scale replicas, shorten handlers |
 | **Auth bypass** | Missing `requireOrganizationPermission` on new route | Cross-tenant data | Route catalog + `auth-enforcement` / expand tenant-isolation tests |
 | **Billing bug** | Out-of-order subscription events | Wrong plan/status | Monotonic migration functions; webhook service tests |
 | **Migration failure** | Unsafe DDL in prod | Downtime | `pnpm db:migrate:lint`; no destructive without flag |

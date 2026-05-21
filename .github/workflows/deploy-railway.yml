@@ -9,7 +9,7 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [main, dev, qa]
+    branches: [main, dev]
   workflow_dispatch:
     inputs:
       target:
@@ -18,8 +18,7 @@ on:
         type: choice
         options:
           - production
-          - dev
-          - qa
+          - development
 
 concurrency:
   group: deploy-railway-${{ github.event.workflow_run.head_branch || github.ref }}
@@ -34,21 +33,24 @@ jobs:
       (
         github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push' &&
-        contains(fromJSON('["main","dev","qa"]'), github.event.workflow_run.head_branch)
+        contains(fromJSON('["main","dev"]'), github.event.workflow_run.head_branch)
       )
     outputs:
       environment: ${{ steps.map.outputs.environment }}
     steps:
       - name: Map branch or input to environment
+        # Canonical mapping (see docs/deployment/runbooks/add-new-environment.md):
+        #   main → production
+        #   dev  → development
+        # Branch name → GitHub Environment name → NODE_ENV value must stay 1:1.
         id: map
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "environment=${{ inputs.target }}" >> "$GITHUB_OUTPUT"
           else
             case "${{ github.event.workflow_run.head_branch }}" in
-              main) echo "environment=production" >> "$GITHUB_OUTPUT" ;;
-              dev)  echo "environment=dev" >> "$GITHUB_OUTPUT" ;;
-              qa)   echo "environment=qa" >> "$GITHUB_OUTPUT" ;;
+              main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
+              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
               *)    echo "::error::Unsupported branch for deploy" && exit 1 ;;
             esac
           fi
@@ -68,8 +70,10 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Validate GitHub environment secrets
+        # `CONFIG` is the env name directly. validate:github-env accepts canonical names
+        # (development | production) and the `dev`/`prod` aliases.
         env:
-          CONFIG: ${{ needs.resolve-environment.outputs.environment == 'production' && 'prod' || needs.resolve-environment.outputs.environment }}
+          CONFIG: ${{ needs.resolve-environment.outputs.environment }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
         run: pnpm validate:github-env
 
@@ -108,37 +112,60 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Set Railway service variables
+        # Keep this list aligned with `src/shared/config/env-schema.ts`.
+        # `validate:github-env` runs above and gates required keys against the schema.
+        #
+        # Classification (see docs/reference/architecture/env-naming-conventions.md):
+        #   - `secrets.X` — credentials / private keys / tokens (encrypted, write-only).
+        #   - `vars.X`    — non-sensitive config knobs (plaintext, readable in logs;
+        #                   the validator reads CAPTCHA_PROVIDER from here).
+        #
+        # Required (Zod-rejects at boot if missing): DATABASE_URL, REDIS_URL, JWT_SECRET,
+        # JWT_PRIVATE_KEY, ALLOWED_ORIGINS, AUDIT_RETENTION_DAYS,
+        # AUTH_SESSION_RETENTION_DAYS, SECRETS_ENCRYPTION_KEY.
+        # Conditionally required: METRICS_SCRAPE_TOKEN (when METRICS_ENABLED=true).
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          # --- Secrets (10): credentials, keys, tokens ---
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
-          NODE_ENV: ${{ secrets.NODE_ENV }}
-          PORT: ${{ secrets.PORT }}
-          HOST: ${{ secrets.HOST }}
-          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
-          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
-          RATE_LIMIT_MAX: ${{ secrets.RATE_LIMIT_MAX }}
-          RATE_LIMIT_WINDOW_MS: ${{ secrets.RATE_LIMIT_WINDOW_MS }}
+          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+          SECRETS_ENCRYPTION_KEY: ${{ secrets.SECRETS_ENCRYPTION_KEY }}
+          METRICS_SCRAPE_TOKEN: ${{ secrets.METRICS_SCRAPE_TOKEN }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
-          SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
-          SENTRY_PROFILE_SAMPLE_RATE: ${{ secrets.SENTRY_PROFILE_SAMPLE_RATE }}
-          AUDIT_RETENTION_DAYS: ${{ secrets.AUDIT_RETENTION_DAYS }}
-          SESSION_RETENTION_DAYS: ${{ secrets.SESSION_RETENTION_DAYS }}
-          NODE_OPTIONS: ${{ secrets.NODE_OPTIONS }}
-          DEPLOYMENT_PROCESS_COUNT: ${{ secrets.DEPLOYMENT_PROCESS_COUNT }}
-          DEPLOYMENT_API_PROCESS_COUNT: ${{ secrets.DEPLOYMENT_API_PROCESS_COUNT }}
-          DEPLOYMENT_WORKER_PROCESS_COUNT: ${{ secrets.DEPLOYMENT_WORKER_PROCESS_COUNT }}
-          DB_MAX: ${{ secrets.DB_MAX }}
-          POSTGRES_RESERVED_CONNECTIONS: ${{ secrets.POSTGRES_RESERVED_CONNECTIONS }}
-          POSTGRES_MAX_CONNECTIONS: ${{ secrets.POSTGRES_MAX_CONNECTIONS }}
-          METRICS_ENABLED: ${{ secrets.METRICS_ENABLED }}
-          METRICS_BEARER_TOKEN: ${{ secrets.METRICS_BEARER_TOKEN }}
+          WEBHOOK_URL_ALLOWLIST: ${{ secrets.WEBHOOK_URL_ALLOWLIST }}
+          # --- Variables (24): plaintext config knobs ---
+          JWT_PUBLIC_KEY: ${{ vars.JWT_PUBLIC_KEY }}
+          JWT_SIGNING_KID: ${{ vars.JWT_SIGNING_KID }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+          COOKIE_SECURE: ${{ vars.COOKIE_SECURE }}
+          DATABASE_SSL_ENABLED: ${{ vars.DATABASE_SSL_ENABLED }}
+          NODE_ENV: ${{ vars.NODE_ENV }}
+          PORT: ${{ vars.PORT }}
+          HTTP_BIND_HOST: ${{ vars.HTTP_BIND_HOST }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+          RATE_LIMIT_MAX: ${{ vars.RATE_LIMIT_MAX }}
+          RATE_LIMIT_WINDOW_MS: ${{ vars.RATE_LIMIT_WINDOW_MS }}
+          SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ vars.SENTRY_TRACES_SAMPLE_RATE }}
+          SENTRY_PROFILE_SAMPLE_RATE: ${{ vars.SENTRY_PROFILE_SAMPLE_RATE }}
+          AUDIT_RETENTION_DAYS: ${{ vars.AUDIT_RETENTION_DAYS }}
+          AUTH_SESSION_RETENTION_DAYS: ${{ vars.AUTH_SESSION_RETENTION_DAYS }}
+          NODE_OPTIONS: ${{ vars.NODE_OPTIONS }}
+          DEPLOYMENT_TOTAL_REPLICA_COUNT: ${{ vars.DEPLOYMENT_TOTAL_REPLICA_COUNT }}
+          DEPLOYMENT_API_REPLICA_COUNT: ${{ vars.DEPLOYMENT_API_REPLICA_COUNT }}
+          DEPLOYMENT_WORKER_REPLICA_COUNT: ${{ vars.DEPLOYMENT_WORKER_REPLICA_COUNT }}
+          DATABASE_POOL_MAX: ${{ vars.DATABASE_POOL_MAX }}
+          POSTGRES_RESERVED_CONNECTIONS: ${{ vars.POSTGRES_RESERVED_CONNECTIONS }}
+          POSTGRES_MAX_CONNECTIONS: ${{ vars.POSTGRES_MAX_CONNECTIONS }}
+          METRICS_ENABLED: ${{ vars.METRICS_ENABLED }}
+          CAPTCHA_PROVIDER: ${{ vars.CAPTCHA_PROVIDER }}
         run: |
-          for var in DATABASE_URL REDIS_URL JWT_SECRET ALLOWED_ORIGINS NODE_ENV PORT HOST LOG_LEVEL FRONTEND_URL RATE_LIMIT_MAX RATE_LIMIT_WINDOW_MS SENTRY_DSN SENTRY_ENVIRONMENT SENTRY_TRACES_SAMPLE_RATE SENTRY_PROFILE_SAMPLE_RATE AUDIT_RETENTION_DAYS SESSION_RETENTION_DAYS NODE_OPTIONS DEPLOYMENT_PROCESS_COUNT DEPLOYMENT_API_PROCESS_COUNT DEPLOYMENT_WORKER_PROCESS_COUNT DB_MAX POSTGRES_RESERVED_CONNECTIONS POSTGRES_MAX_CONNECTIONS METRICS_ENABLED METRICS_BEARER_TOKEN; do
+          for var in DATABASE_URL DATABASE_MIGRATION_URL REDIS_URL JWT_SECRET JWT_PRIVATE_KEY JWT_PUBLIC_KEY JWT_SIGNING_KID SECRETS_ENCRYPTION_KEY ALLOWED_ORIGINS COOKIE_SECURE DATABASE_SSL_ENABLED WEBHOOK_URL_ALLOWLIST NODE_ENV PORT HTTP_BIND_HOST LOG_LEVEL FRONTEND_URL RATE_LIMIT_MAX RATE_LIMIT_WINDOW_MS SENTRY_DSN SENTRY_ENVIRONMENT SENTRY_TRACES_SAMPLE_RATE SENTRY_PROFILE_SAMPLE_RATE AUDIT_RETENTION_DAYS AUTH_SESSION_RETENTION_DAYS NODE_OPTIONS DEPLOYMENT_TOTAL_REPLICA_COUNT DEPLOYMENT_API_REPLICA_COUNT DEPLOYMENT_WORKER_REPLICA_COUNT DATABASE_POOL_MAX POSTGRES_RESERVED_CONNECTIONS POSTGRES_MAX_CONNECTIONS METRICS_ENABLED METRICS_SCRAPE_TOKEN CAPTCHA_PROVIDER; do
             val="${!var}"
             if [ -n "$val" ]; then
               railway variable set --service "$RAILWAY_SERVICE_ID" "$var=$val" || true

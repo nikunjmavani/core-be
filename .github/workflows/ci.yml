@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, dev, qa]
+    branches: [main, dev]
   push:
-    branches: [main, dev, qa]
+    branches: [main, dev]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -21,6 +21,9 @@ jobs:
       src-code: ${{ steps.filter.outputs.src-code }}
       docker: ${{ steps.filter.outputs.docker }}
       docs-artifacts: ${{ steps.filter.outputs.docs-artifacts }}
+      # docs-only: PR/commit touches no src/docker/openapi paths — derived from
+      # the other outputs so heavy static/security and test slices can be skipped.
+      docs-only: ${{ steps.filter.outputs.src-code == 'false' && steps.filter.outputs.docker == 'false' && steps.filter.outputs.docs-artifacts == 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,6 +65,10 @@ jobs:
 
   quality:
     name: Quality & static security
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.outputs.docs-only != 'true' || github.event_name == 'push')
     uses: ./.github/workflows/reusable/quality-static.yml
 
   test:
@@ -107,10 +114,14 @@ jobs:
   sbom:
     name: Generate CycloneDX SBOM
     needs: [quality, changes]
+    # SBOM is published to GitHub Releases by release-sbom.yml; here we
+    # only generate it on protected-branch pushes when src/dependencies changed
+    # so PR runs stay fast (release-sbom.yml owns release artifacts).
     if: |
       always() &&
       needs.quality.result == 'success' &&
-      (needs.changes.outputs.src-code == 'true' || github.event_name == 'push')
+      github.event_name == 'push' &&
+      needs.changes.outputs.src-code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -134,6 +145,10 @@ jobs:
     needs: [quality, changes]
     if: |
       github.event_name == 'push' &&
+      contains(fromJSON('["refs/heads/main","refs/heads/dev"]'), github.ref) &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
     uses: ./.github/workflows/reusable/docs-generate.yml
     secrets: inherit
+    with:
+      github_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      publish_hosted_docs: true

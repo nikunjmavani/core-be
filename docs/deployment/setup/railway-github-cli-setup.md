@@ -15,8 +15,8 @@ flowchart LR
 
 1. Install CLIs (Railway + GitHub)
 2. Railway: login → create project + service → get service ID → get project token (dashboard)
-3. GitHub: create environments (dev, qa, production) → add secrets to each
-4. Done → push to dev/qa/main to deploy
+3. GitHub: create environments (development, production) → add secrets to each
+4. Done → push to dev/main to deploy
 
 ---
 
@@ -69,11 +69,11 @@ Railway → Your project → Settings → Tokens → Create token. Copy it; you 
 
 ### 3.1 Create environments
 
-Repo → Settings → Environments → New environment. Create **dev**, **qa**, **production**.
+Repo → Settings → Environments → New environment. Create **development** and **production**.
 
 ### 3.2 Add secrets to each environment
 
-For each environment (dev, qa, production), add Environment secrets:
+For each environment (development, production), add Environment secrets:
 
 | Secret name          | Value                              |
 | -------------------- | ---------------------------------- |
@@ -88,16 +88,16 @@ For each environment (dev, qa, production), add Environment secrets:
 | HOST                 | 0.0.0.0                            |
 | LOG_LEVEL            | debug or info                      |
 | FRONTEND_URL         | Frontend URL for that env          |
-| RATE_LIMIT_MAX       | 10000 (dev), 1000 (qa), 100 (prod) |
+| RATE_LIMIT_MAX       | 10000 (development), 100 (production) |
 | RATE_LIMIT_WINDOW_MS | 60000                              |
 
 ### 3.3 Via CLI (optional)
 
 ```bash
 gh auth login
-gh secret set RAILWAY_TOKEN --env dev --body "paste-token"
-gh secret set RAILWAY_SERVICE_ID --env dev --body "paste-service-id"
-gh secret set DATABASE_URL --env dev --body "postgresql://..."
+gh secret set RAILWAY_TOKEN --env development --body "paste-token"
+gh secret set RAILWAY_SERVICE_ID --env development --body "paste-service-id"
+gh secret set DATABASE_URL --env development --body "postgresql://..."
 # etc.
 ```
 
@@ -105,7 +105,7 @@ gh secret set DATABASE_URL --env dev --body "postgresql://..."
 
 ## Step 4: Push to deploy
 
-Push to **dev**, **qa**, or **main**. The deploy workflow uses the corresponding GitHub environment (dev, qa, production) and deploys to Railway.
+Push to **dev** or **main**. The deploy workflow uses the corresponding GitHub environment (development, production) and deploys to Railway.
 
 ---
 

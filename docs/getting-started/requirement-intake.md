@@ -294,7 +294,7 @@ All `.cursor/rules/*.mdc` whose globs match the files you change (see skill inde
 | lint-warnings-handler          | `.cursor/skills/lint-warnings-handler/SKILL.md`          | Detail guide (via code-smells)                            |
 | i18n-message-guard             | `.cursor/skills/i18n-message-guard/SKILL.md`             | User-facing messages / locales                            |
 | openapi-multilingual           | `.cursor/skills/openapi-multilingual/SKILL.md`           | OpenAPI locale files                                      |
-| env-example-sync               | `.cursor/skills/env-example-sync/SKILL.md`               | Env schema / `.env.example`                               |
+| env-schema-add                 | `.cursor/skills/env-schema-add/SKILL.md`                 | Env schema / `.env.example` (Secret vs Variable, sub-section choice) |
 | docs-maintainer                | `.cursor/skills/docs-maintainer/SKILL.md`                | Hand-written `docs/` changes                              |
 | docs-audit                     | `.cursor/skills/docs-audit/SKILL.md`                     | Full docs review (on request)                             |
 | setup-infra-maintainer         | `.cursor/skills/setup-infra-maintainer/SKILL.md`         | `tooling/setup/` providers                                |
