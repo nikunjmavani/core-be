@@ -31,6 +31,7 @@ import { resolve } from 'node:path';
 import sodium from 'libsodium-wrappers';
 
 import { parseEnvExampleSections, type EnvExampleKey } from './parse-env-example-sections.js';
+import { runGhAuthPreflight } from './gh-auth-preflight.js';
 
 const projectRoot = process.cwd();
 
@@ -313,8 +314,20 @@ async function main(): Promise<void> {
     return;
   }
 
-  const token = getGitHubToken();
   const repositoryFullName = getRepositoryFullName();
+
+  // Skip the preflight when invoked from `github:sync` — that caller already
+  // verified the active user once and chained env-sync runs should not
+  // re-prompt for every environment.
+  if (process.env.GITHUB_SYNC_PARENT !== '1') {
+    await runGhAuthPreflight({
+      repository: repositoryFullName,
+      purpose: `Push secrets and variables to GitHub Environment "${environment}"`,
+      destructive: true,
+    });
+  }
+
+  const token = getGitHubToken();
   if (!skipCreate) {
     console.log(`Creating GitHub environment "${environment}" (idempotent)...`);
     await createGitHubEnvironment(token, repositoryFullName, environment);

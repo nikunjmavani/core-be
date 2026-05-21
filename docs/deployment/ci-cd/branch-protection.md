@@ -117,9 +117,26 @@ These settings match the committed JSON files in [`.github/rulesets/`](../../../
 
 Requires [`gh`](https://cli.github.com/) authenticated with **`repo`** scope (and organization permission if the repo belongs to an org).
 
+### One-step init (recommended)
+
+Use [`tooling/setup/github-init.ts`](../../../tooling/setup/github-init.ts). It derives the target branches from the committed rulesets (`refs/heads/<branch>` entries in `conditions.ref_name.include`), ensures each branch exists on the remote (creating missing branches from the default branch's SHA via `POST /repos/{repo}/git/refs`), `POST`s / `PUT`s every ruleset, and idempotently creates the GitHub Environments declared in [`.github/environments/*.json`](../../../.github/environments/). Safe to run repeatedly.
+
+```bash
+pnpm github:check          # read-only drift report (missing branches, rulesets, environments)
+pnpm github:init           # ensure branches + rulesets + GitHub Environments
+```
+
+Before any GitHub API call the script runs a **gh auth preflight** that prints the currently active `gh` user and lets you confirm, abort, or switch to a different account (`gh auth switch`).
+
+For a full bootstrap that also pushes per-environment secrets and variables, see `pnpm github:sync` (with a confirmation prompt — the values push is non-reversible).
+
+The script resolves the target repository in this order: `GITHUB_REPOSITORY` env → `origin` git remote → `gh repo view`.
+
+### Manual one-off via raw API
+
 Replace **`OWNER`** and **`REPO`** with your GitHub owner and repository name.
 
-Each **`POST`** creates a **new** ruleset. Do not run these repeatedly without deleting duplicate rulesets in **Settings → Rules**, or use **`PATCH`** with an existing ruleset ID instead.
+Each **`POST`** creates a **new** ruleset. Do not run these repeatedly without deleting duplicate rulesets in **Settings → Rules**, or use **`PUT`** / **`PATCH`** with an existing ruleset ID instead.
 
 ```bash
 gh api --method POST repos/OWNER/REPO/rulesets \
@@ -132,6 +149,14 @@ gh api --method POST repos/OWNER/REPO/rulesets \
 ```
 
 **Updating an existing ruleset:** use `PATCH /repos/{owner}/{repo}/rulesets/{ruleset_id}` with the same JSON shape (omit fields you do not want to change), or edit in the UI. Listing IDs: `gh api repos/OWNER/REPO/rulesets`.
+
+### Plan requirement
+
+Repository rulesets on **private** repos require **GitHub Pro / Team / Enterprise**. On the free personal plan the API returns `HTTP 403`:
+
+> `Upgrade to GitHub Pro or make this repository public to enable this feature.`
+
+The sync script surfaces this message verbatim and exits non-zero. Either upgrade the account/org plan or make the repository public to apply rulesets.
 
 **Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm names match **`CI / …`** and **`PR Checks / …`**. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
 
