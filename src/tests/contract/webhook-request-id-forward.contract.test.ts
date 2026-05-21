@@ -37,8 +37,10 @@ vi.mock('@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js', (
 }));
 
 vi.mock('@/infrastructure/database/contexts/tenant-context.js', () => ({
-  withOrganizationContext: async (_organizationPublicId: string, callback: (databaseHandle: never) => unknown) =>
-    callback({} as never),
+  withOrganizationContext: async (
+    _organizationPublicId: string,
+    callback: (databaseHandle: never) => unknown,
+  ) => callback({} as never),
 }));
 
 vi.mock('@/shared/utils/security/field-secret-encryption.util.js', () => ({
