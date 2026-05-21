@@ -12,6 +12,18 @@ ARG PNPM_VERSION
 ARG GENERATE_MCP_DOCS
 WORKDIR /app
 
+ENV NODE_ENV=test \
+  DATABASE_URL=postgresql://postgres:postgres@localhost:5432/core \
+  REDIS_URL=redis://localhost:6379 \
+  JWT_SECRET=test-jwt-secret-min-32-chars-xxxxxxxx \
+  JWT_PRIVATE_KEY=test-private-key \
+  JWT_PUBLIC_KEY=test-public-key \
+  ALLOWED_ORIGINS=http://localhost:3000 \
+  AUDIT_RETENTION_DAYS=90 \
+  AUTH_SESSION_RETENTION_DAYS=30 \
+  METRICS_SCRAPE_TOKEN=test-metrics-token-min-32-characters \
+  SECRETS_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
+
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
 COPY package.json pnpm-lock.yaml ./

@@ -53,8 +53,8 @@ jobs:
       - name: Regenerate API docs (OpenAPI + Postman)
         run: pnpm docs:all
 
-      - name: Validate OpenAPI spec
-        run: pnpm docs:validate:openapi
+      - name: Check API docs sync
+        run: pnpm docs:check
 
       - name: Upload API docs artifact
         uses: actions/upload-artifact@v4
