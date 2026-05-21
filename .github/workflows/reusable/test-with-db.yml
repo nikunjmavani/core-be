@@ -2,6 +2,11 @@ name: Reusable — test with Postgres and Redis
 
 on:
   workflow_call:
+    secrets:
+      RESEND_API_KEY:
+        required: false
+      TEST_REPORT_EMAIL_TO:
+        required: false
 
 permissions:
   contents: read

@@ -2,6 +2,9 @@ name: Reusable — quality static
 
 on:
   workflow_call:
+    secrets:
+      GITHUB_TOKEN:
+        required: false
 
 permissions:
   contents: read

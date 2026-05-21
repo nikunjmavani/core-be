@@ -12,6 +12,17 @@ on:
         required: false
         type: boolean
         default: true
+    secrets:
+      POSTMAN_API_KEY:
+        required: false
+      POSTMAN_WORKSPACE_ID:
+        required: false
+      SCALAR_API_KEY:
+        required: false
+      SCALAR_NAMESPACE:
+        required: false
+      SCALAR_SLUG:
+        required: false
 
 permissions:
   contents: read
