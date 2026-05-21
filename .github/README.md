@@ -9,7 +9,6 @@ Long-lived branches: **`dev`** (development), **`main`** (production).
 | CI                    | [workflows/ci.yml](workflows/ci.yml)                                     | PR + push `main`, `dev`       | Quality, Test, API smoke, Chaos, Docker Build (Trivy) |
 | PR Checks             | [workflows/pr-checks.yml](workflows/pr-checks.yml)                       | PR                            | PR Quality Gates              |
 | Deploy to Railway     | [workflows/deploy-railway.yml](workflows/deploy-railway.yml)             | After CI success + manual     | No (post-merge)               |
-| CodeQL                | [workflows/codeql.yml](workflows/codeql.yml)                             | PR + push + weekly            | No (advisory)                 |
 | Load tests (k6)       | [workflows/load-tests.yml](workflows/load-tests.yml)                     | Nightly + manual              | No                            |
 | Commitlint            | [workflows/commit-lint.yml](workflows/commit-lint.yml)                   | Push `main`, `dev`            | No (post-push)                |
 | Release Please        | [workflows/release-please.yml](workflows/release-please.yml)             | Push `main`, `dev`            | No (creates release PR)       |
@@ -30,7 +29,7 @@ Long-lived branches: **`dev`** (development), **`main`** (production).
 
 | Action              | Path                                                            | Used by                                                     |
 | ------------------- | --------------------------------------------------------------- | ----------------------------------------------------------- |
-| Setup Node and pnpm | [actions/setup-node-pnpm](actions/setup-node-pnpm/action.yml)   | Reusable workflows, deploy, CodeQL, commit-lint, load-tests |
+| Setup Node and pnpm | [actions/setup-node-pnpm](actions/setup-node-pnpm/action.yml)   | Reusable workflows, deploy, commit-lint, load-tests         |
 | Start API server    | [actions/start-api-server](actions/start-api-server/action.yml) | API smoke reusable, load-tests                              |
 | Stop API server     | [actions/stop-api-server](actions/stop-api-server/action.yml)   | API smoke reusable, load-tests                              |
 
