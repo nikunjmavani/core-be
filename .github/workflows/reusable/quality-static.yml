@@ -2,9 +2,6 @@ name: Reusable — quality static
 
 on:
   workflow_call:
-    secrets:
-      GITHUB_TOKEN:
-        required: false
 
 permissions:
   contents: read
@@ -61,7 +58,7 @@ jobs:
       - name: Gitleaks (secret detection)
         uses: gitleaks/gitleaks-action@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Setup Python for Semgrep
         uses: actions/setup-python@v5

@@ -2,9 +2,6 @@ name: Reusable — Docker build and verify
 
 on:
   workflow_call:
-    secrets:
-      GITHUB_TOKEN:
-        required: false
 
 permissions:
   contents: read
@@ -122,7 +119,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
       - name: Push images to GHCR (main + dev)
         if: |
