@@ -26,10 +26,10 @@ jobs:
       docs-only: ${{ steps.filter.outputs.src-code == 'false' && steps.filter.outputs.docker == 'false' && steps.filter.outputs.docs-artifacts == 'false' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Path filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -125,7 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
@@ -135,7 +135,7 @@ jobs:
           output-file: sbom.cyclonedx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom.cyclonedx.json
           path: sbom.cyclonedx.json
