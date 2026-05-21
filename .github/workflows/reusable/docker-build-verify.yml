@@ -1,0 +1,139 @@
+name: Reusable — Docker build and verify
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILDKIT: 1
+
+    services:
+      postgres:
+        image: postgres:17.10-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: core
+        options: >-
+          --health-cmd="pg_isready -U postgres -d core"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+      redis:
+        image: redis:8.6.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify Dockerfile.worker sync
+        run: node tooling/ci/check-dockerfile-sync.mjs
+
+      - name: Build API Docker image
+        run: |
+          docker build --target api \
+            --build-arg GENERATE_MCP_DOCS=true \
+            --build-arg BUILD_REVISION="${{ github.sha }}" \
+            --build-arg IMAGE_SOURCE="${{ github.server_url }}/${{ github.repository }}" \
+            -t core-be:ci .
+
+      - name: Build worker Docker image
+        run: |
+          docker build -f Dockerfile.worker \
+            --build-arg BUILD_REVISION="${{ github.sha }}" \
+            --build-arg IMAGE_SOURCE="${{ github.server_url }}/${{ github.repository }}" \
+            -t core-be-worker:ci .
+
+      - name: Scan API image with Trivy
+        uses: aquasecurity/trivy-action@0.34.0
+        with:
+          image-ref: core-be:ci
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: 1
+          ignore-unfixed: true
+
+      - name: Scan worker image with Trivy
+        uses: aquasecurity/trivy-action@0.34.0
+        with:
+          image-ref: core-be-worker:ci
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: 1
+          ignore-unfixed: true
+
+      - name: Verify worker image
+        run: |
+          set -euo pipefail
+          docker run --rm core-be-worker:ci node --check dist/worker.js
+          docker run --rm core-be-worker:ci node -e "import('argon2').then(()=>import('@sentry/profiling-node')).then(()=>console.log('native ok'))"
+
+      - name: Login to GitHub Container Registry
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push images to GHCR (main branch)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          API_IMAGE="ghcr.io/${{ github.repository }}/core-be-api"
+          WORKER_IMAGE="ghcr.io/${{ github.repository }}/core-be-worker"
+          docker tag core-be:ci "${API_IMAGE}:${{ github.sha }}"
+          docker tag core-be:ci "${API_IMAGE}:latest"
+          docker tag core-be-worker:ci "${WORKER_IMAGE}:${{ github.sha }}"
+          docker tag core-be-worker:ci "${WORKER_IMAGE}:latest"
+          docker push "${API_IMAGE}:${{ github.sha }}"
+          docker push "${API_IMAGE}:latest"
+          docker push "${WORKER_IMAGE}:${{ github.sha }}"
+          docker push "${WORKER_IMAGE}:latest"
+          echo "Pushed ${API_IMAGE}:${{ github.sha }}"
+          echo "Pushed ${WORKER_IMAGE}:${{ github.sha }}"
+
+      - name: Boot API container and verify /health/ready
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
+          REDIS_URL: redis://localhost:6379
+        run: |
+          set -euo pipefail
+          docker run -d --name core-be-health --network host \
+            -e NODE_ENV=test \
+            -e HOST=0.0.0.0 \
+            -e PORT=3000 \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e REDIS_URL="$REDIS_URL" \
+            -e JWT_SECRET=test-jwt-secret-min-32-chars-xxxxxxxx \
+            -e ALLOWED_ORIGINS=http://localhost:3000 \
+            -e AUDIT_RETENTION_DAYS=90 \
+            -e SESSION_RETENTION_DAYS=30 \
+            core-be:ci
+          timeout 90 bash -c 'until curl -sf http://localhost:3000/health/ready; do sleep 2; done'
+          docker logs core-be-health --tail 50
+          docker rm -f core-be-health

@@ -1,0 +1,11 @@
+---
+description: Auto-triggers code-quality-guard skill when lint, pre-commit, or CI security config changes.
+globs: eslint.config.mjs, .husky/pre-commit, .github/workflows/**/*.yml, .gitleaks.toml, .semgrepignore
+alwaysApply: false
+---
+
+When any matching file is created or modified, read and follow the code-quality-guard skill:
+- Skill file: `.cursor/skills/code-quality-guard/SKILL.md`
+- Verify the 3-layer quality pipeline: ESLint plugins, Husky pre-commit hooks, CI security scanning
+- Ensure lint-staged config in package.json matches the pre-commit hook
+- Validate CI workflows include all security checks (Gitleaks, Semgrep, audit)

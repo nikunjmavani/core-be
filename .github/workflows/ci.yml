@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dev, qa]
+  push:
+    branches: [main, dev, qa]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      src-code: ${{ steps.filter.outputs.src-code }}
+      docker: ${{ steps.filter.outputs.docker }}
+      docs-artifacts: ${{ steps.filter.outputs.docs-artifacts }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Path filter
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            src-code:
+              - 'src/**'
+              - 'migrations/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'Dockerfile'
+              - 'Dockerfile.worker'
+              - 'Dockerfile.agent'
+              - 'vitest.config.ts'
+              - 'vitest.unit.config.ts'
+              - 'vitest.chaos.config.ts'
+              - 'vitest.contract.config.ts'
+              - 'tooling/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/reusable/**'
+            docker:
+              - 'Dockerfile'
+              - 'Dockerfile.worker'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tooling/ci/check-dockerfile-sync.mjs'
+            docs-artifacts:
+              - 'docs/openapi/**'
+              - 'src/shared/locales/**/openapi.json'
+              - 'src/scripts/codegen/generate-openapi.ts'
+              - 'src/scripts/codegen/openapi-enricher.ts'
+              - 'src/scripts/codegen/openapi-schema-map.ts'
+              - 'src/scripts/codegen/openapi-response-map.ts'
+              - 'src/scripts/codegen/check-api-docs-sync.ts'
+
+  quality:
+    name: Quality & static security
+    uses: ./.github/workflows/reusable/quality-static.yml
+
+  test:
+    name: Test (Postgres + Redis)
+    needs: [quality, changes]
+    if: |
+      always() &&
+      needs.quality.result == 'success' &&
+      (needs.changes.outputs.src-code == 'true' || github.event_name == 'push')
+    uses: ./.github/workflows/reusable/test-with-db.yml
+    secrets: inherit
+
+  api-smoke:
+    name: API smoke (Postgres + Redis + live server)
+    needs: [quality, changes]
+    if: |
+      always() &&
+      needs.quality.result == 'success' &&
+      (needs.changes.outputs.src-code == 'true' || github.event_name == 'push')
+    uses: ./.github/workflows/reusable/api-smoke-with-db.yml
+    secrets: inherit
+
+  chaos-testing:
+    name: Chaos (Postgres + Redis via Toxiproxy)
+    needs: [quality, changes]
+    if: |
+      always() &&
+      needs.quality.result == 'success' &&
+      (needs.changes.outputs.src-code == 'true' || github.event_name == 'push')
+    uses: ./.github/workflows/reusable/chaos-toxiproxy.yml
+    secrets: inherit
+
+  docker-build:
+    name: Docker Build
+    needs: [quality, changes]
+    if: |
+      always() &&
+      needs.quality.result == 'success' &&
+      (needs.changes.outputs.docker == 'true' || github.event_name == 'push')
+    uses: ./.github/workflows/reusable/docker-build-verify.yml
+    secrets: inherit
+
+  sbom:
+    name: Generate CycloneDX SBOM
+    needs: [quality, changes]
+    if: |
+      always() &&
+      needs.quality.result == 'success' &&
+      (needs.changes.outputs.src-code == 'true' || github.event_name == 'push')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom.cyclonedx.json
+          path: sbom.cyclonedx.json
+
+  docs:
+    name: API Docs
+    needs: [quality, changes]
+    if: |
+      github.event_name == 'push' &&
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
+    uses: ./.github/workflows/reusable/docs-generate.yml
+    secrets: inherit

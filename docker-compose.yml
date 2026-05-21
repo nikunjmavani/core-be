@@ -1,0 +1,76 @@
+# Local development: Postgres + Redis. Optional profile `smoke` runs API container (see docs/deployment/docker-images.md).
+# Pinned patch tags for reproducibility; bump intentionally when upgrading.
+services:
+  postgres:
+    image: postgres:17.10-alpine
+    restart: unless-stopped
+    container_name: core-be-postgres
+    environment:
+      POSTGRES_USER: core
+      POSTGRES_PASSWORD: core
+      POSTGRES_DB: core
+    ports:
+      - '5432:5432'
+    volumes:
+      - core_be_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U core -d core']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8.6.3-alpine
+    restart: unless-stopped
+    container_name: core-be-redis
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api-smoke:
+    profiles: ['smoke']
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+      args:
+        GENERATE_MCP_DOCS: 'true'
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: test
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://core:core@postgres:5432/core
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
+      ALLOWED_ORIGINS: http://localhost:3000
+      AUDIT_RETENTION_DAYS: 90
+      SESSION_RETENTION_DAYS: 30
+      LOG_LEVEL: info
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    container_name: core-be-toxiproxy
+    profiles: ['chaos']
+    ports:
+      - '8474:8474'
+      - '25432:25432'
+      - '26379:26379'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  core_be_postgres_data:

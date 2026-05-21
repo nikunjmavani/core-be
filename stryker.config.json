@@ -1,0 +1,53 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "mutate": [
+    "src/domains/auth/auth.service.ts",
+    "src/domains/auth/sub-domains/auth-session/auth-session.service.ts",
+    "src/domains/auth/sub-domains/auth-method/auth-method.service.ts",
+    "src/domains/auth/sub-domains/auth-method/magic-link.service.ts",
+    "src/domains/auth/sub-domains/auth-method/oauth/oauth.service.ts",
+    "src/domains/auth/sub-domains/auth-mfa/mfa.service.ts",
+    "src/domains/billing/**/*.service.ts",
+    "src/domains/tenancy/sub-domains/membership/membership.service.ts",
+    "src/domains/tenancy/sub-domains/organization/organization.service.ts",
+    "src/domains/tenancy/sub-domains/member-invitation/member-invitation.service.ts",
+    "src/domains/tenancy/sub-domains/member-roles/member-role.service.ts",
+    "src/domains/tenancy/sub-domains/organization-api-key/organization-api-key.service.ts",
+    "src/domains/tenancy/sub-domains/organization-settings/organization-settings.service.ts",
+    "src/domains/tenancy/sub-domains/permission/authorization.service.ts",
+    "src/domains/tenancy/sub-domains/permission/permission.service.ts",
+    "src/domains/tenancy/sub-domains/member-role-permission/member-role-permission.service.ts",
+    "src/domains/tenancy/sub-domains/organization-notification-policy/organization-notification-policy.service.ts",
+    "src/shared/middlewares/auth.middleware.ts",
+    "src/shared/middlewares/tenant.middleware.ts",
+    "src/shared/middlewares/idempotency.middleware.ts",
+    "src/shared/middlewares/api-key-auth.middleware.ts",
+    "src/shared/middlewares/error-handler.middleware.ts",
+    "src/shared/middlewares/organization-rls-transaction.middleware.ts",
+    "src/shared/middlewares/encryption.middleware.ts"
+  ],
+  "mutator": {
+    "excludedMutations": ["StringLiteral", "Regex", "TemplateLiteral"]
+  },
+  "thresholds": {
+    "high": 80,
+    "low": 70,
+    "break": 70
+  },
+  "reporters": ["html", "clear-text", "progress", "json"],
+  "htmlReporter": {
+    "fileName": "reports/mutation/mutation-report.html"
+  },
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation-report.json"
+  },
+  "vitest": {
+    "configFile": "vitest.stryker.config.ts",
+    "related": true
+  },
+  "timeoutMS": 60000,
+  "concurrency": 4
+}

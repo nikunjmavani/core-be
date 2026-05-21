@@ -1,0 +1,5 @@
+{
+  "items[0][id]": "si_fixture_contract_item_stable",
+  "items[0][price]": "price_fixture_contract_plan_b",
+  "metadata[next_sync]": "contract_fixture_upgrade"
+}

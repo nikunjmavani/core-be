@@ -1,0 +1,57 @@
+{
+  "info": {
+    "title": "core-be API",
+    "description": "Backend API for the Core platform. Includes authentication, multi-tenant organization management, billing, notifications, webhooks, and admin operations.\n\nAll authenticated endpoints require a Bearer JWT token in the Authorization header. Organization-scoped endpoints also require the appropriate permission."
+  },
+  "servers": {
+    "local": "Local development"
+  },
+  "tags": {
+    "Health": "Server health and readiness probes",
+    "MCP": "Model Context Protocol — tools and resources for agents (requires admin JWT when ENABLE_MCP_SERVER=true)",
+    "Auth": "Authentication — login, logout, password management",
+    "Magic Link": "Passwordless authentication via magic link emails",
+    "OAuth": "OAuth 2.0 social login flows",
+    "Password": "Password management (forgot, reset, change)",
+    "Email Verification": "Email address verification",
+    "MFA": "Multi-factor authentication enrollment and verification",
+    "WebAuthn": "Passkey (WebAuthn) registration and sign-in",
+    "Token": "Token refresh and management",
+    "Session": "Session management — list and revoke active sessions",
+    "Auth Method": "Manage linked authentication methods (password, OAuth, etc.)",
+    "User": "Current user profile management",
+    "User Settings": "User personal settings (dark mode, language, etc.)",
+    "Notification Preferences": "Per-user notification type and channel preferences",
+    "Admin": "Platform administration endpoints (requires admin role)",
+    "User Management": "Admin user management — list, update, suspend, delete users",
+    "Organization": "Organization CRUD and management",
+    "Organization Settings": "Organization-level settings and policies",
+    "API Key": "Organization API key management",
+    "Notification Policy": "Organization notification delivery policies",
+    "Audit Log": "Audit trail of actions performed in the organization",
+    "Membership": "Organization membership management",
+    "Invitation": "Member invitations — create, accept, decline, resend",
+    "Role": "Custom role management within organizations",
+    "Permission": "Available permissions that can be assigned to roles",
+    "Billing": "Billing and subscription management",
+    "Plan": "Subscription plans and pricing",
+    "Subscription": "Subscription lifecycle — create, upgrade, cancel, resume",
+    "Notification": "User notification feed",
+    "Webhook": "Webhook endpoint management and delivery history",
+    "Upload": "Pre-signed URL generation for file uploads"
+  },
+  "components": {
+    "bearerAuthDescription": "JWT access token obtained from the login or token refresh endpoint."
+  },
+  "responses": {
+    "success": "Successful operation",
+    "created": "Resource created successfully",
+    "noContent": "No Content",
+    "validationError": "Validation error",
+    "unauthorized": "Unauthorized",
+    "forbidden": "Forbidden",
+    "notFound": "Not Found",
+    "conflict": "Conflict",
+    "internalError": "Internal Server Error"
+  }
+}

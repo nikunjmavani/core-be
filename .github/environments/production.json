@@ -1,0 +1,14 @@
+{
+  "name": "production",
+  "protection": {
+    "requiredReviewers": {
+      "users": ["nikunjmavani"],
+      "teams": [],
+      "preventSelfReview": false
+    },
+    "deploymentBranchPolicy": {
+      "protectedBranches": true,
+      "customBranchPolicies": false
+    }
+  }
+}

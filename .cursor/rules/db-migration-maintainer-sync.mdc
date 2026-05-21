@@ -1,0 +1,15 @@
+---
+description: When creating or editing SQL migrations or Drizzle schemas, run db-migration-maintainer (and sql-design-guard for schemas).
+globs: migrations/*.sql, src/domains/**/*.schema.ts
+alwaysApply: false
+---
+
+## DB migration maintainer sync
+
+When you create or modify matching files:
+
+1. **Read** `.cursor/skills/db-migration-maintainer/SKILL.md`.
+2. For `*.schema.ts` changes, also follow `.cursor/skills/sql-design-guard/SKILL.md`.
+3. After editing `migrations/*.sql`, run `pnpm db:migrate:lint` (CI blocks unsafe DDL).
+4. Verify with `pnpm db:migrate` on a local database when the change is non-trivial.
+5. If new tables need demo/reference data, invoke **seed-maintainer**.

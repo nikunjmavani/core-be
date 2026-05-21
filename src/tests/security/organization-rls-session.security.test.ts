@@ -1,0 +1,94 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { sql as drizzleSql, eq } from 'drizzle-orm';
+import { sql } from '@/infrastructure/database/connection.js';
+import { createTestApp } from '@/tests/helpers/test-app.js';
+import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { createTestUser } from '@/tests/factories/user.factory.js';
+import { createTestOrganization } from '@/tests/factories/organization.factory.js';
+import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import {
+  seedPermissions,
+  createRoleWithPermissions,
+  createMembership,
+} from '@/domains/tenancy/__tests__/factories/permission.factory.js';
+import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import { organizationHeaders } from '@/tests/helpers/test-organization.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
+import type { FastifyInstance } from 'fastify';
+import type { TestRequestAgent } from '@/tests/helpers/test-app.js';
+
+/**
+ * RLS session variable + HTTP tenant header alignment (FORCE ROW LEVEL SECURITY migrations).
+ */
+describe('Security: Organization RLS session', () => {
+  let app: FastifyInstance;
+  let request: TestRequestAgent;
+
+  beforeAll(async () => {
+    await sql`GRANT core_be_app TO core`.catch(() => undefined);
+    const testApp = await createTestApp();
+    app = testApp.app;
+    request = testApp.request;
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(async () => {
+    await cleanupDatabase();
+    await seedPermissions([TENANCY_PERMISSIONS.ORGANIZATION_READ]);
+  });
+
+  it('should hide other tenants when app.current_organization_id is set in a transaction', async () => {
+    const forceRlsRows = await sql<{ relforcerowsecurity: boolean }[]>`
+      SELECT c.relforcerowsecurity
+      FROM pg_class c
+      INNER JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'tenancy' AND c.relname = 'organizations'
+    `;
+    expect(
+      forceRlsRows[0]?.relforcerowsecurity,
+      'Apply migrations including 20260516000006_force_row_level_security.sql',
+    ).toBe(true);
+    const ownerA = await createTestUser();
+    const ownerB = await createTestUser();
+    const organizationA = await createTestOrganization({ ownerUserId: ownerA.id });
+    const organizationB = await createTestOrganization({ ownerUserId: ownerB.id });
+
+    await database.transaction(async (transaction) => {
+      await transaction.execute(drizzleSql`SET LOCAL ROLE core_be_app`);
+      await transaction.execute(
+        drizzleSql`SELECT set_config('app.current_organization_id', ${organizationA.public_id}, true)`,
+      );
+      const rows = await transaction
+        .select({ public_id: organizations.public_id })
+        .from(organizations)
+        .where(eq(organizations.public_id, organizationB.public_id));
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  it('should return 200 for matching X-Organization-Id and route organization', async () => {
+    const user = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: [TENANCY_PERMISSIONS.ORGANIZATION_READ],
+    });
+    await createMembership({
+      userId: user.id,
+      organizationId: organization.id,
+      roleId: role.id,
+    });
+    const token = await generateTestToken({ userId: user.public_id });
+
+    const response = await request
+      .get(`/api/v1/tenancy/organizations/${organization.public_id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set(organizationHeaders(organization.public_id));
+
+    expect(response.status).toBe(200);
+  });
+});

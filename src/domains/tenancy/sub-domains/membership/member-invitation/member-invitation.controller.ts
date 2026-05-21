@@ -1,0 +1,74 @@
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { successResponse } from '@/shared/utils/http/response.util.js';
+import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
+import type { MemberInvitationService } from './member-invitation.service.js';
+
+export function createMemberInvitationController(service: MemberInvitationService) {
+  return {
+    listMemberInvitations: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const organizationId = validatePublicIdParam(
+        (request.params as { id: string }).id ?? '',
+        'id',
+      );
+      const limit = Math.min(Number((request.query as { limit?: string }).limit) || 100, 100);
+      const data = await service.list(organizationId, limit);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    createMemberInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const organizationId = validatePublicIdParam(
+        (request.params as { id: string }).id ?? '',
+        'id',
+      );
+      const result = await service.create(organizationId, request.body, auth.userId);
+      reply.code(201);
+      return successResponse(
+        { invitation: result.invitation, token: result.token },
+        getRequestIdentifier(request),
+      );
+    },
+    acceptMemberInvitation: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const { invitationId } = (request.params as { invitationId: string }) ?? {
+        invitationId: '',
+      };
+      const data = await service.accept(invitationId, request.body);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    revokeMemberInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
+      requireAuth(request);
+      const organizationId = validatePublicIdParam(
+        (request.params as { id: string }).id ?? '',
+        'id',
+      );
+      const { invitationId } = request.params as { invitationId: string };
+      await service.revoke(organizationId, invitationId);
+      return reply.code(204).send();
+    },
+    resendInvitation: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const organizationId = validatePublicIdParam(
+        (request.params as { id: string }).id ?? '',
+        'id',
+      );
+      const { invitationId } = request.params as { invitationId: string };
+      const result = await service.resend(organizationId, invitationId, request.body);
+      return successResponse(
+        { invitation: result.invitation, token: result.token },
+        getRequestIdentifier(request),
+      );
+    },
+    listPendingInvitations: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const data = await service.listPendingInvitations(auth.userId);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    declineInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const { invitationId } = (request.params as { invitationId: string }) ?? {
+        invitationId: '',
+      };
+      await service.decline(invitationId, auth.userId);
+      return reply.code(204).send();
+    },
+  };
+}

@@ -1,0 +1,247 @@
+# How to get third-party credentials for .env
+
+Copy `.env.example` to `.env` in the project root, then optionally copy `.env.local.example` to `.env.local` for overrides (secrets, machine-specific values). Never commit `.env` or `.env.local`.
+
+---
+
+## Where credentials go
+
+```mermaid
+flowchart TB
+  subgraph required [Required for app]
+    DB[DATABASE_URL]
+    Redis[REDIS_URL]
+    JWT[JWT_SECRET]
+    Origins[ALLOWED_ORIGINS]
+  end
+
+  subgraph optional [Optional by service]
+    S3[S3: upload]
+    Resend[Resend: mail]
+    OAuth[OAuth: Google, GitHub]
+    Stripe[Stripe: billing]
+    Sentry[Sentry: errors]
+    Postman[Postman: docs upload]
+  end
+
+  required --> env_file[.env at project root]
+  optional --> env_file
+```
+
+Required vs optional credentials and where they go: local `.env`, CI (GitHub environment secrets), and per-service below.
+
+---
+
+## 1. S3 (AWS) — uploads / presigned URLs
+
+**Used for:** `POST /api/v1/upload` (presigned upload URLs).
+
+| .env variable          | Where to get it                 |
+| ---------------------- | ------------------------------- |
+| `S3_BUCKET`            | Bucket name you create.         |
+| `S3_REGION`            | Region code (e.g. `us-east-1`). |
+| `S3_ACCESS_KEY_ID`     | IAM user access key.            |
+| `S3_SECRET_ACCESS_KEY` | IAM user secret key.            |
+
+**Steps (AWS Console):**
+
+1. Go to [AWS Console](https://console.aws.amazon.com/) → **S3** → **Create bucket**.
+2. Pick a name (e.g. `myapp-uploads-dev`), choose region (e.g. `us-east-1`), create.
+3. Go to **IAM** → **Users** → **Create user** (e.g. `s3-upload-app`).
+4. Attach policy (e.g. inline) that allows `s3:PutObject`, `s3:GetObject` on that bucket (and optionally `s3:ListBucket`).
+5. **Security credentials** → **Create access key** → choose "Application running outside AWS" → create.
+6. Copy **Access key ID** → `S3_ACCESS_KEY_ID`; **Secret access key** → `S3_SECRET_ACCESS_KEY`.
+7. In `.env`:  
+   `S3_BUCKET=myapp-uploads-dev`  
+   `S3_REGION=us-east-1`  
+   (plus the two keys above.)
+
+**CLI (optional):** [AWS CLI](https://aws.amazon.com/cli/) — `aws s3 mb s3://myapp-uploads-dev`, then create user/keys in console or with `aws iam create-user` / `aws iam create-access-key`.
+
+---
+
+## 2. Resend — email (magic link, invitations, password reset)
+
+**Used for:** Magic link login, invitations, password reset emails.
+
+| .env variable        | Where to get it                            |
+| -------------------- | ------------------------------------------ |
+| `RESEND_API_KEY`     | Resend API key.                            |
+| `EMAIL_FROM_ADDRESS` | Sender email (must be verified in Resend). |
+| `EMAIL_FROM_NAME`    | Sender display name.                       |
+
+**Steps:**
+
+1. Sign up at [resend.com](https://resend.com).
+2. **API Keys** → **Create API Key** → copy key (starts with `re_`) → `RESEND_API_KEY`.
+3. **Domains** → add your domain (or use their sandbox domain for testing).
+4. For sandbox: use `onboarding@resend.dev` as sender (see Resend docs).
+5. In `.env`:  
+   `RESEND_API_KEY=re_xxxx`  
+   `EMAIL_FROM_ADDRESS=noreply@albetrios.com` (or your verified address; default is `noreply@albetrios.com`)  
+   `EMAIL_FROM_NAME=YourApp`
+
+**CLI:** Resend has no official credential CLI; use the dashboard.
+
+---
+
+## 3. OAuth — Google (login with Google)
+
+**Used for:** `GET /api/v1/auth/oauth/:provider` (redirect to Google). Without these, that route returns 501.
+
+| .env variable                | Where to get it                          |
+| ---------------------------- | ---------------------------------------- |
+| `OAUTH_GOOGLE_CLIENT_ID`     | Google OAuth client ID.                  |
+| `OAUTH_GOOGLE_CLIENT_SECRET` | Google OAuth client secret.              |
+| `OAUTH_GOOGLE_REDIRECT_URI`  | Callback URL (must match Google config). |
+
+**Steps:**
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Credentials**.
+2. **Create Project** (if needed) → **OAuth consent screen** → External (or Internal) → fill app name, save.
+3. **Credentials** → **Create credentials** → **OAuth client ID**.
+4. Application type: **Web application**.
+5. **Authorized redirect URIs** add: `http://localhost:3000/auth/oauth/google/callback` (or your API base + `/auth/oauth/google/callback`).
+6. Create → copy **Client ID** and **Client secret**.
+7. In `.env`:  
+   `OAUTH_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com`  
+   `OAUTH_GOOGLE_CLIENT_SECRET=xxxx`  
+   `OAUTH_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/oauth/google/callback`
+
+---
+
+## 4. OAuth — GitHub (login with GitHub)
+
+**Used for:** GitHub OAuth login. Without these, that provider returns 501.
+
+| .env variable                | Where to get it                       |
+| ---------------------------- | ------------------------------------- |
+| `OAUTH_GITHUB_CLIENT_ID`     | GitHub OAuth App Client ID.           |
+| `OAUTH_GITHUB_CLIENT_SECRET` | GitHub OAuth App Client Secret.       |
+| `OAUTH_GITHUB_REDIRECT_URI`  | Callback URL (must match GitHub app). |
+
+**Steps:**
+
+1. GitHub → **Settings** → **Developer settings** → **OAuth Apps** → **New OAuth App**.
+2. **Application name:** e.g. `My App (Local)`. **Homepage URL:** `http://localhost:3000`. **Authorization callback URL:** `http://localhost:3000/auth/oauth/github/callback`.
+3. Register → copy **Client ID** and generate **Client secret**.
+4. In `.env`:  
+   `OAUTH_GITHUB_CLIENT_ID=xxxx`  
+   `OAUTH_GITHUB_CLIENT_SECRET=xxxx`  
+   `OAUTH_GITHUB_REDIRECT_URI=http://localhost:3000/auth/oauth/github/callback`
+
+**Production smoke (after secrets are in Railway / GitHub Environment):**
+
+1. Set `FRONTEND_URL` to the deployed frontend origin (used for default redirect URIs when `OAUTH_*_REDIRECT_URI` is unset).
+2. Confirm OAuth app callback URLs match **exactly** the values in env (scheme, host, path).
+3. API checks (replace host):
+
+   ```bash
+   curl -sS -o /dev/null -w "%{http_code}\n" https://api.example.com/api/v1/auth/oauth/providers
+   # Expect 200
+
+   curl -sS -o /dev/null -w "%{http_code}\n" https://api.example.com/api/v1/auth/oauth/google
+   # Expect 302 to Google when OAUTH_GOOGLE_CLIENT_ID is set; 501 when not configured
+
+   curl -sS -o /dev/null -w "%{http_code}\n" https://api.example.com/api/v1/auth/oauth/github
+   # Expect 302 to GitHub when OAUTH_GITHUB_CLIENT_ID is set; 501 when not configured
+   ```
+
+4. Complete one browser callback flow per provider and verify session cookie + JWT are issued.
+
+Implementation lives under `src/domains/auth/sub-domains/auth-method/oauth/` — no code change is required to enable providers; only env + OAuth app configuration.
+
+---
+
+## 5. Stripe — billing / subscriptions / webhooks
+
+**Used for:** Plans, subscriptions, webhook handling.
+
+| .env variable           | Where to get it                                      |
+| ----------------------- | ---------------------------------------------------- |
+| `STRIPE_SECRET_KEY`     | Stripe secret key (test: `sk_test_...`).             |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret (for local: from Stripe CLI). |
+
+**Steps (Dashboard):**
+
+1. Sign up at [stripe.com](https://stripe.com) → **Developers** → **API keys**.
+2. Copy **Secret key** (test) → `STRIPE_SECRET_KEY=sk_test_xxxx`.
+
+**Webhook secret (for local / tests):**
+
+- **Option A — Stripe CLI (recommended for local):**
+  1. Install [Stripe CLI](https://stripe.com/docs/stripe-cli): `brew install stripe/stripe-cli/stripe` (macOS) or see docs.
+  2. Login: `stripe login`.
+  3. Forward webhooks to your server: `stripe listen --forward-to localhost:3000/api/v1/billing/webhooks/stripe`.
+  4. CLI prints **webhook signing secret** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET=whsec_xxxx`.
+- **Option B — Dashboard:** **Developers** → **Webhooks** → **Add endpoint** → URL e.g. `https://your-api.com/api/v1/billing/webhooks/stripe` → select events → create → reveal **Signing secret** → `STRIPE_WEBHOOK_SECRET=whsec_xxxx`.
+
+---
+
+## 6. Sentry (optional) — errors / tracing
+
+**Used for:** Error reporting, performance tracing. App runs without these.
+
+| .env variable                | Where to get it                       |
+| ---------------------------- | ------------------------------------- |
+| `SENTRY_DSN`                 | Project DSN (Settings → Client Keys). |
+| `SENTRY_ENVIRONMENT`         | e.g. `local` or `development`.        |
+| `SENTRY_TRACES_SAMPLE_RATE`  | 0.0–1.0 (e.g. `0.2`).                 |
+| `SENTRY_PROFILE_SAMPLE_RATE` | 0.0–1.0 (e.g. `0.5`).                 |
+
+**Steps:** [sentry.io](https://sentry.io) → create project (Node/Express or similar) → **Settings** → **Client Keys (DSN)** → copy DSN → `SENTRY_DSN=https://...@sentry.io/...`.
+
+---
+
+## 7. Postman (optional) — upload API collection
+
+**Used for:** `pnpm docs:upload` to push the generated collection to a Postman workspace.
+
+| .env variable          | Where to get it                                |
+| ---------------------- | ---------------------------------------------- |
+| `POSTMAN_API_KEY`      | Postman API key.                               |
+| `POSTMAN_WORKSPACE_ID` | Workspace ID (from workspace URL or settings). |
+
+**Steps:** [Postman](https://go.postman.co/) → **Settings** (account) → **API Keys** → Generate → copy key. **Workspace** → **Settings** → copy **Workspace ID** from URL or sidebar.
+
+---
+
+## Quick checklist (paste into .env)
+
+After you have the values, set in `.env`:
+
+```bash
+# Required (you likely have these)
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://...
+JWT_SECRET=at-least-32-characters-secret
+
+# S3
+S3_BUCKET=your-bucket-name
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=AKIA...
+S3_SECRET_ACCESS_KEY=...
+
+# Resend
+RESEND_API_KEY=re_...
+EMAIL_FROM_ADDRESS=onboarding@resend.dev
+EMAIL_FROM_NAME=YourApp
+
+# Google OAuth (or leave commented to get 501 on OAuth)
+OAUTH_GOOGLE_CLIENT_ID=....apps.googleusercontent.com
+OAUTH_GOOGLE_CLIENT_SECRET=...
+OAUTH_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/oauth/google/callback
+
+# GitHub OAuth (or leave commented)
+OAUTH_GITHUB_CLIENT_ID=...
+OAUTH_GITHUB_CLIENT_SECRET=...
+OAUTH_GITHUB_REDIRECT_URI=http://localhost:3000/auth/oauth/github/callback
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...   # from Stripe CLI or Dashboard
+```
+
+No third party offers a single "create all env vars" CLI; use the steps above per provider. **Queue dashboard (Bull Board):** Set `ENABLE_QUEUE_DASHBOARD=true` to mount the queue UI at `/admin/queues`. Access requires JWT auth and global role `super_admin`. Mutating Bull Board API calls (2xx) are written to `audit.logs`. Optional; leave unset or `false` in production if not needed.
+
+For Stripe webhooks locally, Stripe CLI is the easiest way to get `STRIPE_WEBHOOK_SECRET`.

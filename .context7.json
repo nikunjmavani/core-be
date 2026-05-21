@@ -1,0 +1,9 @@
+{
+  "libraries": [
+    "fastify/fastify",
+    "drizzle-team/drizzle-orm",
+    "postgres/postgres",
+    "optimalbits/bullmq",
+    "nodejs/node"
+  ]
+}

@@ -1,0 +1,28 @@
+# Release-please: conventional commits → release PR (CHANGELOG + version bump) → merge → GitHub Release + tag.
+# Uses the maintained googleapis/release-please-action (see https://github.com/googleapis/release-please).
+# Runs on push to main. Use RELEASE_PLEASE_TOKEN (PAT) so merging the release PR triggers CI.
+# See docs/deployment/ci-cd/cicd-and-deployment.md (§4 Release and versioning).
+
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json

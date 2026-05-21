@@ -1,0 +1,282 @@
+# Project Structure Guide
+
+Conventions, layer matrix, request flow, and known inconsistencies for `src/`. For canonical layout rules, see [CLAUDE.md](../../../CLAUDE.md) and [domains-and-public-api-design.md](../architecture/domains-and-public-api-design.md).
+
+---
+
+## 1. Directory structure
+
+The full `src/` file tree is **not** duplicated here (it drifts from code quickly).
+
+| Source                                                               | Use                                                                         |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [CLAUDE.md](../../../CLAUDE.md)                                         | Domain → sub-domain (and nested sub-domain) layout, tests, dependency rules |
+| [domains-and-public-api-design.md](../architecture/domains-and-public-api-design.md) | Layout variants, nesting rules, tests (§1.5), route-file strategy           |
+| `.cursor/skills/domain-generator/SKILL.md`                           | Scaffolding checklist for new domains/resources                             |
+| `.cursor/skills/test-generator/SKILL.md`                             | Where to put unit, e2e, and event-handler tests                             |
+| [docs/routes.txt](../../routes.txt)                                     | Generated route catalog (`pnpm routes:catalog`)                             |
+| `pnpm tool:project-structure-tree`                                   | Print current `src/` tree to stdout (skips `__tests__/`, caches)            |
+
+---
+
+## 2. File Responsibilities
+
+| Suffix           | Responsibility                                                                                |
+| ---------------- | --------------------------------------------------------------------------------------------- |
+| `.routes.ts`     | Fastify route registration; receives container or service(s), registers HTTP handlers         |
+| `.controller.ts` | Thin HTTP handlers: parse request, call service(s), return response                           |
+| `.validator.ts`  | Function-based input validation using Zod `.safeParse()`, throws `ValidationError`            |
+| `.dto.ts`        | Zod schemas for request body/query/params validation                                          |
+| `.serializer.ts` | Function-based response shaping (e.g. `serializeOrganization(row)`)                           |
+| `.service.ts`    | Business logic; uses repositories, validators; may call other domain services or enqueue jobs |
+| `.repository.ts` | Drizzle DB access; imports schema and connection                                              |
+| `.types.ts`      | TypeScript domain types and interfaces                                                        |
+| `.schema.ts`     | Drizzle table/column definitions (snake_case, co-located in domain)                           |
+| `.container.ts`  | DI: instantiates repositories, services; exports services for routes/controllers              |
+
+**Other files**
+
+| Suffix / pattern                                                    | Inferred purpose                                                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `.permissions.ts`                                                   | Permission code constants for the domain (used by `permissions.ts` and authorization) |
+| `.constants.ts`                                                     | Domain-specific constants (e.g. upload)                                               |
+| `.seed.ts`                                                          | Seed data and reference data for the domain                                           |
+| `*.queue.ts`                                                        | BullMQ queue definition and enqueue helpers (under `queues/`)                         |
+| `*.worker.ts`                                                       | BullMQ job processor (under `workers/`)                                               |
+| `authorization.service.ts`                                          | Permission resolution (tenancy/permission)                                            |
+| `permission-cache.service.ts`                                       | Redis permission cache (tenancy/permission)                                           |
+| `magic-link.service.ts`, `oauth.service.ts`                         | Auth-method-specific auth flows                                                       |
+| `verification-token.repository.ts` / `verification-token.schema.ts` | Verification token entity under auth-method                                           |
+| `webhook-delivery-attempt.repository.ts`                            | Webhook delivery attempt entity under webhook                                         |
+
+---
+
+## 3. Domain vs Sub-domain File Matrix
+
+| File             | Domain (root)                                            | Sub-domain (no API)                                                                                                              | Sub-domain (has API)                                                                                                                                                                  |
+| ---------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.routes.ts`     | ✅ (audit, auth, billing, notify, tenancy, upload, user) | ❌                                                                                                                               | ✅ (tenancy: organization, membership, member-roles, permission). Billing/notify sub-domains register via parent composers (`billing.routes.ts`, `notify.routes.ts`) — see Section 7. |
+| `.controller.ts` | ✅ where domain has HTTP API                             | ✅ (e.g. member-invitation, organization-settings, stripe-webhook, user-data-export, webhook-event)              | ✅                                                                                                                                                                                    |
+| `.validator.ts`  | ✅ where domain has input                                | ✅ or ❌ by sub-domain                                                                                                           | ✅                                                                                                                                                                                    |
+| `.dto.ts`        | ✅ where domain has input                                | ✅ or ❌ by sub-domain                                                                                                           | ✅                                                                                                                                                                                    |
+| `.serializer.ts` | ✅ where domain returns shaped data                      | ✅ or ❌ by sub-domain                                                                                                           | ✅                                                                                                                                                                                    |
+| `.service.ts`    | ✅                                                       | ✅                                                                                                                               | ✅                                                                                                                                                                                    |
+| `.repository.ts` | ✅ or ❌ (auth has no domain repo)                       | ✅                                                                                                                               | ✅                                                                                                                                                                                    |
+| `.types.ts`      | ✅ where present                                         | ✅ or ❌ by sub-domain                                                                                                           | ✅                                                                                                                                                                                    |
+| `.schema.ts`     | ✅ where domain has tables                               | ✅ or ❌ by sub-domain                                                                                                           | ✅                                                                                                                                                                                    |
+| `.container.ts`  | ✅ (all 7 domains)                                       | ❌                                                                                                                               | ❌                                                                                                                                                                                    |
+
+**Inconsistencies**
+
+- **Sub-domain has controller but no routes file:** Many sub-domains are exposed only via the parent domain routes (e.g. member-invitation, organization-settings, organization-api-key, organization-notification-policy, webhook-event). Their controllers are used by the parent `billing.routes.ts` or `tenancy.routes.ts` or `notify.routes.ts`; the sub-domain does not have its own `.routes.ts` that is mounted.
+- **`user-data-export`:** intentional cross-schema GDPR reads in `UserDataExportService` (documented exception; not refactored in layer-cleanup pass).
+
+---
+
+## 4. Request / Response Flow
+
+**Standard flow (all domains, including auth and user with multiple sub-domain services):**
+
+```
+HTTP Request
+    │
+    ▼
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐
+│ .routes.ts  │────▶│ .controller │────▶│ .validator   │
+│ (register)  │     │ (thin)      │     │ / .dto       │
+└─────────────┘     └──────┬──────┘     └──────┬───────┘
+                           │                    │
+                           ▼                    ▼
+                    ┌──────────────┐     ┌──────────────┐
+                    │ .service     │────▶│ .repository  │────▶ .schema / DB
+                    │ (or sub-svc) │     └──────┬───────┘
+                    └──────┬───────┘            │
+                           │                    ▼
+                           │             ┌──────────────┐
+                           └────────────▶│ .serializer  │────▶ Response
+                                         └──────────────┘
+```
+
+---
+
+## 5. Data Layer Separation
+
+| Layer      | File             | Represents                                        |
+| ---------- | ---------------- | ------------------------------------------------- |
+| Schema     | `.schema.ts`     | DB table/column definitions (Drizzle, snake_case) |
+| DTO        | `.dto.ts`        | Request input validation (Zod schemas)            |
+| Types      | `.types.ts`      | TypeScript domain types / interfaces              |
+| Serializer | `.serializer.ts` | Response shaping (row → API shape)                |
+
+**Domains/sub-domains with all four (schema, dto, types, serializer):**
+
+- **Domain root:** audit, upload, user.
+- **Sub-domains:** subscription, member-invitation, member-role-permission, membership, member-roles (member-role), organization, organization-settings, organization-notification-policy, organization-api-key, webhook.
+
+**Domains/sub-domains missing one or more:**
+
+| Location                      | Missing                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------ |
+| auth (root)                   | .schema.ts at domain root (schemas in sub-domains)                       |
+| billing (root)                | .controller, .validator, .dto, .serializer, .repository, .types, .schema |
+| notify (root)                 | .controller, .validator, .dto, .serializer, .repository, .types, .schema |
+| tenancy (root)                | .controller, .validator, .dto, .serializer, .repository, .types, .schema |
+| auth-method                   | .dto, .serializer, .controller (API via auth.routes)                     |
+| auth-session                  | .dto, .serializer, .controller                                           |
+| auth-mfa                      | .dto, .serializer, .controller                                           |
+| user-settings                 | .dto, .serializer, .controller (service-only)                            |
+| user-notification-preferences | .dto, .serializer, .controller                                           |
+| user-data-export              | .dto, .validator, .serializer, .repository, .types, .schema              |
+| plan                          | .dto, .validator                                                         |
+| notification                  | .dto, .validator                                                         |
+| stripe-webhook                | .repository, .types, .schema, .dto, .validator, .serializer              |
+| webhook-event                 | .dto, .schema, .validator                                                |
+| permission                    | .dto, .validator                                                         |
+
+---
+
+## 5.1 Shared utilities (`src/shared/utils/`)
+
+Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/http/response.util.js`); `index.ts` re-exports the public API for transitional use.
+
+| Folder | Examples |
+| ------ | -------- |
+| `http/` | `request.util`, `response.util`, `pagination.util`, `api-versioning.util`, `fastify-server.util`, `http-cache.util` |
+| `security/` | `jwt.util`, `password.util`, `encryption.util`, `field-secret-encryption.util`, `allowed-origins.util`, `webhook-url.util`, `webhook-outbound-fetch.util` |
+| `validation/` | `validation.util`, `bullmq-job-validation.util`, `file-magic.util`, `omit-undefined.util` |
+| `infrastructure/` | `logger.util`, `postgres-error.util`, `readiness-probes.util`, `application-lifecycle.util`, `audit-record.util` |
+| `identity/` | `public-id.util`, `public-id-param.util`, `uuid.util` |
+| `auth/` | `authorization.util`, `global-admin-role.util` |
+| `i18n/` | `translate-request.util`, `i18n-response.util` |
+| `idempotency/` | `idempotency-key.util` |
+| `text/` | `email.util`, `html-escape.util` |
+
+**Middleware** (Fastify plugins) lives in `src/shared/middlewares/` — registered via `registerMiddleware()` from `@/shared/middlewares/index.js`.
+
+---
+
+## 6. Access Rules (Actual)
+
+### Within-domain
+
+| Layer      | Imports                                                                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Controller | Own service(s) from container, own serializer, own validator; `@/shared/utils/http/response.util.js`, `@/shared/utils/http/request.util.js`, `@/shared/errors/index.js`, Fastify types |
+| Service    | Own repositories, own validators, other domains’ **services** (not repositories), `@/shared/errors`, infrastructure (e.g. mail queue, Stripe client, storage) as needed      |
+| Repository | Own schema(s), `@/infrastructure/database/connection.js`; some extend `BaseRepository`. No repository imports another repository class (only schema imports for joins).      |
+
+### Cross-domain
+
+| From                                                                                                               | To                                                                                              | Use                                              | READ/WRITE        |
+| ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------- |
+| organization.controller.ts                                                                                         | audit/audit.service.js                                                                          | Type-only `AuditService` for createOrganization  | WRITE (audit log) |
+| auth (auth.service, magic-link, oauth, auth-method, auth-mfa, auth-session)                                        | user/user.service.js                                                                            | UserService (findByEmail, createFromOAuth, etc.) | READ/WRITE        |
+| tenancy/membership/member-invitation.service                                                                       | user/user.service.js                                                                            | UserService                                      | READ              |
+| billing (subscription) services                                       | tenancy/organization/organization.service.js                                                    | OrganizationService                              | READ              |
+| audit/audit.service                                                                                                | user/user.service.js, organization/organization.service.js                                      | UserService, OrganizationService                 | READ              |
+| notify/notification.service                                                                                        | user/user.service.js                                                                            | UserService                                      | READ              |
+| notify/webhook.service                                                                                             | tenancy/organization/organization.service.js                                                    | OrganizationService                              | READ              |
+| upload/upload.service                                                                                              | user/user.service.js, organization/organization.service.js, permission/authorization.service.js | UserService, OrganizationService, permissions    | READ              |
+| user/user-data-export/user-data-export.service (exception)                                                         | multiple domain schemas via direct DB                                                           | GDPR export                                      | READ              |
+| tenancy sub-services (membership, member-role, organization-settings, etc.)                                        | organization.repository (same domain)                                                           | Within-tenancy only                              | READ              |
+
+### Queues and email
+
+- `magic-link.service.ts` → `enqueueEmail()` from `@/infrastructure/mail/queues/mail.queue.js`
+- `auth-method.service.ts` → `enqueueEmail()` from same
+- `member-invitation.service.ts` → `eventBus.emit()` → handler → `enqueueEmail()` (see Event bus)
+
+### Event bus
+
+- `src/core/events/event-bus.ts` defines `EventBus` and `eventBus` singleton with `on()` and `emit()`.
+- `src/core/events/register-event-handlers.ts` registers domain handlers from `buildApp()` before routes.
+- **Member invitation:** `member-invitation.service.ts` emits `tenancy.member_invitation.created` / `tenancy.member_invitation.resent`; handlers in `tenancy/events/`.
+
+### Violations and follow-up
+
+- **None (layer cleanup pass):** No controller imports another controller. Cross-domain access uses services only (except documented `user-data-export`).
+- **Follow-up (separate PRs):** Optional `WebhookDeliveryService` extraction for `webhook-delivery.worker.ts` (worker already uses `createWorker*Repository(databaseHandle)` and `createTenantScopedBullMQWorker` — no `getRequestDatabase()`). New domain events/jobs only when product needs them. Tenancy sub-services using `organization.repository` within the tenancy domain is **intentional** — do not “fix” by injecting `OrganizationService` everywhere.
+
+---
+
+## 7. Route Mounting
+
+**Root registration (`src/routes.ts`):**
+
+| Mount path                          | Route file / export                                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `/api/v1/audit`                     | `auditRoutes(audit.auditService)` from `@/domains/audit/audit.routes.js`                         |
+| `/api/v1/auth`                      | `authRoutes(auth)` from `@/domains/auth/auth.routes.js`                                          |
+| `/api/v1/users`                     | `userRoutes(user)` from `@/domains/user/user.routes.js`                                          |
+| `/api/v1/tenancy`                   | `tenancyRoutes({ ...tenancy, auditService })` from `@/domains/tenancy/tenancy.routes.js`         |
+| `/api/v1/billing`                   | `billingRoutes(billing)` from `@/domains/billing/billing.routes.js`                              |
+| `/api/v1/notify`                    | `notifyRoutes(notify)` from `@/domains/notify/notify.routes.js`                                  |
+| `/api/v1/uploads`                   | `uploadRoutes(upload.uploadService)` from `@/domains/upload/upload.routes.js`                    |
+| (conditional) `/admin/queues`       | `registerQueueDashboard(app, { auditService })` from `@/infrastructure/queue/queue-dashboard.js` |
+| (conditional) `/api/v1/mcp`, `/mcp` | MCP server from `@/infrastructure/mcp/mcp-server.js`                                             |
+
+**Tenancy sub-routes (registered inside `tenancy.routes.ts`):**
+
+- `organizationRoutes(...)` — no extra prefix (routes under `/api/v1/tenancy`)
+- `membershipRoutes(...)` — no extra prefix
+- `memberRoleRoutes(...)` — no extra prefix
+- `permissionRoutes(...)` — no extra prefix
+
+**Billing and notify route composition:** `billing.routes.ts` and `notify.routes.ts` are thin composers that `app.register()` sub-domain route plugins (same pattern as `tenancy.routes.ts`).
+
+---
+
+## 8. DB Schema to Domain Mapping
+
+**Shared namespaces:** `src/infrastructure/database/pg-schemas.ts` defines `authSchema`, `tenancySchema`, `billingSchema`, `notifySchema`, `auditSchema`, `uploadSchema`.
+
+**Infrastructure exception:** `src/infrastructure/mail/mail-outbox.schema.ts` — transactional outbox table shared across domains (not under `domains/`).
+
+**Schema files by domain (all under `src/domains/`):**
+
+| Domain  | Schema files                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| auth    | auth-method/auth-method.schema.ts, auth-method/verification-token.schema.ts, auth-session/auth-session.schema.ts, auth-mfa/mfa-method.schema.ts, auth-mfa/mfa-recovery-code.schema.ts, auth-webauthn/webauthn-credential.schema.ts                                                                                                                                                                                                         |
+| user    | user.schema.ts, user-settings/user-settings.schema.ts, user-notification-preferences/user-notification-preferences.schema.ts                                                                                                                                                                                                                                                                                                              |
+| tenancy | organization/organization.schema.ts, organization-settings/organization-settings.schema.ts, organization-notification-policy/organization-notification-policy.schema.ts, organization-api-key/organization-api-key.schema.ts, membership/membership.schema.ts, member-invitation/member-invitation.schema.ts, member-role/member-role.schema.ts, member-role-permission/member-role-permission.schema.ts, permission/permission.schema.ts |
+| billing | plan/plan.schema.ts, subscription/subscription.schema.ts, stripe-webhook/stripe-webhook.schema.ts                                                                                                                                                                                                                                                                                                    |
+| notify  | notification/notification.schema.ts, webhook/webhook.schema.ts                                                                                                                                                                                                                                                                                                                                                                            |
+| audit   | audit.schema.ts                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| upload  | upload.schema.ts (`upload.uploads` table)                                                                                                                                                                                                                                                                                                                                                                                                 |
+
+**Schemas with no matching repository:** `user-data-export` has no schema (uses cross-domain reads). Mail outbox schema is infrastructure-owned.
+
+**Repositories with no matching schema in same folder:**
+
+- **webhook-event:** has `webhook-event.repository.ts` but no `webhook-event.schema.ts`; likely uses webhook schema or shared table.
+- **auth-mfa:** repository is `mfa.repository.ts`, schema is `mfa-method.schema.ts` (naming mismatch).
+
+---
+
+## 9. Naming Conventions (Actual)
+
+**Sub-domain directory prefix patterns:**
+
+- **user:** `user-settings`, `user-notification-preferences`, `user-data-export`
+- **organization (under tenancy):** `organization-settings`, `organization-notification-policy`, `organization-api-key`
+- **membership:** `member-invitation`
+- **member-roles:** `member-role-permission`
+- **auth:** `auth-method`, `auth-session`, `auth-mfa`, `auth-webauthn`
+- **billing:** `stripe-webhook` (no billing- prefix)
+- **webhook (under notify):** `webhook-event`
+
+**Inconsistencies:**
+
+- **auth-mfa** schema file is `mfa-method.schema.ts` while service/repository are `mfa.service.ts` / `mfa.repository.ts` (file-name mismatch within the sub-domain; folder uses the required `auth-` prefix).
+- **plan**, **subscription** do not use a `billing-` prefix (standalone names under billing).
+
+---
+
+## 10. Missing / Inconsistent Items Report
+
+- **webhook-event:** repository exists, no `webhook-event.schema.ts`.
+- **auth-mfa:** schema file is `mfa-method.schema.ts`; service/repository are `mfa.*` (file-name mismatch within the sub-domain).
+- **CLAUDE.md / domains-and-public-api-design.md:** Domain mapping tables include `user-data-export` and nested `organization-api-key` under `organization` (keep in sync when adding sub-domains).
+- **No orchestrator layer:** Multi-sub-domain domains (**auth**, **user**, **billing**, **tenancy**, **notify**) wire sub-domain services via `<domain>.container.ts`; controllers call the appropriate service directly.
+- **Sub-domains missing standard files:** Several sub-domains lack .dto, .validator, .serializer, or .types as documented in Section 5 (e.g. user-data-export, stripe-webhook, webhook-event, plan, notification, auth-method, auth-session, auth-mfa, user-settings, user-notification-preferences).
+- **Test layout:** Domain e2e at `<domain>/__tests__/`; sub-domain and **nested** sub-domain unit/e2e under `sub-domains/.../__tests__/`; event tests under `events/__tests__/`; shared tenancy helpers at `tenancy/__tests__/factories/permission.factory.ts`. See **CLAUDE.md** § Testing and **domains-and-public-api-design.md** §1.5. `src/tests/node_modules/` is gitignored Vite cache (do not commit).

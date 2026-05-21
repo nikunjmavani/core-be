@@ -1,0 +1,123 @@
+# Observability (production)
+
+What is **in place today** for production signals, and what is **deferred**. For the 2026-05-15 review snapshot, see [production-readiness-2026-05-15.md](../../reviews/production-readiness-2026-05-15.md).
+
+---
+
+## In place
+
+| Signal                      | Tool / path                                                         | Notes                                                                                                |
+| --------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Errors, traces, profiling   | [Sentry](../../../src/infrastructure/observability/sentry/sentry.ts)       | `SENTRY_DSN`, release + environment tags                                                             |
+| Structured logs             | Pino ([`logger.util.ts`](../../../src/shared/utils/infrastructure/logger.util.ts)) | JSON to stdout; Railway log drain                                                                    |
+| Liveness / readiness        | `GET /health/live`, `GET /health/ready`                             | See [health-checks.md](../../reference/reliability/health-checks.md); deploy probes and load tests               |
+| Idempotency cardinality     | Repeatable BullMQ job `idempotency-cardinality`                     | Bounded Redis SCAN + log / Sentry thresholds (`IDEMPOTENCY_CARDINALITY_*`)                           |
+| DB pool exhaustion          | API process poll (`db-pool-metrics.ts`)                             | Sentry `database.pool.exhaustion.*` — independent of `METRICS_ENABLED`; see [resource-limits.md](resource-limits.md) |
+| Queue inspection (optional) | Bull Board at `/admin/queues`                                       | `ENABLE_QUEUE_DASHBOARD=true` + super_admin JWT — see [bull-board.md](../../reference/runtime/bull-board.md) |
+| **Prometheus metrics** | `GET /metrics` on API + worker (`WORKER_HEALTH_PORT`)              | **On by default in production** (`METRICS_ENABLED` defaults true); bearer auth required — see [Prometheus](#prometheus-opt-in) below |
+
+---
+
+## Prometheus (opt-in)
+
+Code is in place (`prom-client`). In **`NODE_ENV=production`**, `METRICS_ENABLED` defaults to **`true`** (set `METRICS_ENABLED=false` to disable). Configure a scraper (Grafana Alloy, Prometheus, etc.) and set `METRICS_BEARER_TOKEN` (min 32 chars). No in-repo Grafana/Prometheus server.
+
+### Enable
+
+| Variable | Purpose |
+| -------- | ------- |
+| `METRICS_ENABLED` | `true` — exposes `GET /metrics` on API and worker health server |
+| `METRICS_BEARER_TOKEN` | Required in production when metrics enabled (min 32 chars); send `Authorization: Bearer …` on scrape |
+
+### Scrape targets
+
+| Process | URL | Notes |
+| ------- | --- | ----- |
+| API | `https://<api-host>/metrics` | Same port as Fastify (`PORT`) |
+| Worker | `http://<worker-host>:9090/metrics` | `WORKER_HEALTH_PORT` (default **9090**); health server starts with `pnpm dev:worker` / worker process (`startWorkerHealthServer` in `src/worker.ts`) |
+
+Dynamic gauges (pool, BullMQ depth, event loop) refresh on each scrape via [`refreshMetricsBeforeScrape()`](../../../src/infrastructure/observability/metrics/metrics.ts).
+
+### Key metrics (audit #10)
+
+| Metric | Type | Use |
+| ------ | ---- | --- |
+| `event_loop_lag_ms` | Gauge | Node event-loop delay p99 (ms) |
+| `pg_pool_active`, `pg_pool_idle`, `pg_pool_waiting` | Gauge | Postgres connection pressure (sampled from `pg_stat_activity`) |
+| `http_request_duration_seconds` | Histogram | Per-route latency; p95 via `histogram_quantile` |
+| `bullmq_jobs_waiting` | Gauge (`queue`) | Queue backlog per BullMQ queue |
+
+Also exported: `db_pool_connections{state}`, `bullmq_queue_*`, `http_requests_total`, default Node metrics (`nodejs_eventloop_lag_*`, heap), and domain gauges (e.g. `stripe_webhook_events_failed`). See [health-checks.md](../../reference/reliability/health-checks.md) and [workers-and-events.md](../../reference/runtime/workers-and-events.md).
+
+### Example PromQL
+
+```promql
+histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))
+pg_pool_waiting
+bullmq_jobs_waiting
+event_loop_lag_ms
+```
+
+### Local smoke
+
+```bash
+METRICS_ENABLED=true pnpm dev
+curl -sS http://127.0.0.1:3000/metrics | head
+```
+
+**Security:** Never expose `/metrics` without bearer auth in production. Avoid high-cardinality labels (user id, organization id) on histograms.
+
+### Still deferred (infra)
+
+| Item | Status |
+| ---- | ------ |
+| Grafana / Prometheus server in-repo | Out of scope — configure scraper + dashboards in your platform |
+| Redis memory / eviction metrics | Not in app metrics yet |
+| Deploy workflow `METRICS_*` secret sync | Optional — set on Railway/GitHub Environment when enabling scrape |
+
+---
+
+## Deferred
+
+| Item                             | Status                                                                                               | When to revisit                                         |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| **OpenTelemetry**                | Not wired                                                                                            | When traces/metrics must export to a non-Sentry backend |
+| **Grafana Loki**                 | Direction only: Railway **stdout** as the log drain; no in-repo Loki pipeline                        | When centralizing logs in Grafana Cloud Loki            |
+
+---
+
+## Sentry sampling
+
+Production defaults (override with `SENTRY_TRACES_SAMPLE_RATE` / `SENTRY_PROFILE_SAMPLE_RATE`):
+
+| Setting | Prod default | Dev default |
+| ------- | ------------ | ----------- |
+| Trace baseline | **0.05** (`tracesSampleRate`) | **1.0** |
+| Profile sessions | **0.10** (`profileSessionSampleRate`) | **1.0** |
+
+[`tracesSampler`](../../../src/infrastructure/observability/sentry/sentry-sampling.util.ts) (head) and [`beforeSendTransaction`](../../../src/infrastructure/observability/sentry/sentry.ts) (tail) always keep at **100%**:
+
+- HTTP **4xx/5xx** responses
+- Transaction names matching **`/error`**
+- Routes under **`/api/v1/billing`** and **Stripe webhook** paths
+- Requests slower than **`SENTRY_SLOW_TRANSACTION_MS`** (default **3000** ms)
+
+Health-check transactions are dropped. Fast successful requests use deterministic baseline sampling (~5% prod) so error and slow paths stay fully covered at lower volume.
+
+Unit tests: `src/infrastructure/observability/__tests__/sentry.unit.test.ts`.
+
+---
+
+## Logs on Railway
+
+1. API and worker log to **stdout** (Pino).
+2. Railway captures container logs in the project dashboard.
+3. Optional: forward Railway logs to **Grafana Cloud Loki** (or another sink) via Railway integrations — outside this repo.
+
+---
+
+## Related
+
+- [resource-limits.md](resource-limits.md) — memory, `NODE_OPTIONS`, worker RSS warnings
+- [ci-cd/cicd-and-deployment.md](../ci-cd/cicd-and-deployment.md) — `SENTRY_*` and deploy env sync
+- [runbook-dev-to-production.md](runbook-dev-to-production.md) — go-live steps

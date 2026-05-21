@@ -1,0 +1,21 @@
+{
+  "recommendations": [
+    "biomejs.biome",
+    "ms-vscode.vscode-typescript-next",
+    "vitest.explorer",
+    "christian-kohler.path-intellisense",
+    "streetsidesoftware.code-spell-checker",
+    "usernamehw.errorlens",
+    "gruntfuggly.todo-tree",
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+    "EcksDy.env-switcher"
+  ],
+  "unwantedRecommendations": [
+    "bradlc.vscode-tailwindcss",
+    "dsznajder.es7-react-js-snippets",
+    "ms-playwright.playwright",
+    "formulahendry.auto-rename-tag",
+    "styled-components.vscode-styled-components"
+  ]
+}

@@ -1,0 +1,75 @@
+# Authentication
+
+core-be supports password login, magic links, OAuth (Google, GitHub), JWT access tokens, session cookies, MFA (TOTP), and organization API keys. Session CSRF and cookie rules are documented in [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md).
+
+## Current methods
+
+| Method | Entry routes | Notes |
+| ------ | ------------- | ----- |
+| Email + password | `POST /api/v1/auth/login` | May return MFA challenge |
+| Magic link | `POST /api/v1/auth/magic-link/*` | Passwordless email flow |
+| OAuth | `GET /api/v1/auth/oauth/{provider}` | PKCE + state cookie |
+| API key | `Authorization: Bearer` with key prefix | Organization-scoped permissions |
+| MFA | TOTP + recovery codes | Encrypted secrets at rest |
+| WebAuthn / passkeys | `POST /api/v1/auth/webauthn/*` | FIDO2 credentials in `auth.webauthn_credentials` |
+
+Implementation lives under `src/domains/auth/` (see [sub-domains-layout.md](../architecture/sub-domains-layout.md)).
+
+## Signup and bot abuse (no CAPTCHA vendor)
+
+There is no separate `POST /auth/signup` route. New accounts are created through:
+
+- **Magic link** — `POST /api/v1/auth/magic-link/send` (existing users only; disposable domains blocked at send time)
+- **OAuth** — `GET /api/v1/auth/oauth/{provider}/callback` (new users via `completeOAuthUserSession`; disposable domains blocked before `userService.createFromOAuth`)
+
+**Disposable email:** `isDisposableEmailBlocked()` (package `disposable-email-domains-js`) runs on login, magic-link send, password forgot, OAuth user creation, and member invitations. When blocked, the API returns **400** with `errors:disposableEmail`. Toggle with `BLOCK_DISPOSABLE_EMAIL` (default `true`).
+
+**Rate limits:** Public auth routes (`/login`, `/magic-link/*`, `/oauth/*`, password reset, MFA challenge) use `STRICT_PUBLIC_RATE_LIMIT` — **5 requests per minute per IP** in production/staging (`5000` in `NODE_ENV=test` for Vitest). Excess traffic receives **429**.
+
+**CAPTCHA (Cloudflare Turnstile):** When `CAPTCHA_PROVIDER=turnstile` and `CAPTCHA_SECRET` are set, public auth routes require `X-Captcha-Token` from the client widget:
+
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/magic-link/send`
+- `POST /api/v1/auth/password/forgot`
+- `POST /api/v1/auth/password/reset`
+- `POST /api/v1/auth/email/verify`
+- `GET /api/v1/auth/oauth/:provider` (OAuth initiation)
+
+Default is `CAPTCHA_PROVIDER=disabled` (no CAPTCHA). In `development` / `test`, verification is skipped when Turnstile is not configured. Optional `CAPTCHA_BYPASS_HEADER` (non-production only) allows local testing. Failures return **401** with `errors:captchaRequired` or `errors:captchaInvalid`.
+
+## Magic-link environment safety
+
+`MagicLinkService.send` returns the raw magic-link token in the JSON body only when `NODE_ENV !== 'production'` (for local API testing). Misconfigured staging must not run with `NODE_ENV=development` and a public `FRONTEND_URL`.
+
+| Guard | When it runs |
+| ----- | ------------- |
+| Zod `NODE_ENV` enum | Boot — rejects values such as `staging` (not in `local`, `development`, `production`, `test`) |
+| Zod `FRONTEND_URL` refine | Boot — when `NODE_ENV` is not `production`, `FRONTEND_URL` must be unset or use `localhost` / `127.0.0.1` |
+| `assertMagicLinkEnvironmentSafe()` | Boot (`getEnv`, `buildApp`) — same rules with an explicit operator-facing error |
+
+**Deployed environments (Railway, staging, production):** set `NODE_ENV=production`. The API and worker process exit on startup if `NODE_ENV=staging` or a non-local `FRONTEND_URL` is paired with a non-production `NODE_ENV`.
+
+## WebAuthn (passkeys)
+
+Passkeys use `@simplewebauthn/server` with challenges stored in Redis (`webauthn:challenge:*`, 5-minute TTL).
+
+| Route | Auth | Purpose |
+| ----- | ---- | ------- |
+| `POST /api/v1/auth/webauthn/register/options` | JWT | Begin enrolment (returns `options` + `challenge_token`) |
+| `POST /api/v1/auth/webauthn/register/verify` | JWT | Complete enrolment; persists public key |
+| `POST /api/v1/auth/webauthn/authenticate/options` | Public | Begin sign-in (`email` required) |
+| `POST /api/v1/auth/webauthn/authenticate/verify` | Public | Complete sign-in; issues JWT + session cookie |
+
+Environment:
+
+- `WEBAUTHN_RP_ID` — relying party hostname (defaults to first `ALLOWED_ORIGINS` host or `localhost`)
+- `WEBAUTHN_RP_NAME` — display name in the passkey prompt (default `core-be`)
+- Request `Origin` header is preferred for verification when present
+
+MFA recovery codes (10 single-use) remain under the MFA sub-domain for TOTP backup.
+
+## Related
+
+- [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md)
+- [api-versioning.md](../api/api-versioning.md)
+- [data-lifecycle-deletion.md](../data/data-lifecycle-deletion.md) — session retention

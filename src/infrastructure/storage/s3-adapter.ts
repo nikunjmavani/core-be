@@ -1,0 +1,195 @@
+import {
+  S3Client,
+  PutObjectCommand,
+  HeadObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { env } from '@/shared/config/env.config.js';
+import { s3Circuit } from '@/infrastructure/resilience/circuit-breaker.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import type {
+  ObjectStoragePort,
+  UploadedObjectMetadata,
+} from '@/infrastructure/storage/object-storage.port.js';
+
+let s3Client: S3Client | null = null;
+
+function getS3Client(): S3Client {
+  if (s3Client) return s3Client;
+
+  s3Client = new S3Client({
+    region: env.S3_REGION ?? 'us-east-1',
+    maxAttempts: env.S3_MAX_ATTEMPTS,
+    ...(env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY
+      ? {
+          credentials: {
+            accessKeyId: env.S3_ACCESS_KEY_ID,
+            secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+          },
+        }
+      : {}),
+  });
+
+  return s3Client;
+}
+
+function requireBucket(): string {
+  const bucket = env.S3_BUCKET;
+  if (!bucket) throw new Error('S3_BUCKET is not configured');
+  return bucket;
+}
+
+/** Default S3 implementation of {@link ObjectStoragePort}. */
+export class S3ObjectStorageAdapter implements ObjectStoragePort {
+  async createPresignedUploadUrl(options: {
+    key: string;
+    contentType: string;
+    contentLength: number;
+    expiresInSeconds: number;
+  }): Promise<string> {
+    const bucket = requireBucket();
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: options.key,
+      ContentType: options.contentType,
+      ContentLength: options.contentLength,
+    });
+
+    return getSignedUrl(getS3Client(), command, { expiresIn: options.expiresInSeconds });
+  }
+
+  async verifyUploadedObject(
+    key: string,
+    expected: { contentType: string; contentLength: number },
+  ): Promise<UploadedObjectMetadata> {
+    const head = await this.headObject(key);
+    if (!head) {
+      throw new Error('upload object not found in storage');
+    }
+
+    if (head.contentType && head.contentType !== expected.contentType) {
+      throw new Error('upload object content type mismatch');
+    }
+
+    if (head.contentLength !== undefined && head.contentLength !== expected.contentLength) {
+      throw new Error('upload object content length mismatch');
+    }
+
+    return head;
+  }
+
+  getObjectUrl(key: string): string {
+    const bucket = requireBucket();
+    const region = env.S3_REGION ?? 'us-east-1';
+    return `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+  }
+
+  async createPresignedDownloadUrl(options: {
+    key: string;
+    expiresInSeconds: number;
+  }): Promise<string> {
+    const bucket = requireBucket();
+    const command = new GetObjectCommand({
+      Bucket: bucket,
+      Key: options.key,
+    });
+    return getSignedUrl(getS3Client(), command, { expiresIn: options.expiresInSeconds });
+  }
+
+  async headObject(
+    key: string,
+  ): Promise<{ contentType: string | undefined; contentLength: number | undefined } | null> {
+    const bucket = requireBucket();
+
+    try {
+      return await s3Circuit.execute(async () => {
+        const response = await getS3Client().send(
+          new HeadObjectCommand({
+            Bucket: bucket,
+            Key: key,
+          }),
+        );
+        return {
+          contentType: response.ContentType,
+          contentLength: response.ContentLength,
+        };
+      });
+    } catch (error) {
+      logger.error({ error, key, bucket }, 's3.headObject.failed');
+      return null;
+    }
+  }
+
+  async getObject(key: string): Promise<{ body: Buffer; contentType: string | undefined }> {
+    const bucket = requireBucket();
+
+    return s3Circuit.execute(async () => {
+      const response = await getS3Client().send(
+        new GetObjectCommand({
+          Bucket: bucket,
+          Key: key,
+        }),
+      );
+
+      const body = await response.Body?.transformToByteArray();
+      if (!body) {
+        throw new Error('upload object body empty');
+      }
+
+      return {
+        body: Buffer.from(body),
+        contentType: response.ContentType,
+      };
+    });
+  }
+
+  async putObject(options: {
+    key: string;
+    body: Buffer;
+    contentType: string;
+    metadata?: Record<string, string>;
+  }): Promise<void> {
+    const bucket = requireBucket();
+    await s3Circuit.execute(async () => {
+      await getS3Client().send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: options.key,
+          Body: options.body,
+          ContentType: options.contentType,
+          Metadata: options.metadata,
+        }),
+      );
+    });
+  }
+
+  async deleteObject(key: string): Promise<boolean> {
+    const bucket = requireBucket();
+
+    try {
+      await s3Circuit.execute(async () => {
+        await getS3Client().send(
+          new DeleteObjectCommand({
+            Bucket: bucket,
+            Key: key,
+          }),
+        );
+      });
+      return true;
+    } catch (error) {
+      logger.error({ error, key, bucket }, 's3.deleteObject.failed');
+      return false;
+    }
+  }
+}
+
+let defaultAdapter: S3ObjectStorageAdapter | null = null;
+
+export function getDefaultS3ObjectStorageAdapter(): S3ObjectStorageAdapter {
+  if (!defaultAdapter) {
+    defaultAdapter = new S3ObjectStorageAdapter();
+  }
+  return defaultAdapter;
+}

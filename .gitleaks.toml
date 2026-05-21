@@ -1,0 +1,18 @@
+# Gitleaks configuration — secret detection allowlist
+# https://github.com/gitleaks/gitleaks
+
+title = "core-be gitleaks config"
+
+[allowlist]
+description = "Global allowlist"
+paths = [
+  '''node_modules''',
+  '''\.git''',
+  '''dist''',
+  '''build''',
+  '''coverage''',
+  '''\.env\.example''',
+  '''pnpm-lock\.yaml''',
+  '''docs/openapi\.json''',
+  '''docs/postman-collection\.json''',
+]

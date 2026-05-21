@@ -1,0 +1,107 @@
+name: Reusable — test with Postgres and Redis
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: ${{ matrix.shard.name }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Two parallel shards run on separate GitHub runners — each owns its own
+        # Postgres + Redis service. Wall-clock CI time = max(fast, db-bound).
+        shard:
+          - name: tests-fast (unit + property + global)
+            id: fast
+            projects: '--project unit --project property --project global'
+          - name: tests-db-bound (unit-db + e2e + integration + security + performance)
+            id: db-bound
+            projects: '--project unit-db --project e2e --project integration --project security --project performance'
+
+    services:
+      postgres:
+        image: postgres:17.10-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: core
+        options: >-
+          --health-cmd="pg_isready -U postgres -d core"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+      redis:
+        image: redis:8.6.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
+      ALLOWED_ORIGINS: http://localhost:3000
+      RATE_LIMIT_MAX: 1000
+      RATE_LIMIT_WINDOW_MS: 60000
+      RUN_DB_TESTS: 1
+      RUN_REDIS_TESTS: 1
+      USE_LOCAL_TEST_DATABASE: 'true'
+      ENABLE_MCP_SERVER: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run migrations
+        run: pnpm db:migrate
+
+      - name: Run ${{ matrix.shard.id }} test shard with coverage
+        id: run-tests
+        run: pnpm exec vitest run --coverage ${{ matrix.shard.projects }}
+
+      - name: Rename coverage report for shard
+        if: always() && hashFiles('coverage/**') != ''
+        run: mv coverage "coverage-${{ matrix.shard.id }}"
+
+      - name: Upload coverage artifact
+        if: always() && hashFiles(format('coverage-{0}/**', matrix.shard.id)) != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.shard.id }}
+          path: coverage-${{ matrix.shard.id }}/
+          retention-days: 14
+
+      - name: Send test result email
+        if: always() && secrets.RESEND_API_KEY != '' && secrets.TEST_REPORT_EMAIL_TO != ''
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          TEST_REPORT_EMAIL_TO: ${{ secrets.TEST_REPORT_EMAIL_TO }}
+          TEST_STATUS: ${{ steps.run-tests.outcome }}
+          TEST_SHARD: ${{ matrix.shard.id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: pnpm tool:test-report-email

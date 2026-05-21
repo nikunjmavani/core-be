@@ -1,0 +1,468 @@
+import { describe, it, expect, vi } from 'vitest';
+import type { FastifyReply } from 'fastify';
+import { NotImplementedError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { createAuthController } from '@/domains/auth/auth.controller.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+
+vi.mock('@/shared/middlewares/cookie-session-origin.pre-handler.js', () => ({
+  requireAllowedSourceOriginForCookieSessionRoute: vi.fn(),
+}));
+
+vi.mock('@/shared/config/env.config.js', () => ({
+  env: {
+    NODE_ENV: 'test',
+    LOG_LEVEL: 'silent',
+    SESSION_MAX_AGE_DAYS: 7,
+  },
+  getEnv: () => ({
+    NODE_ENV: 'test',
+    LOG_LEVEL: 'silent',
+    SESSION_MAX_AGE_DAYS: 7,
+  }),
+}));
+
+function mockRequest(overrides: Record<string, unknown> = {}): never {
+  return {
+    auth: { userId: generatePublicId(), role: 'user' },
+    params: {},
+    body: {},
+    query: {},
+    headers: { 'user-agent': 'vitest' },
+    cookies: {},
+    ip: '127.0.0.1',
+    id: 'request-id',
+    t: (key: string) => key,
+    server: {
+      auditDomain: {
+        auditService: { record: vi.fn().mockResolvedValue(undefined) },
+      },
+    },
+    log: { warn: vi.fn(), error: vi.fn() },
+    ...overrides,
+  } as never;
+}
+
+function mockReply(): FastifyReply {
+  return {
+    setCookie: vi.fn().mockReturnThis(),
+    clearCookie: vi.fn().mockReturnThis(),
+    status: vi.fn().mockReturnThis(),
+    code: vi.fn().mockReturnThis(),
+    send: vi.fn().mockReturnThis(),
+    redirect: vi.fn().mockReturnThis(),
+  } as unknown as FastifyReply;
+}
+
+describe('createAuthController', () => {
+  const authService = {
+    login: vi.fn().mockResolvedValue({
+      access_token: 'token',
+      session_public_id: 'session',
+    }),
+    logout: vi.fn().mockResolvedValue(undefined),
+    refreshToken: vi.fn().mockResolvedValue({ access_token: 'new-token' }),
+  };
+
+  const authMethodService = {
+    list: vi.fn().mockResolvedValue([]),
+    create: vi.fn().mockResolvedValue({ id: 1 }),
+    delete: vi.fn().mockResolvedValue(undefined),
+    forgotPassword: vi.fn().mockResolvedValue({ messageKey: 'success:forgotPassword' }),
+    resetPassword: vi.fn().mockResolvedValue(undefined),
+    changePassword: vi.fn().mockResolvedValue(undefined),
+    verifyEmail: vi.fn().mockResolvedValue({ messageKey: 'success:emailVerified' }),
+    resendEmailVerification: vi
+      .fn()
+      .mockResolvedValue({ messageKey: 'success:emailVerificationSent' }),
+  };
+
+  const magicLinkService = {
+    send: vi
+      .fn()
+      .mockResolvedValue({ messageKey: 'success:magicLinkEmailSent', expires_in_minutes: 15 }),
+    verify: vi.fn().mockResolvedValue({
+      access_token: 'token',
+      session_public_id: 'session',
+    }),
+  };
+
+  const oauthService = {
+    listProviders: vi.fn().mockReturnValue({ providers: ['google', 'github'] }),
+    getRedirectUrl: vi.fn().mockResolvedValue({ redirect_url: 'https://oauth.example/authorize' }),
+    handleCallback: vi.fn().mockResolvedValue({
+      access_token: 'token',
+      session_public_id: 'session',
+    }),
+  };
+
+  const mfaService = {
+    verify: vi.fn().mockResolvedValue({ verified: true }),
+    enroll: vi.fn().mockResolvedValue({ secret: 'secret', provisioning_uri: 'uri', method_id: 1 }),
+    challenge: vi.fn().mockResolvedValue({ access_token: 'token', session_public_id: 'session' }),
+    listMfaMethods: vi.fn().mockResolvedValue([]),
+    deleteMfa: vi.fn().mockResolvedValue(undefined),
+  };
+
+  const authSessionService = {
+    list: vi.fn().mockResolvedValue([]),
+    revoke: vi.fn().mockResolvedValue(undefined),
+    revokeAllSessions: vi.fn().mockResolvedValue(undefined),
+  };
+
+  const webauthnService = {
+    generateRegistrationOptions: vi.fn(),
+    verifyRegistration: vi.fn(),
+    generateAuthenticationOptions: vi.fn(),
+    verifyAuthentication: vi.fn(),
+  };
+
+  const controller = createAuthController({
+    authService: authService as never,
+    authMethodService: authMethodService as never,
+    magicLinkService: magicLinkService as never,
+    oauthService: oauthService as never,
+    mfaService: mfaService as never,
+    webauthnService: webauthnService as never,
+    authSessionService: authSessionService as never,
+  });
+
+  it('login sets session cookie and returns token', async () => {
+    const reply = mockReply();
+    await controller.login(mockRequest({ body: { email: 'a@b.com', password: 'pass' } }), reply);
+    expect(authService.login).toHaveBeenCalled();
+    expect(reply.setCookie).toHaveBeenCalled();
+  });
+
+  it('logout requires bearer token and clears cookie', async () => {
+    const reply = mockReply();
+    await controller.logout(
+      mockRequest({ headers: { authorization: 'Bearer access-token', 'user-agent': 'vitest' } }),
+      reply,
+    );
+    expect(authService.logout).toHaveBeenCalledWith('access-token');
+    expect(reply.clearCookie).toHaveBeenCalled();
+  });
+
+  it('logout rejects missing authorization header', async () => {
+    await expect(controller.logout(mockRequest(), mockReply())).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
+  });
+
+  it('magic link handlers delegate to magic link service', async () => {
+    const verifyReply = mockReply();
+    await controller.sendMagicLink(
+      mockRequest({ body: { email: 'user@example.com' } }),
+      mockReply(),
+    );
+    await controller.verifyMagicLink(mockRequest({ body: { token: 'raw-token' } }), verifyReply);
+    expect(magicLinkService.send).toHaveBeenCalled();
+    expect(verifyReply.setCookie).toHaveBeenCalled();
+  });
+
+  it('oauth handlers delegate to oauth service', async () => {
+    await controller.listOauthProviders(mockRequest(), mockReply());
+    await controller.oauthRedirect(mockRequest({ params: { provider: 'google' } }), mockReply());
+    const callbackReply = mockReply();
+    await controller.oauthCallback(
+      mockRequest({
+        params: { provider: 'google' },
+        query: { code: 'code', state: 'state' },
+      }),
+      callbackReply,
+    );
+    expect(oauthService.listProviders).toHaveBeenCalled();
+    expect(oauthService.getRedirectUrl).toHaveBeenCalled();
+    expect(callbackReply.setCookie).toHaveBeenCalled();
+  });
+
+  it('oauthRedirect returns 501 for not implemented providers', async () => {
+    vi.mocked(oauthService.getRedirectUrl).mockRejectedValueOnce(
+      new NotImplementedError('errors:notImplemented'),
+    );
+    const reply = mockReply();
+    await controller.oauthRedirect(mockRequest({ params: { provider: 'unknown' } }), reply);
+    expect(reply.status).toHaveBeenCalledWith(501);
+  });
+
+  it('MFA handlers delegate to mfa service', async () => {
+    const challengeReply = mockReply();
+    await controller.enrollMfa(mockRequest({ body: { method_type: 'MFA_TOTP' } }), mockReply());
+    await controller.verifyMfa(mockRequest({ body: { code: '123456' } }), mockReply());
+    await controller.challengeMfa(
+      mockRequest({ body: { user_id: generatePublicId(), code: '123456' } }),
+      challengeReply,
+    );
+    await controller.listMfaMethods(mockRequest(), mockReply());
+    const deleteReply = mockReply();
+    await controller.deleteMfa(mockRequest({ params: { mfaMethodId: '5' } }), deleteReply);
+    expect(mfaService.enroll).toHaveBeenCalled();
+    expect(mfaService.challenge).toHaveBeenCalled();
+    expect(deleteReply.code).toHaveBeenCalledWith(204);
+  });
+
+  it('challengeMfa returns session_public_id and sets session cookie', async () => {
+    const challengeReply = mockReply();
+    const responsePayload = await controller.challengeMfa(
+      mockRequest({ body: { user_id: generatePublicId(), code: '123456' } }),
+      challengeReply,
+    );
+    expect(responsePayload.data).toMatchObject({
+      access_token: 'token',
+      session_public_id: 'session',
+    });
+    expect(challengeReply.setCookie).toHaveBeenCalledWith(
+      'session_id',
+      'session',
+      expect.objectContaining({ httpOnly: true }),
+    );
+  });
+
+  it('auth method and session handlers delegate to services', async () => {
+    await controller.listAuthMethods(mockRequest(), mockReply());
+    await controller.createAuthMethod(mockRequest({ body: { type: 'password' } }), mockReply());
+    const deleteMethodReply = mockReply();
+    await controller.deleteAuthMethod(mockRequest({ params: { id: '1' } }), deleteMethodReply);
+    await controller.listSessions(mockRequest(), mockReply());
+    const revokeReply = mockReply();
+    await controller.revokeSession(
+      mockRequest({ params: { id: generatePublicId() } }),
+      revokeReply,
+    );
+    expect(authMethodService.list).toHaveBeenCalled();
+    expect(authSessionService.revoke).toHaveBeenCalled();
+  });
+
+  it('password and email verification handlers delegate to auth method service', async () => {
+    await controller.forgotPassword(mockRequest({ body: { email: 'a@b.com' } }), mockReply());
+    const resetReply = mockReply();
+    await controller.resetPassword(
+      mockRequest({ body: { token: 't', password: 'p' } }),
+      resetReply,
+    );
+    const changeReply = mockReply();
+    await controller.changePassword(mockRequest({ body: { password: 'new' } }), changeReply);
+    await controller.verifyEmail(mockRequest({ body: { token: 'verify' } }), mockReply());
+    await controller.resendEmailVerification(mockRequest(), mockReply());
+    expect(authMethodService.resetPassword).toHaveBeenCalled();
+    expect(resetReply.code).toHaveBeenCalledWith(204);
+  });
+
+  it('refreshToken and revokeAllSessions use session cookie', async () => {
+    const refreshReply = mockReply();
+    await controller.refreshToken(
+      mockRequest({ cookies: { session_id: 'session' } }),
+      refreshReply,
+    );
+    const revokeAllReply = mockReply();
+    await controller.revokeAllSessions(mockRequest(), revokeAllReply);
+    expect(authService.refreshToken).toHaveBeenCalledWith('session');
+    expect(refreshReply.setCookie).toHaveBeenCalledWith(
+      'csrf_token',
+      expect.any(String),
+      expect.objectContaining({ httpOnly: false }),
+    );
+    expect(revokeAllReply.clearCookie).toHaveBeenCalled();
+  });
+
+  it('refreshToken rejects missing session cookie', async () => {
+    await expect(controller.refreshToken(mockRequest(), mockReply())).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
+  });
+
+  it('deleteAuthMethod rejects invalid id param', async () => {
+    await expect(
+      controller.deleteAuthMethod(mockRequest({ params: { id: '0' } }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('logout rejects malformed bearer authorization header', async () => {
+    await expect(
+      controller.logout(
+        mockRequest({ headers: { authorization: 'NotBearer token-value' } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('oauthRedirect returns 501 when provider is not supported', async () => {
+    vi.mocked(oauthService.getRedirectUrl).mockRejectedValueOnce(
+      new NotImplementedError('errors:notImplemented'),
+    );
+    const reply = mockReply();
+    await controller.oauthRedirect(
+      mockRequest({
+        params: { provider: 'unknown' },
+        t: vi.fn((key: string) => key) as never,
+      }),
+      reply,
+    );
+    expect(reply.status).toHaveBeenCalledWith(501);
+  });
+
+  it('oauthRedirect rethrows unexpected errors', async () => {
+    vi.mocked(oauthService.getRedirectUrl).mockRejectedValueOnce(new Error('upstream failure'));
+    await expect(
+      controller.oauthRedirect(mockRequest({ params: { provider: 'google' } }), mockReply()),
+    ).rejects.toThrow('upstream failure');
+  });
+
+  it('forgotPassword uses i18next when request.t is absent', async () => {
+    const responsePayload = await controller.forgotPassword(
+      mockRequest({ body: { email: 'a@b.com' }, t: undefined }),
+      mockReply(),
+    );
+    expect(responsePayload.data).toHaveProperty('message');
+  });
+
+  it('verifyMagicLink skips session cookie when session_public_id is absent', async () => {
+    vi.mocked(magicLinkService.verify).mockResolvedValueOnce({
+      access_token: 'token-only',
+    } as never);
+    const reply = mockReply();
+    await controller.verifyMagicLink(mockRequest({ body: { token: 'magic' } }), reply);
+    expect(reply.setCookie).not.toHaveBeenCalled();
+  });
+
+  it('challengeMfa skips session cookie when session_public_id is absent', async () => {
+    vi.mocked(mfaService.challenge).mockResolvedValueOnce({ access_token: 'token-only' } as never);
+    const reply = mockReply();
+    await controller.challengeMfa(
+      mockRequest({ body: { user_id: generatePublicId(), code: '123456' } }),
+      reply,
+    );
+    expect(reply.setCookie).not.toHaveBeenCalled();
+  });
+
+  it('oauthCallback sets session cookie and returns access token payload', async () => {
+    const callbackReply = mockReply();
+    await controller.oauthCallback(
+      mockRequest({
+        params: { provider: 'google' },
+        query: { code: 'auth-code', state: 'state' },
+      }),
+      callbackReply,
+    );
+    expect(oauthService.handleCallback).toHaveBeenCalled();
+    expect(callbackReply.setCookie).toHaveBeenCalled();
+  });
+
+  it('resendEmailVerification uses i18next when request.t is absent', async () => {
+    const responsePayload = await controller.resendEmailVerification(
+      mockRequest({ t: undefined }),
+      mockReply(),
+    );
+    expect(responsePayload.data).toHaveProperty('message');
+  });
+
+  it('oauthRedirect returns 501 when error name is NotImplementedError', async () => {
+    const notImplemented = new Error('not implemented');
+    notImplemented.name = 'NotImplementedError';
+    vi.mocked(oauthService.getRedirectUrl).mockRejectedValueOnce(notImplemented);
+    const reply = mockReply();
+    await controller.oauthRedirect(
+      mockRequest({ params: { provider: 'unknown' }, t: vi.fn((key: string) => key) }),
+      reply,
+    );
+    expect(reply.status).toHaveBeenCalledWith(501);
+  });
+
+  it('oauthRedirect returns 501 for plain errors with statusCode 501', async () => {
+    vi.mocked(oauthService.getRedirectUrl).mockRejectedValueOnce({ statusCode: 501 });
+    const reply = mockReply();
+    await controller.oauthRedirect(
+      mockRequest({ params: { provider: 'unknown' }, t: vi.fn((key: string) => key) }),
+      reply,
+    );
+    expect(reply.status).toHaveBeenCalledWith(501);
+  });
+
+  it('oauthRedirect returns 501 for errors that include not supported message', async () => {
+    vi.mocked(oauthService.getRedirectUrl).mockRejectedValueOnce(
+      Object.assign(new Error('provider not supported'), { name: 'NotImplementedError' }),
+    );
+    const reply = mockReply();
+    await controller.oauthRedirect(
+      mockRequest({ params: { provider: 'unknown' }, t: vi.fn((key: string) => key) }),
+      reply,
+    );
+    expect(reply.status).toHaveBeenCalledWith(501);
+  });
+
+  it('verifyEmail uses i18next fallback when request.t is absent', async () => {
+    const responsePayload = await controller.verifyEmail(
+      mockRequest({ body: { token: 'verify' }, t: undefined }),
+      mockReply(),
+    );
+    expect(responsePayload.data).toHaveProperty('message');
+  });
+
+  it('login uses secure session cookies in production', async () => {
+    const { env } = await import('@/shared/config/env.config.js');
+    const previousNodeEnvironment = env.NODE_ENV;
+    Object.assign(env, { NODE_ENV: 'production' });
+    const reply = mockReply();
+    await controller.login(
+      mockRequest({ body: { email: 'a@b.com', password: 'pass' }, ip: undefined }),
+      reply,
+    );
+    expect(reply.setCookie).toHaveBeenCalledWith(
+      'session_id',
+      expect.any(String),
+      expect.objectContaining({ secure: true }),
+    );
+    Object.assign(env, { NODE_ENV: previousNodeEnvironment });
+  });
+
+  it('oauthRedirect uses i18next fallback when request.t is absent', async () => {
+    vi.mocked(oauthService.getRedirectUrl).mockRejectedValueOnce(
+      new NotImplementedError('errors:notImplemented'),
+    );
+    const reply = mockReply();
+    await controller.oauthRedirect(
+      mockRequest({ params: { provider: 'unknown' }, t: undefined }),
+      reply,
+    );
+    expect(reply.status).toHaveBeenCalledWith(501);
+  });
+
+  it('oauthCallback omits session cookie when session_public_id is absent', async () => {
+    vi.mocked(oauthService.handleCallback).mockResolvedValueOnce({
+      access_token: 'token-only',
+    } as never);
+    const reply = mockReply();
+    await controller.oauthCallback(
+      mockRequest({
+        params: { provider: 'google' },
+        query: { code: 'auth-code', state: 'oauth-state' },
+      }),
+      reply,
+    );
+    expect(oauthService.handleCallback).toHaveBeenCalledWith(
+      'google',
+      'auth-code',
+      'oauth-state',
+      '127.0.0.1',
+      'vitest',
+    );
+    expect(reply.setCookie).not.toHaveBeenCalled();
+  });
+
+  it('deleteAuthMethod rejects non-integer id param', async () => {
+    await expect(
+      controller.deleteAuthMethod(mockRequest({ params: { id: 'abc' } }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('forgotPassword returns raw payload when messageKey is absent', async () => {
+    vi.mocked(authMethodService.forgotPassword).mockResolvedValueOnce({
+      message: 'raw-response',
+    } as never);
+    const responsePayload = await controller.forgotPassword(
+      mockRequest({ body: { email: 'a@b.com' } }),
+      mockReply(),
+    );
+    expect(responsePayload.data).toEqual({ message: 'raw-response' });
+  });
+});

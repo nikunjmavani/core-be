@@ -1,0 +1,54 @@
+# Mutation testing (Stryker)
+
+Mutation testing checks whether unit tests detect small code changes (mutants) in production paths. This repo uses [Stryker](https://stryker-mutator.io/) with the Vitest runner.
+
+---
+
+## Commands
+
+| Command | Purpose |
+| ------- | ------- |
+| `pnpm test:mutation` | Full Stryker run (enforces **≥ 70%** mutation score) |
+| `vitest run --config vitest.stryker.config.ts` | Dry-run the same unit tests Stryker uses (no mutation) |
+
+Configuration: [`stryker.config.json`](../../../stryker.config.json), [`vitest.stryker.config.ts`](../../../vitest.stryker.config.ts).
+
+---
+
+## Scope
+
+**Mutated code** (see `mutate` in `stryker.config.json`):
+
+- Auth, billing, and tenancy **services** that have co-located `*service*.unit.test.ts` coverage
+- Security-critical **middleware**: auth, tenant, idempotency, API key auth, error handler, organization RLS transaction, encryption
+
+**Excluded until dedicated service unit tests exist** (not in `mutate`):
+
+- `webauthn.service.ts`, `session-token-cache.service.ts`, `verification-token.service.ts`
+- `permission-cache.service.ts`
+- Other middleware (compress, helmet, CORS, health, etc.) — covered by integration tests; narrow scope keeps nightly runtime under ~3 minutes
+
+**Thresholds:** `break: 70`, `high: 80` (global mutation score).
+
+**Mutator noise reduction:** `StringLiteral`, `Regex`, and `TemplateLiteral` mutations are excluded so scores reflect behavioral coverage.
+
+---
+
+## CI
+
+Workflow: [.github/workflows/mutation-testing.yml](../../../.github/workflows/mutation-testing.yml)
+
+- **Schedule:** Sundays 03:30 UTC
+- **Manual:** `workflow_dispatch`
+- **Artifacts:** `reports/mutation/mutation-report.html` and `mutation-report.json` (14-day retention)
+- **Failure:** exit code 1 when mutation score &lt; 70%
+
+---
+
+## Local troubleshooting
+
+1. Run `vitest run --config vitest.stryker.config.ts` — all tests must pass before Stryker starts.
+2. Open `reports/mutation/mutation-report.html` after a run to inspect surviving mutants.
+3. If Vitest reports “no related tests”, ensure the service has a `*service*.unit.test.ts` under `__tests__/unit/` and imports the service under test.
+
+See also [testing-conventions.md](../testing/testing-conventions.md).

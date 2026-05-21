@@ -1,0 +1,35 @@
+/**
+ * Maps OpenAPI route patterns (method + path) to Zod querystring DTOs.
+ *
+ * Used by generate-openapi.ts to document query parameters (especially cursor pagination).
+ * When adding a list route with query validation, add its mapping here.
+ */
+import type { ZodTypeAny } from 'zod';
+import { ListAuditLogsQueryDto } from '@/domains/audit/audit.dto.js';
+import { OauthCallbackQueryDto } from '@/domains/auth/auth.dto.js';
+import { listNotificationsQueryDto } from '@/domains/notify/sub-domains/notification/notification.dto.js';
+import { listMemberInvitationsQueryDto } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.dto.js';
+import { listMembershipsQueryDto } from '@/domains/tenancy/sub-domains/membership/membership.dto.js';
+import { listMemberRolesQueryDto } from '@/domains/tenancy/sub-domains/member-roles/member-role.dto.js';
+import { listOrganizationApiKeysQueryDto } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.dto.js';
+import { listOrganizationsQueryDto } from '@/domains/tenancy/sub-domains/organization/organization.dto.js';
+import { ListUsersDto } from '@/domains/user/user.dto.js';
+import { listLimitQuerySchema } from '@/shared/utils/http/pagination.util.js';
+
+export const routeQuerySchemaMap: Record<string, ZodTypeAny> = {
+  'GET /api/v1/audit/logs': ListAuditLogsQueryDto,
+  'GET /api/v1/users': ListUsersDto,
+  'GET /api/v1/tenancy/organizations': listOrganizationsQueryDto,
+  'GET /api/v1/tenancy/organizations/{id}/audit-logs': ListAuditLogsQueryDto,
+  'GET /api/v1/tenancy/organizations/{id}/api-keys': listOrganizationApiKeysQueryDto,
+  'GET /api/v1/tenancy/organizations/{id}/memberships': listMembershipsQueryDto,
+  'GET /api/v1/tenancy/organizations/{id}/roles': listMemberRolesQueryDto,
+  'GET /api/v1/notify/notifications': listNotificationsQueryDto,
+  'GET /api/v1/tenancy/organizations/{id}/invitations': listMemberInvitationsQueryDto,
+  'GET /api/v1/notify/organizations/{id}/webhooks/{webhookId}/delivery-attempts':
+    listLimitQuerySchema,
+  'GET /api/v1/auth/oauth/{provider}/callback': OauthCallbackQueryDto,
+};
+
+/** Routes that must document `after` and `limit` query parameters in OpenAPI. */
+export const routeQuerySchemaMapKeys = Object.keys(routeQuerySchemaMap);

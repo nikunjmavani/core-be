@@ -1,0 +1,236 @@
+import i18next from 'i18next';
+import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import { emitWebhookDeliveryRequested } from '@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js';
+import type { WebhookRepository } from './webhook.repository.js';
+import type { WebhookDeliveryAttemptRepository } from './webhook-delivery-attempt.repository.js';
+import { WebhookSerializer } from './webhook.serializer.js';
+import { validateCreateWebhook, validateUpdateWebhook } from './webhook.validator.js';
+import { encryptFieldSecret } from '@/shared/utils/security/field-secret-encryption.util.js';
+import { validateWebhookUrl } from '@/shared/utils/security/webhook-url.util.js';
+import { NotFoundError } from '@/shared/errors/index.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
+
+const WEBHOOK_TEST_TIMEOUT_MS = 10_000;
+/** Maximum response body length returned to client (prevents leaking sensitive data from target) */
+const WEBHOOK_TEST_RESPONSE_BODY_MAX_LENGTH = 500;
+
+export class WebhookService {
+  constructor(
+    private readonly organizationService: OrganizationService,
+    private readonly webhookRepository: WebhookRepository,
+    private readonly deliveryAttemptRepository: WebhookDeliveryAttemptRepository,
+  ) {}
+
+  async list(organization_public_id: string) {
+    const organization =
+      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+    const rows = await this.webhookRepository.listByOrganization(organization.id);
+    return WebhookSerializer.many(rows);
+  }
+
+  async get(organization_public_id: string, webhook_public_id: string) {
+    const organization =
+      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+    const webhook = await this.webhookRepository.findByPublicId(webhook_public_id, organization.id);
+    if (!webhook) throw new NotFoundError('Webhook');
+    return WebhookSerializer.one(webhook);
+  }
+
+  async create(organization_public_id: string, body: unknown, created_by_user_public_id: string) {
+    const parsed = validateCreateWebhook(body);
+    await validateWebhookUrl(parsed.url);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      const userId =
+        await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
+      const row = await this.webhookRepository.create(
+        omitUndefined({
+          organization_id: organization.id,
+          url: parsed.url,
+          encrypted_secret: encryptFieldSecret(parsed.secret ?? ''),
+          events: parsed.events,
+          is_enabled: parsed.is_enabled,
+          created_by_user_id: userId ?? undefined,
+        }),
+      );
+      return WebhookSerializer.one(row);
+    });
+  }
+
+  async update(
+    organization_public_id: string,
+    webhook_public_id: string,
+    body: unknown,
+    updated_by_user_public_id: string,
+  ) {
+    const parsed = validateUpdateWebhook(body);
+    if (parsed.url !== undefined) {
+      await validateWebhookUrl(parsed.url);
+    }
+    const organization =
+      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+    const userId =
+      await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
+    const updatePayload = omitUndefined({
+      url: parsed.url,
+      events: parsed.events,
+      is_enabled: parsed.is_enabled,
+      encrypted_secret: parsed.secret !== undefined ? encryptFieldSecret(parsed.secret) : undefined,
+    });
+    const updated = await this.webhookRepository.update(
+      webhook_public_id,
+      organization.id,
+      updatePayload,
+      userId ?? undefined,
+    );
+    if (!updated) throw new NotFoundError('Webhook');
+    return WebhookSerializer.one(updated);
+  }
+
+  async delete(organization_public_id: string, webhook_public_id: string) {
+    const organization =
+      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+    const deleted = await this.webhookRepository.softDelete(webhook_public_id, organization.id);
+    if (!deleted) throw new NotFoundError('Webhook');
+  }
+
+  /**
+   * Request async HTTP delivery for a webhook event (persist attempt + event bus → Redis queue).
+   */
+  async requestWebhookDelivery(input: {
+    webhookId: number;
+    eventType: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    await emitWebhookDeliveryRequested(input);
+  }
+
+  /**
+   * Deliver an organization-scoped billing event to all subscribed enabled webhooks.
+   */
+  async dispatchOrganizationWebhooks(
+    organization_id: number,
+    event_type: string,
+    payload: Record<string, unknown>,
+    _requestId?: string,
+  ): Promise<void> {
+    const webhooks = await this.webhookRepository.listEnabledSubscribedToEvent(
+      organization_id,
+      event_type,
+    );
+    for (const webhook of webhooks) {
+      await this.requestWebhookDelivery({
+        webhookId: webhook.id,
+        eventType: event_type,
+        payload,
+      });
+    }
+  }
+
+  async listDeliveryAttempts(
+    organization_public_id: string,
+    webhook_public_id: string,
+    limit: number,
+  ) {
+    const organization =
+      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+    const webhookId = await this.deliveryAttemptRepository.getWebhookId(
+      webhook_public_id,
+      organization.id,
+    );
+    if (webhookId === null || webhookId === undefined) throw new NotFoundError('Webhook');
+    return this.deliveryAttemptRepository.listByWebhook(webhookId, limit);
+  }
+
+  async testWebhook(organization_public_id: string, webhook_public_id: string) {
+    const organization =
+      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+    const webhook = await this.webhookRepository.findByPublicId(webhook_public_id, organization.id);
+    if (!webhook) throw new NotFoundError('Webhook');
+
+    await validateWebhookUrl(webhook.url);
+
+    const testPayload = {
+      event: 'webhook.test',
+      timestamp: new Date().toISOString(),
+      data: {
+        webhook_id: webhook.public_id,
+        message: i18next.t('success:webhookTestDelivery', { lng: 'en' }),
+      },
+    };
+
+    const sentAt = new Date();
+    let statusCode: number | null = null;
+    let responseBody: string | null = null;
+    let success = false;
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), WEBHOOK_TEST_TIMEOUT_MS);
+
+      const response = await fetch(webhook.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'core-be-webhook/1.0',
+          'X-Webhook-Event': 'webhook.test',
+        },
+        body: JSON.stringify(testPayload),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+      statusCode = response.status;
+      try {
+        responseBody = await response.text();
+      } catch (parseError) {
+        logger.warn(
+          {
+            webhookId: webhook.public_id,
+            url: webhook.url,
+            parseError: parseError instanceof Error ? parseError.message : 'Unknown error',
+          },
+          'webhook.response.body.parse.failed',
+        );
+        responseBody = '[parse error]';
+      }
+      success = response.ok;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      responseBody = errorMessage;
+      logger.warn(
+        { webhookId: webhook.public_id, url: webhook.url, error: errorMessage },
+        'webhook.test.delivery.failed',
+      );
+    }
+
+    // Record the delivery attempt
+    await this.deliveryAttemptRepository.create({
+      webhook_id: webhook.id,
+      event_type: 'webhook.test',
+      payload: testPayload,
+      status: success ? 'SENT' : 'FAILED',
+      http_status_code: statusCode,
+      response_body: responseBody,
+      sent_at: sentAt,
+      attempt_count: 1,
+    });
+
+    const truncatedBody =
+      responseBody !== null &&
+      responseBody !== undefined &&
+      responseBody.length > WEBHOOK_TEST_RESPONSE_BODY_MAX_LENGTH
+        ? `${responseBody.slice(0, WEBHOOK_TEST_RESPONSE_BODY_MAX_LENGTH)}... [truncated]`
+        : responseBody;
+
+    return {
+      success,
+      status_code: statusCode,
+      delivered_at: sentAt.toISOString(),
+      response_body: truncatedBody,
+    };
+  }
+}

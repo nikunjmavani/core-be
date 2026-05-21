@@ -1,0 +1,88 @@
+import { ValidationError } from '@/shared/errors/index.js';
+import { createUploadDto, uploadPublicIdParamDto } from './upload.dto.js';
+import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
+import { UPLOAD_PURPOSE_CONFIG, UPLOAD_TARGETS } from './upload.constants.js';
+import { getAllowedContentTypesForPurpose } from './upload-content-type.util.js';
+import type { CreateUploadInput } from './upload.types.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+
+export function validateCreateUpload(data: unknown): CreateUploadInput {
+  const result = createUploadDto.safeParse(data);
+  if (!result.success) {
+    throw new ValidationError(
+      'errors:invalidUploadInput',
+      undefined,
+      result.error.flatten().fieldErrors,
+    );
+  }
+
+  const input = result.data;
+  const config = UPLOAD_PURPOSE_CONFIG[input.purpose];
+  const allowedTypes = getAllowedContentTypesForPurpose(input.purpose);
+
+  // Ownership validation
+  if (input.for === UPLOAD_TARGETS.USER && input.organizationId) {
+    throw new ValidationError('errors:uploadOrganizationIdNotAllowed', undefined, undefined, [
+      { field: 'organizationId', messageKey: 'errors:uploadOrganizationIdNotAllowed' },
+    ]);
+  }
+  if (input.for === UPLOAD_TARGETS.ORGANIZATION && !input.organizationId) {
+    throw new ValidationError('errors:uploadOrganizationIdRequired', undefined, undefined, [
+      { field: 'organizationId', messageKey: 'errors:uploadOrganizationIdRequired' },
+    ]);
+  }
+
+  // Content type validation
+  if (!allowedTypes.includes(input.contentType)) {
+    throw new ValidationError(
+      'errors:uploadContentTypeNotAllowed',
+      {
+        contentType: input.contentType,
+        purpose: input.purpose,
+        allowed: allowedTypes.join(', '),
+      },
+      undefined,
+      [
+        {
+          field: 'contentType',
+          messageKey: 'errors:uploadContentTypeNotAllowed',
+          messageParams: {
+            contentType: input.contentType,
+            purpose: input.purpose,
+            allowed: allowedTypes.join(', '),
+          },
+        },
+      ],
+    );
+  }
+
+  // File size validation
+  if (input.fileSize > config.maxSize) {
+    throw new ValidationError(
+      'errors:uploadFileSizeExceeded',
+      { fileSize: input.fileSize, maxSize: config.maxSize, purpose: input.purpose },
+      undefined,
+      [
+        {
+          field: 'fileSize',
+          messageKey: 'errors:uploadFileSizeExceeded',
+          messageParams: {
+            fileSize: input.fileSize,
+            maxSize: config.maxSize,
+            purpose: input.purpose,
+          },
+        },
+      ],
+    );
+  }
+
+  return omitUndefined(input);
+}
+
+export function validateUploadPublicIdParam(public_id: string): string {
+  const parsed = uploadPublicIdParamDto.safeParse({ publicId: public_id });
+  if (!parsed.success) {
+    throw new ValidationError('errors:invalidInput', undefined, parsed.error.flatten().fieldErrors);
+  }
+  return validatePublicIdParam(parsed.data.publicId, 'publicId');
+}

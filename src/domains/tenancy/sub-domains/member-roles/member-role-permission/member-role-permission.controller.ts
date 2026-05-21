@@ -1,0 +1,37 @@
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
+import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
+import type { MemberRolePermissionService } from './member-role-permission.service.js';
+import { serializeMemberRolePermission } from './member-role-permission.serializer.js';
+
+export function createMemberRolePermissionController(service: MemberRolePermissionService) {
+  return {
+    listRolePermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const organizationId = validatePublicIdParam(
+        (request.params as { id: string }).id ?? '',
+        'id',
+      );
+      const { roleId } = request.params as { roleId: string };
+      const rows = await service.list(organizationId, roleId);
+      const data = rows.map((row) => serializeMemberRolePermission(row, roleId));
+      return paginatedResponse(data, getRequestIdentifier(request), {
+        per_page: data.length,
+        next: null,
+        has_more: false,
+        estimated_total: data.length,
+      });
+    },
+    putRolePermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const organizationId = validatePublicIdParam(
+        (request.params as { id: string }).id ?? '',
+        'id',
+      );
+      const { roleId } = request.params as { roleId: string };
+      const rows = await service.put(organizationId, roleId, request.body, auth.userId);
+      const data = rows.map((row) => serializeMemberRolePermission(row, roleId));
+      return successResponse(data, getRequestIdentifier(request));
+    },
+  };
+}

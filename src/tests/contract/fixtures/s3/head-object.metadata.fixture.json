@@ -1,0 +1,7 @@
+{
+  "contentType": "image/png",
+  "contentLength": "2048",
+  "s3EncodedObjectKeySegments": ["uploads", "avatars", "user-contract-test.png"],
+  "httpStatusSuccess": 200,
+  "httpStatusNotFound": 404
+}

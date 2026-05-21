@@ -1,0 +1,68 @@
+import http from 'k6/http';
+import { sleep } from 'k6';
+import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
+import { checkOk, checkResponseTime } from '../helpers/checks.js';
+import { authHeaders } from '../helpers/auth.js';
+
+/**
+ * k6 Scenario: Daily Operations
+ *
+ * Simulates typical daily user operations:
+ * - Fetch notifications
+ * - List organization members
+ * - Check unread notification count
+ */
+export const options = {
+  scenarios: {
+    load: { ...SCENARIOS.load, exec: 'dailyOps' },
+  },
+  thresholds: {
+    ...THRESHOLDS,
+    'http_req_duration{name:list-notifications}': ['p(95)<500', 'p(99)<1000'],
+    'http_req_duration{name:unread-count}': ['p(95)<200', 'p(99)<400'],
+    'http_req_duration{name:list-members}': ['p(95)<500', 'p(99)<1000'],
+  },
+};
+
+export function dailyOps() {
+  const token = __ENV.TEST_TOKEN;
+  if (!token) {
+    console.error('TEST_TOKEN env var required');
+    return;
+  }
+
+  const headers = authHeaders(token).headers;
+  const orgId = __ENV.TEST_ORG_ID || 'test-org-id';
+
+  // Notifications
+  const notifResponse = http.get(`${API_PREFIX}/notify/notifications`, {
+    headers,
+    tags: { name: 'list-notifications' },
+  });
+  checkOk(notifResponse, 'list-notifications');
+  checkResponseTime(notifResponse, 500, 'list-notifications');
+
+  sleep(0.3);
+
+  // Unread count
+  const unreadResponse = http.get(`${API_PREFIX}/notify/notifications/unread-count`, {
+    headers,
+    tags: { name: 'unread-count' },
+  });
+  checkOk(unreadResponse, 'unread-count');
+  checkResponseTime(unreadResponse, 200, 'unread-count');
+
+  sleep(0.3);
+
+  // Organization memberships
+  const membersResponse = http.get(`${API_PREFIX}/tenancy/organizations/${orgId}/memberships`, {
+    headers,
+    tags: { name: 'list-members' },
+  });
+  // May get 403 if no permission — that's expected in load test
+  checkResponseTime(membersResponse, 500, 'list-members');
+
+  sleep(1);
+}
+
+export default dailyOps;

@@ -1,0 +1,10 @@
+{
+  "id": "cus_fixture_contract_aa",
+  "object": "customer",
+  "email": "subscription.owner@contract.test",
+  "name": "Subscription Owner Contract Test",
+  "metadata": {},
+  "created": 1735600000,
+  "livemode": false,
+  "default_source": null
+}

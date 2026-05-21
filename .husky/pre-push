@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# Fast gate before push — full suite runs in CI (pnpm ci:local / pnpm test).
+
+pnpm typecheck
+pnpm build
+pnpm build:check
+pnpm test:unit

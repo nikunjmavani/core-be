@@ -1,0 +1,50 @@
+# Auto-merge policy for Dependabot PRs (pull_request_target required).
+# - Production: patch only
+# - Development: patch + minor (never major)
+# - Security alerts: patch + minor
+
+name: Dependabot auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    name: Enable auto-merge for safe Dependabot updates
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          alert-lookup: true
+
+      - name: Enable auto-merge for safe updates
+        if: >-
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          (
+            steps.meta.outputs.dependency-type == 'direct:development' &&
+            steps.meta.outputs.update-type == 'version-update:semver-patch'
+          ) ||
+          (
+            steps.meta.outputs.dependency-type == 'direct:development' &&
+            steps.meta.outputs.update-type == 'version-update:semver-minor'
+          ) ||
+          (
+            steps.meta.outputs.alert-state != '' &&
+            (
+              steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+              steps.meta.outputs.update-type == 'version-update:semver-minor'
+            )
+          )
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"

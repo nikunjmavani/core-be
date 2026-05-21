@@ -1,0 +1,243 @@
+import { and, asc, count, eq, isNull, or } from 'drizzle-orm';
+import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
+import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
+import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
+import { users as authUsers } from '@/domains/user/user.schema.js';
+import { BaseRepository } from '@/infrastructure/database/base-repository.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import type { Organization } from './organization.types.js';
+
+export class OrganizationRepository extends BaseRepository {
+  async resolveUserIdByPublicId(public_id: string): Promise<number | null> {
+    const rows = await getRequestDatabase()
+      .select({ id: authUsers.id })
+      .from(authUsers)
+      .where(and(eq(authUsers.public_id, public_id), isNull(authUsers.deleted_at)))
+      .limit(1);
+    return rows[0]?.id ?? null;
+  }
+
+  async findById(identifier: number): Promise<Organization | null> {
+    const rows = await getRequestDatabase()
+      .select()
+      .from(organizations)
+      .where(and(eq(organizations.id, identifier), isNull(organizations.deleted_at)))
+      .limit(1);
+    return (rows[0] ?? null) as Organization | null;
+  }
+
+  async findByPublicId(public_id: string): Promise<Organization | null> {
+    const rows = await getRequestDatabase()
+      .select()
+      .from(organizations)
+      .where(and(eq(organizations.public_id, public_id), isNull(organizations.deleted_at)))
+      .limit(1);
+    return (rows[0] ?? null) as Organization | null;
+  }
+
+  async findBySlug(slug: string): Promise<Organization | null> {
+    const rows = await getRequestDatabase()
+      .select()
+      .from(organizations)
+      .where(and(eq(organizations.slug, slug), isNull(organizations.deleted_at)))
+      .limit(1);
+    return (rows[0] ?? null) as Organization | null;
+  }
+
+  async findAll(page: number, limit: number, _owner_user_id?: number) {
+    const offset = (page - 1) * limit;
+    const where = isNull(organizations.deleted_at);
+    const [rows, countResult] = await Promise.all([
+      getRequestDatabase()
+        .select()
+        .from(organizations)
+        .where(where)
+        .orderBy(asc(organizations.created_at))
+        .limit(limit)
+        .offset(offset),
+      getRequestDatabase().select({ count: count() }).from(organizations).where(where),
+    ]);
+    const total = countResult[0]?.count ?? 0;
+    return this.paginate(rows as Organization[], total, page, limit);
+  }
+
+  async findAllForUser(user_public_id: string, page: number, limit: number) {
+    const userId = await this.resolveUserIdByPublicId(user_public_id);
+    if (userId === null) {
+      return this.paginate([], 0, page, limit);
+    }
+    const offset = (page - 1) * limit;
+    const accessWhere = and(
+      isNull(organizations.deleted_at),
+      or(
+        eq(organizations.owner_user_id, userId),
+        and(
+          eq(memberships.user_id, userId),
+          eq(memberships.status, 'ACTIVE'),
+          isNull(memberships.deleted_at),
+        ),
+      ),
+    );
+    const [rows, countResult] = await Promise.all([
+      getRequestDatabase()
+        .select()
+        .from(organizations)
+        .leftJoin(
+          memberships,
+          and(
+            eq(memberships.organization_id, organizations.id),
+            eq(memberships.user_id, userId),
+            eq(memberships.status, 'ACTIVE'),
+            isNull(memberships.deleted_at),
+          ),
+        )
+        .where(accessWhere)
+        .orderBy(asc(organizations.created_at))
+        .limit(limit)
+        .offset(offset),
+      getRequestDatabase()
+        .select({ count: count() })
+        .from(organizations)
+        .leftJoin(
+          memberships,
+          and(
+            eq(memberships.organization_id, organizations.id),
+            eq(memberships.user_id, userId),
+            eq(memberships.status, 'ACTIVE'),
+            isNull(memberships.deleted_at),
+          ),
+        )
+        .where(accessWhere),
+    ]);
+    const total = countResult[0]?.count ?? 0;
+    const organizationsOnly = rows.map((row) => row.organizations);
+    return this.paginate(organizationsOnly, total, page, limit);
+  }
+
+  async userCanAccessOrganization(
+    user_public_id: string,
+    organization_public_id: string,
+  ): Promise<boolean> {
+    const organization = await this.findByPublicId(organization_public_id);
+    if (!organization) {
+      return false;
+    }
+    const userId = await this.resolveUserIdByPublicId(user_public_id);
+    if (userId !== null && organization.owner_user_id === userId) {
+      return true;
+    }
+    return this.userHasActiveMembership(user_public_id, organization_public_id);
+  }
+
+  async userHasActiveMembership(
+    user_public_id: string,
+    organization_public_id: string,
+  ): Promise<boolean> {
+    const rows = await getRequestDatabase()
+      .select({ id: memberships.id })
+      .from(memberships)
+      .innerJoin(authUsers, eq(memberships.user_id, authUsers.id))
+      .innerJoin(organizations, eq(memberships.organization_id, organizations.id))
+      .where(
+        and(
+          eq(authUsers.public_id, user_public_id),
+          eq(organizations.public_id, organization_public_id),
+          eq(memberships.status, 'ACTIVE'),
+          isNull(memberships.deleted_at),
+          isNull(organizations.deleted_at),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  async create(data: {
+    name: string;
+    slug: string;
+    owner_user_id: number;
+    created_by_user_id: number | null;
+  }) {
+    return runInsertWithPublicIdentifierRetry(async () => {
+      const public_id = generatePublicId();
+      const row = {
+        public_id,
+        name: data.name,
+        slug: data.slug,
+        owner_user_id: data.owner_user_id,
+        created_by_user_id: data.created_by_user_id ?? undefined,
+        updated_by_user_id: data.created_by_user_id ?? undefined,
+      };
+      const rows = await getRequestDatabase().insert(organizations).values(row).returning();
+      return rows[0]! as Organization;
+    });
+  }
+
+  async update(
+    public_id: string,
+    data: { name?: string; slug?: string; status?: string; logo_url?: string | null },
+    updated_by_user_id: number | null,
+  ): Promise<Organization | null> {
+    const rows = await getRequestDatabase()
+      .update(organizations)
+      .set({
+        ...data,
+        updated_at: databaseNowTimestamp,
+        updated_by_user_id: updated_by_user_id ?? undefined,
+      })
+      .where(and(eq(organizations.public_id, public_id), isNull(organizations.deleted_at)))
+      .returning();
+    return (rows[0] ?? null) as Organization | null;
+  }
+
+  async updateOwner(public_id: string, owner_user_id: number): Promise<Organization | null> {
+    const rows = await getRequestDatabase()
+      .update(organizations)
+      .set({
+        owner_user_id,
+        updated_at: databaseNowTimestamp,
+      })
+      .where(and(eq(organizations.public_id, public_id), isNull(organizations.deleted_at)))
+      .returning();
+    return (rows[0] ?? null) as Organization | null;
+  }
+
+  async updateStripeCustomerId(
+    organization_id: number,
+    stripe_customer_id: string,
+  ): Promise<Organization | null> {
+    const rows = await getRequestDatabase()
+      .update(organizations)
+      .set({
+        stripe_customer_id,
+        updated_at: databaseNowTimestamp,
+      })
+      .where(eq(organizations.id, organization_id))
+      .returning();
+    return (rows[0] ?? null) as Organization | null;
+  }
+
+  async findByStripeCustomerId(stripe_customer_id: string): Promise<Organization | null> {
+    const rows = await getRequestDatabase()
+      .select()
+      .from(organizations)
+      .where(
+        and(
+          eq(organizations.stripe_customer_id, stripe_customer_id),
+          isNull(organizations.deleted_at),
+        ),
+      )
+      .limit(1);
+    return (rows[0] ?? null) as Organization | null;
+  }
+
+  async softDelete(public_id: string): Promise<Organization | null> {
+    const rows = await getRequestDatabase()
+      .update(organizations)
+      .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .where(and(eq(organizations.public_id, public_id), isNull(organizations.deleted_at)))
+      .returning();
+    return (rows[0] ?? null) as Organization | null;
+  }
+}

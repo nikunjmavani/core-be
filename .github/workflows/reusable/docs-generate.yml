@@ -1,0 +1,47 @@
+name: Reusable — generate API docs
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: OpenAPI and Postman specs in sync
+        run: pnpm docs:check
+
+      - name: Validate OpenAPI spec
+        run: pnpm docs:validate:openapi
+
+      - name: Upload API docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-docs
+          path: |
+            docs/openapi/
+            docs/postman-collection.json
+          retention-days: 30
+
+      - name: Upload Postman Collection to workspace
+        if: github.ref == 'refs/heads/main' && secrets.POSTMAN_API_KEY != ''
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          POSTMAN_WORKSPACE_ID: ${{ secrets.POSTMAN_WORKSPACE_ID }}
+        run: pnpm docs:upload
+
+      - name: Upload OpenAPI to Scalar Registry
+        if: github.ref == 'refs/heads/main' && secrets.SCALAR_API_KEY != ''
+        env:
+          SCALAR_API_KEY: ${{ secrets.SCALAR_API_KEY }}
+          SCALAR_NAMESPACE: ${{ secrets.SCALAR_NAMESPACE }}
+          SCALAR_SLUG: ${{ secrets.SCALAR_SLUG }}
+        run: pnpm docs:upload:scalar

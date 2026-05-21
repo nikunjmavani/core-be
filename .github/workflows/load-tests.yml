@@ -1,0 +1,200 @@
+# Nightly k6 load tests against an ephemeral API (Postgres + Redis).
+# Gate: health-stress + api-stress (SLO thresholds). Informational: auth, daily-ops, billing, webhooks, admin.
+# Secrets (optional email): RESEND_API_KEY, LOAD_TEST_RESULT_EMAIL_TO or TEST_REPORT_EMAIL_TO
+name: Load tests (k6)
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: load-tests-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  k6:
+    name: k6 SLO gate and scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgres:17.10-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: core
+        options: >-
+          --health-cmd="pg_isready -U postgres -d core"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+      redis:
+        image: redis:8.6.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
+      ALLOWED_ORIGINS: http://localhost:3000
+      RATE_LIMIT_MAX: 10000
+      RATE_LIMIT_WINDOW_MS: 60000
+      ENABLE_MCP_SERVER: 'true'
+      BASE_URL: http://localhost:3000
+      # Fixed demo password for db:seed:full + k6 auth scenario
+      TEST_PASSWORD: DemoPassword123!
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run migrations
+        run: pnpm db:migrate
+
+      - name: Seed full demo data
+        run: pnpm db:seed:full
+
+      - name: Start API server
+        uses: ./.github/actions/start-api-server
+        with:
+          rate-limit-max: '10000'
+          ready-timeout-seconds: '80'
+
+      - name: Export load-test credentials and admin token
+        run: |
+          set -euo pipefail
+          CREDS_OUT="$(pnpm tool:load-test-credentials 2>&1)"
+          echo "$CREDS_OUT"
+          TOKEN="$(echo "$CREDS_OUT" | sed -n 's/^export TEST_TOKEN="\([^"]*\)"/\1/p')"
+          ORGANIZATION_PUBLIC_ID="$(echo "$CREDS_OUT" | sed -n 's/^export TEST_ORG_ID="\([^"]*\)"/\1/p')"
+          if [ -z "$TOKEN" ] || [ -z "$ORGANIZATION_PUBLIC_ID" ]; then
+            echo "::error::Could not parse TEST_TOKEN or TEST_ORG_ID from tool:load-test-credentials"
+            exit 1
+          fi
+          {
+            echo "TEST_TOKEN<<EOF_TEST_TOKEN"
+            echo "$TOKEN"
+            echo "EOF_TEST_TOKEN"
+            echo "TEST_ORG_ID<<EOF_TEST_ORG_ID"
+            echo "$ORGANIZATION_PUBLIC_ID"
+            echo "EOF_TEST_ORG_ID"
+          } >> "$GITHUB_ENV"
+          ADMIN_OUT="$(pnpm tool:admin-token 2>&1)"
+          echo "$ADMIN_OUT"
+          ADMIN_TOKEN_VALUE="$(echo "$ADMIN_OUT" | sed -n 's/^export ADMIN_TOKEN="\([^"]*\)"/\1/p')"
+          if [ -z "$ADMIN_TOKEN_VALUE" ]; then
+            echo "::error::Could not parse ADMIN_TOKEN from tool:admin-token"
+            exit 1
+          fi
+          {
+            echo "ADMIN_TOKEN<<EOF_ADMIN_TOKEN"
+            echo "$ADMIN_TOKEN_VALUE"
+            echo "EOF_ADMIN_TOKEN"
+          } >> "$GITHUB_ENV"
+
+      - name: Gate — health stress + API stress (k6 SLO)
+        id: gate
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          k6 run --summary-export=k6-health-stress.json src/tests/load/k6/scenarios/health-stress.js
+          k6 run --summary-export=k6-api-stress.json src/tests/load/k6/scenarios/api-stress.js
+          k6 run --summary-export=k6-login-smoke.json src/tests/load/k6/scenarios/login-smoke.js
+          k6 run --summary-export=k6-permission-cached.json src/tests/load/k6/scenarios/permission-cached.js
+          k6 run --summary-export=k6-stripe-webhook-ingest.json src/tests/load/k6/scenarios/stripe-webhook-ingest.js
+          k6 run --summary-export=k6-idempotency-storm.json src/tests/load/k6/scenarios/idempotency-storm.js
+
+      - name: k6 auth-onboarding (informational)
+        if: always()
+        continue-on-error: true
+        run: >
+          k6 run --summary-export=k6-auth-onboarding.json src/tests/load/k6/scenarios/auth-onboarding.js
+        env:
+          TEST_EMAIL: demo@example.com
+          TEST_PASSWORD: DemoPassword123!
+
+      - name: k6 daily-ops (informational)
+        if: always()
+        continue-on-error: true
+        run: k6 run --summary-export=k6-daily-ops.json src/tests/load/k6/scenarios/daily-ops.js
+
+      - name: k6 billing (informational)
+        if: always()
+        continue-on-error: true
+        run: k6 run --summary-export=k6-billing.json src/tests/load/k6/scenarios/billing.js
+
+      - name: k6 webhooks (informational)
+        if: always()
+        continue-on-error: true
+        run: k6 run --summary-export=k6-webhooks.json src/tests/load/k6/scenarios/webhooks.js
+
+      - name: k6 admin (informational)
+        if: always()
+        continue-on-error: true
+        run: k6 run --summary-export=k6-admin.json src/tests/load/k6/scenarios/admin.js
+
+      - name: k6 org-scoped routes (informational)
+        if: always()
+        continue-on-error: true
+        run: |
+          k6 run --summary-export=k6-audit-list.json src/tests/load/k6/scenarios/audit-list.js
+          k6 run --summary-export=k6-org-membership-list.json src/tests/load/k6/scenarios/org-membership-list.js
+          k6 run --summary-export=k6-notification-policy.json src/tests/load/k6/scenarios/notification-policy-crud.js
+          k6 run --summary-export=k6-billing-subscriptions-rls.json src/tests/load/k6/scenarios/billing-subscriptions-rls.js
+          k6 run --summary-export=k6-user-data-export.json src/tests/load/k6/scenarios/user-data-export.js
+        env:
+          ADMIN_TOKEN: ${{ env.ADMIN_TOKEN }}
+          TEST_TOKEN: ${{ env.TEST_TOKEN }}
+          TEST_ORG_ID: ${{ env.TEST_ORG_ID }}
+
+      - name: Upload k6 summaries and server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-load-test-artifacts
+          path: |
+            k6-*.json
+            server.log
+          retention-days: 14
+
+      - name: Send load-test results email (from k6 summaries)
+        if: always() && secrets.RESEND_API_KEY != '' && (secrets.LOAD_TEST_RESULT_EMAIL_TO != '' || secrets.TEST_REPORT_EMAIL_TO != '')
+        continue-on-error: true
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          LOAD_TEST_RESULT_EMAIL_TO: ${{ secrets.LOAD_TEST_RESULT_EMAIL_TO }}
+          TEST_REPORT_EMAIL_TO: ${{ secrets.TEST_REPORT_EMAIL_TO }}
+          BASE_URL: http://localhost:3000
+          K6_USE_SUMMARIES: '1'
+        run: pnpm tool:send-load-test-results-email
+
+      - name: Stop API server
+        if: always()
+        uses: ./.github/actions/stop-api-server
+
+      - name: Enforce gate success (SLO)
+        if: always() && (steps.gate.outcome == 'failure' || steps.gate.outcome == 'cancelled')
+        run: |
+          echo "::error::k6 gate failed — health-stress or api-stress breached SLO thresholds."
+          exit 1

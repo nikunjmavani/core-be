@@ -1,0 +1,6 @@
+{
+  "from": "Core <noreply@albetrios.com>",
+  "to": ["subscriber@contract.test"],
+  "subject": "Contract fixture outbound subject line",
+  "html": "<p>Outbound contract fixture markup</p>"
+}

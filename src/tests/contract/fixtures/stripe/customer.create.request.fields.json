@@ -1,0 +1,5 @@
+{
+  "email": "subscription.owner@contract.test",
+  "name": "Subscription Owner Contract Test",
+  "metadata[user_tag]": "contract_fixture_organization"
+}

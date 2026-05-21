@@ -1,0 +1,141 @@
+/**
+ * i18n middleware: initializes i18next with fs-backend and language detection,
+ * adds a preHandler so every request gets request.t(), request.language, request.i18n.
+ * English is the default and fallback locale.
+ */
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import Backend from 'i18next-fs-backend';
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import { handle as i18nextHandle, LanguageDetector } from 'i18next-http-middleware';
+import i18next from 'i18next';
+import type { InitOptions } from 'i18next';
+import { env } from '@/shared/config/env.config.js';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+
+const LOCALES_DIR = join(process.cwd(), 'src', 'shared', 'locales');
+const LOCALES_LOAD_PATH = join(LOCALES_DIR, '{{lng}}', '{{ns}}.json');
+
+const DEFAULT_LOCALE = 'en';
+const REQUIRED_NAMESPACES = ['common', 'errors', 'success', 'mail'] as const;
+
+const I18N_IGNORE_ROUTES = ['/health/live', '/health/ready', '/api/v1/mcp'];
+
+export function resolveRequestLanguageFromHeader(
+  acceptLanguageHeader: string | string[] | undefined,
+  organizationDefaultLocale?: 'en' | 'es' | null,
+): 'en' | 'es' {
+  if (!acceptLanguageHeader) {
+    return organizationDefaultLocale === 'es' ? 'es' : 'en';
+  }
+  const preferred = String(acceptLanguageHeader).split(',')[0]?.trim().slice(0, 2) ?? 'en';
+  return preferred === 'es' ? 'es' : 'en';
+}
+
+type I18nRequest = {
+  language?: string;
+  t?: (key: string, opts?: object) => string;
+};
+
+function applyResolvedLanguage(
+  request: FastifyRequest,
+  req: I18nRequest,
+  language: 'en' | 'es',
+): void {
+  req.language = language;
+  (request as { language?: string }).language = language;
+  const requestWithTranslation = request as I18nRequest;
+  requestWithTranslation.t =
+    req.t ??
+    ((key: string, opts?: object) =>
+      i18next.t(key, { lng: requestWithTranslation.language ?? 'en', ...opts }));
+}
+
+export function attachRequestI18nHelpers(
+  request: FastifyRequest,
+  req: I18nRequest,
+  organizationDefaultLocale?: 'en' | 'es' | null,
+): void {
+  const language = resolveRequestLanguageFromHeader(
+    request.headers['accept-language'],
+    organizationDefaultLocale,
+  );
+  applyResolvedLanguage(request, req, language);
+}
+
+export function verifyLocalesAvailable(): void {
+  if (!existsSync(LOCALES_DIR)) {
+    throw new Error(
+      `Locales directory not found at ${LOCALES_DIR}. In production ensure src/shared/locales is copied (e.g. in Dockerfile).`,
+    );
+  }
+  for (const namespace of REQUIRED_NAMESPACES) {
+    const filePath = join(LOCALES_DIR, DEFAULT_LOCALE, `${namespace}.json`);
+    if (!existsSync(filePath)) {
+      throw new Error(
+        `Required locale file not found: ${DEFAULT_LOCALE}/${namespace}.json at ${filePath}`,
+      );
+    }
+  }
+}
+
+const i18nMiddleware: FastifyPluginAsync = async (app) => {
+  verifyLocalesAvailable();
+
+  const i18nInitOptions: InitOptions = {
+    preload: ['en', 'es'],
+    ns: ['common', 'errors', 'success', 'mail'],
+    defaultNS: 'common',
+    fallbackLng: ['en'],
+    returnNull: false,
+    returnEmptyString: false,
+    parseMissingKeyHandler: (key, language) => {
+      if (env.NODE_ENV === 'production' && language !== DEFAULT_LOCALE) {
+        captureMessage(`i18n missing key: ${key} (${language})`, { level: 'warning' });
+      } else if (env.NODE_ENV !== 'production') {
+        logger.debug({ key, language }, 'i18n.missing_key');
+      }
+      return key;
+    },
+    backend: {
+      loadPath: LOCALES_LOAD_PATH,
+    },
+  };
+
+  await i18next.use(Backend).use(LanguageDetector).init(i18nInitOptions);
+
+  const handler = i18nextHandle(i18next, { ignoreRoutes: I18N_IGNORE_ROUTES });
+  // Use onRequest so request.t is set for every request (including 404 not-found).
+  app.addHook('onRequest', (request, reply, done) => {
+    const req = request as unknown as Parameters<typeof handler>[0] & {
+      language?: string;
+      t?: (key: string, opts?: object) => string;
+    };
+    const res = reply as unknown as Parameters<typeof handler>[1];
+    handler(req, res, (err?: Error) => {
+      if (err) return done(err);
+      attachRequestI18nHelpers(request, req);
+      done();
+    });
+  });
+
+  // After tenant middleware sets organizationId: apply org default_locale when Accept-Language is absent.
+  app.addHook('preHandler', async (request) => {
+    if (request.headers['accept-language']) {
+      return;
+    }
+    const organizationPublicId = request.organizationId;
+    if (!organizationPublicId) {
+      return;
+    }
+    const organizationDefaultLocale =
+      await request.server.tenancyDomain.organizationSettingsService.resolveDefaultLocaleForOrganization(
+        organizationPublicId,
+      );
+    const req = request as unknown as I18nRequest;
+    attachRequestI18nHelpers(request, req, organizationDefaultLocale);
+  });
+};
+
+export default i18nMiddleware;

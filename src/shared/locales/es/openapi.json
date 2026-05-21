@@ -1,0 +1,57 @@
+{
+  "info": {
+    "title": "API core-be",
+    "description": "API backend para la plataforma Core. Incluye autenticación, gestión de organizaciones multi-tenant, facturación, notificaciones, webhooks y operaciones de administración.\n\nTodos los endpoints autenticados requieren un token JWT Bearer en el encabezado Authorization. Los endpoints con ámbito de organización requieren además el permiso correspondiente."
+  },
+  "servers": {
+    "local": "Desarrollo local"
+  },
+  "tags": {
+    "Health": "Comprobaciones de estado y preparación del servidor",
+    "MCP": "Protocolo de contexto de modelo — herramientas y recursos para agentes (requiere JWT admin cuando ENABLE_MCP_SERVER=true)",
+    "Auth": "Autenticación — inicio de sesión, cierre, gestión de contraseñas",
+    "Magic Link": "Autenticación sin contraseña por enlace por correo",
+    "OAuth": "Flujos de inicio de sesión social OAuth 2.0",
+    "Password": "Gestión de contraseñas (olvidar, restablecer, cambiar)",
+    "Email Verification": "Verificación de dirección de correo",
+    "MFA": "Registro y verificación de autenticación multifactor",
+    "WebAuthn": "Registro e inicio de sesión con passkey (WebAuthn)",
+    "Token": "Renovación y gestión de tokens",
+    "Session": "Gestión de sesiones — listar y revocar sesiones activas",
+    "Auth Method": "Gestionar métodos de autenticación vinculados (contraseña, OAuth, etc.)",
+    "User": "Gestión del perfil del usuario actual",
+    "User Settings": "Configuración personal del usuario (modo oscuro, idioma, etc.)",
+    "Notification Preferences": "Preferencias de notificación por tipo y canal por usuario",
+    "Admin": "Endpoints de administración de la plataforma (requiere rol admin)",
+    "User Management": "Gestión de usuarios por admin — listar, actualizar, suspender, eliminar",
+    "Organization": "CRUD y gestión de organizaciones",
+    "Organization Settings": "Configuración y políticas a nivel de organización",
+    "API Key": "Gestión de claves API de la organización",
+    "Notification Policy": "Políticas de entrega de notificaciones de la organización",
+    "Audit Log": "Registro de auditoría de acciones en la organización",
+    "Membership": "Gestión de membresías de la organización",
+    "Invitation": "Invitaciones de miembros — crear, aceptar, rechazar, reenviar",
+    "Role": "Gestión de roles personalizados en las organizaciones",
+    "Permission": "Permisos disponibles que se pueden asignar a roles",
+    "Billing": "Gestión de facturación y suscripciones",
+    "Plan": "Planes de suscripción y precios",
+    "Subscription": "Ciclo de vida de suscripción — crear, mejorar, cancelar, reanudar",
+    "Notification": "Feed de notificaciones del usuario",
+    "Webhook": "Gestión de endpoints webhook e historial de envíos",
+    "Upload": "Generación de URL pre-firmadas para subida de archivos"
+  },
+  "components": {
+    "bearerAuthDescription": "Token de acceso JWT obtenido del endpoint de login o renovación de token."
+  },
+  "responses": {
+    "success": "Operación correcta",
+    "created": "Recurso creado correctamente",
+    "noContent": "Sin contenido",
+    "validationError": "Error de validación",
+    "unauthorized": "No autorizado",
+    "forbidden": "Prohibido",
+    "notFound": "No encontrado",
+    "conflict": "Conflicto",
+    "internalError": "Error interno del servidor"
+  }
+}

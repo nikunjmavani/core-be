@@ -1,0 +1,149 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { createTestUser } from '@/tests/factories/user.factory.js';
+import { createTestOrganization } from '@/tests/factories/organization.factory.js';
+import { createTestPlan } from '@/tests/factories/plan.factory.js';
+import { createTestSubscription } from '@/domains/billing/__tests__/factories/subscription.factory.js';
+import { SubscriptionRepository } from '@/domains/billing/sub-domains/subscription/subscription.repository.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { subscriptions } from '@/domains/billing/sub-domains/subscription/subscription.schema.js';
+
+describe('SubscriptionRepository (database)', () => {
+  const repository = new SubscriptionRepository();
+
+  beforeEach(async () => {
+    await cleanupDatabase();
+  });
+
+  it('lists, finds, creates, and updates subscriptions for an organization', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+    const seeded = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      createdByUserId: owner.id,
+    });
+
+    const listed = await repository.listByOrganization(organization.id);
+    expect(listed.some((row) => row.public_id === seeded.public_id)).toBe(true);
+
+    const found = await repository.findByPublicId(seeded.public_id, organization.id);
+    expect(found?.id).toBe(seeded.id);
+
+    const missing = await repository.findByPublicId('invalid_public_id', organization.id);
+    expect(missing).toBeNull();
+
+    const updated = await repository.update(seeded.public_id, organization.id, {
+      cancel_at_period_end: true,
+    });
+    expect(updated?.cancel_at_period_end).toBe(true);
+
+    const missingUpdate = await repository.update('missing_public_id', organization.id, {
+      cancel_at_period_end: false,
+    });
+    expect(missingUpdate).toBeNull();
+  });
+
+  it('creates a subscription when organization has none yet', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+
+    const created = await repository.create({
+      organization_id: organization.id,
+      plan_id: plan.id,
+      billing_cycle: 'MONTHLY',
+      status: 'TRIALING',
+      current_period_start: new Date(),
+      current_period_end: new Date(Date.now() + 86_400_000),
+      created_by_user_id: owner.id,
+    });
+    expect(created.public_id).toBeTruthy();
+  });
+
+  it('syncFromStripeProviderSubscription applies fresh events and ignores stale ones', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+    const providerSubscriptionId = `sub_provider_${Date.now()}`;
+    const seeded = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      providerSubscriptionId,
+    });
+
+    const freshEventAt = new Date('2026-05-01T00:00:00.000Z');
+    const synced = await repository.syncFromStripeProviderSubscription(
+      providerSubscriptionId,
+      { status: 'PAST_DUE' },
+      freshEventAt,
+    );
+    expect(synced?.status).toBe('PAST_DUE');
+    expect(synced?.last_stripe_event_created_at?.toISOString()).toBe(freshEventAt.toISOString());
+
+    const staleEventAt = new Date('2026-04-01T00:00:00.000Z');
+    const staleSync = await repository.syncFromStripeProviderSubscription(
+      providerSubscriptionId,
+      { status: 'ACTIVE' },
+      staleEventAt,
+    );
+    expect(staleSync).toBeNull();
+
+    const refetched = await repository.findByPublicId(seeded.public_id, organization.id);
+    expect(refetched?.status).toBe('PAST_DUE');
+  });
+
+  it('syncFromStripeProviderSubscription updates when last_stripe_event_created_at is null', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+    const providerSubscriptionId = `sub_null_guard_${Date.now()}`;
+    const seeded = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      providerSubscriptionId,
+    });
+
+    await database
+      .update(subscriptions)
+      .set({ last_stripe_event_created_at: null, status: 'ACTIVE' })
+      .where(eq(subscriptions.id, seeded.id));
+
+    const eventAt = new Date('2026-06-01T00:00:00.000Z');
+    const synced = await repository.syncFromStripeProviderSubscription(
+      providerSubscriptionId,
+      { status: 'PAUSED' },
+      eventAt,
+    );
+    expect(synced?.status).toBe('PAUSED');
+  });
+
+  it('markCanceledByProviderSubscriptionId cancels on fresh events and ignores stale ones', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+    const providerSubscriptionId = `sub_cancel_${Date.now()}`;
+    await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      providerSubscriptionId,
+    });
+
+    const freshEventAt = new Date('2026-05-10T00:00:00.000Z');
+    const canceled = await repository.markCanceledByProviderSubscriptionId(
+      providerSubscriptionId,
+      freshEventAt,
+    );
+    expect(canceled?.status).toBe('CANCELED');
+    expect(canceled?.canceled_at).toBeTruthy();
+
+    const staleEventAt = new Date('2026-05-01T00:00:00.000Z');
+    const staleCancel = await repository.markCanceledByProviderSubscriptionId(
+      providerSubscriptionId,
+      staleEventAt,
+    );
+    expect(staleCancel).toBeNull();
+  });
+});

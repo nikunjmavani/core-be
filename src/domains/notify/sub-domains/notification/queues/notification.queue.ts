@@ -1,0 +1,64 @@
+import { Queue } from 'bullmq';
+import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
+import {
+  notificationJobDataSchema,
+  type NotificationJobDataValidated,
+} from './notification.job.schema.js';
+
+export const NOTIFICATION_QUEUE_NAME = 'notification';
+
+/** Only ids are stored in Redis; content is loaded in the worker from Postgres with org scoping. */
+export type NotificationJobData = NotificationJobDataValidated;
+
+let notificationQueue: Queue<NotificationJobData> | null = null;
+
+function getNotificationQueue(): Queue<NotificationJobData> {
+  if (notificationQueue) return notificationQueue;
+  notificationQueue = new Queue<NotificationJobData>(NOTIFICATION_QUEUE_NAME, {
+    connection: getBullMQConnectionOptions(),
+    defaultJobOptions: {
+      removeOnComplete: { count: 2000 },
+      removeOnFail: { count: 5000 },
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5_000 },
+    },
+  });
+  return notificationQueue;
+}
+
+/**
+ * Enqueue a notification for async delivery across configured channels.
+ */
+export async function enqueueNotification(
+  notificationId: number,
+  organizationPublicId: string | null,
+  requestId?: string,
+): Promise<void> {
+  const queue = getNotificationQueue();
+  const jobData = parseBullMQJobData(
+    notificationJobDataSchema,
+    { notificationId, organizationPublicId, requestId },
+    NOTIFICATION_QUEUE_NAME,
+  );
+  await queue.add('dispatch-notification', jobData);
+}
+
+export async function closeNotificationQueue(): Promise<void> {
+  if (notificationQueue) {
+    await notificationQueue.close();
+    notificationQueue = null;
+  }
+}
+
+/**
+ * Pings Redis through BullMQ Queue's client — used by HTTP readiness probing.
+ */
+export async function pingNotificationQueueConnection(): Promise<void> {
+  const queue = getNotificationQueue();
+  const redisClient = await queue.client;
+  const pong = await redisClient.ping();
+  if (pong !== 'PONG') {
+    throw new Error('notification_queue_ping_unexpected_response');
+  }
+}

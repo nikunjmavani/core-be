@@ -1,0 +1,236 @@
+import { describe, it, expect, vi } from 'vitest';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { ValidationError } from '@/shared/errors/index.js';
+import { createOrganizationController } from '@/domains/tenancy/sub-domains/organization/organization.controller.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import type { AuditService } from '@/domains/audit/audit.service.js';
+
+describe('createOrganizationController', () => {
+  const organizationPublicId = generatePublicId();
+  const userPublicId = generatePublicId();
+
+  function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
+    return {
+      auth: { userId: userPublicId, role: 'USER' },
+      params: {},
+      body: {},
+      query: {},
+      headers: {},
+      id: 'request-id',
+      ...overrides,
+    } as FastifyRequest;
+  }
+
+  function mockReply(): FastifyReply {
+    const reply = {
+      code: vi.fn().mockReturnThis(),
+      send: vi.fn().mockReturnThis(),
+    };
+    return reply as unknown as FastifyReply;
+  }
+  const organization = { public_id: organizationPublicId, name: 'Acme', slug: 'acme' };
+
+  const service = {
+    list: vi.fn().mockResolvedValue({ items: [organization], page: 1, limit: 20, total: 1 }),
+    getByPublicId: vi.fn().mockResolvedValue(organization),
+    getBySlug: vi.fn().mockResolvedValue(organization),
+    create: vi.fn().mockResolvedValue(organization),
+    update: vi.fn().mockResolvedValue(organization),
+    delete: vi.fn().mockResolvedValue(undefined),
+    uploadLogo: vi.fn().mockResolvedValue(organization),
+    deleteLogo: vi.fn().mockResolvedValue(organization),
+  } as unknown as OrganizationService;
+
+  const auditService = {
+    list: vi.fn().mockResolvedValue({
+      items: [],
+      page: 1,
+      limit: 20,
+      total: 0,
+      total_pages: 0,
+    }),
+  } as unknown as AuditService;
+
+  const controller = createOrganizationController(service, auditService);
+
+  it('listOrganizations returns paginated data with has_more', async () => {
+    vi.mocked(service.list).mockResolvedValueOnce({
+      items: [organization],
+      page: 1,
+      limit: 20,
+      total: 50,
+    } as never);
+    const response = await controller.listOrganizations(mockRequest(), mockReply());
+    expect(service.list).toHaveBeenCalledWith({}, userPublicId, 'USER');
+    expect(response).toMatchObject({
+      data: [organization],
+      meta: { pagination: expect.objectContaining({ has_more: true, next: '2' }) },
+    });
+  });
+
+  it('listOrganizations returns has_more false when all items fit page', async () => {
+    vi.mocked(service.list).mockResolvedValueOnce({
+      items: [organization],
+      page: 1,
+      limit: 20,
+      total: 1,
+    } as never);
+    const response = await controller.listOrganizations(mockRequest(), mockReply());
+    expect(response).toMatchObject({
+      meta: { pagination: expect.objectContaining({ has_more: false, next: null }) },
+    });
+  });
+
+  it('getOrganization delegates to service', async () => {
+    await controller.getOrganization(
+      mockRequest({ params: { id: organizationPublicId } }),
+      mockReply(),
+    );
+    expect(service.getByPublicId).toHaveBeenCalledWith(organizationPublicId, userPublicId, 'USER');
+  });
+
+  it('getOrganizationBySlug delegates to service', async () => {
+    await controller.getOrganizationBySlug(mockRequest({ params: { slug: 'acme' } }), mockReply());
+    expect(service.getBySlug).toHaveBeenCalledWith('acme', userPublicId, 'USER');
+  });
+
+  it('createOrganization returns 201', async () => {
+    const reply = mockReply();
+    await controller.createOrganization(
+      mockRequest({ body: { name: 'Acme', slug: 'acme' } }),
+      reply,
+    );
+    expect(service.create).toHaveBeenCalled();
+    expect(reply.code).toHaveBeenCalledWith(201);
+  });
+
+  it('updateOrganization delegates to service', async () => {
+    await controller.updateOrganization(
+      mockRequest({ params: { id: organizationPublicId }, body: { name: 'New' } }),
+      mockReply(),
+    );
+    expect(service.update).toHaveBeenCalled();
+  });
+
+  it('deleteOrganization returns 204', async () => {
+    const reply = mockReply();
+    await controller.deleteOrganization(
+      mockRequest({ params: { id: organizationPublicId } }),
+      reply,
+    );
+    expect(service.delete).toHaveBeenCalledWith(organizationPublicId);
+    expect(reply.code).toHaveBeenCalledWith(204);
+  });
+
+  it('uploadLogo and deleteLogo delegate to service', async () => {
+    await controller.uploadLogo(
+      mockRequest({
+        params: { id: organizationPublicId },
+        body: { key: `organization-logos/${organizationPublicId}/logo.png` },
+      }),
+      mockReply(),
+    );
+    expect(service.uploadLogo).toHaveBeenCalled();
+
+    await controller.deleteLogo(mockRequest({ params: { id: organizationPublicId } }), mockReply());
+    expect(service.deleteLogo).toHaveBeenCalled();
+  });
+
+  it('listOrganizationAuditLogs delegates to audit service', async () => {
+    vi.mocked(auditService.list).mockResolvedValueOnce({
+      items: [],
+      page: 1,
+      limit: 20,
+      total: 100,
+      total_pages: 5,
+    } as never);
+    const response = await controller.listOrganizationAuditLogs(
+      mockRequest({ params: { id: organizationPublicId }, query: { limit: '20' } }),
+      mockReply(),
+    );
+    expect(auditService.list).toHaveBeenCalled();
+    expect(response).toMatchObject({
+      meta: { pagination: expect.objectContaining({ has_more: true, next: '2' }) },
+    });
+  });
+
+  it('rejects invalid organization id on each validated handler', async () => {
+    const invalidId = 'not-a-public-id';
+    await expect(
+      controller.getOrganization(mockRequest({ params: {} }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.getOrganization(mockRequest({ params: { id: invalidId } }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.updateOrganization(mockRequest({ params: {}, body: { name: 'X' } }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.updateOrganization(
+        mockRequest({ params: { id: '' }, body: { name: 'X' } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.deleteOrganization(mockRequest({ params: {} }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.deleteOrganization(mockRequest({ params: { id: invalidId } }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.uploadLogo(mockRequest({ params: {}, body: { key: 'k' } }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.uploadLogo(
+        mockRequest({ params: { id: invalidId }, body: { key: 'k' } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.deleteLogo(mockRequest({ params: {} }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.deleteLogo(mockRequest({ params: { id: '' } }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.listOrganizationAuditLogs(mockRequest({ params: {} }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      controller.listOrganizationAuditLogs(mockRequest({ params: { id: invalidId } }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('uses empty slug default when params are undefined', async () => {
+    vi.mocked(service.getBySlug).mockClear();
+    await controller.getOrganizationBySlug(mockRequest({ params: undefined }), mockReply());
+    expect(service.getBySlug).toHaveBeenCalledWith('', userPublicId, 'USER');
+  });
+
+  it('listOrganizationAuditLogs returns has_more false on last page', async () => {
+    vi.mocked(auditService.list).mockResolvedValueOnce({
+      items: [],
+      page: 5,
+      limit: 20,
+      total: 100,
+      total_pages: 5,
+    } as never);
+    const response = await controller.listOrganizationAuditLogs(
+      mockRequest({ params: { id: organizationPublicId }, query: { after: '100' } }),
+      mockReply(),
+    );
+    expect(response).toMatchObject({
+      meta: { pagination: expect.objectContaining({ has_more: false, next: null }) },
+    });
+  });
+
+  it('listOrganizationAuditLogs throws when audit service is not configured', async () => {
+    const controllerWithoutAudit = createOrganizationController(service);
+    await expect(
+      controllerWithoutAudit.listOrganizationAuditLogs(
+        mockRequest({ params: { id: organizationPublicId } }),
+        mockReply(),
+      ),
+    ).rejects.toThrow('Audit service not configured');
+  });
+});

@@ -1,0 +1,68 @@
+# Auto-labeling configuration for actions/labeler
+# Maps file path patterns to labels
+
+domain:auth:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/auth/**'
+
+domain:billing:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/billing/**'
+
+domain:tenancy:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/tenancy/**'
+
+domain:user:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/user/**'
+
+domain:notify:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/notify/**'
+
+domain:audit:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/audit/**'
+
+domain:upload:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/upload/**'
+
+infrastructure:
+  - changed-files:
+      - any-glob-to-any-file: 'src/infrastructure/**'
+
+shared:
+  - changed-files:
+      - any-glob-to-any-file: 'src/shared/**'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/tests/**'
+          - 'src/domains/**/__tests__/**'
+          - 'vitest.config.ts'
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '*.md'
+
+database:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'migrations/**'
+          - 'src/domains/**/*.schema.ts'
+          - 'drizzle.config.ts'
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package.json'
+          - 'pnpm-lock.yaml'

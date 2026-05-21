@@ -1,0 +1,8 @@
+{
+  "emailVerified": "Correo verificado correctamente.",
+  "emailAlreadyVerified": "El correo ya está verificado.",
+  "verificationEmailSent": "Correo de verificación enviado.",
+  "passwordResetEmailSent": "Si existe una cuenta con este correo, recibirás un enlace para restablecer la contraseña en breve.",
+  "magicLinkEmailSent": "Si existe una cuenta con este correo, recibirás un enlace mágico en breve.",
+  "webhookTestDelivery": "Este es un envío de prueba de la configuración de tu webhook."
+}

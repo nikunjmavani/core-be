@@ -1,0 +1,53 @@
+/**
+ * User domain seed — create users for dev/demo.
+ * Domain-owned; used by scripts/seed orchestration.
+ */
+import { createHash } from 'node:crypto';
+import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { users } from './user.schema.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { hashPassword } from '@/shared/utils/security/password.util.js';
+
+export interface SeedUserPayload {
+  email: string;
+  first_name: string;
+  last_name: string;
+  password_hash?: string | null;
+  status?: string;
+}
+
+export async function seedUser(payload: SeedUserPayload) {
+  const emailHash = createHash('sha256').update(payload.email.toLowerCase()).digest('hex');
+  const [row] = await getRequestDatabase()
+    .insert(users)
+    .values({
+      public_id: generatePublicId(),
+      email: payload.email,
+      email_hash: emailHash,
+      is_email_verified: true,
+      first_name: payload.first_name,
+      last_name: payload.last_name,
+      password_hash: payload.password_hash ?? null,
+      status: payload.status ?? 'ACTIVE',
+    })
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Seed a single demo user with known credentials for login.
+ * Uses hashPassword so the user can log in via POST /api/v1/auth/login.
+ */
+export async function seedDemoUser(
+  email: string,
+  password: string,
+  options?: { first_name?: string; last_name?: string },
+) {
+  const passwordHash = await hashPassword(password);
+  return seedUser({
+    email,
+    first_name: options?.first_name ?? 'Demo',
+    last_name: options?.last_name ?? 'User',
+    password_hash: passwordHash,
+  });
+}

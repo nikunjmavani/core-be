@@ -1,0 +1,51 @@
+---
+description: Use Context7 for backend stack docs only; prefer version-specific prompts.
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+# Context7 — version-wise backend context only
+
+This codebase uses **Context7 MCP** for up-to-date, version-specific documentation. Scope is **backend only** (no frontend libs).
+
+## When to use Context7
+
+- Library APIs, setup, or configuration for: Fastify, Drizzle, BullMQ, Postgres, Node.js
+- Code examples for external packages in the backend stack
+- Framework-specific patterns (routes, auth, plugins, schema, queries, queues, workers)
+
+## Version-wise prompts
+
+Mention versions in prompts so Context7 returns docs for the versions we use:
+
+- **Fastify 5** — routes, auth, plugins
+- **Drizzle 0.45** — postgres schema, queries, indexes
+- **BullMQ 5** — redis queues, jobs, workers
+- **Postgres** — pooling, connections, SQL
+- **Node.js** — runtime, modules, async
+
+Example prompts:
+
+```
+How do I add rate limiting in Fastify 5? use context7
+Drizzle 0.45 migration for adding a column. use context7
+BullMQ 5 job retry configuration. use context7
+```
+
+## Library IDs (skip resolution)
+
+Use these directly when you know the library:
+
+- `/fastify/fastify` — routes, auth, plugins
+- `/drizzle-team/drizzle-orm` — postgres schema, queries, indexes
+- `/optimalbits/bullmq` — redis queues, jobs
+- `/postgres/postgres` — pooling, connections, SQL
+- `/nodejs/node` — runtime, modules, async
+
+Example: `use context7 with /fastify/fastify for auth plugin setup`
+
+## Do not use Context7 for
+
+- Frontend libs (Vite, React, Tailwind, shadcn) — not in this repo
+- General coding questions unrelated to external packages
+- Internal domain logic (handlers, services, repos) — use CLAUDE.md and project rules

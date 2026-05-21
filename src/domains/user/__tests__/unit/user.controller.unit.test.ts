@@ -1,0 +1,210 @@
+import { describe, it, expect, vi } from 'vitest';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { createUserController } from '@/domains/user/user.controller.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+
+function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
+  return {
+    auth: { userId: generatePublicId(), role: 'USER' },
+    params: {},
+    body: {},
+    query: {},
+    headers: {},
+    id: 'request-id',
+    ip: '127.0.0.1',
+    log: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+    server: {
+      auditDomain: {
+        auditService: { record: vi.fn().mockResolvedValue(undefined) },
+      },
+    },
+    ...overrides,
+  } as FastifyRequest;
+}
+
+describe('createUserController', () => {
+  const userPublicId = generatePublicId();
+  const userService = {
+    getMe: vi.fn().mockResolvedValue({ id: userPublicId }),
+    updateMe: vi.fn().mockResolvedValue({ id: userPublicId }),
+    deleteMe: vi.fn().mockResolvedValue(undefined),
+    listUsers: vi.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0 }),
+    getUser: vi.fn().mockResolvedValue({ id: userPublicId }),
+    adminUpdateUser: vi.fn().mockResolvedValue({ id: userPublicId }),
+    deleteUser: vi.fn().mockResolvedValue(undefined),
+    suspendUser: vi.fn().mockResolvedValue({ id: userPublicId }),
+    unsuspendUser: vi.fn().mockResolvedValue({ id: userPublicId }),
+    uploadAvatar: vi.fn().mockResolvedValue({ avatar_url: 'key' }),
+    deleteAvatar: vi.fn().mockResolvedValue(undefined),
+  };
+
+  const userSettingsService = {
+    get: vi.fn().mockResolvedValue({ language: 'en' }),
+    update: vi.fn().mockResolvedValue({ language: 'es' }),
+  };
+
+  const userNotificationPreferencesService = {
+    get: vi.fn().mockResolvedValue({ email: true }),
+    put: vi.fn().mockResolvedValue({ email: false }),
+  };
+
+  const controller = createUserController({
+    userService: userService as never,
+    userSettingsService: userSettingsService as never,
+    userNotificationPreferencesService: userNotificationPreferencesService as never,
+  });
+
+  it('getMe returns current user', async () => {
+    await controller.getMe(mockRequest(), {} as FastifyReply);
+    expect(userService.getMe).toHaveBeenCalled();
+  });
+
+  it('patchMe updates profile', async () => {
+    await controller.patchMe(mockRequest({ body: { first_name: 'A' } }), {} as FastifyReply);
+    expect(userService.updateMe).toHaveBeenCalled();
+  });
+
+  it('deleteMe returns 204', async () => {
+    const reply = { status: vi.fn().mockReturnThis(), send: vi.fn() };
+    await controller.deleteMe(mockRequest(), reply as unknown as FastifyReply);
+    expect(reply.status).toHaveBeenCalledWith(204);
+  });
+
+  it('getSettings and patchSettings delegate to settings service', async () => {
+    await controller.getSettings(mockRequest(), {} as FastifyReply);
+    await controller.patchSettings(mockRequest({ body: { language: 'es' } }), {} as FastifyReply);
+    expect(userSettingsService.get).toHaveBeenCalled();
+    expect(userSettingsService.update).toHaveBeenCalled();
+  });
+
+  it('notification preference handlers delegate to service', async () => {
+    await controller.getNotificationPreferences(mockRequest(), {} as FastifyReply);
+    await controller.putNotificationPreferences(
+      mockRequest({ body: { email: false } }),
+      {} as FastifyReply,
+    );
+    expect(userNotificationPreferencesService.get).toHaveBeenCalled();
+    expect(userNotificationPreferencesService.put).toHaveBeenCalled();
+  });
+
+  it('listUsers sets has_more when more pages exist', async () => {
+    vi.mocked(userService.listUsers).mockResolvedValueOnce({
+      items: [{ id: userPublicId }],
+      page: 1,
+      limit: 1,
+      total: 50,
+    } as never);
+    const response = await controller.listUsers(
+      mockRequest({ query: { limit: 1, after: '1' } }),
+      {} as FastifyReply,
+    );
+    expect(response).toMatchObject({
+      meta: { pagination: { has_more: true, next: null } },
+    });
+  });
+
+  it('admin user handlers delegate to user service', async () => {
+    const targetId = generatePublicId();
+    await controller.listUsers(mockRequest({ query: { limit: 20 } }), {} as FastifyReply);
+    await controller.getUser(mockRequest({ params: { userId: targetId } }), {} as FastifyReply);
+    await controller.updateUser(
+      mockRequest({ params: { userId: targetId }, body: { status: 'SUSPENDED' } }),
+      {} as FastifyReply,
+    );
+    await controller.suspendUser(mockRequest({ params: { userId: targetId } }), {} as FastifyReply);
+    await controller.unsuspendUser(
+      mockRequest({ params: { userId: targetId } }),
+      {} as FastifyReply,
+    );
+    const deleteReply = { status: vi.fn().mockReturnThis(), send: vi.fn() };
+    await controller.deleteUser(
+      mockRequest({ params: { userId: targetId } }),
+      deleteReply as unknown as FastifyReply,
+    );
+    expect(userService.listUsers).toHaveBeenCalled();
+    expect(userService.adminUpdateUser).toHaveBeenCalled();
+    expect(userService.suspendUser).toHaveBeenCalled();
+    expect(userService.unsuspendUser).toHaveBeenCalled();
+    expect(userService.deleteUser).toHaveBeenCalled();
+  });
+
+  it('admin handlers use empty userId when params are missing', async () => {
+    await expect(
+      controller.getUser(mockRequest({ params: {} }), {} as FastifyReply),
+    ).rejects.toThrow();
+    await expect(
+      controller.updateUser(mockRequest({ params: undefined }), {} as FastifyReply),
+    ).rejects.toThrow();
+    await expect(
+      controller.deleteUser(mockRequest({ params: {} }), {} as FastifyReply),
+    ).rejects.toThrow();
+    await expect(
+      controller.suspendUser(mockRequest({ params: undefined }), {} as FastifyReply),
+    ).rejects.toThrow();
+    await expect(
+      controller.unsuspendUser(mockRequest({ params: {} }), {} as FastifyReply),
+    ).rejects.toThrow();
+  });
+
+  it('avatar handlers delegate to user service', async () => {
+    await controller.uploadAvatar(
+      mockRequest({ body: { avatarKey: 'avatars/user/avatar.png' } }),
+      {} as FastifyReply,
+    );
+    await controller.deleteAvatar(mockRequest(), {} as FastifyReply);
+    expect(userService.uploadAvatar).toHaveBeenCalled();
+    expect(userService.deleteAvatar).toHaveBeenCalled();
+  });
+
+  it('listUsers paginates with has_more when additional pages exist', async () => {
+    vi.mocked(userService.listUsers).mockResolvedValueOnce({
+      items: [{ id: userPublicId }],
+      page: 1,
+      limit: 10,
+      total: 50,
+    } as never);
+    const response = await controller.listUsers(
+      mockRequest({ query: { limit: 10 } }),
+      {} as FastifyReply,
+    );
+    expect(
+      (response as { meta: { pagination: { has_more: boolean } } }).meta.pagination.has_more,
+    ).toBe(true);
+  });
+
+  it('listUsers sets has_more false on the last page', async () => {
+    vi.mocked(userService.listUsers).mockResolvedValueOnce({
+      items: [],
+      has_more: false,
+      next_cursor: null,
+    } as never);
+    const response = await controller.listUsers(
+      mockRequest({ query: { limit: 10, after: '100' } }),
+      {} as FastifyReply,
+    );
+    expect(
+      (response as { meta: { pagination: { has_more: boolean } } }).meta.pagination.has_more,
+    ).toBe(false);
+  });
+
+  it('admin handlers treat missing userId param as empty string', async () => {
+    await expect(
+      controller.getUser(mockRequest({ params: {} }), {} as FastifyReply),
+    ).rejects.toThrow();
+    await expect(
+      controller.updateUser(mockRequest({ params: {}, body: {} }), {} as FastifyReply),
+    ).rejects.toThrow();
+    await expect(
+      controller.suspendUser(mockRequest({ params: {} }), {} as FastifyReply),
+    ).rejects.toThrow();
+    await expect(
+      controller.unsuspendUser(mockRequest({ params: {} }), {} as FastifyReply),
+    ).rejects.toThrow();
+    await expect(
+      controller.deleteUser(mockRequest({ params: {} }), {
+        status: vi.fn().mockReturnThis(),
+        send: vi.fn(),
+      } as unknown as FastifyReply),
+    ).rejects.toThrow();
+  });
+});

@@ -1,0 +1,18 @@
+---
+description: When starting a new requirement, use the intake format and invoke the right skills. Reference this rule and docs/getting-started/requirement-intake.md so the AI performs best.
+globs: docs/getting-started/requirement-intake.md
+alwaysApply: false
+---
+
+# New Requirement Intake
+
+When the user describes a **new requirement** or you are directed to **docs/getting-started/requirement-intake.md**:
+
+1. **Read** `docs/getting-started/requirement-intake.md` and identify the requirement type (new domain, new routes, new worker, schema, seed, migration, CI, infra, rename, or other).
+2. **Consult** `.cursor/skills/skill-index/SKILL.md` first.
+3. **Use the intake details** the user provided (or ask only for the missing fields listed under "Details to provide" for that type).
+4. **Run the skills** listed for that requirement type **in the order given** in the intake doc.
+5. **Apply the rules** whose globs match the files you change (see intake doc "Rules that will apply" and skill index "Auto-trigger rules").
+6. **Finish** with zero new lint issues in touched files (**code-smells-and-best-practices**); rely on pre-commit/CI for full `pnpm validate` unless the hook failed.
+
+This ensures every new requirement is handled consistently and all relevant skills and rules are invoked.

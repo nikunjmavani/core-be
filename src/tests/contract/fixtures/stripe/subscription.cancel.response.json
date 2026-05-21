@@ -1,0 +1,10 @@
+{
+  "id": "sub_fixture_contract_cancel_imm",
+  "object": "subscription",
+  "customer": "cus_fixture_contract_aa",
+  "status": "canceled",
+  "cancel_at_period_end": false,
+  "canceled_at": 1735600300,
+  "current_period_start": 1735600200,
+  "current_period_end": 1738278600
+}

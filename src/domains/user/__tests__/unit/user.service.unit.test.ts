@@ -1,0 +1,359 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { UserService } from '@/domains/user/user.service.js';
+import type { UserRepository } from '@/domains/user/user.repository.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
+
+const userRow = {
+  id: 1,
+  public_id: generatePublicId(),
+  email: 'user@example.com',
+  first_name: 'Test',
+  last_name: 'User',
+  avatar_url: null,
+  deleted_at: null,
+  password_hash: 'hash',
+  is_email_verified: true,
+  mfa_enabled: false,
+  global_role: 'USER',
+  suspended_at: null,
+  created_at: new Date(),
+  updated_at: new Date(),
+};
+
+describe('UserService', () => {
+  const repository = {
+    findByEmail: vi.fn().mockResolvedValue(userRow),
+    findByPublicId: vi.fn().mockResolvedValue(userRow),
+    findById: vi.fn().mockResolvedValue(userRow),
+    update: vi.fn().mockResolvedValue(userRow),
+    updatePassword: vi.fn().mockResolvedValue(userRow),
+    updateLoginAttempt: vi.fn().mockResolvedValue(userRow),
+    updateEmailVerified: vi.fn().mockResolvedValue(userRow),
+    updateMfaEnabled: vi.fn().mockResolvedValue(userRow),
+    createFromOAuth: vi.fn().mockResolvedValue(userRow),
+    softDelete: vi.fn().mockResolvedValue(userRow),
+    findMany: vi.fn().mockResolvedValue({ items: [userRow], total: 1 }),
+    adminUpdate: vi.fn().mockResolvedValue(userRow),
+    suspend: vi.fn().mockResolvedValue({ ...userRow, suspended_at: new Date() }),
+    unsuspend: vi.fn().mockResolvedValue(userRow),
+  } as unknown as UserRepository;
+
+  const objectStorage = createObjectStoragePortMock();
+  const service = new UserService(repository, objectStorage);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(repository.findByPublicId).mockResolvedValue(userRow as never);
+    vi.mocked(repository.softDelete).mockResolvedValue(userRow as never);
+    vi.mocked(repository.update).mockResolvedValue(userRow as never);
+  });
+
+  it('findByEmail returns user record', async () => {
+    const result = await service.findByEmail('user@example.com');
+    expect(result?.email).toBe('user@example.com');
+  });
+
+  it('requireUserRecordByPublicId returns active user', async () => {
+    const result = await service.requireUserRecordByPublicId(userRow.public_id);
+    expect(result.public_id).toBe(userRow.public_id);
+  });
+
+  it('requireUserRecordByPublicId throws for deleted user', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...userRow,
+      deleted_at: new Date(),
+    } as never);
+    await expect(service.requireUserRecordByPublicId(userRow.public_id)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it('updateMfaEnabled updates flag', async () => {
+    await service.updateMfaEnabled(userRow.public_id, true);
+    expect(repository.updateMfaEnabled).toHaveBeenCalledWith(userRow.public_id, true);
+  });
+
+  it('getMe and updateMe return serialized user', async () => {
+    const me = await service.getMe(userRow.public_id);
+    expect(me.id).toBe(userRow.public_id);
+    await service.updateMe(userRow.public_id, { first_name: 'Updated' });
+    expect(repository.update).toHaveBeenCalled();
+  });
+
+  it('uploadAvatar validates storage key and updates avatar', async () => {
+    const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
+    vi.mocked(repository.update).mockResolvedValue({ ...userRow, avatar_url: avatarKey } as never);
+    const result = await service.uploadAvatar(userRow.public_id, { avatarKey });
+    expect(result.avatar_url).toBe(avatarKey);
+  });
+
+  it('uploadAvatar rejects keys outside avatars prefix', async () => {
+    await expect(
+      service.uploadAvatar(userRow.public_id, { avatarKey: 'wrong/prefix.png' }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('deleteMe runs offboarding when dependencies attached', async () => {
+    const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
+    service.wireOffboardingServices({
+      authSessionService: authSessionService as never,
+      authMethodService: authMethodService as never,
+      uploadService: uploadService as never,
+      userDataExportService: {
+        deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
+    await service.deleteMe(userRow.public_id);
+    expect(repository.softDelete).toHaveBeenCalledWith(userRow.public_id);
+  });
+
+  it('listUsers, getUser, adminUpdateUser, suspend and unsuspend', async () => {
+    const listed = await service.listUsers({ page: 1, limit: 20 });
+    expect(listed.items).toHaveLength(1);
+    const profile = await service.getUser(userRow.public_id);
+    expect(profile.id).toBe(userRow.public_id);
+    await service.adminUpdateUser(userRow.public_id, { status: 'SUSPENDED' });
+    await service.suspendUser(userRow.public_id);
+    await service.unsuspendUser(userRow.public_id);
+    expect(repository.suspend).toHaveBeenCalled();
+  });
+
+  it('getUser throws when user is missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(service.getUser(userRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('deleteAvatar clears avatar url', async () => {
+    const result = await service.deleteAvatar(userRow.public_id);
+    expect(repository.update).toHaveBeenCalledWith(userRow.public_id, { avatar_url: null });
+    expect(result.id).toBe(userRow.public_id);
+  });
+
+  it('uploadAvatar rejects missing storage object', async () => {
+    vi.mocked(objectStorage.headObject).mockResolvedValueOnce(null);
+    const avatarKey = `avatars/${userRow.public_id}/missing.png`;
+    await expect(service.uploadAvatar(userRow.public_id, { avatarKey })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+  });
+
+  it('uploadAvatar rejects invalid content type from storage metadata', async () => {
+    vi.mocked(objectStorage.headObject).mockResolvedValueOnce({
+      contentType: 'application/pdf',
+      contentLength: 10,
+    });
+    const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
+    await expect(service.uploadAvatar(userRow.public_id, { avatarKey })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+  });
+
+  it('updateMe can set avatar from storage key', async () => {
+    const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
+    vi.mocked(repository.update).mockResolvedValue({ ...userRow, avatar_url: avatarKey } as never);
+    const result = await service.updateMe(userRow.public_id, { avatarKey, first_name: 'New' });
+    expect(result.avatar_url).toBe(avatarKey);
+  });
+
+  it('updateMe throws when repository update returns null', async () => {
+    vi.mocked(repository.update).mockResolvedValue(null);
+    await expect(
+      service.updateMe(userRow.public_id, { first_name: 'Missing' }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('deleteMe skips offboarding when dependencies are not attached', async () => {
+    const standaloneService = new UserService(repository, createObjectStoragePortMock());
+    vi.mocked(repository.findByPublicId).mockResolvedValue(userRow as never);
+    await standaloneService.deleteMe(userRow.public_id);
+    expect(repository.softDelete).toHaveBeenCalledWith(userRow.public_id);
+  });
+
+  it('createFromOAuth, updatePassword, and resolveInternalId delegate to repository', async () => {
+    await service.createFromOAuth({
+      email: 'oauth@example.com',
+      is_email_verified: true,
+    });
+    expect(repository.createFromOAuth).toHaveBeenCalled();
+    await service.updatePassword(userRow.public_id, 'new-hash');
+    expect(repository.updatePassword).toHaveBeenCalledWith(userRow.public_id, 'new-hash');
+    const internalId = await service.resolveInternalIdByPublicId(userRow.public_id);
+    expect(internalId).toBe(1);
+    vi.mocked(repository.findByPublicId).mockResolvedValueOnce(null);
+    expect(await service.resolveInternalIdByPublicId('missing')).toBeNull();
+  });
+
+  it('getMe throws when user is deleted', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...userRow,
+      deleted_at: new Date(),
+    } as never);
+    await expect(service.getMe(userRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('adminUpdateUser and suspendUser throw when repository returns null', async () => {
+    vi.mocked(repository.adminUpdate).mockResolvedValue(null);
+    vi.mocked(repository.suspend).mockResolvedValue(null);
+    await expect(
+      service.adminUpdateUser(userRow.public_id, { status: 'SUSPENDED' }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.suspendUser(userRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('unsuspendUser throws when repository returns null', async () => {
+    vi.mocked(repository.unsuspend).mockResolvedValue(null);
+    await expect(service.unsuspendUser(userRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('deleteMe throws when soft delete fails after offboarding', async () => {
+    vi.mocked(repository.softDelete).mockResolvedValue(null);
+    await expect(service.deleteMe(userRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('deleteMe skips avatar cleanup when user has no avatar', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...userRow,
+      avatar_url: null,
+    } as never);
+    const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
+    service.wireOffboardingServices({
+      authSessionService: authSessionService as never,
+      authMethodService: authMethodService as never,
+      uploadService: uploadService as never,
+      userDataExportService: {
+        deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
+    await service.deleteMe(userRow.public_id);
+    expect(objectStorage.deleteObject).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('requireUserRecordByPublicId throws when user is missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(service.requireUserRecordByPublicId('missing')).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it('deleteMe clears avatar storage when offboarding dependencies are attached', async () => {
+    const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...userRow,
+      avatar_url: avatarKey,
+    } as never);
+    const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
+    service.wireOffboardingServices({
+      authSessionService: authSessionService as never,
+      authMethodService: authMethodService as never,
+      uploadService: uploadService as never,
+      userDataExportService: {
+        deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
+    await service.deleteMe(userRow.public_id);
+    expect(repository.update).toHaveBeenCalledWith(userRow.public_id, { avatar_url: null });
+  });
+
+  it('deleteAvatar throws when repository update returns null', async () => {
+    vi.mocked(repository.update).mockResolvedValue(null);
+    await expect(service.deleteAvatar(userRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('deleteUser runs offboarding path', async () => {
+    const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
+    service.wireOffboardingServices({
+      authSessionService: authSessionService as never,
+      authMethodService: authMethodService as never,
+      uploadService: uploadService as never,
+      userDataExportService: {
+        deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
+    await service.deleteUser(userRow.public_id);
+    expect(repository.softDelete).toHaveBeenCalled();
+  });
+
+  it('findById delegates to repository', async () => {
+    await service.findById(42);
+    expect(repository.findById).toHaveBeenCalledWith(42);
+  });
+
+  it('updateMe rejects avatar keys outside the user prefix', async () => {
+    await expect(
+      service.updateMe(userRow.public_id, { avatarKey: 'wrong/prefix.png' }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('findUserRecordByPublicId and login helpers delegate to repository', async () => {
+    const record = await service.findUserRecordByPublicId(userRow.public_id);
+    expect(record?.public_id).toBe(userRow.public_id);
+    await service.updateLoginAttempt(userRow.public_id, 2, null);
+    expect(repository.updateLoginAttempt).toHaveBeenCalledWith(userRow.public_id, 2, null);
+    await service.updateEmailVerified(userRow.public_id);
+    expect(repository.updateEmailVerified).toHaveBeenCalledWith(userRow.public_id);
+  });
+
+  it('deleteMe skips avatar cleanup when key is outside user prefix', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...userRow,
+      avatar_url: 'other-prefix/avatar.png',
+    } as never);
+    const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
+    service.wireOffboardingServices({
+      authSessionService: authSessionService as never,
+      authMethodService: authMethodService as never,
+      uploadService: uploadService as never,
+      userDataExportService: {
+        deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
+    await service.deleteMe(userRow.public_id);
+    expect(objectStorage.deleteObject).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalledWith(userRow.public_id, { avatar_url: null });
+  });
+
+  it('deleteMe logs when avatar object deletion fails', async () => {
+    const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...userRow,
+      avatar_url: avatarKey,
+    } as never);
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(false);
+    const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
+    service.wireOffboardingServices({
+      authSessionService: authSessionService as never,
+      authMethodService: authMethodService as never,
+      uploadService: uploadService as never,
+      userDataExportService: {
+        deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
+    await service.deleteMe(userRow.public_id);
+    expect(repository.update).toHaveBeenCalledWith(userRow.public_id, { avatar_url: null });
+  });
+
+  it('uploadAvatar accepts objects without contentType metadata', async () => {
+    vi.mocked(objectStorage.headObject).mockResolvedValueOnce({
+      contentType: undefined,
+      contentLength: 100,
+    });
+    const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
+    await service.uploadAvatar(userRow.public_id, { avatarKey });
+    expect(repository.update).toHaveBeenCalled();
+  });
+});

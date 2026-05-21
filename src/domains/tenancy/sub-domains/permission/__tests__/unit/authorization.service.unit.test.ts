@@ -1,0 +1,57 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('@/infrastructure/cache/redis.client.js', () => ({
+  redisConnection: {
+    get: vi.fn(),
+    set: vi.fn(),
+    del: vi.fn(),
+    scan: vi.fn(),
+  },
+}));
+
+vi.mock('@/infrastructure/database/contexts/tenant-context.js', () => ({
+  withOrganizationContext: vi.fn(
+    async (_organizationId: string, callback: () => Promise<string[]>) => callback(),
+  ),
+}));
+
+import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
+import type { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
+
+describe('AuthorizationService', () => {
+  const permissionRepository = {
+    findPermissionCodesForUserInOrganization: vi
+      .fn()
+      .mockResolvedValue(['organization:read', 'organization:manage']),
+  } as unknown as PermissionRepository;
+
+  const authorizationService = new AuthorizationService(permissionRepository);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns cached permissions without hitting the database', async () => {
+    vi.mocked(redisConnection.get).mockResolvedValue(JSON.stringify(['organization:read']));
+    const codes = await authorizationService.resolveUserOrganizationPermissions(
+      'user_public',
+      'org_public',
+    );
+    expect(codes).toEqual(['organization:read']);
+    expect(permissionRepository.findPermissionCodesForUserInOrganization).not.toHaveBeenCalled();
+  });
+
+  it('recomputes and caches permissions on cache miss', async () => {
+    vi.mocked(redisConnection.get).mockResolvedValue(null);
+    vi.mocked(redisConnection.set).mockResolvedValue('OK');
+    vi.mocked(redisConnection.del).mockResolvedValue(1);
+    const codes = await authorizationService.resolveUserOrganizationPermissions(
+      'user_public',
+      'org_public',
+    );
+    expect(codes).toEqual(['organization:read', 'organization:manage']);
+    expect(permissionRepository.findPermissionCodesForUserInOrganization).toHaveBeenCalled();
+    expect(redisConnection.set).toHaveBeenCalled();
+  });
+});

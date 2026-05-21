@@ -1,0 +1,60 @@
+import { sql } from 'drizzle-orm';
+import {
+  bigint,
+  bigserial,
+  varchar,
+  text,
+  boolean,
+  timestamp,
+  index,
+  uniqueIndex,
+  check,
+  pgPolicy,
+} from 'drizzle-orm/pg-core';
+import { tenancySchema } from '@/infrastructure/database/pg-schemas.js';
+import { users } from '@/domains/user/user.schema.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
+
+export const roles = tenancySchema
+  .table(
+    'roles',
+    {
+      id: bigserial('id', { mode: 'number' }).primaryKey(),
+      public_id: varchar('public_id', { length: 21 }).notNull(),
+      organization_id: bigint('organization_id', { mode: 'number' })
+        .notNull()
+        .references(() => organizations.id, { onDelete: 'cascade' }),
+      name: varchar('name', { length: 100 }).notNull(),
+      description: text('description'),
+      is_system: boolean('is_system').notNull().default(false),
+      deleted_at: timestamp('deleted_at', { withTimezone: true }),
+      created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+      updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+      created_by_user_id: bigint('created_by_user_id', { mode: 'number' }).references(
+        () => users.id,
+      ),
+      updated_by_user_id: bigint('updated_by_user_id', { mode: 'number' }).references(
+        () => users.id,
+      ),
+    },
+    (table) => [
+      uniqueIndex('idx_roles_public_id').on(table.public_id),
+      index('idx_roles_org_name').on(table.organization_id, table.name),
+      index('idx_roles_org_system').on(table.organization_id, table.is_system),
+      uniqueIndex('idx_roles_org_name_unique')
+        .on(table.organization_id, table.name)
+        .where(sql`${table.deleted_at} IS NULL`),
+      check('chk_roles_updated', sql`${table.updated_at} >= ${table.created_at}`),
+      pgPolicy('roles_tenant_isolation', {
+        as: 'permissive',
+        for: 'all',
+        to: 'public',
+        using: sql`${table.organization_id} = (
+            SELECT id FROM tenancy.organizations
+            WHERE public_id = current_setting('app.current_organization_id', true)
+          )
+          OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+      }),
+    ],
+  )
+  .enableRLS();

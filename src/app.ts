@@ -1,0 +1,87 @@
+import Fastify from 'fastify';
+import { Sentry, isSentryInitialized } from '@/infrastructure/observability/sentry/sentry.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { env, getEnv } from '@/shared/config/env.config.js';
+import { registerMiddleware } from '@/shared/middlewares/index.js';
+import { registerEventHandlers } from '@/core/events/register-event-handlers.js';
+import { registerRoutes } from '@/routes.js';
+import { buildFastifyServerOptions } from '@/shared/utils/http/fastify-server.util.js';
+
+const API_SERVER_NAME = 'core-be';
+const API_SERVER_VERSION = '1.0.0';
+
+export type RegisteredRouteCapture = {
+  method: string;
+  url: string;
+};
+
+export type BuildAppOptions = {
+  /** When set, every registered HTTP route is appended (used by route parity tests). */
+  captureRegisteredRoutes?: RegisteredRouteCapture[];
+};
+
+export async function buildApp(options?: BuildAppOptions) {
+  const app = Fastify(buildFastifyServerOptions());
+
+  if (options?.captureRegisteredRoutes) {
+    const captures = options.captureRegisteredRoutes;
+    app.addHook('onRoute', (routeOptions) => {
+      const methods = Array.isArray(routeOptions.method)
+        ? routeOptions.method
+        : [routeOptions.method];
+      for (const method of methods) {
+        if (method === 'HEAD') continue;
+        captures.push({ method: method.toUpperCase(), url: routeOptions.url });
+      }
+    });
+  }
+
+  const keepAliveTimeoutMs = env.FASTIFY_KEEP_ALIVE_TIMEOUT_MS ?? 72_000;
+  const headersTimeoutMs = env.FASTIFY_HEADERS_TIMEOUT_MS ?? 73_000;
+  app.server.keepAliveTimeout = keepAliveTimeoutMs;
+  app.server.headersTimeout = headersTimeoutMs;
+
+  // Capture raw body for webhook signature verification (Stripe, etc.)
+  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (request, body, done) => {
+    const buffer = typeof body === 'string' ? Buffer.from(body) : body;
+    (request as unknown as { rawBody: Buffer }).rawBody = buffer;
+    try {
+      const json = JSON.parse(buffer.toString()) as unknown;
+      done(null, json);
+    } catch (error) {
+      done(error as Error, undefined);
+    }
+  });
+
+  await registerMiddleware(app);
+  registerEventHandlers();
+  await registerRoutes(app);
+
+  if (getEnv().ENABLE_API_REFERENCE) {
+    const { registerScalarApiReference } =
+      await import('@/infrastructure/api-reference/scalar-api-reference.js');
+    await registerScalarApiReference(app);
+  }
+
+  if (getEnv().ENABLE_MCP_SERVER) {
+    try {
+      const { registerMcpRoute } = await import('@/infrastructure/mcp/mcp-server.js');
+      await registerMcpRoute(app, { name: API_SERVER_NAME, version: API_SERVER_VERSION });
+    } catch (error) {
+      logger.error({ error }, 'Failed to load MCP server module');
+      throw new Error(
+        'ENABLE_MCP_SERVER is true but the MCP server could not be loaded. Install optional dependency @modelcontextprotocol/sdk (e.g. pnpm install without --no-optional, or Docker build-arg INSTALL_MCP_OPTIONAL=true).',
+        { cause: error },
+      );
+    }
+  }
+
+  // Sentry Fastify error handler — gives Sentry full route context
+  // (method, url, params, query, headers) on every captured error.
+  // Must be registered after all routes and middleware.
+  if (isSentryInitialized()) {
+    Sentry.setupFastifyErrorHandler(app);
+  }
+
+  return app;
+}

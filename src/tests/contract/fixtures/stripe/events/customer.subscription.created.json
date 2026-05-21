@@ -1,0 +1,27 @@
+{
+  "id": "evt_fixture_contract_subscription_created",
+  "object": "event",
+  "livemode": false,
+  "type": "customer.subscription.created",
+  "data": {
+    "object": {
+      "id": "sub_webhook_contract_created",
+      "object": "subscription",
+      "status": "trialing",
+      "customer": "cus_fixture_contract_aa",
+      "cancel_at_period_end": false,
+      "canceled_at": null,
+      "current_period_start": 1735600700,
+      "current_period_end": 1738279100,
+      "items": {
+        "object": "list",
+        "data": [
+          {
+            "id": "si_fixture_webhook_item_created",
+            "object": "subscription_item"
+          }
+        ]
+      }
+    }
+  }
+}

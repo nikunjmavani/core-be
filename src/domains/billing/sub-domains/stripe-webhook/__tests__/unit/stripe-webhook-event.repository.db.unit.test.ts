@@ -1,0 +1,89 @@
+import { describe, it, expect, afterEach } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { database } from '@/infrastructure/database/connection.js';
+import { stripe_webhook_events } from '@/domains/billing/sub-domains/stripe-webhook/stripe-webhook.schema.js';
+import { StripeWebhookEventRepository } from '@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-event.repository.js';
+
+describe('StripeWebhookEventRepository', () => {
+  const repository = new StripeWebhookEventRepository();
+  const stripeEventId = `evt_test_${Date.now()}`;
+
+  afterEach(async () => {
+    await database
+      .delete(stripe_webhook_events)
+      .where(eq(stripe_webhook_events.stripe_event_id, stripeEventId));
+  });
+
+  it('claims a new event once and treats a concurrent second claim as in-flight', async () => {
+    const stripeCreatedAt = new Date('2026-01-15T12:00:00.000Z');
+
+    const firstClaim = await repository.tryClaimEvent({
+      stripe_event_id: stripeEventId,
+      event_type: 'customer.subscription.updated',
+      stripe_created_at: stripeCreatedAt,
+      request_id: 'req-1',
+    });
+
+    const secondClaim = await repository.tryClaimEvent({
+      stripe_event_id: stripeEventId,
+      event_type: 'customer.subscription.updated',
+      stripe_created_at: stripeCreatedAt,
+      request_id: 'req-2',
+    });
+
+    expect(firstClaim).toBe('claimed');
+    expect(secondClaim).toBe('still_processing_within_lease');
+  });
+
+  it('returns processed_duplicate after the event is marked processed', async () => {
+    const stripeCreatedAt = new Date('2026-01-15T12:00:00.000Z');
+    const processedEventId = `${stripeEventId}_processed`;
+
+    await repository.tryClaimEvent({
+      stripe_event_id: processedEventId,
+      event_type: 'customer.subscription.updated',
+      stripe_created_at: stripeCreatedAt,
+    });
+    await repository.markProcessed(processedEventId);
+
+    const duplicateClaim = await repository.tryClaimEvent({
+      stripe_event_id: processedEventId,
+      event_type: 'customer.subscription.updated',
+      stripe_created_at: stripeCreatedAt,
+    });
+
+    expect(duplicateClaim).toBe('processed_duplicate');
+
+    await database
+      .delete(stripe_webhook_events)
+      .where(eq(stripe_webhook_events.stripe_event_id, processedEventId));
+  });
+
+  it('marks processed and failed states', async () => {
+    await repository.tryClaimEvent({
+      stripe_event_id: stripeEventId,
+      event_type: 'customer.subscription.updated',
+      stripe_created_at: new Date(),
+    });
+
+    await repository.markProcessed(stripeEventId);
+
+    const processedRows = await database
+      .select()
+      .from(stripe_webhook_events)
+      .where(eq(stripe_webhook_events.stripe_event_id, stripeEventId));
+
+    expect(processedRows[0]?.processing_status).toBe('processed');
+    expect(processedRows[0]?.processed_at).toBeTruthy();
+
+    await repository.markFailed(stripeEventId, 'synthetic failure');
+
+    const failedRows = await database
+      .select()
+      .from(stripe_webhook_events)
+      .where(eq(stripe_webhook_events.stripe_event_id, stripeEventId));
+
+    expect(failedRows[0]?.processing_status).toBe('failed');
+    expect(failedRows[0]?.failure_reason).toBe('synthetic failure');
+  });
+});

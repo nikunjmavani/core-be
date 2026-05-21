@@ -1,0 +1,53 @@
+# CODEOWNERS — auto-assign reviewers based on file paths
+# TODO: Replace @nikunjmavani with @core/dev when team grows (single team ownership).
+
+# Default — all files
+* @nikunjmavani
+
+# Domains
+/src/domains/auth/       @nikunjmavani
+/src/domains/billing/    @nikunjmavani
+/src/domains/tenancy/    @nikunjmavani
+/src/domains/user/       @nikunjmavani
+/src/domains/notify/     @nikunjmavani
+/src/domains/audit/      @nikunjmavani
+/src/domains/upload/     @nikunjmavani
+
+# Infrastructure
+/src/infrastructure/     @nikunjmavani
+
+# Shared / middleware
+/src/shared/             @nikunjmavani
+
+# CI/CD
+/.github/                @nikunjmavani
+
+# Database
+/migrations/             @nikunjmavani
+/drizzle.config.ts       @nikunjmavani
+
+# Scripts, docs, and tests
+/tooling/                @nikunjmavani
+/docs/                   @nikunjmavani
+/src/tests/              @nikunjmavani
+
+# Tooling and editor
+/.husky/                 @nikunjmavani
+/.vscode/                @nikunjmavani
+
+# Container
+/Dockerfile              @nikunjmavani
+/Dockerfile.worker       @nikunjmavani
+/Dockerfile.agent        @nikunjmavani
+/docker-compose.yml      @nikunjmavani
+/.dockerignore           @nikunjmavani
+
+# Root configuration
+/package.json            @nikunjmavani
+/pnpm-lock.yaml          @nikunjmavani
+/tsconfig.json           @nikunjmavani
+/vitest.config.ts        @nikunjmavani
+/vitest.unit.config.ts   @nikunjmavani
+/eslint.config.mjs      @nikunjmavani
+/.gitleaks.toml          @nikunjmavani
+/.semgrepignore          @nikunjmavani

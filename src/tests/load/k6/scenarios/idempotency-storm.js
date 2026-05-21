@@ -1,0 +1,52 @@
+import http from 'k6/http';
+import { sleep } from 'k6';
+import { API_PREFIX, SCENARIOS, SMOKE_THRESHOLDS } from '../helpers/config.js';
+import { checkStatus } from '../helpers/checks.js';
+
+/**
+ * Hammer an idempotency-protected route with the same key (expect 409 or 422 on duplicates).
+ */
+export const options = {
+  scenarios: {
+    idempotencyStorm: {
+      ...SCENARIOS.smoke,
+      exec: 'idempotencyStorm',
+      vus: 5,
+      iterations: 20,
+    },
+  },
+  thresholds: {
+    ...SMOKE_THRESHOLDS,
+    'http_req_duration{name:idempotency-storm}': ['p(95)<1200', 'p(99)<2000'],
+  },
+};
+
+export function idempotencyStorm() {
+  const token = __ENV.TEST_TOKEN;
+  const organizationPublicId = __ENV.TEST_ORG_ID;
+  if (!(token && organizationPublicId)) {
+    sleep(1);
+    return;
+  }
+
+  const idempotencyKey = `k6-storm-${organizationPublicId}`;
+  const response = http.post(
+    `${API_PREFIX}/billing/organizations/${organizationPublicId}/subscriptions`,
+    JSON.stringify({ plan_public_id: 'plan_free', billing_cycle: 'monthly' }),
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Organization-Id': organizationPublicId,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      tags: { name: 'idempotency-storm' },
+      responseCallback: http.expectedStatuses(200, 201, 409, 422),
+    },
+  );
+
+  checkStatus(response, [200, 201, 409, 422], 'idempotency-storm');
+  sleep(0.1);
+}
+
+export default idempotencyStorm;

@@ -1,0 +1,337 @@
+# New Requirement Intake (core-be)
+
+**Use this format when giving a new requirement.** Providing the details below in your request helps the AI perform best and ensures the right skills and rules are invoked.
+
+---
+
+## Intake flow
+
+```mermaid
+flowchart LR
+  A[Copy template] --> B[Fill details]
+  B --> C[AI consults skill-index]
+  C --> D[Run skills in order]
+  D --> E[Apply rules]
+  E --> F[Lint]
+```
+
+1. **You (the user)** describe the requirement using the **Details to provide** for the matching type below.
+2. **The AI** consults **`.cursor/skills/skill-index/SKILL.md`** first, invokes the **Skills to run** in order, applies the **Rules** that match the changed files, and fixes lint issues in touched files (**code-smells-and-best-practices**) before finishing.
+
+---
+
+## Requirement types and details to provide
+
+### 1. New domain or sub-domain (new resource/API surface)
+
+**Details to provide:**
+
+- **Domain** (must match an existing DB schema): `auth` | `user` | `tenancy` | `billing` | `notify` | `audit` | `upload`
+- **Sub-domain name** (domain-prefixed, e.g. `organization-settings`, `member-invitation`): **\*\***\_**\*\***
+- **Parent sub-domain** (if nested aggregate child): e.g. `organization` → `organization-api-key`, `webhook` → `webhook-event` — path is `sub-domains/<parent>/<child>/`
+- **API shape**: list (GET), get-by-id (GET :id), create (POST), update (PATCH :id), delete (DELETE :id), or custom (describe path + method + body/query)
+- **Access**: `public` | `authenticated` | `org-permission:<code>` | `global-role:admin` (or list which routes need which)
+- **Database**: Do you need new tables? If yes: table name(s), columns (name, type, constraints) in brief.
+- **Dependencies**: Any cross-domain calls? (e.g. "create membership when invitation is accepted")
+
+**Skills to run (in order):**
+
+1. **domain-generator** — `.cursor/skills/domain-generator/SKILL.md`
+2. **schema-generator** (if new tables) — `.cursor/skills/schema-generator/SKILL.md`
+3. **sql-design-guard** — `.cursor/skills/sql-design-guard/SKILL.md`
+4. **db-migration-maintainer** (if new tables) — `.cursor/skills/db-migration-maintainer/SKILL.md`
+5. **workers-events** (if events/queues/workers) — `.cursor/skills/workers-events/SKILL.md`
+6. **route-catalog** — `.cursor/skills/route-catalog/SKILL.md`
+7. **openapi-route-sync** — `.cursor/skills/openapi-route-sync/SKILL.md`
+8. **test-generator** — `.cursor/skills/test-generator/SKILL.md`
+9. **seed-maintainer** (if seed data needed) — `.cursor/skills/seed-maintainer/SKILL.md`
+10. **structure-maintainer** — `.cursor/skills/structure-maintainer/SKILL.md`
+11. **code-smells-and-best-practices** — zero new lint issues in touched files
+
+**Rules that will apply:**  
+`core-be-src-architecture.mdc`, `domain-generator-sync.mdc`, `sql-design-guard-sync.mdc`, `no-placeholder-files.mdc`, `code-smells-and-best-practices-sync.mdc`, `testing-conventions.mdc`
+
+---
+
+### 2. New routes only (existing domain/sub-domain)
+
+**Details to provide:**
+
+- **Domain + sub-domain** (e.g. `tenancy` / `organization`): **\*\***\_**\*\***
+- **New routes**: for each — HTTP method, path (e.g. `GET /organizations/:id/settings`), request body/query shape (brief), response shape (brief), access (`public` | `authenticated` | `org-permission:...` | `global-role:...`)
+
+**Skills to run (in order):**
+
+1. **domain-generator** (for layout reference) or implement in existing controller/service/validator/serializer
+2. **route-catalog** — `.cursor/skills/route-catalog/SKILL.md`
+3. **openapi-route-sync** — `.cursor/skills/openapi-route-sync/SKILL.md`
+4. **test-generator** (add tests for new routes)
+5. **seed-maintainer** (if new routes need seed data)
+6. **code-smells-and-best-practices**
+
+**Rules that will apply:**  
+`core-be-src-architecture.mdc`, `domain-generator-sync.mdc`, `code-smells-and-best-practices-sync.mdc`, `testing-conventions.mdc`
+
+---
+
+### 3. New event / queue / worker (background job)
+
+**Details to provide:**
+
+- **Domain + sub-domain** (e.g. `notify` / `webhook`): **\*\***\_**\*\***
+- **Event name** (if event-driven): **\*\***\_**\*\***
+- **Queue name** (BullMQ): **\*\***\_**\*\***
+- **Job payload**: list of fields (e.g. `{ webhookId, payload, attempt }`)
+- **Worker behavior**: what the worker does (e.g. "HTTP POST to endpoint, retry 3x, update delivery_attempt")
+- **Who enqueues**: which service/handler emits the event or calls `enqueue*`
+
+**Skills to run (in order):**
+
+1. **workers-events** — `.cursor/skills/workers-events/SKILL.md`
+2. **route-catalog** (if any new HTTP route triggers the job)
+3. **test-generator** (if new routes or worker tests)
+4. **structure-maintainer** (if new dirs)
+5. **code-smells-and-best-practices**
+
+**Rules that will apply:**  
+`core-be-src-architecture.mdc`, `workers-events-sync.mdc`, `code-smells-and-best-practices-sync.mdc`
+
+---
+
+### 4. New or changed database schema (tables/columns)
+
+**Details to provide:**
+
+- **Domain** (DB schema name): **\*\***\_**\*\***
+- **Sub-domain** (if any): **\*\***\_**\*\***
+- **Table name** (snake_case, plural): **\*\***\_**\*\***
+- **Columns**: name, type (e.g. `text`, `bigint`, `timestamp with time zone`, `jsonb`), `notNull()`, `default()`, unique, FK to table.column. Use `text` everywhere — never `varchar(n)`; enforce real length/format limits with a `CHECK` constraint (see `sql-design-guard` section C).
+- **Indexes**: which columns, unique or not
+- **Migration**: "add new migration file" or "change existing table X"
+
+**Skills to run (in order):**
+
+1. **schema-generator** — `.cursor/skills/schema-generator/SKILL.md`
+2. **sql-design-guard** — `.cursor/skills/sql-design-guard/SKILL.md`
+3. **db-migration-maintainer** — `.cursor/skills/db-migration-maintainer/SKILL.md`
+4. **seed-maintainer** (if seed data for new tables)
+5. **structure-maintainer** (if new schema file)
+6. **code-smells-and-best-practices**
+
+**Rules that will apply:**  
+`core-be-src-architecture.mdc`, `sql-design-guard-sync.mdc`, `code-smells-and-best-practices-sync.mdc`
+
+---
+
+### 5. New seed data or change to seeds
+
+**Details to provide:**
+
+- **What to seed**: e.g. "default plan", "super_admin user", "sample organization"
+- **Script**: `pnpm db:seed` (minimal) or `pnpm db:seed:full` (full demo)
+- **Idempotency**: can the seed run multiple times? (prefer yes)
+
+**Skills to run (in order):**
+
+1. **seed-maintainer** — `.cursor/skills/seed-maintainer/SKILL.md`
+2. **code-smells-and-best-practices**
+
+**Rules that will apply:**  
+`code-smells-and-best-practices-sync.mdc`
+
+---
+
+### 6. Porting from Supabase Edge Functions (migration)
+
+**Details to provide:**
+
+- **Source**: path or description of the Supabase function(s) (e.g. `supabase/functions/_shared/...` or "auth callback")
+- **Target domain/sub-domain** in core-be: **\*\***\_**\*\***
+- **Routes to expose** (method, path, body, response)
+- **Env/secrets**: list any Supabase-specific env vars and their core-be equivalent (e.g. `SUPABASE_URL` → `DATABASE_URL`)
+
+**Skills to run (in order):**
+
+1. **supabase-porting** — `.cursor/skills/supabase-porting/SKILL.md`
+2. **domain-generator** or extend existing domain
+3. **route-catalog** + **openapi-route-sync**
+4. **test-generator**
+5. **structure-maintainer**
+6. **code-smells-and-best-practices**
+
+**Rules that will apply:**  
+`core-be-src-architecture.mdc`, `domain-generator-sync.mdc`, `code-smells-and-best-practices-sync.mdc`, `testing-conventions.mdc`
+
+---
+
+### 7. ESLint / pre-commit / CI / security pipeline change
+
+**Details to provide:**
+
+- **What changes**: e.g. "add rule X", "run Semgrep in CI", "change audit level"
+- **Files**: `eslint.config.mjs`, `.husky/pre-commit`, `.github/workflows/ci.yml`, `.gitleaks.toml`, `.semgrepignore`, etc.
+
+**Skills to run (in order):**
+
+1. **code-quality-guard** — `.cursor/skills/code-quality-guard/SKILL.md`
+2. **code-smells-and-best-practices** (if code under `src/` is touched)
+
+**Rules that will apply:**  
+`code-quality-guard-sync.mdc`, `code-smells-and-best-practices-sync.mdc`
+
+---
+
+### 8. Middleware / infra / security / production hardening
+
+**Details to provide:**
+
+- **What**: e.g. "add rate limit for login", "enable RLS for table X", "circuit breaker for new client"
+- **Where**: middleware, `connection.ts`, `env.config.ts`, etc.
+
+**Skills to run (in order):**
+
+1. **production-hardening-guard** — `.cursor/skills/production-hardening-guard/SKILL.md`
+2. **structure-maintainer** (if new files or layout)
+3. **code-smells-and-best-practices**
+
+**Rules that will apply:**  
+`production-hardening.mdc`, `core-be-src-architecture.mdc`, `code-smells-and-best-practices-sync.mdc`
+
+---
+
+### 9. Rename / move files or folders (structure change)
+
+**Details to provide:**
+
+- **Current path(s)**: **\*\***\_**\*\***
+- **New path(s)**: **\*\***\_**\*\***
+- **Reason**: e.g. "align with domain naming", "split sub-domain"
+
+**Skills to run (in order):**
+
+1. **structure-maintainer** — `.cursor/skills/structure-maintainer/SKILL.md`
+2. **domain-generator** (if domain layout changes)
+3. **route-catalog** (if route files move)
+4. **code-smells-and-best-practices**
+
+**Rules that will apply:**  
+`structure-maintainer-sync.mdc`, `core-be-src-architecture.mdc`, `domain-generator-sync.mdc` (if routes), `code-smells-and-best-practices-sync.mdc`
+
+---
+
+### 10. PR babysit / fix CI on a pull request
+
+**Details to provide:**
+
+- **PR number or branch name**
+- **Failing check name(s)** (if known)
+- **Scope**: fix only this PR vs also merge latest base branch
+
+**Skills to run (in order):**
+
+1. **ci-investigator** (if diagnosing one check) — `.cursor/skills/ci-investigator/SKILL.md`
+2. **pr-babysit** — `.cursor/skills/pr-babysit/SKILL.md`
+3. **before-commit-guard** (if pre-commit fails locally)
+4. Skills from **skill-index** matching the code you change (routes, migrations, contract/chaos tests, etc.)
+
+---
+
+### 11. Split work into multiple PRs
+
+**Details to provide:**
+
+- **Goal** of the overall work
+- **Preferred split** (optional): by domain, migration-first, etc.
+- **Whether stacking** is acceptable
+
+**Skills to run:**
+
+1. **split-to-prs** — `.cursor/skills/split-to-prs/SKILL.md`
+2. Per-slice skills from **skill-index** after each PR is carved out
+
+---
+
+### 12. Other or mixed requirement
+
+**Details to provide:**
+
+- **Goal**: 1–2 sentences.
+- **Scope**: which domains/files (e.g. "billing and tenancy", "only auth controller").
+- **Acceptance**: how to verify (e.g. "GET /api/v1/billing/plans returns 200", "lint and tests pass").
+
+**Skills to run:**
+
+- **Always:** Consult **skill-index** first, then run any skill whose trigger matches your changes.
+- **Always:** **code-smells-and-best-practices** after editing `src/**/*.ts` (fix touched files; pre-commit/CI run full validate).
+- **If routes change:** **route-catalog**, **openapi-route-sync**, **seed-maintainer**.
+- **If domain/structure changes:** **structure-maintainer**, **domain-generator** (if new scaffold).
+
+**Rules that will apply:**  
+All `.cursor/rules/*.mdc` whose globs match the files you change (see skill index "Auto-trigger rules" table).
+
+---
+
+## Quick reference: all skills
+
+| Skill                          | Path                                                     | When to invoke                                            |
+| ------------------------------ | -------------------------------------------------------- | --------------------------------------------------------- |
+| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (32 project skills) |
+| domain-generator               | `.cursor/skills/domain-generator/SKILL.md`               | New domain/sub-domain scaffold                            |
+| route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                  | Any change to `*.routes.ts`                               |
+| openapi-route-sync             | `.cursor/skills/openapi-route-sync/SKILL.md`             | After route-catalog — OpenAPI metadata                    |
+| workers-events                 | `.cursor/skills/workers-events/SKILL.md`                 | Events, queues, workers                                   |
+| schema-generator               | `.cursor/skills/schema-generator/SKILL.md`               | New/changed Drizzle schema                                |
+| sql-design-guard               | `.cursor/skills/sql-design-guard/SKILL.md`               | Schema design review                                      |
+| db-migration-maintainer        | `.cursor/skills/db-migration-maintainer/SKILL.md`        | SQL in `migrations/`                                      |
+| test-generator                 | `.cursor/skills/test-generator/SKILL.md`                 | Tests, validators, serializers                            |
+| seed-maintainer                | `.cursor/skills/seed-maintainer/SKILL.md`                | Seed scripts or seed data                                 |
+| structure-maintainer           | `.cursor/skills/structure-maintainer/SKILL.md`           | Renames, moves, layout sync                               |
+| supabase-porting               | `.cursor/skills/supabase-porting/SKILL.md`               | Supabase Edge Functions → core-be (manual)                |
+| code-quality-guard             | `.cursor/skills/code-quality-guard/SKILL.md`             | ESLint, Husky, CI security                                |
+| production-hardening-guard     | `.cursor/skills/production-hardening-guard/SKILL.md`     | Middleware, infra, security                               |
+| path-to-production-gate        | `.cursor/skills/path-to-production-gate/SKILL.md`        | Pre-release / deploy review                               |
+| code-smells-and-best-practices | `.cursor/skills/code-smells-and-best-practices/SKILL.md` | Any edit under `src/`                                     |
+| lint-warnings-handler          | `.cursor/skills/lint-warnings-handler/SKILL.md`          | Detail guide (via code-smells)                            |
+| i18n-message-guard             | `.cursor/skills/i18n-message-guard/SKILL.md`             | User-facing messages / locales                            |
+| openapi-multilingual           | `.cursor/skills/openapi-multilingual/SKILL.md`           | OpenAPI locale files                                      |
+| env-example-sync               | `.cursor/skills/env-example-sync/SKILL.md`               | Env schema / `.env.example`                               |
+| docs-maintainer                | `.cursor/skills/docs-maintainer/SKILL.md`                | Hand-written `docs/` changes                              |
+| docs-audit                     | `.cursor/skills/docs-audit/SKILL.md`                     | Full docs review (on request)                             |
+| setup-infra-maintainer         | `.cursor/skills/setup-infra-maintainer/SKILL.md`         | `tooling/setup/` providers                                |
+| ide-productivity-guard         | `.cursor/skills/ide-productivity-guard/SKILL.md`         | `.vscode/` project IDE config                             |
+| dependency-security            | `.cursor/skills/dependency-security/SKILL.md`            | `package.json` / lockfile                                 |
+| before-commit-guard            | `.cursor/skills/before-commit-guard/SKILL.md`            | Failed pre-commit / commit-ready                          |
+| pr-babysit                     | `.cursor/skills/pr-babysit/SKILL.md`                     | PR merge-ready loop (CI + comments)                       |
+| split-to-prs                   | `.cursor/skills/split-to-prs/SKILL.md`                   | Split branch into reviewable PRs                          |
+| ci-investigator                | `.cursor/skills/ci-investigator/SKILL.md`                | Diagnose one failing CI check                             |
+| contract-test-maintainer       | `.cursor/skills/contract-test-maintainer/SKILL.md`       | Stripe/Resend/S3 nock contracts                           |
+| chaos-test-maintainer          | `.cursor/skills/chaos-test-maintainer/SKILL.md`          | Toxiproxy chaos tests                                     |
+| cursor-global-skills           | `.cursor/skills/cursor-global-skills/SKILL.md`           | Reference: Cursor built-in skills                         |
+
+---
+
+## Quick reference: all rules (auto-invoke by file)
+
+| Rule                                    | Globs                                                                                                | Invokes / purpose                                              |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| core-be-src-architecture.mdc            | (always apply for src/)                                                                              | Architecture and layer rules                                   |
+| domain-generator-sync.mdc               | `src/domains/**/*.container.ts`, `*.routes.ts`, `src/routes.ts`                                      | domain-generator + route-catalog + openapi-route-sync (routes) |
+| testing-conventions.mdc                 | tests, validators, serializers                                                                       | test-generator                                                 |
+| workers-events-sync.mdc                 | `**/events/**`, `**/queues/**`, `**/workers/**`, `src/infrastructure/queue/**`, `src/core/events/**` | workers-events                                                 |
+| code-quality-guard-sync.mdc             | `eslint.config.mjs`, `.husky/pre-commit`, `.github/workflows/**`, `.gitleaks.toml`, `.semgrepignore` | code-quality-guard                                             |
+| structure-maintainer-sync.mdc           | `CLAUDE.md`, `README.md`, `.cursor/rules/**`, `.cursor/skills/**`                                    | structure-maintainer                                           |
+| code-smells-and-best-practices-sync.mdc | `src/**/*.ts`                                                                                        | code-smells-and-best-practices (single quality owner)          |
+| sql-design-guard-sync.mdc               | `src/domains/**/*.schema.ts`                                                                         | sql-design-guard + schema conventions                          |
+| production-hardening.mdc                | `src/infrastructure/**`, middleware, config                                                          | production-hardening-guard                                     |
+| no-placeholder-files.mdc                | `src/domains/**/*.dto.ts`, `*.validator.ts`, `*.serializer.ts`                                       | No empty placeholder files                                     |
+| testing-conventions.mdc                 | (test files)                                                                                         | test-generator conventions                                     |
+| context7-backend.mdc                    | `src/**/*.ts`                                                                                        | Use Context7 for Fastify, Drizzle, BullMQ, etc.                |
+| db-migration-maintainer-sync.mdc        | `migrations/*.sql`, `src/domains/**/*.schema.ts`                                                     | db-migration-maintainer                                        |
+| seed-maintainer-sync.mdc                | `src/domains/**/*.seed.ts`, `src/scripts/seed/**/*.ts`                                               | seed-maintainer                                                |
+| openapi-multilingual-sync.mdc           | `src/shared/locales/*/openapi.json`, OpenAPI generator scripts                                       | openapi-multilingual                                           |
+| contract-test-maintainer-sync.mdc       | `src/tests/contract/**`, payment/mail/storage infra                                                  | contract-test-maintainer                                       |
+| chaos-test-maintainer-sync.mdc          | `src/tests/chaos/**`, chaos Vitest config, `docker-compose.yml`                                      | chaos-test-maintainer                                          |
+
+---
+
+**Summary:** For any new requirement, give the **details** from the matching section above. The AI will consult the **skill-index** and run the **skills** in order, and the **rules** will auto-invoke based on the files changed. This keeps behavior consistent and ensures docs, routes, tests, and lint stay in sync.

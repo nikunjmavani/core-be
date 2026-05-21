@@ -1,0 +1,119 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+import { eq } from 'drizzle-orm';
+import type { FastifyInstance } from 'fastify';
+import { createTestApp } from '@/tests/helpers/test-app.js';
+import {
+  injectAuthenticatedOrganizationMutation,
+  injectRoute,
+} from '@/tests/helpers/test-http-inject.helper.js';
+import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { createTestUser } from '@/tests/factories/user.factory.js';
+import { createTestOrganization } from '@/tests/factories/organization.factory.js';
+import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import {
+  seedPermissions,
+  createRoleWithPermissions,
+  createMembership,
+} from '@/domains/tenancy/__tests__/factories/permission.factory.js';
+import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
+type ApiKeyCreateResponse = {
+  data: { api_key: { id: string }; raw_key: string };
+};
+
+describe('Security: Organization API key authentication', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    const { app: testApplication } = await createTestApp();
+    app = testApplication;
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(async () => {
+    await cleanupDatabase();
+    await seedPermissions(Object.values(TENANCY_PERMISSIONS));
+  });
+
+  async function createApiKeyWithPermissions(permissionCodes: string[]) {
+    const user = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes,
+    });
+    await createMembership({
+      userId: user.id,
+      organizationId: organization.id,
+      roleId: role.id,
+    });
+    const token = await generateTestToken({ userId: user.public_id });
+
+    const createResponse = await injectAuthenticatedOrganizationMutation(app, {
+      method: 'POST',
+      url: testApiPath(`/tenancy/organizations/${organization.public_id}/api-keys`),
+      token,
+      payload: { name: 'Security test key', scopes: permissionCodes },
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const body = createResponse.json() as ApiKeyCreateResponse;
+
+    return {
+      organization,
+      rawKey: body.data.raw_key,
+      apiKeyPublicId: body.data.api_key.id,
+    };
+  }
+
+  it('returns 401 for unknown api key', async () => {
+    const response = await injectRoute(app, {
+      method: 'GET',
+      url: testApiPath('/tenancy/organizations/000000000000000000000/api-keys'),
+      headers: { authorization: 'ApiKey ak_00000000000000000000000000000000' },
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('returns 403 when api key scopes exclude required permission', async () => {
+    const { organization, rawKey, apiKeyPublicId } = await createApiKeyWithPermissions([
+      TENANCY_PERMISSIONS.API_KEY_READ,
+      TENANCY_PERMISSIONS.API_KEY_MANAGE,
+    ]);
+
+    await database
+      .update(api_keys)
+      .set({ scopes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] })
+      .where(eq(api_keys.public_id, apiKeyPublicId));
+
+    const response = await injectRoute(app, {
+      method: 'GET',
+      url: testApiPath(`/tenancy/organizations/${organization.public_id}/api-keys`),
+      headers: { authorization: `ApiKey ${rawKey}` },
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('returns 401 when api key is expired', async () => {
+    const { organization, rawKey, apiKeyPublicId } = await createApiKeyWithPermissions([
+      TENANCY_PERMISSIONS.API_KEY_READ,
+      TENANCY_PERMISSIONS.API_KEY_MANAGE,
+    ]);
+
+    await database
+      .update(api_keys)
+      .set({ expires_at: new Date('2000-01-01T00:00:00.000Z') })
+      .where(eq(api_keys.public_id, apiKeyPublicId));
+
+    const response = await injectRoute(app, {
+      method: 'GET',
+      url: testApiPath(`/tenancy/organizations/${organization.public_id}/api-keys`),
+      headers: { authorization: `ApiKey ${rawKey}` },
+    });
+    expect(response.statusCode).toBe(401);
+  });
+});

@@ -1,0 +1,196 @@
+# Deploy to Railway after CI succeeds (workflow_run) or on manual dispatch.
+# Production API and worker run scanned CI images from GHCR (Trivy gate in docker-build job).
+# Optional environment secrets GHCR_API_IMAGE / GHCR_WORKER_IMAGE override the commit SHA tag
+# (for example digest pinning). See docs/deployment/ci-cd/cicd-and-deployment.md
+
+name: Deploy to Railway
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main, dev, qa]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: GitHub Environment to deploy
+        required: true
+        type: choice
+        options:
+          - production
+          - dev
+          - qa
+
+concurrency:
+  group: deploy-railway-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-environment:
+    name: Resolve environment
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        contains(fromJSON('["main","dev","qa"]'), github.event.workflow_run.head_branch)
+      )
+    outputs:
+      environment: ${{ steps.map.outputs.environment }}
+    steps:
+      - name: Map branch or input to environment
+        id: map
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ inputs.target }}" >> "$GITHUB_OUTPUT"
+          else
+            case "${{ github.event.workflow_run.head_branch }}" in
+              main) echo "environment=production" >> "$GITHUB_OUTPUT" ;;
+              dev)  echo "environment=dev" >> "$GITHUB_OUTPUT" ;;
+              qa)   echo "environment=qa" >> "$GITHUB_OUTPUT" ;;
+              *)    echo "::error::Unsupported branch for deploy" && exit 1 ;;
+            esac
+          fi
+
+  deploy:
+    name: Deploy (${{ needs.resolve-environment.outputs.environment }})
+    needs: resolve-environment
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-environment.outputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Validate GitHub environment secrets
+        env:
+          CONFIG: ${{ needs.resolve-environment.outputs.environment == 'production' && 'prod' || needs.resolve-environment.outputs.environment }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
+        run: pnpm validate:github-env
+
+      - name: Resolve scanned CI images from GHCR
+        id: ghcr_images
+        env:
+          GHCR_API_IMAGE: ${{ secrets.GHCR_API_IMAGE }}
+          GHCR_WORKER_IMAGE: ${{ secrets.GHCR_WORKER_IMAGE }}
+          RAILWAY_GIT_COMMIT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          API_BASE="ghcr.io/${{ github.repository }}/core-be-api"
+          WORKER_BASE="ghcr.io/${{ github.repository }}/core-be-worker"
+          if [ -n "${GHCR_API_IMAGE:-}" ]; then
+            api_image="${GHCR_API_IMAGE}"
+          else
+            api_image="${API_BASE}:${RAILWAY_GIT_COMMIT_SHA}"
+          fi
+          if [ -n "${GHCR_WORKER_IMAGE:-}" ]; then
+            worker_image="${GHCR_WORKER_IMAGE}"
+          else
+            worker_image="${WORKER_BASE}:${RAILWAY_GIT_COMMIT_SHA}"
+          fi
+          echo "api_image=${api_image}" >> "$GITHUB_OUTPUT"
+          echo "worker_image=${worker_image}" >> "$GITHUB_OUTPUT"
+          echo "API image: ${api_image}"
+          echo "Worker image: ${worker_image}"
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+        run: pnpm db:migrate
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Set Railway service variables
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+          NODE_ENV: ${{ secrets.NODE_ENV }}
+          PORT: ${{ secrets.PORT }}
+          HOST: ${{ secrets.HOST }}
+          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          RATE_LIMIT_MAX: ${{ secrets.RATE_LIMIT_MAX }}
+          RATE_LIMIT_WINDOW_MS: ${{ secrets.RATE_LIMIT_WINDOW_MS }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
+          SENTRY_PROFILE_SAMPLE_RATE: ${{ secrets.SENTRY_PROFILE_SAMPLE_RATE }}
+          AUDIT_RETENTION_DAYS: ${{ secrets.AUDIT_RETENTION_DAYS }}
+          SESSION_RETENTION_DAYS: ${{ secrets.SESSION_RETENTION_DAYS }}
+          NODE_OPTIONS: ${{ secrets.NODE_OPTIONS }}
+          DEPLOYMENT_PROCESS_COUNT: ${{ secrets.DEPLOYMENT_PROCESS_COUNT }}
+          DEPLOYMENT_API_PROCESS_COUNT: ${{ secrets.DEPLOYMENT_API_PROCESS_COUNT }}
+          DEPLOYMENT_WORKER_PROCESS_COUNT: ${{ secrets.DEPLOYMENT_WORKER_PROCESS_COUNT }}
+          DB_MAX: ${{ secrets.DB_MAX }}
+          POSTGRES_RESERVED_CONNECTIONS: ${{ secrets.POSTGRES_RESERVED_CONNECTIONS }}
+          POSTGRES_MAX_CONNECTIONS: ${{ secrets.POSTGRES_MAX_CONNECTIONS }}
+          METRICS_ENABLED: ${{ secrets.METRICS_ENABLED }}
+          METRICS_BEARER_TOKEN: ${{ secrets.METRICS_BEARER_TOKEN }}
+        run: |
+          for var in DATABASE_URL REDIS_URL JWT_SECRET ALLOWED_ORIGINS NODE_ENV PORT HOST LOG_LEVEL FRONTEND_URL RATE_LIMIT_MAX RATE_LIMIT_WINDOW_MS SENTRY_DSN SENTRY_ENVIRONMENT SENTRY_TRACES_SAMPLE_RATE SENTRY_PROFILE_SAMPLE_RATE AUDIT_RETENTION_DAYS SESSION_RETENTION_DAYS NODE_OPTIONS DEPLOYMENT_PROCESS_COUNT DEPLOYMENT_API_PROCESS_COUNT DEPLOYMENT_WORKER_PROCESS_COUNT DB_MAX POSTGRES_RESERVED_CONNECTIONS POSTGRES_MAX_CONNECTIONS METRICS_ENABLED METRICS_BEARER_TOKEN; do
+            val="${!var}"
+            if [ -n "$val" ]; then
+              railway variable set --service "$RAILWAY_SERVICE_ID" "$var=$val" || true
+            fi
+          done
+
+      - name: Deploy API to Railway
+        env:
+          RAILWAY_GIT_COMMIT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          railway variable set --service "$RAILWAY_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
+          echo "Deploying API from GHCR image: ${{ steps.ghcr_images.outputs.api_image }}"
+          railway redeploy --service "$RAILWAY_SERVICE_ID" --image "${{ steps.ghcr_images.outputs.api_image }}"
+
+      - name: Require worker service for deploy
+        env:
+          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
+        run: |
+          if [ -z "$RAILWAY_WORKER_SERVICE_ID" ]; then
+            echo "::error::RAILWAY_WORKER_SERVICE_ID must be set in this GitHub environment."
+            exit 1
+          fi
+
+      - name: Deploy worker to Railway
+        env:
+          RAILWAY_GIT_COMMIT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          railway variable set --service "$RAILWAY_WORKER_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
+          echo "Deploying worker from GHCR image: ${{ steps.ghcr_images.outputs.worker_image }}"
+          railway redeploy --service "$RAILWAY_WORKER_SERVICE_ID" --image "${{ steps.ghcr_images.outputs.worker_image }}"
+
+      - name: Post-deploy worker health check
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
+          WORKER_HEALTH_PORT: ${{ secrets.WORKER_HEALTH_PORT || '9090' }}
+        run: |
+          set -euo pipefail
+          worker_domain_json="$(railway domain --service "$RAILWAY_WORKER_SERVICE_ID" --json)"
+          worker_base_url="$(printf '%s' "$worker_domain_json" | node -e "
+            const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            const url = input.domain ?? input.domains?.[0];
+            if (!url) process.exit(1);
+            const host = String(url).replace(/\\/$/, '');
+            process.stdout.write(host.includes('://') ? host : 'https://' + host);
+          ")"
+          export WORKER_HEALTH_URL="${worker_base_url%/*}:$WORKER_HEALTH_PORT"
+          echo "Probing worker readiness at $WORKER_HEALTH_URL/health/worker"
+          pnpm tool:worker-readiness --url "$WORKER_HEALTH_URL"

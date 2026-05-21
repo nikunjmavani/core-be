@@ -1,0 +1,55 @@
+export type AppErrorCode =
+  | 'VALIDATION_ERROR'
+  | 'NOT_FOUND'
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'CONFLICT'
+  | 'RATE_LIMITED'
+  | 'PAYLOAD_TOO_LARGE'
+  | 'UNPROCESSABLE_ENTITY'
+  | 'GONE'
+  | 'SERVICE_UNAVAILABLE'
+  | 'INTERNAL_ERROR'
+  | 'NOT_IMPLEMENTED';
+
+/** Paddle-style snake_case error code for API responses */
+export const ERROR_CODE_TO_SNAKE: Record<AppErrorCode, string> = {
+  VALIDATION_ERROR: 'invalid_field',
+  NOT_FOUND: 'not_found',
+  UNAUTHORIZED: 'unauthorized',
+  FORBIDDEN: 'forbidden',
+  CONFLICT: 'conflict',
+  RATE_LIMITED: 'rate_limited',
+  PAYLOAD_TOO_LARGE: 'payload_too_large',
+  UNPROCESSABLE_ENTITY: 'unprocessable_entity',
+  GONE: 'gone',
+  SERVICE_UNAVAILABLE: 'service_unavailable',
+  INTERNAL_ERROR: 'internal_error',
+  NOT_IMPLEMENTED: 'not_implemented',
+};
+
+export class AppError extends Error {
+  readonly code: AppErrorCode;
+  readonly statusCode: number;
+  /** Translation key (e.g. "errors:notFound"); error handler uses request.t(messageKey, messageParams). */
+  readonly messageKey: string;
+  /** Interpolation params for request.t(messageKey, messageParams). */
+  readonly messageParams?: Record<string, string | number>;
+
+  constructor(
+    code: AppErrorCode,
+    statusCode: number,
+    messageKey: string,
+    messageParams?: Record<string, string | number>,
+    fallbackMessage?: string,
+  ) {
+    super(fallbackMessage ?? messageKey);
+    this.code = code;
+    this.statusCode = statusCode;
+    this.messageKey = messageKey;
+    if (messageParams !== undefined) {
+      this.messageParams = messageParams;
+    }
+    this.name = this.constructor.name;
+  }
+}

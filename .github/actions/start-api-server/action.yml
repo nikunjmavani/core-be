@@ -1,0 +1,31 @@
+name: Start API server
+description: Start the API in the background and wait for /health/ready
+
+inputs:
+  rate-limit-max:
+    description: RATE_LIMIT_MAX for the server process
+    required: false
+    default: '10000'
+  log-file:
+    description: Server log file path
+    required: false
+    default: server.log
+  ready-timeout-seconds:
+    description: Max seconds to wait for readiness
+    required: false
+    default: '60'
+
+runs:
+  using: composite
+  steps:
+    - name: Start API server (background)
+      run: |
+        RATE_LIMIT_MAX=${{ inputs.rate-limit-max }} pnpm exec tsx src/server.ts > "${{ inputs.log-file }}" 2>&1 &
+        echo $! > server.pid
+      shell: bash
+
+    - name: Wait for server readiness
+      run: |
+        timeout "${{ inputs.ready-timeout-seconds }}" bash -c \
+          'until curl -sf http://localhost:3000/health/ready; do sleep 1; done'
+      shell: bash

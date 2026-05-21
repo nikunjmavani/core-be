@@ -1,0 +1,25 @@
+name: Setup Node and pnpm
+description: Install pnpm, Node from .nvmrc, and project dependencies
+
+inputs:
+  install:
+    description: Run pnpm install --frozen-lockfile
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+
+    - name: Install dependencies
+      if: inputs.install == 'true'
+      run: pnpm install --frozen-lockfile
+      shell: bash

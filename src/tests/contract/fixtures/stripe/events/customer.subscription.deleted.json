@@ -1,0 +1,16 @@
+{
+  "id": "evt_fixture_contract_subscription_deleted",
+  "object": "event",
+  "livemode": false,
+  "type": "customer.subscription.deleted",
+  "data": {
+    "object": {
+      "id": "sub_webhook_contract_deleted",
+      "object": "subscription",
+      "status": "canceled",
+      "customer": "cus_fixture_contract_aa",
+      "cancel_at_period_end": false,
+      "canceled_at": 1735600900
+    }
+  }
+}

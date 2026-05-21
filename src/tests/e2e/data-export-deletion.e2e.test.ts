@@ -1,0 +1,57 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+import { createTestApp } from '@/tests/helpers/test-app.js';
+import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { createTestUser } from '@/tests/factories/user.factory.js';
+import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { user_data_exports } from '@/domains/user/sub-domains/user-data-export/user-data-export.schema.js';
+import type { FastifyInstance } from 'fastify';
+
+describe('Cross-domain e2e: data export and deletion', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    const testApp = await createTestApp();
+    app = testApp.app;
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(async () => {
+    await cleanupDatabase();
+  });
+
+  it('requests data export then deletes account', async () => {
+    const user = await createTestUser();
+    const token = await generateTestToken({ userId: user.public_id });
+
+    const exportResponse = await injectAuthenticated(app, {
+      method: 'POST',
+      url: testApiPath('/users/me/data-export'),
+      token,
+      payload: {},
+    });
+    expect(exportResponse.statusCode).toBe(202);
+    const exportBody = exportResponse.json() as { data?: { export_id?: string; status?: string } };
+    expect(exportBody.data?.status).toBe('pending');
+    expect(exportBody.data?.export_id).toBeTruthy();
+
+    const deleteResponse = await injectAuthenticated(app, {
+      method: 'DELETE',
+      url: testApiPath('/users/me'),
+      token,
+    });
+    expect([200, 204]).toContain(deleteResponse.statusCode);
+
+    const exportRows = await database
+      .select({ id: user_data_exports.id })
+      .from(user_data_exports)
+      .where(eq(user_data_exports.user_id, user.id));
+    expect(exportRows).toHaveLength(0);
+  });
+});

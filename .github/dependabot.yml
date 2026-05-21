@@ -1,0 +1,74 @@
+# Dependabot version updates. Auto-merge policy: .github/workflows/dependabot-automerge.yml
+# (production patch; dev patch+minor; security patch+minor — never dev/production major via automerge).
+
+version: 2
+
+updates:
+  # npm (pnpm) dependencies — lockfile + semver ranges in package.json
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'Asia/Kolkata'
+    open-pull-requests-limit: 15
+    versioning-strategy: increase
+    commit-message:
+      prefix: 'chore'
+      prefix-development: 'chore'
+      include: 'scope'
+    labels:
+      - 'dependencies'
+    ignore:
+      - dependency-name: '@types/node'
+        update-types:
+          - 'version-update:semver-major'
+    groups:
+      production-minor-and-patch:
+        applies-to: version-updates
+        dependency-type: production
+        update-types:
+          - patch
+          - minor
+      production-major:
+        applies-to: version-updates
+        dependency-type: production
+        update-types:
+          - major
+      dev-dependencies:
+        applies-to: version-updates
+        dependency-type: development
+      security-updates:
+        applies-to: security-updates
+        patterns:
+          - '*'
+
+  # GitHub Actions versions
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    labels:
+      - 'ci'
+    groups:
+      actions:
+        patterns:
+          - '*'
+
+  # Docker base image (aligns with CI Trivy gate)
+  - package-ecosystem: 'docker'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    labels:
+      - 'ci'
+      - 'docker'

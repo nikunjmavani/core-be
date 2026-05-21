@@ -1,0 +1,12 @@
+# Semgrep ignore patterns (used in CI SAST scanning)
+node_modules/
+dist/
+build/
+coverage/
+migrations/
+*.min.js
+*.bundle.js
+*.lock
+pnpm-lock.yaml
+docs/openapi/
+docs/postman-collection.json

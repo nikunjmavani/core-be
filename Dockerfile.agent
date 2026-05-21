@@ -1,0 +1,22 @@
+# Development-oriented image for Cursor cloud agents and similar full-repo workflows.
+# Installs all npm dependencies (including devDependencies). Not used for production;
+# see Dockerfile for the production multi-stage build.
+
+ARG NODE_VERSION=24.13.0
+
+FROM node:${NODE_VERSION}-bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git openssh-client ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY package.json pnpm-lock.yaml ./
+
+RUN corepack enable \
+  && corepack prepare pnpm@10.28.2 --activate
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+  pnpm install --frozen-lockfile
+
+COPY . .

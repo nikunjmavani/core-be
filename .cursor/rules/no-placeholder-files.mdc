@@ -1,0 +1,15 @@
+---
+description: Prevents creation of empty placeholder files in domains.
+globs: src/domains/**/*.dto.ts, src/domains/**/*.validator.ts, src/domains/**/*.serializer.ts
+alwaysApply: false
+---
+
+## No Placeholder Files
+
+1. **Every file must have real code** — no empty exports or comment-only files
+2. If a domain/sub-domain doesn't need DTOs, validators, or serializers, **don't create them**
+3. Only create these files when the domain actually has:
+   - **DTOs**: Zod schemas for request validation
+   - **Validators**: Functions that call `.safeParse()` and throw `ValidationError`
+   - **Serializers**: Functions that shape response data
+4. If you find an empty placeholder, **delete it** and report it

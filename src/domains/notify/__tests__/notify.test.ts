@@ -1,0 +1,295 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createTestApp } from '@/tests/helpers/test-app.js';
+import {
+  injectAuthenticated,
+  injectAuthenticatedOrganizationMutation,
+  injectUnauthenticated,
+} from '@/tests/helpers/test-http-inject.helper.js';
+import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { createTestUser } from '@/tests/factories/user.factory.js';
+import { createTestOrganization } from '@/tests/factories/organization.factory.js';
+import { createTestWebhook } from '@/tests/factories/webhook.factory.js';
+import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import {
+  seedPermissions,
+  createRoleWithPermissions,
+  createMembership,
+} from '@/domains/tenancy/__tests__/factories/permission.factory.js';
+import type { FastifyInstance } from 'fastify';
+
+const NOTIFY_PERMISSIONS = {
+  WEBHOOK_READ: 'webhook:read',
+  WEBHOOK_MANAGE: 'webhook:manage',
+} as const;
+
+const ALL_NOTIFY_PERMISSIONS = Object.values(NOTIFY_PERMISSIONS);
+
+describe('Notify Domain — Integration', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    const { app: testApplication } = await createTestApp();
+    app = testApplication;
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(async () => {
+    await cleanupDatabase();
+    await seedPermissions(ALL_NOTIFY_PERMISSIONS);
+  });
+
+  async function createAuthorizedNotifyContext(permissionCodes = ALL_NOTIFY_PERMISSIONS) {
+    const user = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes,
+    });
+    await createMembership({
+      userId: user.id,
+      organizationId: organization.id,
+      roleId: role.id,
+    });
+    const token = await generateTestToken({ userId: user.public_id });
+    return { user, organization, role, token };
+  }
+
+  // ─── Notifications ────────────────────────────────────────────
+
+  describe('GET /api/v1/notify/notifications', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        url: '/api/v1/notify/notifications',
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return notifications for authenticated user', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        url: '/api/v1/notify/notifications',
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+    });
+  });
+
+  describe('GET /api/v1/notify/notifications/:id', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        url: '/api/v1/notify/notifications/test-id',
+      });
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe('PATCH /api/v1/notify/notifications/:id/read', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'PATCH',
+        url: '/api/v1/notify/notifications/test-id/read',
+      });
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe('POST /api/v1/notify/notifications/mark-all-read', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: '/api/v1/notify/notifications/mark-all-read',
+      });
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe('GET /api/v1/notify/notifications/unread-count', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        url: '/api/v1/notify/notifications/unread-count',
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return unread count for authenticated user', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        url: '/api/v1/notify/notifications/unread-count',
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+    });
+  });
+
+  describe('DELETE /api/v1/notify/notifications/:notificationId', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'DELETE',
+        url: '/api/v1/notify/notifications/test-id',
+      });
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  // ─── Webhooks ─────────────────────────────────────────────────
+
+  describe('GET /api/v1/notify/organizations/:id/webhooks', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        url: '/api/v1/notify/organizations/some-id/webhooks',
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 403 without webhook read permission', async () => {
+      const { organization } = await createAuthorizedNotifyContext();
+      const user = await createTestUser({ email: 'noperm@test.com' });
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks`,
+        token,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('should return webhooks with permission', async () => {
+      const { organization, token } = await createAuthorizedNotifyContext();
+      const response = await injectAuthenticated(app, {
+        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks`,
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+    });
+  });
+
+  describe('POST /api/v1/notify/organizations/:id/webhooks', () => {
+    it('should return 403 without manage permission', async () => {
+      const { organization } = await createAuthorizedNotifyContext([
+        NOTIFY_PERMISSIONS.WEBHOOK_READ,
+      ]);
+      const user = await createTestUser({ email: 'readonly@test.com' });
+      const readRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [NOTIFY_PERMISSIONS.WEBHOOK_READ],
+      });
+      await createMembership({
+        userId: user.id,
+        organizationId: organization.id,
+        roleId: readRole.id,
+      });
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks`,
+        token,
+        payload: {},
+      });
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
+  // ─── Webhook Test Delivery ──────────────────────────────────
+
+  describe('POST /api/v1/notify/organizations/:id/webhooks/:webhookId/test', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: '/api/v1/notify/organizations/some-id/webhooks/some-webhook-id/test',
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 403 without webhook:manage permission', async () => {
+      const { organization, user } = await createAuthorizedNotifyContext();
+      // Create a second user with only READ permission
+      const readUser = await createTestUser({ email: 'readonlywebhook@test.com' });
+      const readRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [NOTIFY_PERMISSIONS.WEBHOOK_READ],
+      });
+      await createMembership({
+        userId: readUser.id,
+        organizationId: organization.id,
+        roleId: readRole.id,
+      });
+      const readToken = await generateTestToken({ userId: readUser.public_id });
+
+      const webhook = await createTestWebhook({
+        organizationId: organization.id,
+        createdByUserId: user.id,
+      });
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/test`,
+        token: readToken,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it(
+      'should send test delivery and return result with manage permission',
+      { timeout: 15_000 },
+      async () => {
+        const { organization, user, token } = await createAuthorizedNotifyContext();
+        const webhook = await createTestWebhook({
+          organizationId: organization.id,
+          url: 'https://httpbin.org/post',
+          createdByUserId: user.id,
+        });
+
+        const response = await injectAuthenticatedOrganizationMutation(app, {
+          method: 'POST',
+          url: `/api/v1/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/test`,
+          token,
+        });
+
+        // External httpbin.org may be slow or return 5xx
+        expect([200, 500]).toContain(response.statusCode);
+        if (response.statusCode === 200) {
+          const body = response.json() as {
+            data: { success: boolean; delivered_at: string };
+          };
+          expect(body.data).toHaveProperty('success');
+          expect(body.data).toHaveProperty('delivered_at');
+          expect(typeof body.data.success).toBe('boolean');
+        }
+      },
+    );
+
+    it('should return 404 for non-existent webhook', async () => {
+      const { organization, token } = await createAuthorizedNotifyContext();
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks/wwwwwwwwwwwwwwwwwwwww/test`,
+        token,
+      });
+      expect(response.statusCode).toBe(404);
+    });
+  });
+
+  // ─── Webhook Events ───────────────────────────────────────────
+
+  describe('GET /api/v1/notify/organizations/:id/webhook-events', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        url: '/api/v1/notify/organizations/some-id/webhook-events',
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return webhook events with permission', async () => {
+      const { organization, token } = await createAuthorizedNotifyContext();
+      const response = await injectAuthenticated(app, {
+        url: `/api/v1/notify/organizations/${organization.public_id}/webhook-events`,
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+    });
+  });
+});

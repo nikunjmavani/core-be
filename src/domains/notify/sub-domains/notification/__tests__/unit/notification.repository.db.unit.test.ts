@@ -1,0 +1,141 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { createTestUser } from '@/tests/factories/user.factory.js';
+import { createTestOrganization } from '@/tests/factories/organization.factory.js';
+import { NotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
+
+describe('NotificationRepository (database)', () => {
+  const repository = new NotificationRepository();
+
+  beforeEach(async () => {
+    await cleanupDatabase();
+  });
+
+  it('creates, lists, marks read, counts unread, and deletes notifications', async () => {
+    const user = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+
+    const notificationId = await repository.create({
+      user_id: user.id,
+      organization_id: organization.id,
+      type: 'BILLING',
+      title: 'Usage updated',
+      message: 'Your monthly usage was updated',
+      data: { subscription_id: 'sub_1' },
+    });
+
+    const organizationPublicId =
+      await repository.findOrganizationPublicIdByNotificationId(notificationId);
+    expect(organizationPublicId).toBe(organization.public_id);
+
+    const listed = await repository.findByUser(user.id, 10);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]!.read_at).toBeNull();
+
+    const unreadBefore = await repository.countUnreadForUser(user.id);
+    expect(unreadBefore).toBe(1);
+
+    const marked = await repository.markRead(listed[0]!.public_id, user.id);
+    expect(marked?.read_at).not.toBeNull();
+
+    const unreadAfterMark = await repository.countUnreadForUser(user.id);
+    expect(unreadAfterMark).toBe(0);
+
+    const secondId = await repository.create({
+      user_id: user.id,
+      type: 'SYSTEM',
+      title: 'Second',
+      message: 'Another notification',
+    });
+    expect(secondId).toBeGreaterThan(notificationId);
+
+    const organizationPublicIdWithoutOrg =
+      await repository.findOrganizationPublicIdByNotificationId(secondId);
+    expect(organizationPublicIdWithoutOrg).toBeNull();
+
+    const markedAll = await repository.markAllReadForUser(user.id);
+    expect(markedAll.length).toBeGreaterThanOrEqual(1);
+
+    const deleted = await repository.deleteByPublicIdForUser(listed[0]!.public_id, user.id);
+    expect(deleted?.public_id).toBe(listed[0]!.public_id);
+
+    const byPublicId = await repository.findByPublicIdForUser(listed[0]!.public_id, user.id);
+    expect(byPublicId).toBeNull();
+  });
+
+  it('findByIdForDispatch returns row scoped to organization', async () => {
+    const user = await createTestUser({ email: 'dispatch@example.com' });
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+    const notificationId = await repository.create({
+      user_id: user.id,
+      organization_id: organization.id,
+      type: 'BILLING',
+      title: 'Dispatch',
+      message: 'Body',
+    });
+
+    const row = await repository.findByIdForDispatch(notificationId, organization.public_id);
+    expect(row?.title).toBe('Dispatch');
+    expect(row?.userEmail).toBe('dispatch@example.com');
+  });
+
+  it('findByIdForDispatch scopes user-only notifications with null organization', async () => {
+    const user = await createTestUser({ email: 'personal@example.com' });
+    const notificationId = await repository.create({
+      user_id: user.id,
+      type: 'SYSTEM',
+      title: 'Personal',
+      message: 'No org',
+    });
+
+    const row = await repository.findByIdForDispatch(notificationId, null);
+    expect(row?.title).toBe('Personal');
+
+    const wrongScope = await repository.findByIdForDispatch(notificationId, 'wrong_org');
+    expect(wrongScope).toBeNull();
+  });
+
+  it('countUnreadForUser returns zero when the user has no notifications', async () => {
+    const user = await createTestUser({ email: 'notify-empty@example.com' });
+    expect(await repository.countUnreadForUser(user.id)).toBe(0);
+  });
+
+  it('markRead and delete return null for unknown public ids', async () => {
+    const user = await createTestUser({ email: 'notify-missing@example.com' });
+    expect(await repository.markRead('missing_public_id', user.id)).toBeNull();
+    expect(await repository.deleteByPublicIdForUser('missing_public_id', user.id)).toBeNull();
+  });
+
+  it('markAllReadForUser returns empty when nothing is unread', async () => {
+    const user = await createTestUser({ email: 'notify-read-all@example.com' });
+    expect(await repository.markAllReadForUser(user.id)).toEqual([]);
+    expect(await repository.countUnreadForUser(user.id)).toBe(0);
+  });
+
+  it('findOrganizationPublicIdByOrganizationId resolves public id by internal id', async () => {
+    const user = await createTestUser({ email: 'notify-resolve-org@example.com' });
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+
+    const resolved = await repository.findOrganizationPublicIdByOrganizationId(organization.id);
+    expect(resolved).toBe(organization.public_id);
+  });
+
+  it('findOrganizationPublicIdByOrganizationId returns null for unknown organization id', async () => {
+    const resolved = await repository.findOrganizationPublicIdByOrganizationId(-1);
+    expect(resolved).toBeNull();
+  });
+
+  it('create stores optional action fields', async () => {
+    const user = await createTestUser({ email: 'notify-action@example.com' });
+    const notificationId = await repository.create({
+      user_id: user.id,
+      type: 'SYSTEM',
+      title: 'Action',
+      message: 'Tap to open',
+      action_url: 'https://example.com/inbox',
+      action_label: 'Open',
+    });
+    const row = await repository.findByIdForDispatch(notificationId, null);
+    expect(row?.actionUrl).toBe('https://example.com/inbox');
+  });
+});

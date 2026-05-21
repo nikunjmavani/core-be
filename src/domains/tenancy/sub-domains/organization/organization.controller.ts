@@ -1,0 +1,91 @@
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
+import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
+import { applyDeprecatedEndpointHeaders } from '@/shared/utils/http/api-versioning.util.js';
+import type { OrganizationService } from './organization.service.js';
+import type { AuditService } from '@/domains/audit/audit.service.js';
+
+export function createOrganizationController(
+  service: OrganizationService,
+  auditService?: AuditService,
+) {
+  return {
+    listOrganizations: async (request: FastifyRequest, reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const result = await service.list(request.query, auth.userId, auth.role);
+      if ((request.query as { page?: unknown }).page !== undefined) {
+        applyDeprecatedEndpointHeaders(reply, {
+          sunset: new Date('2027-01-01T00:00:00.000Z'),
+        });
+      }
+      const hasMore = result.page * result.limit < result.total;
+      return paginatedResponse(result.items, getRequestIdentifier(request), {
+        per_page: result.limit,
+        next: hasMore ? String(result.page + 1) : null,
+        has_more: hasMore,
+        estimated_total: result.total,
+      });
+    },
+    getOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
+      const data = await service.getByPublicId(id, auth.userId, auth.role);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    getOrganizationBySlug: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const { slug } = (request.params as { slug: string }) ?? { slug: '' };
+      const data = await service.getBySlug(slug, auth.userId, auth.role);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    createOrganization: async (request: FastifyRequest, reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const data = await service.create(request.body, auth.userId);
+      reply.code(201);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    updateOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
+      const data = await service.update(id, request.body, auth.userId);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    deleteOrganization: async (request: FastifyRequest, reply: FastifyReply) => {
+      requireAuth(request);
+      const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
+      await service.delete(id);
+      return reply.code(204).send();
+    },
+    uploadLogo: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
+      const data = await service.uploadLogo(id, request.body, auth.userId);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    deleteLogo: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
+      const data = await service.deleteLogo(id, auth.userId);
+      return successResponse(data, getRequestIdentifier(request));
+    },
+    listOrganizationAuditLogs: async (request: FastifyRequest, _reply: FastifyReply) => {
+      if (!auditService) throw new Error('Audit service not configured');
+      const organizationId = validatePublicIdParam(
+        (request.params as { id: string }).id ?? '',
+        'id',
+      );
+      const query = {
+        ...(request.query as Record<string, unknown>),
+        organization_id: organizationId,
+      };
+      const result = await auditService.list(query);
+      return paginatedResponse(result.items, getRequestIdentifier(request), {
+        per_page: result.limit,
+        next: result.page < result.total_pages ? String(result.page + 1) : null,
+        has_more: result.page < result.total_pages,
+        estimated_total: result.total,
+      });
+    },
+  };
+}

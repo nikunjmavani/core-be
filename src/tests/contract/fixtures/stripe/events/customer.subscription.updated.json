@@ -1,0 +1,22 @@
+{
+  "id": "evt_fixture_contract_subscription_updated",
+  "object": "event",
+  "livemode": false,
+  "type": "customer.subscription.updated",
+  "data": {
+    "object": {
+      "id": "sub_webhook_contract_updated",
+      "object": "subscription",
+      "status": "active",
+      "customer": "cus_fixture_contract_aa",
+      "cancel_at_period_end": true,
+      "canceled_at": null,
+      "current_period_start": 1735600800,
+      "current_period_end": 1738279200,
+      "items": {
+        "object": "list",
+        "data": [{ "id": "si_fixture_webhook_updated", "object": "subscription_item" }]
+      }
+    }
+  }
+}

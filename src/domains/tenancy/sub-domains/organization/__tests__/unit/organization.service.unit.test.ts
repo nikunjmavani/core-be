@@ -1,0 +1,494 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
+  withOrganizationDatabaseContext: vi.fn(
+    async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
+  ),
+}));
+
+import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
+
+const organizationRow = {
+  id: 1,
+  public_id: generatePublicId(),
+  name: 'Acme',
+  slug: 'acme',
+  status: 'ACTIVE',
+  stripe_customer_id: null,
+  owner_user_id: 10,
+  logo_url: null,
+  created_at: new Date(),
+  updated_at: new Date(),
+  deleted_at: null,
+};
+
+describe('OrganizationService', () => {
+  const repository = {
+    findByPublicId: vi.fn().mockResolvedValue(organizationRow),
+    findById: vi.fn().mockResolvedValue(organizationRow),
+    findBySlug: vi.fn().mockResolvedValue(null),
+    findAll: vi.fn().mockResolvedValue({
+      items: [organizationRow],
+      total: 1,
+      page: 1,
+      limit: 20,
+      total_pages: 1,
+    }),
+    create: vi.fn().mockResolvedValue(organizationRow),
+    update: vi.fn().mockResolvedValue(organizationRow),
+    softDelete: vi.fn().mockResolvedValue(organizationRow),
+    resolveUserIdByPublicId: vi.fn().mockResolvedValue(10),
+    updateOwner: vi.fn().mockResolvedValue(undefined),
+    updateStripeCustomerId: vi.fn().mockResolvedValue(undefined),
+    userHasActiveMembership: vi.fn().mockResolvedValue(true),
+    userCanAccessOrganization: vi.fn().mockResolvedValue(true),
+    findAllForUser: vi.fn().mockResolvedValue({
+      items: [organizationRow],
+      total: 1,
+      page: 1,
+      limit: 20,
+      total_pages: 1,
+    }),
+  } as unknown as OrganizationRepository;
+
+  const objectStorage = createObjectStoragePortMock();
+  const service = new OrganizationService(repository, objectStorage);
+  service.wireOffboardingUploadService({ deleteObject: vi.fn() } as never);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(objectStorage.headObject).mockResolvedValue({
+      contentLength: 100,
+      contentType: 'image/png',
+    });
+    vi.mocked(repository.findByPublicId).mockResolvedValue(organizationRow as never);
+    vi.mocked(repository.findById).mockResolvedValue(organizationRow as never);
+    vi.mocked(repository.findBySlug).mockResolvedValue(null);
+    vi.mocked(repository.resolveUserIdByPublicId).mockResolvedValue(10);
+    vi.mocked(repository.update).mockResolvedValue(organizationRow as never);
+    vi.mocked(repository.softDelete).mockResolvedValue(organizationRow as never);
+    vi.mocked(repository.userCanAccessOrganization).mockResolvedValue(true);
+  });
+
+  it('requireOrganizationByPublicId returns billing context', async () => {
+    const result = await service.requireOrganizationByPublicId(organizationRow.public_id);
+    expect(result.public_id).toBe(organizationRow.public_id);
+  });
+
+  it('requireOrganizationByPublicId throws when missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(service.requireOrganizationByPublicId('missing')).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it('list returns paginated organizations', async () => {
+    const result = await service.list({ page: 1, limit: 20 }, 'user_public');
+    expect(result.items).toHaveLength(1);
+  });
+
+  it('create persists organization for owner', async () => {
+    const result = await service.create({ name: 'New Org', slug: 'new-org' }, 'owner_public');
+    expect(repository.create).toHaveBeenCalled();
+    expect(result.name).toBe('Acme');
+  });
+
+  it('getByPublicId returns organization', async () => {
+    const result = await service.getByPublicId(organizationRow.public_id, 'user_public');
+    expect(result.id).toBe(organizationRow.public_id);
+  });
+
+  it('create throws when owner user missing', async () => {
+    vi.mocked(repository.resolveUserIdByPublicId).mockResolvedValue(null);
+    await expect(
+      service.create({ name: 'New Org', slug: 'new-org' }, 'missing_owner'),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('getBySlug returns organization', async () => {
+    vi.mocked(repository.findBySlug).mockResolvedValue(organizationRow as never);
+    const result = await service.getBySlug('acme', 'user_public');
+    expect(result.slug).toBe('acme');
+  });
+
+  it('update throws conflict when slug taken', async () => {
+    vi.mocked(repository.findBySlug).mockResolvedValue({
+      ...organizationRow,
+      public_id: 'other_org',
+    } as never);
+    await expect(
+      service.update(organizationRow.public_id, { slug: 'taken' }, 'owner_public'),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it('delete runs offboarding when dependencies attached', async () => {
+    const uploadService = { tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(3) };
+    service.wireOffboardingUploadService(uploadService as never);
+    await service.delete(organizationRow.public_id);
+    expect(uploadService.tombstoneAllByOrganizationId).toHaveBeenCalledWith(organizationRow.id);
+  });
+
+  it('uploadLogo validates key prefix and updates logo url', async () => {
+    const key = `organization-logos/${organizationRow.public_id}/logo.png`;
+    const result = await service.uploadLogo(organizationRow.public_id, { key }, 'owner_public');
+    expect(result).toBeDefined();
+  });
+
+  it('uploadLogo throws when object is missing in storage', async () => {
+    vi.mocked(objectStorage.headObject).mockResolvedValueOnce(null);
+    const key = `organization-logos/${organizationRow.public_id}/logo.png`;
+    await expect(
+      service.uploadLogo(organizationRow.public_id, { key }, 'owner_public'),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('update throws when repository update returns null', async () => {
+    vi.mocked(repository.update).mockResolvedValue(null);
+    await expect(
+      service.update(organizationRow.public_id, { name: 'X' }, 'owner_public'),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('uploadLogo rejects keys outside organization prefix', async () => {
+    const otherOrganizationKey = `organization-logos/${generatePublicId()}/logo.png`;
+    await expect(
+      service.uploadLogo(organizationRow.public_id, { key: otherOrganizationKey }, 'owner_public'),
+    ).rejects.toMatchObject({ name: 'ValidationError' });
+  });
+
+  it('getBySlug throws when organization missing', async () => {
+    vi.mocked(repository.findBySlug).mockResolvedValue(null);
+    await expect(service.getBySlug('missing', 'user_public')).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('transferOrganizationOwnership updates owner and returns context', async () => {
+    const result = await service.transferOrganizationOwnership(organizationRow.public_id, 99);
+    expect(repository.updateOwner).toHaveBeenCalledWith(organizationRow.public_id, 99);
+    expect(result.public_id).toBe(organizationRow.public_id);
+  });
+
+  it('deleteLogo clears logo when organization has logo url', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: `https://cdn.example/organization-logos/${organizationRow.public_id}/logo.png`,
+    } as never);
+    vi.mocked(repository.update).mockResolvedValue({
+      ...organizationRow,
+      logo_url: null,
+    } as never);
+    const result = await service.deleteLogo(organizationRow.public_id, 'owner_public');
+    expect(result.logo_url).toBeNull();
+  });
+
+  it('create throws conflict when slug already exists', async () => {
+    vi.mocked(repository.findBySlug).mockResolvedValue(organizationRow as never);
+    await expect(
+      service.create({ name: 'Dup', slug: organizationRow.slug }, 'owner_public'),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it('getByPublicId throws when organization missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(service.getByPublicId('missing', 'user_public')).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it('findOrganizationByPublicId and internal id return billing context', async () => {
+    const byPublic = await service.findOrganizationByPublicId(organizationRow.public_id);
+    expect(byPublic?.public_id).toBe(organizationRow.public_id);
+    const byInternal = await service.findOrganizationByInternalId(organizationRow.id);
+    expect(byInternal?.id).toBe(organizationRow.id);
+  });
+
+  it('updateStripeCustomerIdForOrganization updates stripe customer', async () => {
+    await service.updateStripeCustomerIdForOrganization(organizationRow.public_id, 'cus_test');
+    expect(repository.updateStripeCustomerId).toHaveBeenCalledWith(organizationRow.id, 'cus_test');
+  });
+
+  it('deleteLogo succeeds when organization has no logo', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: null,
+    } as never);
+    const result = await service.deleteLogo(organizationRow.public_id, 'owner_public');
+    expect(result.logo_url).toBeNull();
+  });
+
+  it('deleteLogo throws when logo object missing in storage', async () => {
+    vi.mocked(objectStorage.headObject).mockResolvedValueOnce(null);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: `https://cdn.example/organization-logos/${organizationRow.public_id}/logo.png`,
+    } as never);
+    await expect(
+      service.deleteLogo(organizationRow.public_id, 'owner_public'),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('delete throws when soft delete returns null', async () => {
+    vi.mocked(repository.softDelete).mockResolvedValue(null);
+    await expect(service.delete(organizationRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('updateStripeCustomerIdForOrganization throws when organization missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(
+      service.updateStripeCustomerIdForOrganization('missing', 'cus_test'),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('findOrganizationByInternalId returns null when row missing', async () => {
+    vi.mocked(repository.findById).mockResolvedValue(null);
+    const result = await service.findOrganizationByInternalId(999);
+    expect(result).toBeNull();
+  });
+
+  it('delete clears logo from CDN-style logo_url during offboarding', async () => {
+    const uploadService = { tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(0) };
+    service.wireOffboardingUploadService(uploadService as never);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: `https://cdn.example/organization-logos/${organizationRow.public_id}/logo.png`,
+    } as never);
+    await service.delete(organizationRow.public_id);
+    expect(uploadService.tombstoneAllByOrganizationId).toHaveBeenCalledWith(organizationRow.id);
+  });
+
+  it('update skips slug conflict check when slug is omitted', async () => {
+    await service.update(organizationRow.public_id, { name: 'Renamed only' }, 'owner_public');
+    expect(repository.findBySlug).not.toHaveBeenCalled();
+    expect(repository.update).toHaveBeenCalled();
+  });
+
+  it('delete succeeds without offboarding dependencies', async () => {
+    const serviceWithoutOffboarding = new OrganizationService(repository, objectStorage);
+    await serviceWithoutOffboarding.delete(organizationRow.public_id);
+    expect(repository.softDelete).toHaveBeenCalledWith(organizationRow.public_id);
+  });
+
+  it('delete skips logo cleanup when logo url is absent', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: null,
+    } as never);
+    await service.delete(organizationRow.public_id);
+    expect(repository.softDelete).toHaveBeenCalled();
+  });
+
+  it('deleteLogo skips storage head check when logo url is absent', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: null,
+    } as never);
+    const result = await service.deleteLogo(organizationRow.public_id, 'owner_public');
+    expect(result.logo_url).toBeNull();
+  });
+
+  it('delete removes logo from CDN-style url during offboarding', async () => {
+    const uploadService = { tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(0) };
+    service.wireOffboardingUploadService(uploadService as never);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: `https://cdn.example.com/organization-logos/${organizationRow.public_id}/logo.png`,
+    } as never);
+    await service.delete(organizationRow.public_id);
+    expect(repository.update).toHaveBeenCalled();
+  });
+
+  it('requireOrganizationByPublicId returns billing context', async () => {
+    const billing = await service.requireOrganizationByPublicId(organizationRow.public_id);
+    expect(billing.public_id).toBe(organizationRow.public_id);
+  });
+
+  it('delete clears logo when storage key uses direct prefix path', async () => {
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(true);
+    const logoKey = `organization-logos/${organizationRow.public_id}/logo.png`;
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: logoKey,
+    } as never);
+    await service.delete(organizationRow.public_id);
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith(logoKey);
+  });
+
+  it('delete skips storage delete when logo url does not match storage key pattern', async () => {
+    vi.mocked(objectStorage.deleteObject).mockClear();
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: 'https://other-cdn.example/unrelated.png',
+    } as never);
+    await service.delete(organizationRow.public_id);
+    expect(objectStorage.deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('delete logs warning when logo object deletion fails', async () => {
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(false);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: `organization-logos/${organizationRow.public_id}/logo.png`,
+    } as never);
+    await service.delete(organizationRow.public_id);
+    expect(repository.update).toHaveBeenCalled();
+  });
+
+  it('deleteLogo skips storage head check when logo url has no extractable key', async () => {
+    vi.mocked(objectStorage.headObject).mockClear();
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: 'https://cdn.example.com/no-org-logos/here.png',
+    } as never);
+    const result = await service.deleteLogo(organizationRow.public_id, 'owner_public');
+    expect(objectStorage.headObject).not.toHaveBeenCalled();
+    expect(result.logo_url).toBeNull();
+  });
+
+  it('uploadLogo and update pass null user id when resolver returns null', async () => {
+    vi.mocked(repository.resolveUserIdByPublicId).mockResolvedValue(null);
+    const key = `organization-logos/${organizationRow.public_id}/logo.png`;
+    vi.mocked(objectStorage.headObject).mockResolvedValue({
+      contentLength: 1,
+      contentType: undefined,
+    });
+    await service.uploadLogo(organizationRow.public_id, { key }, 'missing_user');
+    expect(repository.update).toHaveBeenCalledWith(
+      organizationRow.public_id,
+      expect.objectContaining({ logo_url: expect.any(String) }),
+      null,
+    );
+
+    vi.mocked(repository.update).mockResolvedValue(organizationRow as never);
+    await service.update(organizationRow.public_id, { name: 'Renamed' }, 'missing_user');
+    expect(repository.update).toHaveBeenCalledWith(
+      organizationRow.public_id,
+      { name: 'Renamed' },
+      null,
+    );
+  });
+
+  it('wireOffboardingUploadService stores upload service for delete', async () => {
+    const uploadService = { tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(2) };
+    const serviceWithOffboarding = new OrganizationService(repository, objectStorage);
+    serviceWithOffboarding.wireOffboardingUploadService(uploadService as never);
+    await serviceWithOffboarding.delete(organizationRow.public_id);
+    expect(uploadService.tombstoneAllByOrganizationId).toHaveBeenCalledWith(organizationRow.id);
+  });
+
+  it('resolveUserInternalIdByPublicId delegates to repository', async () => {
+    const userId = await service.resolveUserInternalIdByPublicId('user_public');
+    expect(userId).toBe(10);
+    expect(repository.resolveUserIdByPublicId).toHaveBeenCalledWith('user_public');
+  });
+
+  it('requireOrganizationMembershipByPublicId throws when organization is missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(service.requireOrganizationMembershipByPublicId('missing')).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it('update allows keeping the same slug for the same organization', async () => {
+    vi.mocked(repository.findBySlug).mockResolvedValue(organizationRow as never);
+    await service.update(organizationRow.public_id, { slug: organizationRow.slug }, 'owner_public');
+    expect(repository.update).toHaveBeenCalled();
+  });
+
+  it('deleteLogo validates storage object when logo url contains extractable key', async () => {
+    const logoPath = `organization-logos/${organizationRow.public_id}/logo.png`;
+    vi.mocked(objectStorage.headObject).mockResolvedValueOnce({
+      contentLength: 100,
+      contentType: undefined,
+    });
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: `https://cdn.example/${logoPath}`,
+    } as never);
+    vi.mocked(repository.update).mockResolvedValue({
+      ...organizationRow,
+      logo_url: null,
+    } as never);
+    const result = await service.deleteLogo(organizationRow.public_id, 'owner_public');
+    expect(objectStorage.headObject).toHaveBeenCalledWith(logoPath);
+    expect(result.logo_url).toBeNull();
+  });
+
+  it('updateStripeCustomerIdForOrganization throws when stripe update target is missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(organizationRow as never);
+    vi.mocked(repository.updateStripeCustomerId).mockResolvedValue(null);
+    await service.updateStripeCustomerIdForOrganization(organizationRow.public_id, 'cus_new');
+    expect(repository.updateStripeCustomerId).toHaveBeenCalledWith(organizationRow.id, 'cus_new');
+  });
+
+  it('uploadLogo throws when organization is missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(
+      service.uploadLogo(
+        organizationRow.public_id,
+        { key: `organization-logos/${organizationRow.public_id}/logo.png` },
+        'owner_public',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('findOrganizationByPublicId returns null when organization is missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    const result = await service.findOrganizationByPublicId('missing');
+    expect(result).toBeNull();
+  });
+
+  it('update throws when organization is missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(
+      service.update(organizationRow.public_id, { name: 'X' }, 'owner_public'),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('delete throws when organization is missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(service.delete(organizationRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('deleteLogo throws when organization is missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(
+      service.deleteLogo(organizationRow.public_id, 'owner_public'),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('uploadLogo throws when repository update returns null', async () => {
+    const key = `organization-logos/${organizationRow.public_id}/logo.png`;
+    vi.mocked(repository.update).mockResolvedValue(null);
+    await expect(
+      service.uploadLogo(organizationRow.public_id, { key }, 'owner_public'),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('deleteLogo throws when repository update returns null', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: null,
+    } as never);
+    vi.mocked(repository.update).mockResolvedValue(null);
+    await expect(
+      service.deleteLogo(organizationRow.public_id, 'owner_public'),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('deleteLogo passes null updater when user resolver returns null', async () => {
+    vi.mocked(repository.resolveUserIdByPublicId).mockResolvedValue(null);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: null,
+    } as never);
+    await service.deleteLogo(organizationRow.public_id, 'missing_user');
+    expect(repository.update).toHaveBeenCalledWith(
+      organizationRow.public_id,
+      { logo_url: null },
+      null,
+    );
+  });
+});

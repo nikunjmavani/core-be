@@ -1,0 +1,196 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createTestApp } from '@/tests/helpers/test-app.js';
+import {
+  injectAuthenticated,
+  injectAuthenticatedOrganizationMutation,
+  injectUnauthenticated,
+} from '@/tests/helpers/test-http-inject.helper.js';
+import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { createTestUser } from '@/tests/factories/user.factory.js';
+import { createTestOrganization } from '@/tests/factories/organization.factory.js';
+import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import {
+  seedPermissions,
+  createRoleWithPermissions,
+  createMembership,
+} from '@/domains/tenancy/__tests__/factories/permission.factory.js';
+import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import type { FastifyInstance } from 'fastify';
+
+const TENANCY_PERMISSION_CODES = Object.values(TENANCY_PERMISSIONS);
+
+describe('Tenancy Organization Settings Sub-Domain — Integration', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    const { app: testApplication } = await createTestApp();
+    app = testApplication;
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(async () => {
+    await cleanupDatabase();
+    await seedPermissions(TENANCY_PERMISSION_CODES);
+  });
+
+  async function createAuthorizedOrganizationContext(permissionCodes: string[]) {
+    const user = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes,
+    });
+    await createMembership({
+      userId: user.id,
+      organizationId: organization.id,
+      roleId: role.id,
+    });
+    const token = await generateTestToken({ userId: user.public_id });
+    return { user, organization, role, token };
+  }
+
+  function organizationSettingsPath(organizationPublicId: string) {
+    return `/api/v1/tenancy/organizations/${organizationPublicId}/settings`;
+  }
+
+  describe('GET /api/v1/tenancy/organizations/:id/settings', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        url: organizationSettingsPath('unauthenticated-organization-route'),
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 403 without organization read permission', async () => {
+      const { organization, token } = await createAuthorizedOrganizationContext([
+        TENANCY_PERMISSIONS.ORGANIZATION_UPDATE,
+      ]);
+
+      const response = await injectAuthenticated(app, {
+        url: organizationSettingsPath(organization.public_id),
+        token,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('should return settings with organization read permission', async () => {
+      const { organization, token } = await createAuthorizedOrganizationContext([
+        TENANCY_PERMISSIONS.ORGANIZATION_READ,
+      ]);
+
+      const response = await injectAuthenticated(app, {
+        url: organizationSettingsPath(organization.public_id),
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        data: {
+          organization_id: string;
+          is_email_notifications_enabled: boolean;
+          security_policy: unknown;
+        };
+      };
+      expect(body.data).toHaveProperty('organization_id', organization.public_id);
+      expect(body.data).toHaveProperty('is_email_notifications_enabled');
+      expect(body.data).toHaveProperty('security_policy');
+    });
+  });
+
+  describe('PATCH /api/v1/tenancy/organizations/:id/settings', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'PATCH',
+        url: organizationSettingsPath('unauthenticated-organization-route'),
+        payload: { is_email_notifications_enabled: false },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 403 without organization update permission', async () => {
+      const updateContext = await createAuthorizedOrganizationContext([
+        TENANCY_PERMISSIONS.ORGANIZATION_READ,
+        TENANCY_PERMISSIONS.ORGANIZATION_UPDATE,
+      ]);
+      const readOnlyUser = await createTestUser({
+        email: 'organization-settings-read-only@test.com',
+      });
+      const readOnlyRole = await createRoleWithPermissions({
+        organizationId: updateContext.organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.ORGANIZATION_READ],
+      });
+      await createMembership({
+        userId: readOnlyUser.id,
+        organizationId: updateContext.organization.id,
+        roleId: readOnlyRole.id,
+      });
+      const readOnlyToken = await generateTestToken({ userId: readOnlyUser.public_id });
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'PATCH',
+        url: organizationSettingsPath(updateContext.organization.public_id),
+        token: readOnlyToken,
+        payload: { is_email_notifications_enabled: false },
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('should return 400 when body contains unknown keys', async () => {
+      const { organization, token } = await createAuthorizedOrganizationContext([
+        TENANCY_PERMISSIONS.ORGANIZATION_READ,
+        TENANCY_PERMISSIONS.ORGANIZATION_UPDATE,
+      ]);
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'PATCH',
+        url: organizationSettingsPath(organization.public_id),
+        token,
+        payload: { is_email_notifications_enabled: true, unknown_field: true },
+      });
+      expect([400, 422]).toContain(response.statusCode);
+    });
+
+    it('should return 400 when is_email_notifications_enabled has wrong type', async () => {
+      const { organization, token } = await createAuthorizedOrganizationContext([
+        TENANCY_PERMISSIONS.ORGANIZATION_READ,
+        TENANCY_PERMISSIONS.ORGANIZATION_UPDATE,
+      ]);
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'PATCH',
+        url: organizationSettingsPath(organization.public_id),
+        token,
+        payload: { is_email_notifications_enabled: 'not-a-boolean' },
+      });
+      expect([400, 422]).toContain(response.statusCode);
+    });
+
+    it('should update settings with organization update permission', async () => {
+      const { organization, token } = await createAuthorizedOrganizationContext([
+        TENANCY_PERMISSIONS.ORGANIZATION_READ,
+        TENANCY_PERMISSIONS.ORGANIZATION_UPDATE,
+      ]);
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'PATCH',
+        url: organizationSettingsPath(organization.public_id),
+        token,
+        payload: {
+          is_email_notifications_enabled: false,
+          security_policy: { mfa_required: true },
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        data: {
+          is_email_notifications_enabled: boolean;
+          security_policy: { mfa_required: boolean };
+        };
+      };
+      expect(body.data.is_email_notifications_enabled).toBe(false);
+      expect(body.data.security_policy).toMatchObject({ mfa_required: true });
+    });
+  });
+});

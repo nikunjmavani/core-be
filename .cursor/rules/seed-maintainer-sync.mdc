@@ -1,0 +1,14 @@
+---
+description: When changing domain seeds or seed orchestration scripts, run seed-maintainer so seeds stay aligned with routes and schemas.
+globs: src/domains/**/*.seed.ts, src/scripts/seed/**/*.ts
+alwaysApply: false
+---
+
+## Seed maintainer sync
+
+When you create or modify matching files:
+
+1. **Read** `.cursor/skills/seed-maintainer/SKILL.md`.
+2. Keep entity seed logic in domain `*.seed.ts` files; orchestration only in `src/scripts/seed/minimal.ts` and `full.ts`.
+3. After route changes, also run **route-catalog** and update seeds for new/removed API surfaces.
+4. Test with `pnpm db:seed` and/or `pnpm db:seed:full` as appropriate.
