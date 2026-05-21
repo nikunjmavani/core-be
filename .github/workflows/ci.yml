@@ -70,7 +70,7 @@ jobs:
     if: |
       always() &&
       (needs.changes.outputs.docs-only != 'true' || github.event_name == 'push')
-    uses: ./.github/workflows/reusable/quality-static.yml
+    uses: ./.github/workflows/quality-static.yml
     secrets: inherit
 
   test:
@@ -80,7 +80,7 @@ jobs:
       always() &&
       needs.quality.result == 'success' &&
       (needs.changes.outputs.src-code == 'true' || github.event_name == 'push')
-    uses: ./.github/workflows/reusable/test-with-db.yml
+    uses: ./.github/workflows/test-with-db.yml
     secrets: inherit
 
   api-smoke:
@@ -90,7 +90,7 @@ jobs:
       always() &&
       needs.quality.result == 'success' &&
       (needs.changes.outputs.src-code == 'true' || github.event_name == 'push')
-    uses: ./.github/workflows/reusable/api-smoke-with-db.yml
+    uses: ./.github/workflows/api-smoke-with-db.yml
     secrets: inherit
 
   chaos-testing:
@@ -100,7 +100,7 @@ jobs:
       always() &&
       needs.quality.result == 'success' &&
       (needs.changes.outputs.src-code == 'true' || github.event_name == 'push')
-    uses: ./.github/workflows/reusable/chaos-toxiproxy.yml
+    uses: ./.github/workflows/chaos-toxiproxy.yml
     secrets: inherit
 
   docker-build:
@@ -110,7 +110,7 @@ jobs:
       always() &&
       needs.quality.result == 'success' &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docker == 'true' || github.event_name == 'push')
-    uses: ./.github/workflows/reusable/docker-build-verify.yml
+    uses: ./.github/workflows/docker-build-verify.yml
     secrets: inherit
 
   sbom:
@@ -149,7 +149,7 @@ jobs:
       github.event_name == 'push' &&
       contains(fromJSON('["refs/heads/main","refs/heads/dev"]'), github.ref) &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
-    uses: ./.github/workflows/reusable/docs-generate.yml
+    uses: ./.github/workflows/docs-generate.yml
     secrets: inherit
     with:
       github_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}

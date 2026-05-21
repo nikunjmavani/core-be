@@ -1,0 +1,71 @@
+name: Reusable — generate API docs
+
+on:
+  workflow_call:
+    inputs:
+      github_environment:
+        description: GitHub Environment for Postman/Scalar secrets (development, production)
+        required: true
+        type: string
+      publish_hosted_docs:
+        description: Upload Postman collection and Scalar Registry after generation
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      POSTMAN_API_KEY:
+        required: false
+      POSTMAN_WORKSPACE_ID:
+        required: false
+      SCALAR_API_KEY:
+        required: false
+      SCALAR_NAMESPACE:
+        required: false
+      SCALAR_SLUG:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.github_environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Regenerate API docs (OpenAPI + Postman)
+        run: pnpm docs:all
+
+      - name: Validate OpenAPI spec
+        run: pnpm docs:validate:openapi
+
+      - name: Upload API docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-docs-${{ inputs.github_environment }}
+          path: |
+            docs/openapi/
+            docs/postman-collection.json
+          retention-days: 30
+
+      - name: Upload Postman Collection to workspace
+        if: inputs.publish_hosted_docs && env.POSTMAN_API_KEY != ''
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+          POSTMAN_WORKSPACE_ID: ${{ secrets.POSTMAN_WORKSPACE_ID }}
+          SCALAR_NAMESPACE: ${{ secrets.SCALAR_NAMESPACE }}
+          SCALAR_SLUG: ${{ secrets.SCALAR_SLUG }}
+        run: pnpm docs:upload
+
+      - name: Upload OpenAPI to Scalar Registry
+        if: inputs.publish_hosted_docs && env.SCALAR_API_KEY != ''
+        env:
+          SCALAR_API_KEY: ${{ secrets.SCALAR_API_KEY }}
+          SCALAR_NAMESPACE: ${{ secrets.SCALAR_NAMESPACE }}
+          SCALAR_SLUG: ${{ secrets.SCALAR_SLUG }}
+        run: pnpm docs:upload:scalar

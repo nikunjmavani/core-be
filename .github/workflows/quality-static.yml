@@ -1,0 +1,72 @@
+name: Reusable — quality static
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Dependency audit (fail on any vulnerability)
+        run: pnpm deps:audit
+
+      - name: Production dependency audit (fail on any vulnerability)
+        run: pnpm deps:audit:prod
+
+      - name: Validate (lint + format + typecheck)
+        run: pnpm validate
+
+      - name: Validate domain structure (strict)
+        run: pnpm validate:domain:strict
+
+      - name: Validate domain integration test coverage
+        run: pnpm validate:domain:coverage
+
+      - name: Scripts layout (no root-level .ts)
+        run: pnpm validate:scripts-layout
+
+      - name: OpenAPI specs in sync
+        run: pnpm docs:check
+
+      - name: Outbound contract tests (nock, offline)
+        run: pnpm test:contract
+
+      # Property tests run in the `fast` shard of reusable/test-with-db.yml.
+      # Keep them out of this static slice to avoid duplicate work on every PR.
+
+      - name: Route catalog in sync
+        run: pnpm routes:catalog:check
+
+      - name: Env example in sync with schema
+        run: |
+          pnpm tool:sync-env-example || (echo "::error::.env.example is out of sync with env schema or is missing the # GitHub Secrets / # GitHub Variables top-level halves. See log above. Run pnpm tool:sync-env-example (with --fix if needed)." && exit 1)
+
+      - name: Migration safety lint
+        run: pnpm db:migrate:lint
+
+      - name: Gitleaks (secret detection)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Setup Python for Semgrep
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Semgrep SAST
+        run: semgrep scan --config auto --error --metrics off

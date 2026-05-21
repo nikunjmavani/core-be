@@ -1,0 +1,77 @@
+name: Reusable — API smoke with Postgres and Redis
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17.10-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: core
+        options: >-
+          --health-cmd="pg_isready -U postgres -d core"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+      redis:
+        image: redis:8.6.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
+      ALLOWED_ORIGINS: http://localhost:3000
+      FRONTEND_URL: http://localhost:3000
+      RATE_LIMIT_MAX: 10000
+      RATE_LIMIT_WINDOW_MS: 60000
+      TEST_EMAIL: demo@example.com
+      TEST_PASSWORD: DemoPassword123!
+      BASE_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run migrations
+        run: pnpm db:migrate
+
+      - name: Seed full demo data
+        run: pnpm db:seed:full
+
+      - name: Start API server
+        uses: ./.github/actions/start-api-server
+        with:
+          rate-limit-max: '10000'
+
+      - name: API smoke tests
+        run: pnpm test:api-smoke
+
+      - name: Stop API server
+        if: always()
+        uses: ./.github/actions/stop-api-server
