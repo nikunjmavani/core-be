@@ -51,7 +51,14 @@ COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
   pnpm install --frozen-lockfile --prod --ignore-scripts \
   $( [ "$INSTALL_MCP_OPTIONAL" = "true" ] || echo "--no-optional" ) \
-  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+  && rm -rf \
+    /root/.cache/node/corepack \
+    /usr/local/bin/corepack \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/pnpm \
+    /usr/local/bin/pnpx \
+    /usr/local/lib/node_modules/npm
 
 USER node
 
