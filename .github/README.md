@@ -10,6 +10,8 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 | --- | --- | --- | --- | --- |
 | Main CI pipeline | [pr-branch-ci.yml](workflows/pr-branch-ci.yml) | **CI** | PR + push to `main`, `dev` | Yes (quality, test, api-smoke, docker) |
 | PR title, labels, `.env` guard | [pr-governance.yml](workflows/pr-governance.yml) | **PR Governance** | Every PR event | Yes (`Checks`) |
+| Post-merge gates (chaos, SBOM, API docs) | [post-merge-ci.yml](workflows/post-merge-ci.yml) | **Post-merge CI** | Push to `main`, `dev` only | No |
+| Docs lint + link check (markdown only) | [pr-docs-lane.yml](workflows/pr-docs-lane.yml) | **Docs lane** | PR that touches `*.md` | No |
 | Railway deploy after green CI | [deploy-railway-after-ci.yml](workflows/deploy-railway-after-ci.yml) | **Deploy Railway after CI** | After `CI` succeeds on push + manual | No |
 | Nightly k6 load + SLO gate | [scheduled-k6-load-slo.yml](workflows/scheduled-k6-load-slo.yml) | **Scheduled k6 API load & SLO** | Daily 02:00 UTC + manual | No |
 | Monthly backup restore + RTO | [scheduled-monthly-restore-rto.yml](workflows/scheduled-monthly-restore-rto.yml) | **Monthly backup restore & RTO drill** | 1st of month 06:00 UTC + manual | No |
@@ -19,7 +21,7 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 | SBOM on GitHub Release | [release-attach-sbom.yml](workflows/release-attach-sbom.yml) | **Release SBOM** | `release: published` | No |
 | Dependabot safe auto-merge | [dependabot-auto-merge.yml](workflows/dependabot-auto-merge.yml) | **Dependabot** | Dependabot PRs | No |
 
-## Reusable workflows (called from `pr-branch-ci.yml`)
+## Reusable workflows (called from `pr-branch-ci.yml` / `post-merge-ci.yml`)
 
 | What it does | File | GitHub UI name (`name:`) |
 | --- | --- | --- |
