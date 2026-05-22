@@ -31,22 +31,19 @@
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
           {
-            "context": "CI / Quality & static security"
+            "context": "CI / Quality"
           },
           {
-            "context": "CI / Test (Postgres + Redis)"
+            "context": "CI / Tests"
           },
           {
-            "context": "CI / API smoke (Postgres + Redis + live server)"
+            "context": "CI / API smoke"
           },
           {
-            "context": "PR Checks / PR Quality Gates"
+            "context": "PR Governance / Checks"
           },
           {
-            "context": "CI / Chaos (Postgres + Redis via Toxiproxy)"
-          },
-          {
-            "context": "CI / Docker Build"
+            "context": "CI / Docker"
           }
         ]
       }

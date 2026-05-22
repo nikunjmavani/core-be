@@ -3,11 +3,16 @@
 # - Development: patch + minor (never major)
 # - Security alerts: patch + minor
 
-name: Dependabot auto-merge
+name: Dependabot
 
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'Dockerfile'
+      - 'Dockerfile.worker'
 
 permissions:
   contents: write
@@ -15,13 +20,13 @@ permissions:
 
 jobs:
   automerge:
-    name: Enable auto-merge for safe Dependabot updates
+    name: Auto-merge
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Fetch Dependabot metadata
         id: meta
-        uses: dependabot/fetch-metadata@v3
+        uses: dependabot/fetch-metadata@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           alert-lookup: true

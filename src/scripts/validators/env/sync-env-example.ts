@@ -4,7 +4,7 @@
  *
  * `.env.example` is the single committed env template — every schema key must appear
  * (commented or uncommented). Per-environment `.env.<name>` files are gitignored copies
- * created by `pnpm env:init` and are NOT validated here.
+ * created by `pnpm github:sync` from `.github/sync.config.json` and are NOT validated here.
  *
  * Usage:
  *   pnpm tool:sync-env-example           # Report only, print PR snippet
@@ -41,7 +41,7 @@ function parseEnvExampleKeys(content: string): {
 /**
  * Verify `.env.example` declares both required top-level halves. The two-half
  * structure ("GitHub Secrets" + "GitHub Variables") is the only classification
- * source — `pnpm env:sync` reads it directly when pushing to GitHub. If a half
+ * source — `pnpm github:sync` reads it directly when pushing to GitHub. If a half
  * is missing, every key under it would silently fall into the other half.
  */
 function checkTopLevelHalves(content: string): string[] {

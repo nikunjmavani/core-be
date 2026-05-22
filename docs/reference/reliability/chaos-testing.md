@@ -25,7 +25,7 @@ replay) against **live Postgres + Redis**, with failures injected by
 
 ## Continuous integration
 
-The **Chaos (Postgres + Redis via Toxiproxy)** job in [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml):
+The **CI / Chaos** job in [`.github/workflows/pr-branch-ci.yml`](../../../.github/workflows/pr-branch-ci.yml) (post-merge on `main` only):
 
 - Runs after **Quality** alongside the main test job.
 - Executes `pnpm chaos:provision`, `pnpm db:migrate` against proxied `DATABASE_URL`, then `pnpm test:chaos`.

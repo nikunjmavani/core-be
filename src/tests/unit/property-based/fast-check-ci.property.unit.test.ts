@@ -35,7 +35,7 @@ describe('fast-check property testing policy (#69)', () => {
     expect(vitestProjects).toContain("name: 'property'");
 
     const qualityStatic = readFileSync(
-      join(process.cwd(), '.github/workflows/reusable/quality-static.yml'),
+      join(process.cwd(), '.github/workflows/reusable-quality-static.yml'),
       'utf8',
     );
     expect(qualityStatic).toContain('pnpm test:property');

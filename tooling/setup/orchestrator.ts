@@ -20,10 +20,35 @@ import * as oauthProvider from './providers/oauth.provider.js';
 import * as railwayProvider from './providers/railway.provider.js';
 import * as githubProvider from './providers/github.provider.js';
 import * as postmanProvider from './providers/postman.provider.js';
+import { runGithubInit } from './github-init.js';
 import { exportEnvFiles } from './export-env-files.js';
 import type { SetupConfig, SetupSecrets, SetupState, ProviderResult } from './types.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../');
+
+function githubTokenPresentInEnvironment(): boolean {
+  return Boolean(
+    (process.env.GITHUB_TOKEN ?? '').trim() || (process.env.GH_TOKEN ?? '').trim(),
+  );
+}
+
+async function syncGithubBranchesRulesetsAndEnvironments(): Promise<void> {
+  logger.info('Syncing GitHub branches, rulesets, and environments...');
+  const initResult = await runGithubInit({
+    mode: 'sync',
+    purpose: 'Setup infra: branches, rulesets, and GitHub Environments',
+    skipPreflight: githubTokenPresentInEnvironment(),
+  });
+  if (initResult.failures > 0) {
+    logger.warn(
+      `GitHub branch/ruleset/environment sync reported ${initResult.failures} failure(s). ` +
+        'Common cause: repository rulesets need GitHub Pro on private repos. ' +
+        'Re-run `pnpm github:sync` after upgrading or making the repo public.',
+    );
+    return;
+  }
+  logger.success('GitHub branches, rulesets, and environments are in sync.');
+}
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -583,9 +608,10 @@ export async function runProvision(): Promise<void> {
       logger.success(result.message);
     }
 
-    // 6k. GitHub secrets (not tracked for rollback — secrets can be overwritten safely)
+    // 6k. GitHub — branches, rulesets, environments, then secrets
     if (config.providers.github.enabled) {
       logger.divider();
+      await syncGithubBranchesRulesetsAndEnvironments();
       logger.info('Setting GitHub secrets...');
       const result = await githubProvider.provision(config, secrets, state, environments);
       if (!result.success) throw new Error(`GitHub: ${result.message}`);
@@ -811,10 +837,11 @@ export async function runUpdate(): Promise<void> {
   const environments = getEnvironmentNames(config);
 
   logger.banner(config.project.displayName, environments);
-  logger.info('Re-syncing secrets to GitHub...');
+  logger.info('Re-syncing GitHub (branches, rulesets, environments, secrets)...');
   logger.blank();
 
   if (config.providers.github.enabled) {
+    await syncGithubBranchesRulesetsAndEnvironments();
     const result = await githubProvider.provision(config, secrets, state, environments);
     applyStateUpdates(state, result);
     if (result.success) {

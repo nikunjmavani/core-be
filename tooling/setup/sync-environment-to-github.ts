@@ -7,10 +7,11 @@
  * the file IS the source of truth.
  *
  * Workflow:
- *   1. Operator runs `pnpm env:init` once → creates `.env.development` and
- *      `.env.production` from `.env.example` (both gitignored).
- *   2. Operator edits `.env.<environment>` with real values.
- *   3. Operator runs `pnpm env:sync <environment>` → this script:
+ *   1. Operator adds environments to `.github/sync.config.json`.
+ *   2. `pnpm github:sync` creates missing `.env.<environment>` files from
+ *      `.env.example` (gitignored).
+ *   3. Operator edits `.env.<environment>` with real values.
+ *   4. Operator runs `pnpm github:sync <environment>` → this script:
  *        - Creates the GitHub Environment (idempotent).
  *        - Encrypts secrets locally with GitHub's environment public key and pushes
  *          them through the REST API.
@@ -21,16 +22,18 @@
  * (Stripe, OAuth, S3) blank without pushing meaningless empty strings.
  *
  * Usage:
- *   pnpm env:sync development
- *   pnpm env:sync production --dry-run     # show what would be pushed
+ *   pnpm github:sync development
+ *   pnpm github:sync production --dry-run     # show what would be pushed
  */
 
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sodium from 'libsodium-wrappers';
 
 import { parseEnvExampleSections, type EnvExampleKey } from './parse-env-example-sections.js';
+import { runGhAuthPreflight } from './gh-auth-preflight.js';
 
 const projectRoot = process.cwd();
 
@@ -116,6 +119,13 @@ interface ParsedArguments {
   readonly skipCreate: boolean;
 }
 
+export interface SyncEnvironmentToGitHubOptions {
+  readonly environment: string;
+  readonly dryRun: boolean;
+  readonly skipCreate?: boolean;
+  readonly skipPreflight?: boolean;
+}
+
 function parseArguments(argv: string[]): ParsedArguments {
   let environment: string | undefined;
   let dryRun = false;
@@ -130,7 +140,7 @@ function parseArguments(argv: string[]): ParsedArguments {
       continue;
     }
     if (arg === '--help' || arg === '-h') {
-      console.log('Usage: pnpm env:sync <environment> [--dry-run] [--no-create]');
+      console.log('Usage: pnpm github:sync <environment> [--dry-run] [--no-create]');
       console.log('');
       console.log('  <environment>  Name of the .env.<environment> file (and GitHub Env)');
       console.log('  --dry-run      Print the plan without calling gh');
@@ -153,7 +163,7 @@ function parseArguments(argv: string[]): ParsedArguments {
   }
   if (environment === undefined) {
     console.error('Missing required argument: <environment>');
-    console.error('Usage: pnpm env:sync <environment> [--dry-run] [--no-create]');
+    console.error('Usage: pnpm github:sync <environment> [--dry-run] [--no-create]');
     process.exit(2);
   }
   return { environment, dryRun, skipCreate };
@@ -187,6 +197,39 @@ async function createGitHubEnvironment(
     `repos/${repositoryFullName}/environments/${encodeURIComponent(environment)}`,
     { method: 'PUT' },
   );
+}
+
+async function githubEnvironmentExists(
+  token: string,
+  repositoryFullName: string,
+  environment: string,
+): Promise<boolean> {
+  try {
+    await requestGitHub<unknown>(
+      token,
+      `probe env ${environment}`,
+      `repos/${repositoryFullName}/environments/${encodeURIComponent(environment)}`,
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof GitHubApiError && error.status === 404) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function ensureGitHubEnvironment(
+  token: string,
+  repositoryFullName: string,
+  environment: string,
+): Promise<void> {
+  if (await githubEnvironmentExists(token, repositoryFullName, environment)) {
+    console.log(`GitHub environment "${environment}" already exists; skipping create.`);
+    return;
+  }
+  console.log(`Creating GitHub environment "${environment}"...`);
+  await createGitHubEnvironment(token, repositoryFullName, environment);
 }
 
 async function getEnvironmentPublicKey(
@@ -286,14 +329,16 @@ async function setVariable(
   return 'updated';
 }
 
-async function main(): Promise<void> {
-  const { environment, dryRun, skipCreate } = parseArguments(process.argv.slice(2));
+export async function syncEnvironmentToGitHub(
+  options: SyncEnvironmentToGitHubOptions,
+): Promise<void> {
+  const { environment, dryRun, skipCreate = false, skipPreflight = false } = options;
   const envFilePath = resolve(projectRoot, `.env.${environment}`);
 
   if (!existsSync(envFilePath)) {
-    console.error(`Missing .env.${environment} at the repo root.`);
-    console.error(`Run \`pnpm env:init ${environment}\` to scaffold it from .env.example.`);
-    process.exit(1);
+    throw new Error(
+      `Missing .env.${environment} at the repo root. Run \`pnpm github:sync\` without --dry-run to scaffold it from .github/sync.config.json.`,
+    );
   }
 
   const parsed = parseEnvExampleSections(envFilePath);
@@ -313,18 +358,31 @@ async function main(): Promise<void> {
     return;
   }
 
-  const token = getGitHubToken();
   const repositoryFullName = getRepositoryFullName();
+
+  // Skip the preflight when invoked from `github:sync` — that caller already
+  // verified the active user once and chained environment syncs should not
+  // re-prompt for every environment.
+  if (!skipPreflight && process.env.GITHUB_SYNC_PARENT !== '1') {
+    await runGhAuthPreflight({
+      repository: repositoryFullName,
+      purpose: `Push secrets and variables to GitHub Environment "${environment}"`,
+      destructive: true,
+    });
+  }
+
+  const token = getGitHubToken();
   if (!skipCreate) {
-    console.log(`Creating GitHub environment "${environment}" (idempotent)...`);
-    await createGitHubEnvironment(token, repositoryFullName, environment);
+    await ensureGitHubEnvironment(token, repositoryFullName, environment);
   }
   const publicKey = await getEnvironmentPublicKey(token, repositoryFullName, environment);
   const existingVariables = await fetchExistingVariables(token, repositoryFullName, environment);
 
   const totalItems = secrets.length + variables.length;
   console.log(`Pushing ${totalItems} item(s) through the GitHub REST API`);
-  console.log('(Variables with unchanged values are skipped; secrets are always re-encrypted and pushed).');
+  console.log(
+    '(Variables with unchanged values are skipped; secrets are always re-encrypted and pushed).',
+  );
   console.log('');
 
   const startTime = Date.now();
@@ -347,7 +405,9 @@ async function main(): Promise<void> {
     const kindLabel = kind === 'secret' ? '[secret]  ' : '[variable]';
 
     console.log(
-      `  ${indexLabel}  ${kindLabel} ${name}  (${status}, took ${formatDuration(itemDuration)}, ${remaining} left, ETA ${formatDuration(estimatedRemaining)})`,
+      `  ${indexLabel}  ${kindLabel} ${name}  (` +
+        `${status}, took ${formatDuration(itemDuration)}, ${remaining} left, ` +
+        `ETA ${formatDuration(estimatedRemaining)})`,
     );
   };
 
@@ -376,7 +436,16 @@ async function main(): Promise<void> {
   console.log(`Verify: SKIP_GITHUB_ENV=1 CONFIG=${environment} pnpm validate:github-env`);
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+async function main(): Promise<void> {
+  const { environment, dryRun, skipCreate } = parseArguments(process.argv.slice(2));
+  await syncEnvironmentToGitHub({ environment, dryRun, skipCreate });
+}
+
+const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
+
+if (isMainModule) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}

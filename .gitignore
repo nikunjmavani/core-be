@@ -9,8 +9,8 @@ node_modules/
 dist/
 
 # Environment: only `.env.example` is committed.
-# `.env.<environment>` files are gitignored copies created by `pnpm env:init` and pushed
-# to GitHub Environments via `pnpm env:sync <environment>`.
+# `.env.<environment>` files are gitignored copies created by `pnpm github:sync` and pushed
+# to GitHub Environments via `pnpm github:sync <environment>`.
 .env*
 !.env.example
 
@@ -37,6 +37,7 @@ npm-debug.log*
 
 # Coverage
 coverage/
+coverage-*/
 
 # Generated docs (run pnpm docs:generate / pnpm docs:postman to recreate)
 docs/openapi/openapi.json

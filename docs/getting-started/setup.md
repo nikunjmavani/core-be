@@ -27,7 +27,7 @@ Single reference for local setup, Git workflow, and testing. **Want one document
 
 ```mermaid
 flowchart LR
-  A[Clone and pnpm install] --> B[pnpm env:init]
+  A[Clone and pnpm install] --> B[pnpm github:sync]
   B --> C[Edit .env.development]
   C --> D[Start Postgres and Redis]
   D --> E[pnpm db:migrate]
@@ -48,16 +48,16 @@ pnpm install
 
 Env files live at **project root only**. There is exactly one committed
 template — `.env.example` — and one gitignored file per environment created
-by `pnpm env:init`:
+from `.github/sync.config.json` by `pnpm github:sync`:
 
 ```bash
-pnpm env:init                       # creates .env.development + .env.production
+pnpm github:sync                    # creates missing .env.<environment> files
 $EDITOR .env.development            # fill in real values
 ```
 
 `.env.example` is split into two top-level halves (`# GitHub Secrets ###`,
 `# GitHub Variables ###`). The section a key sits in IS its classification —
-`pnpm env:sync <environment>` later pushes each half to the matching GitHub
+`pnpm github:sync <environment>` later pushes each half to the matching GitHub
 Environment via `gh secret set` or `gh api .../variables`. See
 [environment-variables.md](../deployment/runbooks/environment-variables.md)
 for the full lifecycle, and [credentials-and-env.md](../integrations/credentials-and-env.md)
@@ -73,8 +73,8 @@ to `.env.development` for `NODE_ENV=test`.
 | File               | Status         | Purpose                                                                          |
 | ------------------ | -------------- | -------------------------------------------------------------------------------- |
 | `.env.example`     | committed      | Single template; every schema key lives here under the right half + sub-section. |
-| `.env.development` | **gitignored** | Local + dev-environment values; source of truth for `pnpm env:sync development`. |
-| `.env.production`  | **gitignored** | Production values; source of truth for `pnpm env:sync production`.               |
+| `.env.development` | **gitignored** | Local + dev-environment values; source of truth for `pnpm github:sync development`. |
+| `.env.production`  | **gitignored** | Production values; source of truth for `pnpm github:sync production`.               |
 
 ### 1.3 Database and Redis
 

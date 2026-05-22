@@ -19,18 +19,18 @@ describe('supply chain SBOM policy (#94 p3-sbom-syft)', () => {
   });
 
   it('runs dependency audit in the quality-static reusable workflow', () => {
-    const qualityStatic = readWorkflow('.github/workflows/reusable/quality-static.yml');
+    const qualityStatic = readWorkflow('.github/workflows/reusable-quality-static.yml');
     expect(qualityStatic).toContain('pnpm deps:audit');
     expect(qualityStatic).toContain('pnpm deps:audit:prod');
   });
 
-  it('generates CycloneDX SBOM in CI and attaches it on GitHub Release publish', () => {
-    const ciWorkflow = readWorkflow('.github/workflows/ci.yml');
-    expect(ciWorkflow).toContain('anchore/sbom-action@v0');
-    expect(ciWorkflow).toContain('cyclonedx-json');
-    expect(ciWorkflow).toContain('sbom.cyclonedx.json');
+  it('generates CycloneDX SBOM post-merge and attaches it on GitHub Release publish', () => {
+    const postMergeWorkflow = readWorkflow('.github/workflows/post-merge-ci.yml');
+    expect(postMergeWorkflow).toContain('anchore/sbom-action@v0');
+    expect(postMergeWorkflow).toContain('cyclonedx-json');
+    expect(postMergeWorkflow).toContain('sbom.cyclonedx.json');
 
-    const releaseSbomWorkflow = readWorkflow('.github/workflows/release-sbom.yml');
+    const releaseSbomWorkflow = readWorkflow('.github/workflows/release-attach-sbom.yml');
     expect(releaseSbomWorkflow).toContain('release:');
     expect(releaseSbomWorkflow).toContain('types: [published]');
     expect(releaseSbomWorkflow).toContain('anchore/sbom-action@v0');

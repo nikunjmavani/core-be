@@ -1,6 +1,61 @@
 import '@/shared/config/load-env-files.js';
 
-process.env.NODE_ENV ??= 'test';
+/**
+ * `.env.development` is loaded before this file (via `load-env-files`). Several values that
+ * make sense for `pnpm dev` would break the test harness — they MUST mirror CI's
+ * `.github/workflows/reusable-vitest-postgres-redis.yml` env, not the developer's `.env.development`.
+ * These are hard-overridden (not `??=`) so local test runs are deterministic regardless of
+ * what each contributor has in their `.env.development`.
+ */
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_SSL_ENABLED = 'false';
+/**
+ * Feature flags asserted by route registration and auth tests. `.env.development` sets
+ * several of these to `'false'` for local dev ergonomics, but the test harness needs the
+ * corresponding routes/handlers wired so each suite can assert its real-world behavior.
+ * Individual tests that exercise the disabled path flip the flag back inside `beforeAll`
+ * (e.g. `mcp-disabled.security.test.ts`, `queue-dashboard-readonly.security.test.ts`).
+ */
+process.env.ENABLE_MCP_SERVER = 'true';
+process.env.ENABLE_QUEUE_DASHBOARD = 'true';
+process.env.ENABLE_QUEUE_DASHBOARD_MUTATIONS = 'true';
+delete process.env.REDIS_KEY_PREFIX;
+delete process.env.WEBHOOK_URL_ALLOWLIST;
+
+/**
+ * Placeholder smell — `.env.example` (and the seeded `.env.development`) use the literal
+ * marker `__REPLACE_ME__` for secrets a contributor must replace before booting `pnpm dev`
+ * against real services. The test harness has its own deterministic fixtures (see the
+ * `??=` defaults below), so drop these values now and let the test fallback win.
+ */
+function clearIfReplaceMePlaceholder(name: string): void {
+  const value = process.env[name];
+  if (value && value.includes('__REPLACE_ME__')) {
+    delete process.env[name];
+  }
+}
+clearIfReplaceMePlaceholder('METRICS_SCRAPE_TOKEN');
+clearIfReplaceMePlaceholder('JWT_SECRET');
+clearIfReplaceMePlaceholder('SECRETS_ENCRYPTION_KEY');
+
+/**
+ * Placeholder smell — `.env.example` (and the seeded `.env.development`) use `host` as a
+ * literal hostname placeholder for connection URLs (e.g. `redis://host:6379`,
+ * `postgresql://user:pass@host:5432/core`). When a contributor copies the template but hasn't
+ * filled in real values, `host` is not resolvable and tests hang on ENOTFOUND. Drop these so
+ * the `??=` fallbacks below point at the Docker Compose defaults.
+ */
+function clearIfPlaceholderHost(name: string): void {
+  const value = process.env[name];
+  /** Matches either `://host:` / `://host/` (no auth) or `@host:` / `@host/` (with auth). */
+  if (value && /(?:\/\/|@)host(?:[:/]|$)/.test(value)) {
+    delete process.env[name];
+  }
+}
+clearIfPlaceholderHost('DATABASE_URL');
+clearIfPlaceholderHost('DATABASE_MIGRATION_URL');
+clearIfPlaceholderHost('REDIS_URL');
+clearIfPlaceholderHost('REDIS_BULLMQ_URL');
 
 const TEST_JWT_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
 MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDJp33Skforij0b
@@ -43,9 +98,23 @@ AQIDAQAB
 -----END PUBLIC KEY-----
 `;
 
-process.env.JWT_PRIVATE_KEY ??= TEST_JWT_PRIVATE_KEY;
-process.env.JWT_PUBLIC_KEY ??= TEST_JWT_PUBLIC_KEY;
+function normalizeTestPem(value: string | undefined, marker: string, fallback: string): string {
+  if (!value?.includes(marker) || value.includes('__REPLACE_ME__') || value.includes('...')) {
+    return fallback;
+  }
+  return value.replaceAll('\\n', '\n');
+}
 
+process.env.JWT_PRIVATE_KEY = normalizeTestPem(
+  process.env.JWT_PRIVATE_KEY,
+  'BEGIN PRIVATE KEY',
+  TEST_JWT_PRIVATE_KEY,
+);
+process.env.JWT_PUBLIC_KEY = normalizeTestPem(
+  process.env.JWT_PUBLIC_KEY,
+  'BEGIN PUBLIC KEY',
+  TEST_JWT_PUBLIC_KEY,
+);
 // Suppress BullMQ Redis eviction policy warning in tests (local/CI Redis often uses volatile-lru)
 const originalWarn = console.warn;
 console.warn = (...args: unknown[]) => {
@@ -56,15 +125,14 @@ console.warn = (...args: unknown[]) => {
 process.env.LOG_LEVEL ??= 'info';
 process.env.PORT ??= '3000';
 process.env.HTTP_BIND_HOST = '127.0.0.1';
-// Prefer local Docker Postgres for tests (see docker-compose.yml) even when .env points elsewhere
-process.env.USE_LOCAL_TEST_DATABASE ??= 'true';
+// Local fallback — tests run against the same Docker Postgres dev uses (see docker-compose.yml).
+// CI overrides DATABASE_URL to its ephemeral service-container Postgres.
 process.env.DATABASE_URL ??= 'postgresql://core:core@localhost:5432/core';
 process.env.REDIS_URL ??= 'redis://localhost:6379';
 process.env.RUN_REDIS_TESTS ??= '1';
 process.env.JWT_SECRET ??= 'test-jwt-secret-min-32-chars-xxxxxxxx';
 process.env.SECRETS_ENCRYPTION_KEY ??= 'a'.repeat(64);
 process.env.METRICS_SCRAPE_TOKEN ??= 'test-metrics-bearer-token-min-32-chars';
-process.env.DATABASE_SSL_ENABLED ??= 'false';
 process.env.COOKIE_SECURE ??= 'false';
 /** Local `.env` may set a short Stripe webhook signing secret — HMAC helpers require plausible length under test */
 if (

@@ -42,7 +42,7 @@ Bug reports, features, PR text, CODEOWNERS, and CI metadata live under [`.github
 
 ## Project Structure
 
-```
+```text
 tooling/
   setup/                     # Infra wizard (pnpm setup:infra) — Neon, Railway, Stripe
   ci/                        # Build/CI guards (Dockerfile sync, dist @/ alias check)
@@ -201,7 +201,7 @@ For the current `src/` tree, run `pnpm tool:project-structure-tree` or see [docs
 
 Each domain uses these layers:
 
-```
+```text
 <domain>.routes.ts       — Route registration (Fastify plugin)
 <domain>.controller.ts   — Thin Fastify handlers
 <domain>.validator.ts    — Calls DTO.parse()
@@ -315,15 +315,15 @@ pnpm install
 
 ### 2. Environment Variables
 
-Env files live at **project root only** (no `env/` directory). Bootstrap one file per environment from the committed template:
+Env files live at **project root only** (no `env/` directory). Bootstrap missing files from `.github/sync.config.json` and the committed template:
 
 ```bash
-pnpm env:init                # creates .env.development + .env.production
+pnpm github:sync             # creates missing .env.<environment> files
 # Then edit each .env.<environment> file with real values.
 ```
 
-`pnpm env:init` copies `.env.example` → `.env.development` and `.env.production` (both
-gitignored). For local dev, edit `.env.development` and run with `NODE_ENV=development`
+`pnpm github:sync` creates missing `.env.<environment>` files from `.env.example` (both
+gitignored) and `.github/sync.config.json`. For local dev, edit `.env.development` and run with `NODE_ENV=development`
 (default). Provide your managed Postgres and Redis connection strings in `DATABASE_URL`
 and `REDIS_URL`. Set `JWT_SECRET` (min 32 chars). Committed template: `.env.example`.
 Gitignored: every `.env.*` file.

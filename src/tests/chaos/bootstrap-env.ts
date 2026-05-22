@@ -14,12 +14,6 @@ process.env.VITEST_CHAOS_SUITE = 'true';
 process.env.RUN_REDIS_TESTS = '0';
 process.env.RUN_DB_TESTS ||= '1';
 
-/**
- * Bypass the conventional test harness override that rewires DATABASE_URL toward direct localhost:5432.
- * Chaos assertions intentionally funnel traffic through Docker-published Toxiproxy ports.
- */
-process.env.USE_LOCAL_TEST_DATABASE = 'false';
-
 process.env.PORT ??= '3000';
 process.env.HTTP_BIND_HOST = '127.0.0.1';
 process.env.LOG_LEVEL ??= 'warn';

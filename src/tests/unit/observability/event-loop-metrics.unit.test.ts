@@ -42,13 +42,15 @@ describe('event-loop-metrics', () => {
     process.env.METRICS_ENABLED = 'true';
     resetEnvCacheForTests();
 
-    const { registerEventLoopMetrics } =
+    const { registerEventLoopMetrics, refreshEventLoopMetrics } =
       await import('@/infrastructure/observability/metrics/event-loop-metrics.js');
-    const { refreshMetricsBeforeScrape, renderMetrics } =
-      await import('@/infrastructure/observability/metrics/metrics.js');
+    const { renderMetrics } = await import('@/infrastructure/observability/metrics/metrics.js');
 
+    /** Use the focused refresh — `refreshMetricsBeforeScrape()` also fans out to BullMQ
+     * queue gauges and Postgres pool metrics, which connect to real infra and would hang
+     * this unit test under parallel forks. We only need the event-loop slice here. */
     registerEventLoopMetrics();
-    await refreshMetricsBeforeScrape();
+    refreshEventLoopMetrics();
 
     const metricsBody = await renderMetrics();
     expect(metricsBody).toContain('# TYPE event_loop_lag_ms gauge');

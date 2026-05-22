@@ -2,7 +2,7 @@
  * Outbound webhook delivery must forward the API request id for log correlation.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { eventBus } from '@/core/events/event-bus.js';
+import { eventBus, runWithOnCommitScope } from '@/core/events/event-bus.js';
 import { NOTIFY_EVENT } from '@/domains/notify/sub-domains/webhook/events/notify.events.js';
 import { registerWebhookDeliveryEventHandlers } from '@/domains/notify/sub-domains/webhook/events/webhook-delivery.event-handlers.js';
 import { processWebhookDeliveryAttempt } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js';
@@ -36,6 +36,13 @@ vi.mock('@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js', (
     findOrganizationPublicIdByDeliveryAttemptIdMock(...arguments_),
 }));
 
+vi.mock('@/infrastructure/database/contexts/tenant-context.js', () => ({
+  withOrganizationContext: async (
+    _organizationPublicId: string,
+    callback: (databaseHandle: never) => unknown,
+  ) => callback({} as never),
+}));
+
 vi.mock('@/shared/utils/security/field-secret-encryption.util.js', () => ({
   decryptFieldSecret: vi.fn(() => 'signing-secret'),
 }));
@@ -65,11 +72,14 @@ describe('Webhook request id forward contract', () => {
   it('propagates requestId from domain event through the queue into outbound X-Request-Id', async () => {
     const correlationRequestId = 'req-api-to-subscriber';
 
-    await eventBus.emit({
-      type: NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED,
-      payload: { delivery_attempt_id: 7 },
-      timestamp: new Date(),
-      requestId: correlationRequestId,
+    await runWithOnCommitScope(async () => {
+      await eventBus.emit({
+        type: NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED,
+        payload: { delivery_attempt_id: 7 },
+        timestamp: new Date(),
+        requestId: correlationRequestId,
+      });
+      await eventBus.flushOnCommit();
     });
 
     expect(enqueueWebhookDeliveryByAttemptIdMock).toHaveBeenCalledWith(

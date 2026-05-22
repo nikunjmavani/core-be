@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   run:
+    name: Toxiproxy
     runs-on: ubuntu-latest
 
     services:
@@ -49,14 +50,9 @@ jobs:
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@localhost:25432/core
       REDIS_URL: redis://localhost:26379
-      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
-      ALLOWED_ORIGINS: http://localhost:3000
       FRONTEND_URL: http://localhost:3000
-      RATE_LIMIT_MAX: 1000
-      RATE_LIMIT_WINDOW_MS: 60000
       RUN_DB_TESTS: 1
       RUN_REDIS_TESTS: 1
-      USE_LOCAL_TEST_DATABASE: 'false'
       ENABLE_MCP_SERVER: 'true'
       TOXIPROXY_URL: http://127.0.0.1:8474
       CHAOS_TOXIPROXY_POSTGRES_UPSTREAM: postgres:5432
@@ -64,10 +60,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export shared CI test env (JWT keys + retention + secrets-encryption)
+        uses: ./.github/actions/test-env
+        with:
+          rate-limit-max: '1000'
+          rate-limit-window-ms: '60000'
 
       - name: Provision chaos Toxiproxy listeners
         run: pnpm chaos:provision

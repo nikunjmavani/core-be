@@ -9,6 +9,17 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   captureMessage: vi.fn(),
 }));
 
+/**
+ * AuditService.record() wraps repository calls in `withUserDatabaseContext`, which opens
+ * a real `database.transaction()` and would hang the unit test (repositories are mocked).
+ * Run the inner callback directly so we still exercise service intent without Postgres.
+ */
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
 describe('AuditService', () => {
   const repository = {
     insert: vi.fn().mockResolvedValue(undefined),

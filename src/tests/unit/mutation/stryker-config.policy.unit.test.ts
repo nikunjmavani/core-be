@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const strykerConfigPath = join(process.cwd(), 'stryker.config.json');
-const workflowPath = join(process.cwd(), '.github/workflows/mutation-testing.yml');
+const workflowPath = join(process.cwd(), '.github/workflows/scheduled-stryker-mutation.yml');
 const vitestStrykerPath = join(process.cwd(), 'vitest.stryker.config.ts');
 
 describe('Stryker mutation testing policy (#68)', () => {

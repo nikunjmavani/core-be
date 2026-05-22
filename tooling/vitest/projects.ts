@@ -13,7 +13,93 @@ import type { TestProjectConfiguration } from 'vitest/config';
  *     because tests share a Postgres database and call `cleanupDatabase()`.
  *
  * Run a slice in parallel (CI matrix shards): `vitest run --project unit --shard=1/3`.
+ *
+ * Domain filtering (CI db-bound shards):
+ *   Set `VITEST_DOMAIN_FILTER=tenancy,billing` to narrow the `e2e` and
+ *   `integration` projects to a subset of domains. Token `rest` additionally
+ *   includes non-domain integration tests (`src/tests/integration/**`).
+ *   Used by `.github/workflows/reusable-vitest-postgres-redis.yml` to split the db-bound suite
+ *   across multiple runners (tenancy+billing, auth+user, notify+audit+upload+rest).
+ *   Empty/unset → run everything (default).
  */
+
+const ALL_DOMAIN_NAMES = [
+  'auth',
+  'tenancy',
+  'billing',
+  'user',
+  'notify',
+  'audit',
+  'upload',
+] as const;
+
+type DomainName = (typeof ALL_DOMAIN_NAMES)[number];
+
+interface DomainFilter {
+  domains: DomainName[];
+  includeRest: boolean;
+}
+
+function parseDomainFilter(): DomainFilter | null {
+  const raw = process.env.VITEST_DOMAIN_FILTER?.trim();
+  if (!raw) return null;
+  const tokens = raw
+    .split(',')
+    .map((token) => token.trim().toLowerCase())
+    .filter((token) => token.length > 0);
+  if (tokens.length === 0) return null;
+  const domains = tokens.filter((token): token is DomainName =>
+    (ALL_DOMAIN_NAMES as readonly string[]).includes(token),
+  );
+  const includeRest = tokens.includes('rest');
+  if (domains.length === 0 && !includeRest) {
+    return null;
+  }
+  return { domains, includeRest };
+}
+
+function buildE2eIncludes(): string[] {
+  const filter = parseDomainFilter();
+  if (!filter) {
+    return [
+      'src/domains/**/__tests__/*.test.ts',
+      'src/domains/**/__tests__/e2e/**/*.test.ts',
+      'src/**/*.e2e.test.ts',
+      'src/**/__tests__/*.worker.test.ts',
+    ];
+  }
+  const patterns: string[] = [];
+  for (const domain of filter.domains) {
+    patterns.push(`src/domains/${domain}/**/__tests__/*.test.ts`);
+    patterns.push(`src/domains/${domain}/**/__tests__/e2e/**/*.test.ts`);
+    patterns.push(`src/domains/${domain}/**/*.e2e.test.ts`);
+    patterns.push(`src/domains/${domain}/**/__tests__/*.worker.test.ts`);
+  }
+  if (filter.includeRest) {
+    patterns.push('src/!(domains)/**/*.e2e.test.ts');
+    patterns.push('src/!(domains)/**/__tests__/*.worker.test.ts');
+  }
+  return patterns;
+}
+
+function buildIntegrationIncludes(): string[] {
+  const filter = parseDomainFilter();
+  if (!filter) {
+    return [
+      'src/tests/integration/**/*.test.ts',
+      'src/**/__tests__/integration/**/*.test.ts',
+    ];
+  }
+  const patterns: string[] = [];
+  for (const domain of filter.domains) {
+    patterns.push(`src/domains/${domain}/**/__tests__/integration/**/*.test.ts`);
+  }
+  if (filter.includeRest) {
+    patterns.push('src/tests/integration/**/*.test.ts');
+  }
+  return patterns;
+}
+
 export const vitestProjects = [
   /* ─────────────────────────────  Parallel tiers  ───────────────────────────── */
 
@@ -77,17 +163,14 @@ export const vitestProjects = [
    * Bundled domain e2e + dedicated `*.e2e.test.ts` suites + worker tests.
    * All hit the live test app and database; files share `cleanupDatabase()`
    * and must run sequentially.
+   *
+   * `include` honors `VITEST_DOMAIN_FILTER` (see top of file).
    */
   {
     extends: true,
     test: {
       name: 'e2e',
-      include: [
-        'src/domains/**/__tests__/*.test.ts',
-        'src/domains/**/__tests__/e2e/**/*.test.ts',
-        'src/**/*.e2e.test.ts',
-        'src/**/__tests__/*.worker.test.ts',
-      ],
+      include: buildE2eIncludes(),
       exclude: [
         'src/**/__tests__/unit/**',
         'src/**/__tests__/integration/**',
@@ -104,15 +187,14 @@ export const vitestProjects = [
   /**
    * Integration tests — `src/tests/integration/**` and per-domain
    * `__tests__/integration/**`. Postgres-backed; sequential.
+   *
+   * `include` honors `VITEST_DOMAIN_FILTER` (see top of file).
    */
   {
     extends: true,
     test: {
       name: 'integration',
-      include: [
-        'src/tests/integration/**/*.test.ts',
-        'src/**/__tests__/integration/**/*.test.ts',
-      ],
+      include: buildIntegrationIncludes(),
       pool: 'forks',
       fileParallelism: false,
       maxWorkers: 1,

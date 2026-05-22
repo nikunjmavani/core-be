@@ -3,6 +3,9 @@ import { enqueueNotification } from '@/domains/notify/sub-domains/notification/q
 import type { NotificationRepository } from './notification.repository.js';
 import type { UserService } from '@/domains/user/user.service.js';
 
+/**
+ * Persists in-app notifications and enqueues delivery for the owning user.
+ */
 export class NotificationService {
   constructor(
     private readonly repository: NotificationRepository,

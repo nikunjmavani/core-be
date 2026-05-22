@@ -33,10 +33,12 @@ Keep **zero known vulnerabilities** in dependencies and avoid **breaking changes
    - Prefer `pnpm update` (patch/minor within declared ranges). For a major upgrade, do it intentionally: update one package, run `pnpm validate` and `pnpm test`, fix any breakage, then commit.
 
 4. **Validate and test**
+
    ```bash
    pnpm validate
    pnpm test
    ```
+
    Do not commit dependency changes without passing validate and tests.
 
 ### When `pnpm audit` reports vulnerabilities
@@ -80,7 +82,7 @@ Keep **zero known vulnerabilities** in dependencies and avoid **breaking changes
 ## CI
 
 - **Quality job** runs `pnpm install --frozen-lockfile` then `pnpm deps:audit` and `pnpm deps:audit:prod`. Any vulnerability fails the job.
-- **Dependabot auto-merge** ([`.github/workflows/dependabot-automerge.yml`](../../../.github/workflows/dependabot-automerge.yml)) only enables merge when checks pass; branch protection must require **Quality & static security** so a merged dependency PR cannot skip audit.
+- **Dependabot auto-merge** ([`.github/workflows/dependabot-auto-merge.yml`](../../../.github/workflows/dependabot-auto-merge.yml)) only enables merge when checks pass; branch protection must require **CI / Quality** so a merged dependency PR cannot skip audit.
 - Keep `pnpm.overrides` in `package.json` when needed so that the lockfile (frozen in CI) already contains patched versions.
 
 ## Checklist (after any dependency change)

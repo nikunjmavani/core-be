@@ -5,6 +5,24 @@ import type { UserRepository } from '@/domains/user/user.repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
 
+/**
+ * UserService wraps repository calls in `withUserDatabaseContext` and `withTransaction`
+ * (see `softDeleteUserWithOffboarding`, `updatePassword`, `updateMfaEnabled`). Those
+ * helpers open a real `database.transaction()` and would hang in pure unit tests with
+ * mocked repositories. Run the inner callback directly so the test exercises service
+ * logic without touching Postgres. Matches the pattern in
+ * `src/domains/auth/__tests__/unit/auth.service.unit.test.ts`.
+ */
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
+vi.mock('@/infrastructure/database/transaction.js', () => ({
+  withTransaction: vi.fn((callback: (transaction: unknown) => Promise<unknown>) => callback({})),
+}));
+
 const userRow = {
   id: 1,
   public_id: generatePublicId(),

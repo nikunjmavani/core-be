@@ -62,10 +62,9 @@ Example: prefix `/api/v1/tenancy` + relative path `/organizations/:id/settings` 
 
 Use this exact format:
 
-```
+```text
 ================================================================================
   ROUTE CATALOG — core-be
-  Generated: <YYYY-MM-DD HH:mm>
   Total routes: <count>
 ================================================================================
 
@@ -141,7 +140,7 @@ Legend:
 
 ### Formatting rules
 
-- **Method** column: left-aligned, 6 chars wide (e.g. `GET   `, `DELETE`)
+- **Method** column: left-aligned, padded to 6 chars wide (e.g. `GET` padded to `GET___`, `DELETE` already 6 chars; underscores show where spaces go)
 - **Path** column: left-aligned, padded to align access labels (use at least 55 chars width)
 - **Access** column: right-aligned label
 - Group routes within a domain by sub-domain using `— Sub-domain Name —` dividers

@@ -12,13 +12,14 @@ invariant. This runbook covers the **per-key lifecycle**.
 
 | What                                 | Command                                       |
 | ------------------------------------ | --------------------------------------------- |
-| Bootstrap local env files            | `pnpm env:init`                               |
+| Bootstrap local env files            | `pnpm github:sync` (from `.github/sync.config.json`) |
 | Edit values                          | open `.env.<environment>` (gitignored)        |
-| Push to GitHub (one env)             | `pnpm env:sync <environment>`                 |
-| Preview without pushing              | `pnpm env:sync <environment> --dry-run`       |
-| Re-generate from template            | `pnpm env:init --force`                       |
+| Full GitHub sync (branches + rulesets + env values) | `pnpm github:sync`              |
+| Sync one environment                 | `pnpm github:sync <environment>`              |
+| Preview without pushing              | `pnpm github:sync <environment> --dry-run`    |
+| Add a hosted environment             | edit `.github/sync.config.json`, then `pnpm github:sync` |
 | Verify schema ↔ template parity      | `pnpm tool:sync-env-example`                  |
-| Verify branch/env/NODE_ENV invariant | `pnpm validate:env-consistency`               |
+| Verify branch/env/NODE_ENV invariant | `pnpm github:sync --check`                    |
 | Verify required keys exist in GitHub | `CONFIG=<env> pnpm validate:github-env`       |
 | Add a new env var (skill)            | read `.cursor/skills/env-schema-add/SKILL.md` |
 
@@ -49,8 +50,9 @@ neighbours (sub-section grouping for readability).
 ```mermaid
 flowchart LR
   S[src/shared/config/env-schema.ts] -- "key names + Zod types" --> T[.env.example]
-  T -- pnpm env:init --> D[".env.&lt;environment&gt; (gitignored)"]
-  D -- pnpm env:sync --> G["GitHub Environment\n(Secrets + Variables)"]
+  Cfg[".github/sync.config.json"] -- "branch + environment mapping" --> D[".env.&lt;environment&gt; (gitignored)"]
+  T -- "template copied when missing" --> D
+  D -- pnpm github:sync --> G["GitHub Environment\n(Secrets + Variables)"]
   G -- pulled at deploy --> R[Railway runtime]
   D -- "NODE_ENV picks .env.${NODE_ENV}" --> L["pnpm dev / dev:worker (local)"]
 ```
@@ -60,16 +62,16 @@ flowchart LR
 You only do this once per machine (or after `git clean -fdx`):
 
 ```bash
-pnpm env:init
+pnpm github:sync
 ```
 
 That command:
 
-1. Parses `.env.example`'s two-half structure.
-2. Writes `.env.development` and `.env.production` (both **gitignored**) at the
-   repo root. Each is a compact mirror of the template with the same sub-section
-   layout but no description comments.
-3. Sets `NODE_ENV=<environment>` automatically inside each file.
+1. Reads `.github/sync.config.json`.
+2. Creates any missing `.env.<environment>` files from `.env.example`.
+3. Creates any missing `.github/environments/<environment>.json` and `.github/rulesets/<branch>.json`.
+4. Applies branches, rulesets, and GitHub Environments.
+5. Asks for confirmation before pushing values.
 
 Then edit `.env.development` (and `.env.production` if you have access to
 production credentials) with real values:
@@ -100,11 +102,10 @@ every contributor to maintain a separate `.env.test`.
 | Change a value    | edit `.env.development` and restart `pnpm dev`                                                         |
 | See what's loaded | the dotenv loader logs `injected env (<n>) from .env.development` at startup                           |
 | Switch profile    | `NODE_ENV=production pnpm dev` to test prod settings locally (requires `.env.production` to be filled) |
-| Reset to template | `pnpm env:init --force` (overwrites both `.env.development` and `.env.production`)                     |
+| Add a new env file | add the environment to `.github/sync.config.json`, then run `pnpm github:sync`                         |
 
-`pnpm env:init` is idempotent **without** `--force` — it skips files that
-already exist, so you can re-run it safely after pulling new schema keys.
-Pass `--force` only when you intentionally want to discard local edits.
+`pnpm github:sync` does not overwrite existing `.env.<environment>` files; update
+existing files manually so real values are not discarded.
 
 ## 4. Adding a new env var
 
@@ -118,8 +119,8 @@ flowchart TB
   B -- public id / op knob / flag --> D[Place under # GitHub Variables in .env.example]
   C --> E[pnpm tool:sync-env-example]
   D --> E
-  E -- exits 0 --> F[pnpm env:init --force]
-  F --> G[pnpm env:sync &lt;env&gt; --dry-run for each hosted env]
+  E -- exits 0 --> F[Update local .env files manually]
+  F --> G[pnpm github:sync &lt;env&gt; --dry-run for each hosted env]
   G --> H[Paste PR description snippet]
 ```
 
@@ -170,17 +171,14 @@ Step by step:
    appended placeholders into the right half/sub-section by hand, with a
    description.
 
-4. **Regenerate operator templates:**
-
-   ```bash
-   pnpm env:init --force
-   ```
+4. **Update local `.env.<environment>` files manually** so they contain the new
+   key under the same half + sub-section. Do not overwrite real values.
 
 5. **Dry-run the GitHub sync for each hosted env:**
 
    ```bash
-   pnpm env:sync development --dry-run
-   pnpm env:sync production  --dry-run
+   pnpm github:sync development --dry-run
+   pnpm github:sync production  --dry-run
    ```
 
    Confirm the new key appears under the correct `[secret]` or `[variable]`
@@ -203,11 +201,11 @@ Hosted-environment change:
 
 ```bash
 $EDITOR .env.<environment>      # edit value
-pnpm env:sync <environment> --dry-run    # preview
-pnpm env:sync <environment>              # push
+pnpm github:sync <environment> --dry-run    # preview
+pnpm github:sync <environment>              # push
 ```
 
-`env:sync` is **idempotent** and **overwrites in place** — running it twice
+`github:sync` is **idempotent** and **overwrites in place** — running it twice
 with the same file is a no-op for unchanged keys.
 
 ## 6. Renaming a key
@@ -218,12 +216,12 @@ A rename is atomic — delete + add in the **same PR**:
 2. Update every code site that read the old key to read the new one.
 3. **Remove the old key** from the schema, `.env.example`, and any consumers.
 4. `pnpm tool:sync-env-example` — must report 0 missing / 0 extra.
-5. `pnpm env:init --force` — rewrites operator templates.
+5. Update local `.env.<environment>` files manually.
 6. After merge, delete the old key from GitHub:
    - Secret: `gh secret delete <OLD_NAME> --env <environment>`
    - Variable: `gh api --method DELETE repos/:owner/:repo/environments/<environment>/variables/<OLD_NAME>`
 
-   `env:sync` does **not** remove keys — it only creates and updates.
+   `github:sync` does **not** remove keys — it only creates and updates.
 
 ## 7. Removing a key
 
@@ -231,7 +229,7 @@ A rename is atomic — delete + add in the **same PR**:
 2. Remove from `.env.example`.
 3. Remove every consumer in code (`getEnv().FOO`).
 4. `pnpm tool:sync-env-example` — must report 0 missing / 0 extra.
-5. `pnpm env:init --force` — operator templates lose the key.
+5. Update local `.env.<environment>` files manually so they lose the key.
 6. After merge, clean up GitHub:
    - Secret: `gh secret delete <NAME> --env <environment>`
    - Variable: `gh api --method DELETE repos/:owner/:repo/environments/<environment>/variables/<NAME>`
@@ -241,20 +239,20 @@ A rename is atomic — delete + add in the **same PR**:
 | Validator                               | What it checks                                                                      | When it runs                         |
 | --------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------ |
 | `pnpm tool:sync-env-example`            | Schema ↔ `.env.example` parity; both halves present                                 | local, pre-commit, CI `ci:quality`   |
-| `pnpm validate:env-consistency`         | `NODE_ENV` enum ↔ `.github/environments/*.json` ↔ `deploy-railway.yml` branch cases | local, CI                            |
+| `pnpm github:sync --check`              | `NODE_ENV` enum ↔ config ↔ rulesets ↔ workflow ↔ GitHub env JSON; remote branch/ruleset/env drift | local before sync                    |
 | `CONFIG=<env> pnpm validate:github-env` | Each `envSchemaRequiredKeys` key exists as a secret in GitHub Environment `<env>`   | local before deploy; deploy workflow |
-| `pnpm env:sync <env> --dry-run`         | Local `.env.<env>` → GitHub plan; surfaces typos and Secret/Variable column         | local before each sync               |
+| `pnpm github:sync <env> --dry-run`      | Local `.env.<env>` → GitHub plan; surfaces typos and Secret/Variable column         | local before each sync               |
 
-All four must be green before merging a PR that touches env vars.
+Run `pnpm github:sync --check`, `pnpm tool:sync-env-example`, and (when pushing values) `pnpm github:sync <env> --dry-run` before merging env plumbing changes.
 
 ## 9. Troubleshooting
 
 | Symptom                                                                                                 | Cause                                                             | Fix                                                                                                                                                        |
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev` boot error "Missing or invalid environment variables"                                        | `.env.${NODE_ENV}` missing or stale schema key                    | Run `pnpm env:init --force` then re-edit values                                                                                                            |
+| `pnpm dev` boot error "Missing or invalid environment variables"                                        | `.env.${NODE_ENV}` missing or stale schema key                    | Run `pnpm github:sync` to scaffold missing files, then edit values                                                                                         |
 | Zod refuses `KEY=""` for an `.optional()` field                                                         | Empty string is not `undefined`                                   | Loader strips empty values automatically; if you still hit this, ensure the key has no inline comment (e.g. `KEY= # foo` parses as a value with a comment) |
-| `pnpm env:sync` says `Missing .env.<env>`                                                               | You skipped `pnpm env:init`                                       | Run `pnpm env:init <env>` first                                                                                                                            |
-| `pnpm env:sync` errors on the secret push                                                               | `gh auth status` failing or insufficient scope                    | Run `gh auth login` and grant `repo` + `admin:org` if it's an org repo                                                                                     |
+| `pnpm github:sync` says `Missing .env.<env>`                                                            | The environment is not in `.github/sync.config.json`, or dry-run cannot scaffold files | Add it to `.github/sync.config.json`, then run `pnpm github:sync` without `--dry-run`                                                                       |
+| `pnpm github:sync` errors on the secret push                                                            | `gh auth status` failing or insufficient scope                    | Run `gh auth login` and grant `repo` + `admin:org` if it's an org repo                                                                                     |
 | A new env var landed in GitHub as a Variable but should be a Secret                                     | The key was placed in the wrong half of `.env.example`            | Move it under `# GitHub Secrets ###`, regen templates, delete the existing GitHub Variable, re-sync                                                        |
 | Local tests fail with `REDIS_BULLMQ_URL must be unset or point to the same Redis endpoint as REDIS_URL` | `REDIS_BULLMQ_URL` is set to a different host than `REDIS_URL`    | Leave `REDIS_BULLMQ_URL=` empty in `.env.development` (single-Redis topology)                                                                              |
 
@@ -270,11 +268,11 @@ see the dedicated runbook: **[add-new-environment.md](./add-new-environment.md)*
 - **Template (committed):** `.env.example`
 - **Operator templates (gitignored):** `.env.development`, `.env.production`
 - **Loader:** `src/shared/config/load-env-files.ts`
-- **Init script:** `tooling/setup/init-environments.ts` (`pnpm env:init`)
-- **GitHub push:** `tooling/setup/sync-environment-to-github.ts` (`pnpm env:sync`)
+- **GitHub sync config:** `.github/sync.config.json`
+- **GitHub push:** `tooling/setup/github-sync.ts` (`pnpm github:sync`)
 - **Section parser shared by both:** `tooling/setup/parse-env-example-sections.ts`
 - **Validator: schema ↔ template:** `src/scripts/validators/env/sync-env-example.ts` (`pnpm tool:sync-env-example`)
-- **Validator: cross-dimension:** `src/scripts/validators/env/validate-environment-consistency.ts` (`pnpm validate:env-consistency`)
+- **Consistency (in github:sync):** `tooling/setup/github-sync-config.ts` (`validateGithubSyncConsistency`; run via `pnpm github:sync --check`)
 - **Validator: GitHub deploy-required keys:** `tooling/setup/validate-github-env.ts` (`pnpm validate:github-env`)
 - **Skill (use this when editing the schema):** `.cursor/skills/env-schema-add/SKILL.md`
 - **Where to obtain credentials:** [credentials-and-env.md](../../integrations/credentials-and-env.md)

@@ -93,7 +93,7 @@ flowchart TB
 | **Quality**      | Every PR and push                             | `pnpm deps:audit`, `pnpm deps:audit:prod`, `pnpm validate`, `pnpm validate:domain`, routes:catalog, `pnpm docs:check`, tool:sync-env-example, Gitleaks, `semgrep scan` |
 | **Test**         | PR/push when `src/**` (etc.) changed          | Postgres + Redis → `pnpm db:migrate` → `pnpm test:coverage`. Skipped on docs-only PRs.                                                                                 |
 | **API smoke**    | PR/push when `src/**` (etc.) changed          | Migrate → seed → API server → `pnpm test:api-smoke`. Skipped on docs-only PRs.                                                                                         |
-| **Chaos**        | PR/push when `src/**` (etc.) changed          | Toxiproxy + `pnpm test:chaos`. Required on PRs (skipped on docs-only). See [branch-protection.md](branch-protection.md).                                               |
+| **Chaos**        | Push to `main` when `src/**` (etc.) changed   | Toxiproxy + `pnpm test:chaos` — runs from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml), not required on PRs. See [branch-protection.md](branch-protection.md).                                                |
 | **Docker build** | PR/push when Docker/deps paths change         | BuildKit + Trivy + health container. Required on PRs (skipped when no `docker` paths). See [branch-protection.md](branch-protection.md).                               |
 | **Docs**         | Push to `dev` / `main` (after quality)        | `pnpm docs:all`; validate OpenAPI; upload artifacts; Postman + Scalar upload via GitHub Environment secrets (`development`, `production`)                              |
 | **PR checks**    | On every PR                                   | Conventional commit title, PR size label, **.env guard** (fail if `.env` other than `.env.example` in diff)                                                            |
@@ -101,7 +101,7 @@ flowchart TB
 
 Workflow files: [.github/workflows/ci.yml](../../../.github/workflows/ci.yml), [.github/workflows/pr-checks.yml](../../../.github/workflows/pr-checks.yml), [.github/workflows/commit-lint.yml](../../../.github/workflows/commit-lint.yml). Index: [.github/README.md](../../../.github/README.md).
 
-**Path filters (docs-only PRs):** [ci.yml](../../../.github/workflows/ci.yml) uses `dorny/paths-filter` — when only `docs/**` or markdown changes (no `src-code`), **Test**, **API smoke**, and **Chaos** are skipped on pull requests (required checks still pass). **Quality** always runs. See [branch-protection.md](branch-protection.md).
+**Path filters (docs-only PRs):** [pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) uses `dorny/paths-filter` — when only `docs/**` or markdown changes (no `src-code`), **Test** and **API smoke** are skipped on pull requests (required checks still pass). **Quality** always runs. Markdown PRs also trigger [pr-docs-lane.yml](../../../.github/workflows/pr-docs-lane.yml) for markdownlint + lychee link check. See [branch-protection.md](branch-protection.md).
 
 ---
 
@@ -304,20 +304,20 @@ walks through the Secret-vs-Variable decision and the section placement in
 2. **Add `KEY=placeholder` to [.env.example](../../../.env.example)** under the
    correct top-level half (`# GitHub Secrets ###` or `# GitHub Variables ###`)
    and an existing sub-section. The half a key sits in IS its classification —
-   `pnpm env:sync` reads the structure directly.
+   `pnpm github:sync` reads the structure directly.
 3. **Verify schema ↔ template parity** with `pnpm tool:sync-env-example`
    (`--fix` will append commented placeholders for missing keys).
-4. **Regenerate operator templates** with `pnpm env:init --force`. This rewrites
-   `.env.development` and `.env.production` (both gitignored) with the new key
-   in the same half + sub-section.
+4. **Update operator env files** manually. Existing `.env.<environment>` files
+   are not overwritten, so add the new key under the same half + sub-section
+   without discarding real values.
 5. **Edit `.env.<environment>`** with the real value(s) for each environment
    you have access to, then push:
 
    ```bash
-   pnpm env:sync development --dry-run     # preview the [secret] / [variable] column
-   pnpm env:sync development               # push
-   pnpm env:sync production --dry-run
-   pnpm env:sync production
+   pnpm github:sync development --dry-run     # preview the [secret] / [variable] column
+   pnpm github:sync development               # push
+   pnpm github:sync production --dry-run
+   pnpm github:sync production
    ```
 
 6. **Add the key to [deploy-railway.yml](../../../.github/workflows/deploy-railway.yml)**
@@ -334,13 +334,13 @@ Full lifecycle (rename, remove, validation matrix, troubleshooting):
 ## 7. Where you need which token (reference)
 
 All tokens stay **out of the repo**. Local uses `.env.<environment>`
-(gitignored, generated by `pnpm env:init`); CI/deploy uses **GitHub
-Environments** (populated by `pnpm env:sync <environment>`).
+(gitignored, generated by `pnpm github:sync` from `.github/sync.config.json`); CI/deploy uses **GitHub
+Environments** (populated by `pnpm github:sync <environment>`).
 
 ```mermaid
 flowchart TB
   subgraph local [Local]
-    A1[".env.&lt;environment&gt; at project root\n(gitignored; pnpm env:init)"]
+    A1[".env.&lt;environment&gt; at project root\n(gitignored; pnpm github:sync)"]
     A2["pnpm dev / dev:worker\n(loader picks .env.${NODE_ENV})"]
     A1 --> A2
   end
@@ -385,13 +385,13 @@ flowchart TB
 | Where                                                        | What                                                                                                                                                                                                                                                                          | Used for                                                                                                                   |
 | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | **Local** (`.env.<environment>` at project root, gitignored) | `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` (min 32 chars), `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` (RS256), `SECRETS_ENCRYPTION_KEY` (64 hex), `ALLOWED_ORIGINS`. Optional: Resend, Stripe, OAuth, S3, Sentry (see [.env.example](../../../.env.example))                         | `pnpm dev` / `pnpm dev:worker` — loader reads `.env.${NODE_ENV}`. **Never commit any `.env.*` other than `.env.example`.** |
-| **GitHub** → Environments (development, production)          | All keys from `.env.<environment>`, classified by section: anything under `# GitHub Secrets ###` becomes a Secret; anything under `# GitHub Variables ###` becomes a Variable. Plus **RAILWAY_TOKEN**, **RAILWAY_SERVICE_ID**, **RAILWAY_WORKER_SERVICE_ID** (workflow-only). | Deploy workflows. Populated by `pnpm env:sync <environment>` — idempotent, overwrites in place.                            |
+| **GitHub** → Environments (development, production)          | All keys from `.env.<environment>`, classified by section: anything under `# GitHub Secrets ###` becomes a Secret; anything under `# GitHub Variables ###` becomes a Variable. Plus **RAILWAY_TOKEN**, **RAILWAY_SERVICE_ID**, **RAILWAY_WORKER_SERVICE_ID** (workflow-only). | Deploy workflows. Populated by `pnpm github:sync <environment>` — idempotent, overwrites in place.                            |
 | **Railway**                                                  | Create **project token** → put in GitHub env as **RAILWAY_TOKEN**. Create **service(s)** → copy **Service ID** into GitHub env as **RAILWAY_SERVICE_ID** / **RAILWAY_WORKER_SERVICE_ID**.                                                                                     | Token and service IDs are stored in GitHub Environments only.                                                              |
 
 **Summary:**
 
-- **Local:** `pnpm env:init` → edit `.env.<environment>` → `pnpm dev` / `pnpm dev:worker`.
-- **GitHub:** `pnpm env:sync <environment>` pushes every key under the right section header. Re-run any time you change a value locally.
+- **Local:** `pnpm github:sync` → edit `.env.<environment>` → `pnpm dev` / `pnpm dev:worker`.
+- **GitHub:** `pnpm github:sync <environment>` pushes every key under the right section header. Re-run any time you change a value locally.
 - **Railway:** Create token and service(s); deploy workflow reads them from the GitHub Environment.
 
 ---

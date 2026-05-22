@@ -36,9 +36,12 @@ describe('Integration: RED HTTP metrics', () => {
     });
     expect(apiResponse.statusCode).toBe(400);
 
+    /** /metrics is gated by METRICS_SCRAPE_TOKEN (see `metrics.middleware.ts`); pass the
+     * token the test setup configures so the route returns 200 instead of 401. */
     const metricsResponse = await injectUnauthenticated(application, {
       method: 'GET',
       url: '/metrics',
+      headers: { authorization: `Bearer ${process.env.METRICS_SCRAPE_TOKEN ?? ''}` },
     });
 
     expect(metricsResponse.statusCode).toBe(200);

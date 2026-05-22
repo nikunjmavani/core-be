@@ -5,10 +5,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import {
-  buildCatalogContent,
-  normalizeCatalogForCheck,
-} from '@tooling/openapi/route-catalog/catalog-formatter.js';
+import { buildCatalogContent } from '@tooling/openapi/route-catalog/catalog-formatter.js';
 import { CATALOG_OUTPUT_PATH } from '@tooling/openapi/route-catalog/constants.js';
 import { collectAllParsedRoutes } from '@tooling/openapi/route-catalog/route-parser.js';
 
@@ -38,7 +35,7 @@ function main(): void {
 
   if (checkOnly) {
     const existingCatalog = readFileSync(CATALOG_OUTPUT_PATH, 'utf-8');
-    if (normalizeCatalogForCheck(existingCatalog) !== normalizeCatalogForCheck(catalogContent)) {
+    if (existingCatalog !== catalogContent) {
       console.error(
         'Route catalog out of sync (docs/routes.txt). Run pnpm routes:catalog and commit.',
       );

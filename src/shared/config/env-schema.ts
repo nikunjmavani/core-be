@@ -444,8 +444,8 @@ export const envSchemaConditionallyRequiredKeys: ReadonlyArray<{
  *
  * The classification lives entirely in `.env.example`: every key sits under
  * either the "GitHub Secrets" half (pushed via `gh secret set`) or the
- * "GitHub Variables" half (pushed via `gh api .../variables`). `pnpm env:init`
- * mirrors that structure into each `.env.<environment>`, and `pnpm env:sync`
+ * "GitHub Variables" half (pushed via `gh api .../variables`). `pnpm github:sync`
+ * mirrors that structure into each missing `.env.<environment>`, and then
  * reads the same structure when pushing.
  *
  * When you add a new env var: add it to this schema AND to the correct half

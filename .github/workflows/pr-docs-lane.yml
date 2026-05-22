@@ -1,0 +1,66 @@
+name: Docs lane
+
+# Lint and link-check markdown only when a PR touches markdown files.
+# Lives in a separate workflow so it does not show as "Skipped" on
+# code-only PRs.
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - '**/*.md'
+      - '.markdownlint.json'
+      - '.markdownlintignore'
+
+concurrency:
+  group: pr-docs-lane-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  markdown:
+    name: Markdown lint + links
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Collect changed markdown files
+        id: changed-markdown
+        run: |
+          set -euo pipefail
+          files="$(git diff --name-only --diff-filter=ACMRT \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            -- '*.md')"
+          if [ -z "${files}" ]; then
+            echo "has-files=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "has-files=true"
+            echo "files<<EOF"
+            echo "${files}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Lint changed markdown files
+        if: steps.changed-markdown.outputs.has-files == 'true'
+        uses: DavidAnson/markdownlint-cli2-action@v18
+        with:
+          config: '.markdownlint.json'
+          globs: ${{ steps.changed-markdown.outputs.files }}
+
+      - name: Check links in changed markdown files (lychee)
+        if: steps.changed-markdown.outputs.has-files == 'true'
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --max-redirects 5
+            --accept 200,204,206,429
+            ${{ steps.changed-markdown.outputs.files }}
+          fail: false

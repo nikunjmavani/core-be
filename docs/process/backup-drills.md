@@ -2,7 +2,7 @@
 
 Operational procedure for monthly disaster-recovery verification. Targets align with [dr-runbook.md](dr-runbook.md): **RPO ≤ 15 minutes**, **RTO ≤ 1 hour** for API + worker availability.
 
-The scheduled workflow [restore-drill.yml](../../.github/workflows/restore-drill.yml) runs on the **1st of each month** (06:00 UTC) and records whether measured restore time is below the RTO threshold.
+The scheduled workflow [scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml) runs on the **1st of each month** (06:00 UTC) and records whether measured restore time is below the RTO threshold.
 
 ---
 
@@ -10,7 +10,7 @@ The scheduled workflow [restore-drill.yml](../../.github/workflows/restore-drill
 
 | Setting | Default | Where |
 | ------- | ------- | ----- |
-| `RTO_MINUTES` | `60` | Workflow `env` in [restore-drill.yml](../../.github/workflows/restore-drill.yml) |
+| `RTO_MINUTES` | `60` | Workflow `env` in [scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml) |
 
 Elapsed restore time must be **strictly less than** `RTO_MINUTES × 60` seconds. The workflow **fails** when elapsed time meets or exceeds the threshold.
 
@@ -70,7 +70,9 @@ Set **`NEON_DRILL_DATABASE_URL`** to a throwaway Neon branch connection string (
 
 ---
 
-## Human drill checklist (≈ 60 minutes)
+## Human drill checklist
+
+Approximate duration: 60 minutes.
 
 1. **Schedule** — Platform owner books a 1-hour window; notify the incidents channel.
 2. **Neon branch** — Create branch from production (or staging) at a timestamp **15 minutes** in the past.

@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { Queue, Worker, QueueEvents } from 'bullmq';
+import { randomUUID } from 'node:crypto';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 
 const NOOP_QUEUE_NAME = 'test-noop-smoke';
@@ -17,20 +18,27 @@ describe('Integration: BullMQ noop job smoke', () => {
 
   it('should enqueue and process a noop job end-to-end', async () => {
     const connection = getBullMQConnectionOptions();
+    const queueName = `${NOOP_QUEUE_NAME}-${randomUUID()}`;
     let processedPayload: { ping: string } | null = null;
 
-    queue = new Queue(NOOP_QUEUE_NAME, { connection });
-    queueEvents = new QueueEvents(NOOP_QUEUE_NAME, { connection });
+    queue = new Queue(queueName, { connection });
+    queueEvents = new QueueEvents(queueName, { connection });
     worker = new Worker<{ ping: string }>(
-      NOOP_QUEUE_NAME,
+      queueName,
       async (job) => {
         processedPayload = job.data;
       },
       { connection },
     );
 
+    await Promise.all([
+      queue.waitUntilReady(),
+      queueEvents.waitUntilReady(),
+      worker.waitUntilReady(),
+    ]);
+
     const job = await queue.add('noop', { ping: 'pong' }, { removeOnComplete: true });
-    await job.waitUntilFinished(queueEvents);
+    await job.waitUntilFinished(queueEvents, 10_000);
 
     expect(processedPayload).toEqual({ ping: 'pong' });
   }, 30_000);

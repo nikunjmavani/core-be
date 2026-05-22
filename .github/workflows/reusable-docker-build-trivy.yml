@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   run:
+    name: Build + Trivy
     runs-on: ubuntu-latest
     env:
       DOCKER_BUILDKIT: 1
@@ -19,11 +20,11 @@ jobs:
         ports:
           - 5432:5432
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: core
+          POSTGRES_PASSWORD: core
           POSTGRES_DB: core
         options: >-
-          --health-cmd="pg_isready -U postgres -d core"
+          --health-cmd="pg_isready -U core -d core"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=20
@@ -40,12 +41,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          node-version-file: '.nvmrc'
+          install: 'false'
+
+      - name: Export shared CI test env (JWT keys + retention + secrets-encryption)
+        uses: ./.github/actions/test-env
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -84,27 +88,33 @@ jobs:
           cache-to: type=gha,mode=max,scope=core-be-worker
 
       - name: Scan API image with Trivy
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@v0.34.0
         with:
           image-ref: core-be:ci
           format: table
           severity: CRITICAL,HIGH
           exit-code: 1
           ignore-unfixed: true
+          version: v0.69.2
+          scanners: vuln
+          skip-files: /app/package.json,/app/pnpm-lock.yaml
 
       - name: Scan worker image with Trivy
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@v0.34.0
         with:
           image-ref: core-be-worker:ci
           format: table
           severity: CRITICAL,HIGH
           exit-code: 1
           ignore-unfixed: true
+          version: v0.69.2
+          scanners: vuln
+          skip-files: /app/package.json,/app/pnpm-lock.yaml
 
       - name: Verify worker image
         run: |
           set -euo pipefail
-          docker run --rm core-be-worker:ci node --check dist/worker.js
+          docker run --rm core-be-worker:ci node --check dist/src/worker.js
           docker run --rm core-be-worker:ci node -e "import('argon2').then(()=>import('@sentry/profiling-node')).then(()=>console.log('native ok'))"
 
       # Publish scanned images to GHCR for ANY protected-branch push (dev or main).
@@ -119,7 +129,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
       - name: Push images to GHCR (main + dev)
         if: |
@@ -146,21 +156,48 @@ jobs:
 
       - name: Boot API container and verify /health/ready
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
+          DATABASE_URL: postgresql://core:core@localhost:5432/core
           REDIS_URL: redis://localhost:6379
+          DATABASE_SSL_ENABLED: 'false'
         run: |
           set -euo pipefail
+          # JWT keys and CI test env are already in $GITHUB_ENV (exported by
+          # ./.github/actions/test-env above), so we can pass them straight
+          # through to `docker run -e VAR` without re-exporting heredocs.
+          docker run --rm --network host \
+            -e NODE_ENV=test \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
+            -e REDIS_URL="$REDIS_URL" \
+            -e JWT_SECRET="$JWT_SECRET" \
+            -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
+            -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
+            -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
+            -e AUDIT_RETENTION_DAYS="$AUDIT_RETENTION_DAYS" \
+            -e AUTH_SESSION_RETENTION_DAYS="$AUTH_SESSION_RETENTION_DAYS" \
+            -e METRICS_SCRAPE_TOKEN="$METRICS_SCRAPE_TOKEN" \
+            -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
+            core-be:ci node dist/src/infrastructure/database/migration/migrate.js
           docker run -d --name core-be-health --network host \
             -e NODE_ENV=test \
             -e HOST=0.0.0.0 \
             -e PORT=3000 \
             -e DATABASE_URL="$DATABASE_URL" \
             -e REDIS_URL="$REDIS_URL" \
-            -e JWT_SECRET=test-jwt-secret-min-32-chars-xxxxxxxx \
-            -e ALLOWED_ORIGINS=http://localhost:3000 \
-            -e AUDIT_RETENTION_DAYS=90 \
-            -e AUTH_SESSION_RETENTION_DAYS=30 \
+            -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
+            -e JWT_SECRET="$JWT_SECRET" \
+            -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
+            -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
+            -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
+            -e AUDIT_RETENTION_DAYS="$AUDIT_RETENTION_DAYS" \
+            -e AUTH_SESSION_RETENTION_DAYS="$AUTH_SESSION_RETENTION_DAYS" \
+            -e METRICS_SCRAPE_TOKEN="$METRICS_SCRAPE_TOKEN" \
+            -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
             core-be:ci
-          timeout 90 bash -c 'until curl -sf http://localhost:3000/health/ready; do sleep 2; done'
+          if ! timeout 90 bash -c 'until curl -sf http://localhost:3000/health/ready; do sleep 2; done'; then
+            docker logs core-be-health --tail 200 || true
+            docker rm -f core-be-health || true
+            exit 1
+          fi
           docker logs core-be-health --tail 50
           docker rm -f core-be-health

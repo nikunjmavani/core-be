@@ -67,7 +67,12 @@ async function main(): Promise<void> {
         );
         logger.info('  pnpm setup:infra:check  Health check all resources');
         logger.info('  pnpm setup:infra:status Show provisioning status');
-        logger.info('  pnpm setup:infra:update Re-sync secrets to GitHub');
+        logger.info(
+          '  pnpm setup:infra:update Re-sync GitHub branches, rulesets, environments, and secrets',
+        );
+        logger.info(
+          '  pnpm github:sync        Full GitHub sync (consistency + scaffold + remote + values)',
+        );
         logger.info('  pnpm setup:infra:revert Revert all provisioned resources');
         logger.info(
           '  pnpm setup:infra:export-env Write .env.<environment> files for GitHub Environment secrets',

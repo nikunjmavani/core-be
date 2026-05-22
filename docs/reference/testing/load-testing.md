@@ -36,7 +36,7 @@ Prerequisites → Quick (health, bench) vs Full confidence (stress, stress:api) 
 
 ## Nightly CI gate (GitHub Actions)
 
-Workflow: [.github/workflows/load-tests.yml](../../../.github/workflows/load-tests.yml)
+Workflow: [.github/workflows/scheduled-k6-load-slo.yml](../../../.github/workflows/scheduled-k6-load-slo.yml) (`Scheduled k6 API load & SLO`)
 
 Runs **daily at 02:00 UTC** (`cron`) and **on demand** (`workflow_dispatch`). The job starts Postgres and Redis service containers, migrates, runs `pnpm db:seed:full` with `TEST_PASSWORD=DemoPassword123!` (matches the demo user), boots the API with `RATE_LIMIT_MAX=10000`, then runs k6.
 
@@ -66,11 +66,13 @@ To gain confidence in the **whole system** (not just health endpoints), run both
 2. **API stress** (authenticated): set credentials, then run `pnpm load:stress:api`
    - Get credentials: `pnpm tool:load-test-credentials` (server up, `pnpm db:seed:full` done).
    - Export and run:
+
      ```bash
      export TEST_TOKEN="<paste from script>"
      export TEST_ORG_ID="<paste from script>"
      pnpm load:stress:api
      ```
+
    - Hits: `GET /api/v1/users/me`, `GET /api/v1/tenancy/organizations`, `GET /api/v1/notify/notifications`, `GET /api/v1/notify/notifications/unread-count`, `GET /api/v1/tenancy/organizations/:id/memberships` with up to 100 VUs.
 
 3. **Optional — auth flow**: `pnpm load:auth`
@@ -175,7 +177,7 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
 | `upload-list.js` | `TEST_TOKEN`, optional `TEST_UPLOAD_PUBLIC_ID` | `GET /api/v1/uploads/:id` |
 | `user-data-export.js` | `TEST_TOKEN` | `POST /api/v1/users/me/data-export` |
 
-CI runs a subset in the **org-scoped routes** job step (see `load-tests.yml`).
+CI runs a subset in the **org-scoped routes** job step (see `scheduled-k6-load-slo.yml`).
 
 ## Obtaining credentials
 

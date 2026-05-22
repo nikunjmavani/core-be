@@ -1,7 +1,7 @@
 # Nightly k6 load tests against an ephemeral API (Postgres + Redis).
 # Gate: health-stress + api-stress (SLO thresholds). Informational: auth, daily-ops, billing, webhooks, admin.
 # Secrets (optional email): RESEND_API_KEY, LOAD_TEST_RESULT_EMAIL_TO or TEST_REPORT_EMAIL_TO
-name: Load tests (k6)
+name: Scheduled k6 API load & SLO
 
 on:
   schedule:
@@ -50,10 +50,6 @@ jobs:
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
       REDIS_URL: redis://localhost:6379
-      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
-      ALLOWED_ORIGINS: http://localhost:3000
-      RATE_LIMIT_MAX: 10000
-      RATE_LIMIT_WINDOW_MS: 60000
       ENABLE_MCP_SERVER: 'true'
       BASE_URL: http://localhost:3000
       # Fixed demo password for db:seed:full + k6 auth scenario
@@ -61,10 +57,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export shared CI test env (JWT keys + retention + secrets-encryption)
+        uses: ./.github/actions/test-env
+        with:
+          rate-limit-max: '10000'
+          rate-limit-window-ms: '60000'
 
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
@@ -170,7 +172,7 @@ jobs:
 
       - name: Upload k6 summaries and server log
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v5
         with:
           name: k6-load-test-artifacts
           path: |
@@ -179,7 +181,7 @@ jobs:
           retention-days: 14
 
       - name: Send load-test results email (from k6 summaries)
-        if: always() && secrets.RESEND_API_KEY != '' && (secrets.LOAD_TEST_RESULT_EMAIL_TO != '' || secrets.TEST_REPORT_EMAIL_TO != '')
+        if: always() && env.RESEND_API_KEY != '' && (env.LOAD_TEST_RESULT_EMAIL_TO != '' || env.TEST_REPORT_EMAIL_TO != '')
         continue-on-error: true
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

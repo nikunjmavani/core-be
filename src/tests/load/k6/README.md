@@ -17,7 +17,7 @@ Load tests for the core-be API. Keep this doc in sync with [docs/reference/testi
 
 **Full confidence:** Run `pnpm load:stress` (health) and `pnpm load:stress:api` (API with TEST_TOKEN + TEST_ORG_ID). See [docs/reference/testing/load-testing.md](../../../../docs/reference/testing/load-testing.md#full-confidence-recommended).
 
-**Nightly CI:** [.github/workflows/load-tests.yml](../../../../.github/workflows/load-tests.yml) — gate on `load:stress`-equivalent and `load:stress:api`-equivalent k6 runs; see [docs/reference/testing/load-testing.md](../../../../docs/reference/testing/load-testing.md#nightly-ci-gate-github-actions).
+**Nightly CI:** [.github/workflows/scheduled-k6-load-slo.yml](../../../../.github/workflows/scheduled-k6-load-slo.yml) (`Scheduled k6 API load & SLO`) — gate on `load:stress`-equivalent and `load:stress:api`-equivalent k6 runs; see [docs/reference/testing/load-testing.md](../../../../docs/reference/testing/load-testing.md#nightly-ci-gate-github-actions).
 
 ## Scenarios
 

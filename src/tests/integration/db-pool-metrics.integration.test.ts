@@ -30,9 +30,12 @@ describe('db-pool-metrics integration', () => {
   });
 
   it('GET /metrics exposes db_pool_connections active, idle, and waiting gauges', async () => {
+    /** /metrics is gated by METRICS_SCRAPE_TOKEN (see `metrics.middleware.ts`); pass the
+     * token the test setup configures so the route returns 200 instead of 401. */
     const response = await injectUnauthenticated(application, {
       method: 'GET',
       url: '/metrics',
+      headers: { authorization: `Bearer ${process.env.METRICS_SCRAPE_TOKEN ?? ''}` },
     });
 
     expect(response.statusCode).toBe(200);

@@ -33,11 +33,11 @@ gh pr checks
 
 | Job / area                    | Typical fix                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| **Quality & static security** | `pnpm ci:quality` locally — validate, domain, contract tests, routes catalog, migrate lint, Gitleaks/Semgrep |
-| **Test (Postgres + Redis)**   | `pnpm db:migrate` then `pnpm test` or failing domain test                                                    |
+| **Quality** | `pnpm ci:quality` locally — validate, domain, contract tests, routes catalog, migrate lint, Gitleaks/Semgrep |
+| **Tests**   | `pnpm db:migrate` then `pnpm test` or failing domain test                                                    |
 | **API smoke**                 | `pnpm verify:base` or `pnpm test:api-smoke` with compose up                                                  |
 | **Chaos (Toxiproxy)**         | `pnpm test:chaos` — see **chaos-test-maintainer**                                                            |
-| **Docker Build**              | `node tooling/ci/check-dockerfile-sync.mjs`; image build errors                                              |
+| **Docker**                    | `node tooling/ci/check-dockerfile-sync.mjs`; image build errors                                              |
 | **API Docs** (push)           | `pnpm docs:all`, `pnpm docs:check`                                                                           |
 
 **Never** weaken CI workflows or skip checks to make red go green. If a failure needs infra or workflow changes outside the PR scope, report back.
