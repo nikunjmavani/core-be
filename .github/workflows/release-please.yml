@@ -10,8 +10,8 @@
 # GitHub Releases (both stable and prerelease) emit a `release: published` event that triggers
 # release-sbom.yml, so dev pre-releases also get a CycloneDX SBOM attached.
 #
-# Uses RELEASE_PLEASE_TOKEN (PAT) when configured so merging the release PR triggers downstream CI;
-# falls back to GITHUB_TOKEN so the workflow still runs in repositories without that secret.
+# Uses RELEASE_PLEASE_TOKEN (PAT) so merging the release PR triggers downstream CI.
+# If the secret is not configured, the workflow skips release automation without failing CI.
 # See docs/deployment/ci-cd/cicd-and-deployment.md (§4 Release and versioning).
 
 name: Release Please
@@ -29,21 +29,27 @@ jobs:
   release-please:
     name: Release Please (${{ github.ref_name }})
     runs-on: ubuntu-latest
+    env:
+      RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
     steps:
+      - name: Skip release-please when token is not configured
+        if: env.RELEASE_PLEASE_TOKEN == ''
+        run: echo "RELEASE_PLEASE_TOKEN is not configured; skipping release automation."
+
       - name: Run release-please (main — stable)
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'main' && env.RELEASE_PLEASE_TOKEN != ''
         uses: googleapis/release-please-action@v4
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          token: ${{ env.RELEASE_PLEASE_TOKEN }}
           target-branch: main
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
 
       - name: Run release-please (dev — prerelease)
-        if: github.ref_name == 'dev'
+        if: github.ref_name == 'dev' && env.RELEASE_PLEASE_TOKEN != ''
         uses: googleapis/release-please-action@v4
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          token: ${{ env.RELEASE_PLEASE_TOKEN }}
           target-branch: dev
           config-file: .release-please-config.dev.json
           manifest-file: .release-please-manifest-dev.json
