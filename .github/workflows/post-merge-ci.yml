@@ -1,0 +1,87 @@
+name: Post-merge CI
+
+# Jobs that only need to run after a merge into a protected branch.
+# Kept in a separate workflow so they do not show as "Skipped" on every PR.
+on:
+  push:
+    branches: [main, dev]
+
+concurrency:
+  group: post-merge-ci-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      src-code: ${{ steps.filter.outputs.src-code }}
+      docs-artifacts: ${{ steps.filter.outputs.docs-artifacts }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Path filter
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            src-code:
+              - 'src/**'
+              - 'migrations/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tooling/**'
+            docs-artifacts:
+              - 'docs/openapi/**'
+              - 'docs/postman-collection.json'
+
+  chaos:
+    name: Chaos
+    needs: [changes]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.src-code == 'true'
+    uses: ./.github/workflows/reusable-chaos-toxiproxy.yml
+    secrets: inherit
+
+  sbom:
+    name: SBOM
+    needs: [changes]
+    if: |
+      always() &&
+      needs.changes.outputs.src-code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: sbom.cyclonedx.json
+          path: sbom.cyclonedx.json
+
+  api-docs:
+    name: API docs
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
+    uses: ./.github/workflows/reusable-openapi-postman-publish.yml
+    secrets: inherit
+    with:
+      github_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      publish_hosted_docs: true

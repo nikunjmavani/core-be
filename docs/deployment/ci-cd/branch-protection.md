@@ -49,31 +49,32 @@ GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `n
 
 ### Same checks on both branches
 
-Require **all five** CI + PR rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-branch-ci.yml`](../../../.github/workflows/pr-branch-ci.yml) runs the same CI targets on PRs into each of these branches (`on: pull_request: branches: [main, dev]`). Chaos runs post-merge on `main` only (not a required PR check).
+Require **all five** CI + PR rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-branch-ci.yml`](../../../.github/workflows/pr-branch-ci.yml) runs the same CI targets on PRs into each of these branches (`on: pull_request: branches: [main, dev]`). Chaos, SBOM, and API docs run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) on push only (not required PR checks).
 
 ### Skipped CI jobs on docs-only pull requests
 
-When [pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) path filters detect **no `src-code` changes**, these jobs are **skipped** on `pull_request` (they still run on **push**):
+When [pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) path filters detect **no `src-code` changes**, these jobs are **skipped** on `pull_request` (push runs are owned by [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)):
 
 | Job `name:`                                  | Skipped when       |
 | -------------------------------------------- | ------------------ |
 | `Tests`     | Docs/markdown-only |
 | `API smoke` | Docs/markdown-only |
-| `Chaos`     | Docs/markdown-only |
 | `Docker`    | Docs/markdown-only (unless `docker` paths change) |
 
-Skipped required checks do **not** block merge. `Quality` and `PR Governance` always run.
+Skipped required checks do **not** block merge. `Quality` and `PR Governance` always run. The markdown lane lives in [pr-docs-lane.yml](../../../.github/workflows/pr-docs-lane.yml) and only triggers when a PR touches `*.md`, so code-only PRs never list it as `Skipped`.
 
 ### Advisory PR jobs (not in rulesets)
 
-_None — all merge-gating CI jobs are listed in the required table above._
+*None — all merge-gating CI jobs are listed in the required table above.*
 
 ### Post-merge-only jobs (do not add as PR required checks)
 
-| Job `name:`  | Workflow                                                      | Why                                     |
-| ------------ | ------------------------------------------------------------- | --------------------------------------- |
-| `API Docs`   | [pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | Push to `dev` / `main` only; regenerates OpenAPI + Postman and uploads to Postman/Scalar when environment secrets exist |
-| `Commitlint` | [commit-lint.yml](../../../.github/workflows/commit-lint.yml) | Runs on **push** to `main`, `dev` |
+| Job `name:`  | Workflow                                                                     | Why                                     |
+| ------------ | ---------------------------------------------------------------------------- | --------------------------------------- |
+| `Chaos`      | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)            | Push to `main` only — Toxiproxy chaos suite |
+| `SBOM`       | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)            | Push to `main`/`dev` — CycloneDX artifact for the branch tip |
+| `API docs`   | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)            | Push to `main`/`dev` — regenerates OpenAPI + Postman and uploads to Postman/Scalar when environment secrets exist |
+| `Commitlint` | [protected-branch-commitlint.yml](../../../.github/workflows/protected-branch-commitlint.yml) | Push to `main`, `dev` |
 
 Treat these as **post-merge gates**: failing runs still indicate problems on the branch tip after merge.
 

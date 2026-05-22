@@ -177,57 +177,6 @@ jobs:
           echo "test-mode=${mode}" >> "$GITHUB_OUTPUT"
           echo "Resolved safe-domain-scope=${safe_scope} test-mode=${mode}"
 
-  docs-fast-lane:
-    name: Docs lane
-    needs: [changes]
-    if: |
-      always() &&
-      github.event_name == 'pull_request' &&
-      needs.changes.outputs.docs-only-md == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Collect changed markdown files
-        id: changed-markdown
-        run: |
-          set -euo pipefail
-          files="$(git diff --name-only --diff-filter=ACMRT \
-            "${{ github.event.pull_request.base.sha }}" \
-            "${{ github.event.pull_request.head.sha }}" \
-            -- '*.md')"
-          if [ -z "${files}" ]; then
-            echo "has-files=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          {
-            echo "has-files=true"
-            echo "files<<EOF"
-            echo "${files}"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Lint changed markdown files
-        if: steps.changed-markdown.outputs.has-files == 'true'
-        uses: DavidAnson/markdownlint-cli2-action@v18
-        with:
-          config: '.markdownlint.json'
-          globs: ${{ steps.changed-markdown.outputs.files }}
-
-      - name: Check links in changed markdown files (lychee)
-        if: steps.changed-markdown.outputs.has-files == 'true'
-        uses: lycheeverse/lychee-action@v2
-        with:
-          args: >-
-            --no-progress
-            --max-redirects 5
-            --accept 200,204,206,429
-            ${{ steps.changed-markdown.outputs.files }}
-          fail: false
-
   quality:
     name: Quality
     needs: [changes]
@@ -261,20 +210,6 @@ jobs:
     uses: ./.github/workflows/reusable-api-smoke-live-server.yml
     secrets: inherit
 
-  chaos-testing:
-    name: Chaos
-    needs: [quality, changes]
-    # Chaos is a post-merge gate — runs only on main pushes when source code
-    # changed. PRs do not block on chaos (it cannot run on `pull_request` events
-    # because `github.ref` is `refs/pull/<n>/merge`, not `refs/heads/main`).
-    if: |
-      always() &&
-      needs.quality.result == 'success' &&
-      github.ref == 'refs/heads/main' &&
-      needs.changes.outputs.src-code == 'true'
-    uses: ./.github/workflows/reusable-chaos-toxiproxy.yml
-    secrets: inherit
-
   docker-build:
     name: Docker
     needs: [quality, changes]
@@ -285,44 +220,3 @@ jobs:
     uses: ./.github/workflows/reusable-docker-build-trivy.yml
     secrets: inherit
 
-  sbom:
-    name: SBOM
-    needs: [quality, changes]
-    # SBOM is published to GitHub Releases by release-sbom.yml; here we
-    # only generate it on protected-branch pushes when src/dependencies changed
-    # so PR runs stay fast (release-sbom.yml owns release artifacts).
-    if: |
-      always() &&
-      needs.quality.result == 'success' &&
-      github.event_name == 'push' &&
-      needs.changes.outputs.src-code == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: cyclonedx-json
-          output-file: sbom.cyclonedx.json
-
-      - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v5
-        with:
-          name: sbom.cyclonedx.json
-          path: sbom.cyclonedx.json
-
-  docs:
-    name: API docs
-    needs: [quality, changes]
-    if: |
-      github.event_name == 'push' &&
-      contains(fromJSON('["refs/heads/main","refs/heads/dev"]'), github.ref) &&
-      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
-    uses: ./.github/workflows/reusable-openapi-postman-publish.yml
-    secrets: inherit
-    with:
-      github_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
-      publish_hosted_docs: true
