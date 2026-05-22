@@ -10,7 +10,7 @@ import {
 
 const DEPLOY_WORKFLOW_PATH = resolve(
   import.meta.dirname,
-  '../../../../.github/workflows/deploy-railway.yml',
+  '../../../../.github/workflows/deploy-railway-after-ci.yml',
 );
 
 describe('deploy-env-sync.util', () => {
@@ -29,7 +29,7 @@ describe('deploy-env-sync.util', () => {
     expect(railwayVariables).toContain('DATABASE_URL');
   });
 
-  it('keeps METRICS_* in sync between env schema and deploy-railway.yml', () => {
+  it('keeps METRICS_* in sync between env schema and deploy workflow', () => {
     const workflowContent = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf-8');
     const validation = validateMetricsDeploySync(workflowContent);
     expect(metricsDeploySyncHasErrors(validation)).toBe(false);

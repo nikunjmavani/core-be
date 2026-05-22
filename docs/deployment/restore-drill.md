@@ -8,7 +8,7 @@ This page covers deployment wiring only.
 
 ## Workflow
 
-[restore-drill.yml](../../.github/workflows/restore-drill.yml) runs on the **1st of each month** (06:00 UTC) and on `workflow_dispatch`.
+[scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml) (`Monthly backup restore & RTO drill`) runs on the **1st of each month** (06:00 UTC) and on `workflow_dispatch`.
 
 | Secret / input | Purpose |
 | -------------- | ------- |

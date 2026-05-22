@@ -11,7 +11,7 @@ Keeps **Toxiproxy** fault-injection tests and provision scripts aligned. See `do
 
 - Added/changed `src/tests/chaos/**/*.chaos.test.ts`
 - Changed `vitest.chaos.config.ts`, `pnpm chaos:provision`, or `docker-compose.yml` chaos profile
-- CI job **Chaos (Postgres + Redis via Toxiproxy)** fails
+- CI job **CI / Chaos** fails
 
 ## Local workflow
 

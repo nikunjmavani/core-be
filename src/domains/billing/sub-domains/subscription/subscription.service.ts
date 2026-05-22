@@ -11,6 +11,10 @@ import {
 } from './subscription.validator.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
+/**
+ * Coordinates plan lookups, payment-provider calls, and subscription updates
+ * for a single organization.
+ */
 export class SubscriptionService {
   constructor(
     private readonly organizationService: OrganizationService,

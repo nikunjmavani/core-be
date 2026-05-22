@@ -41,29 +41,28 @@ GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `n
 
 | Workflow file                                                               | Workflow `name:` | Job `name:`                                  | Required check string                             |
 | --------------------------------------------------------------------------- | ---------------- | -------------------------------------------- | ------------------------------------------------- |
-| [.github/workflows/ci.yml](../../../.github/workflows/ci.yml)               | `CI`             | `Quality & static security`                  | `CI / Quality & static security`                  |
-| [.github/workflows/ci.yml](../../../.github/workflows/ci.yml)               | `CI`             | `Test (Postgres + Redis)`                    | `CI / Test (Postgres + Redis)`                    |
-| [.github/workflows/ci.yml](../../../.github/workflows/ci.yml)               | `CI`             | `API smoke (Postgres + Redis + live server)` | `CI / API smoke (Postgres + Redis + live server)` |
-| [.github/workflows/ci.yml](../../../.github/workflows/ci.yml)               | `CI`             | `Chaos (Postgres + Redis via Toxiproxy)`     | `CI / Chaos (Postgres + Redis via Toxiproxy)`     |
-| [.github/workflows/ci.yml](../../../.github/workflows/ci.yml)               | `CI`             | `Docker Build` (includes Trivy image scan)   | `CI / Docker Build`                               |
-| [.github/workflows/pr-checks.yml](../../../.github/workflows/pr-checks.yml) | `PR Checks`      | `PR Quality Gates`                           | `PR Checks / PR Quality Gates`                    |
+| [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `Quality` | `CI / Quality` |
+| [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `Tests` | `CI / Tests` |
+| [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `API smoke` | `CI / API smoke` |
+| [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `Docker` (Trivy image scan) | `CI / Docker` |
+| [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR governance` | `Checks` | `PR governance / Checks` |
 
 ### Same checks on both branches
 
-Require **all six** CI + PR rows above for **`main`** and **`dev`** PRs. [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) runs the same CI targets on PRs into each of these branches (`on: pull_request: branches: [main, dev]`).
+Require **all five** CI + PR rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-branch-ci.yml`](../../../.github/workflows/pr-branch-ci.yml) runs the same CI targets on PRs into each of these branches (`on: pull_request: branches: [main, dev]`). Chaos runs post-merge on `main` only (not a required PR check).
 
 ### Skipped CI jobs on docs-only pull requests
 
-When [ci.yml](../../../.github/workflows/ci.yml) path filters detect **no `src-code` changes**, these jobs are **skipped** on `pull_request` (they still run on **push**):
+When [pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) path filters detect **no `src-code` changes**, these jobs are **skipped** on `pull_request` (they still run on **push**):
 
 | Job `name:`                                  | Skipped when       |
 | -------------------------------------------- | ------------------ |
-| `Test (Postgres + Redis)`                    | Docs/markdown-only |
-| `API smoke (Postgres + Redis + live server)` | Docs/markdown-only |
-| `Chaos (Postgres + Redis via Toxiproxy)`     | Docs/markdown-only |
-| `Docker Build`                               | Docs/markdown-only (unless `docker` paths change) |
+| `Tests`     | Docs/markdown-only |
+| `API smoke` | Docs/markdown-only |
+| `Chaos`     | Docs/markdown-only |
+| `Docker`    | Docs/markdown-only (unless `docker` paths change) |
 
-Skipped required checks do **not** block merge. `Quality & static security` and `PR Checks` always run.
+Skipped required checks do **not** block merge. `Quality` and `PR governance` always run.
 
 ### Advisory PR jobs (not in rulesets)
 
@@ -73,7 +72,7 @@ _None — all merge-gating CI jobs are listed in the required table above._
 
 | Job `name:`  | Workflow                                                      | Why                                     |
 | ------------ | ------------------------------------------------------------- | --------------------------------------- |
-| `API Docs`   | [ci.yml](../../../.github/workflows/ci.yml)                   | Push to `dev` / `main` only; regenerates OpenAPI + Postman and uploads to Postman/Scalar when environment secrets exist |
+| `API Docs`   | [pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | Push to `dev` / `main` only; regenerates OpenAPI + Postman and uploads to Postman/Scalar when environment secrets exist |
 | `Commitlint` | [commit-lint.yml](../../../.github/workflows/commit-lint.yml) | Runs on **push** to `main`, `dev` |
 
 Treat these as **post-merge gates**: failing runs still indicate problems on the branch tip after merge.
@@ -156,13 +155,13 @@ Repository rulesets on **private** repos require **GitHub Pro / Team / Enterpris
 
 The sync script surfaces this message verbatim and exits non-zero. Either upgrade the account/org plan or make the repository public to apply rulesets.
 
-**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm names match **`CI / …`** and **`PR Checks / …`**. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
+**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm names match **`CI / …`** and **`PR governance / …`**. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
 
 ---
 
 ## Maintenance
 
 - **Renaming or splitting CI jobs:** Update job `name:` values in workflows **and** sync **`required_status_checks`** contexts in **every** file under [`.github/rulesets/`](../../../.github/rulesets/), plus this document.
-- **Adding a new required workflow:** Prefer extending [.github/workflows/ci.yml](../../../.github/workflows/ci.yml) or [.github/workflows/pr-checks.yml](../../../.github/workflows/pr-checks.yml) so checks stay consistent across branches.
+- **Adding a new required workflow:** Prefer extending [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) or [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) so checks stay consistent across branches.
 
-Consult [.cursor/skills/skill-index/SKILL.md](../../../.cursor/skills/skill-index/SKILL.md) after edits to `.github/rulesets/` or this file (**docs-maintainer**). Changes to [.github/workflows/ci.yml](../../../.github/workflows/ci.yml) should still follow **code-quality-guard**.
+Consult [.cursor/skills/skill-index/SKILL.md](../../../.cursor/skills/skill-index/SKILL.md) after edits to `.github/rulesets/` or this file (**docs-maintainer**). Changes to [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) should still follow **code-quality-guard**.

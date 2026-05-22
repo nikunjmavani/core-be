@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   run:
+    name: Build + Trivy
     runs-on: ubuntu-latest
     env:
       DOCKER_BUILDKIT: 1
@@ -46,6 +47,9 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
         with:
           install: 'false'
+
+      - name: Export shared CI test env (JWT keys + retention + secrets-encryption)
+        uses: ./.github/actions/test-env
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -157,62 +161,22 @@ jobs:
           DATABASE_SSL_ENABLED: 'false'
         run: |
           set -euo pipefail
-          JWT_PRIVATE_KEY="$(cat <<'EOF'
-          -----BEGIN PRIVATE KEY-----
-          MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDJp33Skforij0b
-          cb5iPkuY7IeTw+X6NuKmkadoCS7aRaQgkon9u/s1Lj05tRuZTgw0VqfYiIbud2z1
-          PWJtl4niSyG8cjNdglpUkNW1f7oaDC9YoGfup5telmZy5vK5IVieT0fn5ePLRdlk
-          bMkOf2fHcx/rRf4Vl+ff9E9BXLmYg1yqkKPxHBBwZPcqmQ2DW3An7DEUS/ZDw8AE
-          UIBHRurFQOYZ1xzov/w21a0l+qT911yk5TJKl+ffeeQQ5twiiDMQEQQoJDKJOXo3
-          UsuFycfSgkJV2KnzK9QsHrHYrM44cD08yIctf1/I3Z3xwVms8Bof6pv0q96Lueh1
-          D+ECdd4BAgMBAAECggEABUwGhJT8Ds+7SjDDMP506ufvqcSAEoIFkx2JWbTAC9C/
-          fnGK+WTKNPvpdM4akvzXWjqafxga/0GY1ZpOrxVHdG/Hy5TuX3rwl38UdgeMYmnG
-          hpv0DvNNI/9sYoFJh+5lzwbDG0bRJIJJsxcecuiK19Tg1kPI6FVMrHfU6yEd6PEi
-          d5/igyxkxxcPr96BlNkKl+7CAYqY88t5uwXbnbxAmxLIMQ6f26T+1vCCJnHpRakS
-          UygAQLJFXJzOTV2j1mMIyZi28DNR7+QRYzHeYTBe+e3dsaxC14+veVMjKpWS+AIX
-          eqoCbyZhDPtYowR9iAO/P1jGPAv9EnEKJZxDCdt65wKBgQDts2fuTmxAFNZg3umt
-          hpUXuxmnzKdkrU8Vtqmwet3MdETIBAUbWnP+l4LgMj1N3CB77/DGWGiSpLKyXWZf
-          oQFEv4XVf6ikKzl11ILouCsaiiR7y5Xqjt2Q1tm7fXZ3ntzsX4jGJ3X8H1KRet63
-          /JP/lPsQqcbZSi8kdrDIvX71HwKBgQDZLa6stFKU4IaEA9SiLxgRpOhBtQB4i+iB
-          L5l7UZkGn5fscNtQG5c9NFnZ0n6NslsNlShCgGuNAyL1mQph4iG1ozmJYeHruWFO
-          CA/3wyxL1alzCPdZxtIDPRZ+F+LnzPHlT4hPA/uHmIgOkQn1HPMAul7D5wEby6y7
-          a69f7b6o3wKBgDiAPqIcrgqFaXfZRL5kkSf052JFeTyrHXNR2gADFJm2wWqx2ezo
-          kU3hAdD84CmTu3z6Scc72I+S6o8POHheswh+ZfebwqBTTfM+MmfS7xv93jI28Emy
-          7+Ovzk2Mww4oCud8xewkER1+7Id8J1ighyVnak5JrOSVh6MpO1hcAsONAoGAerRY
-          0LNBRWRmHAieBtRc4PsvTpCZp4JE51ihew9rSla5W5mYD/bGyInfijZn0l9HGrF/
-          gbNVEOMIyYKiXxOIwDtssrZfEvQ2igP8IZxgVqhtiNU0C8FNvw6wuqV8SkN9GHaL
-          KTmyz7XaiYBhA+BLW8nw6PaHpdC501rQR37oDjkCgYAUYS5GwaSz9O6UQAN3/TxS
-          cpwfpB+Vt5zOcukuHOw0IWNjxI3DGglfjeipNJSXMAlUfoMrXuTpt2YjYs2gJH1U
-          caaEEWY15kCKLmEjbKIIechhSi5FUlyJ118JbioPVgXDhvxara1wGITfk6APhvCL
-          LjeTy3MMidIN1gyTCnBPWQ==
-          -----END PRIVATE KEY-----
-          EOF
-          )"
-          JWT_PUBLIC_KEY="$(cat <<'EOF'
-          -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyad90pH6K4o9G3G+Yj5L
-          mOyHk8Pl+jbippGnaAku2kWkIJKJ/bv7NS49ObUbmU4MNFan2IiG7nds9T1ibZeJ
-          4kshvHIzXYJaVJDVtX+6GgwvWKBn7qebXpZmcubyuSFYnk9H5+Xjy0XZZGzJDn9n
-          x3Mf60X+FZfn3/RPQVy5mINcqpCj8RwQcGT3KpkNg1twJ+wxFEv2Q8PABFCAR0bq
-          xUDmGdcc6L/8NtWtJfqk/ddcpOUySpfn33nkEObcIogzEBEEKCQyiTl6N1LLhcnH
-          0oJCVdip8yvULB6x2KzOOHA9PMiHLX9fyN2d8cFZrPAaH+qb9Kvei7nodQ/hAnXe
-          AQIDAQAB
-          -----END PUBLIC KEY-----
-          EOF
-          )"
+          # JWT keys and CI test env are already in $GITHUB_ENV (exported by
+          # ./.github/actions/test-env above), so we can pass them straight
+          # through to `docker run -e VAR` without re-exporting heredocs.
           docker run --rm --network host \
             -e NODE_ENV=test \
             -e DATABASE_URL="$DATABASE_URL" \
             -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
             -e REDIS_URL="$REDIS_URL" \
-            -e JWT_SECRET=test-jwt-secret-min-32-chars-xxxxxxxx \
+            -e JWT_SECRET="$JWT_SECRET" \
             -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
             -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
-            -e ALLOWED_ORIGINS=http://localhost:3000 \
-            -e AUDIT_RETENTION_DAYS=90 \
-            -e AUTH_SESSION_RETENTION_DAYS=30 \
-            -e METRICS_SCRAPE_TOKEN=test-metrics-token-min-32-characters \
-            -e SECRETS_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 \
+            -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
+            -e AUDIT_RETENTION_DAYS="$AUDIT_RETENTION_DAYS" \
+            -e AUTH_SESSION_RETENTION_DAYS="$AUTH_SESSION_RETENTION_DAYS" \
+            -e METRICS_SCRAPE_TOKEN="$METRICS_SCRAPE_TOKEN" \
+            -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
             core-be:ci node dist/src/infrastructure/database/migration/migrate.js
           docker run -d --name core-be-health --network host \
             -e NODE_ENV=test \
@@ -221,14 +185,14 @@ jobs:
             -e DATABASE_URL="$DATABASE_URL" \
             -e REDIS_URL="$REDIS_URL" \
             -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
-            -e JWT_SECRET=test-jwt-secret-min-32-chars-xxxxxxxx \
+            -e JWT_SECRET="$JWT_SECRET" \
             -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
             -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
-            -e ALLOWED_ORIGINS=http://localhost:3000 \
-            -e AUDIT_RETENTION_DAYS=90 \
-            -e AUTH_SESSION_RETENTION_DAYS=30 \
-            -e METRICS_SCRAPE_TOKEN=test-metrics-token-min-32-characters \
-            -e SECRETS_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 \
+            -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
+            -e AUDIT_RETENTION_DAYS="$AUDIT_RETENTION_DAYS" \
+            -e AUTH_SESSION_RETENTION_DAYS="$AUTH_SESSION_RETENTION_DAYS" \
+            -e METRICS_SCRAPE_TOKEN="$METRICS_SCRAPE_TOKEN" \
+            -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
             core-be:ci
           if ! timeout 90 bash -c 'until curl -sf http://localhost:3000/health/ready; do sleep 2; done'; then
             docker logs core-be-health --tail 200 || true

@@ -1,0 +1,298 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      # Coarse buckets — decide which heavy workflows to run at all.
+      src-code: ${{ steps.filter.outputs.src-code }}
+      docker: ${{ steps.filter.outputs.docker }}
+      docs-artifacts: ${{ steps.filter.outputs.docs-artifacts }}
+      # docs-only-md: PR/commit touches *only* markdown docs (no TS, no openapi
+      # JSON, no Docker, no infra). Routes the change through the fast docs lane.
+      docs-only-md: ${{ steps.filter.outputs.docs-only-md == 'true' && steps.filter.outputs.src-code == 'false' && steps.filter.outputs.docker == 'false' && steps.filter.outputs.docs-artifacts == 'false' && steps.filter.outputs.infra == 'false' && steps.filter.outputs.shared == 'false' && steps.filter.outputs.migrations == 'false' && steps.filter.outputs.lockfile == 'false' && steps.filter.outputs.vitest-config == 'false' }}
+      # docs-only (existing semantic): no src/docker/openapi change — used to
+      # skip the heavy quality matrix on hand-written docs PRs.
+      docs-only: ${{ steps.filter.outputs.src-code == 'false' && steps.filter.outputs.docker == 'false' && steps.filter.outputs.docs-artifacts == 'false' }}
+
+      # Per-domain change flags — drive labels and (via safe-domain-scope below)
+      # smart-mode test selection.
+      domain-auth: ${{ steps.filter.outputs.domain-auth }}
+      domain-tenancy: ${{ steps.filter.outputs.domain-tenancy }}
+      domain-billing: ${{ steps.filter.outputs.domain-billing }}
+      domain-user: ${{ steps.filter.outputs.domain-user }}
+      domain-notify: ${{ steps.filter.outputs.domain-notify }}
+      domain-audit: ${{ steps.filter.outputs.domain-audit }}
+      domain-upload: ${{ steps.filter.outputs.domain-upload }}
+
+      # Cross-cutting flags — any "true" here forces full-scope test mode.
+      infra: ${{ steps.filter.outputs.infra }}
+      shared: ${{ steps.filter.outputs.shared }}
+      migrations: ${{ steps.filter.outputs.migrations }}
+      lockfile: ${{ steps.filter.outputs.lockfile }}
+      vitest-config: ${{ steps.filter.outputs.vitest-config }}
+
+      # safe-domain-scope: the diff is confined to one or more domain folders
+      # (no infra, no shared, no migrations, no lockfile, no vitest config, no
+      # Docker). When true on a PR, the db-bound test shard runs in smart mode
+      # with `vitest --changed` so only affected tests execute.
+      safe-domain-scope: ${{ steps.resolve.outputs.safe-domain-scope }}
+
+      # Resolved test mode for `test-with-db.yml` — either "smart" or "full".
+      test-mode: ${{ steps.resolve.outputs.test-mode }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Path filter
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            src-code:
+              - 'src/**'
+              - 'migrations/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'Dockerfile.agent'
+              - 'vitest.config.ts'
+              - 'vitest.unit.config.ts'
+              - 'vitest.chaos.config.ts'
+              - 'vitest.contract.config.ts'
+              - 'tooling/**'
+            docker:
+              - 'Dockerfile'
+              - 'Dockerfile.worker'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tooling/ci/check-dockerfile-sync.mjs'
+            docs-artifacts:
+              - 'docs/openapi/**'
+              - 'src/shared/locales/**/openapi.json'
+              - 'src/scripts/codegen/generate-openapi.ts'
+              - 'src/scripts/codegen/openapi-enricher.ts'
+              - 'src/scripts/codegen/openapi-schema-map.ts'
+              - 'src/scripts/codegen/openapi-response-map.ts'
+              - 'src/scripts/codegen/check-api-docs-sync.ts'
+            docs-only-md:
+              - '**/*.md'
+              - 'docs/**'
+            domain-auth:
+              - 'src/domains/auth/**'
+            domain-tenancy:
+              - 'src/domains/tenancy/**'
+            domain-billing:
+              - 'src/domains/billing/**'
+            domain-user:
+              - 'src/domains/user/**'
+            domain-notify:
+              - 'src/domains/notify/**'
+            domain-audit:
+              - 'src/domains/audit/**'
+            domain-upload:
+              - 'src/domains/upload/**'
+            infra:
+              - 'src/infrastructure/**'
+            shared:
+              - 'src/shared/**'
+              - 'src/core/**'
+              - 'src/app.ts'
+              - 'src/server.ts'
+              - 'src/worker.ts'
+              - 'src/routes.ts'
+            migrations:
+              - 'migrations/**'
+            lockfile:
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+            vitest-config:
+              - 'vitest.config.ts'
+              - 'vitest.base.ts'
+              - 'vitest.unit.config.ts'
+              - 'vitest.chaos.config.ts'
+              - 'vitest.contract.config.ts'
+              - 'tooling/vitest/**'
+
+      - name: Resolve test scope and mode
+        id: resolve
+        env:
+          SRC_CODE: ${{ steps.filter.outputs.src-code }}
+          INFRA: ${{ steps.filter.outputs.infra }}
+          SHARED: ${{ steps.filter.outputs.shared }}
+          MIGRATIONS: ${{ steps.filter.outputs.migrations }}
+          LOCKFILE: ${{ steps.filter.outputs.lockfile }}
+          VITEST_CONFIG: ${{ steps.filter.outputs.vitest-config }}
+          DOCKER: ${{ steps.filter.outputs.docker }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          # A diff is "safe-domain-scope" when src changed, but none of the
+          # cross-cutting buckets did (infra, shared, migrations, lockfile,
+          # vitest config, Docker). In that case the import graph is the only
+          # thing that can be affected, so `vitest --changed` is sufficient.
+          safe_scope="false"
+          if [ "${SRC_CODE}" = "true" ] \
+            && [ "${INFRA}" = "false" ] \
+            && [ "${SHARED}" = "false" ] \
+            && [ "${MIGRATIONS}" = "false" ] \
+            && [ "${LOCKFILE}" = "false" ] \
+            && [ "${VITEST_CONFIG}" = "false" ] \
+            && [ "${DOCKER}" = "false" ]; then
+            safe_scope="true"
+          fi
+
+          # Smart mode is only safe for `pull_request` events — push events
+          # always run the full matrix so the protected branch keeps a
+          # complete pre-deploy signal.
+          if [ "${EVENT_NAME}" = "pull_request" ] && [ "${safe_scope}" = "true" ]; then
+            mode="smart"
+          else
+            mode="full"
+          fi
+
+          echo "safe-domain-scope=${safe_scope}" >> "$GITHUB_OUTPUT"
+          echo "test-mode=${mode}" >> "$GITHUB_OUTPUT"
+          echo "Resolved safe-domain-scope=${safe_scope} test-mode=${mode}"
+
+  docs-fast-lane:
+    name: Docs lane
+    needs: [changes]
+    if: |
+      always() &&
+      github.event_name == 'pull_request' &&
+      needs.changes.outputs.docs-only-md == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Lint changed markdown files
+        uses: DavidAnson/markdownlint-cli2-action@v18
+        with:
+          config: '.markdownlint.json'
+          globs: |
+            **/*.md
+
+      - name: Check links in changed markdown files (lychee)
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --no-progress --max-redirects 5 --accept 200,204,206,429 '**/*.md'
+          fail: false
+
+  quality:
+    name: Quality
+    needs: [changes]
+    if: |
+      always() &&
+      needs.changes.outputs.docs-only-md != 'true' &&
+      (needs.changes.outputs.docs-only != 'true' || github.event_name == 'push')
+    uses: ./.github/workflows/reusable-quality-static.yml
+    secrets: inherit
+
+  test:
+    name: Tests
+    needs: [quality, changes]
+    if: |
+      always() &&
+      needs.quality.result == 'success' &&
+      needs.changes.outputs.src-code == 'true'
+    uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
+    secrets: inherit
+    with:
+      mode: ${{ needs.changes.outputs.test-mode }}
+      base-ref: ${{ github.event.pull_request.base.ref || '' }}
+
+  api-smoke:
+    name: API smoke
+    needs: [quality, changes]
+    if: |
+      always() &&
+      needs.quality.result == 'success' &&
+      needs.changes.outputs.src-code == 'true'
+    uses: ./.github/workflows/reusable-api-smoke-live-server.yml
+    secrets: inherit
+
+  chaos-testing:
+    name: Chaos
+    needs: [quality, changes]
+    # Chaos is a post-merge gate — runs only on main pushes when source code
+    # changed. PRs do not block on chaos (it cannot run on `pull_request` events
+    # because `github.ref` is `refs/pull/<n>/merge`, not `refs/heads/main`).
+    if: |
+      always() &&
+      needs.quality.result == 'success' &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.src-code == 'true'
+    uses: ./.github/workflows/reusable-chaos-toxiproxy.yml
+    secrets: inherit
+
+  docker-build:
+    name: Docker
+    needs: [quality, changes]
+    if: |
+      always() &&
+      needs.quality.result == 'success' &&
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docker == 'true')
+    uses: ./.github/workflows/reusable-docker-build-trivy.yml
+    secrets: inherit
+
+  sbom:
+    name: SBOM
+    needs: [quality, changes]
+    # SBOM is published to GitHub Releases by release-sbom.yml; here we
+    # only generate it on protected-branch pushes when src/dependencies changed
+    # so PR runs stay fast (release-sbom.yml owns release artifacts).
+    if: |
+      always() &&
+      needs.quality.result == 'success' &&
+      github.event_name == 'push' &&
+      needs.changes.outputs.src-code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: sbom.cyclonedx.json
+          path: sbom.cyclonedx.json
+
+  docs:
+    name: API docs
+    needs: [quality, changes]
+    if: |
+      github.event_name == 'push' &&
+      contains(fromJSON('["refs/heads/main","refs/heads/dev"]'), github.ref) &&
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
+    uses: ./.github/workflows/reusable-openapi-postman-publish.yml
+    secrets: inherit
+    with:
+      github_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      publish_hosted_docs: true

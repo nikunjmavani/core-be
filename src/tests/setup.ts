@@ -3,7 +3,7 @@ import '@/shared/config/load-env-files.js';
 /**
  * `.env.development` is loaded before this file (via `load-env-files`). Several values that
  * make sense for `pnpm dev` would break the test harness — they MUST mirror CI's
- * `.github/workflows/reusable/test-with-db.yml` env, not the developer's `.env.development`.
+ * `.github/workflows/reusable-vitest-postgres-redis.yml` env, not the developer's `.env.development`.
  * These are hard-overridden (not `??=`) so local test runs are deterministic regardless of
  * what each contributor has in their `.env.development`.
  */

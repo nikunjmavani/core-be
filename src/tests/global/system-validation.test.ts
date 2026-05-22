@@ -219,11 +219,11 @@ describe('System Validation', () => {
 
   describe('CI/CD Configuration', () => {
     it('should have CI workflow', () => {
-      expect(existsSync(resolve(ROOT, '.github/workflows/ci.yml'))).toBe(true);
+      expect(existsSync(resolve(ROOT, '.github/workflows/pr-branch-ci.yml'))).toBe(true);
     });
 
     it('should have PR checks workflow', () => {
-      expect(existsSync(resolve(ROOT, '.github/workflows/pr-checks.yml'))).toBe(true);
+      expect(existsSync(resolve(ROOT, '.github/workflows/pr-governance.yml'))).toBe(true);
     });
 
     it('should have CODEOWNERS', () => {

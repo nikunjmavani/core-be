@@ -14,7 +14,7 @@ interface RequiredFile {
 
 const REQUIRED_FILES: RequiredFile[] = [
   {
-    relativePath: '.github/workflows/reusable/docs-generate.yml',
+    relativePath: '.github/workflows/reusable-openapi-postman-publish.yml',
     mustContain: [
       'pnpm docs:all',
       'pnpm docs:validate:openapi',

@@ -1,5 +1,21 @@
 name: Reusable — quality static
 
+# Split into 3 parallel jobs to cut PR wall-clock by ~50%:
+#
+#   quality-source   — fast TS / structural / sync checks (validate, domain
+#                      structure + coverage, scripts-layout, routes-catalog,
+#                      docs:check, sync-env-example, db:migrate:lint).
+#
+#   quality-security — dependency audit + secret scan + SAST. Heavier and
+#                      sometimes slow (semgrep install) — kept off the hot path.
+#
+#   quality-tests-static — `test:contract` (nock, offline) + `test:property`
+#                          (fast-check, bounded). Both pure, no Postgres needed.
+#
+# The caller (`pr-branch-ci.yml`) treats this whole reusable workflow as one required
+# status check named "Quality" — that name is set in the calling job, so the
+# 3 sub-jobs aggregate into one PR-merge gate.
+
 on:
   workflow_call:
 
@@ -7,7 +23,8 @@ permissions:
   contents: read
 
 jobs:
-  run:
+  quality-source:
+    name: Lint + types
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -17,12 +34,6 @@ jobs:
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
-
-      - name: Dependency audit (fail on any vulnerability)
-        run: pnpm deps:audit
-
-      - name: Production dependency audit (fail on any vulnerability)
-        run: pnpm deps:audit:prod
 
       - name: Validate (lint + format + typecheck)
         run: pnpm validate
@@ -35,6 +46,9 @@ jobs:
 
       - name: Scripts layout (no root-level .ts)
         run: pnpm validate:scripts-layout
+
+      - name: Route catalog in sync
+        run: pnpm routes:catalog:check
 
       - name: OpenAPI specs in sync
         env:
@@ -51,23 +65,30 @@ jobs:
           SECRETS_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
         run: pnpm docs:check
 
-      - name: Outbound contract tests (nock, offline)
-        run: pnpm test:contract
-
-      - name: Property tests (bounded)
-        env:
-          FAST_CHECK_NUM_RUNS: 50
-        run: pnpm test:property
-
-      - name: Route catalog in sync
-        run: pnpm routes:catalog:check
-
       - name: Env example in sync with schema
         run: |
           pnpm tool:sync-env-example || (echo "::error::.env.example is out of sync with env schema or is missing the # GitHub Secrets / # GitHub Variables top-level halves. See log above. Run pnpm tool:sync-env-example (with --fix if needed)." && exit 1)
 
       - name: Migration safety lint
         run: pnpm db:migrate:lint
+
+  quality-security:
+    name: Security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Dependency audit (all deps — fail on any vulnerability)
+        run: pnpm deps:audit
+
+      - name: Production dependency audit (fail on any vulnerability)
+        run: pnpm deps:audit:prod
 
       - name: Gitleaks (secret detection)
         uses: gitleaks/gitleaks-action@v2
@@ -84,3 +105,21 @@ jobs:
 
       - name: Semgrep SAST
         run: semgrep scan --config p/default --metrics off
+
+  quality-tests-static:
+    name: Contract + property
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Outbound contract tests (nock, offline)
+        run: pnpm test:contract
+
+      - name: Property tests (bounded)
+        env:
+          FAST_CHECK_NUM_RUNS: 50
+        run: pnpm test:property

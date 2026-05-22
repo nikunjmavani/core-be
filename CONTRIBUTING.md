@@ -124,7 +124,7 @@ Errors and API messages must use i18n keys—see **[`.cursor/skills/i18n-message
 
 Completing this once avoids broken defaults for contributors:
 
-- **Labels** — Create path labels used by [`.github/labeler.yml`](.github/labeler.yml) and PR size labels (`size/S` … `size/XL`) if you use automated labeling.
+- **Labels** — Create path labels used by [`.github/labeler.yml`](.github/labeler.yml) and PR size labels (`size/small`, `size/medium`, `size/large`, `size/x-large`) if you use automated labeling.
 - **Security advisories** — Ensure **private vulnerability reporting** is enabled (`Settings → Security → Code security`).
 - **Placeholders** — Replace any placeholders in **`SECURITY.md`** using your canonical GitHub slug (compare `git remote get-url origin`).
 - **Contacts** — Set a real **`security@…`** address in **`SECURITY.md`** and enforcement contact in **`CODE_OF_CONDUCT.md`** (currently placeholders).

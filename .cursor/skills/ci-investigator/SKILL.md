@@ -20,11 +20,11 @@ Produce a **short root-cause summary** for **one** failing check (not full PR ba
 
 | CI job name               | Workflow                           | Local reproduction                                           |
 | ------------------------- | ---------------------------------- | ------------------------------------------------------------ |
-| Quality & static security | `reusable/quality-static.yml`      | `pnpm ci:quality`                                            |
-| Test (Postgres + Redis)   | `reusable/test-with-db.yml`        | `pnpm compose:up` → `pnpm db:migrate` → `pnpm test`          |
+| Quality                   | `reusable-quality-static.yml`      | `pnpm ci:quality`                                            |
+| Tests                     | `reusable-vitest-postgres-redis.yml` | `pnpm compose:up` → `pnpm db:migrate` → `pnpm test`        |
 | API smoke                 | `reusable/api-smoke-with-db.yml`   | `pnpm verify:base` or `pnpm test:api-smoke`                  |
 | Chaos (Toxiproxy)         | `reusable/chaos-toxiproxy.yml`     | `pnpm chaos:up` → `pnpm chaos:provision` → `pnpm test:chaos` |
-| Docker Build              | `reusable/docker-build-verify.yml` | `node tooling/ci/check-dockerfile-sync.mjs` + docker build   |
+| Docker                    | `reusable-docker-build-trivy.yml`  | `node tooling/ci/check-dockerfile-sync.mjs` + docker build   |
 | API Docs                  | `reusable/docs-generate.yml`       | `pnpm docs:all` / `pnpm docs:check`                          |
 
 3. Reproduce the **first** failing step locally when possible.

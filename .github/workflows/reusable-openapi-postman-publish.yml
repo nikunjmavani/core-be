@@ -29,6 +29,7 @@ permissions:
 
 jobs:
   run:
+    name: Generate + publish
     runs-on: ubuntu-latest
     environment: ${{ inputs.github_environment }}
     env:

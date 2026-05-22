@@ -8,7 +8,7 @@ const environmentExamplePath = resolve(projectRoot, '.env.example');
 const environmentSchemaPath = resolve(projectRoot, 'src/shared/config/env-schema.ts');
 const githubEnvironmentsDirectory = resolve(projectRoot, '.github/environments');
 const githubRulesetsDirectory = resolve(projectRoot, '.github/rulesets');
-const deployWorkflowPath = resolve(projectRoot, '.github/workflows/deploy-railway.yml');
+const deployWorkflowPath = resolve(projectRoot, '.github/workflows/deploy-railway-after-ci.yml');
 
 const githubSyncEnvironmentSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9-]*$/),
@@ -264,12 +264,11 @@ function buildBranchRuleset(branch: string): string {
         parameters: {
           strict_required_status_checks_policy: true,
           required_status_checks: [
-            { context: 'CI / Quality & static security' },
-            { context: 'CI / Test (Postgres + Redis)' },
-            { context: 'CI / API smoke (Postgres + Redis + live server)' },
-            { context: 'PR Checks / PR Quality Gates' },
-            { context: 'CI / Chaos (Postgres + Redis via Toxiproxy)' },
-            { context: 'CI / Docker Build' },
+            { context: 'CI / Quality' },
+            { context: 'CI / Tests' },
+            { context: 'CI / API smoke' },
+            { context: 'PR Governance / Checks' },
+            { context: 'CI / Docker' },
           ],
         },
       },

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+coverage-*/
+CHANGELOG.md
+docs/openapi/
+docs/postman-collection.json
+docs/routes.txt
+.github/PULL_REQUEST_TEMPLATE.md
+reports/

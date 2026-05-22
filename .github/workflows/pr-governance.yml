@@ -1,4 +1,4 @@
-name: PR Checks
+name: PR governance
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   pr-quality:
-    name: PR Quality Gates
+    name: Checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -65,10 +65,10 @@ jobs:
               per_page: 100,
             });
             const changes = files.reduce((sum, file) => sum + file.additions + file.deletions, 0);
-            let sizeLabel = 'size/S';
-            if (changes > 500) sizeLabel = 'size/XL';
-            else if (changes > 200) sizeLabel = 'size/L';
-            else if (changes > 50) sizeLabel = 'size/M';
+            let sizeLabel = 'size/small';
+            if (changes > 500) sizeLabel = 'size/x-large';
+            else if (changes > 200) sizeLabel = 'size/large';
+            else if (changes > 50) sizeLabel = 'size/medium';
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
