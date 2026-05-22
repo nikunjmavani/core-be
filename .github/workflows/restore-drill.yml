@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Print drill steps
         run: |
@@ -67,7 +67,7 @@ jobs:
       AUTH_SESSION_RETENTION_DAYS: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -126,7 +126,7 @@ jobs:
 
       - name: Upload RTO report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: restore-drill-rto
           path: restore-drill-rto.json
@@ -144,7 +144,7 @@ jobs:
     steps:
       - name: Download automated RTO report
         if: needs.restore-integration.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: restore-drill-rto
 
@@ -198,7 +198,7 @@ jobs:
 
       - name: Upload manual RTO report
         if: github.event_name == 'workflow_dispatch' && inputs.recorded_rto_minutes != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: restore-drill-rto-manual
           path: restore-drill-rto-manual.json
@@ -269,7 +269,7 @@ jobs:
 
       - name: Upload consolidated RTO report
         if: always() && hashFiles('restore-drill-rto-report.json') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: restore-drill-rto-report
           path: restore-drill-rto-report.json

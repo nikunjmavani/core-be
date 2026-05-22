@@ -31,7 +31,7 @@ jobs:
     steps:
       - name: Run release-please (main — stable)
         if: github.ref_name == 'main'
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           target-branch: main
@@ -40,7 +40,7 @@ jobs:
 
       - name: Run release-please (dev — prerelease)
         if: github.ref_name == 'dev'
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           target-branch: dev
