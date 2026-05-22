@@ -35,7 +35,11 @@ export async function resolvePostgresMaxConnections(): Promise<number> {
     return env.POSTGRES_MAX_CONNECTIONS;
   }
 
-  const rows = await sql<{ setting: string }[]>`SHOW max_connections`;
+  const rows = await sql<{ setting: string }[]>`
+    SELECT setting
+    FROM pg_settings
+    WHERE name = 'max_connections'
+  `;
   const setting = rows[0]?.setting;
   if (!setting) {
     throw new Error('database.connection_budget.max_connections_query_empty');
