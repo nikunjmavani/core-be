@@ -193,7 +193,7 @@ jobs:
     if: |
       always() &&
       needs.quality.result == 'success' &&
-      needs.changes.outputs.src-code == 'true'
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.ci-config == 'true')
     uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
     secrets: inherit
     with:
@@ -206,7 +206,7 @@ jobs:
     if: |
       always() &&
       needs.quality.result == 'success' &&
-      needs.changes.outputs.src-code == 'true'
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.ci-config == 'true')
     uses: ./.github/workflows/reusable-api-smoke-live-server.yml
     secrets: inherit
 
@@ -216,7 +216,11 @@ jobs:
     if: |
       always() &&
       needs.quality.result == 'success' &&
-      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docker == 'true')
+      (
+        needs.changes.outputs.src-code == 'true' ||
+        needs.changes.outputs.docker == 'true' ||
+        needs.changes.outputs.ci-config == 'true'
+      )
     uses: ./.github/workflows/reusable-docker-build-trivy.yml
     secrets: inherit
 
