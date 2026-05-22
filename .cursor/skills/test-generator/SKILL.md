@@ -174,7 +174,7 @@ k6 scenarios and helpers live in `src/tests/load/k6/` (`.js` files, not Vitest).
 ### 4. Commands before considering tests done
 
 ```bash
-pnpm test:unit          # vitest.unit.config.ts (common unit + all domain __tests__/unit)
+pnpm test:unit          # --project unit (common unit + all domain __tests__/unit)
 pnpm test:integration   # src/tests/integration touched
 pnpm test:e2e           # domain __tests__ touched (stop pnpm dev first)
 pnpm test:security      # auth, middleware, RLS touched

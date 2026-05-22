@@ -69,7 +69,7 @@ Keep these aligned in `.vscode/settings.json`:
 
 ## Vitest workspace (editor only)
 
-When the repo has multiple Vitest configs (`vitest.config.ts`, `vitest.unit.config.ts`, `vitest.contract.config.ts`, `vitest.chaos.config.ts`), use **`.vscode/vitest.workspace.ts`** (not at repo root) plus:
+When the repo has multiple Vitest configs (`vitest.config.ts`, `tooling/vitest/contract.config.ts`, `tooling/vitest/chaos.config.ts`, `tooling/vitest/stryker.config.ts`), use **`.vscode/vitest.workspace.ts`** (not at repo root) plus:
 
 ```json
 "vitest.workspaceConfig": ".vscode/vitest.workspace.ts"

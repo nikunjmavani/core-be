@@ -10,7 +10,7 @@ Keeps **Toxiproxy** fault-injection tests and provision scripts aligned. See `do
 ## When to use
 
 - Added/changed `src/tests/chaos/**/*.chaos.test.ts`
-- Changed `vitest.chaos.config.ts`, `pnpm chaos:provision`, or `docker-compose.yml` chaos profile
+- Changed `tooling/vitest/chaos.config.ts`, `pnpm chaos:provision`, or `docker-compose.yml` chaos profile
 - CI job **CI / Chaos** fails
 
 ## Local workflow
@@ -28,7 +28,7 @@ Proxied defaults: Postgres `25432`, Redis `26379`, Toxiproxy admin `8474`.
 
 ## Adding a scenario
 
-1. Create `src/tests/chaos/<name>.chaos.test.ts` (picked up only by `vitest.chaos.config.ts`).
+1. Create `src/tests/chaos/<name>.chaos.test.ts` (picked up only by `tooling/vitest/chaos.config.ts`).
 2. Use existing helpers for toxic injection and cleanup.
 3. Assert **graceful degradation** (no unhandled rejections; correct HTTP/status/cache behavior).
 4. Document non-obvious setup in `docs/reference/reliability/chaos-testing.md` if needed.
