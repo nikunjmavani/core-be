@@ -13,7 +13,7 @@ inputs:
   ready-timeout-seconds:
     description: Max seconds to wait for readiness
     required: false
-    default: '60'
+    default: '120'
 
 runs:
   using: composite
@@ -26,6 +26,30 @@ runs:
 
     - name: Wait for server readiness
       run: |
-        timeout "${{ inputs.ready-timeout-seconds }}" bash -c \
-          'until curl -sf http://localhost:3000/health/ready; do sleep 1; done'
+        deadline=$((SECONDS + ${{ inputs.ready-timeout-seconds }}))
+        while [ "$SECONDS" -lt "$deadline" ]; do
+          if [ -f server.pid ] && ! kill -0 "$(tr -d '\n' < server.pid)" 2>/dev/null; then
+            echo "API server exited before readiness."
+            echo "--- ${{ inputs.log-file }} (tail 200) ---"
+            tail -n 200 "${{ inputs.log-file }}" || true
+            exit 1
+          fi
+
+          if curl -sf http://localhost:3000/health/ready; then
+            exit 0
+          fi
+
+          if [ $((SECONDS % 10)) -eq 0 ]; then
+            echo "Waiting for API readiness..."
+            curl -s http://localhost:3000/health/ready || true
+            echo
+          fi
+
+          sleep 1
+        done
+
+        echo "API server did not become ready within ${{ inputs.ready-timeout-seconds }} seconds."
+        echo "--- ${{ inputs.log-file }} (tail 200) ---"
+        tail -n 200 "${{ inputs.log-file }}" || true
+        exit 1
       shell: bash

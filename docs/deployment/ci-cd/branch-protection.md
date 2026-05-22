@@ -122,13 +122,11 @@ Requires [`gh`](https://cli.github.com/) authenticated with **`repo`** scope (an
 Use [`tooling/setup/github-init.ts`](../../../tooling/setup/github-init.ts). It derives the target branches from the committed rulesets (`refs/heads/<branch>` entries in `conditions.ref_name.include`), ensures each branch exists on the remote (creating missing branches from the default branch's SHA via `POST /repos/{repo}/git/refs`), `POST`s / `PUT`s every ruleset, and idempotently creates the GitHub Environments declared in [`.github/environments/*.json`](../../../.github/environments/). Safe to run repeatedly.
 
 ```bash
-pnpm github:check          # read-only drift report (missing branches, rulesets, environments)
-pnpm github:init           # ensure branches + rulesets + GitHub Environments
+pnpm github:sync --check   # read-only: consistency + drift (missing branches, rulesets, environments)
+pnpm github:sync           # apply branches + rulesets + environments + push .env.<env> values
 ```
 
-Before any GitHub API call the script runs a **gh auth preflight** that prints the currently active `gh` user and lets you confirm, abort, or switch to a different account (`gh auth switch`).
-
-For a full bootstrap that also pushes per-environment secrets and variables, see `pnpm github:sync` (with a confirmation prompt — the values push is non-reversible).
+Before any GitHub API call, `github:sync` runs a **gh auth preflight** that prints the currently active `gh` user and lets you confirm, abort, or switch to a different account (`gh auth switch`). The values push requires typing `sync` (or `--yes` in automation) and is non-reversible.
 
 The script resolves the target repository in this order: `GITHUB_REPOSITORY` env → `origin` git remote → `gh repo view`.
 

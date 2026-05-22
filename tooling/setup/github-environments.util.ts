@@ -67,6 +67,15 @@ function sortedUniqueNormalized(values: string[], normalize: (value: string) => 
   return [...new Set(values.map(normalize))].sort();
 }
 
+/** Environment names from committed `.github/environments/*.json` (`name` field). */
+export function loadLocalGitHubEnvironmentNames(
+  environmentsDirectory = ENVIRONMENTS_DIRECTORY,
+): string[] {
+  return loadGitHubEnvironmentConfigs(environmentsDirectory)
+    .map((config) => config.name)
+    .sort();
+}
+
 export function loadGitHubEnvironmentConfigs(
   environmentsDirectory = ENVIRONMENTS_DIRECTORY,
 ): GitHubEnvironmentConfig[] {

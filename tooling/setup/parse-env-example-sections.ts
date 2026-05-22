@@ -27,7 +27,7 @@
  *   - Variables are recognized as `KEY=VALUE` (commented lines are skipped).
  *   - Multi-line double-quoted values (PEM keys) are reassembled correctly.
  *
- * Both `init-environments.ts` (template → `.env.<env>`) and
+ * Both `github-sync-config.ts` (template → `.env.<env>`) and
  * `sync-environment-to-github.ts` (push to GitHub) read this structure,
  * so the file IS the source of truth for classification — no separate rules
  * file, no override lists, no `classifyEnvKey()` function.

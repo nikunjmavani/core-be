@@ -9,7 +9,7 @@ Use this skill whenever you **add, rename, or remove** an environment variable. 
 file structure of `.env.example` is the **single source of truth** for whether each
 key is a GitHub Secret (credential) or a GitHub Variable (plaintext config) — there
 is no classifier function, no override list, and no CI guard to keep in sync. Get
-the section right and the rest of the toolchain (env:init, env:sync, deploy) just
+the section right and the rest of the toolchain (github:sync, deploy) just
 works.
 
 ## The two-half rule
@@ -33,9 +33,9 @@ PORT=3000
 ```
 
 Every key sits under exactly one half. Sub-sections (`# --- Title ---`) group
-related keys for readability. `pnpm env:init` mirrors this structure into each
-`.env.<environment>`, and `pnpm env:sync` reads the same structure when pushing
-to GitHub. The structure IS the classification.
+related keys for readability. `pnpm github:sync` creates missing `.env.<environment>`
+files from `.github/sync.config.json` and reads the same structure when pushing to
+GitHub. The structure IS the classification.
 
 ## Decision tree — Secret or Variable?
 
@@ -100,29 +100,22 @@ Apply in order; the first rule that matches wins.
    commented placeholders, then move them into the right half/sub-section by
    hand and add descriptions.
 
-4. **Regenerate the operator templates:**
+4. **Ensure hosted environments are listed in `.github/sync.config.json`.**
 
-   ```bash
-   pnpm env:init --force
-   ```
-
-   This rewrites `.env.development` and `.env.production` (gitignored) so the
-   operator's local copies pick up the new key under the same half + sub-section
-   as the template. Existing values for keys that didn't change are preserved
-   only when the operator has already edited them and you skip `--force` — when
-   adding a new key from scratch, `--force` is the safe default because the
-   placeholder is what the operator needs to see first.
+   `pnpm github:sync` scaffolds missing `.env.<environment>` files from that
+   config. Existing local env files are not overwritten; update them manually
+   when adding a new key so real values are preserved.
 
 5. **Push to the live GitHub Environments:**
 
    ```bash
-   pnpm env:sync development --dry-run  # preview the new key under the right header
-   pnpm env:sync development            # push
-   pnpm env:sync production --dry-run
-   pnpm env:sync production
+   pnpm github:sync development --dry-run  # preview the new key under the right header
+   pnpm github:sync development            # push
+   pnpm github:sync production --dry-run
+   pnpm github:sync production
    ```
 
-   `env:sync` reads the structure of `.env.<environment>` and pushes anything
+   `github:sync` reads the structure of `.env.<environment>` and pushes anything
    under the Secrets half via `gh secret set` and anything under the Variables
    half via `gh api .../variables`. Empty values are skipped.
 
@@ -140,8 +133,9 @@ A rename is a delete + add, atomic in the same PR:
 2. Update every code site that read the old key to read the new one.
 3. Remove the old key from the schema, `.env.example`, and any consumers.
 4. Run `pnpm tool:sync-env-example` — it must report 0 missing / 0 extra.
-5. Run `pnpm env:init --force` to rewrite the operator templates.
-6. After merge, run `pnpm env:sync <env>` for each environment. The old key
+5. Update local `.env.<environment>` files manually so they contain the new key
+   and no longer contain the old key.
+6. After merge, run `pnpm github:sync <env>` for each environment. The old key
    stays in GitHub until you delete it manually (`gh secret delete` /
    `gh api --method DELETE .../variables/<name>`); call that out in the PR
    description so deploys do not carry stale config.
@@ -152,7 +146,7 @@ A rename is a delete + add, atomic in the same PR:
 2. Remove from `.env.example`.
 3. Remove from any consumer code.
 4. Run `pnpm tool:sync-env-example` — it should report 0 missing / 0 extra.
-5. Run `pnpm env:init --force` to rewrite operator templates.
+5. Update local `.env.<environment>` files manually to remove the key.
 6. After merge, clean up GitHub manually:
    - Secret: `gh secret delete <NAME> --env <environment>`
    - Variable: `gh api --method DELETE repos/:owner/:repo/environments/<environment>/variables/<NAME>`
@@ -165,8 +159,9 @@ A rename is a delete + add, atomic in the same PR:
 - [ ] Description comment above the key explains what it controls and what
       a sensible value looks like.
 - [ ] `pnpm tool:sync-env-example` exits 0 (and reports both halves present).
-- [ ] `pnpm env:init --force` regenerated `.env.development` and `.env.production`.
-- [ ] `pnpm env:sync <env> --dry-run` shows the new key listed under the right
+- [ ] `.github/sync.config.json` lists every hosted environment (new hosted env: edit config after updating `NODE_ENV`, then `pnpm github:sync`).
+- [ ] Local `.env.<environment>` files were updated manually without discarding real values.
+- [ ] `pnpm github:sync <env> --dry-run` shows the new key listed under the right
       `[secret]` or `[variable]` column for every hosted environment.
 - [ ] PR description includes the "Environment variable changes" snippet from
       `pnpm tool:sync-env-example`.
@@ -178,9 +173,11 @@ A rename is a delete + add, atomic in the same PR:
 - **Per-provider credential acquisition:** [`docs/integrations/credentials-and-env.md`](../../../docs/integrations/credentials-and-env.md).
 - **Schema:** `src/shared/config/env-schema.ts`
 - **Template:** `.env.example` (committed; two-half + sub-section structure)
-- **Operator template generator:** `tooling/setup/init-environments.ts`
-- **GitHub push:** `tooling/setup/sync-environment-to-github.ts`
+- **GitHub sync config:** `.github/sync.config.json`
+- **GitHub sync:** `tooling/setup/github-sync.ts`
+- **Environment value sync helper:** `tooling/setup/sync-environment-to-github.ts`
 - **Section parser shared by both:** `tooling/setup/parse-env-example-sections.ts`
 - **Schema ↔ template validator:** `src/scripts/validators/env/sync-env-example.ts` (`pnpm tool:sync-env-example`)
-- **Cross-dimension consistency validator:** `src/scripts/validators/env/validate-environment-consistency.ts` (`pnpm validate:env-consistency`)
+- **Cross-dimension consistency (in github:sync):** `tooling/setup/github-sync-config.ts` — run `pnpm github:sync --check` before pushing
+- **Add hosted environment:** edit `.github/sync.config.json` and run `pnpm github:sync` (no env:add script)
 - **Deploy-required keys assertion:** `tooling/setup/validate-github-env.ts` (`pnpm validate:github-env`)

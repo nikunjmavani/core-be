@@ -7,7 +7,7 @@ Thank you for improving this backend. This document stays short—use **[CLAUDE.
 - **Node.js** — version in [`.nvmrc`](.nvmrc) (project expects Node 24 per `package.json` `engines`)
 - **pnpm** — package manager used by this repo
 - **Docker** — Postgres and Redis (see [`docker-compose.yml`](docker-compose.yml))
-- **Environment** — bootstrap per-env files: `pnpm env:init` creates `.env.development` and `.env.production` from `.env.example`. Fill in real values for the environment you're working with (defaults to `NODE_ENV=development` → `.env.development`).
+- **Environment** — new hosted env: add `NODE_ENV` in the schema and an entry in `.github/sync.config.json`, then `pnpm github:sync`. Fill in real values (defaults to `NODE_ENV=development` → `.env.development`). Push to GitHub: `pnpm github:sync <environment>`.
 
 ## Local setup
 

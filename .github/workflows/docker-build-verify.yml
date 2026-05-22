@@ -40,10 +40,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version-file: '.nvmrc'
 
@@ -110,7 +110,7 @@ jobs:
       - name: Verify worker image
         run: |
           set -euo pipefail
-          docker run --rm core-be-worker:ci node --check dist/worker.js
+          docker run --rm core-be-worker:ci node --check dist/src/worker.js
           docker run --rm core-be-worker:ci node -e "import('argon2').then(()=>import('@sentry/profiling-node')).then(()=>console.log('native ok'))"
 
       # Publish scanned images to GHCR for ANY protected-branch push (dev or main).

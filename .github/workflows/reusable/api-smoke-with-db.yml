@@ -97,7 +97,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -112,6 +112,7 @@ jobs:
         uses: ./.github/actions/start-api-server
         with:
           rate-limit-max: '10000'
+          ready-timeout-seconds: '120'
 
       - name: API smoke tests
         run: pnpm test:api-smoke

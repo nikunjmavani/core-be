@@ -6,29 +6,37 @@ mapping intact across all dimensions.
 
 ## Canonical invariant
 
-Every hosted environment must satisfy:
+Every hosted environment must be declared in `.github/sync.config.json`:
+
+```json
+{
+  "environments": [
+    { "name": "development", "branch": "dev" },
+    { "name": "production", "branch": "main" }
+  ]
+}
+```
+
+The `name` is both the GitHub Environment and `NODE_ENV` value. The `branch` is
+the protected branch that deploys to that environment. Plus the operator-local
+artefact:
 
 ```
-Git branch  ==  GitHub Environment  ==  NODE_ENV value
-```
-
-Plus the operator-local artefact:
-
-```
-.env.<environment>   (gitignored; created by `pnpm env:init`, pushed by `pnpm env:sync`)
+.env.<environment>   (gitignored; created by `pnpm github:sync`, pushed by `pnpm github:sync`)
 ```
 
 | Dimension | Lives in |
 | --------- | -------- |
+| Branch ↔ environment mapping | `.github/sync.config.json` |
 | `NODE_ENV` enum value | `src/shared/config/env-schema.ts` |
 | `.github/environments/<env>.json` | committed protection config |
 | Branch ruleset | `.github/rulesets/<branch>.json` |
 | Workflow case mapping | `.github/workflows/deploy-railway.yml` |
-| GitHub Environment (secrets + variables) | live in GitHub UI (managed via `pnpm env:sync`) |
-| `.env.<environment>` | repo root, **gitignored** (operator-local; source of truth for `env:sync`) |
+| GitHub Environment (secrets + variables) | live in GitHub UI (managed via `pnpm github:sync`) |
+| `.env.<environment>` | repo root, **gitignored** (operator-local; source of truth for `github:sync`) |
 
-`pnpm validate:env-consistency` enforces the three committed dimensions on every PR. CI
-fails if any of them disagree.
+`pnpm github:sync --check` enforces the committed dimensions before any GitHub write.
+Run it locally before merging plumbing changes.
 
 ## Existing hosted environments
 
@@ -44,13 +52,13 @@ Non-hosted runtime modes (no branch, no GH env): `local`, `test`.
 For an existing environment whose values have not been seeded into GitHub yet:
 
 ```bash
-pnpm env:init                      # creates .env.development + .env.production
+pnpm github:sync                   # creates missing .env.<environment> files
 # Edit each file with real values
-pnpm env:sync development          # push to GitHub
-pnpm env:sync production
+pnpm github:sync development          # push to GitHub
+pnpm github:sync production
 ```
 
-`env:sync` is idempotent — safe to re-run any time you change a value locally.
+`github:sync` is idempotent — safe to re-run any time you change a value locally.
 
 ## Adding a new environment
 
@@ -61,34 +69,48 @@ pnpm env:sync production
 If not, add it to `nodeEnvSchema` in `src/shared/config/env-schema.ts` first and run
 `pnpm validate`.
 
-### 2. Scaffold local + committed files
+### 2. Update sync config and scaffold local files
+
+Edit `.github/sync.config.json`:
+
+```json
+{
+  "environments": [
+    { "name": "development", "branch": "dev" },
+    { "name": "production", "branch": "main" },
+    { "name": "staging", "branch": "staging" }
+  ]
+}
+```
+
+Then run:
 
 ```bash
-pnpm env:add staging --branch staging
+pnpm github:sync
 ```
 
 This creates (idempotent — never overwrites existing files):
 
 - `.env.staging` (local, **gitignored**) — copy of `.env.example`. Edit it with real values.
 - `.github/environments/staging.json` (committed) — empty protection by default.
-- `.github/rulesets/staging.json` (committed) — branch ruleset matching `dev` / `main`.
+- `.github/rulesets/staging.json` (committed) — branch ruleset matching the default non-production policy.
 
 It also prints the exact next commands.
 
 ### 3. Fill in `.env.staging` with real values
 
 Open `.env.staging` and replace placeholders with real `DATABASE_URL`, `REDIS_URL`, JWT
-keypair, `SENTRY_DSN`, Railway token, etc. Leave optional integrations blank — `env:sync`
+keypair, `SENTRY_DSN`, Railway token, etc. Leave optional integrations blank — `github:sync`
 skips empty values.
 
 ### 4. Push to GitHub
 
 ```bash
-pnpm env:sync staging --dry-run    # preview what will be pushed
-pnpm env:sync staging              # push for real
+pnpm github:sync staging --dry-run    # preview what will be pushed
+pnpm github:sync staging              # push for real
 ```
 
-`env:sync` creates the GitHub Environment and pushes every `KEY=VALUE` according to which
+`github:sync` creates the GitHub Environment and pushes every `KEY=VALUE` according to which
 top-level half it sits in inside `.env.<environment>`:
 
 - Anything under `# ### GitHub Secrets ### #` → `gh secret set`.
@@ -134,7 +156,7 @@ gh api --method POST repos/:owner/:repo/rulesets \
 ### 7. Verify everything is 1:1
 
 ```bash
-pnpm validate:env-consistency             # cross-dimension drift check
+pnpm github:sync --check                  # cross-dimension drift + GitHub IaC check
 pnpm tool:sync-env-example                # .env.example <-> schema coverage
 CONFIG=staging pnpm validate:github-env   # GH env <-> schema required keys
 ```
@@ -149,7 +171,7 @@ All three must exit 0 before merging.
 4. `rm .env.<name>` (local-only, already gitignored — but tidy up your machine)
 5. Edit `.github/workflows/deploy-railway.yml`: drop `<branch>` from `branches` and
    remove the corresponding case.
-6. Run `pnpm validate:env-consistency` to confirm.
+6. Run `pnpm github:sync --check` to confirm.
 
 ## Why the invariant matters
 
@@ -160,5 +182,5 @@ A drift between any two dimensions silently breaks deploys:
 - `NODE_ENV` value missing → `env.config.ts` throws at boot with no meaningful message.
 - GH env config missing → workflow runs but has no protection / secrets.
 
-The lint validator (`pnpm validate:env-consistency`) is the single source of truth: if
-that command is green, every committed dimension matches.
+`pnpm github:sync --check` is the single source of truth: if that command is green,
+every committed dimension matches and remote GitHub IaC has no reported drift.

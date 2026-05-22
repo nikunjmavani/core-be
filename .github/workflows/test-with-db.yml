@@ -115,7 +115,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -137,7 +137,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: always() && hashFiles(format('coverage-{0}/**', matrix.shard.id)) != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-${{ matrix.shard.id }}
           path: coverage-${{ matrix.shard.id }}/
@@ -164,16 +164,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download fast shard coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: coverage-fast
           path: coverage-fast
 
       - name: Download db-bound shard coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: coverage-db-bound
           path: coverage-db-bound
@@ -189,7 +189,7 @@ jobs:
 
       - name: Upload merged coverage artifact
         if: always() && hashFiles('coverage-merged/**') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-merged
           path: coverage-merged/

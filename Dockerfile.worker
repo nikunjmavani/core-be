@@ -50,7 +50,8 @@ COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
 
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
   pnpm install --frozen-lockfile --prod --ignore-scripts \
-  $( [ "$INSTALL_MCP_OPTIONAL" = "true" ] || echo "--no-optional" )
+  $( [ "$INSTALL_MCP_OPTIONAL" = "true" ] || echo "--no-optional" ) \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 USER node
 
@@ -60,4 +61,4 @@ ARG IMAGE_SOURCE
 LABEL org.opencontainers.image.source="${IMAGE_SOURCE}"
 LABEL org.opencontainers.image.revision="${BUILD_REVISION}"
 
-CMD ["node", "dist/worker.js"]
+CMD ["node", "dist/src/worker.js"]

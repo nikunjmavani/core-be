@@ -14,6 +14,10 @@
  *
  * Does NOT push variables or secrets. Use `pnpm github:sync` for that.
  *
+ * Usage:
+ *   Invoked by `pnpm github:sync` (and `github:sync --check` / `--dry-run`).
+ *   Do not run this file directly — use `pnpm github:sync`.
+ *
  * Modes:
  *   default      — write changes to the remote.
  *   --check      — read-only drift report; exit non-zero if anything is missing.
@@ -26,20 +30,20 @@
  */
 
 import { execSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { runGhAuthPreflight } from './gh-auth-preflight.js';
 import {
-  extractTargetBranchesFromRulesets,
+  getGithubSyncBranches,
+  getGithubSyncEnvironmentNames,
+  loadGithubSyncConfig,
+  scaffoldGithubSyncFiles,
+} from './github-sync-config.js';
+import {
   getRepositoryIdentifier,
   loadLocalRulesets,
   syncRulesets,
   type SyncMode,
 } from './sync-rulesets.js';
-
-const ENVIRONMENTS_DIRECTORY = resolve(import.meta.dirname, '../../.github/environments');
 
 interface DefaultBranch {
   readonly name: string;
@@ -52,29 +56,6 @@ interface RepoSummary {
 
 interface RefObject {
   readonly object?: { readonly sha?: string };
-}
-
-interface CliOptions {
-  readonly mode: SyncMode;
-}
-
-function parseArguments(): CliOptions {
-  const argumentsList = process.argv.slice(2);
-
-  if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
-    console.log('Usage: pnpm github:init [--check | --dry-run]');
-    console.log('');
-    console.log('  (default)   Ensure branches, rulesets, and GitHub Environments exist');
-    console.log('  --check     Read-only drift report; exit non-zero if anything is missing');
-    console.log('  --dry-run   Show planned create / update operations without writing');
-    process.exit(0);
-  }
-
-  if (argumentsList.includes('--check')) return { mode: 'check' };
-  if (argumentsList.includes('--dry-run')) return { mode: 'dry-run' };
-  if (argumentsList.length === 0) return { mode: 'sync' };
-
-  throw new Error(`Unknown argument(s): ${argumentsList.join(' ')}. Use --help for options.`);
 }
 
 interface GhProbeResult {
@@ -213,21 +194,6 @@ function createOrUpdateEnvironment(repository: string, environment: string): voi
   );
 }
 
-function loadLocalEnvironmentNames(): string[] {
-  return readdirSync(ENVIRONMENTS_DIRECTORY)
-    .filter((entry) => entry.endsWith('.json'))
-    .map((entry) => {
-      const filePath = join(ENVIRONMENTS_DIRECTORY, entry);
-      const payload = JSON.parse(readFileSync(filePath, 'utf-8')) as { name?: unknown };
-      const name = typeof payload.name === 'string' ? payload.name.trim() : '';
-      if (!name) {
-        throw new Error(`${entry}: missing required string field "name".`);
-      }
-      return name;
-    })
-    .sort();
-}
-
 interface EnsureResult {
   readonly failures: number;
   readonly drift: number;
@@ -353,24 +319,37 @@ export interface RunGithubInitResult {
 export async function runGithubInit(args: {
   readonly mode: SyncMode;
   readonly purpose?: string;
+  /** Skip gh auth preflight (e.g. setup:infra with GITHUB_TOKEN only). */
+  readonly skipPreflight?: boolean;
+  /** When true, scaffold local IaC on sync mode (default). github-sync.ts passes false — it scaffolds first. */
+  readonly scaffoldOnSync?: boolean;
 }): Promise<RunGithubInitResult> {
+  const config = loadGithubSyncConfig();
+  const scaffoldOnSync = args.scaffoldOnSync ?? true;
+  if (args.mode === 'sync' && scaffoldOnSync) {
+    scaffoldGithubSyncFiles(config);
+  }
+
   const repository = getRepositoryIdentifier();
   const locals = loadLocalRulesets();
-  const branches = extractTargetBranchesFromRulesets(locals);
-  const environments = loadLocalEnvironmentNames();
+  const branches = getGithubSyncBranches(config);
+  const environments = getGithubSyncEnvironmentNames(config);
 
   console.log(`Repository:    ${repository}`);
   console.log(`Mode:          ${args.mode}`);
+  console.log(`Config:        .github/sync.config.json`);
   console.log(`Rulesets:      ${locals.map((local) => local.fileName).join(', ')}`);
   console.log(`Branches:      ${branches.length > 0 ? branches.join(', ') : '(none derived)'}`);
   console.log(`Environments:  ${environments.length > 0 ? environments.join(', ') : '(none)'}`);
   console.log('');
 
-  await runGhAuthPreflight({
-    repository,
-    purpose: args.purpose ?? 'Initialise GitHub branches, rulesets, and environments',
-    destructive: args.mode === 'sync',
-  });
+  if (!args.skipPreflight) {
+    await runGhAuthPreflight({
+      repository,
+      purpose: args.purpose ?? 'Initialise GitHub branches, rulesets, and environments',
+      destructive: args.mode === 'sync',
+    });
+  }
 
   console.log('Step 1/3 — Ensuring target branches exist');
   const branchResult = ensureBranches({ repository, branches, mode: args.mode });
@@ -387,51 +366,4 @@ export async function runGithubInit(args: {
     failures: branchResult.failures + rulesetResult.failures + environmentResult.failures,
     drift: branchResult.drift + rulesetResult.drift + environmentResult.drift,
   };
-}
-
-async function main(): Promise<void> {
-  const { mode } = parseArguments();
-  const { failures, drift } = await runGithubInit({ mode });
-
-  console.log('');
-
-  if (mode === 'check') {
-    if (drift === 0 && failures === 0) {
-      console.log('GitHub state in sync: branches, rulesets, and environments all present.');
-      process.exit(0);
-    }
-    if (drift > 0) {
-      console.error(`Drift detected: ${drift} item(s) missing on remote.`);
-      console.error('Run `pnpm github:init` to apply.');
-    }
-    if (failures > 0) {
-      console.error(`${failures} probe / list failure(s).`);
-    }
-    process.exit(1);
-  }
-
-  if (mode === 'dry-run') {
-    if (failures > 0) {
-      console.error(`${failures} failure(s) during dry-run probes.`);
-      process.exit(1);
-    }
-    console.log('Dry run complete. No changes pushed.');
-    process.exit(0);
-  }
-
-  if (failures > 0) {
-    console.error(`Init finished with ${failures} failure(s).`);
-    process.exit(1);
-  }
-
-  console.log('Init complete: branches, rulesets, and environments present.');
-}
-
-const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
-
-if (isMainModule) {
-  main().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  });
 }

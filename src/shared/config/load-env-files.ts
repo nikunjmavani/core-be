@@ -3,8 +3,8 @@
  *
  * Convention: a single file named `.env.<NODE_ENV>` per environment. Defaults to
  * `.env.development` when `NODE_ENV` is unset (local dev). The file is gitignored —
- * `.env.example` (committed) is the canonical template; copy it via `pnpm env:init` and
- * push the result to GitHub Environments via `pnpm env:sync <environment>`.
+ * `.env.example` (committed) is the canonical template; `pnpm github:sync` creates
+ * missing `.env.<environment>` files from `.github/sync.config.json` and pushes values.
  *
  * Safety-net fallback: when `.env.<NODE_ENV>` does not exist AND `NODE_ENV` is not
  * `production`, we additionally try `.env.development`. This keeps tests and ad-hoc

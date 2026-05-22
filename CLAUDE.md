@@ -246,7 +246,7 @@ Billing event helpers and types live with the billing sub-domains that emit them
 - **Tenant**: `X-Organization-Id` header → `request.organizationId` via `src/shared/middlewares/tenant.middleware.ts`
 - **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call or import `getRequestDatabase()` (ESLint blocks `request-database.context` under `*.worker.ts` / `*.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/retention-database.context.ts` and migration `20260530000001_global_retention_cleanup_rls.sql`.
 - **DB**: `src/infrastructure/database/connection.ts` singleton + Drizzle queries in repositories; repositories may extend `src/infrastructure/database/base-repository.ts` for `paginate()`
-- **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) are gitignored, created via `pnpm env:init`, and synced to GitHub Environments via `pnpm env:sync <environment>`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'development'}`.
+- **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) are gitignored. Hosted environment mapping lives in `.github/sync.config.json` (edit by hand when adding/removing environments). Scaffold and push with `pnpm github:sync`. Consistency and remote drift: `pnpm github:sync --check`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'development'}`.
 
 ## Dependency Rules
 
@@ -347,5 +347,6 @@ Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, 
 - `pnpm deps:update` — safe patch/minor updates within ranges; run audit + validate + test after
 - `pnpm db:seed` — seed minimal dev data
 - `pnpm db:seed:full` — seed full demo data
+- `pnpm github:sync` — consistency, scaffold, branches, rulesets, GitHub Environments, push `.env.<environment>` values; `--check` read-only; `--dry-run` preview
 - `pnpm tool:sync-env-example` — report env schema vs .env.example diff and PR snippet; use `--fix` to append missing vars (legacy: `scripts:sync-env-example`, `validate:env-example`)
 - `pnpm tool:project-structure-tree` — print `src/` directory tree to stdout (see `docs/reference/architecture/project-structure-guide.md`)
