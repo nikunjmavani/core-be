@@ -64,3 +64,5 @@ jobs:
             --accept 200,204,206,429
             ${{ steps.changed-markdown.outputs.files }}
           fail: false
+          # PR templates and short docs may have no links; do not fail the lane.
+          failIfEmpty: false
