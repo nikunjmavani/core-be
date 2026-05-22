@@ -65,7 +65,7 @@ Skipped required checks do **not** block merge. `Quality` and `PR Governance` al
 
 ### Advisory PR jobs (not in rulesets)
 
-_None — all merge-gating CI jobs are listed in the required table above._
+*None — all merge-gating CI jobs are listed in the required table above.*
 
 ### Post-merge-only jobs (do not add as PR required checks)
 
