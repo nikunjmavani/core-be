@@ -129,6 +129,9 @@ importers:
       ioredis:
         specifier: 5.10.1
         version: 5.10.1
+      isomorphic-dompurify:
+        specifier: ^3.14.0
+        version: 3.14.0(@noble/hashes@2.2.0)
       jose:
         specifier: ^6.2.3
         version: 6.2.3
@@ -217,9 +220,6 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
-      isomorphic-dompurify:
-        specifier: ^3.14.0
-        version: 3.14.0(@noble/hashes@2.2.0)
       libsodium-wrappers:
         specifier: ^0.8.4
         version: 0.8.4
