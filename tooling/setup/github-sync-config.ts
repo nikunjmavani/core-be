@@ -8,7 +8,7 @@ const environmentExamplePath = resolve(projectRoot, '.env.example');
 const environmentSchemaPath = resolve(projectRoot, 'src/shared/config/env-schema.ts');
 const githubEnvironmentsDirectory = resolve(projectRoot, '.github/environments');
 const githubRulesetsDirectory = resolve(projectRoot, '.github/rulesets');
-const deployWorkflowPath = resolve(projectRoot, '.github/workflows/deploy-railway.yml');
+const deployWorkflowPath = resolve(projectRoot, '.github/workflows/deploy-railway-after-ci.yml');
 
 const githubSyncEnvironmentSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9-]*$/),
@@ -267,7 +267,7 @@ function buildBranchRuleset(branch: string): string {
             { context: 'CI / Quality' },
             { context: 'CI / Tests' },
             { context: 'CI / API smoke' },
-            { context: 'PR governance / Checks' },
+            { context: 'PR Governance / Checks' },
             { context: 'CI / Docker' },
           ],
         },

@@ -30,7 +30,7 @@ describe('supply chain SBOM policy (#94 p3-sbom-syft)', () => {
     expect(ciWorkflow).toContain('cyclonedx-json');
     expect(ciWorkflow).toContain('sbom.cyclonedx.json');
 
-    const releaseSbomWorkflow = readWorkflow('.github/workflows/release-sbom.yml');
+    const releaseSbomWorkflow = readWorkflow('.github/workflows/release-attach-sbom.yml');
     expect(releaseSbomWorkflow).toContain('release:');
     expect(releaseSbomWorkflow).toContain('types: [published]');
     expect(releaseSbomWorkflow).toContain('anchore/sbom-action@v0');
