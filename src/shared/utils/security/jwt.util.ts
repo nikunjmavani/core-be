@@ -14,6 +14,12 @@ let _signingKey: CryptoKey | Uint8Array | null = null;
 let _verifyKey: CryptoKey | Uint8Array | null = null;
 let _algorithm: 'RS256' | 'HS256' = 'HS256';
 
+function normalizePem(value: string): string {
+  const normalized = value.replaceAll('\\n', '\n').trim();
+  const beginIndex = normalized.indexOf('-----BEGIN ');
+  return beginIndex > 0 ? normalized.slice(beginIndex) : normalized;
+}
+
 /**
  * Determine the signing key and algorithm.
  * - If JWT_PRIVATE_KEY is set → RS256
@@ -30,7 +36,7 @@ async function getSigningKey(): Promise<{
   const environment = getEnv();
   if (environment.JWT_PRIVATE_KEY) {
     _algorithm = 'RS256';
-    _signingKey = await importPKCS8(environment.JWT_PRIVATE_KEY, 'RS256');
+    _signingKey = await importPKCS8(normalizePem(environment.JWT_PRIVATE_KEY), 'RS256');
   } else {
     _algorithm = 'HS256';
     _signingKey = new TextEncoder().encode(environment.JWT_SECRET);
@@ -54,7 +60,7 @@ async function getVerifyKey(): Promise<{
   const environment = getEnv();
   if (environment.JWT_PUBLIC_KEY) {
     _algorithm = 'RS256';
-    _verifyKey = await importSPKI(environment.JWT_PUBLIC_KEY, 'RS256');
+    _verifyKey = await importSPKI(normalizePem(environment.JWT_PUBLIC_KEY), 'RS256');
   } else {
     _algorithm = 'HS256';
     _verifyKey = new TextEncoder().encode(environment.JWT_SECRET);

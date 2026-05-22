@@ -43,9 +43,23 @@ AQIDAQAB
 -----END PUBLIC KEY-----
 `;
 
-process.env.JWT_PRIVATE_KEY ??= TEST_JWT_PRIVATE_KEY;
-process.env.JWT_PUBLIC_KEY ??= TEST_JWT_PUBLIC_KEY;
+function normalizeTestPem(value: string | undefined, marker: string, fallback: string): string {
+  if (!value?.includes(marker) || value.includes('__REPLACE_ME__') || value.includes('...')) {
+    return fallback;
+  }
+  return value.replaceAll('\\n', '\n');
+}
 
+process.env.JWT_PRIVATE_KEY = normalizeTestPem(
+  process.env.JWT_PRIVATE_KEY,
+  'BEGIN PRIVATE KEY',
+  TEST_JWT_PRIVATE_KEY,
+);
+process.env.JWT_PUBLIC_KEY = normalizeTestPem(
+  process.env.JWT_PUBLIC_KEY,
+  'BEGIN PUBLIC KEY',
+  TEST_JWT_PUBLIC_KEY,
+);
 // Suppress BullMQ Redis eviction policy warning in tests (local/CI Redis often uses volatile-lru)
 const originalWarn = console.warn;
 console.warn = (...args: unknown[]) => {
