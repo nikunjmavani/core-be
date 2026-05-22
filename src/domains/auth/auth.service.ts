@@ -21,6 +21,10 @@ export type LoginResult =
   | { access_token: string; session_public_id: string }
   | { mfa_required: true; mfa_session_token: string };
 
+/**
+ * Verifies credentials, issues access tokens, and tracks failed login attempts
+ * with an organization-aware lockout window.
+ */
 export class AuthService {
   constructor(
     private readonly userService: UserService,
