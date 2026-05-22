@@ -66,11 +66,13 @@ To gain confidence in the **whole system** (not just health endpoints), run both
 2. **API stress** (authenticated): set credentials, then run `pnpm load:stress:api`
    - Get credentials: `pnpm tool:load-test-credentials` (server up, `pnpm db:seed:full` done).
    - Export and run:
+
      ```bash
      export TEST_TOKEN="<paste from script>"
      export TEST_ORG_ID="<paste from script>"
      pnpm load:stress:api
      ```
+
    - Hits: `GET /api/v1/users/me`, `GET /api/v1/tenancy/organizations`, `GET /api/v1/notify/notifications`, `GET /api/v1/notify/notifications/unread-count`, `GET /api/v1/tenancy/organizations/:id/memberships` with up to 100 VUs.
 
 3. **Optional — auth flow**: `pnpm load:auth`

@@ -33,10 +33,12 @@ Keep **zero known vulnerabilities** in dependencies and avoid **breaking changes
    - Prefer `pnpm update` (patch/minor within declared ranges). For a major upgrade, do it intentionally: update one package, run `pnpm validate` and `pnpm test`, fix any breakage, then commit.
 
 4. **Validate and test**
+
    ```bash
    pnpm validate
    pnpm test
    ```
+
    Do not commit dependency changes without passing validate and tests.
 
 ### When `pnpm audit` reports vulnerabilities

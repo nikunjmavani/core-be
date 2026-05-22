@@ -21,7 +21,7 @@ The `name` is both the GitHub Environment and `NODE_ENV` value. The `branch` is
 the protected branch that deploys to that environment. Plus the operator-local
 artefact:
 
-```
+```text
 .env.<environment>   (gitignored; created by `pnpm github:sync`, pushed by `pnpm github:sync`)
 ```
 

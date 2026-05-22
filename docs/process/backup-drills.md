@@ -70,7 +70,9 @@ Set **`NEON_DRILL_DATABASE_URL`** to a throwaway Neon branch connection string (
 
 ---
 
-## Human drill checklist (≈ 60 minutes)
+## Human drill checklist
+
+Approximate duration: 60 minutes.
 
 1. **Schedule** — Platform owner books a 1-hour window; notify the incidents channel.
 2. **Neon branch** — Create branch from production (or staging) at a timestamp **15 minutes** in the past.

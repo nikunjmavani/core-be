@@ -32,7 +32,7 @@ Domains live under `src/domains/<domain>/`. Each domain has sub-domains with thi
 
 ### Canonical layout
 
-```
+```text
 src/domains/<domain>/
   <domain>.routes.ts          # Route registration (FastifyPluginAsync)
   <domain>.container.ts       # DI container (repos → services); export services for routes/controllers
@@ -113,7 +113,7 @@ See **`docs/reference/architecture/domains-and-public-api-design.md`** for route
 
 ## Infrastructure
 
-```
+```text
 src/infrastructure/
   database/
     connection.ts             # Exports: database, sql, closeDatabase
@@ -154,7 +154,7 @@ src/infrastructure/
 
 ## Shared
 
-```
+```text
 src/shared/
   config/
     env.config.ts             # Environment validation (Zod)
