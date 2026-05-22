@@ -22,7 +22,7 @@ describe('Worker readiness (global)', () => {
   });
 
   it('deploy workflow fails when RAILWAY_WORKER_SERVICE_ID is unset', () => {
-    const workflowPath = resolve(ROOT, '.github/workflows/deploy-railway.yml');
+    const workflowPath = resolve(ROOT, '.github/workflows/deploy-railway-after-ci.yml');
     expect(existsSync(workflowPath)).toBe(true);
     const workflow = readFileSync(workflowPath, 'utf8');
     expect(workflow).toContain('RAILWAY_WORKER_SERVICE_ID must be set in this GitHub environment');
@@ -30,7 +30,7 @@ describe('Worker readiness (global)', () => {
   });
 
   it('deploy workflow uses scanned CI images only (no source build or railway up)', () => {
-    const workflowPath = resolve(ROOT, '.github/workflows/deploy-railway.yml');
+    const workflowPath = resolve(ROOT, '.github/workflows/deploy-railway-after-ci.yml');
     const workflow = readFileSync(workflowPath, 'utf8');
     expect(workflow).toContain('railway redeploy --service');
     expect(workflow).toContain('Resolve scanned CI images from GHCR');
