@@ -37,7 +37,7 @@ Vitest tests live under `src/` in **two places only**. Do not mix responsibiliti
 
 Use for infrastructure and behavior that is **not owned by a single domain**:
 
-```
+```text
 src/tests/
   helpers/          # test-app, test-auth, test-database, test-organization
   factories/        # shared factories (user, organization, plan, …)
@@ -57,7 +57,7 @@ src/tests/
 
 Each domain has a root `__tests__/` folder. **Sub-domains** (under `sub-domains/<resource>/`) hold co-located unit, event-handler, and nested e2e tests.
 
-```
+```text
 src/domains/<domain>/__tests__/
   <domain>.test.ts              # bundled domain inject suite (auth, billing, notify, user, tenancy)
   factories/                    # domain-wide test helpers (e.g. tenancy permission.factory.ts)
