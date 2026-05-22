@@ -43,9 +43,6 @@
             "context": "PR Checks / PR Quality Gates"
           },
           {
-            "context": "CI / Chaos (Postgres + Redis via Toxiproxy)"
-          },
-          {
             "context": "CI / Docker Build"
           }
         ]

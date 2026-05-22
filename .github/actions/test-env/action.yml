@@ -1,0 +1,103 @@
+name: Export shared CI test env
+description: |
+  Exports the canonical fake JWT keypair and the shared CI test environment
+  variables (ALLOWED_ORIGINS, AUDIT_RETENTION_DAYS, AUTH_SESSION_RETENTION_DAYS,
+  METRICS_SCRAPE_TOKEN, SECRETS_ENCRYPTION_KEY, etc.) into $GITHUB_ENV so each
+  CI workflow does not have to inline the same 80-line YAML blob.
+
+  These values are CI-only test fixtures. Production secrets are injected by the
+  `deploy-railway.yml` workflow from the matching GitHub Environment.
+
+inputs:
+  jwt-secret:
+    description: Override for JWT_SECRET
+    required: false
+    default: test-jwt-secret-min-32-chars-xxxxxxxx
+  allowed-origins:
+    description: Override for ALLOWED_ORIGINS
+    required: false
+    default: http://localhost:3000
+  rate-limit-max:
+    description: Override for RATE_LIMIT_MAX (export only when non-empty)
+    required: false
+    default: ''
+  rate-limit-window-ms:
+    description: Override for RATE_LIMIT_WINDOW_MS (export only when non-empty)
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Export shared CI test env
+      shell: bash
+      env:
+        JWT_SECRET_INPUT: ${{ inputs.jwt-secret }}
+        ALLOWED_ORIGINS_INPUT: ${{ inputs.allowed-origins }}
+        RATE_LIMIT_MAX_INPUT: ${{ inputs.rate-limit-max }}
+        RATE_LIMIT_WINDOW_MS_INPUT: ${{ inputs.rate-limit-window-ms }}
+      run: |
+        set -euo pipefail
+
+        {
+          echo "JWT_SECRET=${JWT_SECRET_INPUT}"
+          echo "ALLOWED_ORIGINS=${ALLOWED_ORIGINS_INPUT}"
+          echo "AUDIT_RETENTION_DAYS=90"
+          echo "AUTH_SESSION_RETENTION_DAYS=30"
+          echo "METRICS_SCRAPE_TOKEN=test-metrics-token-min-32-characters"
+          echo "SECRETS_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000"
+        } >> "$GITHUB_ENV"
+
+        if [ -n "${RATE_LIMIT_MAX_INPUT}" ]; then
+          echo "RATE_LIMIT_MAX=${RATE_LIMIT_MAX_INPUT}" >> "$GITHUB_ENV"
+        fi
+        if [ -n "${RATE_LIMIT_WINDOW_MS_INPUT}" ]; then
+          echo "RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS_INPUT}" >> "$GITHUB_ENV"
+        fi
+
+        {
+          echo "JWT_PRIVATE_KEY<<__CI_JWT_PRIVATE_KEY__"
+          echo "-----BEGIN PRIVATE KEY-----"
+          echo "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDJp33Skforij0b"
+          echo "cb5iPkuY7IeTw+X6NuKmkadoCS7aRaQgkon9u/s1Lj05tRuZTgw0VqfYiIbud2z1"
+          echo "PWJtl4niSyG8cjNdglpUkNW1f7oaDC9YoGfup5telmZy5vK5IVieT0fn5ePLRdlk"
+          echo "bMkOf2fHcx/rRf4Vl+ff9E9BXLmYg1yqkKPxHBBwZPcqmQ2DW3An7DEUS/ZDw8AE"
+          echo "UIBHRurFQOYZ1xzov/w21a0l+qT911yk5TJKl+ffeeQQ5twiiDMQEQQoJDKJOXo3"
+          echo "UsuFycfSgkJV2KnzK9QsHrHYrM44cD08yIctf1/I3Z3xwVms8Bof6pv0q96Lueh1"
+          echo "D+ECdd4BAgMBAAECggEABUwGhJT8Ds+7SjDDMP506ufvqcSAEoIFkx2JWbTAC9C/"
+          echo "fnGK+WTKNPvpdM4akvzXWjqafxga/0GY1ZpOrxVHdG/Hy5TuX3rwl38UdgeMYmnG"
+          echo "hpv0DvNNI/9sYoFJh+5lzwbDG0bRJIJJsxcecuiK19Tg1kPI6FVMrHfU6yEd6PEi"
+          echo "d5/igyxkxxcPr96BlNkKl+7CAYqY88t5uwXbnbxAmxLIMQ6f26T+1vCCJnHpRakS"
+          echo "UygAQLJFXJzOTV2j1mMIyZi28DNR7+QRYzHeYTBe+e3dsaxC14+veVMjKpWS+AIX"
+          echo "eqoCbyZhDPtYowR9iAO/P1jGPAv9EnEKJZxDCdt65wKBgQDts2fuTmxAFNZg3umt"
+          echo "hpUXuxmnzKdkrU8Vtqmwet3MdETIBAUbWnP+l4LgMj1N3CB77/DGWGiSpLKyXWZf"
+          echo "oQFEv4XVf6ikKzl11ILouCsaiiR7y5Xqjt2Q1tm7fXZ3ntzsX4jGJ3X8H1KRet63"
+          echo "/JP/lPsQqcbZSi8kdrDIvX71HwKBgQDZLa6stFKU4IaEA9SiLxgRpOhBtQB4i+iB"
+          echo "L5l7UZkGn5fscNtQG5c9NFnZ0n6NslsNlShCgGuNAyL1mQph4iG1ozmJYeHruWFO"
+          echo "CA/3wyxL1alzCPdZxtIDPRZ+F+LnzPHlT4hPA/uHmIgOkQn1HPMAul7D5wEby6y7"
+          echo "a69f7b6o3wKBgDiAPqIcrgqFaXfZRL5kkSf052JFeTyrHXNR2gADFJm2wWqx2ezo"
+          echo "kU3hAdD84CmTu3z6Scc72I+S6o8POHheswh+ZfebwqBTTfM+MmfS7xv93jI28Emy"
+          echo "7+Ovzk2Mww4oCud8xewkER1+7Id8J1ighyVnak5JrOSVh6MpO1hcAsONAoGAerRY"
+          echo "0LNBRWRmHAieBtRc4PsvTpCZp4JE51ihew9rSla5W5mYD/bGyInfijZn0l9HGrF/"
+          echo "gbNVEOMIyYKiXxOIwDtssrZfEvQ2igP8IZxgVqhtiNU0C8FNvw6wuqV8SkN9GHaL"
+          echo "KTmyz7XaiYBhA+BLW8nw6PaHpdC501rQR37oDjkCgYAUYS5GwaSz9O6UQAN3/TxS"
+          echo "cpwfpB+Vt5zOcukuHOw0IWNjxI3DGglfjeipNJSXMAlUfoMrXuTpt2YjYs2gJH1U"
+          echo "caaEEWY15kCKLmEjbKIIechhSi5FUlyJ118JbioPVgXDhvxara1wGITfk6APhvCL"
+          echo "LjeTy3MMidIN1gyTCnBPWQ=="
+          echo "-----END PRIVATE KEY-----"
+          echo "__CI_JWT_PRIVATE_KEY__"
+        } >> "$GITHUB_ENV"
+
+        {
+          echo "JWT_PUBLIC_KEY<<__CI_JWT_PUBLIC_KEY__"
+          echo "-----BEGIN PUBLIC KEY-----"
+          echo "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyad90pH6K4o9G3G+Yj5L"
+          echo "mOyHk8Pl+jbippGnaAku2kWkIJKJ/bv7NS49ObUbmU4MNFan2IiG7nds9T1ibZeJ"
+          echo "4kshvHIzXYJaVJDVtX+6GgwvWKBn7qebXpZmcubyuSFYnk9H5+Xjy0XZZGzJDn9n"
+          echo "x3Mf60X+FZfn3/RPQVy5mINcqpCj8RwQcGT3KpkNg1twJ+wxFEv2Q8PABFCAR0bq"
+          echo "xUDmGdcc6L/8NtWtJfqk/ddcpOUySpfn33nkEObcIogzEBEEKCQyiTl6N1LLhcnH"
+          echo "0oJCVdip8yvULB6x2KzOOHA9PMiHLX9fyN2d8cFZrPAaH+qb9Kvei7nodQ/hAnXe"
+          echo "AQIDAQAB"
+          echo "-----END PUBLIC KEY-----"
+          echo "__CI_JWT_PUBLIC_KEY__"
+        } >> "$GITHUB_ENV"

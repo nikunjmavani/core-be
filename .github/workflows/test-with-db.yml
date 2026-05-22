@@ -1,7 +1,36 @@
 name: Reusable — test with Postgres and Redis
 
+# Two modes (selected by caller via `mode` input):
+#
+#   full  (default)  — runs the complete matrix split into 4 shards:
+#                       1) fast              (unit + property + global)
+#                       2) db-tenancy-billing (e2e for tenancy + billing + their integration)
+#                       3) db-auth-user      (e2e for auth + user + their integration)
+#                       4) db-rest           (e2e for notify + audit + upload + unit-db + remaining integration + security + performance)
+#                      Used when a PR/push touches anything outside src/domains/ (infra,
+#                      shared, migrations, lockfile, Dockerfiles, vitest configs).
+#
+#   smart            — runs only the fast shard + a single db-bound shard that uses
+#                      `vitest --changed=origin/${BASE_REF}` so test selection is driven
+#                      by the import graph rather than path filters. Caller passes
+#                      `base-ref` so vitest knows where the PR branched from.
+#                      Used when the PR's diff is confined to src/domains/ (a "safe
+#                      domain scope") — the fast shard, api-smoke, and quality jobs
+#                      stay as the cross-cutting safety net.
+
 on:
   workflow_call:
+    inputs:
+      mode:
+        description: Test selection mode — "full" or "smart"
+        required: false
+        type: string
+        default: full
+      base-ref:
+        description: Base ref for `vitest --changed` in smart mode (e.g. "main")
+        required: false
+        type: string
+        default: ''
     secrets:
       RESEND_API_KEY:
         required: false
@@ -12,22 +41,74 @@ permissions:
   contents: read
 
 jobs:
+  matrix-config:
+    name: Resolve test matrix
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.config.outputs.shards }}
+    steps:
+      - name: Pick matrix for mode=${{ inputs.mode }}
+        id: config
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.mode }}" = "smart" ]; then
+            # Smart mode: fast shard (full breadth) + a single db-bound shard driven
+            # by `vitest --changed`. We still execute every db-bound project so the
+            # import graph can pick up tests in any tier; --changed filters them.
+            cat > shards.json <<'JSON'
+            [
+              { "name": "tests-fast (unit + property + global)",
+                "id": "fast",
+                "projects": "--project unit --project property --project global",
+                "domain_filter": "",
+                "use_changed": false },
+              { "name": "tests-db-smart (changed-only via vitest --changed)",
+                "id": "db-smart",
+                "projects": "--project unit-db --project e2e --project integration --project security --project performance",
+                "domain_filter": "",
+                "use_changed": true }
+            ]
+            JSON
+          else
+            cat > shards.json <<'JSON'
+            [
+              { "name": "tests-fast (unit + property + global)",
+                "id": "fast",
+                "projects": "--project unit --project property --project global",
+                "domain_filter": "",
+                "use_changed": false },
+              { "name": "tests-db-tenancy-billing (e2e + integration for tenancy + billing)",
+                "id": "db-tenancy-billing",
+                "projects": "--project e2e --project integration",
+                "domain_filter": "tenancy,billing",
+                "use_changed": false },
+              { "name": "tests-db-auth-user (e2e + integration for auth + user)",
+                "id": "db-auth-user",
+                "projects": "--project e2e --project integration",
+                "domain_filter": "auth,user",
+                "use_changed": false },
+              { "name": "tests-db-rest (e2e + integration for notify + audit + upload + remaining tiers)",
+                "id": "db-rest",
+                "projects": "--project unit-db --project e2e --project integration --project security --project performance",
+                "domain_filter": "notify,audit,upload,rest",
+                "use_changed": false }
+            ]
+            JSON
+          fi
+          shards_compact="$(jq -c . shards.json)"
+          echo "shards=${shards_compact}" >> "$GITHUB_OUTPUT"
+          echo "Selected shards:"
+          jq . shards.json
+
   run:
     name: ${{ matrix.shard.name }}
+    needs: matrix-config
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        # Two parallel shards run on separate GitHub runners — each owns its own
-        # Postgres + Redis service. Wall-clock CI time = max(fast, db-bound).
-        shard:
-          - name: tests-fast (unit + property + global)
-            id: fast
-            projects: '--project unit --project property --project global'
-          - name: tests-db-bound (unit-db + e2e + integration + security + performance)
-            id: db-bound
-            projects: '--project unit-db --project e2e --project integration --project security --project performance'
+        shard: ${{ fromJSON(needs.matrix-config.outputs.shards) }}
 
     services:
       postgres:
@@ -62,51 +143,6 @@ jobs:
       DATABASE_URL: postgresql://core:core@localhost:5432/core
       REDIS_URL: redis://localhost:6379
       DATABASE_SSL_ENABLED: 'false'
-      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
-      JWT_PRIVATE_KEY: |
-        -----BEGIN PRIVATE KEY-----
-        MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDJp33Skforij0b
-        cb5iPkuY7IeTw+X6NuKmkadoCS7aRaQgkon9u/s1Lj05tRuZTgw0VqfYiIbud2z1
-        PWJtl4niSyG8cjNdglpUkNW1f7oaDC9YoGfup5telmZy5vK5IVieT0fn5ePLRdlk
-        bMkOf2fHcx/rRf4Vl+ff9E9BXLmYg1yqkKPxHBBwZPcqmQ2DW3An7DEUS/ZDw8AE
-        UIBHRurFQOYZ1xzov/w21a0l+qT911yk5TJKl+ffeeQQ5twiiDMQEQQoJDKJOXo3
-        UsuFycfSgkJV2KnzK9QsHrHYrM44cD08yIctf1/I3Z3xwVms8Bof6pv0q96Lueh1
-        D+ECdd4BAgMBAAECggEABUwGhJT8Ds+7SjDDMP506ufvqcSAEoIFkx2JWbTAC9C/
-        fnGK+WTKNPvpdM4akvzXWjqafxga/0GY1ZpOrxVHdG/Hy5TuX3rwl38UdgeMYmnG
-        hpv0DvNNI/9sYoFJh+5lzwbDG0bRJIJJsxcecuiK19Tg1kPI6FVMrHfU6yEd6PEi
-        d5/igyxkxxcPr96BlNkKl+7CAYqY88t5uwXbnbxAmxLIMQ6f26T+1vCCJnHpRakS
-        UygAQLJFXJzOTV2j1mMIyZi28DNR7+QRYzHeYTBe+e3dsaxC14+veVMjKpWS+AIX
-        eqoCbyZhDPtYowR9iAO/P1jGPAv9EnEKJZxDCdt65wKBgQDts2fuTmxAFNZg3umt
-        hpUXuxmnzKdkrU8Vtqmwet3MdETIBAUbWnP+l4LgMj1N3CB77/DGWGiSpLKyXWZf
-        oQFEv4XVf6ikKzl11ILouCsaiiR7y5Xqjt2Q1tm7fXZ3ntzsX4jGJ3X8H1KRet63
-        /JP/lPsQqcbZSi8kdrDIvX71HwKBgQDZLa6stFKU4IaEA9SiLxgRpOhBtQB4i+iB
-        L5l7UZkGn5fscNtQG5c9NFnZ0n6NslsNlShCgGuNAyL1mQph4iG1ozmJYeHruWFO
-        CA/3wyxL1alzCPdZxtIDPRZ+F+LnzPHlT4hPA/uHmIgOkQn1HPMAul7D5wEby6y7
-        a69f7b6o3wKBgDiAPqIcrgqFaXfZRL5kkSf052JFeTyrHXNR2gADFJm2wWqx2ezo
-        kU3hAdD84CmTu3z6Scc72I+S6o8POHheswh+ZfebwqBTTfM+MmfS7xv93jI28Emy
-        7+Ovzk2Mww4oCud8xewkER1+7Id8J1ighyVnak5JrOSVh6MpO1hcAsONAoGAerRY
-        0LNBRWRmHAieBtRc4PsvTpCZp4JE51ihew9rSla5W5mYD/bGyInfijZn0l9HGrF/
-        gbNVEOMIyYKiXxOIwDtssrZfEvQ2igP8IZxgVqhtiNU0C8FNvw6wuqV8SkN9GHaL
-        KTmyz7XaiYBhA+BLW8nw6PaHpdC501rQR37oDjkCgYAUYS5GwaSz9O6UQAN3/TxS
-        cpwfpB+Vt5zOcukuHOw0IWNjxI3DGglfjeipNJSXMAlUfoMrXuTpt2YjYs2gJH1U
-        caaEEWY15kCKLmEjbKIIechhSi5FUlyJ118JbioPVgXDhvxara1wGITfk6APhvCL
-        LjeTy3MMidIN1gyTCnBPWQ==
-        -----END PRIVATE KEY-----
-      JWT_PUBLIC_KEY: |
-        -----BEGIN PUBLIC KEY-----
-        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyad90pH6K4o9G3G+Yj5L
-        mOyHk8Pl+jbippGnaAku2kWkIJKJ/bv7NS49ObUbmU4MNFan2IiG7nds9T1ibZeJ
-        4kshvHIzXYJaVJDVtX+6GgwvWKBn7qebXpZmcubyuSFYnk9H5+Xjy0XZZGzJDn9n
-        x3Mf60X+FZfn3/RPQVy5mINcqpCj8RwQcGT3KpkNg1twJ+wxFEv2Q8PABFCAR0bq
-        xUDmGdcc6L/8NtWtJfqk/ddcpOUySpfn33nkEObcIogzEBEEKCQyiTl6N1LLhcnH
-        0oJCVdip8yvULB6x2KzOOHA9PMiHLX9fyN2d8cFZrPAaH+qb9Kvei7nodQ/hAnXe
-        AQIDAQAB
-        -----END PUBLIC KEY-----
-      ALLOWED_ORIGINS: http://localhost:3000
-      AUDIT_RETENTION_DAYS: 90
-      AUTH_SESSION_RETENTION_DAYS: 30
-      METRICS_SCRAPE_TOKEN: test-metrics-token-min-32-characters
-      SECRETS_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
       RATE_LIMIT_MAX: 1000
       RATE_LIMIT_WINDOW_MS: 60000
       RUN_DB_TESTS: 1
@@ -116,9 +152,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export shared CI test env (JWT keys + retention + secrets-encryption)
+        uses: ./.github/actions/test-env
+
+      - name: Fetch base ref for `vitest --changed`
+        if: matrix.shard.use_changed && inputs.base-ref != ''
+        run: git fetch origin ${{ inputs.base-ref }} --depth=1
 
       - name: Run migrations
         run: pnpm db:migrate
@@ -129,7 +174,27 @@ jobs:
 
       - name: Run ${{ matrix.shard.id }} test shard with coverage
         id: run-tests
-        run: pnpm exec vitest run --coverage --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 --coverage.thresholds.statements=0 --coverage.thresholds.branches=0 ${{ matrix.shard.projects }}
+        env:
+          VITEST_DOMAIN_FILTER: ${{ matrix.shard.domain_filter }}
+        run: |
+          set -euo pipefail
+          CHANGED_ARG=""
+          if [ "${{ matrix.shard.use_changed }}" = "true" ] && [ -n "${{ inputs.base-ref }}" ]; then
+            CHANGED_ARG="--changed origin/${{ inputs.base-ref }}"
+            echo "Smart mode: running with ${CHANGED_ARG}"
+          fi
+          # `--passWithNoTests` lets domain-filtered shards exit cleanly when no
+          # matching test files exist (e.g. db-tenancy-billing shard on a PR that
+          # only touched docs in tenancy).
+          pnpm exec vitest run \
+            --coverage \
+            --coverage.thresholds.lines=0 \
+            --coverage.thresholds.functions=0 \
+            --coverage.thresholds.statements=0 \
+            --coverage.thresholds.branches=0 \
+            --passWithNoTests \
+            ${{ matrix.shard.projects }} \
+            ${CHANGED_ARG}
 
       - name: Rename coverage report for shard
         if: always() && hashFiles('coverage/**') != ''
@@ -166,25 +231,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Download fast shard coverage
+      - name: Download all shard coverage artifacts
         uses: actions/download-artifact@v5
         with:
-          name: coverage-fast
-          path: coverage-fast
-
-      - name: Download db-bound shard coverage
-        uses: actions/download-artifact@v5
-        with:
-          name: coverage-db-bound
-          path: coverage-db-bound
+          pattern: coverage-*
+          path: coverage-shards
+          merge-multiple: false
 
       - name: Merge coverage and check thresholds
         # Thresholds come from tooling/ci/coverage-thresholds.json — same source
         # vitest.config.ts uses, so local and CI gates stay in lockstep.
+        # The merger accepts any number of coverage-final.json paths, so this
+        # naturally adapts to the smart mode (2 shards) vs full mode (4 shards).
         run: |
+          set -euo pipefail
+          shopt -s nullglob
+          inputs=()
+          for shard_dir in coverage-shards/coverage-*; do
+            if [ -f "${shard_dir}/coverage-final.json" ]; then
+              inputs+=("${shard_dir}/coverage-final.json")
+            fi
+          done
+          if [ "${#inputs[@]}" -eq 0 ]; then
+            echo "::warning::No shard coverage artifacts found — skipping merged gate."
+            exit 0
+          fi
           node tooling/ci/merge-coverage-and-check-thresholds.mjs \
-            coverage-fast/coverage-final.json \
-            coverage-db-bound/coverage-final.json \
+            "${inputs[@]}" \
             --output coverage-merged/coverage-final.json
 
       - name: Upload merged coverage artifact
