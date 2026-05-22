@@ -18,7 +18,7 @@ import type { TestProjectConfiguration } from 'vitest/config';
  *   Set `VITEST_DOMAIN_FILTER=tenancy,billing` to narrow the `e2e` and
  *   `integration` projects to a subset of domains. Token `rest` additionally
  *   includes non-domain integration tests (`src/tests/integration/**`).
- *   Used by `.github/workflows/test-with-db.yml` to split the db-bound suite
+ *   Used by `.github/workflows/reusable-vitest-postgres-redis.yml` to split the db-bound suite
  *   across multiple runners (tenancy+billing, auth+user, notify+audit+upload+rest).
  *   Empty/unset → run everything (default).
  */

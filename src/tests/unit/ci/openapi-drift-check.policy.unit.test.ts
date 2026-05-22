@@ -30,10 +30,10 @@ describe('OpenAPI drift check policy', () => {
 
     expect(packageJson.scripts['ci:quality']).toMatch(/pnpm docs:check/);
 
-    const qualityStatic = readWorkflow('.github/workflows/reusable/quality-static.yml');
+    const qualityStatic = readWorkflow('.github/workflows/reusable-quality-static.yml');
     expect(qualityStatic).toContain('pnpm docs:check');
 
-    const docsGenerate = readWorkflow('.github/workflows/reusable/docs-generate.yml');
+    const docsGenerate = readWorkflow('.github/workflows/reusable-openapi-postman-publish.yml');
     expect(docsGenerate).toContain('pnpm docs:check');
   });
 });

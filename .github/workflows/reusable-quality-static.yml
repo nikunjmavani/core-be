@@ -12,7 +12,7 @@ name: Reusable — quality static
 #   quality-tests-static — `test:contract` (nock, offline) + `test:property`
 #                          (fast-check, bounded). Both pure, no Postgres needed.
 #
-# The caller (`ci.yml`) treats this whole reusable workflow as one required
+# The caller (`pr-branch-ci.yml`) treats this whole reusable workflow as one required
 # status check named "Quality & static security" — that name is set in the
 # calling job, so the 3 sub-jobs aggregate into one PR-merge gate.
 

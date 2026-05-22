@@ -1,4 +1,4 @@
-name: PR Checks
+name: Pull request governance
 
 on:
   pull_request:

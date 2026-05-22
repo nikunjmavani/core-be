@@ -1,4 +1,4 @@
-name: CI
+name: PR & branch CI
 
 on:
   pull_request:
@@ -205,7 +205,7 @@ jobs:
       always() &&
       needs.changes.outputs.docs-only-md != 'true' &&
       (needs.changes.outputs.docs-only != 'true' || github.event_name == 'push')
-    uses: ./.github/workflows/quality-static.yml
+    uses: ./.github/workflows/reusable-quality-static.yml
     secrets: inherit
 
   test:
@@ -215,7 +215,7 @@ jobs:
       always() &&
       needs.quality.result == 'success' &&
       needs.changes.outputs.src-code == 'true'
-    uses: ./.github/workflows/test-with-db.yml
+    uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
     secrets: inherit
     with:
       mode: ${{ needs.changes.outputs.test-mode }}
@@ -228,7 +228,7 @@ jobs:
       always() &&
       needs.quality.result == 'success' &&
       needs.changes.outputs.src-code == 'true'
-    uses: ./.github/workflows/api-smoke-with-db.yml
+    uses: ./.github/workflows/reusable-api-smoke-live-server.yml
     secrets: inherit
 
   chaos-testing:
@@ -242,7 +242,7 @@ jobs:
       needs.quality.result == 'success' &&
       github.ref == 'refs/heads/main' &&
       needs.changes.outputs.src-code == 'true'
-    uses: ./.github/workflows/chaos-toxiproxy.yml
+    uses: ./.github/workflows/reusable-chaos-toxiproxy.yml
     secrets: inherit
 
   docker-build:
@@ -252,7 +252,7 @@ jobs:
       always() &&
       needs.quality.result == 'success' &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docker == 'true')
-    uses: ./.github/workflows/docker-build-verify.yml
+    uses: ./.github/workflows/reusable-docker-build-trivy.yml
     secrets: inherit
 
   sbom:
@@ -291,7 +291,7 @@ jobs:
       github.event_name == 'push' &&
       contains(fromJSON('["refs/heads/main","refs/heads/dev"]'), github.ref) &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
-    uses: ./.github/workflows/docs-generate.yml
+    uses: ./.github/workflows/reusable-openapi-postman-publish.yml
     secrets: inherit
     with:
       github_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}

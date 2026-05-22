@@ -264,12 +264,11 @@ function buildBranchRuleset(branch: string): string {
         parameters: {
           strict_required_status_checks_policy: true,
           required_status_checks: [
-            { context: 'CI / Quality & static security' },
-            { context: 'CI / Test (Postgres + Redis)' },
-            { context: 'CI / API smoke (Postgres + Redis + live server)' },
-            { context: 'PR Checks / PR Quality Gates' },
-            { context: 'CI / Chaos (Postgres + Redis via Toxiproxy)' },
-            { context: 'CI / Docker Build' },
+            { context: 'PR & branch CI / Quality & static security' },
+            { context: 'PR & branch CI / Test (Postgres + Redis)' },
+            { context: 'PR & branch CI / API smoke (Postgres + Redis + live server)' },
+            { context: 'Pull request governance / PR Quality Gates' },
+            { context: 'PR & branch CI / Docker Build' },
           ],
         },
       },

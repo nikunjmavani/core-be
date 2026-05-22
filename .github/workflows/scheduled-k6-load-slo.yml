@@ -1,7 +1,7 @@
 # Nightly k6 load tests against an ephemeral API (Postgres + Redis).
 # Gate: health-stress + api-stress (SLO thresholds). Informational: auth, daily-ops, billing, webhooks, admin.
 # Secrets (optional email): RESEND_API_KEY, LOAD_TEST_RESULT_EMAIL_TO or TEST_REPORT_EMAIL_TO
-name: Load tests (k6)
+name: Scheduled k6 API load & SLO
 
 on:
   schedule:

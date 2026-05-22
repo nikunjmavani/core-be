@@ -2,7 +2,7 @@
 # Set NEON_DRILL_DATABASE_URL in repository secrets to run migrations + integration tests against a throwaway Neon branch.
 # Records restore duration and fails when elapsed >= RTO_MINUTES. See docs/process/backup-drills.md.
 
-name: Restore drill (monthly)
+name: Monthly backup restore & RTO drill
 
 on:
   schedule:

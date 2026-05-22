@@ -7,7 +7,7 @@
  * Wall-clock time = max(fast tier, db-bound tier) instead of sum.
  *
  * Use locally to verify CI parallelism ergonomics. CI uses a matrix split
- * (`.github/workflows/reusable/test-with-db.yml`) with the same project
+ * (`.github/workflows/reusable-vitest-postgres-redis.yml`) with the same project
  * filters so each shard runs on its own runner.
  *
  * Usage:

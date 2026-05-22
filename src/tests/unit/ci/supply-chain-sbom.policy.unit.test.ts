@@ -19,13 +19,13 @@ describe('supply chain SBOM policy (#94 p3-sbom-syft)', () => {
   });
 
   it('runs dependency audit in the quality-static reusable workflow', () => {
-    const qualityStatic = readWorkflow('.github/workflows/reusable/quality-static.yml');
+    const qualityStatic = readWorkflow('.github/workflows/reusable-quality-static.yml');
     expect(qualityStatic).toContain('pnpm deps:audit');
     expect(qualityStatic).toContain('pnpm deps:audit:prod');
   });
 
   it('generates CycloneDX SBOM in CI and attaches it on GitHub Release publish', () => {
-    const ciWorkflow = readWorkflow('.github/workflows/ci.yml');
+    const ciWorkflow = readWorkflow('.github/workflows/pr-branch-ci.yml');
     expect(ciWorkflow).toContain('anchore/sbom-action@v0');
     expect(ciWorkflow).toContain('cyclonedx-json');
     expect(ciWorkflow).toContain('sbom.cyclonedx.json');

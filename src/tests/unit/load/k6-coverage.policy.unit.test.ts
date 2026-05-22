@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const workflowPath = join(process.cwd(), '.github/workflows/load-tests.yml');
+const workflowPath = join(process.cwd(), '.github/workflows/scheduled-k6-load-slo.yml');
 const configPath = join(process.cwd(), 'src/tests/load/k6/helpers/config.js');
 
 const gatedScenarios = [
