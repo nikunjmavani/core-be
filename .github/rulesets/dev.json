@@ -40,7 +40,7 @@
             "context": "CI / API smoke"
           },
           {
-            "context": "PR governance / Checks"
+            "context": "PR Governance / Checks"
           },
           {
             "context": "CI / Docker"

@@ -222,7 +222,7 @@ jobs:
       base-ref: ${{ github.event.pull_request.base.ref || '' }}
 
   api-smoke:
-    name: API smoke
+    name: API Smoke
     needs: [quality, changes]
     if: |
       always() &&

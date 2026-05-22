@@ -45,7 +45,7 @@ GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `n
 | [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `Tests` | `CI / Tests` |
 | [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `API smoke` | `CI / API smoke` |
 | [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `Docker` (Trivy image scan) | `CI / Docker` |
-| [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR governance` | `Checks` | `PR governance / Checks` |
+| [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR Governance` | `Checks` | `PR Governance / Checks` |
 
 ### Same checks on both branches
 
@@ -62,7 +62,7 @@ When [pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) path filter
 | `Chaos`     | Docs/markdown-only |
 | `Docker`    | Docs/markdown-only (unless `docker` paths change) |
 
-Skipped required checks do **not** block merge. `Quality` and `PR governance` always run.
+Skipped required checks do **not** block merge. `Quality` and `PR Governance` always run.
 
 ### Advisory PR jobs (not in rulesets)
 
@@ -155,7 +155,7 @@ Repository rulesets on **private** repos require **GitHub Pro / Team / Enterpris
 
 The sync script surfaces this message verbatim and exits non-zero. Either upgrade the account/org plan or make the repository public to apply rulesets.
 
-**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm names match **`CI / …`** and **`PR governance / …`**. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
+**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm names match **`CI / …`** and **`PR Governance / …`**. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
 
 ---
 
