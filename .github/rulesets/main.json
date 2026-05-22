@@ -46,7 +46,7 @@
             "context": "CI / API smoke"
           },
           {
-            "context": "PR governance / PR Quality Gates"
+            "context": "PR governance / Checks"
           },
           {
             "context": "CI / Docker"

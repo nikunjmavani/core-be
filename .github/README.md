@@ -9,7 +9,7 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 | What it does | File | GitHub UI name (`name:`) | When it runs | Required on PR? |
 | --- | --- | --- | --- | --- |
 | Main CI pipeline | [pr-branch-ci.yml](workflows/pr-branch-ci.yml) | **CI** | PR + push to `main`, `dev` | Yes (quality, test, api-smoke, docker) |
-| PR title, labels, `.env` guard | [pr-governance.yml](workflows/pr-governance.yml) | **PR governance** | Every PR event | Yes (`PR Quality Gates`) |
+| PR title, labels, `.env` guard | [pr-governance.yml](workflows/pr-governance.yml) | **PR governance** | Every PR event | Yes (`Checks`) |
 | Railway deploy after green CI | [deploy-railway-after-ci.yml](workflows/deploy-railway-after-ci.yml) | **Deploy Railway after CI** | After `CI` succeeds on push + manual | No |
 | Nightly k6 load + SLO gate | [scheduled-k6-load-slo.yml](workflows/scheduled-k6-load-slo.yml) | **Scheduled k6 API load & SLO** | Daily 02:00 UTC + manual | No |
 | Monthly backup restore + RTO | [scheduled-monthly-restore-rto.yml](workflows/scheduled-monthly-restore-rto.yml) | **Monthly backup restore & RTO drill** | 1st of month 06:00 UTC + manual | No |

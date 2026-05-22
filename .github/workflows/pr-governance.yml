@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   pr-quality:
-    name: PR Quality Gates
+    name: Checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

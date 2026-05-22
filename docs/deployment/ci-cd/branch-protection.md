@@ -45,7 +45,7 @@ GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `n
 | [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `Tests` | `CI / Tests` |
 | [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `API smoke` | `CI / API smoke` |
 | [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `Docker` (Trivy image scan) | `CI / Docker` |
-| [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR governance` | `PR Quality Gates` | `PR governance / PR Quality Gates` |
+| [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR governance` | `Checks` | `PR governance / Checks` |
 
 ### Same checks on both branches
 

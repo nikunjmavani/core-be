@@ -267,7 +267,7 @@ function buildBranchRuleset(branch: string): string {
             { context: 'CI / Quality' },
             { context: 'CI / Tests' },
             { context: 'CI / API smoke' },
-            { context: 'PR governance / PR Quality Gates' },
+            { context: 'PR governance / Checks' },
             { context: 'CI / Docker' },
           ],
         },
