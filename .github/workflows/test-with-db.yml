@@ -111,7 +111,6 @@ jobs:
       RATE_LIMIT_WINDOW_MS: 60000
       RUN_DB_TESTS: 1
       RUN_REDIS_TESTS: 1
-      USE_LOCAL_TEST_DATABASE: 'false'
       ENABLE_MCP_SERVER: 'true'
 
     steps:
@@ -158,3 +157,40 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_ACTOR: ${{ github.actor }}
         run: pnpm tool:test-report-email
+
+  coverage-gate:
+    name: Coverage gate (merged shards)
+    needs: run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download fast shard coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-fast
+          path: coverage-fast
+
+      - name: Download db-bound shard coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-db-bound
+          path: coverage-db-bound
+
+      - name: Merge coverage and check thresholds
+        # Thresholds come from tooling/ci/coverage-thresholds.json — same source
+        # vitest.config.ts uses, so local and CI gates stay in lockstep.
+        run: |
+          node tooling/ci/merge-coverage-and-check-thresholds.mjs \
+            coverage-fast/coverage-final.json \
+            coverage-db-bound/coverage-final.json \
+            --output coverage-merged/coverage-final.json
+
+      - name: Upload merged coverage artifact
+        if: always() && hashFiles('coverage-merged/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-merged
+          path: coverage-merged/
+          retention-days: 14

@@ -10,9 +10,19 @@
  * (`.github/workflows/reusable/test-with-db.yml`) with the same project
  * filters so each shard runs on its own runner.
  *
- * Usage: `pnpm test:parallel`
+ * Usage:
+ *   pnpm test:parallel               # tests only, no coverage
+ *   pnpm test:parallel -- --coverage # tests + per-lane coverage + merged gate
+ *
+ * Coverage mode mirrors the CI `coverage-gate` job exactly: each lane writes
+ * a shard-scoped report (`coverage-fast/`, `coverage-db-bound/`), thresholds
+ * are disabled per shard, and after both shards finish the shared merge
+ * script (`tooling/ci/merge-coverage-and-check-thresholds.mjs`) merges the
+ * shard JSONs and enforces the thresholds from
+ * `tooling/ci/coverage-thresholds.json`.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
 type Lane = {
@@ -21,6 +31,17 @@ type Lane = {
   /** Lanes that run sequentially together — useful when DB cleanup races would happen across forks. */
   serial?: boolean;
 };
+
+const COVERAGE_FLAG = '--coverage';
+const COVERAGE_DISABLE_THRESHOLD_FLAGS = [
+  '--coverage.thresholds.lines=0',
+  '--coverage.thresholds.functions=0',
+  '--coverage.thresholds.statements=0',
+  '--coverage.thresholds.branches=0',
+];
+
+const passthroughArgs = process.argv.slice(2);
+const coverageEnabled = passthroughArgs.includes(COVERAGE_FLAG);
 
 const LANES: Lane[] = [
   /**
@@ -55,13 +76,26 @@ const LANES: Lane[] = [
   },
 ];
 
-function runLane(lane: Lane): Promise<{ name: string; code: number; ms: number }> {
-  return new Promise((resolve) => {
-    const start = performance.now();
-    const prefix = `[${lane.name}]`;
-    process.stdout.write(`${prefix} starting: vitest ${lane.args.join(' ')}\n`);
+function buildLaneArgs(lane: Lane): string[] {
+  if (!coverageEnabled) return lane.args;
+  return [
+    ...lane.args,
+    COVERAGE_FLAG,
+    `--coverage.reportsDirectory=coverage-${lane.name}`,
+    ...COVERAGE_DISABLE_THRESHOLD_FLAGS,
+  ];
+}
 
-    const child: ChildProcess = spawn('pnpm', ['exec', 'vitest', ...lane.args], {
+function runChild(
+  prefix: string,
+  command: string,
+  commandArgs: string[],
+): Promise<{ code: number; ms: number }> {
+  return new Promise((resolvePromise) => {
+    const start = performance.now();
+    process.stdout.write(`${prefix} starting: ${command} ${commandArgs.join(' ')}\n`);
+
+    const child: ChildProcess = spawn(command, commandArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, FORCE_COLOR: '1' },
     });
@@ -80,9 +114,27 @@ function runLane(lane: Lane): Promise<{ name: string; code: number; ms: number }
 
     child.on('close', (code) => {
       const ms = performance.now() - start;
-      resolve({ name: lane.name, code: code ?? 1, ms });
+      resolvePromise({ code: code ?? 1, ms });
     });
   });
+}
+
+async function runLane(lane: Lane): Promise<{ name: string; code: number; ms: number }> {
+  const result = await runChild(`[${lane.name}]`, 'pnpm', ['exec', 'vitest', ...buildLaneArgs(lane)]);
+  return { name: lane.name, ...result };
+}
+
+async function runMergedCoverageGate(): Promise<number> {
+  const shardInputs = LANES.map((lane) => `coverage-${lane.name}/coverage-final.json`);
+  const mergeScript = resolve(process.cwd(), 'tooling/ci/merge-coverage-and-check-thresholds.mjs');
+  const args = [
+    mergeScript,
+    ...shardInputs,
+    '--output',
+    'coverage/coverage-final.json',
+  ];
+  const result = await runChild('[coverage-gate]', process.execPath, args);
+  return result.code;
 }
 
 async function main(): Promise<void> {
@@ -109,9 +161,16 @@ async function main(): Promise<void> {
   }
   process.stdout.write(`${formatLine('total (wall)', overallMs, 0)}\n`);
 
-  const failed = results.find((r) => r.code !== 0);
-  if (failed) {
-    process.exit(failed.code);
+  const failedLane = results.find((r) => r.code !== 0);
+  if (failedLane) {
+    process.exit(failedLane.code);
+  }
+
+  if (coverageEnabled) {
+    const mergeExitCode = await runMergedCoverageGate();
+    if (mergeExitCode !== 0) {
+      process.exit(mergeExitCode);
+    }
   }
 }
 

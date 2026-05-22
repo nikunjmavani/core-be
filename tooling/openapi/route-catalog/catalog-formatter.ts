@@ -8,7 +8,6 @@ function formatRouteLine(method: string, path: string, access: RouteAccess): str
 }
 
 export function buildCatalogContent(routes: ParsedRoute[]): string {
-  const timestamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
   const sortedRoutes = [...routes].sort((left, right) => {
     if (left.domainKey !== right.domainKey) return left.domainKey.localeCompare(right.domainKey);
     if ((left.subDomainLabel ?? '') !== (right.subDomainLabel ?? '')) {
@@ -24,7 +23,6 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
   const lines: string[] = [
     '================================================================================',
     '  ROUTE CATALOG — core-be',
-    `  Generated: ${timestamp}`,
     `  Total routes: ${sortedRoutes.length}`,
     '================================================================================',
     '',
@@ -121,8 +119,4 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
   );
 
   return lines.join('\n');
-}
-
-export function normalizeCatalogForCheck(content: string): string {
-  return content.replace(/Generated: .+\n/, 'Generated: <timestamp>\n');
 }

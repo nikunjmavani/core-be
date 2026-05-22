@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnauthorizedError } from '@/shared/errors/index.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
-import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import authMiddleware from '@/shared/middlewares/auth.middleware.js';
 
 async function createAuthMiddlewareApplication() {
@@ -60,7 +60,10 @@ describe('auth.middleware', () => {
   it('sets request.auth for valid bearer tokens', async () => {
     application = await createAuthMiddlewareApplication();
     const userPublicId = generatePublicId();
-    const accessToken = await generateTestToken({ userId: userPublicId, role: 'user' });
+    /** Session lookup is mocked on `authSessionService.verifyActiveAccessToken`, so we
+     * sign the JWT directly instead of using `generateTestToken` (which persists a real
+     * session row via `database.select`). Keeps this a true unit test of the middleware. */
+    const accessToken = await signAccessToken({ userId: userPublicId, role: 'user' });
 
     const response = await application.inject({
       method: 'GET',
@@ -91,7 +94,7 @@ describe('auth.middleware', () => {
   it('rejects bearer when session is revoked or missing in database', async () => {
     application = await createAuthMiddlewareApplication();
     const userPublicId = generatePublicId();
-    const accessToken = await generateTestToken({ userId: userPublicId, role: 'user' });
+    const accessToken = await signAccessToken({ userId: userPublicId, role: 'user' });
 
     const authSessionService = application.authDomain?.authSessionService;
     vi.mocked(authSessionService!.verifyActiveAccessToken).mockRejectedValueOnce(

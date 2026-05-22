@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import baseConfig from './vitest.base.js';
 import { vitestProjects } from './tooling/vitest/projects.js';
+import coverageThresholds from './tooling/ci/coverage-thresholds.json' with { type: 'json' };
 
 /**
  * Root Vitest config — composes shared settings from `vitest.base.ts` with the
@@ -21,7 +22,9 @@ export default defineConfig({
     projects: vitestProjects,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'lcov', 'json-summary'],
+      // `json` emits coverage-final.json (istanbul format) so CI shards can be
+      // merged into a single report — see tooling/ci/merge-coverage-and-check-thresholds.mjs.
+      reporter: ['text', 'lcov', 'json-summary', 'json'],
       reportsDirectory: './coverage',
       include: [
         'src/domains/**/*.service.ts',
@@ -35,12 +38,9 @@ export default defineConfig({
         'src/domains/**/__tests__/**',
         '**/*.d.ts',
       ],
-      thresholds: {
-        lines: 80,
-        branches: 70,
-        statements: 80,
-        functions: 80,
-      },
+      // Single source of truth — also consumed by the CI coverage-gate job via
+      // tooling/ci/merge-coverage-and-check-thresholds.mjs.
+      thresholds: coverageThresholds,
     },
   },
 });

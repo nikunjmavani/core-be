@@ -20,10 +20,7 @@ export default async function globalSetup(): Promise<void> {
     return;
   }
 
-  if (process.env.USE_LOCAL_TEST_DATABASE === 'true') {
-    process.env.DATABASE_URL ??=
-      process.env.TEST_DATABASE_URL ?? 'postgresql://core:core@localhost:5432/core';
-  }
+  process.env.DATABASE_URL ??= 'postgresql://core:core@localhost:5432/core';
   const migrationUrl = process.env.DATABASE_URL;
   if (!migrationUrl) {
     throw new Error('DATABASE_URL must be set for test global setup');

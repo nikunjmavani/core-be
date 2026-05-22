@@ -74,6 +74,7 @@
     "bigserial",
     "biomejs",
     "bullmq",
+    "dorny",
     "drizzle",
     "elitedev",
     "fastify",
@@ -94,6 +95,7 @@
     "semgrep",
     "TOTP",
     "toxiproxy",
-    "tsparser"
+    "tsparser",
+    "vitest"
   ]
 }

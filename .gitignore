@@ -37,6 +37,7 @@ npm-debug.log*
 
 # Coverage
 coverage/
+coverage-*/
 
 # Generated docs (run pnpm docs:generate / pnpm docs:postman to recreate)
 docs/openapi/openapi.json
