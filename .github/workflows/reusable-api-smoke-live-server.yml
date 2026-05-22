@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   run:
+    name: Live server
     runs-on: ubuntu-latest
 
     services:

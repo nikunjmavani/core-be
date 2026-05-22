@@ -7,7 +7,7 @@ name: Deploy Railway after CI
 
 on:
   workflow_run:
-    workflows: ['PR & branch CI']
+    workflows: ['CI']
     types: [completed]
     branches: [main, dev]
   workflow_dispatch:

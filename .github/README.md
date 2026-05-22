@@ -8,16 +8,16 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 
 | What it does | File | GitHub UI name (`name:`) | When it runs | Required on PR? |
 | --- | --- | --- | --- | --- |
-| Main CI pipeline | [pr-branch-ci.yml](workflows/pr-branch-ci.yml) | **PR & branch CI** | PR + push to `main`, `dev` | Yes (quality, test, api-smoke, docker) |
-| PR title, labels, `.env` guard | [pr-governance.yml](workflows/pr-governance.yml) | **Pull request governance** | Every PR event | Yes (`PR Quality Gates`) |
-| Railway deploy after green CI | [deploy-railway-after-ci.yml](workflows/deploy-railway-after-ci.yml) | **Deploy Railway after CI** | After `PR & branch CI` succeeds on push + manual | No |
+| Main CI pipeline | [pr-branch-ci.yml](workflows/pr-branch-ci.yml) | **CI** | PR + push to `main`, `dev` | Yes (quality, test, api-smoke, docker) |
+| PR title, labels, `.env` guard | [pr-governance.yml](workflows/pr-governance.yml) | **PR governance** | Every PR event | Yes (`PR Quality Gates`) |
+| Railway deploy after green CI | [deploy-railway-after-ci.yml](workflows/deploy-railway-after-ci.yml) | **Deploy Railway after CI** | After `CI` succeeds on push + manual | No |
 | Nightly k6 load + SLO gate | [scheduled-k6-load-slo.yml](workflows/scheduled-k6-load-slo.yml) | **Scheduled k6 API load & SLO** | Daily 02:00 UTC + manual | No |
 | Monthly backup restore + RTO | [scheduled-monthly-restore-rto.yml](workflows/scheduled-monthly-restore-rto.yml) | **Monthly backup restore & RTO drill** | 1st of month 06:00 UTC + manual | No |
 | Stryker mutation score | [scheduled-stryker-mutation.yml](workflows/scheduled-stryker-mutation.yml) | **Scheduled Stryker mutation testing** | Weekly Sunday + manual | No |
 | Conventional commit on push | [protected-branch-commitlint.yml](workflows/protected-branch-commitlint.yml) | **Protected branch commitlint** | Push to `main`, `dev` | No |
 | Release versioning PRs | [release-please-versioning.yml](workflows/release-please-versioning.yml) | **Release Please** | Push to `main`, `dev` | No |
 | SBOM on GitHub Release | [release-attach-sbom.yml](workflows/release-attach-sbom.yml) | **Release SBOM** | `release: published` | No |
-| Dependabot safe auto-merge | [dependabot-auto-merge.yml](workflows/dependabot-auto-merge.yml) | **Dependabot auto-merge** | Dependabot PRs | No |
+| Dependabot safe auto-merge | [dependabot-auto-merge.yml](workflows/dependabot-auto-merge.yml) | **Dependabot** | Dependabot PRs | No |
 
 ## Reusable workflows (called from `pr-branch-ci.yml`)
 
@@ -46,4 +46,4 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 - [rulesets/](rulesets/) — branch protection JSON for `main`, `dev`
 - [CODEOWNERS](CODEOWNERS) — review assignments
 
-See [docs/deployment/ci-cd/branch-protection.md](../docs/deployment/ci-cd/branch-protection.md) for required check names (must match `PR & branch CI / …` and `Pull request governance / …`).
+See [docs/deployment/ci-cd/branch-protection.md](../docs/deployment/ci-cd/branch-protection.md) for required check names (must match `CI / …` and `PR governance / …`).

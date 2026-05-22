@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   run:
+    name: Build + Trivy
     runs-on: ubuntu-latest
     env:
       DOCKER_BUILDKIT: 1

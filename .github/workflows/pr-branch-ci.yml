@@ -1,4 +1,4 @@
-name: PR & branch CI
+name: CI
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   changes:
-    name: Detect changed paths
+    name: Detect changes
     runs-on: ubuntu-latest
     outputs:
       # Coarse buckets — decide which heavy workflows to run at all.
@@ -172,7 +172,7 @@ jobs:
           echo "Resolved safe-domain-scope=${safe_scope} test-mode=${mode}"
 
   docs-fast-lane:
-    name: Docs fast lane (markdown only)
+    name: Docs lane
     needs: [changes]
     if: |
       always() &&
@@ -199,7 +199,7 @@ jobs:
           fail: false
 
   quality:
-    name: Quality & static security
+    name: Quality
     needs: [changes]
     if: |
       always() &&
@@ -209,7 +209,7 @@ jobs:
     secrets: inherit
 
   test:
-    name: Test (Postgres + Redis)
+    name: Tests
     needs: [quality, changes]
     if: |
       always() &&
@@ -222,7 +222,7 @@ jobs:
       base-ref: ${{ github.event.pull_request.base.ref || '' }}
 
   api-smoke:
-    name: API smoke (Postgres + Redis + live server)
+    name: API smoke
     needs: [quality, changes]
     if: |
       always() &&
@@ -232,7 +232,7 @@ jobs:
     secrets: inherit
 
   chaos-testing:
-    name: Chaos (Postgres + Redis via Toxiproxy)
+    name: Chaos
     needs: [quality, changes]
     # Chaos is a post-merge gate — runs only on main pushes when source code
     # changed. PRs do not block on chaos (it cannot run on `pull_request` events
@@ -246,7 +246,7 @@ jobs:
     secrets: inherit
 
   docker-build:
-    name: Docker Build
+    name: Docker
     needs: [quality, changes]
     if: |
       always() &&
@@ -256,7 +256,7 @@ jobs:
     secrets: inherit
 
   sbom:
-    name: Generate CycloneDX SBOM
+    name: SBOM
     needs: [quality, changes]
     # SBOM is published to GitHub Releases by release-sbom.yml; here we
     # only generate it on protected-branch pushes when src/dependencies changed
@@ -285,7 +285,7 @@ jobs:
           path: sbom.cyclonedx.json
 
   docs:
-    name: API Docs
+    name: API docs
     needs: [quality, changes]
     if: |
       github.event_name == 'push' &&

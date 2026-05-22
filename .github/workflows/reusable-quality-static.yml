@@ -13,8 +13,8 @@ name: Reusable — quality static
 #                          (fast-check, bounded). Both pure, no Postgres needed.
 #
 # The caller (`pr-branch-ci.yml`) treats this whole reusable workflow as one required
-# status check named "Quality & static security" — that name is set in the
-# calling job, so the 3 sub-jobs aggregate into one PR-merge gate.
+# status check named "Quality" — that name is set in the calling job, so the
+# 3 sub-jobs aggregate into one PR-merge gate.
 
 on:
   workflow_call:
@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   quality-source:
-    name: Source quality (lint + types + structural sync)
+    name: Lint + types
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -73,7 +73,7 @@ jobs:
         run: pnpm db:migrate:lint
 
   quality-security:
-    name: Security (deps audit + gitleaks + semgrep)
+    name: Security
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -107,7 +107,7 @@ jobs:
         run: semgrep scan --config p/default --metrics off
 
   quality-tests-static:
-    name: Static tests (contract + property)
+    name: Contract + property
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

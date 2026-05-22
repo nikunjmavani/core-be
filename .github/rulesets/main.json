@@ -37,19 +37,19 @@
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
           {
-            "context": "PR & branch CI / Quality & static security"
+            "context": "CI / Quality"
           },
           {
-            "context": "PR & branch CI / Test (Postgres + Redis)"
+            "context": "CI / Tests"
           },
           {
-            "context": "PR & branch CI / API smoke (Postgres + Redis + live server)"
+            "context": "CI / API smoke"
           },
           {
-            "context": "Pull request governance / PR Quality Gates"
+            "context": "PR governance / PR Quality Gates"
           },
           {
-            "context": "PR & branch CI / Docker Build"
+            "context": "CI / Docker"
           }
         ]
       }

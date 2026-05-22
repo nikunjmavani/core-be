@@ -42,7 +42,7 @@ permissions:
 
 jobs:
   matrix-config:
-    name: Resolve test matrix
+    name: Matrix
     runs-on: ubuntu-latest
     outputs:
       shards: ${{ steps.config.outputs.shards }}
@@ -55,9 +55,9 @@ jobs:
             # Smart mode: fast shard (full breadth) + a single db-bound shard driven
             # by `vitest --changed`. We still execute every db-bound project so the
             # import graph can pick up tests in any tier; --changed filters them.
-            shards_compact='[{"name":"tests-fast (unit + property + global)","id":"fast","projects":"--project unit --project property --project global","domain_filter":"","use_changed":false},{"name":"tests-db-smart (changed-only via vitest --changed)","id":"db-smart","projects":"--project unit-db --project e2e --project integration --project security --project performance","domain_filter":"","use_changed":true}]'
+            shards_compact='[{"name":"unit + property + global","id":"fast","projects":"--project unit --project property --project global","domain_filter":"","use_changed":false},{"name":"db (changed)","id":"db-smart","projects":"--project unit-db --project e2e --project integration --project security --project performance","domain_filter":"","use_changed":true}]'
           else
-            shards_compact='[{"name":"tests-fast (unit + property + global)","id":"fast","projects":"--project unit --project property --project global","domain_filter":"","use_changed":false},{"name":"tests-db-tenancy-billing (e2e + integration for tenancy + billing)","id":"db-tenancy-billing","projects":"--project e2e --project integration","domain_filter":"tenancy,billing","use_changed":false},{"name":"tests-db-auth-user (e2e + integration for auth + user)","id":"db-auth-user","projects":"--project e2e --project integration","domain_filter":"auth,user","use_changed":false},{"name":"tests-db-rest (e2e + integration for notify + audit + upload + remaining tiers)","id":"db-rest","projects":"--project unit-db --project e2e --project integration --project security --project performance","domain_filter":"notify,audit,upload,rest","use_changed":false}]'
+            shards_compact='[{"name":"unit + property + global","id":"fast","projects":"--project unit --project property --project global","domain_filter":"","use_changed":false},{"name":"tenancy + billing","id":"db-tenancy-billing","projects":"--project e2e --project integration","domain_filter":"tenancy,billing","use_changed":false},{"name":"auth + user","id":"db-auth-user","projects":"--project e2e --project integration","domain_filter":"auth,user","use_changed":false},{"name":"notify + audit + upload","id":"db-rest","projects":"--project unit-db --project e2e --project integration --project security --project performance","domain_filter":"notify,audit,upload,rest","use_changed":false}]'
           fi
           echo "shards=${shards_compact}" >> "$GITHUB_OUTPUT"
           echo "Selected shards:"
@@ -187,7 +187,7 @@ jobs:
         run: pnpm tool:test-report-email
 
   coverage-gate:
-    name: Coverage gate (merged shards)
+    name: Coverage
     needs: run
     runs-on: ubuntu-latest
     steps:
