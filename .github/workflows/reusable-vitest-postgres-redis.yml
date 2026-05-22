@@ -206,6 +206,14 @@ jobs:
         # vitest.config.ts uses, so local and CI gates stay in lockstep.
         # The merger accepts any number of coverage-final.json paths, so this
         # naturally adapts to the smart mode (2 shards) vs full mode (4 shards).
+        #
+        # Smart mode runs only tests touched by the PR diff, so the merged
+        # shard coverage is intentionally a subset and cannot meet the full
+        # threshold. Pass `--report-only` so the gate still publishes the
+        # summary without failing — the same `full` matrix runs on every push
+        # to `main` / `dev` and keeps the post-merge gate enforced.
+        env:
+          TEST_MODE: ${{ inputs.mode }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -219,9 +227,14 @@ jobs:
             echo "::warning::No shard coverage artifacts found — skipping merged gate."
             exit 0
           fi
+          extra=()
+          if [ "${TEST_MODE}" = "smart" ]; then
+            extra+=("--report-only")
+          fi
           node tooling/ci/merge-coverage-and-check-thresholds.mjs \
             "${inputs[@]}" \
-            --output coverage-merged/coverage-final.json
+            --output coverage-merged/coverage-final.json \
+            "${extra[@]}"
 
       - name: Upload merged coverage artifact
         if: always() && hashFiles('coverage-merged/**') != ''

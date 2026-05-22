@@ -10,12 +10,17 @@
  *     coverage-fast/coverage-final.json \
  *     coverage-db-bound/coverage-final.json \
  *     [--output coverage-merged/coverage-final.json] \
- *     [--lines 80] [--branches 70] [--statements 80] [--functions 80]
+ *     [--lines 80] [--branches 70] [--statements 80] [--functions 80] \
+ *     [--report-only]
  *
  * Vitest applies coverage thresholds *per process*, so when CI splits tests
  * across matrix shards each shard fails the global threshold even when the
  * union of shards exceeds it. Disable thresholds per shard
  * (`--coverage.thresholds.*=0`) and gate the merged report with this script.
+ *
+ * `--report-only` prints the summary and threshold comparison without exiting
+ * non-zero on misses. Used by CI in smart mode, where only tests touched by
+ * the PR diff run and the merged report cannot meet a full-matrix threshold.
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -35,11 +40,17 @@ function parseArguments(argv) {
   const inputs = [];
   const thresholds = { ...DEFAULT_THRESHOLDS };
   let outputPath = null;
+  let reportOnly = false;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
+    if (token === '') continue;
     if (token === '--output' || token === '-o') {
       outputPath = argv[index + 1];
       index += 1;
+      continue;
+    }
+    if (token === '--report-only') {
+      reportOnly = true;
       continue;
     }
     const thresholdKey = ['lines', 'branches', 'statements', 'functions'].find(
@@ -60,7 +71,7 @@ function parseArguments(argv) {
       'No coverage inputs provided. Pass one or more `coverage-final.json` paths.',
     );
   }
-  return { inputs, thresholds, outputPath };
+  return { inputs, thresholds, outputPath, reportOnly };
 }
 
 function mergeFileCoverage(target, source) {
@@ -157,7 +168,7 @@ function computeSummary(merged) {
 }
 
 function main() {
-  const { inputs, thresholds, outputPath } = parseArguments(process.argv.slice(2));
+  const { inputs, thresholds, outputPath, reportOnly } = parseArguments(process.argv.slice(2));
 
   const merged = {};
   for (const inputPath of inputs) {
@@ -203,6 +214,12 @@ function main() {
   }
 
   if (failed) {
+    if (reportOnly) {
+      console.warn(
+        '\nCoverage thresholds not met across merged shards (report-only mode — not failing).',
+      );
+      return;
+    }
     console.error('\nCoverage thresholds not met across merged shards.');
     process.exit(1);
   }
