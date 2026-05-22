@@ -149,8 +149,8 @@ There are **two release channels** — each tracks its own version via a dedicat
 
 | Channel        | Branch | Tag style       | Config file                                                                 | Manifest file                                                                   | Changelog          |
 | -------------- | ------ | --------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------ |
-| **Stable**     | `main` | `v2.1.0`        | [.release-please-config.json](../../../.release-please-config.json)         | [.release-please-manifest.json](../../../.release-please-manifest.json)         | `CHANGELOG.md`     |
-| **Prerelease** | `dev`  | `v2.1.0-dev.0`  | [.release-please-config.dev.json](../../../.release-please-config.dev.json) | [.release-please-manifest-dev.json](../../../.release-please-manifest-dev.json) | `CHANGELOG-dev.md` |
+| **Stable**     | `main` | `v2.1.0`        | [.github/release-please/config.json](../../../.github/release-please/config.json)         | [.github/release-please/manifest.json](../../../.github/release-please/manifest.json)         | `CHANGELOG.md`     |
+| **Prerelease** | `dev`  | `v2.1.0-dev.0`  | [.github/release-please/config.dev.json](../../../.github/release-please/config.dev.json) | [.github/release-please/manifest.dev.json](../../../.github/release-please/manifest.dev.json) | `CHANGELOG-dev.md` |
 
 The dev config sets `prerelease: true` + `prerelease-type: "dev"` and writes its own `CHANGELOG-dev.md`, so a `dev → main` promotion never collides with main's `CHANGELOG.md`. Both channels publish GitHub Releases (`release: published`), so [release-sbom.yml](../../../.github/workflows/release-sbom.yml) attaches a CycloneDX SBOM in either case.
 
@@ -163,7 +163,7 @@ Local commits are validated by **commitlint** via [.husky/commit-msg](../../../.
 | What         | Where                                                                                                                          |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | **Runs on**  | Push to **main** (stable) and **dev** (prerelease)                                                                              |
-| **Workflow** | [.github/workflows/release-please.yml](../../../.github/workflows/release-please.yml)                                          |
+| **Workflow** | [.github/workflows/release-please-versioning.yml](../../../.github/workflows/release-please-versioning.yml)                    |
 | **Token**    | **RELEASE_PLEASE_TOKEN** (Personal Access Token) in repository secrets — use a PAT so that merging the release PR triggers CI. |
 
 ### 4.1 Release and deploy flow (feature → production)
@@ -213,7 +213,7 @@ flowchart TB
 **Development path (steps):** identical to production but on the `dev` branch, with a few differences:
 
 1. Merge to `dev` (e.g. from a feature PR).
-2. Release-please creates or updates the **dev release PR** on push to `dev` (`.release-please-config.dev.json` + `.release-please-manifest-dev.json`).
+2. Release-please creates or updates the **dev release PR** on push to `dev` (`.github/release-please/config.dev.json` + `.github/release-please/manifest.dev.json`).
 3. Merge the dev release PR when ready → **prerelease** GitHub Release + tag (`v2.x.y-dev.N`) → `release-sbom.yml` attaches the SBOM.
 4. CI `docker-build` job on `dev` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (SHA-tagged only — `:latest` is reserved for `main`).
 5. Deploy workflow runs on push to `dev` (validate env → resolve GHCR images by SHA → migrate → `railway redeploy --image`) against the **development** GitHub Environment.

@@ -45,6 +45,7 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 
 - [dependabot.yml](dependabot.yml) — dependency update PRs
 - [labeler.yml](labeler.yml) — path-based PR labels (via PR Governance)
+- [release-please/](release-please/) — release-please configs + manifests for `main` (stable) and `dev` (prerelease) channels
 - [rulesets/](rulesets/) — branch protection JSON for `main`, `dev`
 - [CODEOWNERS](CODEOWNERS) — review assignments
 
