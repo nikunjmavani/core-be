@@ -200,6 +200,20 @@ jobs:
           -----END PUBLIC KEY-----
           EOF
           )"
+          docker run --rm --network host \
+            -e NODE_ENV=test \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
+            -e REDIS_URL="$REDIS_URL" \
+            -e JWT_SECRET=test-jwt-secret-min-32-chars-xxxxxxxx \
+            -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
+            -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
+            -e ALLOWED_ORIGINS=http://localhost:3000 \
+            -e AUDIT_RETENTION_DAYS=90 \
+            -e AUTH_SESSION_RETENTION_DAYS=30 \
+            -e METRICS_SCRAPE_TOKEN=test-metrics-token-min-32-characters \
+            -e SECRETS_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 \
+            core-be:ci node dist/src/infrastructure/database/migration/migrate.js
           docker run -d --name core-be-health --network host \
             -e NODE_ENV=test \
             -e HOST=0.0.0.0 \
@@ -216,6 +230,10 @@ jobs:
             -e METRICS_SCRAPE_TOKEN=test-metrics-token-min-32-characters \
             -e SECRETS_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 \
             core-be:ci
-          timeout 90 bash -c 'until curl -sf http://localhost:3000/health/ready; do sleep 2; done'
+          if ! timeout 90 bash -c 'until curl -sf http://localhost:3000/health/ready; do sleep 2; done'; then
+            docker logs core-be-health --tail 200 || true
+            docker rm -f core-be-health || true
+            exit 1
+          fi
           docker logs core-be-health --tail 50
           docker rm -f core-be-health
