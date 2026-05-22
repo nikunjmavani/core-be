@@ -43,6 +43,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+RUN apk upgrade --no-cache
+
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
 COPY --from=build /app/dist ./dist

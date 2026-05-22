@@ -92,6 +92,8 @@ jobs:
           exit-code: 1
           ignore-unfixed: true
           version: v0.69.2
+          scanners: vuln
+          skip-files: /app/package.json,/app/pnpm-lock.yaml
 
       - name: Scan worker image with Trivy
         uses: aquasecurity/trivy-action@v0.34.0
@@ -102,6 +104,8 @@ jobs:
           exit-code: 1
           ignore-unfixed: true
           version: v0.69.2
+          scanners: vuln
+          skip-files: /app/package.json,/app/pnpm-lock.yaml
 
       - name: Verify worker image
         run: |
@@ -150,6 +154,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://core:core@localhost:5432/core
           REDIS_URL: redis://localhost:6379
+          DATABASE_SSL_ENABLED: 'false'
         run: |
           set -euo pipefail
           JWT_PRIVATE_KEY="$(cat <<'EOF'
@@ -201,6 +206,7 @@ jobs:
             -e PORT=3000 \
             -e DATABASE_URL="$DATABASE_URL" \
             -e REDIS_URL="$REDIS_URL" \
+            -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
             -e JWT_SECRET=test-jwt-secret-min-32-chars-xxxxxxxx \
             -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
             -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \

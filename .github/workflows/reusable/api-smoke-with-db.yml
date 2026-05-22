@@ -42,6 +42,7 @@ jobs:
       PORT: 3000
       DATABASE_URL: postgresql://core:core@localhost:5432/core
       REDIS_URL: redis://localhost:6379
+      DATABASE_SSL_ENABLED: 'false'
       JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
       JWT_PRIVATE_KEY: |
         -----BEGIN PRIVATE KEY-----
