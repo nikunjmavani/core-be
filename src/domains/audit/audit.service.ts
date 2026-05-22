@@ -15,7 +15,9 @@ export class AuditService {
   ) {}
 
   /**
-   * Persists an audit log row. Resolves the actor's internal user id from their public id.
+   * Persists an audit log row. Resolves the actor's internal user id from their
+   * public id, then writes the row inside the actor's user database context so
+   * RLS sees the correct organization scope.
    */
   async record(input: AuditLogRecordInput): Promise<void> {
     const user = await withUserDatabaseContext(input.actorUserPublicId, () =>
