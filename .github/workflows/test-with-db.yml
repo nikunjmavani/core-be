@@ -55,50 +55,13 @@ jobs:
             # Smart mode: fast shard (full breadth) + a single db-bound shard driven
             # by `vitest --changed`. We still execute every db-bound project so the
             # import graph can pick up tests in any tier; --changed filters them.
-            cat > shards.json <<'JSON'
-            [
-              { "name": "tests-fast (unit + property + global)",
-                "id": "fast",
-                "projects": "--project unit --project property --project global",
-                "domain_filter": "",
-                "use_changed": false },
-              { "name": "tests-db-smart (changed-only via vitest --changed)",
-                "id": "db-smart",
-                "projects": "--project unit-db --project e2e --project integration --project security --project performance",
-                "domain_filter": "",
-                "use_changed": true }
-            ]
-            JSON
+            shards_compact='[{"name":"tests-fast (unit + property + global)","id":"fast","projects":"--project unit --project property --project global","domain_filter":"","use_changed":false},{"name":"tests-db-smart (changed-only via vitest --changed)","id":"db-smart","projects":"--project unit-db --project e2e --project integration --project security --project performance","domain_filter":"","use_changed":true}]'
           else
-            cat > shards.json <<'JSON'
-            [
-              { "name": "tests-fast (unit + property + global)",
-                "id": "fast",
-                "projects": "--project unit --project property --project global",
-                "domain_filter": "",
-                "use_changed": false },
-              { "name": "tests-db-tenancy-billing (e2e + integration for tenancy + billing)",
-                "id": "db-tenancy-billing",
-                "projects": "--project e2e --project integration",
-                "domain_filter": "tenancy,billing",
-                "use_changed": false },
-              { "name": "tests-db-auth-user (e2e + integration for auth + user)",
-                "id": "db-auth-user",
-                "projects": "--project e2e --project integration",
-                "domain_filter": "auth,user",
-                "use_changed": false },
-              { "name": "tests-db-rest (e2e + integration for notify + audit + upload + remaining tiers)",
-                "id": "db-rest",
-                "projects": "--project unit-db --project e2e --project integration --project security --project performance",
-                "domain_filter": "notify,audit,upload,rest",
-                "use_changed": false }
-            ]
-            JSON
+            shards_compact='[{"name":"tests-fast (unit + property + global)","id":"fast","projects":"--project unit --project property --project global","domain_filter":"","use_changed":false},{"name":"tests-db-tenancy-billing (e2e + integration for tenancy + billing)","id":"db-tenancy-billing","projects":"--project e2e --project integration","domain_filter":"tenancy,billing","use_changed":false},{"name":"tests-db-auth-user (e2e + integration for auth + user)","id":"db-auth-user","projects":"--project e2e --project integration","domain_filter":"auth,user","use_changed":false},{"name":"tests-db-rest (e2e + integration for notify + audit + upload + remaining tiers)","id":"db-rest","projects":"--project unit-db --project e2e --project integration --project security --project performance","domain_filter":"notify,audit,upload,rest","use_changed":false}]'
           fi
-          shards_compact="$(jq -c . shards.json)"
           echo "shards=${shards_compact}" >> "$GITHUB_OUTPUT"
           echo "Selected shards:"
-          jq . shards.json
+          jq . <<<"${shards_compact}"
 
   run:
     name: ${{ matrix.shard.name }}
