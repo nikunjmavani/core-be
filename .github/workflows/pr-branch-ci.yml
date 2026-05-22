@@ -23,12 +23,13 @@ jobs:
       src-code: ${{ steps.filter.outputs.src-code }}
       docker: ${{ steps.filter.outputs.docker }}
       docs-artifacts: ${{ steps.filter.outputs.docs-artifacts }}
+      ci-config: ${{ steps.filter.outputs.ci-config }}
       # docs-only-md: PR/commit touches *only* markdown docs (no TS, no openapi
       # JSON, no Docker, no infra). Routes the change through the fast docs lane.
-      docs-only-md: ${{ steps.filter.outputs.docs-only-md == 'true' && steps.filter.outputs.src-code == 'false' && steps.filter.outputs.docker == 'false' && steps.filter.outputs.docs-artifacts == 'false' && steps.filter.outputs.infra == 'false' && steps.filter.outputs.shared == 'false' && steps.filter.outputs.migrations == 'false' && steps.filter.outputs.lockfile == 'false' && steps.filter.outputs.vitest-config == 'false' }}
+      docs-only-md: ${{ steps.filter.outputs.docs-only-md == 'true' && steps.filter.outputs.src-code == 'false' && steps.filter.outputs.docker == 'false' && steps.filter.outputs.docs-artifacts == 'false' && steps.filter.outputs.ci-config == 'false' && steps.filter.outputs.infra == 'false' && steps.filter.outputs.shared == 'false' && steps.filter.outputs.migrations == 'false' && steps.filter.outputs.lockfile == 'false' && steps.filter.outputs.vitest-config == 'false' }}
       # docs-only (existing semantic): no src/docker/openapi change — used to
       # skip the heavy quality matrix on hand-written docs PRs.
-      docs-only: ${{ steps.filter.outputs.src-code == 'false' && steps.filter.outputs.docker == 'false' && steps.filter.outputs.docs-artifacts == 'false' }}
+      docs-only: ${{ steps.filter.outputs.src-code == 'false' && steps.filter.outputs.docker == 'false' && steps.filter.outputs.docs-artifacts == 'false' && steps.filter.outputs.ci-config == 'false' }}
 
       # Per-domain change flags — drive labels and (via safe-domain-scope below)
       # smart-mode test selection.
@@ -90,6 +91,11 @@ jobs:
               - 'src/scripts/codegen/openapi-schema-map.ts'
               - 'src/scripts/codegen/openapi-response-map.ts'
               - 'src/scripts/codegen/check-api-docs-sync.ts'
+            ci-config:
+              - '.github/**'
+              - '.vscode/**'
+              - '.markdownlint.json'
+              - '.markdownlintignore'
             docs-only-md:
               - '**/*.md'
               - 'docs/**'
@@ -185,17 +191,41 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Collect changed markdown files
+        id: changed-markdown
+        run: |
+          set -euo pipefail
+          files="$(git diff --name-only --diff-filter=ACMRT \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            -- '*.md')"
+          if [ -z "${files}" ]; then
+            echo "has-files=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "has-files=true"
+            echo "files<<EOF"
+            echo "${files}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Lint changed markdown files
+        if: steps.changed-markdown.outputs.has-files == 'true'
         uses: DavidAnson/markdownlint-cli2-action@v18
         with:
           config: '.markdownlint.json'
-          globs: |
-            **/*.md
+          globs: ${{ steps.changed-markdown.outputs.files }}
 
       - name: Check links in changed markdown files (lychee)
+        if: steps.changed-markdown.outputs.has-files == 'true'
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --no-progress --max-redirects 5 --accept 200,204,206,429 '**/*.md'
+          args: >-
+            --no-progress
+            --max-redirects 5
+            --accept 200,204,206,429
+            ${{ steps.changed-markdown.outputs.files }}
           fail: false
 
   quality:
@@ -222,7 +252,7 @@ jobs:
       base-ref: ${{ github.event.pull_request.base.ref || '' }}
 
   api-smoke:
-    name: API smoke
+    name: API Smoke
     needs: [quality, changes]
     if: |
       always() &&

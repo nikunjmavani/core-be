@@ -27,7 +27,7 @@ The build context is the full repo. The committed [`.dockerignore`](../../.docke
 
 ## Multi-repository environments
 
-Cursor supports **multi-repo** development environments so one agent session can mount several repositories (for example backend and frontend). See the [Cursor 3.4 changelog (May 13, 2026)](https://cursor.com/changelog/05-13-26) and [Cloud agent setup](https://cursor.com/docs/cloud-agent/setup) for configuration as code, versioning, and governance.
+Cursor supports **multi-repo** development environments so one agent session can mount several repositories (for example backend and frontend). See the [Cursor 3.4 changelog (May 13, 2026)](https://cursor.com/changelog/05-13-26) and [Cloud agent setup](https://cursor.com/docs/cloud-agent/setup) for configuration as code, versioning, and Governance.
 
 ---
 

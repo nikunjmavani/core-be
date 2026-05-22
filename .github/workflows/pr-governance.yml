@@ -1,4 +1,4 @@
-name: PR governance
+name: PR Governance
 
 on:
   pull_request:
