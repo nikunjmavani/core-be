@@ -37,7 +37,7 @@ related keys for readability. `pnpm github:sync` creates missing `.env.<environm
 files from `.github/sync.config.json` and reads the same structure when pushing to
 GitHub. The structure IS the classification.
 
-## Decision tree — Secret or Variable?
+## Decision tree — Secret or Variable
 
 Apply in order; the first rule that matches wins.
 

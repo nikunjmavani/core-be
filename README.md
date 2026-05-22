@@ -42,7 +42,7 @@ Bug reports, features, PR text, CODEOWNERS, and CI metadata live under [`.github
 
 ## Project Structure
 
-```
+```text
 tooling/
   setup/                     # Infra wizard (pnpm setup:infra) — Neon, Railway, Stripe
   ci/                        # Build/CI guards (Dockerfile sync, dist @/ alias check)
@@ -201,7 +201,7 @@ For the current `src/` tree, run `pnpm tool:project-structure-tree` or see [docs
 
 Each domain uses these layers:
 
-```
+```text
 <domain>.routes.ts       — Route registration (Fastify plugin)
 <domain>.controller.ts   — Thin Fastify handlers
 <domain>.validator.ts    — Calls DTO.parse()
