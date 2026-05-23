@@ -11,7 +11,7 @@ import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const CONFIG_PATH = resolve(import.meta.dirname, '../setup.config.json');
+const CONFIG_PATH = resolve(import.meta.dirname, 'setup.config.json');
 
 /**
  * Maps short CLI aliases (`dev`, `prod`) to canonical full GitHub Environment
@@ -82,7 +82,7 @@ function main(): void {
     const message = loadError instanceof Error ? loadError.message : String(loadError);
     console.error(`Could not resolve GitHub repository: ${message}`);
     console.error(
-      'Run gh auth login or set providers.github.repository in tooling/setup.config.json',
+      'Run gh auth login or set providers.github.repository in tooling/setup/setup.config.json',
     );
     process.exit(1);
   }

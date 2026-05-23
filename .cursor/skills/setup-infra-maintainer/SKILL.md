@@ -7,7 +7,7 @@ description: Keeps setup:infra third-party providers and all dependent files in 
 
 ## Purpose
 
-When you **add or remove a third-party provider** in the setup:infra flow (`pnpm setup:infra`, `setup:infra:init`, `setup:infra:preview`), **every dependent file** must be updated in the same change. This skill is the checklist so nothing is missed.
+When you **add or remove a third-party provider** in the setup:infra flow (`pnpm setup:infra`, `setup --init`, `setup:infra:preview`), **every dependent file** must be updated in the same change. This skill is the checklist so nothing is missed.
 
 ## When to Use
 
@@ -51,8 +51,8 @@ Work through each section. Do not skip; missing any item will break init, previe
   - **`runCheck`** — Add health check for the new provider (call provider’s `check` when enabled and state exists).
   - **`runStatus`** — If the provider has per-env or shared state, add a line to the shared resources summary or env rows.
   - **`runUpdate`** — Only if the provider participates in “update” (e.g. re-sync secrets); GitHub does; most others don’t.
-  - **Rollback / revert** — If the provider creates resources: add to `ProviderName` type, add case in `rollback()`, and in `runRevertAll()` add logic to destroy per-env resources and update state. If it’s repo-level only, handle in `rollback()` only.
-  - **`buildRevertListForEnvironment`** / **`removeEnvironmentFromState`** — If the provider has per-env state, add entries there.
+  - **No automated rollback / no script-side delete.** `setup:infra` never deletes resources and never rolls back on failure. Failures stop the run; the user removes any partial resources by hand using `pnpm setup:infra --delete`.
+  - **`deleteInstructions(context)`** — If the provider records anything in `.setup-state.json`, implement this hook on the `InfraProvider`. Return one or more blocks `{ provider, dashboardUrl, steps?, resources: [{ label, identifier }] }` derived from state — these are rendered by `pnpm setup:infra --delete`. Do **not** add `destroy`/`destroyEnvironment` methods.
 
 ### 4. Guide (browser + instructions)
 
@@ -68,13 +68,13 @@ Work through each section. Do not skip; missing any item will break init, previe
 - **`tooling/setup/prerequisites.ts`** — If the new provider requires a CLI or token to be present:
   - Add an entry to `PREREQUISITES`: `command`, `versionFlag`, `enabledCheck` for the provider, and optionally `authCheck` and/or `tokenEnvKey` (e.g. `NEW_PROVIDER_TOKEN`) so token-based auth is supported without login.
 
-### 6. Provider module (provision / check / destroy)
+### 6. Provider module (provision / check / deleteInstructions)
 
-- **`tooling/setup/providers/<name>.provider.ts`** — Create (or update) the provider module. Export at least:
+- **`tooling/setup/infra/providers/setup-<name>/setup-<name>.provider.ts`** — Create (or update) the provider module. Export at least:
   - `provision(config, secrets, state, environments): Promise<ProviderResult>`.
   - `check(state, secrets?, ...): Promise<boolean>` if the provider is health-checked.
-  - `destroy(state, ...)` (and optionally `destroyEnvironment`) if it creates resources that must be rolled back.
-- **`tooling/setup/orchestrator.ts`** — Ensure the new provider is imported and used in the steps above.
+  - On the exported `InfraProvider`: implement `deleteInstructions(context)` whenever the provider writes to `.setup-state.json`, returning the dashboard URL plus the identifiers the user must delete by hand. Never add `destroy` / `destroyEnvironment` — `setup:infra` does not delete resources.
+- **`tooling/setup/infra/providers/index.ts`** — Add the new provider to `INFRA_PROVIDERS` (order matters).
 
 ### 7. State shape (for resources that persist)
 
@@ -95,7 +95,7 @@ Work through each section. Do not skip; missing any item will break init, previe
 
 ### 10. Verify
 
-- Run **`pnpm setup:infra:init`** (defaults should include the new provider if enabled by default).
+- Run **`pnpm setup --init`** (defaults should include the new provider if enabled by default).
 - Run **`pnpm setup:infra:preview`** — new provider should appear in the list with correct URL and config key.
 - Run **`pnpm typecheck`** and fix any type errors.
 - Optionally run **`pnpm setup:infra`** in a test repo to confirm provisioning (or at least that the flow reaches the new step without error).
@@ -110,7 +110,7 @@ Reverse the steps above; remove or disable the provider everywhere.
 2. **`tooling/setup/init-wizard.ts`** — Remove or set `enabled: false` in `buildConfig()` for the provider.
 3. **`tooling/setup/secrets.ts`** — Remove from `setupSecretsSchema` (or make optional and stop using).
 4. **`tooling/setup/env-secrets.ts`** — Remove from `TOKEN_URLS`, `SIMPLE_VARS`, `loadSecretsFromEnv`, `buildEnvSetupTemplateContent`, `appendMissingEnvSetupVariables`, `hasAnyEnvSecret` as applicable.
-5. **`tooling/setup/orchestrator.ts`** — Remove from `PREVIEW_PROVIDERS`, `displaySettingsReview`, `checkForExistingResources`, `runProvision`, `runCheck`, `runStatus`, `runUpdate`, rollback/revert logic, and env state helpers.
+5. **`tooling/setup/infra/orchestrator.ts`** — Remove from any provider-specific summary lines in `runStatus`, env-state helpers, and the per-provider blocks in the post-provision summary. The provider's `deleteInstructions` hook is removed automatically when its module is deleted.
 6. **`tooling/setup/guide.ts`** — Remove the corresponding step from `buildGuideSteps()`.
 7. **`tooling/setup/prerequisites.ts`** — Remove the prerequisite entry for that provider’s CLI/token.
 8. **`tooling/setup/providers/<name>.provider.ts`** — Delete the file and remove its import/usages from the orchestrator.

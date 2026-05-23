@@ -52,13 +52,10 @@ export async function closeNotificationQueue(): Promise<void> {
 }
 
 /**
- * Pings Redis through BullMQ Queue's client — used by HTTP readiness probing.
+ * Verifies BullMQ can reach Redis through the Queue API used by producers.
  */
 export async function pingNotificationQueueConnection(): Promise<void> {
   const queue = getNotificationQueue();
-  const redisClient = await queue.client;
-  const pong = await redisClient.ping();
-  if (pong !== 'PONG') {
-    throw new Error('notification_queue_ping_unexpected_response');
-  }
+  await queue.waitUntilReady();
+  await queue.getJobCounts('waiting');
 }

@@ -92,8 +92,9 @@ Outside `src/` — not part of the runtime app. Do not merge with `src/scripts/`
 
 ```
 tooling/
-  setup/              # External infra wizard (pnpm setup:infra*) — Neon, Railway, Stripe, GitHub secrets
-  setup.config.json   # Wizard config (committed)
+  setup-infra/        # External infra wizard (pnpm setup:infra*) — Neon, Railway, Stripe, GitHub secrets
+                      # Providers live under setup-infra/providers/setup-<name>/setup-<name>.provider.ts
+  setup-infra/setup.config.json   # Wizard config (committed)
   ci/                 # Build/CI guards (check-dockerfile-sync.mjs, check-dist-imports.mjs)
   dev/                # Local dev helpers (wait-for-local-postgres.sh → pnpm compose:wait)
 ```
