@@ -1,7 +1,17 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import organizationRlsTransactionMiddleware from '@/shared/middlewares/organization-rls-transaction.middleware.js';
+import requestLifecycleMiddleware from '@/shared/middlewares/request-lifecycle.middleware.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+
+/**
+ * The request lifecycle coordinator owns settle in production wiring — register it
+ * alongside the RLS middleware in every test app so commits/rollbacks actually fire.
+ */
+async function registerLifecyclePlugins(application: FastifyInstance): Promise<void> {
+  await application.register(requestLifecycleMiddleware);
+  await application.register(organizationRlsTransactionMiddleware);
+}
 
 const mockExecute = vi.fn().mockResolvedValue(undefined);
 const mockTransaction = vi.fn();
@@ -29,9 +39,21 @@ vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => 
   },
 }));
 
+// The lifecycle coordinator pulls in idempotency (→ redis) and the event bus. Stub them
+// out so this test stays focused on RLS commit/rollback behavior.
+vi.mock('@/shared/middlewares/idempotency.middleware.js', () => ({
+  default: async () => undefined,
+  idempotencyOnResponse: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/core/events/event-bus.js', () => ({
+  eventBus: { flushOnCommit: vi.fn(async () => undefined) },
+  enterOnCommitScope: vi.fn(),
+}));
+
 async function createOrganizationRlsApp() {
   const application = Fastify({ logger: false });
-  await application.register(organizationRlsTransactionMiddleware);
+  await registerLifecyclePlugins(application);
   application.get('/probe', async (request) => ({
     organizationId: (request as { organizationId?: string | null }).organizationId ?? null,
   }));
@@ -59,7 +81,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = '';
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -75,7 +97,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string | null }).organizationId = null;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -100,7 +122,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async (request) => ({
       organizationId: (request as { organizationId?: string }).organizationId,
     }));
@@ -120,7 +142,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -149,7 +171,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.delete('/probe', async (_request, reply) => {
       reply.code(204).send();
     });
@@ -177,7 +199,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/fail', async (_request, reply) => {
       reply.status(404).send({ error: 'not_found' });
     });
@@ -205,7 +227,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/server-error', async (_request, reply) => {
       reply.status(500).send({ error: 'internal_error' });
     });
@@ -226,7 +248,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -258,7 +280,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -277,7 +299,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -302,7 +324,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/no-status', async (_request, reply) => {
       Object.defineProperty(reply, 'statusCode', {
         value: undefined,
@@ -334,7 +356,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 

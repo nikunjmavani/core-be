@@ -334,7 +334,10 @@ async function idempotencyOnSend(
  *     placeholder so the client may safely retry
  *  3. claim was never acquired -> no-op
  */
-async function idempotencyOnResponse(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+export async function idempotencyOnResponse(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
   const requestWithIdempotency = request as RequestWithIdempotency;
   if (!requestWithIdempotency._idempotencyClaimed) return;
 
@@ -404,7 +407,9 @@ const idempotencyMiddlewarePlugin: FastifyPluginAsync = async (application) => {
 
   application.addHook('onRequest', idempotencyOnRequest);
   application.addHook('onSend', idempotencyOnSend);
-  application.addHook('onResponse', idempotencyOnResponse);
+  // The post-response cache write is dispatched by request-lifecycle.middleware.ts so it
+  // runs strictly AFTER the RLS transaction has committed/rolled back. Registering an
+  // `onResponse` hook here would run too early (Fastify onResponse is FIFO).
 };
 
 /** Must break encapsulation so hooks apply to routes registered after middleware on the root app. */
