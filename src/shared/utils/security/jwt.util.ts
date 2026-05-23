@@ -10,6 +10,17 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 const JWT_ISSUER = 'core-be';
 const JWT_AUDIENCE = 'core-api';
 
+/**
+ * Production must use RS256 only. HS256 remains a development/test convenience (signed with
+ * JWT_SECRET). Gating strictly on production prevents algorithm-policy drift: even though the
+ * env schema already requires RS256 keys in production, this rejects any HS256 token at verify
+ * time and refuses to sign with HS256, so a future schema relaxation cannot silently reintroduce
+ * a downgrade path.
+ */
+function isRsaOnlyAlgorithmRequired(): boolean {
+  return getEnv().NODE_ENV === 'production';
+}
+
 let _signingKey: CryptoKey | Uint8Array | null = null;
 let _verifyKey: CryptoKey | Uint8Array | null = null;
 let _algorithm: 'RS256' | 'HS256' = 'HS256';
@@ -38,6 +49,9 @@ async function getSigningKey(): Promise<{
     _algorithm = 'RS256';
     _signingKey = await importPKCS8(normalizePem(environment.JWT_PRIVATE_KEY), 'RS256');
   } else {
+    if (isRsaOnlyAlgorithmRequired()) {
+      throw new Error('JWT_PRIVATE_KEY is required in production: RS256 signing is mandatory');
+    }
     _algorithm = 'HS256';
     _signingKey = new TextEncoder().encode(environment.JWT_SECRET);
   }
@@ -119,6 +133,9 @@ async function resolveVerifyKeyForToken(token: string): Promise<{
   algorithm: 'RS256' | 'HS256';
 }> {
   const header = decodeProtectedHeader(token);
+  if (isRsaOnlyAlgorithmRequired() && header.alg !== 'RS256') {
+    throw new Error('JWT algorithm not allowed: production accepts RS256 only');
+  }
   const algorithm = header.alg === 'RS256' ? 'RS256' : 'HS256';
 
   if (algorithm === 'RS256') {

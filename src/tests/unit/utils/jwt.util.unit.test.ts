@@ -3,6 +3,7 @@ import { TextEncoder } from 'node:util';
 import { SignJWT, decodeProtectedHeader } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetEnvCacheForTests } from '@/shared/config/env.config.js';
+import * as envConfigModule from '@/shared/config/env.config.js';
 import {
   ACCESS_TOKEN_EXPIRY_SECONDS,
   JWT_AUDIENCE,
@@ -179,6 +180,69 @@ describe('jwt.util', () => {
         .sign(encoder.encode(sharedSecret));
 
       await expect(verifyAccessToken(token)).rejects.toThrow();
+    });
+  });
+
+  describe('production RS256-only policy', () => {
+    const sharedSecret = 'test-jwt-secret-min-32-chars-xxxxxxxx';
+    const keyPair = generateRsaPemKeyPair();
+    const now = Math.floor(Date.now() / 1000);
+    let getEnvSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      const baseEnv = envConfigModule.getEnv();
+      getEnvSpy = vi
+        .spyOn(envConfigModule, 'getEnv')
+        .mockReturnValue({ ...baseEnv, NODE_ENV: 'production' });
+      resetJwtCachesForTests();
+    });
+
+    afterEach(() => {
+      getEnvSpy.mockRestore();
+      resetJwtCachesForTests();
+    });
+
+    it('rejects an HS256 token at verify time in production', async () => {
+      const hsToken = await new SignJWT({})
+        .setProtectedHeader({ alg: 'HS256' })
+        .setSubject('user-hs256-prod')
+        .setIssuer(JWT_ISSUER)
+        .setAudience(JWT_AUDIENCE)
+        .setIssuedAt(now)
+        .setExpirationTime(now + 60)
+        .sign(new TextEncoder().encode(sharedSecret));
+
+      await expect(verifyAccessToken(hsToken)).rejects.toThrow(/RS256 only/);
+    });
+
+    it('signs and verifies RS256 in production', async () => {
+      const baseEnv = envConfigModule.getEnv();
+      getEnvSpy.mockReturnValue({
+        ...baseEnv,
+        NODE_ENV: 'production',
+        JWT_PRIVATE_KEY: keyPair.privateKey,
+        JWT_PUBLIC_KEY: keyPair.publicKey,
+      });
+      resetJwtCachesForTests();
+
+      const token = await signAccessToken({ userId: 'user-rs256-prod' });
+      expect(decodeProtectedHeader(token).alg).toBe('RS256');
+      const payload = await verifyAccessToken(token);
+      expect(payload.userId).toBe('user-rs256-prod');
+    });
+
+    it('refuses to sign with HS256 in production when no private key is configured', async () => {
+      const baseEnv = envConfigModule.getEnv();
+      getEnvSpy.mockReturnValue({
+        ...baseEnv,
+        NODE_ENV: 'production',
+        JWT_PRIVATE_KEY: undefined,
+      });
+      resetJwtCachesForTests();
+
+      await expect(signAccessToken({ userId: 'user-no-key' })).rejects.toThrow(
+        /JWT_PRIVATE_KEY is required in production/,
+      );
     });
   });
 });
