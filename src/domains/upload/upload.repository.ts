@@ -83,6 +83,21 @@ export class UploadRepository {
     return rows[0] ?? null;
   }
 
+  async markStatus(public_id: string, user_id: number, status: string): Promise<UploadRow | null> {
+    const rows = await getRequestDatabase()
+      .update(uploads)
+      .set({ status, updated_at: databaseNowTimestamp })
+      .where(
+        and(
+          eq(uploads.public_id, public_id),
+          eq(uploads.user_id, user_id),
+          isNull(uploads.deleted_at),
+        ),
+      )
+      .returning();
+    return rows[0] ?? null;
+  }
+
   async findActiveByUserId(user_id: number): Promise<Pick<UploadRow, 'id' | 'file_key'>[]> {
     return getRequestDatabase()
       .select({ id: uploads.id, file_key: uploads.file_key })

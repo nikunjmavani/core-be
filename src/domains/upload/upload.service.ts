@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { getEnv } from '@/shared/config/env.config.js';
-import { ConfigurationError, ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+import {
+  ConfigurationError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -10,13 +15,14 @@ import {
   UPLOAD_PURPOSE_CONFIG,
   UPLOAD_PURPOSES,
   PRESIGNED_URL_EXPIRY_SECONDS,
+  UPLOAD_STATUS,
   UPLOAD_TARGETS,
   buildOrganizationLogoKeyPrefix,
   buildUserAvatarKeyPrefix,
 } from './upload.constants.js';
 import { UPLOAD_PERMISSIONS } from './upload.permissions.js';
 import type { CreateUploadInput, UploadCreateOutput, UploadDetailOutput } from './upload.types.js';
-import type { UploadRepository } from './upload.repository.js';
+import type { UploadRepository, UploadRow } from './upload.repository.js';
 import { serializeUploadCreate, serializeUploadDetail } from './upload.serializer.js';
 import { validateUploadPublicIdParam } from './upload.validator.js';
 
@@ -108,6 +114,74 @@ export class UploadService {
       organizationPublicId = organization?.public_id ?? null;
     }
 
+    return serializeUploadDetail(row, organizationPublicId);
+  }
+
+  /**
+   * Server-side finalization: HEAD the uploaded object and compare its content type/length
+   * against the values declared at create time. On success the row moves PENDING → UPLOADED;
+   * on mismatch/missing it moves to FAILED and a validation error is surfaced. Consumers must
+   * require UPLOADED before attaching the object. Idempotent for already-UPLOADED rows.
+   */
+  async confirmUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
+    const validatedPublicId = validateUploadPublicIdParam(public_id);
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    const row = await this.repository.findByPublicIdForUser(validatedPublicId, user.id);
+    if (!row) throw new NotFoundError('Upload');
+
+    if (row.status === UPLOAD_STATUS.UPLOADED) {
+      return this.toUploadDetail(row);
+    }
+    if (row.status !== UPLOAD_STATUS.PENDING) {
+      throw new ValidationError('errors:uploadNotPending', undefined, {
+        status: ['Upload is not awaiting confirmation'],
+      });
+    }
+
+    let verified = false;
+    try {
+      const metadata = await this.objectStorage.verifyUploadedObject(row.file_key, {
+        contentType: row.mime_type,
+        contentLength: row.file_size,
+      });
+      const objectExists = metadata.contentLength !== undefined;
+      const lengthMatches = metadata.contentLength === row.file_size;
+      // S3 may not echo a content type; only fail on type when one is reported.
+      const typeMatches =
+        metadata.contentType === undefined || metadata.contentType === row.mime_type;
+      verified = objectExists && lengthMatches && typeMatches;
+    } catch (error) {
+      logger.warn(
+        { publicId: validatedPublicId, fileKey: row.file_key, error },
+        'upload.confirm.verifyFailed',
+      );
+      verified = false;
+    }
+
+    const updated = await this.repository.markStatus(
+      validatedPublicId,
+      user.id,
+      verified ? UPLOAD_STATUS.UPLOADED : UPLOAD_STATUS.FAILED,
+    );
+    if (!updated) throw new NotFoundError('Upload');
+
+    if (!verified) {
+      throw new ValidationError('errors:uploadVerificationFailed', undefined, {
+        file: ['Uploaded object could not be verified against its declared type and size'],
+      });
+    }
+
+    return this.toUploadDetail(updated);
+  }
+
+  private async toUploadDetail(row: UploadRow): Promise<UploadDetailOutput> {
+    let organizationPublicId: string | null = null;
+    if (row.organization_id !== null) {
+      const organization = await this.organizationService.findOrganizationByInternalId(
+        row.organization_id,
+      );
+      organizationPublicId = organization?.public_id ?? null;
+    }
     return serializeUploadDetail(row, organizationPublicId);
   }
 

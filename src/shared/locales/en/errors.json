@@ -91,6 +91,8 @@
   "uploadOrganizationIdRequired": "organizationId is required when \"for\" is \"organization\"",
   "uploadContentTypeNotAllowed": "Content type \"{{contentType}}\" is not allowed for purpose \"{{purpose}}\". Allowed: {{allowed}}",
   "uploadFileSizeExceeded": "File size {{fileSize}} exceeds maximum {{maxSize}} bytes for purpose \"{{purpose}}\"",
+  "uploadNotPending": "Upload is not awaiting confirmation",
+  "uploadVerificationFailed": "Uploaded object could not be verified against its declared type and size",
   "webhookUrlInvalid": "Invalid webhook URL format",
   "webhookUrlInvalidScheme": "Webhook URL must use HTTP or HTTPS (got {{scheme}})",
   "webhookUrlNotAllowed": "Webhook URL is not allowed. It must not point to localhost or private networks.",
