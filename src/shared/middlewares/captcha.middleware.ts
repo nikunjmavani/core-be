@@ -23,6 +23,15 @@ function isCaptchaFailOpen(): boolean {
   return nodeEnvironment === 'test' || nodeEnvironment === 'development';
 }
 
+/**
+ * Production operators must explicitly acknowledge running with CAPTCHA disabled
+ * (boot validation enforces this). When acknowledged, skip enforcement instead of
+ * fail-closing so auth routes do not return 401.
+ */
+function isCaptchaDisabledAcknowledged(): boolean {
+  return getEnv().CAPTCHA_DISABLED_ACK === true;
+}
+
 function isCaptchaBypassAllowed(request: FastifyRequest): boolean {
   const environment = getEnv();
   if (environment.NODE_ENV === 'production') {
@@ -47,7 +56,7 @@ export async function captchaPreHandler(
   _reply: FastifyReply,
 ): Promise<void> {
   if (!isCaptchaEnforced()) {
-    if (isCaptchaFailOpen()) {
+    if (isCaptchaFailOpen() || isCaptchaDisabledAcknowledged()) {
       return;
     }
     throw new UnauthorizedError('errors:captchaProviderUnavailable');
