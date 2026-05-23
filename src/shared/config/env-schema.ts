@@ -168,6 +168,12 @@ const envSchemaBase = z.object({
     .min(60_000)
     .max(3_600_000)
     .default(300_000),
+  /**
+   * Headroom (pooled connections) the worker process keeps free for the ~18 always-registered
+   * single-concurrency background workers (retention/tombstone/monitoring crons) on top of
+   * WORKER_CONCURRENCY. Heuristic buffer, not a per-worker reservation. Default 6.
+   */
+  WORKER_BACKGROUND_POOL_SLOT_RESERVE: z.coerce.number().int().min(0).max(64).default(6),
   /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. */
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).optional(),
   /** Connections reserved for admin, migrations, and monitoring (subtracted from Postgres max_connections). */
