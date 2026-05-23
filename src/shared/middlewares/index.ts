@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import requestLifecycleMiddleware from './request-lifecycle.middleware.js';
 import compressMiddleware from './compress.middleware.js';
 import cookieMiddleware from './cookie.middleware.js';
 import helmetMiddleware from './helmet.middleware.js';
@@ -22,6 +23,10 @@ import metricsMiddleware from './metrics.middleware.js';
 import shutdownMiddleware from './shutdown.middleware.js';
 
 const middlewarePlugins = [
+  // MUST be first: registers the only `onResponse` hook that orchestrates
+  // RLS-settle → idempotency-cache → outbox-flush in the correct order
+  // (Fastify onResponse hooks run FIFO).
+  requestLifecycleMiddleware,
   compressMiddleware,
   cookieMiddleware,
   helmetMiddleware,

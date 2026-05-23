@@ -23,6 +23,14 @@ const organizationRlsTransactionCompletions = new WeakMap<
   OrganizationRlsTransactionCompletion
 >();
 
+/**
+ * Outer `database.transaction()` promise per request. The request lifecycle coordinator
+ * awaits this so idempotency cache writes and outbox flushes only run after commit/rollback
+ * has actually settled — calling `resolve()` on the inner promise only lets the transaction
+ * callback return; the COMMIT still completes asynchronously.
+ */
+const organizationRlsTransactionOuterPromises = new WeakMap<FastifyRequest, Promise<void>>();
+
 const organizationRlsCheckoutHeld = new WeakMap<FastifyRequest, boolean>();
 
 function getOrganizationPublicIdFromRequest(request: FastifyRequest): string | null {
@@ -51,6 +59,40 @@ function settleOrganizationRlsTransaction(request: FastifyRequest, reply: Fastif
     return;
   }
   completion.resolve();
+}
+
+/**
+ * Signals settlement to the in-flight RLS transaction and awaits the outer
+ * `database.transaction()` promise so commit/rollback has finished before the caller
+ * proceeds. Also releases the pooled checkout counter. Safe to call for non-org
+ * requests (no-op when no transaction was opened).
+ *
+ * Intended to be invoked exclusively from the request lifecycle coordinator
+ * (`request-lifecycle.middleware.ts`) — it owns the post-response ordering across RLS,
+ * idempotency, and outbox flush.
+ */
+export async function settleAndAwaitOrganizationRlsTransaction(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  settleOrganizationRlsTransaction(request, reply);
+
+  const outerPromise = organizationRlsTransactionOuterPromises.get(request);
+  if (outerPromise !== undefined) {
+    organizationRlsTransactionOuterPromises.delete(request);
+    try {
+      await outerPromise;
+    } catch (error) {
+      logger.warn(
+        { error, organizationPublicId: getOrganizationPublicIdFromRequest(request) },
+        'organization.rls.transaction.settle_await_error',
+      );
+    }
+  }
+
+  if (organizationRlsCheckoutHeld.delete(request)) {
+    decrementOrganizationRlsCheckoutCount();
+  }
 }
 
 /**
@@ -96,7 +138,7 @@ const organizationRlsTransactionMiddlewarePlugin: FastifyPluginAsync = async (ap
 
     organizationRlsCheckoutHeld.set(request, true);
     incrementOrganizationRlsCheckoutCount();
-    void database
+    const outerPromise = database
       .transaction(async (transaction) => {
         await transaction.execute(
           drizzleSql`SELECT set_config('app.current_organization_id', ${organizationPublicId}, true)`,
@@ -128,20 +170,7 @@ const organizationRlsTransactionMiddlewarePlugin: FastifyPluginAsync = async (ap
         }
         logger.warn({ error }, 'organization.rls.transaction.failure_after_on_request');
       });
-  });
-
-  application.addHook('onResponse', (request: FastifyRequest, reply, done) => {
-    try {
-      settleOrganizationRlsTransaction(request, reply);
-    } catch (error: unknown) {
-      done(error instanceof Error ? error : new Error(String(error)));
-      return;
-    } finally {
-      if (organizationRlsCheckoutHeld.delete(request)) {
-        decrementOrganizationRlsCheckoutCount();
-      }
-    }
-    done();
+    organizationRlsTransactionOuterPromises.set(request, outerPromise);
   });
 };
 

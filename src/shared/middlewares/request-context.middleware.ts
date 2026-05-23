@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
-import { enterOnCommitScope, eventBus } from '@/core/events/event-bus.js';
+import { enterOnCommitScope } from '@/core/events/event-bus.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const requestContextMiddleware: FastifyPluginAsync = async (app) => {
@@ -11,13 +11,8 @@ const requestContextMiddleware: FastifyPluginAsync = async (app) => {
   });
 
   app.addHook('onResponse', async (request, reply) => {
-    /**
-     * Runs after organization-rls-transaction / request-statement-timeout `onResponse`
-     * hooks (registered later → execute first). Dispatches transactional outbox BullMQ
-     * jobs only once the request DB transaction has committed.
-     */
-    await eventBus.flushOnCommit();
-
+    // Outbox flush moved to request-lifecycle.middleware.ts so it runs strictly after the
+    // RLS transaction has committed. This hook now only emits the request completion log.
     if (request.url.startsWith('/health')) {
       return;
     }
