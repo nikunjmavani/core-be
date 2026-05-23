@@ -145,6 +145,11 @@ jobs:
           LOCKFILE: ${{ steps.filter.outputs.lockfile }}
           VITEST_CONFIG: ${{ steps.filter.outputs.vitest-config }}
           DOCKER: ${{ steps.filter.outputs.docker }}
+          # High-risk domains force full DB/security/contract coverage even when the diff is
+          # confined to them — `vitest --changed` can miss cross-domain contract regressions.
+          DOMAIN_AUTH: ${{ steps.filter.outputs.domain-auth }}
+          DOMAIN_TENANCY: ${{ steps.filter.outputs.domain-tenancy }}
+          DOMAIN_BILLING: ${{ steps.filter.outputs.domain-billing }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
@@ -162,6 +167,15 @@ jobs:
             && [ "${VITEST_CONFIG}" = "false" ] \
             && [ "${DOCKER}" = "false" ]; then
             safe_scope="true"
+          fi
+
+          # High-risk domains (auth, tenancy, billing) always run the full matrix: their
+          # contracts are exercised by DB-bound, security, and contract suites that
+          # `vitest --changed` would skip, so a domain-only diff here is NOT smart-safe.
+          if [ "${DOMAIN_AUTH}" = "true" ] \
+            || [ "${DOMAIN_TENANCY}" = "true" ] \
+            || [ "${DOMAIN_BILLING}" = "true" ]; then
+            safe_scope="false"
           fi
 
           # Smart mode is only safe for `pull_request` events — push events
@@ -223,4 +237,3 @@ jobs:
       )
     uses: ./.github/workflows/reusable-docker-build-trivy.yml
     secrets: inherit
-
