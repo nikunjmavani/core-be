@@ -1,5 +1,6 @@
 import { ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { UserSettingsService } from '@/domains/user/sub-domains/user-settings/user-settings.service.js';
 import {
   isFactoryDefaultUserLocaleSettings,
@@ -52,39 +53,43 @@ export class MembershipService {
   }
 
   async list(organization_public_id: string, query: unknown) {
-    const organization =
-      await this.organizationService.requireOrganizationMembershipByPublicId(
-        organization_public_id,
-      );
     const parsed = validateListMembershipsQuery(query);
-    const page = parsed.page ?? 1;
-    const result = await this.membershipRepository.findByOrganizationId(
-      organization.id,
-      page,
-      parsed.limit,
-    );
-    return {
-      ...result,
-      items: result.items.map((membership) =>
-        serializeMembership(membership, organization_public_id),
-      ),
-    };
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationMembershipByPublicId(
+          organization_public_id,
+        );
+      const page = parsed.page ?? 1;
+      const result = await this.membershipRepository.findByOrganizationId(
+        organization.id,
+        page,
+        parsed.limit,
+      );
+      return {
+        ...result,
+        items: result.items.map((membership) =>
+          serializeMembership(membership, organization_public_id),
+        ),
+      };
+    });
   }
 
   async getByPublicId(
     organization_public_id: string,
     membership_public_id: string,
   ): Promise<MembershipOutput> {
-    const organization =
-      await this.organizationService.requireOrganizationMembershipByPublicId(
-        organization_public_id,
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationMembershipByPublicId(
+          organization_public_id,
+        );
+      const membership = await this.membershipRepository.findByPublicId(
+        membership_public_id,
+        organization.id,
       );
-    const membership = await this.membershipRepository.findByPublicId(
-      membership_public_id,
-      organization.id,
-    );
-    if (!membership) throw new NotFoundError('Membership');
-    return serializeMembership(membership, organization_public_id);
+      if (!membership) throw new NotFoundError('Membership');
+      return serializeMembership(membership, organization_public_id);
+    });
   }
 
   async create(
@@ -93,31 +98,33 @@ export class MembershipService {
     invited_by_user_public_id: string,
   ): Promise<MembershipOutput> {
     const parsed = validateCreateMembership(body);
-    const organization =
-      await this.organizationService.requireOrganizationMembershipByPublicId(
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationMembershipByPublicId(
+          organization_public_id,
+        );
+      const role = await this.memberRoleService.requireRoleRecordByPublicId(
         organization_public_id,
+        parsed.role_id,
       );
-    const role = await this.memberRoleService.requireRoleRecordByPublicId(
-      organization_public_id,
-      parsed.role_id,
-    );
-    const userId = await this.organizationService.resolveUserInternalIdByPublicId(parsed.user_id);
-    if (userId === null) throw new NotFoundError('User');
-    const inviterId =
-      await this.organizationService.resolveUserInternalIdByPublicId(invited_by_user_public_id);
-    const created = await this.membershipRepository.create(
-      omitUndefined({
-        organization_id: organization.id,
-        user_id: userId,
-        role_id: role.id,
-        status: parsed.status,
-        invited_by_user_id: inviterId,
-        created_by_user_id: inviterId,
-      }),
-    );
-    await invalidatePermissions(parsed.user_id, organization_public_id);
-    await this.applyOrganizationLocaleDefaults(parsed.user_id, organization_public_id);
-    return serializeMembership(created, organization_public_id);
+      const userId = await this.organizationService.resolveUserInternalIdByPublicId(parsed.user_id);
+      if (userId === null) throw new NotFoundError('User');
+      const inviterId =
+        await this.organizationService.resolveUserInternalIdByPublicId(invited_by_user_public_id);
+      const created = await this.membershipRepository.create(
+        omitUndefined({
+          organization_id: organization.id,
+          user_id: userId,
+          role_id: role.id,
+          status: parsed.status,
+          invited_by_user_id: inviterId,
+          created_by_user_id: inviterId,
+        }),
+      );
+      await invalidatePermissions(parsed.user_id, organization_public_id);
+      await this.applyOrganizationLocaleDefaults(parsed.user_id, organization_public_id);
+      return serializeMembership(created, organization_public_id);
+    });
   }
 
   async update(
@@ -127,78 +134,86 @@ export class MembershipService {
     updated_by_user_public_id: string,
   ): Promise<MembershipOutput> {
     const parsed = validateUpdateMembership(body);
-    const organization =
-      await this.organizationService.requireOrganizationMembershipByPublicId(
-        organization_public_id,
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationMembershipByPublicId(
+          organization_public_id,
+        );
+      const membership = await this.membershipRepository.findByPublicId(
+        membership_public_id,
+        organization.id,
       );
-    const membership = await this.membershipRepository.findByPublicId(
-      membership_public_id,
-      organization.id,
-    );
-    if (!membership) throw new NotFoundError('Membership');
-    const userId =
-      await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
-    const updated = await this.membershipRepository.update(
-      membership_public_id,
-      organization.id,
-      omitUndefined(parsed),
-      userId ?? null,
-    );
-    if (!updated) throw new NotFoundError('Membership');
-    return serializeMembership(updated, organization_public_id);
+      if (!membership) throw new NotFoundError('Membership');
+      const userId =
+        await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
+      const updated = await this.membershipRepository.update(
+        membership_public_id,
+        organization.id,
+        omitUndefined(parsed),
+        userId ?? null,
+      );
+      if (!updated) throw new NotFoundError('Membership');
+      return serializeMembership(updated, organization_public_id);
+    });
   }
 
   async delete(organization_public_id: string, membership_public_id: string): Promise<void> {
-    const organization =
-      await this.organizationService.requireOrganizationMembershipByPublicId(
-        organization_public_id,
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationMembershipByPublicId(
+          organization_public_id,
+        );
+      const deleted = await this.membershipRepository.softDelete(
+        membership_public_id,
+        organization.id,
       );
-    const deleted = await this.membershipRepository.softDelete(
-      membership_public_id,
-      organization.id,
-    );
-    if (!deleted) throw new NotFoundError('Membership');
+      if (!deleted) throw new NotFoundError('Membership');
+    });
   }
 
   async getPermissions(
     organization_public_id: string,
     membership_public_id: string,
   ): Promise<MembershipPermissionsOutput> {
-    const organization =
-      await this.organizationService.requireOrganizationMembershipByPublicId(
-        organization_public_id,
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationMembershipByPublicId(
+          organization_public_id,
+        );
+      const membership = await this.membershipRepository.findByPublicId(
+        membership_public_id,
+        organization.id,
       );
-    const membership = await this.membershipRepository.findByPublicId(
-      membership_public_id,
-      organization.id,
-    );
-    if (!membership) throw new NotFoundError('Membership');
-    const permissionCodes = await this.memberRolePermissionService.listPermissionCodesForRole(
-      membership.role_id,
-    );
-    return { permissions: permissionCodes };
+      if (!membership) throw new NotFoundError('Membership');
+      const permissionCodes = await this.memberRolePermissionService.listPermissionCodesForRole(
+        membership.role_id,
+      );
+      return { permissions: permissionCodes };
+    });
   }
 
   async leaveOrganization(organization_public_id: string, user_public_id: string): Promise<void> {
-    const organization =
-      await this.organizationService.requireOrganizationMembershipByPublicId(
-        organization_public_id,
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationMembershipByPublicId(
+          organization_public_id,
+        );
+      const userId = await this.organizationService.resolveUserInternalIdByPublicId(user_public_id);
+      if (userId === null) throw new NotFoundError('User');
+      const membership = await this.membershipRepository.findByUserAndOrganization(
+        userId,
+        organization.id,
       );
-    const userId = await this.organizationService.resolveUserInternalIdByPublicId(user_public_id);
-    if (userId === null) throw new NotFoundError('User');
-    const membership = await this.membershipRepository.findByUserAndOrganization(
-      userId,
-      organization.id,
-    );
-    if (!membership) throw new NotFoundError('Membership');
-    if (organization.owner_user_id === userId) {
-      throw new ForbiddenError('errors:ownerCannotLeave');
-    }
-    const deleted = await this.membershipRepository.softDelete(
-      membership.public_id,
-      organization.id,
-    );
-    if (!deleted) throw new NotFoundError('Membership');
+      if (!membership) throw new NotFoundError('Membership');
+      if (organization.owner_user_id === userId) {
+        throw new ForbiddenError('errors:ownerCannotLeave');
+      }
+      const deleted = await this.membershipRepository.softDelete(
+        membership.public_id,
+        organization.id,
+      );
+      if (!deleted) throw new NotFoundError('Membership');
+    });
   }
 
   async transferOwnership(
@@ -207,29 +222,31 @@ export class MembershipService {
     current_user_public_id: string,
   ): Promise<MembershipOutput> {
     const parsed = validateTransferOwnership(body);
-    const organization =
-      await this.organizationService.requireOrganizationMembershipByPublicId(
-        organization_public_id,
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationMembershipByPublicId(
+          organization_public_id,
+        );
+      const currentUserId =
+        await this.organizationService.resolveUserInternalIdByPublicId(current_user_public_id);
+      if (currentUserId === null) throw new NotFoundError('User');
+      if (organization.owner_user_id !== currentUserId) {
+        throw new ForbiddenError('errors:onlyOwnerCanTransfer');
+      }
+      const newOwnerUserId = await this.organizationService.resolveUserInternalIdByPublicId(
+        parsed.new_owner_user_id,
       );
-    const currentUserId =
-      await this.organizationService.resolveUserInternalIdByPublicId(current_user_public_id);
-    if (currentUserId === null) throw new NotFoundError('User');
-    if (organization.owner_user_id !== currentUserId) {
-      throw new ForbiddenError('errors:onlyOwnerCanTransfer');
-    }
-    const newOwnerUserId = await this.organizationService.resolveUserInternalIdByPublicId(
-      parsed.new_owner_user_id,
-    );
-    if (newOwnerUserId === null) throw new NotFoundError('User');
-    const newOwnerMembership = await this.membershipRepository.findByUserAndOrganization(
-      newOwnerUserId,
-      organization.id,
-    );
-    if (!newOwnerMembership) throw new NotFoundError('New owner must be an active member');
-    await this.organizationService.transferOrganizationOwnership(
-      organization_public_id,
-      newOwnerUserId,
-    );
-    return serializeMembership(newOwnerMembership, organization_public_id);
+      if (newOwnerUserId === null) throw new NotFoundError('User');
+      const newOwnerMembership = await this.membershipRepository.findByUserAndOrganization(
+        newOwnerUserId,
+        organization.id,
+      );
+      if (!newOwnerMembership) throw new NotFoundError('New owner must be an active member');
+      await this.organizationService.transferOrganizationOwnership(
+        organization_public_id,
+        newOwnerUserId,
+      );
+      return serializeMembership(newOwnerMembership, organization_public_id);
+    });
   }
 }

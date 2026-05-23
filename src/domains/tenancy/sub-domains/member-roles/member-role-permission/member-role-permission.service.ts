@@ -1,4 +1,5 @@
 import { NotFoundError } from '@/shared/errors/index.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationRepository } from '../../organization/organization.repository.js';
 import type { MemberRoleRepository } from '../member-role.repository.js';
 import type { MemberRolePermissionRepository } from './member-role-permission.repository.js';
@@ -17,11 +18,13 @@ export class MemberRolePermissionService {
   }
 
   async list(organization_public_id: string, role_public_id: string) {
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
-    if (!role) throw new NotFoundError('Role');
-    return this.memberRolePermissionRepository.findByRoleId(role.id);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
+      if (!role) throw new NotFoundError('Role');
+      return this.memberRolePermissionRepository.findByRoleId(role.id);
+    });
   }
 
   async put(
@@ -31,16 +34,18 @@ export class MemberRolePermissionService {
     created_by_user_public_id: string,
   ) {
     const parsed = validatePutMemberRolePermissions(body);
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
-    if (!role) throw new NotFoundError('Role');
-    const userId =
-      await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id);
-    return this.memberRolePermissionRepository.replace(
-      role.id,
-      parsed.permission_codes,
-      userId ?? null,
-    );
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
+      if (!role) throw new NotFoundError('Role');
+      const userId =
+        await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id);
+      return this.memberRolePermissionRepository.replace(
+        role.id,
+        parsed.permission_codes,
+        userId ?? null,
+      );
+    });
   }
 }

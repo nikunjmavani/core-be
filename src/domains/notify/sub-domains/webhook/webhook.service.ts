@@ -31,18 +31,25 @@ export class WebhookService {
   ) {}
 
   async list(organization_public_id: string) {
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    const rows = await this.webhookRepository.listByOrganization(organization.id);
-    return WebhookSerializer.many(rows);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      const rows = await this.webhookRepository.listByOrganization(organization.id);
+      return WebhookSerializer.many(rows);
+    });
   }
 
   async get(organization_public_id: string, webhook_public_id: string) {
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    const webhook = await this.webhookRepository.findByPublicId(webhook_public_id, organization.id);
-    if (!webhook) throw new NotFoundError('Webhook');
-    return WebhookSerializer.one(webhook);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      const webhook = await this.webhookRepository.findByPublicId(
+        webhook_public_id,
+        organization.id,
+      );
+      if (!webhook) throw new NotFoundError('Webhook');
+      return WebhookSerializer.one(webhook);
+    });
   }
 
   async create(organization_public_id: string, body: unknown, created_by_user_public_id: string) {
@@ -77,31 +84,36 @@ export class WebhookService {
     if (parsed.url !== undefined) {
       await validateWebhookUrl(parsed.url);
     }
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    const userId =
-      await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
-    const updatePayload = omitUndefined({
-      url: parsed.url,
-      events: parsed.events,
-      is_enabled: parsed.is_enabled,
-      encrypted_secret: parsed.secret !== undefined ? encryptFieldSecret(parsed.secret) : undefined,
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      const userId =
+        await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
+      const updatePayload = omitUndefined({
+        url: parsed.url,
+        events: parsed.events,
+        is_enabled: parsed.is_enabled,
+        encrypted_secret:
+          parsed.secret !== undefined ? encryptFieldSecret(parsed.secret) : undefined,
+      });
+      const updated = await this.webhookRepository.update(
+        webhook_public_id,
+        organization.id,
+        updatePayload,
+        userId ?? undefined,
+      );
+      if (!updated) throw new NotFoundError('Webhook');
+      return WebhookSerializer.one(updated);
     });
-    const updated = await this.webhookRepository.update(
-      webhook_public_id,
-      organization.id,
-      updatePayload,
-      userId ?? undefined,
-    );
-    if (!updated) throw new NotFoundError('Webhook');
-    return WebhookSerializer.one(updated);
   }
 
   async delete(organization_public_id: string, webhook_public_id: string) {
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    const deleted = await this.webhookRepository.softDelete(webhook_public_id, organization.id);
-    if (!deleted) throw new NotFoundError('Webhook');
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      const deleted = await this.webhookRepository.softDelete(webhook_public_id, organization.id);
+      if (!deleted) throw new NotFoundError('Webhook');
+    });
   }
 
   /**
@@ -142,21 +154,27 @@ export class WebhookService {
     webhook_public_id: string,
     limit: number,
   ) {
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    const webhookId = await this.deliveryAttemptRepository.getWebhookId(
-      webhook_public_id,
-      organization.id,
-    );
-    if (webhookId === null || webhookId === undefined) throw new NotFoundError('Webhook');
-    return this.deliveryAttemptRepository.listByWebhook(webhookId, limit);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      const webhookId = await this.deliveryAttemptRepository.getWebhookId(
+        webhook_public_id,
+        organization.id,
+      );
+      if (webhookId === null || webhookId === undefined) throw new NotFoundError('Webhook');
+      return this.deliveryAttemptRepository.listByWebhook(webhookId, limit);
+    });
   }
 
   async testWebhook(organization_public_id: string, webhook_public_id: string) {
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    const webhook = await this.webhookRepository.findByPublicId(webhook_public_id, organization.id);
-    if (!webhook) throw new NotFoundError('Webhook');
+    // Phase 1 (DB context): resolve the webhook under RLS scope.
+    const webhook = await withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      const found = await this.webhookRepository.findByPublicId(webhook_public_id, organization.id);
+      if (!found) throw new NotFoundError('Webhook');
+      return found;
+    });
 
     // Pins DNS to a single SSRF-validated resolution and enforces the production allowlist.
     // Throws ValidationError (4xx) before any attempt is recorded if the URL is now unsafe —
@@ -232,16 +250,18 @@ export class WebhookService {
         ? responseBody.slice(0, WEBHOOK_TEST_RESPONSE_BODY_STORED_MAX_LENGTH)
         : responseBody;
 
-    // Record the delivery attempt
-    await this.deliveryAttemptRepository.create({
-      webhook_id: webhook.id,
-      event_type: 'webhook.test',
-      payload: testPayload,
-      status: success ? 'SENT' : 'FAILED',
-      http_status_code: statusCode,
-      response_body: storedResponseBody,
-      sent_at: sentAt,
-      attempt_count: 1,
+    // Phase 2 (DB context): record the delivery attempt under RLS scope (network already done).
+    await withOrganizationDatabaseContext(organization_public_id, async () => {
+      await this.deliveryAttemptRepository.create({
+        webhook_id: webhook.id,
+        event_type: 'webhook.test',
+        payload: testPayload,
+        status: success ? 'SENT' : 'FAILED',
+        http_status_code: statusCode,
+        response_body: storedResponseBody,
+        sent_at: sentAt,
+        attempt_count: 1,
+      });
     });
 
     const truncatedBody =
