@@ -9,6 +9,8 @@ export interface AuditLogFilters {
   to?: string;
   page: number;
   limit: number;
+  /** When false, skip the expensive count(*) on this growing table; total is returned as null. */
+  include_total?: boolean;
 }
 
 /** Row shape for inserting into `audit.logs` (Drizzle insert). */
