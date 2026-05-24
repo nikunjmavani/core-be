@@ -65,17 +65,42 @@ export class UploadService {
       key = `${config.keyPrefix}/${ownerSegment}/${randomUUID()}${extension}`;
     }
 
-    const bucket = getEnv().S3_BUCKET;
+    const environment = getEnv();
+    const bucket = environment.S3_BUCKET;
     if (!bucket) {
       throw new ConfigurationError('S3_BUCKET is not configured');
     }
 
-    const uploadUrl = await this.objectStorage.createPresignedUploadUrl({
-      key,
-      contentType: input.contentType,
-      contentLength: input.fileSize,
-      expiresInSeconds: PRESIGNED_URL_EXPIRY_SECONDS,
-    });
+    let uploadUrl: string;
+    let uploadMethod: 'PUT' | 'POST';
+    let fields: Record<string, string> | undefined;
+
+    if (environment.UPLOAD_USE_PRESIGNED_POST) {
+      // S3 enforces the content-length-range at upload time, rejecting empty/oversized bodies.
+      const post = await this.objectStorage.createPresignedUploadPost({
+        key,
+        contentType: input.contentType,
+        minContentLength: 1,
+        maxContentLength: config.maxSize,
+        expiresInSeconds: PRESIGNED_URL_EXPIRY_SECONDS,
+        metadata: {
+          purpose: input.purpose,
+          'declared-type': input.contentType,
+          owner: userPublicId,
+        },
+      });
+      uploadUrl = post.url;
+      fields = post.fields;
+      uploadMethod = 'POST';
+    } else {
+      uploadUrl = await this.objectStorage.createPresignedUploadUrl({
+        key,
+        contentType: input.contentType,
+        contentLength: input.fileSize,
+        expiresInSeconds: PRESIGNED_URL_EXPIRY_SECONDS,
+      });
+      uploadMethod = 'PUT';
+    }
 
     const expiresAt = new Date(Date.now() + PRESIGNED_URL_EXPIRY_SECONDS * 1000);
 
@@ -97,6 +122,8 @@ export class UploadService {
       uploadUrl,
       key,
       expiresAt,
+      uploadMethod,
+      ...(fields !== undefined ? { fields } : {}),
     });
   }
 

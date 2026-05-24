@@ -82,6 +82,38 @@ describe('UploadService', () => {
     expect(repository.create).toHaveBeenCalled();
   });
 
+  it('createUpload returns a presigned POST with content-length-range when enabled', async () => {
+    const { getEnv } = await import('@/shared/config/env.config.js');
+    vi.mocked(getEnv).mockReturnValueOnce({
+      S3_BUCKET: 'test-bucket',
+      LOG_LEVEL: 'silent',
+      UPLOAD_ALLOW_SVG: false,
+      UPLOAD_USE_PRESIGNED_POST: true,
+    } as ReturnType<typeof getEnv>);
+    vi.mocked(objectStorage.createPresignedUploadPost).mockResolvedValueOnce({
+      url: 'https://s3.example/post',
+      fields: { key: 'avatars/u/x.png', policy: 'p', 'Content-Type': 'image/png' },
+    });
+
+    const result = await service.createUpload(
+      {
+        purpose: 'avatar',
+        for: 'user',
+        contentType: 'image/png',
+        fileName: 'avatar.png',
+        fileSize: 1024,
+      },
+      userPublicId,
+    );
+
+    expect(objectStorage.createPresignedUploadPost).toHaveBeenCalledWith(
+      expect.objectContaining({ minContentLength: 1, maxContentLength: 2 * 1024 * 1024 }),
+    );
+    expect(objectStorage.createPresignedUploadUrl).not.toHaveBeenCalled();
+    expect(result.uploadMethod).toBe('POST');
+    expect(result.fields).toMatchObject({ 'Content-Type': 'image/png' });
+  });
+
   it('createUpload rejects organization upload without manage permission', async () => {
     const { resolveUserOrganizationPermissions } =
       await import('@/domains/tenancy/sub-domains/permission/authorization.service.js');

@@ -156,6 +156,7 @@
   "packageManager": "pnpm@10.28.2",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",
+    "@aws-sdk/s3-presigned-post": "^3.1053.0",
     "@aws-sdk/s3-request-presigner": "^3.1048.0",
     "@bull-board/api": "^7.1.5",
     "@bull-board/fastify": "^7.1.5",
