@@ -75,7 +75,7 @@ export class AuditService {
       to: parsed.to,
       page,
       limit: parsed.limit,
-      include_total: parsed.include_total,
+      include_total: parsed.include_total !== 'false',
     });
 
     const { items, total, hasMore } = await this.repository.findWithFilters(filters);

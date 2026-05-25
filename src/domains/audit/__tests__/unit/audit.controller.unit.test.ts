@@ -61,7 +61,7 @@ describe('createAuditController', () => {
 
   it('listLogs returns paginated audit entries with sanitized metadata', async () => {
     const response = await controller.listLogs(
-      mockRequest({ query: { page: 1, limit: 20, include_total: true } }),
+      mockRequest({ query: { page: 1, limit: 20, include_total: 'true' } }),
       mockReply(),
     );
     expect(service.list).toHaveBeenCalled();
@@ -86,7 +86,7 @@ describe('createAuditController', () => {
       has_more: true,
     } as never);
     const response = await controller.listLogs(
-      mockRequest({ query: { page: 1, limit: 2, include_total: true } }),
+      mockRequest({ query: { page: 1, limit: 2, include_total: 'true' } }),
       mockReply(),
     );
     expect(response).toMatchObject({

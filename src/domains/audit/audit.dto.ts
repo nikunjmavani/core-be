@@ -12,11 +12,9 @@ export const ListAuditLogsQueryDto = cursorListQuerySchema
     to: z.string().trim().datetime().optional(),
     // Opt out of the expensive count(*) for deep browsing of this growing table. Defaults to
     // true to preserve the exact-total response; pass `false` for cheap keyset-style paging.
-    include_total: z
-      .enum(['true', 'false'])
-      .optional()
-      .default('true')
-      .transform((value) => value !== 'false'),
+    // Kept as a string enum (no transform) so the schema renders to JSON Schema for OpenAPI;
+    // the service coerces it to a boolean.
+    include_total: z.enum(['true', 'false']).optional().default('true'),
   })
   .strict();
 
