@@ -3,6 +3,12 @@ export interface UploadedObjectMetadata {
   contentLength: number | undefined;
 }
 
+/** Browser-postable presigned upload: a form `url` plus hidden `fields` to submit with the file. */
+export interface PresignedUploadPost {
+  url: string;
+  fields: Record<string, string>;
+}
+
 /**
  * Port for object storage (S3-compatible). Domain upload code depends on this abstraction.
  */
@@ -13,6 +19,20 @@ export interface ObjectStoragePort {
     contentLength: number;
     expiresInSeconds: number;
   }): Promise<string>;
+
+  /**
+   * Presigned POST with a `content-length-range` policy so S3 itself rejects oversized or
+   * empty uploads at upload time (stronger than a presigned PUT, which only signs a single
+   * Content-Length). Returns the form action URL and the policy fields to submit.
+   */
+  createPresignedUploadPost(options: {
+    key: string;
+    contentType: string;
+    minContentLength: number;
+    maxContentLength: number;
+    expiresInSeconds: number;
+    metadata?: Record<string, string>;
+  }): Promise<PresignedUploadPost>;
 
   verifyUploadedObject(
     key: string,

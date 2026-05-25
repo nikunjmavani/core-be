@@ -14,6 +14,13 @@ export interface UploadCreateOutput {
   uploadUrl: string;
   key: string;
   expiresAt: string;
+  /**
+   * Upload method. `PUT` → send the file as the body to `uploadUrl`. `POST` → submit a
+   * multipart form to `uploadUrl` with `fields` plus the file (S3 enforces content-length-range).
+   */
+  uploadMethod: 'PUT' | 'POST';
+  /** Present only for `POST` uploads: hidden form fields to submit alongside the file. */
+  fields?: Record<string, string>;
 }
 
 export interface UploadDetailOutput {

@@ -8,6 +8,12 @@ vi.mock('@/domains/notify/sub-domains/notification/queues/notification.queue.js'
   enqueueNotification: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
 const user = { id: 1, public_id: 'user_public' };
 const notification = {
   id: 2,

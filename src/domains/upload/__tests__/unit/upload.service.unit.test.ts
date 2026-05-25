@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { UploadService } from '@/domains/upload/upload.service.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { UploadRepository } from '@/domains/upload/upload.repository.js';
@@ -15,6 +15,12 @@ vi.mock('@/domains/tenancy/sub-domains/permission/authorization.service.js', () 
 vi.mock('@/shared/config/env.config.js', () => ({
   getEnv: vi.fn(() => ({ S3_BUCKET: 'test-bucket', LOG_LEVEL: 'silent', UPLOAD_ALLOW_SVG: false })),
   env: { S3_BUCKET: 'test-bucket', LOG_LEVEL: 'silent', UPLOAD_ALLOW_SVG: false },
+}));
+
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
 }));
 
 const userPublicId = generatePublicId();
@@ -42,6 +48,7 @@ describe('UploadService', () => {
     create: vi.fn().mockResolvedValue(uploadRow),
     findByPublicIdForUser: vi.fn().mockResolvedValue(uploadRow),
     findActiveByUserId: vi.fn().mockResolvedValue([uploadRow]),
+    markStatus: vi.fn().mockResolvedValue(uploadRow),
     softDelete: vi.fn().mockResolvedValue(uploadRow),
     softDeleteAllByUserId: vi.fn().mockResolvedValue(1),
     softDeleteAllByOrganizationId: vi.fn().mockResolvedValue(2),
@@ -79,6 +86,38 @@ describe('UploadService', () => {
     );
     expect(result.uploadUrl).toContain('https://');
     expect(repository.create).toHaveBeenCalled();
+  });
+
+  it('createUpload returns a presigned POST with content-length-range when enabled', async () => {
+    const { getEnv } = await import('@/shared/config/env.config.js');
+    vi.mocked(getEnv).mockReturnValueOnce({
+      S3_BUCKET: 'test-bucket',
+      LOG_LEVEL: 'silent',
+      UPLOAD_ALLOW_SVG: false,
+      UPLOAD_USE_PRESIGNED_POST: true,
+    } as ReturnType<typeof getEnv>);
+    vi.mocked(objectStorage.createPresignedUploadPost).mockResolvedValueOnce({
+      url: 'https://s3.example/post',
+      fields: { key: 'avatars/u/x.png', policy: 'p', 'Content-Type': 'image/png' },
+    });
+
+    const result = await service.createUpload(
+      {
+        purpose: 'avatar',
+        for: 'user',
+        contentType: 'image/png',
+        fileName: 'avatar.png',
+        fileSize: 1024,
+      },
+      userPublicId,
+    );
+
+    expect(objectStorage.createPresignedUploadPost).toHaveBeenCalledWith(
+      expect.objectContaining({ minContentLength: 1, maxContentLength: 2 * 1024 * 1024 }),
+    );
+    expect(objectStorage.createPresignedUploadUrl).not.toHaveBeenCalled();
+    expect(result.uploadMethod).toBe('POST');
+    expect(result.fields).toMatchObject({ 'Content-Type': 'image/png' });
   });
 
   it('createUpload rejects organization upload without manage permission', async () => {
@@ -144,6 +183,77 @@ describe('UploadService', () => {
     vi.mocked(repository.softDeleteAllByOrganizationId).mockResolvedValue(2);
     const count = await service.tombstoneAllByOrganizationId(10);
     expect(count).toBe(2);
+  });
+
+  it('confirmUpload marks UPLOADED when the object matches declared type and size', async () => {
+    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+      ...uploadRow,
+      status: 'PENDING',
+    } as never);
+    vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
+      contentType: 'image/png',
+      contentLength: 1024,
+    });
+    vi.mocked(repository.markStatus).mockResolvedValue({
+      ...uploadRow,
+      status: 'UPLOADED',
+    } as never);
+
+    const result = await service.confirmUpload(uploadPublicId, userPublicId);
+
+    expect(objectStorage.verifyUploadedObject).toHaveBeenCalledWith(uploadRow.file_key, {
+      contentType: 'image/png',
+      contentLength: 1024,
+    });
+    expect(repository.markStatus).toHaveBeenCalledWith(uploadPublicId, user.id, 'UPLOADED');
+    expect(result.status).toBe('UPLOADED');
+  });
+
+  it('confirmUpload marks FAILED and throws when object size does not match', async () => {
+    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+      ...uploadRow,
+      status: 'PENDING',
+    } as never);
+    vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
+      contentType: 'image/png',
+      contentLength: 9999,
+    });
+
+    await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(repository.markStatus).toHaveBeenCalledWith(uploadPublicId, user.id, 'FAILED');
+  });
+
+  it('confirmUpload is idempotent for already-UPLOADED rows', async () => {
+    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+      ...uploadRow,
+      status: 'UPLOADED',
+    } as never);
+
+    const result = await service.confirmUpload(uploadPublicId, userPublicId);
+    expect(result.status).toBe('UPLOADED');
+    expect(objectStorage.verifyUploadedObject).not.toHaveBeenCalled();
+    expect(repository.markStatus).not.toHaveBeenCalled();
+  });
+
+  it('confirmUpload rejects when the upload is not pending', async () => {
+    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+      ...uploadRow,
+      status: 'FAILED',
+    } as never);
+
+    await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(objectStorage.verifyUploadedObject).not.toHaveBeenCalled();
+  });
+
+  it('confirmUpload throws NotFound when the upload is missing', async () => {
+    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue(null);
+    await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 
   it('createUpload throws when S3 bucket is not configured', async () => {

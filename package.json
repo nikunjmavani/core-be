@@ -178,8 +178,9 @@
   },
   "packageManager": "pnpm@10.28.2",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1053.0",
-    "@aws-sdk/s3-request-presigner": "^3.1053.0",
+    "@aws-sdk/client-s3": "^3.1048.0",
+    "@aws-sdk/s3-presigned-post": "^3.1053.0",
+    "@aws-sdk/s3-request-presigner": "^3.1048.0",
     "@bull-board/api": "^7.1.5",
     "@bull-board/fastify": "^7.1.5",
     "@fastify/compress": "^8.3.1",
@@ -303,7 +304,8 @@
       "i18next-http-middleware": ">=3.9.3",
       "qs": "^6.15.2",
       "uuid": ">=11.1.1",
-      "yaml@1.10.2": "1.10.3"
+      "yaml@1.10.2": "1.10.3",
+      "qs": ">=6.15.2"
     }
   }
 }

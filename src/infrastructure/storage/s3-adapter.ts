@@ -6,11 +6,13 @@ import {
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { env } from '@/shared/config/env.config.js';
 import { s3Circuit } from '@/infrastructure/resilience/circuit-breaker.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import type {
   ObjectStoragePort,
+  PresignedUploadPost,
   UploadedObjectMetadata,
 } from '@/infrastructure/storage/object-storage.port.js';
 
@@ -58,6 +60,40 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
     });
 
     return getSignedUrl(getS3Client(), command, { expiresIn: options.expiresInSeconds });
+  }
+
+  async createPresignedUploadPost(options: {
+    key: string;
+    contentType: string;
+    minContentLength: number;
+    maxContentLength: number;
+    expiresInSeconds: number;
+    metadata?: Record<string, string>;
+  }): Promise<PresignedUploadPost> {
+    const bucket = requireBucket();
+    const metadataConditions = Object.entries(options.metadata ?? {}).map(
+      ([metadataKey, value]) => ({ [`x-amz-meta-${metadataKey}`]: value }),
+    );
+    const { url, fields } = await createPresignedPost(getS3Client(), {
+      Bucket: bucket,
+      Key: options.key,
+      Conditions: [
+        ['content-length-range', options.minContentLength, options.maxContentLength],
+        ['eq', '$Content-Type', options.contentType],
+        ...metadataConditions,
+      ],
+      Fields: {
+        'Content-Type': options.contentType,
+        ...Object.fromEntries(
+          Object.entries(options.metadata ?? {}).map(([metadataKey, value]) => [
+            `x-amz-meta-${metadataKey}`,
+            value,
+          ]),
+        ),
+      },
+      Expires: options.expiresInSeconds,
+    });
+    return { url, fields };
   }
 
   async verifyUploadedObject(
