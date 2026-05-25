@@ -20,6 +20,7 @@ import { createMembershipTombstoneRetentionWorker } from '@/domains/tenancy/sub-
 import { createMemberRoleTombstoneRetentionWorker } from '@/domains/tenancy/sub-domains/member-roles/workers/member-role-tombstone-retention.worker.js';
 import { createOrganizationApiKeyTombstoneRetentionWorker } from '@/domains/tenancy/sub-domains/organization/organization-api-key/workers/organization-api-key-tombstone-retention.worker.js';
 import { createUploadTombstoneRetentionWorker } from '@/domains/upload/workers/upload-tombstone-retention.worker.js';
+import { createUploadPendingSweepWorker } from '@/domains/upload/workers/upload-pending-sweep.worker.js';
 import { createUserDataExportWorker } from '@/domains/user/sub-domains/user-data-export/workers/user-data-export.worker.js';
 import { createUserDataExportRetentionWorker } from '@/domains/user/sub-domains/user-data-export/workers/user-data-export-retention.worker.js';
 import { createIdempotencyCardinalityWorker } from '@/infrastructure/observability/idempotency-cardinality/idempotency-cardinality.worker.js';
@@ -166,6 +167,9 @@ export async function registerDomainWorkers(
 
   pushWorkerWithDeadLetterHook(workers, createUploadTombstoneRetentionWorker);
   logger.info('Registered upload tombstone retention worker');
+
+  pushWorkerWithDeadLetterHook(workers, createUploadPendingSweepWorker);
+  logger.info('Registered upload pending sweep worker');
 
   pushWorkerWithDeadLetterHook(workers, createUserDataExportRetentionWorker);
   logger.info('Registered user data export retention worker');

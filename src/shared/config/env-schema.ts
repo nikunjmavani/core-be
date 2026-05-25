@@ -294,6 +294,14 @@ const envSchemaBase = z.object({
   MEMBER_ROLE_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   UPLOAD_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
+  /** Cron for the PENDING upload sweeper (auto-confirm matches, hard-delete orphans). */
+  UPLOAD_PENDING_SWEEP_CRON: z.string().min(1).optional(),
+  /**
+   * Extra grace beyond `PRESIGNED_URL_EXPIRY_SECONDS` before a PENDING upload row becomes
+   * eligible for sweeping. Prevents reconciling rows whose presigned URL has only just
+   * expired and whose client confirm call is still in flight. Default 1 hour.
+   */
+  UPLOAD_PENDING_SWEEP_GRACE_SECONDS: z.coerce.number().int().min(60).default(3600),
 
   /** Bounded SCAN cap for idempotency Redis key cardinality sampling (worker). */
   IDEMPOTENCY_CARDINALITY_SCAN_MAX: z.coerce.number().int().min(1).default(200_000),
