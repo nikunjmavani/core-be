@@ -203,11 +203,11 @@
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
-    "@aws-sdk/client-iam": "^3.1051.0",
+    "@aws-sdk/client-iam": "^3.1053.0",
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
     "@faker-js/faker": "^10.4.0",
-    "@scalar/fastify-api-reference": "^1.57.2",
+    "@scalar/fastify-api-reference": "^1.57.5",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@testcontainers/postgresql": "^12.0.0",
