@@ -15,6 +15,44 @@ import {
 let initialized = false;
 
 /**
+ * Scrubs secrets from a Sentry error event before it is sent upstream.
+ * Shared by `beforeSend` and unit tests.
+ */
+export function redactSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
+  if (event.breadcrumbs) {
+    for (const breadcrumb of event.breadcrumbs) {
+      if (breadcrumb.data) {
+        breadcrumb.data = redactSensitive(breadcrumb.data);
+      }
+    }
+  }
+  if (event.request) {
+    if (event.request.headers) {
+      event.request.headers = redactSensitive(event.request.headers);
+    }
+    if (event.request.cookies) {
+      event.request.cookies = redactSensitive(event.request.cookies);
+    }
+    if (event.request.data !== undefined) {
+      event.request.data = redactSensitive(event.request.data);
+    }
+    if (event.request.query_string !== undefined) {
+      event.request.query_string = redactSensitive(event.request.query_string);
+    }
+    if (event.request.url !== undefined) {
+      event.request.url = redactSensitive(event.request.url);
+    }
+  }
+  if (event.extra) {
+    event.extra = redactSensitive(event.extra);
+  }
+  if (event.contexts) {
+    event.contexts = redactSensitive(event.contexts);
+  }
+  return event;
+}
+
+/**
  * Initialize Sentry with error tracking, performance tracing, continuous
  * profiling (V8 CpuProfiler), structured logs, and auto-instrumentation
  * for HTTP / Postgres / Redis.
@@ -84,33 +122,7 @@ export function initSentry(): void {
 
     // ── Privacy / noise filters ─────────────────────────────────────
     beforeSend(event) {
-      // Recursively, case-insensitively scrub secrets (headers, query, body, breadcrumbs,
-      // extras) before the event leaves the process for Sentry.
-      if (event.breadcrumbs) {
-        for (const breadcrumb of event.breadcrumbs) {
-          if (breadcrumb.data) {
-            breadcrumb.data = redactSensitive(breadcrumb.data);
-          }
-        }
-      }
-      if (event.request) {
-        if (event.request.headers) {
-          event.request.headers = redactSensitive(event.request.headers);
-        }
-        if (event.request.cookies) {
-          event.request.cookies = redactSensitive(event.request.cookies);
-        }
-        if (event.request.data !== undefined) {
-          event.request.data = redactSensitive(event.request.data);
-        }
-      }
-      if (event.extra) {
-        event.extra = redactSensitive(event.extra);
-      }
-      if (event.contexts) {
-        event.contexts = redactSensitive(event.contexts);
-      }
-      return event;
+      return redactSentryEvent(event);
     },
 
     beforeSendTransaction(event) {
