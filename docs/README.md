@@ -58,12 +58,12 @@ flowchart TB
 
 ## Development workflow
 
-| Doc                                                  | Description                                                         |
-| ---------------------------------------------------- | ------------------------------------------------------------------- |
-| [process/git-workflow.md](process/git-workflow.md)   | Branch naming, PR flow, conventional commits.                       |
-| [process/dr-runbook.md](process/dr-runbook.md)       | Disaster recovery — RTO 1h, RPO 15m, failover, quarterly review.    |
-| [process/backup-drills.md](process/backup-drills.md) | Monthly restore drill — automated/manual RTO recording and CI gate. |
-| [process/dlq-runbook.md](process/dlq-runbook.md)     | Dead-letter queue inspection and replay.                            |
+| Doc                                                  | Description                                                                              |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [process/git-workflow.md](process/git-workflow.md)   | Branch naming, PR flow, conventional commits.                                            |
+| [process/dr-runbook.md](process/dr-runbook.md)       | Disaster recovery — RTO 1h, RPO 15m, failover, quarterly review.                         |
+| [process/backup-drills.md](process/backup-drills.md) | Monthly restore drill — required automated RTO gate + optional manual evidence workflow. |
+| [process/dlq-runbook.md](process/dlq-runbook.md)     | Dead-letter queue inspection and replay.                                                 |
 
 ---
 

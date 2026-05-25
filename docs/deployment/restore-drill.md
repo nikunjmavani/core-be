@@ -6,26 +6,43 @@ This page covers deployment wiring only.
 
 ---
 
-## Workflow
+## Workflows
 
-[scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml) (`Monthly backup restore & RTO drill`) runs on the **1st of each month** (06:00 UTC) and on `workflow_dispatch`.
+| Workflow                               | File                                                                                           | When                                         | Required?             |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------- | --------------------- |
+| **Monthly backup restore & RTO drill** | [scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml) | 1st of month 06:00 UTC + `workflow_dispatch` | Yes (compliance gate) |
+| **Manual DR RTO record (optional)**    | [manual-dr-rto-record.yml](../../.github/workflows/manual-dr-rto-record.yml)                   | `workflow_dispatch` only                     | No                    |
 
-| Secret / input | Purpose |
-| -------------- | ------- |
-| `NEON_DRILL_DATABASE_URL` | Throwaway Neon branch for automated `db:migrate` + integration smoke |
-| `recorded_rto_minutes` | Manual end-to-end RTO when automation is skipped |
+### Monthly drill (required)
+
+| Secret / input                           | Purpose                                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL` | **Required** repository secret — throwaway Neon branch for `db:migrate` + integration smoke |
+
+The workflow **fails** when the secret is missing, restore steps do not complete, or `restore_seconds` ≥ `RTO_MINUTES × 60` (default **60 minutes**).
+
+### Manual evidence (optional)
+
+| Input                  | Purpose                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `recorded_rto_minutes` | Human end-to-end RTO after a manual drill (separate workflow; does not satisfy the monthly gate) |
 
 ---
 
 ## CI artifacts
 
-| Artifact | Contents |
-| -------- | -------- |
-| `restore-drill-rto` | Automated timing JSON |
-| `restore-drill-rto-manual` | Manual timing JSON |
+### Monthly backup restore & RTO drill
+
+| Artifact                   | Contents                        |
+| -------------------------- | ------------------------------- |
+| `restore-drill-rto`        | Automated timing JSON           |
 | `restore-drill-rto-report` | Consolidated report for the run |
 
-The workflow fails when `restore_seconds` ≥ `RTO_MINUTES × 60` (default **60 minutes**).
+### Manual DR RTO record (optional)
+
+| Artifact                   | Contents           |
+| -------------------------- | ------------------ |
+| `restore-drill-rto-manual` | Manual timing JSON |
 
 ---
 
