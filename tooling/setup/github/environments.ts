@@ -76,20 +76,42 @@ function fetchGitHubEnvironment(repository: string, environmentName: string): un
   }
 }
 
-export function validateGitHubEnvironmentsDrift(
+export type ValidateGitHubEnvironmentsDriftOptions = {
+  readonly environmentsDirectory?: string;
+  readonly environmentNames?: readonly string[];
+};
+
+export function validateGitHubEnvironmentsDrift({
   environmentsDirectory = ENVIRONMENTS_DIRECTORY,
-): GitHubEnvironmentDriftResult[] {
+  environmentNames,
+}: ValidateGitHubEnvironmentsDriftOptions = {}): GitHubEnvironmentDriftResult[] {
   const repository = getRepositoryIdentifier();
   const configs = loadGitHubEnvironmentConfigs(environmentsDirectory);
+  const selectedEnvironmentNames = environmentNames
+    ? new Set(environmentNames.map((environmentName) => environmentName.trim()).filter(Boolean))
+    : undefined;
+  const selectedConfigs = selectedEnvironmentNames
+    ? configs.filter((config) => selectedEnvironmentNames.has(config.name))
+    : configs;
   const results: GitHubEnvironmentDriftResult[] = [];
+
+  if (selectedEnvironmentNames && selectedConfigs.length !== selectedEnvironmentNames.size) {
+    const configuredNames = new Set(configs.map((config) => config.name));
+    const missingNames = [...selectedEnvironmentNames].filter(
+      (environmentName) => !configuredNames.has(environmentName),
+    );
+    throw new Error(
+      `Missing GitHub environment config file for: ${missingNames.join(', ') || 'unknown'}`,
+    );
+  }
 
   console.log(`Validating GitHub environment protection (config ↔ UI)`);
   console.log(`  Repository: ${repository}`);
   console.log(`  Config directory: ${environmentsDirectory}`);
-  console.log(`  Environments: ${configs.map((config) => config.name).join(', ')}`);
+  console.log(`  Environments: ${selectedConfigs.map((config) => config.name).join(', ')}`);
   console.log('');
 
-  for (const config of configs) {
+  for (const config of selectedConfigs) {
     const configPath = join(environmentsDirectory, `${config.name}.json`);
     const apiResponse = fetchGitHubEnvironment(repository, config.name);
     const live = parseGitHubEnvironmentApiResponse(apiResponse);

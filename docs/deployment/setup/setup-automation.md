@@ -44,7 +44,7 @@ flowchart LR
 | `pnpm setup:infra:delete`           | Print a manual-delete guide: dashboard URLs and resource identifiers (from `.setup-state.json`) for every provider that has provisioned state. **The script never deletes resources** — open each dashboard and remove items by hand, then delete the matching entries in `tooling/setup/.setup-state.json`. `setup:infra:revert` is kept as a back-compat alias for this command. |
 | `pnpm setup:infra:export-env`       | Write `.env.<environment>` files (e.g. `.env.development`, `.env.production`) from current state. Use these to push secrets to GitHub Environment secrets. Run after provisioning or anytime to regenerate.                                                                                                                                                                        |
 | `pnpm validate:github-environments` | Drift check: compare `.github/environments/*.json` (required reviewers, branch policy) vs GitHub API. Requires `gh auth login`. Use `--check` explicitly or via this script.                                                                                                                                                                                                       |
-| `pnpm validate:github-env`          | Drift check **plus** validate GitHub environment secrets (all variables from `.env.example`). Uses `CONFIG` (default: `development`). Run with `CONFIG=production` per branch. `SKIP_GITHUB_ENV=1` skips GitHub API calls.                                                                                                                                                         |
+| `pnpm validate:github-env`          | Targeted drift check **plus** GitHub environment secret validation. Uses `CONFIG` (default: `development`) and only checks the selected environment, so `CONFIG=development` does not fail on production-only drift. Requires `gh auth login`; `SKIP_GITHUB_ENV=1` skips GitHub API calls.                                                                                         |
 | `pnpm setup:push-retention-secrets` | Set `AUDIT_RETENTION_DAYS` and `AUTH_SESSION_RETENTION_DAYS` on GitHub environments (development, production). Requires `gh auth login`. Optional `CONFIG=development`; override days via env vars.                                                                                                                                                                                |
 
 ---
@@ -76,7 +76,7 @@ Do not commit these files (they contain secrets); `.env.*` is in `.gitignore` (e
 
 | Variable | Purpose                                                                                                                                                                    |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CONFIG` | Environment to validate (full name preferred — `development`, `production`; aliases `dev`/`prod` are accepted and resolve to the same full names). Default: `development`. |
+| `CONFIG` | Environment to validate locally or in deploy CI (full name preferred — `development`, `production`; aliases `dev`/`prod` are accepted and resolve to the same full names). Default: `development`. |
 
 ---
 
