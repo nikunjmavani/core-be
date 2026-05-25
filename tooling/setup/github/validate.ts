@@ -60,6 +60,38 @@ function getRequiredVariables(): string[] {
   return [...envSchemaRequiredKeys];
 }
 
+/**
+ * Decide whether a missing conditionally-required key should be reported for the
+ * given GitHub environment. Mirrors the `.refine()` clauses in `env-schema.ts` so
+ * the validator only warns when the runtime would actually fail to boot — gating
+ * by the controlling variable (e.g. `CAPTCHA_PROVIDER`, `METRICS_ENABLED`) or by
+ * the environment (e.g. `CAPTCHA_DISABLED_ACK` is only enforced in `production`).
+ */
+export function shouldReportMissingConditional(
+  entry: { readonly key: string },
+  environment: string,
+  variableValues: ReadonlyMap<string, string>,
+): boolean {
+  if (entry.key === 'CAPTCHA_SECRET') {
+    // Required only when CAPTCHA_PROVIDER is explicitly `turnstile`.
+    // Schema default is `disabled`; absence ⇒ disabled ⇒ no warning.
+    return variableValues.get('CAPTCHA_PROVIDER') === 'turnstile';
+  }
+  if (entry.key === 'METRICS_SCRAPE_TOKEN') {
+    const metricsEnabled = variableValues.get('METRICS_ENABLED');
+    // METRICS_ENABLED schema default is true; warn unless explicitly disabled.
+    return metricsEnabled !== 'false' && metricsEnabled !== '0';
+  }
+  if (entry.key === 'CAPTCHA_DISABLED_ACK') {
+    // Production boot fails when CAPTCHA_PROVIDER=disabled unless this is true.
+    // Outside production, the schema does not enforce the acknowledgement, and
+    // when CAPTCHA_PROVIDER=turnstile is set the ack is irrelevant.
+    if (environment !== 'production') return false;
+    return variableValues.get('CAPTCHA_PROVIDER') !== 'turnstile';
+  }
+  return true;
+}
+
 function fetchGitHubResource(
   environment: string,
   resource: 'secrets' | 'variables',
@@ -164,21 +196,9 @@ function main(): void {
   const missingVariables = requiredVariables.filter((variable) => !allPresent.includes(variable));
   const deploymentCountIssue = validateDeploymentProcessCountSecrets(environment, allPresent);
 
-  // Conditional keys: gate the warning by reading the controlling variable when possible.
   const missingConditional = envSchemaConditionallyRequiredKeys.filter((entry) => {
     if (allPresent.includes(entry.key)) return false;
-    if (entry.key === 'CAPTCHA_SECRET') {
-      const provider = variableValues.get('CAPTCHA_PROVIDER');
-      // Only required when CAPTCHA_PROVIDER is explicitly `turnstile`.
-      // Schema default is `disabled`; absence ⇒ disabled ⇒ no warning.
-      return provider === 'turnstile';
-    }
-    if (entry.key === 'METRICS_SCRAPE_TOKEN') {
-      const metricsEnabled = variableValues.get('METRICS_ENABLED');
-      // METRICS_ENABLED schema default is true; warn unless explicitly disabled.
-      return metricsEnabled !== 'false' && metricsEnabled !== '0';
-    }
-    return true;
+    return shouldReportMissingConditional(entry, environment, variableValues);
   });
 
   if (
