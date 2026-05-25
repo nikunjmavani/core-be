@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
-import { LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY } from '@/shared/utils/http/pagination.util.js';
+import {
+  LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
+  LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+} from '@/shared/utils/http/pagination.util.js';
 import {
   validateAcceptMemberInvitation,
   validateCreateMemberInvitation,
@@ -64,7 +67,11 @@ describe('member-invitation validators', () => {
         expect(validationError.statusCode).toBe(400);
         expect(validationError.messageKey).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY);
         expect(validationError.errors).toEqual([
-          { field: 'page', messageKey: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY },
+          {
+            field: 'page',
+            messageKey: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+            message: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
+          },
         ]);
       }
     });
