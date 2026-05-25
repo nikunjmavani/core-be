@@ -36,7 +36,6 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = tenancy, auth, public
-SET row_security = off
 AS $$
   SELECT EXISTS (
     SELECT 1
@@ -106,7 +105,6 @@ CREATE OR REPLACE FUNCTION tenancy.resolve_member_invitation_lookup_by_public_id
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = tenancy, public
-SET row_security = off
 AS $$
   SELECT
     organization_row.public_id::text AS organization_public_id,
@@ -136,7 +134,6 @@ CREATE OR REPLACE FUNCTION tenancy.list_pending_member_invitations_for_email (
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = tenancy, public
-SET row_security = off
 AS $$
   SELECT
     invitation_row.public_id::text AS invitation_public_id,

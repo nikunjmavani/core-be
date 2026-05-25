@@ -35,7 +35,7 @@ export const setupConfigSchema = z.object({
     neon: z.object({
       enabled: z.boolean(),
       region: z.string().min(1),
-      pgVersion: z.number().int().min(14).max(17).default(17),
+      pgVersion: z.number().int().min(17).max(17).default(17),
       computeSize: z.object({
         min: z.number().min(0.25),
         max: z.number().min(0.25),

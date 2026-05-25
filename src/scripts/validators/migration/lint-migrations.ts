@@ -21,6 +21,7 @@ export const migrationSafetyRuleIds = [
   'add_unique_constraint_inline',
   'alter_column_type',
   'create_index_without_concurrently',
+  'disable_row_security_guc',
   'drop_column',
   'drop_table',
   'missing_if_not_exists_on_create',
@@ -45,6 +46,8 @@ const ruleFixHints: Record<MigrationSafetyRuleId, string> = {
     'Add a new column with the target type, backfill, switch reads/writes, then drop the old column in a later migration.',
   create_index_without_concurrently:
     'Prefer CREATE INDEX CONCURRENTLY in a non-transactional migration. This repo runs each file inside a transaction, so CONCURRENTLY cannot run as-is; split the index into a follow-up migration that runs outside a transaction, or explicitly allow this rule with a documented reason.',
+  disable_row_security_guc:
+    'Migrations must not SET / RESET the `row_security` GUC. Postgres enforces RLS on FORCE ROW LEVEL SECURITY tables for any non-privileged session role; SECURITY DEFINER functions already run as their owner and bypass RLS through ownership, not by toggling row_security. Drop the SET row_security clause and rely on SECURITY DEFINER + GRANT EXECUTE.',
   drop_column:
     'Stop application writes, deploy, then drop the column in a later migration (contract phase).',
   drop_table:
@@ -474,6 +477,34 @@ function emitViolationIfNotAllowed(
   };
 }
 
+/**
+ * Matches any SET / RESET of the `row_security` GUC (top-level statement,
+ * SET LOCAL, function-attribute SET clause inside a CREATE FUNCTION header,
+ * or inside a DO/function body) so the lint catches every form. RLS bypass
+ * for trusted lookups must go through SECURITY DEFINER + ownership, not
+ * the row_security session GUC.
+ */
+const rowSecurityGucPattern =
+  /\b(?:SET\s+LOCAL\s+row_security\b|SET\s+SESSION\s+row_security\b|SET\s+row_security\b|RESET\s+row_security\b)/iu;
+
+function findRowSecurityGucViolations(filename: string, fileContent: string): Violation[] {
+  const violations: Violation[] = [];
+  const lines = fileContent.split('\n');
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const rawLine = lines[lineIndex] ?? '';
+    const commentIndex = rawLine.indexOf('--');
+    const lineBody = commentIndex === -1 ? rawLine : rawLine.slice(0, commentIndex);
+    if (!rowSecurityGucPattern.test(lineBody)) continue;
+    violations.push({
+      filename,
+      lineNumber: lineIndex + 1,
+      ruleId: 'disable_row_security_guc',
+      message: ruleFixHints.disable_row_security_guc,
+    });
+  }
+  return violations;
+}
+
 export function lintMigrationFileContent(
   filename: string,
   fileContent: string,
@@ -489,6 +520,8 @@ export function lintMigrationFileContent(
   if (headerErrors.length > 0) {
     return { violations, headerErrors, usedAllowRules };
   }
+
+  violations.push(...findRowSecurityGucViolations(filename, fileContent));
 
   const statements = splitSqlStatements(fileContent);
 
