@@ -38,31 +38,27 @@ export class AuditRepository {
   }
 
   async findWithFilters(filters: AuditLogFilters) {
-    const { after, offset_page, limit } = filters;
+    const { after, limit } = filters;
     const includeTotal = filters.include_total === true;
     const filterConditions = buildAuditFilterConditions(filters);
     const countWhere = filterConditions.length > 0 ? and(...filterConditions) : undefined;
 
     const conditions = [...filterConditions];
-    if (offset_page === undefined) {
-      const cursorCondition = buildDescendingCreatedAtIdCursorCondition(
-        logs.created_at,
-        logs.id,
-        parseListCursor(after),
-      );
-      if (cursorCondition !== undefined) conditions.push(cursorCondition);
-    }
+    const cursorCondition = buildDescendingCreatedAtIdCursorCondition(
+      logs.created_at,
+      logs.id,
+      parseListCursor(after),
+    );
+    if (cursorCondition !== undefined) conditions.push(cursorCondition);
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     // Fetch one extra row so has_more is accurate without depending on count(*).
-    const rowsQuery = getRequestDatabase()
+    const rowsPromise = getRequestDatabase()
       .select()
       .from(logs)
       .where(where)
       .orderBy(desc(logs.created_at), desc(logs.id))
       .limit(limit + 1);
-    const rowsPromise =
-      offset_page !== undefined ? rowsQuery.offset((offset_page - 1) * limit) : rowsQuery;
 
     const countPromise = includeTotal
       ? getRequestDatabase()

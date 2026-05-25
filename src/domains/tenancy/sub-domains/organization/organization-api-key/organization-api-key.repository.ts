@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
@@ -14,7 +14,6 @@ import type { OrganizationApiKeyRow } from './organization-api-key.types.js';
 
 interface OrganizationApiKeyListPagination {
   after?: string;
-  offset_page?: number;
   limit: number;
 }
 
@@ -28,39 +27,29 @@ export class OrganizationApiKeyRepository extends BaseRepository {
     organization_id: number,
     pagination: OrganizationApiKeyListPagination,
   ) {
-    const { after, offset_page, limit } = pagination;
-    const cursorCondition =
-      offset_page === undefined
-        ? buildAscendingCreatedAtIdCursorCondition(
-            api_keys.created_at,
-            api_keys.id,
-            parseListCursor(after),
-          )
-        : undefined;
+    const { after, limit } = pagination;
+    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+      api_keys.created_at,
+      api_keys.id,
+      parseListCursor(after),
+    );
     const where = and(
       eq(api_keys.organization_id, organization_id),
       isNull(api_keys.deleted_at),
       cursorCondition,
     );
-    const rowsQuery = getRequestDatabase()
+    const rows = await getRequestDatabase()
       .select()
       .from(api_keys)
       .where(where)
       .orderBy(asc(api_keys.created_at), asc(api_keys.id))
       .limit(limit + 1);
-    const [rows, countResult] = await Promise.all([
-      offset_page !== undefined ? rowsQuery.offset((offset_page - 1) * limit) : rowsQuery,
-      offset_page !== undefined
-        ? getRequestDatabase().select({ count: count() }).from(api_keys).where(where)
-        : Promise.resolve([{ count: null }]),
-    ]);
     const hasMore = rows.length > limit;
     const items = (hasMore ? rows.slice(0, limit) : rows) as OrganizationApiKeyRow[];
     const lastItem = items.at(-1);
     return {
       items,
-      total: countResult[0]?.count ?? null,
-      page: offset_page,
+      total: null,
       limit,
       has_more: hasMore,
       next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,

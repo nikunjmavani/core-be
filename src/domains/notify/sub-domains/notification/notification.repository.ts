@@ -14,7 +14,6 @@ import {
 
 export interface NotificationListPagination {
   after?: string;
-  offset_page?: number;
   limit: number;
   include_total?: boolean;
 }
@@ -99,30 +98,25 @@ export class NotificationRepository {
   }
 
   async findByUser(user_id: number, pagination: NotificationListPagination) {
-    const { after, offset_page, limit } = pagination;
-    const includeTotal = pagination.include_total === true || offset_page !== undefined;
+    const { after, limit } = pagination;
+    const includeTotal = pagination.include_total === true;
     const filterConditions: SQL[] = [eq(notifications.user_id, user_id)];
     const countWhere = and(...filterConditions);
-    const cursorCondition =
-      offset_page === undefined
-        ? buildDescendingCreatedAtIdCursorCondition(
-            notifications.created_at,
-            notifications.id,
-            parseListCursor(after),
-          )
-        : undefined;
+    const cursorCondition = buildDescendingCreatedAtIdCursorCondition(
+      notifications.created_at,
+      notifications.id,
+      parseListCursor(after),
+    );
     const where =
       cursorCondition !== undefined ? and(...filterConditions, cursorCondition) : countWhere;
 
     // Fetch one extra row so has_more is accurate without depending on count(*).
-    const rowsQuery = this.db()
+    const rowsPromise = this.db()
       .select()
       .from(notifications)
       .where(where)
       .orderBy(desc(notifications.created_at), desc(notifications.id))
       .limit(limit + 1);
-    const rowsPromise =
-      offset_page !== undefined ? rowsQuery.offset((offset_page - 1) * limit) : rowsQuery;
 
     const countPromise = includeTotal
       ? this.db()
@@ -141,7 +135,6 @@ export class NotificationRepository {
     return {
       items,
       total,
-      page: offset_page,
       limit,
       has_more: hasMore,
       next_cursor: nextCursor,

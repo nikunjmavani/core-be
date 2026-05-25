@@ -1,21 +1,8 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
 import { and, eq, gt, lt, ne, or, type SQL } from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
 import { z } from 'zod';
-import { GoneError } from '@/shared/errors/index.js';
-import { PAGINATION, OFFSET_PAGINATION_SUNSET } from '@/shared/constants/pagination.constants.js';
-import {
-  alertDeprecatedUsagePastSunset,
-  applyDeprecatedEndpointHeaders,
-} from '@/shared/utils/http/api-versioning.util.js';
+import { PAGINATION } from '@/shared/constants/pagination.constants.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-
-export const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(PAGINATION.DEFAULT_PAGE),
-  limit: z.coerce.number().int().min(1).max(PAGINATION.MAX_LIMIT).default(PAGINATION.DEFAULT_LIMIT),
-});
-
-export type PaginationInput = z.infer<typeof paginationSchema>;
 
 /**
  * Cursor-based pagination query schema.
@@ -27,13 +14,6 @@ export const cursorPaginationSchema = z.object({
 });
 
 export type CursorPaginationInput = z.infer<typeof cursorPaginationSchema>;
-
-/** Cursor list queries accept `after` and, during deprecation, legacy `page`. */
-export const cursorListQuerySchema = cursorPaginationSchema.extend({
-  page: z.coerce.number().int().min(1).optional(),
-});
-
-export type CursorListQueryInput = z.infer<typeof cursorListQuerySchema>;
 
 /** Limit-only list queries (no cursor); same default and max as cursor lists. */
 export const listLimitQuerySchema = z.object({
@@ -60,12 +40,6 @@ export type ListCursorPayload = z.infer<typeof listCursorPayloadSchema>;
 export type ParsedListCursor =
   | { kind: 'opaque'; created_at: Date; sort_value?: string; public_id?: string; id?: number }
   | { kind: 'legacy'; id: number };
-
-export type ResolvedListPagination = {
-  limit: number;
-  after?: string;
-  offsetPage?: number;
-};
 
 export function encodeListCursor(payload: ListCursorPayload): string {
   return Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -116,59 +90,6 @@ export function createOpaqueCursorFromRow(row: {
       id: row.id,
     }),
   );
-}
-
-export function isOffsetPaginationPastSunset(now: Date = new Date()): boolean {
-  return now.getTime() >= OFFSET_PAGINATION_SUNSET.getTime();
-}
-
-/**
- * Parses cursor list query params and applies offset deprecation policy.
- * When `page` is present before sunset, sets RFC 8594/9745 headers on `reply`.
- */
-export type ListPaginationRequestContext = {
-  method: string;
-  url: string;
-};
-
-export function resolveListPaginationQuery(
-  query: unknown,
-  reply?: FastifyReply,
-  requestContext?: ListPaginationRequestContext,
-): ResolvedListPagination {
-  const parsed = cursorListQuerySchema.parse(query);
-  if (parsed.page !== undefined) {
-    if (isOffsetPaginationPastSunset()) {
-      if (requestContext) {
-        alertDeprecatedUsagePastSunset({
-          surface: 'offset-pagination-page',
-          sunset: OFFSET_PAGINATION_SUNSET,
-          method: requestContext.method,
-          url: requestContext.url,
-          statusCode: 410,
-        });
-      }
-      throw new GoneError();
-    }
-    if (reply) {
-      applyDeprecatedEndpointHeaders(reply, {
-        sunset: OFFSET_PAGINATION_SUNSET,
-        deprecation: true,
-      });
-    }
-    return omitUndefined({ limit: parsed.limit, offsetPage: parsed.page, after: parsed.after });
-  }
-  return omitUndefined({ limit: parsed.limit, after: parsed.after });
-}
-
-export function resolveListPaginationQueryForRequest(
-  request: Pick<FastifyRequest, 'query' | 'method' | 'url'>,
-  reply?: FastifyReply,
-): ResolvedListPagination {
-  return resolveListPaginationQuery(request.query, reply, {
-    method: request.method,
-    url: request.url,
-  });
 }
 
 export function resolveAscendingIdAfter(cursor: ParsedListCursor | null): number | undefined {

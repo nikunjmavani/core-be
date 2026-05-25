@@ -41,7 +41,6 @@ describe('member-invitation validators', () => {
       const parsed = validateListMemberInvitationsQuery({});
       expect(parsed.include_total).toBe('false');
       expect(parsed.after).toBeUndefined();
-      expect(parsed.page).toBeUndefined();
       expect(typeof parsed.limit).toBe('number');
     });
 
@@ -54,15 +53,10 @@ describe('member-invitation validators', () => {
       expect(parsed.limit).toBe(15);
     });
 
-    it('accepts legacy page during deprecation window', () => {
-      const parsed = validateListMemberInvitationsQuery({
-        page: '3',
-        limit: '10',
-        include_total: 'true',
-      });
-      expect(parsed.page).toBe(3);
-      expect(parsed.limit).toBe(10);
-      expect(parsed.include_total).toBe('true');
+    it('rejects legacy page query parameter (cursor-only)', () => {
+      expect(() =>
+        validateListMemberInvitationsQuery({ page: '3', limit: '10', include_total: 'true' }),
+      ).toThrow(ValidationError);
     });
 
     it('rejects unknown query keys (strict)', () => {
@@ -78,10 +72,6 @@ describe('member-invitation validators', () => {
     it('rejects limit outside allowed range', () => {
       expect(() => validateListMemberInvitationsQuery({ limit: '0' })).toThrow(ValidationError);
       expect(() => validateListMemberInvitationsQuery({ limit: '1000' })).toThrow(ValidationError);
-    });
-
-    it('rejects negative page', () => {
-      expect(() => validateListMemberInvitationsQuery({ page: '0' })).toThrow(ValidationError);
     });
   });
 });

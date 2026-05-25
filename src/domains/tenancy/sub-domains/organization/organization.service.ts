@@ -172,7 +172,6 @@ export class OrganizationService {
     const parsed = validateListOrganizationsQuery(query);
     const pagination = omitUndefined({
       after: parsed.after,
-      offset_page: parsed.page,
       limit: parsed.limit,
     });
     return withUserDatabaseContext(user_public_id, async () => {

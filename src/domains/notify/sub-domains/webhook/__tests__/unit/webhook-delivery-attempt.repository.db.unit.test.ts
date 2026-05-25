@@ -139,28 +139,6 @@ describe('WebhookDeliveryAttemptRepository (database)', () => {
       expect(result.has_more).toBe(true);
     });
 
-    it('supports legacy offset_page (deprecated) by returning total and page metadata', async () => {
-      const { webhook } = await setupWebhookWithAttempts(3);
-
-      const page1 = await attemptRepository.listByWebhook(webhook.id, {
-        limit: 2,
-        offset_page: 1,
-      });
-      const page2 = await attemptRepository.listByWebhook(webhook.id, {
-        limit: 2,
-        offset_page: 2,
-      });
-
-      expect(page1.items).toHaveLength(2);
-      expect(page1.total).toBe(3);
-      expect(page1.page).toBe(1);
-      expect(page1.has_more).toBe(true);
-
-      expect(page2.items).toHaveLength(1);
-      expect(page2.page).toBe(2);
-      expect(page2.has_more).toBe(false);
-    });
-
     it('returns empty result when the webhook has no delivery attempts', async () => {
       const owner = await createTestUser();
       const organization = await createTestOrganization({ ownerUserId: owner.id });

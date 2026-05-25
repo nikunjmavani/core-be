@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cursorListQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedSlug, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /** Shared path params for org-scoped routes (`/organizations/:id/...`). */
@@ -42,7 +42,7 @@ export const updateOrganizationDto = z
   })
   .strict();
 
-export const listOrganizationsQueryDto = cursorListQuerySchema;
+export const listOrganizationsQueryDto = cursorPaginationSchema.strict();
 
 export const uploadLogoDto = z
   .object({

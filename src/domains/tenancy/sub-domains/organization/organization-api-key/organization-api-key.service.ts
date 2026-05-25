@@ -47,7 +47,6 @@ export class OrganizationApiKeyService {
         organization.id,
         omitUndefined({
           after: parsed.after,
-          offset_page: parsed.page,
           limit: parsed.limit,
         }),
       );

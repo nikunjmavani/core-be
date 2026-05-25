@@ -96,7 +96,7 @@ describe('UserRepository', () => {
     expect(await repository.updateMfaEnabled('missing', true)).toBeNull();
   });
 
-  it('findMany returns empty keyset result when no rows match (count(*) only when include_total=true or offset_page given)', async () => {
+  it('findMany returns empty keyset result when no rows match (count(*) only when include_total=true)', async () => {
     const rowsQueryThenable = Promise.resolve([]);
     const rowsLimit = vi.fn(() => rowsQueryThenable);
     const rowsOrderBy = vi.fn(() => ({ limit: rowsLimit }));

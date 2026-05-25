@@ -73,7 +73,6 @@ export class AuditService {
       from: parsed.from,
       to: parsed.to,
       after: parsed.after,
-      offset_page: parsed.page,
       limit: parsed.limit,
       include_total: parsed.include_total === 'true',
     });
@@ -84,7 +83,6 @@ export class AuditService {
       items,
       total,
       limit: parsed.limit,
-      total_pages: total !== null ? Math.ceil(total / parsed.limit) || 1 : null,
       has_more: hasMore,
       next_cursor: nextCursor,
     };

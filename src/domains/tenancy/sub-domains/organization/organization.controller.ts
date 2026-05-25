@@ -2,7 +2,6 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
-import { applyDeprecatedEndpointHeaders } from '@/shared/utils/http/api-versioning.util.js';
 import type { OrganizationService } from './organization.service.js';
 import type { AuditService } from '@/domains/audit/audit.service.js';
 
@@ -11,20 +10,12 @@ export function createOrganizationController(
   auditService?: AuditService,
 ) {
   return {
-    listOrganizations: async (request: FastifyRequest, reply: FastifyReply) => {
+    listOrganizations: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const result = await service.list(request.query, auth.userId, auth.role);
-      if ((request.query as { page?: unknown }).page !== undefined) {
-        applyDeprecatedEndpointHeaders(reply, {
-          sunset: new Date('2027-01-01T00:00:00.000Z'),
-        });
-      }
       return paginatedResponse(result.items, getRequestIdentifier(request), {
         per_page: result.limit,
-        next:
-          result.page !== undefined && result.has_more
-            ? String(result.page + 1)
-            : result.next_cursor,
+        next: result.next_cursor,
         has_more: result.has_more,
         ...(result.total !== null ? { estimated_total: result.total } : {}),
       });

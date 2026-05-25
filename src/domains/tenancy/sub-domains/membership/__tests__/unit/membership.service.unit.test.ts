@@ -52,10 +52,10 @@ describe('MembershipService', () => {
   const membershipRepository = {
     findByOrganizationId: vi.fn().mockResolvedValue({
       items: [membershipRow],
-      total: 1,
-      page: 1,
+      total: null,
       limit: 20,
-      total_pages: 1,
+      has_more: false,
+      next_cursor: null,
     }),
     findByPublicId: vi.fn().mockResolvedValue(membershipRow),
     create: vi.fn().mockResolvedValue(membershipRow),
@@ -90,11 +90,10 @@ describe('MembershipService', () => {
   });
 
   it('list returns paginated memberships', async () => {
-    const result = await service.list('org_public', { page: 1, limit: 20 });
+    const result = await service.list('org_public', { limit: 20 });
     expect(result.items).toHaveLength(1);
-    expect(result.total).toBe(1);
+    expect(result.total).toBeNull();
     expect(membershipRepository.findByOrganizationId).toHaveBeenCalledWith(1, {
-      offset_page: 1,
       limit: 20,
     });
   });

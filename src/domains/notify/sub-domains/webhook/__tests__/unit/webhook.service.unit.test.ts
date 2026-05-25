@@ -58,7 +58,6 @@ describe('WebhookService', () => {
     listByOrganization: vi.fn().mockResolvedValue({
       items: [webhook],
       total: null,
-      page: undefined,
       limit: 25,
       has_more: false,
       next_cursor: null,
@@ -75,7 +74,6 @@ describe('WebhookService', () => {
     listByWebhook: vi.fn().mockResolvedValue({
       items: [],
       total: null,
-      page: undefined,
       limit: 10,
       has_more: false,
       next_cursor: null,

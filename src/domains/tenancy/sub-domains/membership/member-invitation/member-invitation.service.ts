@@ -44,7 +44,6 @@ export class MemberInvitationService {
   async list(options: MemberInvitationListOptions): Promise<{
     items: MemberInvitationOutput[];
     total: number | null;
-    page: number | undefined;
     limit: number;
     has_more: boolean;
     next_cursor: string | null;
@@ -58,7 +57,6 @@ export class MemberInvitationService {
         organization.id,
         omitUndefined({
           after: parsed.after,
-          offset_page: parsed.page,
           limit: parsed.limit,
           include_total: parsed.include_total === 'true',
         }),

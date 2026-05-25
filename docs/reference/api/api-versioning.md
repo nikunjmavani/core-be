@@ -78,7 +78,8 @@ Constants and helpers live in **`src/shared/utils/http/api-versioning.util.ts`**
 | All `/api/v1/*` responses | `API-Version: 1` | `api-versioning.middleware` (`onSend`) via `applyPublicApiVersionHeader` |
 | All `/api/v1/*` during v1→v2 overlap | `Sunset`, `Deprecation` | Set `PUBLIC_API_V1_SUNSET` in `api-versioning.util.ts`; middleware applies `applyDeprecatedEndpointHeaders` on every v1 response |
 | `GET /health`, `GET /health/worker` | `Sunset`, `Deprecation` | `health.middleware` (aggregate routes; sunset **2026-08-19** UTC) |
-| Cursor list routes with legacy `page` query | `Sunset`, `Deprecation` | `resolveListPaginationQuery` in `pagination.util.ts` (sunset **2026-08-19** UTC; **410** after sunset via `GoneError`) |
 | Per-route deprecation | `Sunset`, `Deprecation`, optional `Link` | Call `applyDeprecatedEndpointHeaders(reply, …)` in the handler before sending the body |
 
-**Past-sunset usage:** `alertDeprecatedUsagePastSunset` logs and sends a throttled Sentry warning when a **2xx** response still carries a `Sunset` header whose date has passed, when offset `page` is used after its sunset (**410** path), or when v1 traffic continues after `PUBLIC_API_V1_SUNSET` (when configured).
+**Past-sunset usage:** `alertDeprecatedUsagePastSunset` logs and sends a throttled Sentry warning when a **2xx** response still carries a `Sunset` header whose date has passed, or when v1 traffic continues after `PUBLIC_API_V1_SUNSET` (when configured).
+
+**Cursor list pagination:** All paginated list endpoints (organizations, memberships, member roles, member invitations, audit logs, webhooks, notifications, etc.) use cursor pagination only. Pass `limit` and optional `after` (opaque cursor from `meta.pagination.next`). The legacy `page` query parameter has been removed and is rejected with a 400 ValidationError.

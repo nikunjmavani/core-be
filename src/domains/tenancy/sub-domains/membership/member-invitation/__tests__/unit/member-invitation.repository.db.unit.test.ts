@@ -71,7 +71,6 @@ describe('MemberInvitationRepository.findByOrganizationId (keyset cursor paginat
     expect(page1.has_more).toBe(true);
     expect(page1.next_cursor).toBeTypeOf('string');
     expect(page1.total).toBeNull();
-    expect(page1.page).toBeUndefined();
   });
 
   it('navigates pages with `after` cursor without repeating items', async () => {
@@ -130,30 +129,6 @@ describe('MemberInvitationRepository.findByOrganizationId (keyset cursor paginat
     expect(result.total).toBe(3);
     expect(result.items).toHaveLength(2);
     expect(result.has_more).toBe(true);
-  });
-
-  it('supports legacy offset_page (deprecated) by returning total and page metadata', async () => {
-    const { owner, organization, membership } = await setupOrganizationWithMembership();
-    await createInvitations(repository, membership.id, owner.id, 3);
-
-    const page1 = await repository.findByOrganizationId(organization.id, {
-      limit: 2,
-      offset_page: 1,
-    });
-    const page2 = await repository.findByOrganizationId(organization.id, {
-      limit: 2,
-      offset_page: 2,
-    });
-
-    expect(page1.items).toHaveLength(2);
-    expect(page1.total).toBe(3);
-    expect(page1.page).toBe(1);
-    expect(page1.has_more).toBe(true);
-
-    expect(page2.items).toHaveLength(1);
-    expect(page2.total).toBe(3);
-    expect(page2.page).toBe(2);
-    expect(page2.has_more).toBe(false);
   });
 
   it('scopes results to the requested organization (does not leak cross-organization invitations)', async () => {

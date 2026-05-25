@@ -6,10 +6,10 @@
 import { PAGINATION } from '@/shared/constants/index.js';
 
 /** Appended to list-operation descriptions in route metadata. */
-export const CURSOR_PAGINATION_DESCRIPTION_SUFFIX = ` Uses cursor pagination: pass \`limit\` (default ${PAGINATION.DEFAULT_LIMIT}, max ${PAGINATION.MAX_LIMIT}) and optional \`after\` (opaque cursor from the previous response \`meta.pagination.next\`). Legacy \`page\` offset is deprecated until 2026-08-19 UTC and returns \`Deprecation\` / \`Sunset\` headers; after that date it returns 410 Gone.`;
+export const CURSOR_PAGINATION_DESCRIPTION_SUFFIX = ` Uses cursor pagination: pass \`limit\` (default ${PAGINATION.DEFAULT_LIMIT}, max ${PAGINATION.MAX_LIMIT}) and optional \`after\` (opaque cursor from the previous response \`meta.pagination.next\`).`;
 
 /**
- * GET list routes that use cursor pagination (`cursorListQuerySchema` or extensions).
+ * GET list routes that use cursor pagination (`cursorPaginationSchema` or extensions).
  * Keys: "METHOD /openapi/path" (with `{param}` placeholders).
  */
 export const CURSOR_PAGINATED_LIST_ROUTE_KEYS = [

@@ -27,7 +27,6 @@ const WEBHOOK_TEST_RESPONSE_BODY_STORED_MAX_LENGTH = 2_000;
 export interface WebhookListOptions {
   organization_public_id: string;
   after?: string;
-  page?: number;
   limit?: number;
   include_total?: boolean;
 }
@@ -52,7 +51,6 @@ export class WebhookService {
         organization.id,
         omitUndefined({
           after: options.after,
-          offset_page: options.page,
           limit: options.limit ?? PAGINATION.DEFAULT_LIMIT,
           include_total: options.include_total,
         }),
@@ -188,7 +186,6 @@ export class WebhookService {
         webhookId,
         omitUndefined({
           after: options.after,
-          offset_page: options.page,
           limit: options.limit ?? PAGINATION.DEFAULT_LIMIT,
           include_total: options.include_total,
         }),

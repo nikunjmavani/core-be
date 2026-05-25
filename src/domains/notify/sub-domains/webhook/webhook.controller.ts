@@ -12,7 +12,6 @@ import {
 
 interface CursorPaginationResult {
   limit: number;
-  page: number | undefined;
   has_more: boolean;
   next_cursor: string | null;
   total: number | null;
@@ -21,8 +20,7 @@ interface CursorPaginationResult {
 function buildCursorPaginationMetadata(result: CursorPaginationResult) {
   return {
     per_page: result.limit,
-    next:
-      result.page !== undefined && result.has_more ? String(result.page + 1) : result.next_cursor,
+    next: result.next_cursor,
     has_more: result.has_more,
     ...(result.total !== null ? { estimated_total: result.total } : {}),
   };
@@ -36,7 +34,6 @@ function createListWebhooksHandler(service: WebhookService) {
       omitUndefined({
         organization_public_id: validatePublicIdParam(request.params.id, 'id'),
         after: parsed.after,
-        page: parsed.page,
         limit: parsed.limit,
         include_total: parsed.include_total === 'true',
       }),
@@ -61,7 +58,6 @@ function createListDeliveryAttemptsHandler(service: WebhookService) {
         organization_public_id: validatePublicIdParam(request.params.id, 'id'),
         webhook_public_id: request.params.webhookId,
         after: parsed.after,
-        page: parsed.page,
         limit: parsed.limit,
         include_total: parsed.include_total === 'true',
       }),

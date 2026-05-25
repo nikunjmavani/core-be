@@ -39,32 +39,28 @@ export interface PendingMemberInvitationLookupRow {
 
 export interface MemberInvitationListPagination {
   after?: string;
-  offset_page?: number;
   limit: number;
   include_total?: boolean;
 }
 
 export class MemberInvitationRepository {
   async findByOrganizationId(organization_id: number, pagination: MemberInvitationListPagination) {
-    const { after, offset_page, limit } = pagination;
-    const includeTotal = pagination.include_total === true || offset_page !== undefined;
+    const { after, limit } = pagination;
+    const includeTotal = pagination.include_total === true;
     const filterConditions: SQL[] = [
       eq(memberships.organization_id, organization_id),
       isNull(memberships.deleted_at)!,
     ];
     const countWhere = and(...filterConditions);
-    const cursorCondition =
-      offset_page === undefined
-        ? buildAscendingCreatedAtIdCursorCondition(
-            member_invitations.created_at,
-            member_invitations.id,
-            parseListCursor(after),
-          )
-        : undefined;
+    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+      member_invitations.created_at,
+      member_invitations.id,
+      parseListCursor(after),
+    );
     const where =
       cursorCondition !== undefined ? and(...filterConditions, cursorCondition) : countWhere;
 
-    const rowsQuery = getRequestDatabase()
+    const rowsPromise = getRequestDatabase()
       .select({
         invitation: member_invitations,
         membership_public_id: memberships.public_id,
@@ -74,8 +70,6 @@ export class MemberInvitationRepository {
       .where(where)
       .orderBy(asc(member_invitations.created_at), asc(member_invitations.id))
       .limit(limit + 1);
-    const rowsPromise =
-      offset_page !== undefined ? rowsQuery.offset((offset_page - 1) * limit) : rowsQuery;
 
     const countPromise = includeTotal
       ? getRequestDatabase()
@@ -97,7 +91,6 @@ export class MemberInvitationRepository {
     return {
       items,
       total,
-      page: offset_page,
       limit,
       has_more: hasMore,
       next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,

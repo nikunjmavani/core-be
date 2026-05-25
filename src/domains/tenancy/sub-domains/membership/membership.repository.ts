@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
@@ -15,45 +15,34 @@ import {
 
 interface MembershipListPagination {
   after?: string;
-  offset_page?: number;
   limit: number;
 }
 
 export class MembershipRepository extends BaseRepository {
   async findByOrganizationId(organization_id: number, pagination: MembershipListPagination) {
-    const { after, offset_page, limit } = pagination;
-    const cursorCondition =
-      offset_page === undefined
-        ? buildAscendingCreatedAtIdCursorCondition(
-            memberships.created_at,
-            memberships.id,
-            parseListCursor(after),
-          )
-        : undefined;
+    const { after, limit } = pagination;
+    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+      memberships.created_at,
+      memberships.id,
+      parseListCursor(after),
+    );
     const where = and(
       eq(memberships.organization_id, organization_id),
       isNull(memberships.deleted_at),
       cursorCondition,
     );
-    const rowsQuery = getRequestDatabase()
+    const rows = await getRequestDatabase()
       .select()
       .from(memberships)
       .where(where)
       .orderBy(asc(memberships.created_at), asc(memberships.id))
       .limit(limit + 1);
-    const [rows, countResult] = await Promise.all([
-      offset_page !== undefined ? rowsQuery.offset((offset_page - 1) * limit) : rowsQuery,
-      offset_page !== undefined
-        ? getRequestDatabase().select({ count: count() }).from(memberships).where(where)
-        : Promise.resolve([{ count: null }]),
-    ]);
     const hasMore = rows.length > limit;
     const items = (hasMore ? rows.slice(0, limit) : rows) as MembershipRow[];
     const lastItem = items.at(-1);
     return {
       items,
-      total: countResult[0]?.count ?? null,
-      page: offset_page,
+      total: null,
       limit,
       has_more: hasMore,
       next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,

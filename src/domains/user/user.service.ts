@@ -259,7 +259,6 @@ export class UserService {
     const result = await this.repository.findMany(
       omitUndefined({
         after: parsed.after,
-        offset_page: parsed.page,
         limit: parsed.limit,
         status: parsed.status,
         search: parsed.search,
@@ -268,7 +267,6 @@ export class UserService {
     );
     return {
       items: result.items.map(UserSerializer.one),
-      page: result.page,
       limit: result.limit,
       total: result.total,
       has_more: result.has_more,

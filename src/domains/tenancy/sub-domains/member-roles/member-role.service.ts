@@ -10,7 +10,7 @@ import {
 } from './member-role.validator.js';
 import { serializeMemberRole } from './member-role.serializer.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import type { ResolvedListPagination } from '@/shared/utils/http/pagination.util.js';
+import type { CursorPaginationInput } from '@/shared/utils/http/pagination.util.js';
 
 export class MemberRoleService {
   constructor(
@@ -18,7 +18,7 @@ export class MemberRoleService {
     private readonly memberRoleRepository: MemberRoleRepository,
   ) {}
 
-  async list(organization_public_id: string, pagination: ResolvedListPagination) {
+  async list(organization_public_id: string, pagination: CursorPaginationInput) {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
@@ -27,19 +27,16 @@ export class MemberRoleService {
       validateListMemberRolesQuery({
         limit: pagination.limit,
         after: pagination.after,
-        page: pagination.offsetPage,
       });
       const result = await this.memberRoleRepository.findByOrganizationId(
         organization.id,
         omitUndefined({
           after: pagination.after,
-          offset_page: pagination.offsetPage,
           limit: pagination.limit,
         }),
       );
       return {
         items: result.items.map(serializeMemberRole),
-        page: result.page,
         limit: result.limit,
         total: result.total,
         has_more: result.has_more,

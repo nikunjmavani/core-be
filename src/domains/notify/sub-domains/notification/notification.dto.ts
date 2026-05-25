@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cursorListQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 export const getNotificationParamsDto = z
@@ -14,7 +14,7 @@ export const deleteNotificationParamsDto = z
   })
   .strict();
 
-export const listNotificationsQueryDto = cursorListQuerySchema
+export const listNotificationsQueryDto = cursorPaginationSchema
   .extend({
     // Opt in to count(*); defaults to false so the user inbox stays keyset-only.
     include_total: z.enum(['true', 'false']).optional().default('false'),

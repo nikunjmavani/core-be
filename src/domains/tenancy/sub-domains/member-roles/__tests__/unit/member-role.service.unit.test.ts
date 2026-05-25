@@ -57,7 +57,7 @@ describe('MemberRoleService', () => {
   });
 
   it('list returns roles', async () => {
-    const result = await service.list(organization.public_id, { limit: 20, offsetPage: 1 });
+    const result = await service.list(organization.public_id, { limit: 20 });
     expect(result.items).toHaveLength(1);
   });
 

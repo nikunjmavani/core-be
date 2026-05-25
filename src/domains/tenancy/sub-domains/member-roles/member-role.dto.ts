@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cursorListQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 export const createMemberRoleDto = z
@@ -17,7 +17,7 @@ export const updateMemberRoleDto = z
   })
   .strict();
 
-export const listMemberRolesQueryDto = cursorListQuerySchema;
+export const listMemberRolesQueryDto = cursorPaginationSchema.strict();
 
 export type CreateMemberRoleInput = z.infer<typeof createMemberRoleDto>;
 export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleDto>;

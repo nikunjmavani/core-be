@@ -14,7 +14,6 @@ import {
 
 export interface UserListPagination {
   after?: string;
-  offset_page?: number;
   limit: number;
   status?: string;
   search?: string;
@@ -127,8 +126,8 @@ export class UserRepository {
   // ── Admin methods ──────────────────────────────────────────
 
   async findMany(pagination: UserListPagination) {
-    const { after, offset_page, limit, status, search } = pagination;
-    const includeTotal = pagination.include_total === true || offset_page !== undefined;
+    const { after, limit, status, search } = pagination;
+    const includeTotal = pagination.include_total === true;
     const filterConditions: SQL[] = [isNull(users.deleted_at)!];
     if (status) {
       filterConditions.push(eq(users.status, status));
@@ -144,26 +143,21 @@ export class UserRepository {
       );
     }
     const countWhere = and(...filterConditions);
-    const cursorCondition =
-      offset_page === undefined
-        ? buildAscendingCreatedAtIdCursorCondition(
-            users.created_at,
-            users.id,
-            parseListCursor(after),
-          )
-        : undefined;
+    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+      users.created_at,
+      users.id,
+      parseListCursor(after),
+    );
     const where =
       cursorCondition !== undefined ? and(...filterConditions, cursorCondition) : countWhere;
 
     // Fetch one extra row so has_more is accurate without depending on count(*).
-    const rowsQuery = getRequestDatabase()
+    const rowsPromise = getRequestDatabase()
       .select()
       .from(users)
       .where(where)
       .orderBy(asc(users.created_at), asc(users.id))
       .limit(limit + 1);
-    const rowsPromise =
-      offset_page !== undefined ? rowsQuery.offset((offset_page - 1) * limit) : rowsQuery;
 
     const countPromise = includeTotal
       ? getRequestDatabase()
@@ -182,7 +176,6 @@ export class UserRepository {
     return {
       items,
       total,
-      page: offset_page,
       limit,
       has_more: hasMore,
       next_cursor: nextCursor,

@@ -34,7 +34,6 @@ describe('NotificationService', () => {
     findByUser: vi.fn().mockResolvedValue({
       items: [notification],
       total: null,
-      page: undefined,
       limit: 50,
       has_more: false,
       next_cursor: null,

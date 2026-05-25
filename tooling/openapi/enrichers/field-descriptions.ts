@@ -97,7 +97,6 @@ export function getFieldSpecificDescription(fieldName: string): string {
     fileSize: 'File size in bytes.',
     key: 'S3 object key path.',
     search: 'Search query to filter results.',
-    page: '**Deprecated.** Offset page number (1-based). Returns `Deprecation` and `Sunset` headers until 2026-08-19 UTC; returns 410 Gone after that date. Prefer `after` cursor pagination.',
     limit: `Maximum number of items to return (default ${PAGINATION.DEFAULT_LIMIT}, max ${PAGINATION.MAX_LIMIT}).`,
     after:
       'Opaque cursor for the next page. Use the value from `meta.pagination.next` on the previous response (base64url JSON with `created_at` and optional `public_id` / `id`). Omit on the first page.',
