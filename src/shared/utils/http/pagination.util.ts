@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { and, eq, gt, lt, or, type SQL } from 'drizzle-orm';
+import { and, eq, gt, lt, ne, or, type SQL } from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
 import { z } from 'zod';
 import { GoneError } from '@/shared/errors/index.js';
@@ -207,8 +207,10 @@ export function buildAscendingCreatedAtIdCursorCondition(
   if (cursorId === undefined) {
     return gt(createdAtColumn, cursor.created_at);
   }
+  // PostgreSQL stores microseconds, while JavaScript Date serializes milliseconds.
+  // Exclude the boundary row by id so precision loss cannot repeat it.
   return or(
-    gt(createdAtColumn, cursor.created_at),
+    and(gt(createdAtColumn, cursor.created_at), ne(idColumn, cursorId)),
     and(eq(createdAtColumn, cursor.created_at), gt(idColumn, cursorId)),
   )!;
 }
@@ -246,8 +248,10 @@ export function buildDescendingCreatedAtIdCursorCondition(
   if (cursorId === undefined) {
     return lt(createdAtColumn, cursor.created_at);
   }
+  // PostgreSQL stores microseconds, while JavaScript Date serializes milliseconds.
+  // Exclude the boundary row by id so precision loss cannot repeat it.
   return or(
-    lt(createdAtColumn, cursor.created_at),
+    and(lt(createdAtColumn, cursor.created_at), ne(idColumn, cursorId)),
     and(eq(createdAtColumn, cursor.created_at), lt(idColumn, cursorId)),
   )!;
 }
