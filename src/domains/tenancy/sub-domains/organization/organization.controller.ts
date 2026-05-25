@@ -82,9 +82,9 @@ export function createOrganizationController(
       const result = await auditService.list(query);
       return paginatedResponse(result.items, getRequestIdentifier(request), {
         per_page: result.limit,
-        next: result.page < result.total_pages ? String(result.page + 1) : null,
-        has_more: result.page < result.total_pages,
-        estimated_total: result.total,
+        next: result.has_more ? String(result.page + 1) : null,
+        has_more: result.has_more,
+        ...(result.total !== null ? { estimated_total: result.total } : {}),
       });
     },
   };

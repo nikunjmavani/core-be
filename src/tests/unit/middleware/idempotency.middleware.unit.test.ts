@@ -123,8 +123,12 @@ describe('idempotency middleware fail-closed behavior', () => {
 });
 
 async function registerIdempotencyHooks() {
-  const { default: idempotencyPlugin } =
-    await import('@/shared/middlewares/idempotency.middleware.js');
+  const idempotencyModule = await import('@/shared/middlewares/idempotency.middleware.js');
+  const idempotencyPlugin = idempotencyModule.default;
+  // `idempotencyOnResponse` is no longer registered as an onResponse hook by the plugin
+  // itself — the request lifecycle coordinator invokes it post-RLS-commit. Tests reach
+  // through the exported function directly so they keep exercising the same code path.
+  const idempotencyOnResponse = idempotencyModule.idempotencyOnResponse;
   const hooks: Record<string, unknown> = {};
   const mockApp = {
     addHook: vi.fn((hookName: string, handler: unknown) => {
@@ -149,7 +153,7 @@ async function registerIdempotencyHooks() {
       reply: FastifyReply,
       payload: unknown,
     ) => Promise<unknown>,
-    onResponse: hooks.onResponse as (request: FastifyRequest, reply: FastifyReply) => Promise<void>,
+    onResponse: idempotencyOnResponse,
   };
 }
 

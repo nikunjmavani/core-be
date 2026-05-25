@@ -68,6 +68,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # A scheduled run must actually restore-and-measure. Without a drill database it would
+      # otherwise skip every step and report green, masking that no restore was tested.
+      - name: Require drill database on scheduled runs
+        if: github.event_name == 'schedule' && env.NEON_DRILL_DATABASE_URL == ''
+        run: |
+          echo "::error title=Restore drill not measured::NEON_DRILL_DATABASE_URL is required for scheduled DR drills so RTO is actually measured. Set it as a repository secret, or run the manual workflow to record a documented RTO."
+          exit 1
+
       - name: Setup Node and pnpm
         if: env.NEON_DRILL_DATABASE_URL != ''
         uses: ./.github/actions/setup-node-pnpm

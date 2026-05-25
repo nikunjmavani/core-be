@@ -75,16 +75,18 @@ export class AuditService {
       to: parsed.to,
       page,
       limit: parsed.limit,
+      include_total: parsed.include_total !== 'false',
     });
 
-    const { items, total } = await this.repository.findWithFilters(filters);
+    const { items, total, hasMore } = await this.repository.findWithFilters(filters);
 
     return {
       items,
       total,
       page,
       limit: parsed.limit,
-      total_pages: Math.ceil(total / parsed.limit) || 1,
+      total_pages: total !== null ? Math.ceil(total / parsed.limit) || 1 : null,
+      has_more: hasMore,
     };
   }
 }

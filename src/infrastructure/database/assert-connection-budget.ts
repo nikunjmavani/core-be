@@ -1,10 +1,14 @@
 import { sql } from '@/infrastructure/database/connection.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import {
+  getWorkerConcurrencyMail,
+  getWorkerConcurrencyNotify,
+  getWorkerConcurrencyStripe,
+  getWorkerConcurrencyWebhook,
+} from '@/shared/config/worker-concurrency.util.js';
 
 const DEFAULT_POOL_MAX_CONNECTIONS = 10;
-/** Retention workers use concurrency 1 each; six slots reserved on the worker process. */
-const RETENTION_WORKER_POOL_SLOT_RESERVE = 6;
 /** Local docker-compose default: one API + one worker process. */
 const LOCAL_DEFAULT_API_PROCESS_COUNT = 1;
 const LOCAL_DEFAULT_WORKER_PROCESS_COUNT = 1;
@@ -228,13 +232,41 @@ export async function assertPostgresConnectionBudget(
   }
 
   if (options.assertWorkerConcurrency) {
+    const backgroundReserve = env.WORKER_BACKGROUND_POOL_SLOT_RESERVE;
     const workerConcurrency = env.WORKER_CONCURRENCY;
-    const maxWorkerConcurrency = poolMaxConnections - RETENTION_WORKER_POOL_SLOT_RESERVE;
+    const maxWorkerConcurrency = poolMaxConnections - backgroundReserve;
     if (workerConcurrency > maxWorkerConcurrency) {
       throw new Error(
         `WORKER_CONCURRENCY (${workerConcurrency}) exceeds DATABASE_POOL_MAX (${poolMaxConnections}) minus ` +
-          `${RETENTION_WORKER_POOL_SLOT_RESERVE} retention worker slots (max ${maxWorkerConcurrency}). ` +
-          'Raise DATABASE_POOL_MAX on the worker service or lower WORKER_CONCURRENCY.',
+          `${backgroundReserve} background worker slots (max ${maxWorkerConcurrency}). ` +
+          'Raise DATABASE_POOL_MAX on the worker service, lower WORKER_CONCURRENCY, or reduce ' +
+          'WORKER_BACKGROUND_POOL_SLOT_RESERVE.',
+      );
+    }
+
+    // Throughput families each run as a separate BullMQ Worker that can hold up to its own
+    // concurrency in pooled connections simultaneously. If their combined peak plus the
+    // background reserve can exceed the pool, warn so operators can split worker services by
+    // queue family or raise the pool before cron overlap / DLQ replay exhausts Postgres.
+    const peakThroughputConcurrency =
+      getWorkerConcurrencyMail() +
+      getWorkerConcurrencyNotify() +
+      getWorkerConcurrencyWebhook() +
+      getWorkerConcurrencyStripe();
+    const peakWorkerPoolDemand = peakThroughputConcurrency + backgroundReserve;
+    if (peakWorkerPoolDemand > poolMaxConnections) {
+      logger.warn(
+        {
+          poolMaxConnections,
+          backgroundReserve,
+          peakThroughputConcurrency,
+          peakWorkerPoolDemand,
+          mail: getWorkerConcurrencyMail(),
+          notify: getWorkerConcurrencyNotify(),
+          webhook: getWorkerConcurrencyWebhook(),
+          stripe: getWorkerConcurrencyStripe(),
+        },
+        'database.connection_budget.worker_pool_pressure',
       );
     }
   }

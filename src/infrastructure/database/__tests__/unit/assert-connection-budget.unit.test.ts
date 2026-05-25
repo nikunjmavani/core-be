@@ -97,6 +97,7 @@ describe('assertPostgresConnectionBudget', () => {
       DEPLOYMENT_TOTAL_REPLICA_COUNT: 1,
       NODE_ENV: 'test',
       WORKER_CONCURRENCY: 10,
+      WORKER_BACKGROUND_POOL_SLOT_RESERVE: 6,
     });
 
     const { assertPostgresConnectionBudget } =
@@ -104,6 +105,49 @@ describe('assertPostgresConnectionBudget', () => {
 
     await expect(assertPostgresConnectionBudget({ assertWorkerConcurrency: true })).rejects.toThrow(
       /WORKER_CONCURRENCY/i,
+    );
+  });
+
+  it('respects a configurable WORKER_BACKGROUND_POOL_SLOT_RESERVE', async () => {
+    getEnvMock.mockReturnValue({
+      DATABASE_POOL_MAX: 10,
+      POSTGRES_RESERVED_CONNECTIONS: 10,
+      POSTGRES_MAX_CONNECTIONS: 100,
+      DEPLOYMENT_TOTAL_REPLICA_COUNT: 1,
+      NODE_ENV: 'test',
+      WORKER_CONCURRENCY: 9,
+      WORKER_BACKGROUND_POOL_SLOT_RESERVE: 2,
+    });
+
+    const { assertPostgresConnectionBudget } =
+      await import('@/infrastructure/database/assert-connection-budget.js');
+
+    // 9 > 10 - 2 = 8 → throws.
+    await expect(assertPostgresConnectionBudget({ assertWorkerConcurrency: true })).rejects.toThrow(
+      /background worker slots/i,
+    );
+  });
+
+  it('warns (without throwing) when combined throughput-family concurrency can exceed the pool', async () => {
+    getEnvMock.mockReturnValue({
+      DATABASE_POOL_MAX: 20,
+      POSTGRES_RESERVED_CONNECTIONS: 10,
+      POSTGRES_MAX_CONNECTIONS: 100,
+      DEPLOYMENT_TOTAL_REPLICA_COUNT: 1,
+      NODE_ENV: 'test',
+      WORKER_CONCURRENCY: 5,
+      WORKER_BACKGROUND_POOL_SLOT_RESERVE: 6,
+    });
+
+    const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
+    const { assertPostgresConnectionBudget } =
+      await import('@/infrastructure/database/assert-connection-budget.js');
+
+    // 4 families × 5 = 20 peak + 6 reserve = 26 > pool 20 → warn; 5 <= 20-6 so no throw.
+    await assertPostgresConnectionBudget({ assertWorkerConcurrency: true });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ peakWorkerPoolDemand: 26 }),
+      'database.connection_budget.worker_pool_pressure',
     );
   });
 

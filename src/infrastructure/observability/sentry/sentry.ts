@@ -3,6 +3,7 @@ import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { redactSensitive } from '@/shared/utils/security/sensitive-redaction.util.js';
 import {
   PRODUCTION_PROFILE_SESSION_SAMPLE_RATE,
   PRODUCTION_TRACES_SAMPLE_RATE,
@@ -83,16 +84,31 @@ export function initSentry(): void {
 
     // ── Privacy / noise filters ─────────────────────────────────────
     beforeSend(event) {
-      // Redact Authorization headers from breadcrumbs
+      // Recursively, case-insensitively scrub secrets (headers, query, body, breadcrumbs,
+      // extras) before the event leaves the process for Sentry.
       if (event.breadcrumbs) {
         for (const breadcrumb of event.breadcrumbs) {
-          if (breadcrumb.data?.Authorization) {
-            breadcrumb.data.Authorization = '[REDACTED]';
-          }
-          if (breadcrumb.data?.cookie) {
-            breadcrumb.data.cookie = '[REDACTED]';
+          if (breadcrumb.data) {
+            breadcrumb.data = redactSensitive(breadcrumb.data);
           }
         }
+      }
+      if (event.request) {
+        if (event.request.headers) {
+          event.request.headers = redactSensitive(event.request.headers);
+        }
+        if (event.request.cookies) {
+          event.request.cookies = redactSensitive(event.request.cookies);
+        }
+        if (event.request.data !== undefined) {
+          event.request.data = redactSensitive(event.request.data);
+        }
+      }
+      if (event.extra) {
+        event.extra = redactSensitive(event.extra);
+      }
+      if (event.contexts) {
+        event.contexts = redactSensitive(event.contexts);
       }
       return event;
     },

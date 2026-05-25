@@ -174,6 +174,12 @@ const envSchemaBase = z.object({
     .min(60_000)
     .max(3_600_000)
     .default(300_000),
+  /**
+   * Headroom (pooled connections) the worker process keeps free for the ~18 always-registered
+   * single-concurrency background workers (retention/tombstone/monitoring crons) on top of
+   * WORKER_CONCURRENCY. Heuristic buffer, not a per-worker reservation. Default 6.
+   */
+  WORKER_BACKGROUND_POOL_SLOT_RESERVE: z.coerce.number().int().min(0).max(64).default(6),
   /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. */
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).optional(),
   /** Connections reserved for admin, migrations, and monitoring (subtracted from Postgres max_connections). */
@@ -310,6 +316,13 @@ const envSchemaBase = z.object({
    * Ignored in production.
    */
   CAPTCHA_BYPASS_HEADER: z.string().min(1).optional(),
+  /**
+   * Production safety acknowledgement. CAPTCHA fail-closes on public auth routes, so a
+   * production deploy with CAPTCHA_PROVIDER=disabled (the default) would turn login and
+   * recovery into 401s. Boot fails in that case unless this is explicitly set to true,
+   * which also switches the middleware to fail-open (skip CAPTCHA) instead of 401.
+   */
+  CAPTCHA_DISABLED_ACK: booleanString('false'),
 
   // MCP server (Model Context Protocol) at POST /api/v1/mcp — exposes APIs as tools for frontends/agents
   ENABLE_MCP_SERVER: z
@@ -370,6 +383,22 @@ export const envSchema = envSchemaBase
     {
       message: 'CAPTCHA_SECRET is required when CAPTCHA_PROVIDER=turnstile',
       path: ['CAPTCHA_SECRET'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      if (data.CAPTCHA_PROVIDER === 'turnstile') {
+        return true;
+      }
+      return data.CAPTCHA_DISABLED_ACK === true;
+    },
+    {
+      message:
+        'In production, configure CAPTCHA (CAPTCHA_PROVIDER=turnstile + CAPTCHA_SECRET) or set CAPTCHA_DISABLED_ACK=true to explicitly run with CAPTCHA disabled (fail-open on auth routes)',
+      path: ['CAPTCHA_PROVIDER'],
     },
   )
   .refine(
@@ -441,6 +470,11 @@ export const envSchemaConditionallyRequiredKeys: ReadonlyArray<{
   {
     key: 'CAPTCHA_SECRET',
     condition: 'CAPTCHA_PROVIDER=turnstile (schema default is `disabled`)',
+  },
+  {
+    key: 'CAPTCHA_DISABLED_ACK',
+    condition:
+      'NODE_ENV=production with CAPTCHA_PROVIDER=disabled (must be true to acknowledge fail-open auth routes)',
   },
 ];
 

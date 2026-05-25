@@ -49,6 +49,7 @@ describe('createOrganizationController', () => {
       limit: 20,
       total: 0,
       total_pages: 0,
+      has_more: false,
     }),
   } as unknown as AuditService;
 
@@ -144,6 +145,7 @@ describe('createOrganizationController', () => {
       limit: 20,
       total: 100,
       total_pages: 5,
+      has_more: true,
     } as never);
     const response = await controller.listOrganizationAuditLogs(
       mockRequest({ params: { id: organizationPublicId }, query: { limit: '20' } }),
@@ -214,6 +216,7 @@ describe('createOrganizationController', () => {
       limit: 20,
       total: 100,
       total_pages: 5,
+      has_more: false,
     } as never);
     const response = await controller.listOrganizationAuditLogs(
       mockRequest({ params: { id: organizationPublicId }, query: { after: '100' } }),

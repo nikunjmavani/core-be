@@ -5,6 +5,7 @@ import {
   ValidationError,
 } from '@/shared/errors/index.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationRepository } from '../../organization/organization.repository.js';
 import type { MembershipRepository } from '../membership.repository.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -34,13 +35,15 @@ export class MemberInvitationService {
   ) {}
 
   async list(organization_public_id: string, limit = 100): Promise<MemberInvitationOutput[]> {
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const rows = await this.invitationRepository.findByOrganizationId(organization.id, limit);
-    type RowWithPublicId = (typeof rows)[number] & { membership_public_id: string };
-    return rows.map((row) =>
-      serializeMemberInvitation(row, (row as RowWithPublicId).membership_public_id),
-    );
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const rows = await this.invitationRepository.findByOrganizationId(organization.id, limit);
+      type RowWithPublicId = (typeof rows)[number] & { membership_public_id: string };
+      return rows.map((row) =>
+        serializeMemberInvitation(row, (row as RowWithPublicId).membership_public_id),
+      );
+    });
   }
 
   async create(
@@ -54,43 +57,45 @@ export class MemberInvitationService {
         { field: 'email', messageKey: 'errors:disposableEmail' },
       ]);
     }
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const membership = await this.membershipRepository.findByPublicId(
-      parsed.membership_id,
-      organization.id,
-    );
-    if (!membership) throw new NotFoundError('Membership');
-    const inviterId =
-      await this.organizationRepository.resolveUserIdByPublicId(invited_by_user_public_id);
-    if (inviterId === null) throw new NotFoundError('User');
-    const token = generateInvitationToken();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
-    const row = await this.invitationRepository.create({
-      membership_id: membership.id,
-      email: parsed.email,
-      token_hash: hashInvitationToken(token),
-      invited_by_user_id: inviterId,
-      expires_at: expiresAt,
-      created_by_user_id: inviterId,
-    });
-    const output = serializeMemberInvitation(row, membership.public_id);
-
-    await eventBus.emit({
-      type: MEMBER_INVITATION_EVENT.CREATED,
-      payload: {
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const membership = await this.membershipRepository.findByPublicId(
+        parsed.membership_id,
+        organization.id,
+      );
+      if (!membership) throw new NotFoundError('Membership');
+      const inviterId =
+        await this.organizationRepository.resolveUserIdByPublicId(invited_by_user_public_id);
+      if (inviterId === null) throw new NotFoundError('User');
+      const token = generateInvitationToken();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
+      const row = await this.invitationRepository.create({
+        membership_id: membership.id,
         email: parsed.email,
-        organization_name: organization.name ?? organization.public_id,
-        inviter_name: invited_by_user_public_id,
-        token,
-        invitation_public_id: output.id,
-        expires_in_days: parsed.expires_in_days,
-      } satisfies MemberInvitationEmailPayload,
-      timestamp: new Date(),
-    });
+        token_hash: hashInvitationToken(token),
+        invited_by_user_id: inviterId,
+        expires_at: expiresAt,
+        created_by_user_id: inviterId,
+      });
+      const output = serializeMemberInvitation(row, membership.public_id);
 
-    return { invitation: output, token };
+      await eventBus.emit({
+        type: MEMBER_INVITATION_EVENT.CREATED,
+        payload: {
+          email: parsed.email,
+          organization_name: organization.name ?? organization.public_id,
+          inviter_name: invited_by_user_public_id,
+          token,
+          invitation_public_id: output.id,
+          expires_in_days: parsed.expires_in_days,
+        } satisfies MemberInvitationEmailPayload,
+        timestamp: new Date(),
+      });
+
+      return { invitation: output, token };
+    });
   }
 
   async accept(invitation_public_id: string, body: unknown): Promise<MemberInvitationOutput> {
@@ -115,15 +120,17 @@ export class MemberInvitationService {
   }
 
   async revoke(organization_public_id: string, invitation_public_id: string): Promise<void> {
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const row = await this.invitationRepository.findByPublicId(invitation_public_id);
-    if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const membership = await this.membershipRepository.findById(row.membership_id);
-    if (!membership || membership.organization_id !== organization.id)
-      throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const updated = await this.invitationRepository.revoke(invitation_public_id);
-    if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const row = await this.invitationRepository.findByPublicId(invitation_public_id);
+      if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const membership = await this.membershipRepository.findById(row.membership_id);
+      if (!membership || membership.organization_id !== organization.id)
+        throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const updated = await this.invitationRepository.revoke(invitation_public_id);
+      if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    });
   }
 
   async resend(
@@ -132,44 +139,46 @@ export class MemberInvitationService {
     body: unknown,
   ): Promise<{ invitation: MemberInvitationOutput; token: string }> {
     const parsed = validateResendMemberInvitation(body);
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const row = await this.invitationRepository.findByPublicId(invitation_public_id);
-    if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const membership = await this.membershipRepository.findById(row.membership_id);
-    if (!membership || membership.organization_id !== organization.id)
-      throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    if (row.accepted_at)
-      throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
-    if (row.revoked_at)
-      throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
-    if (new Date() > row.expires_at)
-      throw new ValidationError('errors:validation.invitationExpired', undefined, {});
-    const token = generateInvitationToken();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
-    const updated = await this.invitationRepository.resend(
-      invitation_public_id,
-      hashInvitationToken(token),
-      expiresAt,
-    );
-    if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const output = serializeMemberInvitation(updated, membership.public_id);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const row = await this.invitationRepository.findByPublicId(invitation_public_id);
+      if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const membership = await this.membershipRepository.findById(row.membership_id);
+      if (!membership || membership.organization_id !== organization.id)
+        throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      if (row.accepted_at)
+        throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
+      if (row.revoked_at)
+        throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
+      if (new Date() > row.expires_at)
+        throw new ValidationError('errors:validation.invitationExpired', undefined, {});
+      const token = generateInvitationToken();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
+      const updated = await this.invitationRepository.resend(
+        invitation_public_id,
+        hashInvitationToken(token),
+        expiresAt,
+      );
+      if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const output = serializeMemberInvitation(updated, membership.public_id);
 
-    await eventBus.emit({
-      type: MEMBER_INVITATION_EVENT.RESENT,
-      payload: {
-        email: row.email,
-        organization_name: organization.name ?? organization.public_id,
-        inviter_name: 'Team member',
-        token,
-        invitation_public_id: output.id,
-        expires_in_days: parsed.expires_in_days,
-      } satisfies MemberInvitationEmailPayload,
-      timestamp: new Date(),
+      await eventBus.emit({
+        type: MEMBER_INVITATION_EVENT.RESENT,
+        payload: {
+          email: row.email,
+          organization_name: organization.name ?? organization.public_id,
+          inviter_name: 'Team member',
+          token,
+          invitation_public_id: output.id,
+          expires_in_days: parsed.expires_in_days,
+        } satisfies MemberInvitationEmailPayload,
+        timestamp: new Date(),
+      });
+
+      return { invitation: output, token };
     });
-
-    return { invitation: output, token };
   }
 
   async listPendingInvitations(user_public_id: string): Promise<MemberInvitationOutput[]> {

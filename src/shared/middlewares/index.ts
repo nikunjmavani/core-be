@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import requestLifecycleMiddleware from './request-lifecycle.middleware.js';
 import compressMiddleware from './compress.middleware.js';
 import cookieMiddleware from './cookie.middleware.js';
 import helmetMiddleware from './helmet.middleware.js';
@@ -21,12 +22,15 @@ import httpMetricsPlugin from '@/infrastructure/observability/metrics/http-metri
 import metricsMiddleware from './metrics.middleware.js';
 import shutdownMiddleware from './shutdown.middleware.js';
 
-const middlewarePlugins = [
+export const middlewarePlugins = [
+  // MUST be first: registers the only `onResponse` hook that orchestrates
+  // RLS-settle → idempotency-cache → outbox-flush in the correct order
+  // (Fastify onResponse hooks run FIFO).
+  requestLifecycleMiddleware,
   compressMiddleware,
   cookieMiddleware,
   helmetMiddleware,
   corsMiddleware,
-  rateLimitMiddleware,
   errorHandlerMiddleware,
   responseFormatMiddleware,
   apiVersioningMiddleware,
@@ -37,6 +41,12 @@ const middlewarePlugins = [
   zodTypeProviderMiddleware,
   authMiddleware,
   tenantMiddleware,
+  // MUST run after tenantMiddleware so `request.organizationId` is populated before the
+  // rate-limit keyGenerator/max read it (otherwise org-scoped limits silently degrade to
+  // per-IP). Kept before organizationRlsTransactionMiddleware so throttled requests never
+  // open a DB transaction. tenantMiddleware itself stays after i18nMiddleware because it
+  // throws a translated ValidationError on header/path mismatch.
+  rateLimitMiddleware,
   organizationRlsTransactionMiddleware,
   requestStatementTimeoutMiddleware,
   healthMiddleware,

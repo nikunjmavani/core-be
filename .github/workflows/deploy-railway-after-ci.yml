@@ -127,6 +127,8 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          # Shared config is synced to the worker service too so API and worker never drift.
+          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
           # --- Secrets (10): credentials, keys, tokens ---
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
@@ -165,11 +167,21 @@ jobs:
           METRICS_ENABLED: ${{ vars.METRICS_ENABLED }}
           CAPTCHA_PROVIDER: ${{ vars.CAPTCHA_PROVIDER }}
         run: |
-          for var in DATABASE_URL DATABASE_MIGRATION_URL REDIS_URL JWT_SECRET JWT_PRIVATE_KEY JWT_PUBLIC_KEY JWT_SIGNING_KID SECRETS_ENCRYPTION_KEY ALLOWED_ORIGINS COOKIE_SECURE DATABASE_SSL_ENABLED WEBHOOK_URL_ALLOWLIST NODE_ENV PORT HTTP_BIND_HOST LOG_LEVEL FRONTEND_URL RATE_LIMIT_MAX RATE_LIMIT_WINDOW_MS SENTRY_DSN SENTRY_ENVIRONMENT SENTRY_TRACES_SAMPLE_RATE SENTRY_PROFILE_SAMPLE_RATE AUDIT_RETENTION_DAYS AUTH_SESSION_RETENTION_DAYS NODE_OPTIONS DEPLOYMENT_TOTAL_REPLICA_COUNT DEPLOYMENT_API_REPLICA_COUNT DEPLOYMENT_WORKER_REPLICA_COUNT DATABASE_POOL_MAX POSTGRES_RESERVED_CONNECTIONS POSTGRES_MAX_CONNECTIONS METRICS_ENABLED METRICS_SCRAPE_TOKEN CAPTCHA_PROVIDER; do
-            val="${!var}"
-            if [ -n "$val" ]; then
-              railway variable set --service "$RAILWAY_SERVICE_ID" "$var=$val" || true
-            fi
+          set -euo pipefail
+          # Sync shared config to API and (when configured) the worker service so secrets,
+          # DB/Redis URLs, pool settings, and metrics config never drift between them.
+          services="$RAILWAY_SERVICE_ID"
+          if [ -n "${RAILWAY_WORKER_SERVICE_ID:-}" ]; then
+            services="$services $RAILWAY_WORKER_SERVICE_ID"
+          fi
+          for service in $services; do
+            for var in DATABASE_URL DATABASE_MIGRATION_URL REDIS_URL JWT_SECRET JWT_PRIVATE_KEY JWT_PUBLIC_KEY JWT_SIGNING_KID SECRETS_ENCRYPTION_KEY ALLOWED_ORIGINS COOKIE_SECURE DATABASE_SSL_ENABLED WEBHOOK_URL_ALLOWLIST NODE_ENV PORT HTTP_BIND_HOST LOG_LEVEL FRONTEND_URL RATE_LIMIT_MAX RATE_LIMIT_WINDOW_MS SENTRY_DSN SENTRY_ENVIRONMENT SENTRY_TRACES_SAMPLE_RATE SENTRY_PROFILE_SAMPLE_RATE AUDIT_RETENTION_DAYS AUTH_SESSION_RETENTION_DAYS NODE_OPTIONS DEPLOYMENT_TOTAL_REPLICA_COUNT DEPLOYMENT_API_REPLICA_COUNT DEPLOYMENT_WORKER_REPLICA_COUNT DATABASE_POOL_MAX POSTGRES_RESERVED_CONNECTIONS POSTGRES_MAX_CONNECTIONS METRICS_ENABLED METRICS_SCRAPE_TOKEN CAPTCHA_PROVIDER; do
+              val="${!var}"
+              if [ -n "$val" ]; then
+                # No `|| true`: a failed variable write must fail the deploy rather than ship stale config.
+                railway variable set --service "$service" "$var=$val"
+              fi
+            done
           done
 
       - name: Deploy API to Railway

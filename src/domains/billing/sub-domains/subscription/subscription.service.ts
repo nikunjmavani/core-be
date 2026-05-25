@@ -10,10 +10,15 @@ import {
   validateUpdateSubscription,
 } from './subscription.validator.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 
 /**
  * Coordinates plan lookups, payment-provider calls, and subscription updates
  * for a single organization.
+ *
+ * Under DATABASE_RLS_SCOPED_CONTEXTS, database reads/writes run inside
+ * `withOrganizationDatabaseContext` so RLS sees the org GUC. Stripe (paymentProvider)
+ * calls are network I/O and MUST stay OUTSIDE those contexts.
  */
 export class SubscriptionService {
   constructor(
@@ -50,20 +55,24 @@ export class SubscriptionService {
   }
 
   async list(organization_public_id: string) {
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    return this.repository.listByOrganization(organization.id);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      return this.repository.listByOrganization(organization.id);
+    });
   }
 
   async get(organization_public_id: string, subscription_public_id: string) {
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    const subscription = await this.repository.findByPublicId(
-      subscription_public_id,
-      organization.id,
-    );
-    if (!subscription) throw new NotFoundError('Subscription');
-    return subscription;
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      const subscription = await this.repository.findByPublicId(
+        subscription_public_id,
+        organization.id,
+      );
+      if (!subscription) throw new NotFoundError('Subscription');
+      return subscription;
+    });
   }
 
   async create(
@@ -73,16 +82,23 @@ export class SubscriptionService {
     idempotencyKey?: string,
   ) {
     const parsed = validateCreateSubscription(body);
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    const plan = await this.planService.requirePlanRecordByPublicId(parsed.plan_id);
-    const createdByUserInternalId =
-      await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
+    const { organization, plan, createdByUserInternalId } = await withOrganizationDatabaseContext(
+      organization_public_id,
+      async () => {
+        const organization =
+          await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        const plan = await this.planService.requirePlanRecordByPublicId(parsed.plan_id);
+        const createdByUserInternalId =
+          await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
+        return { organization, plan, createdByUserInternalId };
+      },
+    );
 
     const now = new Date();
     const periodEnd = new Date(now);
     periodEnd.setMonth(periodEnd.getMonth() + (parsed.billing_cycle === 'yearly' ? 12 : 1));
 
+    // Stripe network call — outside any database context.
     const paymentResult = await this.paymentProvider.createSubscription(
       omitUndefined({
         organization,
@@ -94,19 +110,21 @@ export class SubscriptionService {
     );
 
     try {
-      return await this.repository.create(
-        omitUndefined({
-          organization_id: organization.id,
-          plan_id: plan.id,
-          billing_cycle: parsed.billing_cycle.toUpperCase() as 'MONTHLY' | 'YEARLY',
-          current_period_start: now,
-          current_period_end: periodEnd,
-          trial_end: parsed.trial_end ? new Date(parsed.trial_end) : undefined,
-          created_by_user_id: createdByUserInternalId ?? undefined,
-          provider: paymentResult.providerSubscriptionId ? 'stripe' : undefined,
-          provider_subscription_id: paymentResult.providerSubscriptionId,
-          provider_customer_id: paymentResult.providerCustomerId,
-        }),
+      return await withOrganizationDatabaseContext(organization_public_id, async () =>
+        this.repository.create(
+          omitUndefined({
+            organization_id: organization.id,
+            plan_id: plan.id,
+            billing_cycle: parsed.billing_cycle.toUpperCase() as 'MONTHLY' | 'YEARLY',
+            current_period_start: now,
+            current_period_end: periodEnd,
+            trial_end: parsed.trial_end ? new Date(parsed.trial_end) : undefined,
+            created_by_user_id: createdByUserInternalId ?? undefined,
+            provider: paymentResult.providerSubscriptionId ? 'stripe' : undefined,
+            provider_subscription_id: paymentResult.providerSubscriptionId,
+            provider_customer_id: paymentResult.providerCustomerId,
+          }),
+        ),
       );
     } catch (error) {
       if (paymentResult.providerSubscriptionId) {
@@ -118,35 +136,44 @@ export class SubscriptionService {
 
   async update(organization_public_id: string, subscription_public_id: string, body: unknown) {
     const parsed = validateUpdateSubscription(body);
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    const updated = await this.repository.update(
-      subscription_public_id,
-      organization.id,
-      omitUndefined({ cancel_at_period_end: parsed.cancel_at_period_end }),
-    );
-    if (!updated) throw new NotFoundError('Subscription');
-    return updated;
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization =
+        await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      const updated = await this.repository.update(
+        subscription_public_id,
+        organization.id,
+        omitUndefined({ cancel_at_period_end: parsed.cancel_at_period_end }),
+      );
+      if (!updated) throw new NotFoundError('Subscription');
+      return updated;
+    });
   }
 
   async changePlan(organization_public_id: string, subscription_public_id: string, body: unknown) {
     const parsed = validateChangePlan(body);
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-    const plan = await this.planService.requirePlanRecordByPublicId(parsed.plan_id);
-    const subscription = await this.repository.findByPublicId(
-      subscription_public_id,
-      organization.id,
-    );
-    if (!subscription) throw new NotFoundError('Subscription');
+    const { organization, plan, subscription, previousPlan } =
+      await withOrganizationDatabaseContext(organization_public_id, async () => {
+        const organization =
+          await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        const plan = await this.planService.requirePlanRecordByPublicId(parsed.plan_id);
+        const subscription = await this.repository.findByPublicId(
+          subscription_public_id,
+          organization.id,
+        );
+        if (!subscription) throw new NotFoundError('Subscription');
+        const previousPlan = await this.planService.requirePlanRecordByInternalId(
+          subscription.plan_id,
+        );
+        return { organization, plan, subscription, previousPlan };
+      });
 
-    const previousPlan = await this.planService.requirePlanRecordByInternalId(subscription.plan_id);
     const providerPriceId = this.paymentProvider.getProviderPriceId(
       plan,
       subscription.billing_cycle === 'YEARLY' ? 'yearly' : 'monthly',
     );
     let providerPlanUpdated = false;
 
+    // Stripe network call — outside any database context.
     if (subscription.provider_subscription_id && providerPriceId) {
       providerPlanUpdated = await this.paymentProvider.updateSubscriptionPrice(
         subscription.provider_subscription_id,
@@ -157,11 +184,13 @@ export class SubscriptionService {
     const periodStart = new Date(subscription.current_period_start);
     const periodEnd = new Date(subscription.current_period_end);
     try {
-      const updated = await this.repository.update(subscription_public_id, organization.id, {
-        plan_id: plan.id,
-        current_period_start: periodStart,
-        current_period_end: periodEnd,
-      });
+      const updated = await withOrganizationDatabaseContext(organization_public_id, async () =>
+        this.repository.update(subscription_public_id, organization.id, {
+          plan_id: plan.id,
+          current_period_start: periodStart,
+          current_period_end: periodEnd,
+        }),
+      );
       if (!updated) throw new NotFoundError('Subscription');
       return updated;
     } catch (error) {
@@ -182,46 +211,62 @@ export class SubscriptionService {
   }
 
   async cancel(organization_public_id: string, subscription_public_id: string) {
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-
-    const subscription = await this.repository.findByPublicId(
-      subscription_public_id,
-      organization.id,
+    const { organization, subscription } = await withOrganizationDatabaseContext(
+      organization_public_id,
+      async () => {
+        const organization =
+          await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        const subscription = await this.repository.findByPublicId(
+          subscription_public_id,
+          organization.id,
+        );
+        if (!subscription) throw new NotFoundError('Subscription');
+        return { organization, subscription };
+      },
     );
-    if (!subscription) throw new NotFoundError('Subscription');
 
+    // Stripe network call — outside any database context.
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.cancelSubscriptionAtPeriodEnd(
         subscription.provider_subscription_id,
       );
     }
 
-    const updated = await this.repository.update(subscription_public_id, organization.id, {
-      cancel_at_period_end: true,
-    });
+    const updated = await withOrganizationDatabaseContext(organization_public_id, async () =>
+      this.repository.update(subscription_public_id, organization.id, {
+        cancel_at_period_end: true,
+      }),
+    );
     if (!updated) throw new NotFoundError('Subscription');
     return updated;
   }
 
   async resume(organization_public_id: string, subscription_public_id: string) {
-    const organization =
-      await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-
-    const subscription = await this.repository.findByPublicId(
-      subscription_public_id,
-      organization.id,
+    const { organization, subscription } = await withOrganizationDatabaseContext(
+      organization_public_id,
+      async () => {
+        const organization =
+          await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        const subscription = await this.repository.findByPublicId(
+          subscription_public_id,
+          organization.id,
+        );
+        if (!subscription) throw new NotFoundError('Subscription');
+        return { organization, subscription };
+      },
     );
-    if (!subscription) throw new NotFoundError('Subscription');
 
+    // Stripe network call — outside any database context.
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.resumeSubscription(subscription.provider_subscription_id);
     }
 
-    const updated = await this.repository.update(subscription_public_id, organization.id, {
-      cancel_at_period_end: false,
-      status: 'ACTIVE',
-    });
+    const updated = await withOrganizationDatabaseContext(organization_public_id, async () =>
+      this.repository.update(subscription_public_id, organization.id, {
+        cancel_at_period_end: false,
+        status: 'ACTIVE',
+      }),
+    );
     if (!updated) throw new NotFoundError('Subscription');
     return updated;
   }

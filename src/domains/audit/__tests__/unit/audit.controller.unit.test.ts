@@ -53,6 +53,7 @@ describe('createAuditController', () => {
       page: 1,
       limit: 20,
       total_pages: 1,
+      has_more: false,
     }),
   } as unknown as AuditService;
 
@@ -60,7 +61,7 @@ describe('createAuditController', () => {
 
   it('listLogs returns paginated audit entries with sanitized metadata', async () => {
     const response = await controller.listLogs(
-      mockRequest({ query: { page: 1, limit: 20 } }),
+      mockRequest({ query: { page: 1, limit: 20, include_total: 'true' } }),
       mockReply(),
     );
     expect(service.list).toHaveBeenCalled();
@@ -82,9 +83,10 @@ describe('createAuditController', () => {
       page: 1,
       limit: 2,
       total_pages: 2,
+      has_more: true,
     } as never);
     const response = await controller.listLogs(
-      mockRequest({ query: { page: 1, limit: 2 } }),
+      mockRequest({ query: { page: 1, limit: 2, include_total: 'true' } }),
       mockReply(),
     );
     expect(response).toMatchObject({
@@ -104,6 +106,7 @@ describe('createAuditController', () => {
       page: 1,
       limit: 20,
       total_pages: 1,
+      has_more: false,
     } as never);
     const response = await controller.listLogs(mockRequest(), mockReply());
     expect(response).toMatchObject({

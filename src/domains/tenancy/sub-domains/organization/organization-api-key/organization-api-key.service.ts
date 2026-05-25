@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationRepository } from '../organization.repository.js';
 import type { OrganizationApiKeyRepository } from './organization-api-key.repository.js';
 import type {
@@ -38,30 +39,34 @@ export class OrganizationApiKeyService {
   ) {}
 
   async list(organization_public_id: string, query: unknown) {
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
     const parsed = validateListOrganizationApiKeysQuery(query);
-    const page = parsed.page ?? 1;
-    const result = await this.apiKeyRepository.findByOrganizationId(
-      organization.id,
-      page,
-      parsed.limit,
-    );
-    return {
-      ...result,
-      items: result.items.map((row) => serializeOrganizationApiKey(row, organization_public_id)),
-    };
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const page = parsed.page ?? 1;
+      const result = await this.apiKeyRepository.findByOrganizationId(
+        organization.id,
+        page,
+        parsed.limit,
+      );
+      return {
+        ...result,
+        items: result.items.map((row) => serializeOrganizationApiKey(row, organization_public_id)),
+      };
+    });
   }
 
   async getByPublicId(
     organization_public_id: string,
     api_key_public_id: string,
   ): Promise<OrganizationApiKeyOutput> {
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const row = await this.apiKeyRepository.findByPublicId(api_key_public_id, organization.id);
-    if (!row) throw new NotFoundError('API key');
-    return serializeOrganizationApiKey(row, organization_public_id);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const row = await this.apiKeyRepository.findByPublicId(api_key_public_id, organization.id);
+      if (!row) throw new NotFoundError('API key');
+      return serializeOrganizationApiKey(row, organization_public_id);
+    });
   }
 
   async create(
@@ -70,29 +75,31 @@ export class OrganizationApiKeyService {
     created_by_user_public_id: string,
   ): Promise<CreateOrganizationApiKeyResult> {
     const parsed = validateCreateOrganizationApiKey(body);
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const userId =
-      await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id);
-    const rawKey = generateApiKey();
-    const keyHash = hashApiKey(rawKey);
-    const keyPrefix = getKeyPrefix(rawKey);
-    let expiresAt: Date | null = null;
-    if (parsed.expires_in_days) {
-      expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
-    }
-    const row = await this.apiKeyRepository.create({
-      organization_id: organization.id,
-      name: parsed.name,
-      key_hash: keyHash,
-      key_prefix: keyPrefix,
-      scopes: parsed.scopes,
-      expires_at: expiresAt,
-      created_by_user_id: userId,
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const userId =
+        await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id);
+      const rawKey = generateApiKey();
+      const keyHash = hashApiKey(rawKey);
+      const keyPrefix = getKeyPrefix(rawKey);
+      let expiresAt: Date | null = null;
+      if (parsed.expires_in_days) {
+        expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
+      }
+      const row = await this.apiKeyRepository.create({
+        organization_id: organization.id,
+        name: parsed.name,
+        key_hash: keyHash,
+        key_prefix: keyPrefix,
+        scopes: parsed.scopes,
+        expires_at: expiresAt,
+        created_by_user_id: userId,
+      });
+      const apiKey = serializeOrganizationApiKey(row, organization_public_id);
+      return { api_key: apiKey, raw_key: rawKey };
     });
-    const apiKey = serializeOrganizationApiKey(row, organization_public_id);
-    return { api_key: apiKey, raw_key: rawKey };
   }
 
   async update(
@@ -102,27 +109,31 @@ export class OrganizationApiKeyService {
     updated_by_user_public_id: string,
   ): Promise<OrganizationApiKeyOutput> {
     const parsed = validateUpdateOrganizationApiKey(body);
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const row = await this.apiKeyRepository.findByPublicId(api_key_public_id, organization.id);
-    if (!row) throw new NotFoundError('API key');
-    const userId =
-      await this.organizationRepository.resolveUserIdByPublicId(updated_by_user_public_id);
-    const updated = await this.apiKeyRepository.update(
-      api_key_public_id,
-      organization.id,
-      omitUndefined(parsed),
-      userId ?? null,
-    );
-    if (!updated) throw new NotFoundError('API key');
-    return serializeOrganizationApiKey(updated, organization_public_id);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const row = await this.apiKeyRepository.findByPublicId(api_key_public_id, organization.id);
+      if (!row) throw new NotFoundError('API key');
+      const userId =
+        await this.organizationRepository.resolveUserIdByPublicId(updated_by_user_public_id);
+      const updated = await this.apiKeyRepository.update(
+        api_key_public_id,
+        organization.id,
+        omitUndefined(parsed),
+        userId ?? null,
+      );
+      if (!updated) throw new NotFoundError('API key');
+      return serializeOrganizationApiKey(updated, organization_public_id);
+    });
   }
 
   async delete(organization_public_id: string, api_key_public_id: string): Promise<void> {
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const deleted = await this.apiKeyRepository.softDelete(api_key_public_id, organization.id);
-    if (!deleted) throw new NotFoundError('API key');
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const deleted = await this.apiKeyRepository.softDelete(api_key_public_id, organization.id);
+      if (!deleted) throw new NotFoundError('API key');
+    });
   }
 
   async authenticate(
@@ -152,15 +163,20 @@ export class OrganizationApiKeyService {
     api_key_public_id: string,
     created_by_user_public_id: string,
   ): Promise<CreateOrganizationApiKeyResult> {
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const existing = await this.apiKeyRepository.findByPublicId(api_key_public_id, organization.id);
-    if (!existing) throw new NotFoundError('API key');
-    await this.apiKeyRepository.softDelete(api_key_public_id, organization.id);
-    return this.create(
-      organization_public_id,
-      { name: existing.name, scopes: existing.scopes },
-      created_by_user_public_id,
-    );
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const existing = await this.apiKeyRepository.findByPublicId(
+        api_key_public_id,
+        organization.id,
+      );
+      if (!existing) throw new NotFoundError('API key');
+      await this.apiKeyRepository.softDelete(api_key_public_id, organization.id);
+      return this.create(
+        organization_public_id,
+        { name: existing.name, scopes: existing.scopes },
+        created_by_user_public_id,
+      );
+    });
   }
 }

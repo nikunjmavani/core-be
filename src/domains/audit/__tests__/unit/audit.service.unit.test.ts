@@ -23,7 +23,9 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
 describe('AuditService', () => {
   const repository = {
     insert: vi.fn().mockResolvedValue(undefined),
-    findWithFilters: vi.fn().mockResolvedValue({ items: [{ action: 'user.login' }], total: 1 }),
+    findWithFilters: vi
+      .fn()
+      .mockResolvedValue({ items: [{ action: 'user.login' }], total: 1, hasMore: false }),
   } as unknown as AuditRepository;
 
   const organizationService = {
@@ -105,9 +107,28 @@ describe('AuditService', () => {
   });
 
   it('list returns empty page when no rows', async () => {
-    vi.mocked(repository.findWithFilters).mockResolvedValue({ items: [], total: 0 });
+    vi.mocked(repository.findWithFilters).mockResolvedValue({
+      items: [],
+      total: 0,
+      hasMore: false,
+    });
     const result = await service.list({ page: 1, limit: 20 });
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
+  });
+
+  it('list skips the total when include_total=false and derives has_more', async () => {
+    vi.mocked(repository.findWithFilters).mockResolvedValue({
+      items: [{ action: 'user.login' }],
+      total: null,
+      hasMore: true,
+    } as never);
+    const result = await service.list({ page: 1, limit: 20, include_total: 'false' });
+    expect(repository.findWithFilters).toHaveBeenCalledWith(
+      expect.objectContaining({ include_total: false }),
+    );
+    expect(result.total).toBeNull();
+    expect(result.total_pages).toBeNull();
+    expect(result.has_more).toBe(true);
   });
 });
