@@ -22,7 +22,6 @@ describe('createNotificationController', () => {
     listForUser: vi.fn().mockResolvedValue({
       items: [notification],
       total: null,
-      page: undefined,
       limit: 25,
       has_more: false,
       next_cursor: null,

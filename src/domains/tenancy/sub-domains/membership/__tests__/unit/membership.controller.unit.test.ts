@@ -9,7 +9,7 @@ function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
     auth: { userId: generatePublicId(), role: 'USER' },
     params: {},
     body: {},
-    query: { page: 1, limit: 20 },
+    query: { limit: 20 },
     headers: {},
     id: 'request-id',
     ...overrides,

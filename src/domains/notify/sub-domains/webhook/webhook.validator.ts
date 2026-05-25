@@ -1,4 +1,5 @@
 import { ValidationError } from '@/shared/errors/index.js';
+import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
   CreateWebhookDto,
   listWebhookDeliveryAttemptsQueryDto,
@@ -11,6 +12,7 @@ import {
 } from './webhook.dto.js';
 
 export function validateListWebhooksQuery(data: unknown): ListWebhooksQueryInput {
+  ensureCursorOnlyPagination(data);
   const result = listWebhooksQueryDto.safeParse(data);
   if (!result.success) {
     throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
@@ -21,6 +23,7 @@ export function validateListWebhooksQuery(data: unknown): ListWebhooksQueryInput
 export function validateListWebhookDeliveryAttemptsQuery(
   data: unknown,
 ): ListWebhookDeliveryAttemptsQueryInput {
+  ensureCursorOnlyPagination(data);
   const result = listWebhookDeliveryAttemptsQueryDto.safeParse(data);
   if (!result.success) {
     throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);

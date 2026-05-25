@@ -31,7 +31,6 @@ describe('createMemberInvitationController (cursor pagination)', () => {
     list: vi.fn().mockResolvedValue({
       items: [invitation],
       total: null,
-      page: undefined,
       limit: 25,
       has_more: false,
       next_cursor: null,
@@ -64,7 +63,6 @@ describe('createMemberInvitationController (cursor pagination)', () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [invitation, invitation],
       total: null,
-      page: undefined,
       limit: 2,
       has_more: true,
       next_cursor: 'opaque-invitation-cursor',
@@ -96,7 +94,6 @@ describe('createMemberInvitationController (cursor pagination)', () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [invitation],
       total: null,
-      page: undefined,
       limit: 25,
       has_more: false,
       next_cursor: null,
@@ -110,40 +107,10 @@ describe('createMemberInvitationController (cursor pagination)', () => {
     });
   });
 
-  it('listMemberInvitations sets next=page+1 string and exposes estimated_total for legacy offset', async () => {
-    vi.mocked(service.list).mockResolvedValueOnce({
-      items: [invitation, invitation],
-      total: 5,
-      page: 1,
-      limit: 2,
-      has_more: true,
-      next_cursor: null,
-    });
-    const response = await controller.listMemberInvitations(
-      mockRequest({
-        params: { id: organizationPublicId },
-        query: { page: '1', limit: '2', include_total: 'true' },
-      }),
-      mockReply(),
-    );
-
-    expect(response).toMatchObject({
-      meta: {
-        pagination: expect.objectContaining({
-          has_more: true,
-          next: '2',
-          per_page: 2,
-          estimated_total: 5,
-        }),
-      },
-    });
-  });
-
   it('listMemberInvitations exposes estimated_total when keyset is combined with include_total', async () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [invitation],
       total: 1,
-      page: undefined,
       limit: 25,
       has_more: false,
       next_cursor: null,

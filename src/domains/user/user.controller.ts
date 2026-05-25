@@ -82,10 +82,7 @@ export function createUserController({
       const result = await userService.listUsers(request.query);
       return paginatedResponse(result.items, getRequestIdentifier(request), {
         per_page: result.limit,
-        next:
-          result.page !== undefined && result.has_more
-            ? String(result.page + 1)
-            : result.next_cursor,
+        next: result.next_cursor,
         has_more: result.has_more,
         ...(result.total !== null ? { estimated_total: result.total } : {}),
       });

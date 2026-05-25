@@ -32,6 +32,7 @@
     "invitationAlreadyDeclined": "Invitation already declined",
     "invalidPolicyId": "Invalid policy id",
     "invalidPagination": "Invalid pagination",
+    "legacyPageNotSupported": "Legacy `page` pagination is no longer supported on this route. Use cursor-based pagination via `limit` and `after` (opaque cursor from `meta.pagination.next`).",
     "logoNotFound": "Logo object not found in storage",
     "avatarInvalidKey": "Invalid avatar key: must start with \"avatars/\"",
     "avatarNotFound": "Avatar file not found in storage",

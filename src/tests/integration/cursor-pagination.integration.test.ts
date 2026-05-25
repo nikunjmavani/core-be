@@ -60,7 +60,7 @@ describe('Cursor pagination — integration', () => {
     expect(secondBody.data[0]?.id).not.toBe(firstBody.data[0]?.id);
   });
 
-  it('GET /organizations with page returns deprecation headers before sunset', async () => {
+  it('GET /organizations rejects legacy page query parameter with a clear cursor-only message', async () => {
     const owner = await createTestUser();
     const token = await generateSuperAdminToken(owner.public_id);
     await createTestOrganization({ ownerUserId: owner.id });
@@ -71,8 +71,18 @@ describe('Cursor pagination — integration', () => {
       token,
       query: { page: '1', limit: '10' },
     });
-    expect(response.statusCode).toBe(200);
-    expect(response.headers.deprecation).toBeDefined();
-    expect(response.headers.sunset).toBeDefined();
+    expect(response.statusCode).toBe(400);
+    const body = response.json() as {
+      error: {
+        type: string;
+        detail: string;
+        errors?: Array<{ field: string; message: string }>;
+      };
+    };
+    expect(body.error.type).toBe('validation_error');
+    expect(body.error.detail).toMatch(/cursor-based pagination/i);
+    expect(body.error.errors).toEqual([
+      expect.objectContaining({ field: 'page', message: expect.stringMatching(/cursor/i) }),
+    ]);
   });
 });

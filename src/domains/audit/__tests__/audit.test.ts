@@ -65,13 +65,13 @@ describe('Audit Domain — Integration', () => {
       expect(response.statusCode).toBe(200);
     });
 
-    it('should accept pagination query parameters', async () => {
+    it('should accept cursor pagination query parameters', async () => {
       const user = await createTestUser();
       const token = await generateSuperAdminToken(user.public_id);
       const response = await injectAuthenticated(app, {
         url: '/api/v1/audit/logs',
         token,
-        query: { page: '1', limit: '5' },
+        query: { limit: '5' },
       });
       expect(response.statusCode).toBe(200);
       const body = response.json() as {

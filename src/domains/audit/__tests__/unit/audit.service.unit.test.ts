@@ -74,7 +74,6 @@ describe('AuditService', () => {
     const organizationPublicId = generatePublicId();
     const actorPublicId = generatePublicId();
     const result = await service.list({
-      page: 1,
       limit: 20,
       organization_id: organizationPublicId,
       actor_user_id: actorPublicId,
@@ -87,7 +86,6 @@ describe('AuditService', () => {
         actor_user_id: 5,
         resource_type: 'user',
         action: 'user.login',
-        offset_page: 1,
         limit: 20,
       }),
     );
@@ -97,14 +95,14 @@ describe('AuditService', () => {
 
   it('list omits organization id when organization not found', async () => {
     vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
-    await service.list({ page: 1, limit: 20, organization_id: generatePublicId() });
+    await service.list({ limit: 20, organization_id: generatePublicId() });
     const [filters] = vi.mocked(repository.findWithFilters).mock.calls[0] ?? [];
     expect(filters).not.toHaveProperty('organization_id');
   });
 
   it('list omits actor id when user not found', async () => {
     vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
-    await service.list({ page: 1, limit: 20, actor_user_id: generatePublicId() });
+    await service.list({ limit: 20, actor_user_id: generatePublicId() });
     const [filters] = vi.mocked(repository.findWithFilters).mock.calls[0] ?? [];
     expect(filters).not.toHaveProperty('actor_user_id');
   });
@@ -116,7 +114,7 @@ describe('AuditService', () => {
       hasMore: false,
       nextCursor: null,
     });
-    const result = await service.list({ page: 1, limit: 20 });
+    const result = await service.list({ limit: 20 });
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
   });
@@ -133,7 +131,6 @@ describe('AuditService', () => {
       expect.objectContaining({ include_total: false }),
     );
     expect(result.total).toBeNull();
-    expect(result.total_pages).toBeNull();
     expect(result.has_more).toBe(true);
     expect(result.next_cursor).toBe('cursor_2');
   });

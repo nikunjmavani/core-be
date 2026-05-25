@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
+  LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
+  LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+} from '@/shared/utils/http/pagination.util.js';
+import {
   validateCreateWebhook,
   validateListWebhookDeliveryAttemptsQuery,
   validateListWebhooksQuery,
@@ -54,7 +58,6 @@ describe('webhook.validator', () => {
       const parsed = validateListWebhooksQuery({});
       expect(parsed).toMatchObject({ include_total: 'false' });
       expect(parsed.after).toBeUndefined();
-      expect(parsed.page).toBeUndefined();
       expect(typeof parsed.limit).toBe('number');
     });
 
@@ -67,11 +70,23 @@ describe('webhook.validator', () => {
       expect(parsed.limit).toBe(25);
     });
 
-    it('accepts legacy page for offset deprecation window', () => {
-      const parsed = validateListWebhooksQuery({ page: '2', limit: '5', include_total: 'true' });
-      expect(parsed.page).toBe(2);
-      expect(parsed.limit).toBe(5);
-      expect(parsed.include_total).toBe('true');
+    it('rejects legacy page query parameter with a cursor-only message', () => {
+      try {
+        validateListWebhooksQuery({ page: '2', limit: '5' });
+        expect.fail('expected ValidationError');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError);
+        const validationError = error as ValidationError;
+        expect(validationError.statusCode).toBe(400);
+        expect(validationError.messageKey).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY);
+        expect(validationError.errors).toEqual([
+          {
+            field: 'page',
+            messageKey: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+            message: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
+          },
+        ]);
+      }
     });
 
     it('rejects unknown query keys (strict)', () => {
@@ -93,7 +108,6 @@ describe('webhook.validator', () => {
       const parsed = validateListWebhookDeliveryAttemptsQuery({});
       expect(parsed.include_total).toBe('false');
       expect(parsed.after).toBeUndefined();
-      expect(parsed.page).toBeUndefined();
     });
 
     it('accepts after cursor and include_total=true together', () => {

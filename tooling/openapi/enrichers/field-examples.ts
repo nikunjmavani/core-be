@@ -138,7 +138,6 @@ export function generateFieldExample(fieldName: string, schema: Record<string, u
   if (lowerField === 'search') return 'john';
 
   // ── Pagination fields ──
-  if (lowerField === 'page') return 1;
   if (lowerField === 'limit') return 20;
   if (lowerField === 'after') {
     return 'eyJjcmVhdGVkX2F0IjoiMjAyNi0wNS0xOVQxMjowMDowMC4wMDBaIiwicHVibGljX2lkIjoiYWJjMTIzNDU2Nzg5MDEyMzQ1Njc4IiwiaWQiOjQyfQ';

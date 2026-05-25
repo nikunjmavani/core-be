@@ -63,7 +63,6 @@ export class MembershipService {
         organization.id,
         omitUndefined({
           after: parsed.after,
-          offset_page: parsed.page,
           limit: parsed.limit,
         }),
       );

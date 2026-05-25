@@ -8,7 +8,6 @@ import type { UserService } from '@/domains/user/user.service.js';
 
 export interface NotificationListServiceOptions {
   after?: string;
-  page?: number;
   limit?: number;
   include_total?: boolean;
 }
@@ -45,7 +44,6 @@ export class NotificationService {
         userId,
         omitUndefined({
           after: resolved.after,
-          offset_page: resolved.page,
           limit,
           include_total: resolved.include_total,
         }),

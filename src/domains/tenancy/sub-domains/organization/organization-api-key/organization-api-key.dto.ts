@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cursorListQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 export const createOrganizationApiKeyDto = z
@@ -17,7 +17,7 @@ export const updateOrganizationApiKeyDto = z
   })
   .strict();
 
-export const listOrganizationApiKeysQueryDto = cursorListQuerySchema;
+export const listOrganizationApiKeysQueryDto = cursorPaginationSchema.strict();
 
 export type CreateOrganizationApiKeyInput = z.infer<typeof createOrganizationApiKeyDto>;
 export type UpdateOrganizationApiKeyInput = z.infer<typeof updateOrganizationApiKeyDto>;

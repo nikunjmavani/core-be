@@ -55,7 +55,6 @@ describe('UserService', () => {
     findMany: vi.fn().mockResolvedValue({
       items: [userRow],
       total: null,
-      page: undefined,
       limit: 20,
       has_more: false,
       next_cursor: null,

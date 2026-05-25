@@ -39,10 +39,10 @@ describe('OrganizationService', () => {
     findBySlug: vi.fn().mockResolvedValue(null),
     findAll: vi.fn().mockResolvedValue({
       items: [organizationRow],
-      total: 1,
-      page: 1,
+      total: null,
       limit: 20,
-      total_pages: 1,
+      has_more: false,
+      next_cursor: null,
     }),
     create: vi.fn().mockResolvedValue(organizationRow),
     update: vi.fn().mockResolvedValue(organizationRow),
@@ -54,10 +54,10 @@ describe('OrganizationService', () => {
     userCanAccessOrganization: vi.fn().mockResolvedValue(true),
     findAllForUser: vi.fn().mockResolvedValue({
       items: [organizationRow],
-      total: 1,
-      page: 1,
+      total: null,
       limit: 20,
-      total_pages: 1,
+      has_more: false,
+      next_cursor: null,
     }),
   } as unknown as OrganizationRepository;
 
@@ -97,7 +97,7 @@ describe('OrganizationService', () => {
   });
 
   it('list returns paginated organizations', async () => {
-    const result = await service.list({ page: 1, limit: 20 }, 'user_public');
+    const result = await service.list({ limit: 20 }, 'user_public');
     expect(result.items).toHaveLength(1);
   });
 

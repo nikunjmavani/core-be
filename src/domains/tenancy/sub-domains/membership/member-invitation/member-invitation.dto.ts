@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { organizationIdParamsDto } from '@/domains/tenancy/sub-domains/organization/organization.dto.js';
-import { cursorListQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedEmail, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 export const listMemberInvitationsParamsDto = organizationIdParamsDto;
 
-export const listMemberInvitationsQueryDto = cursorListQuerySchema
+export const listMemberInvitationsQueryDto = cursorPaginationSchema
   .extend({
     include_total: z.enum(['true', 'false']).optional().default('false'),
   })

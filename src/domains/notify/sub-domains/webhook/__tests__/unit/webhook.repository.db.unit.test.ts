@@ -106,7 +106,6 @@ describe('WebhookRepository (database)', () => {
       expect(page1.next_cursor).toBeTypeOf('string');
       expect(page1.next_cursor).not.toBe('');
       expect(page1.total).toBeNull();
-      expect(page1.page).toBeUndefined();
     });
 
     it('navigating with `after` returns the next batch and stops at the final page', async () => {
@@ -169,31 +168,6 @@ describe('WebhookRepository (database)', () => {
       expect(result.total).toBe(3);
       expect(result.items).toHaveLength(2);
       expect(result.has_more).toBe(true);
-    });
-
-    it('supports legacy offset_page (deprecated) by returning total and the page metadata', async () => {
-      const user = await createTestUser();
-      const organization = await createTestOrganization({ ownerUserId: user.id });
-      await createWebhooks(organization.id, user.id, 3);
-
-      const page1 = await repository.listByOrganization(organization.id, {
-        limit: 2,
-        offset_page: 1,
-      });
-      const page2 = await repository.listByOrganization(organization.id, {
-        limit: 2,
-        offset_page: 2,
-      });
-
-      expect(page1.items).toHaveLength(2);
-      expect(page1.total).toBe(3);
-      expect(page1.page).toBe(1);
-      expect(page1.has_more).toBe(true);
-
-      expect(page2.items).toHaveLength(1);
-      expect(page2.total).toBe(3);
-      expect(page2.page).toBe(2);
-      expect(page2.has_more).toBe(false);
     });
 
     it('does not include soft-deleted webhooks in results or total', async () => {

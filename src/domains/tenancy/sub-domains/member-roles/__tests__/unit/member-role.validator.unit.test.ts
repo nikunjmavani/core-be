@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
+import { LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY } from '@/shared/utils/http/pagination.util.js';
 import {
   validateCreateMemberRole,
   validateListMemberRolesQuery,
@@ -17,6 +18,16 @@ describe('member-role validators', () => {
 
   it('validateListMemberRolesQuery applies defaults', () => {
     expect(validateListMemberRolesQuery({})).toMatchObject({ limit: 25 });
+  });
+
+  it('validateListMemberRolesQuery rejects legacy page query parameter', () => {
+    try {
+      validateListMemberRolesQuery({ page: '1', limit: '10' });
+      expect.fail('expected ValidationError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).messageKey).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY);
+    }
   });
 
   it('validateCreateMemberRole throws for empty name', () => {

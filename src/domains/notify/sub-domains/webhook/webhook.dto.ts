@@ -1,14 +1,14 @@
 import { z } from 'zod';
-import { cursorListQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedString } from '@/shared/utils/validation/validation.util.js';
 
-export const listWebhooksQueryDto = cursorListQuerySchema
+export const listWebhooksQueryDto = cursorPaginationSchema
   .extend({
     include_total: z.enum(['true', 'false']).optional().default('false'),
   })
   .strict();
 
-export const listWebhookDeliveryAttemptsQueryDto = cursorListQuerySchema
+export const listWebhookDeliveryAttemptsQueryDto = cursorPaginationSchema
   .extend({
     include_total: z.enum(['true', 'false']).optional().default('false'),
   })

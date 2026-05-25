@@ -1,4 +1,5 @@
 import { ValidationError } from '@/shared/errors/index.js';
+import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
   createMembershipDto,
   updateMembershipDto,
@@ -29,6 +30,7 @@ export function validateUpdateMembership(data: unknown): UpdateMembershipInput {
 }
 
 export function validateListMembershipsQuery(data: unknown): ListMembershipsQueryInput {
+  ensureCursorOnlyPagination(data);
   const result = listMembershipsQueryDto.safeParse(data);
   if (!result.success) {
     throw new ValidationError(

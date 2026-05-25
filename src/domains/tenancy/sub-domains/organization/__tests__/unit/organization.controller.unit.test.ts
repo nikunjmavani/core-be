@@ -53,7 +53,6 @@ describe('createOrganizationController', () => {
       items: [],
       limit: 20,
       total: null,
-      total_pages: 0,
       has_more: false,
       next_cursor: null,
     }),
@@ -153,7 +152,6 @@ describe('createOrganizationController', () => {
       items: [],
       limit: 20,
       total: null,
-      total_pages: 5,
       has_more: true,
       next_cursor: 'audit_cursor_2',
     } as never);
@@ -224,7 +222,6 @@ describe('createOrganizationController', () => {
       items: [],
       limit: 20,
       total: null,
-      total_pages: 5,
       has_more: false,
       next_cursor: null,
     } as never);

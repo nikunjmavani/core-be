@@ -4,6 +4,7 @@ import {
   STRICT_AUTHED_RATE_LIMIT,
 } from '@/shared/middlewares/rate-limit-presets.constants.js';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
+import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
 import { NOTIFY_PERMISSIONS } from '../../notify.permissions.js';
 import type { WebhookService } from './webhook.service.js';
 import type { WebhookEventService } from './webhook-event/webhook-event.service.js';
@@ -32,6 +33,7 @@ export function webhookRoutes(
       {
         schema: { querystring: listWebhooksQueryDto },
         onRequest: [app.authenticate],
+        preValidation: [rejectLegacyPagePagination],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_READ, 'id')],
       },
       webhookController.listWebhooks,
@@ -76,6 +78,7 @@ export function webhookRoutes(
       {
         schema: { querystring: listWebhookDeliveryAttemptsQueryDto },
         onRequest: [app.authenticate],
+        preValidation: [rejectLegacyPagePagination],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_READ, 'id')],
       },
       webhookController.listDeliveryAttempts,

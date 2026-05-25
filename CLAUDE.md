@@ -180,7 +180,7 @@ src/shared/
     api-versioning.util.ts    # buildPublicApiPrefix; applyDeprecatedEndpointHeaders (Sunset / Deprecation)
     request.util.ts           # getRequestIdentifier, requireAuth (shared controller helpers)
     authorization.util.ts     # requireRole, requireOrganizationPermission preHandlers
-    pagination.util.ts        # paginationSchema, cursorPaginationSchema
+    pagination.util.ts        # cursorPaginationSchema, listLimitQuerySchema
     public-id.util.ts         # generatePublicId
     uuid.util.ts              # uuidSchema
   middleware/

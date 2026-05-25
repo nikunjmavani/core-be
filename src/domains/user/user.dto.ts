@@ -33,7 +33,6 @@ export type UploadAvatarInput = z.infer<typeof UploadAvatarDto>;
 export const ListUsersDto = z
   .object({
     after: z.string().optional(),
-    page: z.coerce.number().int().min(1).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
     status: z.enum(['ACTIVE', 'SUSPENDED', 'DELETED']).optional(),
     search: trimmedString().max(255).optional(),

@@ -53,14 +53,21 @@ describe('OpenAPI cursor pagination', () => {
     expect(queryNames, `${routeKey} query params: ${queryNames.join(', ')}`).toContain('after');
   });
 
-  it('documents deprecated page parameter on cursor list routes', () => {
-    const queryNames = getQueryParameterNames(spec, 'GET /api/v1/tenancy/organizations');
-    expect(queryNames).toContain('page');
+  it('does not expose legacy page parameter on cursor list routes', () => {
+    for (const routeKey of CURSOR_PAGINATED_LIST_ROUTE_KEYS) {
+      const queryNames = getQueryParameterNames(spec, routeKey);
+      expect(queryNames, `${routeKey} should not document page`).not.toContain('page');
+    }
   });
 
   it('includes cursor pagination guidance in operation descriptions', () => {
     const operation = spec.paths['/api/v1/tenancy/organizations']?.get;
     expect(operation?.description).toContain('cursor pagination');
     expect(operation?.description).toContain('meta.pagination.next');
+  });
+
+  it('documents that legacy page is no longer supported in operation descriptions', () => {
+    const operation = spec.paths['/api/v1/tenancy/organizations']?.get;
+    expect(operation?.description).toMatch(/legacy `page`.*no longer supported/i);
   });
 });

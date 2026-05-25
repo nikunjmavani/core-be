@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { cursorListQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedString } from '@/shared/utils/validation/validation.util.js';
 
-export const ListAuditLogsQueryDto = cursorListQuerySchema
+export const ListAuditLogsQueryDto = cursorPaginationSchema
   .extend({
     organization_id: trimmedString().max(255).optional(),
     actor_user_id: trimmedString().max(255).optional(),

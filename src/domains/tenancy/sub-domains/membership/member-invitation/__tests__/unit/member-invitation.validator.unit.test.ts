@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
+  LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
+  LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+} from '@/shared/utils/http/pagination.util.js';
+import {
   validateAcceptMemberInvitation,
   validateCreateMemberInvitation,
   validateListMemberInvitationsQuery,
@@ -41,7 +45,6 @@ describe('member-invitation validators', () => {
       const parsed = validateListMemberInvitationsQuery({});
       expect(parsed.include_total).toBe('false');
       expect(parsed.after).toBeUndefined();
-      expect(parsed.page).toBeUndefined();
       expect(typeof parsed.limit).toBe('number');
     });
 
@@ -54,15 +57,23 @@ describe('member-invitation validators', () => {
       expect(parsed.limit).toBe(15);
     });
 
-    it('accepts legacy page during deprecation window', () => {
-      const parsed = validateListMemberInvitationsQuery({
-        page: '3',
-        limit: '10',
-        include_total: 'true',
-      });
-      expect(parsed.page).toBe(3);
-      expect(parsed.limit).toBe(10);
-      expect(parsed.include_total).toBe('true');
+    it('rejects legacy page query parameter with a cursor-only message', () => {
+      try {
+        validateListMemberInvitationsQuery({ page: '3', limit: '10', include_total: 'true' });
+        expect.fail('expected ValidationError');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError);
+        const validationError = error as ValidationError;
+        expect(validationError.statusCode).toBe(400);
+        expect(validationError.messageKey).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY);
+        expect(validationError.errors).toEqual([
+          {
+            field: 'page',
+            messageKey: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+            message: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
+          },
+        ]);
+      }
     });
 
     it('rejects unknown query keys (strict)', () => {
@@ -78,10 +89,6 @@ describe('member-invitation validators', () => {
     it('rejects limit outside allowed range', () => {
       expect(() => validateListMemberInvitationsQuery({ limit: '0' })).toThrow(ValidationError);
       expect(() => validateListMemberInvitationsQuery({ limit: '1000' })).toThrow(ValidationError);
-    });
-
-    it('rejects negative page', () => {
-      expect(() => validateListMemberInvitationsQuery({ page: '0' })).toThrow(ValidationError);
     });
   });
 });

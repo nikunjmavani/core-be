@@ -63,14 +63,14 @@ src/
       auth.error.ts          # NotFound, Unauthorized, Forbidden, Conflict, NotImplemented
       index.ts               # Re-exports
     types/
-      index.ts               # AuthContext, PaginatedResult
+      index.ts               # AuthContext
     constants/
       index.ts               # PAGINATION, SLUG_REGEX, UUID_REGEX
     services/                   # (barrel only — services relocated to domains)
     utils/
       logger.util.ts         # Pino logger
       response.util.ts       # successResponse, paginatedResponse
-      pagination.util.ts     # paginationSchema, cursorPaginationSchema
+      pagination.util.ts     # cursorPaginationSchema, listLimitQuerySchema
       public-id.util.ts      # generatePublicId
       uuid.util.ts           # uuidSchema
     middleware/
@@ -91,7 +91,7 @@ src/
   infrastructure/
     database/
       connection.ts          # Postgres + Drizzle
-      base-repository.ts     # Offset + cursor-based pagination helpers
+      base-repository.ts     # Cursor-based pagination helper
       transaction.ts         # withTransaction()
       migrate.ts             # Migration runner
       pg-schemas.ts          # Shared pgSchema definitions (auth, tenancy, billing, notify, audit)

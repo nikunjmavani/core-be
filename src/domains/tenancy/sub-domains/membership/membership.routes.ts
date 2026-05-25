@@ -5,6 +5,7 @@ import {
   STRICT_AUTHED_RATE_LIMIT,
   STRICT_PUBLIC_RATE_LIMIT,
 } from '@/shared/middlewares/rate-limit-presets.constants.js';
+import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
 import type { MembershipService } from './membership.service.js';
 import type { MemberInvitationService } from './member-invitation/member-invitation.service.js';
 import { listMemberInvitationsQueryDto } from './member-invitation/member-invitation.dto.js';
@@ -90,6 +91,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       {
         schema: { querystring: listMemberInvitationsQueryDto },
         onRequest: [app.authenticate],
+        preValidation: [rejectLegacyPagePagination],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE, 'id')],
       },
       invitationController.listMemberInvitations,

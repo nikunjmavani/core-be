@@ -18,7 +18,6 @@ export type WebhookDeliverySendingClaimResult = 'claimed' | 'in_flight' | 'alrea
 
 export interface WebhookDeliveryAttemptListPagination {
   after?: string;
-  offset_page?: number;
   limit: number;
   include_total?: boolean;
 }
@@ -31,29 +30,24 @@ export class WebhookDeliveryAttemptRepository {
   }
 
   async listByWebhook(webhook_id: number, pagination: WebhookDeliveryAttemptListPagination) {
-    const { after, offset_page, limit } = pagination;
-    const includeTotal = pagination.include_total === true || offset_page !== undefined;
+    const { after, limit } = pagination;
+    const includeTotal = pagination.include_total === true;
     const filterConditions: SQL[] = [eq(webhook_delivery_attempts.webhook_id, webhook_id)];
     const countWhere = and(...filterConditions);
-    const cursorCondition =
-      offset_page === undefined
-        ? buildDescendingCreatedAtIdCursorCondition(
-            webhook_delivery_attempts.created_at,
-            webhook_delivery_attempts.id,
-            parseListCursor(after),
-          )
-        : undefined;
+    const cursorCondition = buildDescendingCreatedAtIdCursorCondition(
+      webhook_delivery_attempts.created_at,
+      webhook_delivery_attempts.id,
+      parseListCursor(after),
+    );
     const where =
       cursorCondition !== undefined ? and(...filterConditions, cursorCondition) : countWhere;
 
-    const rowsQuery = this.db()
+    const rowsPromise = this.db()
       .select()
       .from(webhook_delivery_attempts)
       .where(where)
       .orderBy(desc(webhook_delivery_attempts.created_at), desc(webhook_delivery_attempts.id))
       .limit(limit + 1);
-    const rowsPromise =
-      offset_page !== undefined ? rowsQuery.offset((offset_page - 1) * limit) : rowsQuery;
 
     const countPromise = includeTotal
       ? this.db()
@@ -70,7 +64,6 @@ export class WebhookDeliveryAttemptRepository {
     return {
       items,
       total,
-      page: offset_page,
       limit,
       has_more: hasMore,
       next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,

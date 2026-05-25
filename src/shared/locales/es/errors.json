@@ -32,6 +32,7 @@
     "invitationAlreadyDeclined": "Invitación ya rechazada",
     "invalidPolicyId": "ID de política no válido",
     "invalidPagination": "Paginación no válida",
+    "legacyPageNotSupported": "La paginación heredada con `page` ya no es compatible en esta ruta. Usa la paginación basada en cursor con `limit` y `after` (cursor opaco de `meta.pagination.next`).",
     "logoNotFound": "Objeto logo no encontrado en almacenamiento",
     "avatarInvalidKey": "Clave de avatar no válida: debe comenzar con \"avatars/\"",
     "avatarNotFound": "Archivo de avatar no encontrado en almacenamiento",

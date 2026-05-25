@@ -30,7 +30,6 @@ describe('createUserController', () => {
     deleteMe: vi.fn().mockResolvedValue(undefined),
     listUsers: vi.fn().mockResolvedValue({
       items: [],
-      page: undefined,
       limit: 20,
       total: null,
       has_more: false,
@@ -97,7 +96,6 @@ describe('createUserController', () => {
   it('listUsers sets has_more and emits cursor when more pages exist', async () => {
     vi.mocked(userService.listUsers).mockResolvedValueOnce({
       items: [{ id: userPublicId }],
-      page: undefined,
       limit: 1,
       total: null,
       has_more: true,
@@ -165,29 +163,27 @@ describe('createUserController', () => {
     expect(userService.deleteAvatar).toHaveBeenCalled();
   });
 
-  it('listUsers returns next page number when legacy offset_page was used', async () => {
+  it('listUsers exposes estimated_total when include_total opts into count(*)', async () => {
     vi.mocked(userService.listUsers).mockResolvedValueOnce({
       items: [{ id: userPublicId }],
-      page: 1,
       limit: 10,
       total: 50,
       has_more: true,
-      next_cursor: null,
+      next_cursor: 'cursor_next',
     } as never);
     const response = await controller.listUsers(
-      mockRequest({ query: { limit: 10, page: '1' } }),
+      mockRequest({ query: { limit: 10, include_total: 'true' } }),
       {} as FastifyReply,
     );
     expect(
       (response as { meta: { pagination: { has_more: boolean; next: string | null } } }).meta
         .pagination,
-    ).toMatchObject({ has_more: true, next: '2', estimated_total: 50 });
+    ).toMatchObject({ has_more: true, next: 'cursor_next', estimated_total: 50 });
   });
 
   it('listUsers sets has_more false on the last page', async () => {
     vi.mocked(userService.listUsers).mockResolvedValueOnce({
       items: [],
-      page: undefined,
       limit: 10,
       total: null,
       has_more: false,

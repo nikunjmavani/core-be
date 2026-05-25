@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import * as fc from 'fast-check';
 import { PAGINATION } from '@/shared/constants/index.js';
-import { paginationSchema } from '@/shared/utils/http/pagination.util.js';
+import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { propertyAssertOptions } from '@/tests/helpers/fast-check-property.util.js';
 
 const propertyOptions = propertyAssertOptions();
 
-describe('paginationSchema (property)', () => {
-  it('accepts in-range page and limit integers', () => {
+describe('cursorPaginationSchema (property)', () => {
+  it('accepts in-range limit integers with optional after cursor', () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 1, max: 10_000 }),
         fc.integer({ min: 1, max: PAGINATION.MAX_LIMIT }),
-        (page, limit) => {
-          const parsed = paginationSchema.safeParse({ page, limit });
+        fc.option(fc.string({ minLength: 1, maxLength: 64 }), { nil: undefined }),
+        (limit, after) => {
+          const parsed = cursorPaginationSchema.safeParse({ limit, ...(after ? { after } : {}) });
           expect(parsed.success).toBe(true);
           if (parsed.success) {
-            expect(parsed.data.page).toBe(page);
             expect(parsed.data.limit).toBe(limit);
+            expect(parsed.data.after).toBe(after);
           }
         },
       ),
@@ -28,10 +28,9 @@ describe('paginationSchema (property)', () => {
   it('rejects limit above MAX_LIMIT', () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 1, max: 100 }),
         fc.integer({ min: PAGINATION.MAX_LIMIT + 1, max: PAGINATION.MAX_LIMIT + 500 }),
-        (page, limit) => {
-          expect(paginationSchema.safeParse({ page, limit }).success).toBe(false);
+        (limit) => {
+          expect(cursorPaginationSchema.safeParse({ limit }).success).toBe(false);
         },
       ),
       propertyOptions,
