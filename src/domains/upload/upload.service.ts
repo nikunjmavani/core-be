@@ -38,50 +38,12 @@ export class UploadService {
 
   async createUpload(input: CreateUploadInput, userPublicId: string): Promise<UploadCreateOutput> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    await this.assertPendingUploadQuota(user.id, userPublicId);
 
-    // Enforce a per-user cap on in-flight PENDING uploads. Stops a single authed user from
-    // exhausting storage by repeatedly requesting presigned URLs without ever calling confirm.
-    // The PENDING sweeper eventually reconciles the rows, but the cap is the immediate guard.
-    const pendingCap = getEnv().UPLOAD_MAX_PENDING_PER_USER;
-    const pendingCount = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.countPendingByUserId(user.id),
+    const organizationInternalId = await this.resolveUploadOrganizationInternalId(
+      input,
+      userPublicId,
     );
-    if (pendingCount >= pendingCap) {
-      throw new ValidationError(
-        'errors:uploadPendingQuotaExceeded',
-        { limit: pendingCap, pending: pendingCount },
-        undefined,
-        [
-          {
-            field: 'fileSize',
-            messageKey: 'errors:uploadPendingQuotaExceeded',
-            messageParams: { limit: pendingCap, pending: pendingCount },
-          },
-        ],
-      );
-    }
-
-    let organizationInternalId: number | null = null;
-    if (input.for === UPLOAD_TARGETS.ORGANIZATION && input.organizationId) {
-      const permissions = await resolveUserOrganizationPermissions(
-        userPublicId,
-        input.organizationId,
-      );
-      if (!permissions.includes(UPLOAD_PERMISSIONS.UPLOAD_MANAGE)) {
-        throw new ForbiddenError('errors:insufficientUploadPermissions');
-      }
-      /**
-       * `requireOrganizationByPublicId` reads `tenancy.organizations` which is FORCE RLS.
-       * Under `DATABASE_RLS_SCOPED_CONTEXTS=true` the call needs either an active
-       * organization context or `app.current_user_id` + the `organizations_user_discovery`
-       * policy. The latter is appropriate here because we have just authorized the user.
-       */
-      const organization = await withUserDatabaseContext(userPublicId, () =>
-        this.organizationService.requireOrganizationByPublicId(input.organizationId!),
-      );
-      organizationInternalId = organization.id;
-    }
-
     const config = UPLOAD_PURPOSE_CONFIG[input.purpose];
     const extension = getCanonicalExtensionForContentType(input.contentType);
     const ownerSegment =
@@ -159,6 +121,59 @@ export class UploadService {
       uploadMethod,
       ...(fields !== undefined ? { fields } : {}),
     });
+  }
+
+  private async assertPendingUploadQuota(
+    userInternalId: number,
+    userPublicId: string,
+  ): Promise<void> {
+    // Enforce a per-user cap on in-flight PENDING uploads. Stops a single authed user from
+    // exhausting storage by repeatedly requesting presigned URLs without ever calling confirm.
+    // The PENDING sweeper eventually reconciles the rows, but the cap is the immediate guard.
+    const pendingCap = getEnv().UPLOAD_MAX_PENDING_PER_USER;
+    const pendingCount = await withUserDatabaseContext(userPublicId, () =>
+      this.repository.countPendingByUserId(userInternalId),
+    );
+    if (pendingCount >= pendingCap) {
+      throw new ValidationError(
+        'errors:uploadPendingQuotaExceeded',
+        { limit: pendingCap, pending: pendingCount },
+        undefined,
+        [
+          {
+            field: 'fileSize',
+            messageKey: 'errors:uploadPendingQuotaExceeded',
+            messageParams: { limit: pendingCap, pending: pendingCount },
+          },
+        ],
+      );
+    }
+  }
+
+  private async resolveUploadOrganizationInternalId(
+    input: CreateUploadInput,
+    userPublicId: string,
+  ): Promise<number | null> {
+    if (input.for === UPLOAD_TARGETS.ORGANIZATION && input.organizationId) {
+      const permissions = await resolveUserOrganizationPermissions(
+        userPublicId,
+        input.organizationId,
+      );
+      if (!permissions.includes(UPLOAD_PERMISSIONS.UPLOAD_MANAGE)) {
+        throw new ForbiddenError('errors:insufficientUploadPermissions');
+      }
+      /**
+       * `requireOrganizationByPublicId` reads `tenancy.organizations` which is FORCE RLS.
+       * Under `DATABASE_RLS_SCOPED_CONTEXTS=true` the call needs either an active
+       * organization context or `app.current_user_id` + the `organizations_user_discovery`
+       * policy. The latter is appropriate here because we have just authorized the user.
+       */
+      const organization = await withUserDatabaseContext(userPublicId, () =>
+        this.organizationService.requireOrganizationByPublicId(input.organizationId!),
+      );
+      return organization.id;
+    }
+    return null;
   }
 
   /**

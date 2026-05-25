@@ -203,10 +203,20 @@ export function getScheduledJobs(): ScheduledJob[] {
   ];
 }
 
+export type RegisterScheduledJobsOptions = {
+  /**
+   * When set, only registers cron schedulers for queues that have an active worker in this
+   * process (split worker services). Omit to register every canonical scheduled job.
+   */
+  readonly activeQueueNames?: ReadonlySet<string>;
+};
+
 /**
- * Registers all repeatable jobs with BullMQ. No-op when SCHEDULER_ENABLED is false.
+ * Registers repeatable jobs with BullMQ. No-op when SCHEDULER_ENABLED is false.
  */
-export async function registerScheduledJobs(): Promise<SchedulerHandle> {
+export async function registerScheduledJobs(
+  options: RegisterScheduledJobsOptions = {},
+): Promise<SchedulerHandle> {
   if (!env.SCHEDULER_ENABLED) {
     logger.info('scheduler.disabled');
     return {
@@ -215,7 +225,11 @@ export async function registerScheduledJobs(): Promise<SchedulerHandle> {
   }
 
   const connection = getBullMQConnectionOptions();
-  const jobs = getScheduledJobs();
+  const allJobs = getScheduledJobs();
+  const jobs =
+    options.activeQueueNames === undefined
+      ? allJobs
+      : allJobs.filter((job) => options.activeQueueNames?.has(job.queueName));
   const queues: Queue[] = [];
 
   try {

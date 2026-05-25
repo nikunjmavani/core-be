@@ -77,6 +77,19 @@ describe('infrastructure queue scheduler', () => {
     );
   });
 
+  it('registerScheduledJobs registers only active queue names when filtered', async () => {
+    vi.stubEnv('SCHEDULER_ENABLED', 'true');
+    const { registerScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
+
+    await registerScheduledJobs({
+      activeQueueNames: new Set(['mail-outbox-sweeper', 'audit-retention']),
+    });
+
+    expect(upsertJobSchedulerMock).toHaveBeenCalledTimes(2);
+    const registeredQueues = upsertJobSchedulerMock.mock.calls.map((_call, index) => index);
+    expect(registeredQueues).toHaveLength(2);
+  });
+
   it('getScheduledJobs sets timezone on each job when SCHEDULER_TIMEZONE is set', async () => {
     vi.stubEnv('SCHEDULER_TIMEZONE', 'America/New_York');
     const { getScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');

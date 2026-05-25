@@ -181,9 +181,14 @@ const envSchemaBase = z.object({
     .max(3_600_000)
     .default(300_000),
   /**
-   * Headroom (pooled connections) the worker process keeps free for the ~18 always-registered
-   * single-concurrency background workers (retention/tombstone/monitoring crons) on top of
-   * WORKER_CONCURRENCY. Heuristic buffer, not a per-worker reservation. Default 6.
+   * Comma-separated BullMQ queue families this worker process runs: `mail`, `notify`,
+   * `webhook`, `stripe`, `retention`, `observability`, or `all` (default monolithic worker).
+   * Use split services in production so each process pool budget matches its registered workers.
+   */
+  WORKER_QUEUE_FAMILIES: z.string().min(1).default('all'),
+  /**
+   * @deprecated Superseded by per-queue demand in worker-connection-budget.ts. Kept for
+   * backward-compatible env templates; startup no longer enforces this heuristic.
    */
   WORKER_BACKGROUND_POOL_SLOT_RESERVE: z.coerce.number().int().min(0).max(64).default(6),
   /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. */

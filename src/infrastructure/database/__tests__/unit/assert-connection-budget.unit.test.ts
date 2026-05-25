@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sqlMock = vi.fn();
 const getEnvMock = vi.fn();
+const computeWorkerPostgresPoolDemandMock = vi.fn();
 const originalKubernetesServiceHost = process.env.KUBERNETES_SERVICE_HOST;
 
 vi.mock('@/infrastructure/database/connection.js', () => ({
@@ -17,18 +18,31 @@ vi.mock('@/shared/config/env.config.js', () => ({
       },
     },
   ),
+  getEnv: () => getEnvMock(),
 }));
 
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('@/infrastructure/queue/worker-runtime/worker-connection-budget.js', () => ({
+  computeWorkerPostgresPoolDemand: (...arguments_: unknown[]) =>
+    computeWorkerPostgresPoolDemandMock(...arguments_),
+}));
+
 describe('assertPostgresConnectionBudget', () => {
   beforeEach(() => {
     sqlMock.mockReset();
     getEnvMock.mockReset();
+    computeWorkerPostgresPoolDemandMock.mockReset();
     vi.resetModules();
     delete process.env.KUBERNETES_SERVICE_HOST;
+    getEnvMock.mockReturnValue({
+      LOG_LEVEL: 'silent',
+      POSTGRES_RESERVED_CONNECTIONS: 10,
+      NODE_ENV: 'test',
+      WORKER_CONCURRENCY: 4,
+    });
   });
 
   afterEach(() => {
@@ -89,64 +103,51 @@ describe('assertPostgresConnectionBudget', () => {
     );
   });
 
-  it('asserts worker concurrency against DATABASE_POOL_MAX when requested', async () => {
+  it('throws when split worker families exceed DATABASE_POOL_MAX', async () => {
     getEnvMock.mockReturnValue({
-      DATABASE_POOL_MAX: 10,
+      DATABASE_POOL_MAX: 8,
       POSTGRES_RESERVED_CONNECTIONS: 10,
       POSTGRES_MAX_CONNECTIONS: 100,
       DEPLOYMENT_TOTAL_REPLICA_COUNT: 1,
       NODE_ENV: 'test',
-      WORKER_CONCURRENCY: 10,
-      WORKER_BACKGROUND_POOL_SLOT_RESERVE: 6,
+    });
+    computeWorkerPostgresPoolDemandMock.mockReturnValue({
+      selectedFamilies: ['webhook'],
+      monolithicWorker: false,
+      peakPostgresConcurrency: 10,
+      queues: [],
     });
 
     const { assertPostgresConnectionBudget } =
       await import('@/infrastructure/database/assert-connection-budget.js');
 
     await expect(assertPostgresConnectionBudget({ assertWorkerConcurrency: true })).rejects.toThrow(
-      /WORKER_CONCURRENCY/i,
+      /Worker Postgres pool demand/i,
     );
   });
 
-  it('respects a configurable WORKER_BACKGROUND_POOL_SLOT_RESERVE', async () => {
+  it('warns (without throwing) when monolithic worker demand exceeds the pool', async () => {
     getEnvMock.mockReturnValue({
-      DATABASE_POOL_MAX: 10,
+      DATABASE_POOL_MAX: 8,
       POSTGRES_RESERVED_CONNECTIONS: 10,
       POSTGRES_MAX_CONNECTIONS: 100,
       DEPLOYMENT_TOTAL_REPLICA_COUNT: 1,
       NODE_ENV: 'test',
-      WORKER_CONCURRENCY: 9,
-      WORKER_BACKGROUND_POOL_SLOT_RESERVE: 2,
     });
-
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
-
-    // 9 > 10 - 2 = 8 → throws.
-    await expect(assertPostgresConnectionBudget({ assertWorkerConcurrency: true })).rejects.toThrow(
-      /background worker slots/i,
-    );
-  });
-
-  it('warns (without throwing) when combined throughput-family concurrency can exceed the pool', async () => {
-    getEnvMock.mockReturnValue({
-      DATABASE_POOL_MAX: 20,
-      POSTGRES_RESERVED_CONNECTIONS: 10,
-      POSTGRES_MAX_CONNECTIONS: 100,
-      DEPLOYMENT_TOTAL_REPLICA_COUNT: 1,
-      NODE_ENV: 'test',
-      WORKER_CONCURRENCY: 5,
-      WORKER_BACKGROUND_POOL_SLOT_RESERVE: 6,
+    computeWorkerPostgresPoolDemandMock.mockReturnValue({
+      selectedFamilies: ['mail', 'notify', 'webhook', 'stripe', 'retention', 'observability'],
+      monolithicWorker: true,
+      peakPostgresConcurrency: 24,
+      queues: [],
     });
 
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertPostgresConnectionBudget } =
       await import('@/infrastructure/database/assert-connection-budget.js');
 
-    // 4 families × 5 = 20 peak + 6 reserve = 26 > pool 20 → warn; 5 <= 20-6 so no throw.
     await assertPostgresConnectionBudget({ assertWorkerConcurrency: true });
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ peakWorkerPoolDemand: 26 }),
+      expect.objectContaining({ peakPostgresConcurrency: 24 }),
       'database.connection_budget.worker_pool_pressure',
     );
   });

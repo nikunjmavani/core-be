@@ -1,0 +1,84 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const workerState = vi.hoisted(() => ({
+  processor: undefined as (() => Promise<unknown>) | undefined,
+  options: undefined as Record<string, unknown> | undefined,
+}));
+
+const deleteInBatchesByConditionMock = vi.fn();
+const withSessionRetentionCleanupDatabaseContextMock = vi.fn();
+
+vi.mock('bullmq', () => ({
+  Worker: vi.fn().mockImplementation(function WorkerMock(_queueName, processor, options) {
+    workerState.processor = processor;
+    workerState.options = options;
+    return {
+      on: vi.fn(),
+      close: vi.fn(),
+    };
+  }),
+}));
+
+vi.mock('@/infrastructure/queue/connection.js', () => ({
+  getBullMQConnectionOptions: () => ({ host: 'redis.test' }),
+}));
+
+vi.mock('@/infrastructure/queue/worker-runtime/worker-close.util.js', () => ({
+  buildWorkerHandle: (worker: unknown, queueName: string) => ({
+    worker,
+    queueName,
+    close: async () => undefined,
+  }),
+}));
+
+vi.mock('@/infrastructure/database/batch-delete.util.js', () => ({
+  deleteInBatchesByCondition: (...parameters: unknown[]) =>
+    deleteInBatchesByConditionMock(...parameters),
+}));
+
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withSessionRetentionCleanupDatabaseContext: (callback: (databaseHandle: unknown) => unknown) =>
+    withSessionRetentionCleanupDatabaseContextMock(callback),
+}));
+
+vi.mock('@/shared/config/env.config.js', () => ({
+  env: { AUTH_SESSION_RETENTION_DAYS: 30, LOG_LEVEL: 'silent' },
+}));
+
+vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+describe('session-cleanup.worker', () => {
+  beforeEach(() => {
+    workerState.processor = undefined;
+    workerState.options = undefined;
+    deleteInBatchesByConditionMock.mockReset();
+    withSessionRetentionCleanupDatabaseContextMock.mockReset();
+    deleteInBatchesByConditionMock.mockResolvedValue({ deletedCount: 3, blockedCount: 1 });
+    withSessionRetentionCleanupDatabaseContextMock.mockImplementation(
+      async (callback: (databaseHandle: unknown) => Promise<unknown>) =>
+        callback({ kind: 'session-retention' }),
+    );
+  });
+
+  it('runs session cleanup inside the session retention database context', async () => {
+    const { createSessionCleanupWorker } =
+      await import('@/domains/auth/sub-domains/auth-session/workers/session-cleanup.worker.js');
+
+    const handle = createSessionCleanupWorker();
+    const result = await workerState.processor?.();
+
+    expect(handle.queueName).toBe('session-cleanup');
+    expect(workerState.options).toEqual(expect.objectContaining({ concurrency: 1 }));
+    expect(withSessionRetentionCleanupDatabaseContextMock).toHaveBeenCalledOnce();
+    expect(deleteInBatchesByConditionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        databaseHandle: { kind: 'session-retention' },
+        logContext: 'session-cleanup',
+        tableLabel: 'auth.sessions',
+      }),
+    );
+    expect(result).toEqual({ deletedCount: 3, blockedCount: 1 });
+  });
+});
