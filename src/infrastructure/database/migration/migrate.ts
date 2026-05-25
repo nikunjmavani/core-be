@@ -16,9 +16,35 @@ if (!migrationUrl) {
 
 const sql = postgres(migrationUrl, { max: 1 });
 
+/**
+ * Postgres 17+ is required project-wide (docker-compose, CI services,
+ * testcontainers, and managed providers like Neon are all pinned to 17).
+ * Refuse to apply migrations against older servers so test infra drift
+ * (e.g. someone pointing DATABASE_MIGRATION_URL at a local 15/16 cluster)
+ * is caught before it can produce a partially-applied schema.
+ */
+const MINIMUM_POSTGRES_SERVER_VERSION_NUM = 170000;
+
+async function assertPostgresMajorVersionAtLeast17(): Promise<void> {
+  const [row] = await sql<
+    { server_version_num: string; server_version: string }[]
+  >`SELECT current_setting('server_version_num') AS server_version_num, current_setting('server_version') AS server_version`;
+  const serverVersionNum = Number(row?.server_version_num ?? '0');
+  if (
+    !Number.isFinite(serverVersionNum) ||
+    serverVersionNum < MINIMUM_POSTGRES_SERVER_VERSION_NUM
+  ) {
+    throw new Error(
+      `Refusing to run migrations against Postgres ${row?.server_version ?? 'unknown'} (server_version_num=${row?.server_version_num ?? 'unknown'}). Postgres 17+ is required project-wide. See .cursor/skills/db-migration-maintainer/SKILL.md and docker-compose.yml.`,
+    );
+  }
+}
+
 async function main() {
   const migrationsFolder = resolve(process.cwd(), 'migrations');
   logger.info({ migrationsFolder }, 'Running migrations');
+
+  await assertPostgresMajorVersionAtLeast17();
 
   await sql`
     create table if not exists public.schema_migrations (

@@ -47,8 +47,14 @@ export class UploadService {
       if (!permissions.includes(UPLOAD_PERMISSIONS.UPLOAD_MANAGE)) {
         throw new ForbiddenError('errors:insufficientUploadPermissions');
       }
-      const organization = await this.organizationService.requireOrganizationByPublicId(
-        input.organizationId,
+      /**
+       * `requireOrganizationByPublicId` reads `tenancy.organizations` which is FORCE RLS.
+       * Under `DATABASE_RLS_SCOPED_CONTEXTS=true` the call needs either an active
+       * organization context or `app.current_user_id` + the `organizations_user_discovery`
+       * policy. The latter is appropriate here because we have just authorized the user.
+       */
+      const organization = await withUserDatabaseContext(userPublicId, () =>
+        this.organizationService.requireOrganizationByPublicId(input.organizationId!),
       );
       organizationInternalId = organization.id;
     }
@@ -159,7 +165,7 @@ export class UploadService {
     );
     if (!row) throw new NotFoundError('Upload');
 
-    return this.toUploadDetail(row);
+    return this.toUploadDetail(row, userPublicId);
   }
 
   /**
@@ -177,7 +183,7 @@ export class UploadService {
     if (!row) throw new NotFoundError('Upload');
 
     if (row.status === UPLOAD_STATUS.UPLOADED) {
-      return this.toUploadDetail(row);
+      return this.toUploadDetail(row, userPublicId);
     }
     if (row.status !== UPLOAD_STATUS.PENDING) {
       throw new ValidationError('errors:uploadNotPending', undefined, {
@@ -220,15 +226,24 @@ export class UploadService {
       });
     }
 
-    return this.toUploadDetail(updated);
+    return this.toUploadDetail(updated, userPublicId);
   }
 
-  private async toUploadDetail(row: UploadRow): Promise<UploadDetailOutput> {
+  private async toUploadDetail(row: UploadRow, userPublicId?: string): Promise<UploadDetailOutput> {
     let organizationPublicId: string | null = null;
     if (row.organization_id !== null) {
-      const organization = await this.organizationService.findOrganizationByInternalId(
-        row.organization_id,
-      );
+      /**
+       * `findOrganizationByInternalId` hits `tenancy.organizations` (FORCE RLS). When
+       * we have a user public id, wrap so the `organizations_user_discovery` policy
+       * is satisfied; otherwise fall back to the bare call (works under legacy mode
+       * and for callers that already pin an organization context).
+       */
+      const organization =
+        userPublicId !== undefined && userPublicId.length > 0
+          ? await withUserDatabaseContext(userPublicId, () =>
+              this.organizationService.findOrganizationByInternalId(row.organization_id!),
+            )
+          : await this.organizationService.findOrganizationByInternalId(row.organization_id);
       organizationPublicId = organization?.public_id ?? null;
     }
     return serializeUploadDetail(row, organizationPublicId);

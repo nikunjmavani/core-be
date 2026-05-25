@@ -6,6 +6,12 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn(async (_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';

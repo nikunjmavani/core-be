@@ -100,23 +100,32 @@ export class MemberInvitationService {
 
   async accept(invitation_public_id: string, body: unknown): Promise<MemberInvitationOutput> {
     const parsed = validateAcceptMemberInvitation(body);
-    const row = await this.invitationRepository.findByPublicId(invitation_public_id);
-    if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const tokenHash = hashInvitationToken(parsed.token);
-    if (row.token_hash !== tokenHash)
-      throw new ValidationError('errors:validation.invalidToken', undefined, {
-        token: ['Invalid or expired'],
-      });
-    if (row.revoked_at)
-      throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
-    if (row.accepted_at)
-      throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
-    if (new Date() > row.expires_at)
-      throw new ValidationError('errors:validation.invitationExpired', undefined, {});
-    const updated = await this.invitationRepository.accept(invitation_public_id);
-    if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const membership = await this.membershipRepository.findById(row.membership_id);
-    return serializeMemberInvitation(updated, membership?.public_id ?? String(row.membership_id));
+    /**
+     * Public route: no org context up front. Resolve the owning org via the
+     * SECURITY DEFINER lookup, then wrap the read + UPDATE in
+     * `withOrganizationDatabaseContext` so RLS sees the org GUC.
+     */
+    const lookup =
+      await this.invitationRepository.lookupOrganizationByInvitationPublicId(invitation_public_id);
+    if (!lookup) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    return withOrganizationDatabaseContext(lookup.organization_public_id, async () => {
+      const row = await this.invitationRepository.findByPublicId(invitation_public_id);
+      if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const tokenHash = hashInvitationToken(parsed.token);
+      if (row.token_hash !== tokenHash)
+        throw new ValidationError('errors:validation.invalidToken', undefined, {
+          token: ['Invalid or expired'],
+        });
+      if (row.revoked_at)
+        throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
+      if (row.accepted_at)
+        throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
+      if (new Date() > row.expires_at)
+        throw new ValidationError('errors:validation.invitationExpired', undefined, {});
+      const updated = await this.invitationRepository.accept(invitation_public_id);
+      if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      return serializeMemberInvitation(updated, lookup.membership_public_id);
+    });
   }
 
   async revoke(organization_public_id: string, invitation_public_id: string): Promise<void> {
@@ -189,8 +198,26 @@ export class MemberInvitationService {
     }
     const user = await this.userService.findUserRecordByPublicId(user_public_id);
     if (!user) throw new NotFoundError('User');
+    /**
+     * Cross-organization read: a single user may have invitations from many orgs and
+     * no `app.current_organization_id` matches all of them. Uses the SECURITY DEFINER
+     * lookup that runs outside RLS but exposes only minimal non-sensitive metadata.
+     */
     const rows = await this.invitationRepository.findByEmailPending(user.email, 100);
-    return rows.map((row) => serializeMemberInvitation(row.invitation, row.membership_public_id));
+    return rows.map((row) =>
+      serializeMemberInvitation(
+        {
+          public_id: row.invitation_public_id,
+          email: row.invitation_email,
+          expires_at: row.invitation_expires_at,
+          accepted_at: null,
+          revoked_at: null,
+          created_at: row.invitation_created_at,
+          membership_id: row.membership_id,
+        },
+        row.membership_public_id,
+      ),
+    );
   }
 
   async decline(invitation_public_id: string, user_public_id: string): Promise<void> {
@@ -201,16 +228,25 @@ export class MemberInvitationService {
     }
     const user = await this.userService.findUserRecordByPublicId(user_public_id);
     if (!user) throw new NotFoundError('User');
-    const row = await this.invitationRepository.findByPublicId(invitation_public_id);
-    if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    if (row.email.toLowerCase() !== user.email.toLowerCase()) {
-      throw new ForbiddenError('errors:declineOwnInvitationOnly');
-    }
-    if (row.accepted_at)
-      throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
-    if (row.revoked_at)
-      throw new ValidationError('errors:validation.invitationAlreadyDeclined', undefined, {});
-    const updated = await this.invitationRepository.revoke(invitation_public_id);
-    if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    /**
+     * User-driven cross-org route: resolve the owning org via SECURITY DEFINER lookup,
+     * then wrap the read + UPDATE in `withOrganizationDatabaseContext`.
+     */
+    const lookup =
+      await this.invitationRepository.lookupOrganizationByInvitationPublicId(invitation_public_id);
+    if (!lookup) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    return withOrganizationDatabaseContext(lookup.organization_public_id, async () => {
+      const row = await this.invitationRepository.findByPublicId(invitation_public_id);
+      if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      if (row.email.toLowerCase() !== user.email.toLowerCase()) {
+        throw new ForbiddenError('errors:declineOwnInvitationOnly');
+      }
+      if (row.accepted_at)
+        throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
+      if (row.revoked_at)
+        throw new ValidationError('errors:validation.invitationAlreadyDeclined', undefined, {});
+      const updated = await this.invitationRepository.revoke(invitation_public_id);
+      if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    });
   }
 }

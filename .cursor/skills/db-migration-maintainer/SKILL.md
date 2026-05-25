@@ -19,7 +19,14 @@ Postgres schema changes require **both** a co-located Drizzle `*.schema.ts` and 
 
 - Drizzle schema uses `pgSchema` from `src/infrastructure/database/pg-schemas.ts`
 - `drizzle.config.ts` glob: `src/domains/**/*.schema.ts`
-- Migrations applied via `pnpm db:migrate` (`src/infrastructure/database/migrate.ts`)
+- Migrations applied via `pnpm db:migrate` (`src/infrastructure/database/migration/migrate.ts`)
+- **Postgres 17+ is required project-wide.** Local Docker (`postgres:17.10-alpine`), every CI service container, testcontainers, and managed providers (Neon `pgVersion: 17`) are all pinned to PG17. `pnpm db:migrate` runs a `SELECT current_setting('server_version_num')` preflight and refuses to apply migrations against anything older. Do not point `DATABASE_MIGRATION_URL` at a 15/16 cluster.
+
+## Hard rules
+
+These are enforced by `pnpm db:migrate:lint` and cannot be overridden by the `-- migration-safety: allow ...` header:
+
+- **No `SET` / `RESET` of the `row_security` GUC** (`disable_row_security_guc`). RLS bypass for trusted lookups must go through `SECURITY DEFINER` + `GRANT EXECUTE`; toggling the session GUC is unnecessary (ownership already bypasses RLS for `SECURITY DEFINER` functions) and inconsistent with the existing `billing.resolve_organization_public_id_for_stripe_subscription` / `tenancy.resolve_member_invitation_lookup_by_public_id` pattern.
 
 ## Workflow
 
@@ -38,12 +45,23 @@ Postgres schema changes require **both** a co-located Drizzle `*.schema.ts` and 
    - **Overrides** — only in the first 20 lines of a file:
      `-- migration-safety: allow <rule_id> reason="short justification"`
      Known `rule_id` values live in `migrationSafetyRuleIds` in [`src/scripts/validators/migration/lint-migrations.ts`](../../../src/scripts/validators/migration/lint-migrations.ts).
-6. **Verify locally**:
+6. **Verify locally** — always against the **local Docker** stack (Postgres 17), never a remote Neon dev branch. The compose Postgres is the only local environment with the `core_be_app` role wired up so RLS security tests can `SET ROLE core_be_app` and exercise policies exactly the way CI does:
+
    ```bash
+   pnpm compose:up && pnpm compose:wait
    pnpm db:migrate:lint
    pnpm db:migrate
    pnpm typecheck
    ```
+
+   When the migration adds, removes, or rewrites an **RLS policy** or a **`SECURITY DEFINER` function**, also run the security RLS shard:
+
+   ```bash
+   pnpm vitest run --project security src/tests/security/rls/
+   ```
+
+   Remote Neon dev fails these with `42501 permission denied to set role "core_be_app"` and silently masks RLS bugs — always run against Docker.
+
 7. **Seeds**: if new tables need reference/demo data, invoke **seed-maintainer**.
 8. **DBML diagram** (`docs/database/core-be.dbml`): regenerated automatically by the local `.husky/pre-commit` hook whenever `migrations/*.sql` is staged (`pnpm tool:generate-dbdiagram` → `git add`). The diagram captures columns, primary keys, foreign keys (with `ON DELETE` actions), unique constraints, RLS rules, and partitioning. It is **local only** — no CI check enforces it. Run `pnpm tool:generate-dbdiagram` manually if you want to preview the output before committing.
 
@@ -66,7 +84,9 @@ Postgres schema changes require **both** a co-located Drizzle `*.schema.ts` and 
 - [ ] Migration filename sorts after existing files
 - [ ] Foreign keys reference correct schema.table
 - [ ] Indexes named consistently (`idx_<table>_<columns>`)
-- [ ] `pnpm db:migrate` succeeds on a clean DB after prior migrations
+- [ ] No `SET` / `RESET row_security` anywhere in the migration (use `SECURITY DEFINER` + `GRANT EXECUTE`)
+- [ ] If the migration touches RLS policies or `SECURITY DEFINER`, security RLS shard run against local Docker Postgres 17
+- [ ] `pnpm db:migrate` succeeds on a clean local Docker DB after prior migrations
 - [ ] `pnpm db:migrate:lint` passes
 - [ ] **seed-maintainer** if routes/seeds need new data
 
@@ -75,3 +95,5 @@ Postgres schema changes require **both** a co-located Drizzle `*.schema.ts` and 
 - Changing only `*.schema.ts` without a migration (production drift)
 - Putting Drizzle schemas under `src/infrastructure/database/schemas/` (use domain co-location)
 - Confusing this skill with **supabase-porting** (Edge Functions → Fastify)
+- `SET row_security = off` / `RESET row_security` inside any migration (use `SECURITY DEFINER` + `GRANT EXECUTE` instead)
+- Verifying RLS-touching migrations against remote Neon dev (must use local Docker Postgres 17, which is the only env that grants `core_be_app` and matches CI)

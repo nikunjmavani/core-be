@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import type { AuditLogRecordInput } from '@/domains/audit/audit.types.js';
 import { recordAuditEvent } from '@/shared/utils/infrastructure/audit-record.util.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 
 export function getAuditRequestNetworkContext(request: FastifyRequest): {
   ip_address: string | null;
@@ -13,6 +14,16 @@ export function getAuditRequestNetworkContext(request: FastifyRequest): {
   };
 }
 
+/**
+ * Looks up the internal organization id for an audit row. Called from controllers
+ * AFTER the wrapped service call has returned, so no scoped DB context is active.
+ * Under `DATABASE_RLS_SCOPED_CONTEXTS=true` the `organizations_tenant_isolation`
+ * policy requires either `app.current_organization_id` (not available here) or
+ * `app.current_user_id` plus the `organizations_user_discovery` policy. We wrap
+ * in `withUserDatabaseContext` when the request is authenticated so the discovery
+ * policy applies; unauthenticated audit recordings fall back to a best-effort
+ * lookup (and the audit row simply records a null organization_id when blocked).
+ */
 export async function resolveOrganizationIdForAudit(
   request: FastifyRequest,
   organizationPublicId: string,
@@ -20,6 +31,13 @@ export async function resolveOrganizationIdForAudit(
   const organizationService = request.server.tenancyDomain?.organizationService;
   if (!organizationService) {
     return null;
+  }
+  const userPublicId = request.auth?.userId;
+  if (typeof userPublicId === 'string' && userPublicId.length > 0) {
+    const organization = await withUserDatabaseContext(userPublicId, () =>
+      organizationService.findOrganizationByPublicId(organizationPublicId),
+    );
+    return organization?.id ?? null;
   }
   const organization = await organizationService.findOrganizationByPublicId(organizationPublicId);
   return organization?.id ?? null;

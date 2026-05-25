@@ -28,6 +28,8 @@
     "validate:scripts-layout": "tsx src/scripts/validators/code/validate-scripts-layout.ts && tsx src/scripts/validators/code/validate-mcp-optional-dependency.ts",
     "validate:mcp-optional-dependency": "tsx src/scripts/validators/code/validate-mcp-optional-dependency.ts",
     "docs:check": "tsx src/scripts/codegen/check-api-docs-sync.ts",
+    "docs:lint": "markdownlint-cli2 --config .markdownlint.json \"**/*.md\"",
+    "docs:lint:fix": "markdownlint-cli2 --config .markdownlint.json --fix \"**/*.md\"",
     "docs:links:check": "tsx src/scripts/validators/docs/check-docs-links.ts",
     "validate:github-env": "tsx tooling/setup/github/validate.ts",
     "validate:github-environments": "tsx tooling/setup/github/environments.ts --check",
@@ -172,8 +174,12 @@
       "eslint --fix",
       "prettier --write"
     ],
-    "*.{json,yaml,yml,md}": [
+    "*.{json,yaml,yml}": [
       "prettier --write"
+    ],
+    "*.md": [
+      "prettier --write",
+      "markdownlint-cli2 --config .markdownlint.json --fix"
     ]
   },
   "packageManager": "pnpm@10.28.2",
@@ -250,6 +256,7 @@
     "libsodium-wrappers": "^0.8.4",
     "light-my-request": "^6.6.0",
     "lint-staged": "^17.0.5",
+    "markdownlint-cli2": "0.15.0",
     "nock": "^14.0.15",
     "openapi-to-postmanv2": "^6.0.1",
     "ora": "^9.4.0",
@@ -293,6 +300,7 @@
       "js-yaml": ">=4.1.1",
       "fast-xml-parser": ">=5.7.0",
       "hono": ">=4.12.18",
+      "markdown-it": ">=14.1.1",
       "minimatch": "10.2.5",
       "micromatch>picomatch": "4.0.4",
       "rollup": ">=4.59.0",
@@ -302,10 +310,9 @@
       "drizzle-orm": ">=0.45.2",
       "i18next-fs-backend": ">=2.6.4",
       "i18next-http-middleware": ">=3.9.3",
-      "qs": "^6.15.2",
+      "qs": ">=6.15.2",
       "uuid": ">=11.1.1",
-      "yaml@1.10.2": "1.10.3",
-      "qs": ">=6.15.2"
+      "yaml@1.10.2": "1.10.3"
     }
   }
 }
