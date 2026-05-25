@@ -248,15 +248,21 @@ export class OrganizationService {
   }
 
   async delete(public_id: string): Promise<void> {
-    const organization = await this.repository.findByPublicId(public_id);
-    if (!organization) throw new NotFoundError('Organization');
+    const organization = await withOrganizationDatabaseContext(public_id, async () => {
+      const found = await this.repository.findByPublicId(public_id);
+      if (!found) throw new NotFoundError('Organization');
+      return found;
+    });
+    // External I/O (S3) and the upload-service tombstone run outside the DB context.
     await this.clearOrganizationLogoStorage(public_id, organization.logo_url);
     if (this.offboardingDependencies) {
       await this.offboardingDependencies.uploadService.tombstoneAllByOrganizationId(
         organization.id,
       );
     }
-    const deleted = await this.repository.softDelete(public_id);
+    const deleted = await withOrganizationDatabaseContext(public_id, () =>
+      this.repository.softDelete(public_id),
+    );
     if (!deleted) throw new NotFoundError('Organization');
   }
 
@@ -266,8 +272,6 @@ export class OrganizationService {
     updated_by_user_public_id: string,
   ): Promise<OrganizationOutput> {
     const parsed = validateUploadLogo(body);
-    const organization = await this.repository.findByPublicId(public_id);
-    if (!organization) throw new NotFoundError('Organization');
     const expectedPrefix = buildOrganizationLogoKeyPrefix(public_id);
     if (!parsed.key.startsWith(expectedPrefix)) {
       throw new ValidationError('errors:validation.logoKeyNotOwned', undefined, {
@@ -277,7 +281,7 @@ export class OrganizationService {
     if (!this.offboardingUploadService) {
       throw new Error('UploadService is not wired for logo-attach confirmation');
     }
-    await this.offboardingUploadService.assertKeyConfirmed(parsed.key);
+    // External I/O (S3) runs outside the DB context.
     const metadata = await this.objectStorage.headObject(parsed.key);
     if (!metadata) {
       throw new ValidationError('errors:validation.logoNotFound', undefined, {
@@ -290,18 +294,31 @@ export class OrganizationService {
       });
     }
     const logoUrl = this.objectStorage.getObjectUrl(parsed.key);
-    const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
-    const updated = await this.repository.update(public_id, { logo_url: logoUrl }, userId ?? null);
-    if (!updated) throw new NotFoundError('Organization');
-    return serializeOrganization(updated);
+    return withOrganizationDatabaseContext(public_id, async () => {
+      const organization = await this.repository.findByPublicId(public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      await this.offboardingUploadService!.assertKeyConfirmed(parsed.key);
+      const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
+      const updated = await this.repository.update(
+        public_id,
+        { logo_url: logoUrl },
+        userId ?? null,
+      );
+      if (!updated) throw new NotFoundError('Organization');
+      return serializeOrganization(updated);
+    });
   }
 
   async deleteLogo(
     public_id: string,
     updated_by_user_public_id: string,
   ): Promise<OrganizationOutput> {
-    const organization = await this.repository.findByPublicId(public_id);
-    if (!organization) throw new NotFoundError('Organization');
+    const organization = await withOrganizationDatabaseContext(public_id, async () => {
+      const found = await this.repository.findByPublicId(public_id);
+      if (!found) throw new NotFoundError('Organization');
+      return found;
+    });
+    // External I/O (S3) runs outside the DB context.
     if (organization.logo_url) {
       const keyMatch = organization.logo_url.match(/organization-logos\/[^?#]+/);
       if (keyMatch) {
@@ -313,9 +330,11 @@ export class OrganizationService {
         }
       }
     }
-    const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
-    const updated = await this.repository.update(public_id, { logo_url: null }, userId ?? null);
-    if (!updated) throw new NotFoundError('Organization');
-    return serializeOrganization(updated);
+    return withOrganizationDatabaseContext(public_id, async () => {
+      const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
+      const updated = await this.repository.update(public_id, { logo_url: null }, userId ?? null);
+      if (!updated) throw new NotFoundError('Organization');
+      return serializeOrganization(updated);
+    });
   }
 }

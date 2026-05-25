@@ -175,7 +175,7 @@ describe('OrganizationService', () => {
     await expect(
       service.uploadLogo(organizationRow.public_id, { key }, 'owner_public'),
     ).rejects.toBeInstanceOf(ValidationError);
-    expect(objectStorage.headObject).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
   });
 
   it('getBySlug throws when organization missing', async () => {
