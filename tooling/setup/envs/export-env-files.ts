@@ -30,12 +30,28 @@ const PROJECT_ROOT = resolve(import.meta.dirname, '../../../');
 
 const ENV_KEY_RE = /^([A-Z][A-Z0-9_]*)=(.*)/;
 
+/**
+ * Encode a value for a `.env` file so dotenv reads it back identically.
+ *
+ * - Empty strings: emit bare empty (no quotes).
+ * - Multi-line values (e.g. PEM keys): emit verbatim multi-line, single-quoted.
+ *   Inside single quotes dotenv preserves all bytes (including newlines and
+ *   backslashes) without escape processing — round-trip safe.
+ * - Single-line values containing whitespace/special chars: double-quote and
+ *   escape backslashes/quotes per dotenv conventions.
+ */
 function escapeEnvValue(value: string): string {
   if (value === '') return '';
-  const normalizedValue = value.replace(/\r?\n/g, '\\n');
-  const hasSpecial = /[\s#"\\]/.test(normalizedValue);
-  if (!hasSpecial) return normalizedValue;
-  return `"${normalizedValue.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  if (value.includes('\n') || value.includes('\r')) {
+    if (value.includes("'")) {
+      const doubled = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      return `"${doubled}"`;
+    }
+    return `'${value}'`;
+  }
+  const hasSpecial = /[\s#"'\\]/.test(value);
+  if (!hasSpecial) return value;
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
 /** Parses KEY=value pairs from a dotenv file. */

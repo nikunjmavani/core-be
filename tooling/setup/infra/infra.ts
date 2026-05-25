@@ -10,6 +10,8 @@
  *   pnpm setup:infra --delete     Print manual-delete dashboard URLs
  *                                 (script never deletes anything; --revert is
  *                                 a back-compat alias)
+ *   pnpm setup:infra --providers neon,jwt,github
+ *   SETUP_INFRA_PROVIDERS=neon,jwt pnpm setup:infra --yes
  */
 import { loadEnvSetupIntoProcess } from '../common/secrets.js';
 import * as logger from '../common/logger.js';
@@ -19,7 +21,9 @@ import {
   runStatus,
   runPreview,
   runDeleteInstructions,
+  getAvailableProviderKeys,
 } from './orchestrator.js';
+import type { ProviderSelectionInput } from './orchestrator.js';
 
 const args = process.argv.slice(2);
 const assumeYes = args.includes('--yes') || args.includes('-y');
@@ -27,6 +31,7 @@ const assumeYes = args.includes('--yes') || args.includes('-y');
 loadEnvSetupIntoProcess();
 
 function getCommand(): string {
+  if (args.includes('--help') || args.includes('-h')) return 'help';
   if (args.includes('--check')) return 'check';
   if (args.includes('--status')) return 'status';
   if (args.includes('--dry-run')) return 'dry-run';
@@ -42,20 +47,63 @@ function getCommand(): string {
   return 'provision';
 }
 
+function parseProviderList(flagName: string): string[] | undefined {
+  const inline = args.find((arg) => arg.startsWith(`${flagName}=`));
+  const flagIndex = args.indexOf(flagName);
+  const rawValue =
+    inline?.slice(flagName.length + 1) ?? (flagIndex >= 0 ? args[flagIndex + 1] : undefined);
+  if (!rawValue || rawValue.startsWith('--')) return undefined;
+  return rawValue
+    .split(',')
+    .map((providerKey) => providerKey.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function getProviderSelection(): ProviderSelectionInput {
+  return {
+    includeKeys: parseProviderList('--providers') ?? parseProviderList('--only-providers'),
+    skipKeys: parseProviderList('--skip-providers'),
+  };
+}
+
+function printHelp(): void {
+  const providerKeys = getAvailableProviderKeys().join(', ');
+  logger.info('Usage:');
+  logger.info('  pnpm setup:infra                         Full provisioning (interactive)');
+  logger.info('  pnpm setup:infra --yes                   Headless provisioning');
+  logger.info('  pnpm setup:infra --check                 Health check selected providers');
+  logger.info('  pnpm setup:infra --status                Show provisioned resources');
+  logger.info('  pnpm setup:infra --dry-run               Preview selected providers');
+  logger.info('  pnpm setup:infra --delete                Print manual-delete dashboard URLs');
+  logger.blank();
+  logger.info('Provider selection:');
+  logger.info('  --providers neon,jwt,github              Run only these provider keys');
+  logger.info('  --skip-providers postman,oauth           Run all except these provider keys');
+  logger.info(
+    '  SETUP_INFRA_PROVIDERS=neon,jwt           Env allow-list for AI/automation prompts',
+  );
+  logger.info('  SETUP_INFRA_SKIP_PROVIDERS=postman       Env skip-list for AI/automation prompts');
+  logger.info(`  Available provider keys: ${providerKeys}`);
+}
+
 async function main(): Promise<void> {
   const command = getCommand();
+  const providerSelection = getProviderSelection();
 
   try {
     switch (command) {
+      case 'help':
+        printHelp();
+        break;
       case 'check':
-        await runCheck();
+        await runCheck({ providerSelection });
         break;
       case 'status':
         runStatus();
         break;
       case 'dry-run':
       case 'preview':
-        runPreview();
+        runPreview({ providerSelection });
         break;
       case 'delete':
         if (args.includes('--revert') || args.includes('--revert-all')) {
@@ -63,14 +111,14 @@ async function main(): Promise<void> {
             '--revert is deprecated — setup:infra never deletes resources. Use --delete to print manual deletion guidance.',
           );
         }
-        runDeleteInstructions();
+        runDeleteInstructions({ providerSelection });
         break;
       case 'provision':
-        await runProvision({ assumeYes });
+        await runProvision({ assumeYes, providerSelection });
         break;
       default:
         logger.error(`Unknown command: ${command}`);
-        logger.info('Usage: pnpm setup:infra [--check|--status|--dry-run|--delete]');
+        printHelp();
         process.exit(1);
     }
   } catch (error) {

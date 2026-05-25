@@ -24,7 +24,7 @@ describe('webhook-delivery.repository (database)', () => {
       organization_id: organization.id,
       url: 'https://example.com/webhooks',
       events: ['subscription.updated'],
-      encrypted_secret: 'whsec_test',
+      encrypted_secret: 'sample-webhook-secret-primary',
       created_by_user_id: owner.id,
     });
 
@@ -59,7 +59,7 @@ describe('webhook-delivery.repository (database)', () => {
       organization_id: organization.id,
       url: 'https://example.com/other',
       events: ['subscription.updated'],
-      encrypted_secret: 'whsec_other',
+      encrypted_secret: 'sample-webhook-secret-secondary',
       created_by_user_id: owner.id,
     });
 

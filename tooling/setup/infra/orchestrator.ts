@@ -24,10 +24,17 @@ import type {
   SetupSecrets,
   SetupState,
   InfraProviderContext,
+  InfraProvider,
 } from '../common/types.js';
 
 export interface ProvisionOptions {
   assumeYes?: boolean;
+  providerSelection?: ProviderSelectionInput;
+}
+
+export interface ProviderSelectionInput {
+  includeKeys?: string[];
+  skipKeys?: string[];
 }
 
 function buildProviderContext(
@@ -49,6 +56,64 @@ function buildProviderContext(
 }
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
+
+const PROVIDER_ALLOW_LIST_ENV = 'SETUP_INFRA_PROVIDERS';
+const PROVIDER_SKIP_LIST_ENV = 'SETUP_INFRA_SKIP_PROVIDERS';
+
+export function getAvailableProviderKeys(): string[] {
+  return INFRA_PROVIDERS.map((provider) => provider.key);
+}
+
+function parseProviderKeyList(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((key) => key.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function formatProviderKeys(keys: string[]): string {
+  return keys.length > 0 ? keys.join(', ') : 'none';
+}
+
+function assertKnownProviderKeys(keys: string[]): void {
+  const knownKeys = new Set(getAvailableProviderKeys());
+  const unknownKeys = keys.filter((key) => !knownKeys.has(key));
+  if (unknownKeys.length === 0) return;
+  throw new Error(
+    `Unknown setup:infra provider key(s): ${unknownKeys.join(', ')}. Available providers: ${getAvailableProviderKeys().join(', ')}`,
+  );
+}
+
+function selectProviders(input?: ProviderSelectionInput): readonly InfraProvider[] {
+  const includeKeys =
+    input?.includeKeys && input.includeKeys.length > 0
+      ? input.includeKeys
+      : parseProviderKeyList(process.env[PROVIDER_ALLOW_LIST_ENV]);
+  const skipKeys =
+    input?.skipKeys && input.skipKeys.length > 0
+      ? input.skipKeys
+      : parseProviderKeyList(process.env[PROVIDER_SKIP_LIST_ENV]);
+
+  assertKnownProviderKeys(includeKeys);
+  assertKnownProviderKeys(skipKeys);
+
+  const includeSet = includeKeys.length > 0 ? new Set(includeKeys) : null;
+  const skipSet = new Set(skipKeys);
+
+  return INFRA_PROVIDERS.filter((provider) => {
+    if (includeSet && !includeSet.has(provider.key)) return false;
+    return !skipSet.has(provider.key);
+  });
+}
+
+function showProviderSelection(providers: readonly InfraProvider[]): void {
+  logger.info(
+    `Selected setup:infra providers: ${formatProviderKeys(providers.map((provider) => provider.key))}`,
+  );
+  logger.info(
+    `Provider selection can also be passed through ${PROVIDER_ALLOW_LIST_ENV}=neon,jwt,github or ${PROVIDER_SKIP_LIST_ENV}=postman.`,
+  );
+}
 
 function getEnvironmentBranchEntries(config: SetupConfig): logger.EnvironmentBranchEntry[] {
   return config.environments.map((environment) => ({
@@ -103,11 +168,15 @@ function isAssumeYes(options: ProvisionOptions | undefined): boolean {
 
 // ─── SETTINGS REVIEW ────────────────────────────────────────────────────────
 
-function displaySettingsReview(config: SetupConfig, context: InfraProviderContext): void {
+function displaySettingsReview(
+  config: SetupConfig,
+  context: InfraProviderContext,
+  providers: readonly InfraProvider[],
+): void {
   const resources: Array<{ provider: string; detail: string }> = [];
   const extras: Array<{ provider: string; detail: string }> = [];
 
-  for (const provider of INFRA_PROVIDERS) {
+  for (const provider of providers) {
     const entries = provider.settingsReview?.(context) ?? [];
     for (const entry of entries) {
       if (entry.bucket === 'resource') {
@@ -131,13 +200,14 @@ function displaySettingsReview(config: SetupConfig, context: InfraProviderContex
 
 async function checkForExistingResources(
   context: InfraProviderContext,
+  providers: readonly InfraProvider[],
 ): Promise<Array<{ provider: string; detail: string }>> {
   const existing: Array<{ provider: string; detail: string }> = [];
 
   logger.info('Checking for existing resources...');
   logger.blank();
 
-  for (const provider of INFRA_PROVIDERS) {
+  for (const provider of providers) {
     if (!provider.detectExisting) continue;
     const found = await provider.detectExisting(context);
     existing.push(...found);
@@ -182,14 +252,17 @@ async function promptEnvOutput(
 
 // ─── PREVIEW ────────────────────────────────────────────────────────────────
 
-export function runPreview(): void {
+export function runPreview(options: { providerSelection?: ProviderSelectionInput } = {}): void {
   const config = loadConfig();
   const environments = getEnvironmentNames(config);
   const secrets = loadSecrets(config);
   const state = loadState();
   const context = buildProviderContext(config, secrets, state, environments);
+  const providers = selectProviders(options.providerSelection);
 
   showHeader(config, environments);
+  showProviderSelection(providers);
+  logger.blank();
 
   const configPath = getConfigPath();
   const secretsPath = getSecretsPath();
@@ -206,7 +279,7 @@ export function runPreview(): void {
     url: string;
     configKey: string;
   }> = [];
-  for (const provider of INFRA_PROVIDERS) {
+  for (const provider of providers) {
     const entry = provider.preview?.(context);
     if (!entry) continue;
     previewEntries.push({
@@ -225,8 +298,11 @@ export function runPreview(): void {
 export async function runProvision(options: ProvisionOptions = {}): Promise<void> {
   const config = await reviewProjectIdentity({ assumeYes: isAssumeYes(options) });
   const environments = getEnvironmentNames(config);
+  const selectedProviders = selectProviders(options.providerSelection);
 
   showHeader(config, environments);
+  showProviderSelection(selectedProviders);
+  logger.blank();
 
   if (!isAssumeYes(options)) {
     const branchOk = await confirmBranchProceed(config);
@@ -264,7 +340,7 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
     process.exit(1);
   }
 
-  displaySettingsReview(config, context);
+  displaySettingsReview(config, context, selectedProviders);
 
   const confirmed = isAssumeYes(options) ? true : await doubleConfirm();
   if (!confirmed) {
@@ -275,7 +351,7 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
 
   logger.blank();
 
-  const existingResources = await checkForExistingResources(context);
+  const existingResources = await checkForExistingResources(context, selectedProviders);
   if (existingResources.length > 0) {
     logger.existingResourcesError(existingResources);
     logger.warn('Existing resources will be adopted or skipped by provider-specific setup.');
@@ -289,11 +365,13 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
   // by the env-file export and (when GitHub is enabled) the GitHub sync step.
   // Database migrations and seeding are intentionally NOT part of setup:infra —
   // they run from CD against each provisioned environment.
-  const steps: StepDescriptor<unknown>[] = INFRA_PROVIDERS.map((provider) =>
+  const steps: StepDescriptor<unknown>[] = selectedProviders.map((provider) =>
     provider.buildStep(context),
   );
   steps.push(buildExportEnvFilesStep(environments));
-  const githubSyncStep = buildGitHubSyncStep(context);
+  const githubSyncStep = selectedProviders.some((provider) => provider.key === 'github')
+    ? buildGitHubSyncStep(context)
+    : null;
   if (githubSyncStep) steps.push(githubSyncStep);
 
   const totalSteps = steps.length;
@@ -449,20 +527,24 @@ function printOutcomeSummary(outcomes: StepOutcome<unknown>[]): void {
 
 // ─── CHECK ──────────────────────────────────────────────────────────────────
 
-export async function runCheck(): Promise<void> {
+export async function runCheck(
+  options: { providerSelection?: ProviderSelectionInput } = {},
+): Promise<void> {
   const config = loadConfig();
   const secrets = loadSecrets(config);
   const state = loadState();
   const environments = getEnvironmentNames(config);
   const context = buildProviderContext(config, secrets, state, environments);
+  const providers = selectProviders(options.providerSelection);
 
   showHeader(config, environments);
+  showProviderSelection(providers);
   logger.info('Running health checks...');
   logger.blank();
 
   let allHealthy = true;
 
-  for (const provider of INFRA_PROVIDERS) {
+  for (const provider of providers) {
     if (!provider.check) continue;
     if (!provider.isEnabled(context)) continue;
     const healthy = await provider.check(context);
@@ -539,18 +621,23 @@ export function runStatus(): void {
 
 // ─── UPDATE ─────────────────────────────────────────────────────────────────
 
-export async function runUpdate(): Promise<void> {
+export async function runUpdate(
+  options: { providerSelection?: ProviderSelectionInput } = {},
+): Promise<void> {
   const config = loadConfig();
   const secrets = loadSecrets(config);
   const state = loadState();
   const environments = getEnvironmentNames(config);
   const context = buildProviderContext(config, secrets, state, environments);
+  const providers = selectProviders(options.providerSelection);
+  const includesGitHub = providers.some((provider) => provider.key === 'github');
 
   showHeader(config, environments);
+  showProviderSelection(providers);
   logger.info('Re-syncing GitHub (branches, rulesets, environments, secrets)...');
   logger.blank();
 
-  if (config.providers.github.enabled) {
+  if (config.providers.github.enabled && includesGitHub) {
     await syncGithubFoundations();
     const result = await githubProvision(config, secrets, state, environments);
     context.applyStateUpdates(result.stateUpdates ?? {});
@@ -559,6 +646,8 @@ export async function runUpdate(): Promise<void> {
     } else {
       logger.error(result.message);
     }
+  } else if (!includesGitHub) {
+    logger.warn('No update provider selected. Today --update only supports provider key "github".');
   } else {
     logger.warn('GitHub is disabled in config. Nothing to update.');
   }
@@ -566,19 +655,23 @@ export async function runUpdate(): Promise<void> {
 
 // ─── RECONSTRUCT ────────────────────────────────────────────────────────────
 
-export async function runReconstruct(): Promise<void> {
+export async function runReconstruct(
+  options: { providerSelection?: ProviderSelectionInput } = {},
+): Promise<void> {
   const config = loadConfig();
   const secrets = loadSecrets(config);
   const environments = getEnvironmentNames(config);
   const state = loadState();
+  const providers = selectProviders(options.providerSelection);
 
   showHeader(config, environments);
+  showProviderSelection(providers);
   logger.info('Reconstructing state from remote providers...');
   logger.blank();
 
   let foundCount = 0;
 
-  for (const provider of INFRA_PROVIDERS) {
+  for (const provider of providers) {
     if (
       !provider.isEnabled({ config, secrets, state, environments, applyStateUpdates: () => {} })
     ) {
@@ -622,16 +715,21 @@ export async function runReconstruct(): Promise<void> {
 // loads `.setup-state.json` and prints, per provider, the dashboard URL and
 // the identifiers the user must delete manually.
 
-export function runDeleteInstructions(): void {
+export function runDeleteInstructions(
+  options: { providerSelection?: ProviderSelectionInput } = {},
+): void {
   const config = loadConfig();
   const secrets = loadSecrets(config);
   const state = loadState();
   const environments = getEnvironmentNames(config);
   const context = buildProviderContext(config, secrets, state, environments);
+  const providers = selectProviders(options.providerSelection);
 
   showHeader(config, environments);
+  showProviderSelection(providers);
+  logger.blank();
 
-  const blocks = INFRA_PROVIDERS.flatMap((provider) =>
+  const blocks = providers.flatMap((provider) =>
     (provider.deleteInstructions?.(context) ?? []).map((block) => ({
       provider: block.provider,
       dashboardUrl: block.dashboardUrl,

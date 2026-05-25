@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import * as logger from '../../../common/logger.js';
 import type {
   SetupState,
@@ -7,30 +7,102 @@ import type {
   InfraProviderContext,
 } from '../../../common/types.js';
 
+interface JwtEnvironmentState {
+  jwtSecret: string;
+  jwtPrivateKey: string;
+  jwtPublicKey: string;
+  jwtSigningKid: string;
+  secretsEncryptionKey?: string;
+}
+
+function generateRsaKeypair(): { privateKey: string; publicKey: string } {
+  return generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+}
+
+function ensureJwtEntry(
+  existing: JwtEnvironmentState | string | undefined,
+  environmentName: string,
+): { entry: JwtEnvironmentState; created: boolean; upgraded: boolean } {
+  if (typeof existing === 'object' && existing.jwtPrivateKey && existing.jwtPublicKey) {
+    return {
+      entry: {
+        jwtSecret: existing.jwtSecret,
+        jwtPrivateKey: existing.jwtPrivateKey,
+        jwtPublicKey: existing.jwtPublicKey,
+        jwtSigningKid: existing.jwtSigningKid ?? `${environmentName}-1`,
+        ...(existing.secretsEncryptionKey
+          ? { secretsEncryptionKey: existing.secretsEncryptionKey }
+          : {}),
+      },
+      created: false,
+      upgraded: false,
+    };
+  }
+
+  const { privateKey, publicKey } = generateRsaKeypair();
+  const jwtSecret = typeof existing === 'string' ? existing : (existing?.jwtSecret ?? '');
+  const carriedSecret = jwtSecret || randomBytes(48).toString('base64url');
+
+  return {
+    entry: {
+      jwtSecret: carriedSecret,
+      jwtPrivateKey: privateKey,
+      jwtPublicKey: publicKey,
+      jwtSigningKid:
+        typeof existing === 'object' && existing.jwtSigningKid
+          ? existing.jwtSigningKid
+          : `${environmentName}-1`,
+      ...(typeof existing === 'object' && existing.secretsEncryptionKey
+        ? { secretsEncryptionKey: existing.secretsEncryptionKey }
+        : {}),
+    },
+    created: existing === undefined,
+    upgraded: existing !== undefined,
+  };
+}
+
 export function provision(state: SetupState, environments: string[]): ProviderResult {
   const existingSecrets = state.jwt ?? {};
   const jwtSecrets: NonNullable<SetupState['jwt']> = { ...existingSecrets };
 
   for (const environmentName of environments) {
-    if (jwtSecrets[environmentName]) {
-      logger.success(`JWT secret for "${environmentName}" — already generated`);
-      continue;
+    const { entry, created, upgraded } = ensureJwtEntry(
+      jwtSecrets[environmentName],
+      environmentName,
+    );
+    jwtSecrets[environmentName] = entry;
+    if (created) {
+      logger.success(
+        `JWT keys for "${environmentName}" — generated (HS256 secret + RS256 keypair)`,
+      );
+    } else if (upgraded) {
+      logger.success(
+        `JWT keys for "${environmentName}" — RS256 keypair generated (existing HS256 secret preserved)`,
+      );
+    } else {
+      logger.success(`JWT keys for "${environmentName}" — already generated`);
     }
-
-    jwtSecrets[environmentName] = randomBytes(48).toString('base64url');
-    logger.success(`JWT secret for "${environmentName}" — generated (64 chars)`);
   }
 
   return {
     success: true,
-    message: `JWT: ${Object.keys(jwtSecrets).length} secrets ready`,
+    message: `JWT: ${Object.keys(jwtSecrets).length} environment(s) ready`,
     stateUpdates: { jwt: jwtSecrets },
   };
 }
 
 function allEnvironmentsHaveJwt(environments: string[], state: SetupState): boolean {
   if (!state.jwt) return false;
-  return environments.every((environmentName) => Boolean(state.jwt?.[environmentName]));
+  return environments.every((environmentName) => {
+    const entry = state.jwt?.[environmentName];
+    if (!entry) return false;
+    if (typeof entry === 'string') return false;
+    return Boolean(entry.jwtSecret && entry.jwtPrivateKey && entry.jwtPublicKey);
+  });
 }
 
 export const setupJwtProvider: InfraProvider = {

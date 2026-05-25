@@ -5,7 +5,7 @@
  * exposes the same `InfraProvider` interface, so each one performs its actions
  * one by one with the same interaction flow (explain → execute → verify →
  * recover) and the same hooks for preview, settings-review, existence-check,
- * health-check, and per-environment revert.
+ * health-check, and manual deletion instructions.
  *
  * To add a new third party:
  *   1. Create `providers/setup-<name>/setup-<name>.provider.ts`

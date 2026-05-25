@@ -20,7 +20,7 @@ describe('WebhookDeliveryAttemptRepository (database)', () => {
       organization_id: organization.id,
       url: 'https://example.com/webhooks',
       events: ['subscription.updated'],
-      encrypted_secret: 'whsec_test',
+      encrypted_secret: 'sample-webhook-secret',
       created_by_user_id: owner.id,
     });
 
