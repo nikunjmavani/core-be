@@ -1,4 +1,6 @@
 import { getActiveOrganizationRlsCheckoutCount } from '@/infrastructure/database/organization-rls-checkout-counter.js';
+import { isWorkerRuntime } from '@/infrastructure/database/contexts/worker-database-context.js';
+import { getWorkerPostgresPoolDemandContext } from '@/infrastructure/queue/worker-runtime/worker-pool-demand-context.js';
 import { env } from '@/shared/config/env.config.js';
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -82,6 +84,23 @@ function shouldEmitAlert(consecutivePolls: number): boolean {
   return consecutivePolls >= env.DATABASE_POOL_ALERT_CONSECUTIVE_POLLS;
 }
 
+function buildWorkerPoolDemandAlertExtra(
+  demand: ReturnType<typeof getWorkerPostgresPoolDemandContext>,
+  poolMaxConnections: number,
+): Record<string, number | string> {
+  if (demand === undefined) {
+    return {};
+  }
+
+  return {
+    workerQueueFamilies: demand.selectedFamilies.join(','),
+    workerPeakPostgresConcurrency: demand.peakPostgresConcurrency,
+    workerPeakPostgresConcurrencyHoldingExternalIo: demand.peakPostgresConcurrencyHoldingExternalIo,
+    workerConfiguredPoolMax: poolMaxConnections,
+    workerMonolithic: demand.monolithicWorker ? 'true' : 'false',
+  };
+}
+
 function emitPoolExhaustionAlert(parameters: {
   level: 'warning' | 'error';
   message: string;
@@ -96,6 +115,87 @@ function emitPoolExhaustionAlert(parameters: {
     level: parameters.level,
     extra: parameters.extra,
   });
+}
+
+function emitActiveCheckoutAlertIfNeeded(parameters: {
+  activeOrganizationRlsCheckouts: number;
+  poolMaxConnections: number;
+  workerPoolDemandExtra: Record<string, number | string>;
+}): void {
+  if (shouldEmitAlert(consecutiveActiveCriticalPolls)) {
+    emitPoolExhaustionAlert({
+      level: 'error',
+      message: 'database.pool.exhaustion.critical',
+      extra: {
+        signal: 'active_organization_rls_checkouts',
+        activeOrganizationRlsCheckouts: parameters.activeOrganizationRlsCheckouts,
+        poolMaxConnections: parameters.poolMaxConnections,
+        criticalRatio: env.DATABASE_POOL_ACTIVE_CRITICAL_RATIO,
+        ...parameters.workerPoolDemandExtra,
+      },
+    });
+    consecutiveActiveCriticalPolls = 0;
+  } else if (shouldEmitAlert(consecutiveActiveWarnPolls)) {
+    emitPoolExhaustionAlert({
+      level: 'warning',
+      message: 'database.pool.exhaustion.high',
+      extra: {
+        signal: 'active_organization_rls_checkouts',
+        activeOrganizationRlsCheckouts: parameters.activeOrganizationRlsCheckouts,
+        poolMaxConnections: parameters.poolMaxConnections,
+        warnRatio: env.DATABASE_POOL_ACTIVE_WARN_RATIO,
+        ...parameters.workerPoolDemandExtra,
+      },
+    });
+    consecutiveActiveWarnPolls = 0;
+  }
+}
+
+function emitClusterAlertIfNeeded(parameters: {
+  clusterActiveConnections: number;
+  allowedApplicationConnections: number;
+  workerPoolDemandExtra: Record<string, number | string>;
+}): void {
+  if (shouldEmitAlert(consecutiveClusterCriticalPolls)) {
+    emitPoolExhaustionAlert({
+      level: 'error',
+      message: 'database.pool.exhaustion.critical',
+      extra: {
+        signal: 'cluster_pg_stat_activity',
+        clusterActiveConnections: parameters.clusterActiveConnections,
+        allowedApplicationConnections: parameters.allowedApplicationConnections,
+        criticalRatio: env.DATABASE_POOL_CLUSTER_CRITICAL_RATIO,
+        ...parameters.workerPoolDemandExtra,
+      },
+    });
+    consecutiveClusterCriticalPolls = 0;
+  } else if (shouldEmitAlert(consecutiveClusterWarnPolls)) {
+    emitPoolExhaustionAlert({
+      level: 'warning',
+      message: 'database.pool.exhaustion.high',
+      extra: {
+        signal: 'cluster_pg_stat_activity',
+        clusterActiveConnections: parameters.clusterActiveConnections,
+        allowedApplicationConnections: parameters.allowedApplicationConnections,
+        warnRatio: env.DATABASE_POOL_CLUSTER_WARN_RATIO,
+        ...parameters.workerPoolDemandExtra,
+      },
+    });
+    consecutiveClusterWarnPolls = 0;
+  }
+}
+
+function resolveOverallPressureLevel(parameters: {
+  activeLevel: PoolPressureLevel;
+  clusterLevel: PoolPressureLevel;
+}): PoolPressureLevel {
+  if (parameters.activeLevel === 'critical' || parameters.clusterLevel === 'critical') {
+    return 'critical';
+  }
+  if (parameters.activeLevel === 'warn' || parameters.clusterLevel === 'warn') {
+    return 'warn';
+  }
+  return 'ok';
 }
 
 /**
@@ -134,67 +234,23 @@ export function evaluatePoolExhaustionAndAlert(parameters: {
     clusterLevel === 'warn',
   );
 
-  if (shouldEmitAlert(consecutiveActiveCriticalPolls)) {
-    emitPoolExhaustionAlert({
-      level: 'error',
-      message: 'database.pool.exhaustion.critical',
-      extra: {
-        signal: 'active_organization_rls_checkouts',
-        activeOrganizationRlsCheckouts,
-        poolMaxConnections,
-        criticalRatio: env.DATABASE_POOL_ACTIVE_CRITICAL_RATIO,
-      },
-    });
-    consecutiveActiveCriticalPolls = 0;
-  } else if (shouldEmitAlert(consecutiveActiveWarnPolls)) {
-    emitPoolExhaustionAlert({
-      level: 'warning',
-      message: 'database.pool.exhaustion.high',
-      extra: {
-        signal: 'active_organization_rls_checkouts',
-        activeOrganizationRlsCheckouts,
-        poolMaxConnections,
-        warnRatio: env.DATABASE_POOL_ACTIVE_WARN_RATIO,
-      },
-    });
-    consecutiveActiveWarnPolls = 0;
-  }
+  const workerPoolDemandExtra = isWorkerRuntime()
+    ? buildWorkerPoolDemandAlertExtra(getWorkerPostgresPoolDemandContext(), poolMaxConnections)
+    : {};
 
-  if (shouldEmitAlert(consecutiveClusterCriticalPolls)) {
-    emitPoolExhaustionAlert({
-      level: 'error',
-      message: 'database.pool.exhaustion.critical',
-      extra: {
-        signal: 'cluster_pg_stat_activity',
-        clusterActiveConnections: parameters.clusterActiveConnections,
-        allowedApplicationConnections: parameters.allowedApplicationConnections,
-        criticalRatio: env.DATABASE_POOL_CLUSTER_CRITICAL_RATIO,
-      },
-    });
-    consecutiveClusterCriticalPolls = 0;
-  } else if (shouldEmitAlert(consecutiveClusterWarnPolls)) {
-    emitPoolExhaustionAlert({
-      level: 'warning',
-      message: 'database.pool.exhaustion.high',
-      extra: {
-        signal: 'cluster_pg_stat_activity',
-        clusterActiveConnections: parameters.clusterActiveConnections,
-        allowedApplicationConnections: parameters.allowedApplicationConnections,
-        warnRatio: env.DATABASE_POOL_CLUSTER_WARN_RATIO,
-      },
-    });
-    consecutiveClusterWarnPolls = 0;
-  }
-
-  const level: PoolPressureLevel =
-    activeLevel === 'critical' || clusterLevel === 'critical'
-      ? 'critical'
-      : activeLevel === 'warn' || clusterLevel === 'warn'
-        ? 'warn'
-        : 'ok';
+  emitActiveCheckoutAlertIfNeeded({
+    activeOrganizationRlsCheckouts,
+    poolMaxConnections,
+    workerPoolDemandExtra,
+  });
+  emitClusterAlertIfNeeded({
+    clusterActiveConnections: parameters.clusterActiveConnections,
+    allowedApplicationConnections: parameters.allowedApplicationConnections,
+    workerPoolDemandExtra,
+  });
 
   return {
-    level,
+    level: resolveOverallPressureLevel({ activeLevel, clusterLevel }),
     activeOrganizationRlsCheckouts,
     poolMaxConnections,
     clusterActiveConnections: parameters.clusterActiveConnections,

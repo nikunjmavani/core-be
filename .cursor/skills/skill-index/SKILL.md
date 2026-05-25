@@ -101,8 +101,8 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### Events, queues, workers
 
-- **Trigger**: new `events/`, `queues/`, or `workers/` directory; new event type; new BullMQ queue or processor; changes to `src/infrastructure/queue/bootstrap.ts`
-- **Action**: read and follow `workers-events` for patterns and wiring
+- **Trigger**: new `events/`, `queues/`, or `workers/` directory; new event type; new BullMQ queue or processor; changes to `src/infrastructure/queue/bootstrap.ts`, `scheduler.ts`, or `src/infrastructure/queue/worker-runtime/**` (registry, family, budget)
+- **Action**: read and follow `workers-events` for patterns and wiring — including registering the worker in `worker-registration.registry.ts` with correct `family`, `usesPostgres`, and `resolvePostgresConcurrency`
 
 ### Code quality and security pipeline
 

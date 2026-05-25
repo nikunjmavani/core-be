@@ -57,9 +57,68 @@ If you set split counts instead of `DEPLOYMENT_TOTAL_REPLICA_COUNT`, the API and
 
 At startup, API and worker processes call `assertPostgresConnectionBudget()` ([`assert-connection-budget.ts`](../../../src/infrastructure/database/assert-connection-budget.ts)): any **hosted deployment** (`NODE_ENV=production`, or any environment that exposes `RAILWAY_GIT_COMMIT_SHA` / `KUBERNETES_SERVICE_HOST`) **fails fast** without deployment counts. Only local development (docker-compose without those markers) defaults to **1 API + 1 worker** when counts are unset.
 
-The pre-deploy CI job (`pnpm validate:github-env`) additionally fails the [`deploy-railway.yml`](../../../.github/workflows/deploy-railway.yml) workflow when the `development` or `production` GitHub Environment is missing `DEPLOYMENT_TOTAL_REPLICA_COUNT` **and** the split counts, so a misconfigured environment is caught before any container starts.
+The pre-deploy CI job (`pnpm validate:github-env`) additionally fails the [`deploy-railway-after-ci.yml`](../../../.github/workflows/deploy-railway-after-ci.yml) workflow when the `development` or `production` GitHub Environment is missing `DEPLOYMENT_TOTAL_REPLICA_COUNT` **and** the split counts, so a misconfigured environment is caught before any container starts.
 
-The worker process runs up to **six** retention workers (concurrency 1 each) plus **webhook-delivery** at `WORKER_CONCURRENCY` (default **4**). Keep `WORKER_CONCURRENCY ≤ DATABASE_POOL_MAX − 6` or raise `DATABASE_POOL_MAX` on the worker service (enforced on the worker at startup).
+### Worker Postgres pool demand (per process)
+
+Every worker is registered exactly once in [`worker-registration.registry.ts`](../../../src/infrastructure/queue/worker-runtime/worker-registration.registry.ts) — the same registry drives **startup** (`bootstrap.ts`) and **budgeting** (`worker-connection-budget.ts`). At startup, `assertPostgresConnectionBudget({ assertWorkerConcurrency: true })` sums **enabled** workers that use Postgres and compares the peak to `DATABASE_POOL_MAX`.
+
+| Variable                                                       | Meaning                                                                                                 | Default                           |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `WORKER_QUEUE_FAMILIES`                                        | Comma-separated families: `mail`, `notify`, `webhook`, `stripe`, `retention`, `observability`, or `all` | `all` (schema default)            |
+| `WORKER_CONCURRENCY`                                           | Fallback BullMQ concurrency when `WORKER_CONCURRENCY_*` unset                                           | `4`                               |
+| `WORKER_CONCURRENCY_MAIL` / `_NOTIFY` / `_WEBHOOK` / `_STRIPE` | Per-family throughput caps                                                                              | fall back to `WORKER_CONCURRENCY` |
+| `SCHEDULER_ENABLED`                                            | Registers repeatable cron jobs for **active queues in this process** only                               | `true`                            |
+
+#### What "uses Postgres" means
+
+Workers process BullMQ jobs from Redis. A worker that talks to Postgres while processing a job holds **one pool checkout per concurrent job** (`usesPostgres: true`). A worker that only touches Redis or makes outbound HTTP calls consumes **zero** Postgres slots (`usesPostgres: false`).
+
+#### Per-registration metadata
+
+Each entry in [`worker-registration.registry.ts`](../../../src/infrastructure/queue/worker-runtime/worker-registration.registry.ts) declares operational metadata used by startup, budgeting, and alerting:
+
+| Field                             | Purpose                                                                                                                                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `usesPostgres`                    | Reserves a per-process pool slot when `true`                                                                                                                                                                                   |
+| `scheduled`                       | `true` for cron-driven workers, `false` for event-driven; cross-checked against `scheduler.ts` at startup (`worker.registry.scheduler_mismatch`)                                                                               |
+| `criticality`                     | `throughput` / `maintenance` / `observability` — surfaced in `worker.queue_families.selected` and pool alerts so operators can correlate latency-critical workloads with pool pressure                                         |
+| `holdsConnectionDuringExternalIo` | `true` when the Postgres checkout is held during an outbound HTTP/S3/Resend call — these workers turn slow externals into pool starvation, so their concurrency is also reported as `peakPostgresConcurrencyHoldingExternalIo` |
+
+#### Per-family registry breakdown (25 workers; 23 use Postgres)
+
+With default concurrency (`WORKER_CONCURRENCY=4`):
+
+| Family                 | Workers                                                                                                                                           | Postgres | Peak demand     | External-IO holding                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------- | -------------------------------------------------------------------------------------- |
+| `mail`                 | `mail` (throughput), `mail-outbox-sweeper` (1)                                                                                                    | 2 / 2    | `4 + 1 = 5`     | `0`                                                                                    |
+| `notify`               | `notification` (throughput), `user-data-export` (throughput)                                                                                      | 2 / 2    | `4 + 4 = 8`     | `4` (user-data-export → S3)                                                            |
+| `webhook`              | `webhook-delivery` (throughput)                                                                                                                   | 1 / 1    | `4`             | `4` (tenant transaction wraps outbound HTTP)                                           |
+| `stripe`               | `stripe-webhook` (throughput), `stripe-webhook-event-retention` (1), `stripe-webhook-event-reclaim` (1)                                           | 3 / 3    | `4 + 1 + 1 = 6` | `0`                                                                                    |
+| `retention`            | 15 single-concurrency workers (audit retention/export, session cleanup, partition maintenance, notification retention, 9 tombstone/sweep workers) | 15 / 15  | `15 × 1 = 15`   | `4` (audit-export, upload-tombstone, upload-pending-sweep, user-data-export-retention) |
+| `observability`        | `idempotency-cardinality`, `dlq-depth` (both Redis-only)                                                                                          | 0 / 2    | `0`             | `0`                                                                                    |
+| **Total (monolithic)** | **25**                                                                                                                                            | **23**   | **`38`**        | **`12`**                                                                               |
+
+The `External-IO holding` column is the **at-risk slice** of the Postgres budget — these are the slots that can starve when Stripe, Resend, or S3 latency spikes. Watch the `workerPeakPostgresConcurrencyHoldingExternalIo` extra in the `database.pool.exhaustion.*` Sentry alerts.
+
+#### Monolithic vs split worker services
+
+| Mode                                                 | Trigger                                | Enforcement                                                                                                                                                                                              |
+| ---------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Monolithic**                                       | `WORKER_QUEUE_FAMILIES` unset or `all` | **Warns** (`database.connection_budget.worker_pool_pressure`) when peak Postgres demand exceeds `DATABASE_POOL_MAX`. Default 38 > pool 10 → tune `DATABASE_POOL_MAX` higher (e.g. 40) or split services. |
+| **Split** (e.g. `WORKER_QUEUE_FAMILIES=mail,notify`) | Explicit subset                        | **Fails fast** at startup when the subset's computed Postgres demand exceeds `DATABASE_POOL_MAX`.                                                                                                        |
+
+#### Example Railway split (same image, different env per service)
+
+| Service              | `WORKER_QUEUE_FAMILIES`      | `SCHEDULER_ENABLED` | Postgres demand      | Suggested `DATABASE_POOL_MAX`                                |
+| -------------------- | ---------------------------- | ------------------- | -------------------- | ------------------------------------------------------------ |
+| Worker throughput    | `mail,notify,webhook,stripe` | `false`             | `5 + 8 + 4 + 6 = 23` | `24`–`28`                                                    |
+| Worker retention     | `retention`                  | `true`              | `15`                 | `16`–`20`                                                    |
+| Worker observability | `observability`              | `true`              | `0`                  | `4` (Redis-only, but keep a small pool for shared utilities) |
+
+Enable **`SCHEDULER_ENABLED=true` on only one service** per environment so repeatable cron jobs are not duplicated across processes (the scheduler filters its registry to active queues in the process, so duplication is bounded — but exactly one scheduler-bearing service is the cleanest contract).
+
+Worker processes also poll pool pressure (same intervals as API) and attach `workerQueueFamilies` / `workerPeakPostgresConcurrency` to Sentry pool alerts when `METRICS_ENABLED` is on.
 
 Use **`DATABASE_MIGRATION_URL`** (owner) for migrations and **`DATABASE_URL`** as the restricted **`core_be_app`** role in production after [migration 20260516000008_core_be_app_role.sql](../../../migrations/00000000000000_init.sql). RLS is enforced via `FORCE ROW LEVEL SECURITY` ([20260516000006_force_row_level_security.sql](../../../migrations/00000000000000_init.sql)).
 

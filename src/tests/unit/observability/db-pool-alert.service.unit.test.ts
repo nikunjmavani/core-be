@@ -22,6 +22,14 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   captureMessage: (...arguments_: unknown[]) => captureMessage(...arguments_),
 }));
 
+vi.mock('@/infrastructure/database/contexts/worker-database-context.js', () => ({
+  isWorkerRuntime: () => false,
+}));
+
+vi.mock('@/infrastructure/queue/worker-runtime/worker-pool-demand-context.js', () => ({
+  getWorkerPostgresPoolDemandContext: () => undefined,
+}));
+
 vi.mock('@/shared/config/env.config.js', () => ({
   env: {
     DATABASE_POOL_MAX: 10,

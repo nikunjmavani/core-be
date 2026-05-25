@@ -1,12 +1,7 @@
 import { sql } from '@/infrastructure/database/connection.js';
+import { computeWorkerPostgresPoolDemand } from '@/infrastructure/queue/worker-runtime/worker-connection-budget.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import {
-  getWorkerConcurrencyMail,
-  getWorkerConcurrencyNotify,
-  getWorkerConcurrencyStripe,
-  getWorkerConcurrencyWebhook,
-} from '@/shared/config/worker-concurrency.util.js';
 
 const DEFAULT_POOL_MAX_CONNECTIONS = 10;
 /** Local docker-compose default: one API + one worker process. */
@@ -14,7 +9,7 @@ const LOCAL_DEFAULT_API_PROCESS_COUNT = 1;
 const LOCAL_DEFAULT_WORKER_PROCESS_COUNT = 1;
 
 export type AssertConnectionBudgetOptions = {
-  /** When true, validates WORKER_CONCURRENCY against DATABASE_POOL_MAX minus retention worker slots. */
+  /** When true, validates per-queue Postgres demand for the selected WORKER_QUEUE_FAMILIES. */
   readonly assertWorkerConcurrency?: boolean;
 };
 
@@ -232,42 +227,46 @@ export async function assertPostgresConnectionBudget(
   }
 
   if (options.assertWorkerConcurrency) {
-    const backgroundReserve = env.WORKER_BACKGROUND_POOL_SLOT_RESERVE;
-    const workerConcurrency = env.WORKER_CONCURRENCY;
-    const maxWorkerConcurrency = poolMaxConnections - backgroundReserve;
-    if (workerConcurrency > maxWorkerConcurrency) {
-      throw new Error(
-        `WORKER_CONCURRENCY (${workerConcurrency}) exceeds DATABASE_POOL_MAX (${poolMaxConnections}) minus ` +
-          `${backgroundReserve} background worker slots (max ${maxWorkerConcurrency}). ` +
-          'Raise DATABASE_POOL_MAX on the worker service, lower WORKER_CONCURRENCY, or reduce ' +
-          'WORKER_BACKGROUND_POOL_SLOT_RESERVE.',
-      );
-    }
+    const poolDemand = computeWorkerPostgresPoolDemand();
+    const { peakPostgresConcurrency, monolithicWorker, selectedFamilies, queues } = poolDemand;
 
-    // Throughput families each run as a separate BullMQ Worker that can hold up to its own
-    // concurrency in pooled connections simultaneously. If their combined peak plus the
-    // background reserve can exceed the pool, warn so operators can split worker services by
-    // queue family or raise the pool before cron overlap / DLQ replay exhausts Postgres.
-    const peakThroughputConcurrency =
-      getWorkerConcurrencyMail() +
-      getWorkerConcurrencyNotify() +
-      getWorkerConcurrencyWebhook() +
-      getWorkerConcurrencyStripe();
-    const peakWorkerPoolDemand = peakThroughputConcurrency + backgroundReserve;
-    if (peakWorkerPoolDemand > poolMaxConnections) {
-      logger.warn(
-        {
-          poolMaxConnections,
-          backgroundReserve,
-          peakThroughputConcurrency,
-          peakWorkerPoolDemand,
-          mail: getWorkerConcurrencyMail(),
-          notify: getWorkerConcurrencyNotify(),
-          webhook: getWorkerConcurrencyWebhook(),
-          stripe: getWorkerConcurrencyStripe(),
-        },
-        'database.connection_budget.worker_pool_pressure',
-      );
+    logger.info(
+      {
+        poolMaxConnections,
+        peakPostgresConcurrency,
+        selectedFamilies,
+        monolithicWorker,
+        enabledQueues: queues
+          .filter((entry) => entry.enabled && entry.postgresConcurrency > 0)
+          .map((entry) => ({
+            queueName: entry.queueName,
+            family: entry.family,
+            postgresConcurrency: entry.postgresConcurrency,
+          })),
+      },
+      'database.connection_budget.worker_demand',
+    );
+
+    if (peakPostgresConcurrency > poolMaxConnections) {
+      const message =
+        `Worker Postgres pool demand (${peakPostgresConcurrency}) exceeds DATABASE_POOL_MAX (${poolMaxConnections}) ` +
+        `for WORKER_QUEUE_FAMILIES [${selectedFamilies.join(', ')}]. ` +
+        'Raise DATABASE_POOL_MAX on the worker service, lower WORKER_CONCURRENCY_* overrides, ' +
+        'or split worker services by queue family. See docs/deployment/runbooks/resource-limits.md';
+
+      if (monolithicWorker) {
+        logger.warn(
+          {
+            poolMaxConnections,
+            peakPostgresConcurrency,
+            selectedFamilies,
+            queues: queues.filter((entry) => entry.enabled && entry.postgresConcurrency > 0),
+          },
+          'database.connection_budget.worker_pool_pressure',
+        );
+      } else {
+        throw new Error(message);
+      }
     }
   }
 }
