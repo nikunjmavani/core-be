@@ -8,6 +8,8 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 
 /** i18n key for the friendly error when a legacy `page` query parameter is sent. */
 export const LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY = 'errors:validation.legacyPageNotSupported';
+export const LEGACY_PAGE_NOT_SUPPORTED_MESSAGE =
+  'Legacy `page` pagination is no longer supported on this route. Use cursor-based pagination via `limit` and `after` (opaque cursor from `meta.pagination.next`).';
 
 /**
  * Throws a clear ValidationError when the request query contains the legacy
@@ -21,9 +23,18 @@ export function ensureCursorOnlyPagination(query: unknown): void {
     !Array.isArray(query) &&
     Object.hasOwn(query, 'page')
   ) {
-    throw new ValidationError(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY, undefined, undefined, [
-      { field: 'page', messageKey: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY },
-    ]);
+    throw new ValidationError(
+      LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+      undefined,
+      LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
+      [
+        {
+          field: 'page',
+          messageKey: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+          message: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
+        },
+      ],
+    );
   }
 }
 

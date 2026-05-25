@@ -4,6 +4,7 @@ import { ValidationError } from '@/shared/errors/index.js';
 import {
   cursorPaginationSchema,
   ensureCursorOnlyPagination,
+  LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
   LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
   rejectLegacyPagePagination,
 } from '@/shared/utils/http/pagination.util.js';
@@ -44,8 +45,13 @@ describe('pagination.util', () => {
         const validationError = error as ValidationError;
         expect(validationError.statusCode).toBe(400);
         expect(validationError.messageKey).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY);
+        expect(validationError.message).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE);
         expect(validationError.errors).toEqual([
-          { field: 'page', messageKey: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY },
+          {
+            field: 'page',
+            messageKey: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+            message: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE,
+          },
         ]);
       }
     });
