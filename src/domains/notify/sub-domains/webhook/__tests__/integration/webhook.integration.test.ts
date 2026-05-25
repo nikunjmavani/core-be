@@ -112,9 +112,10 @@ describe('Webhook Sub-Domain — Integration', () => {
           url: `https://example.com/cursor-${index}-${baseCreatedAt}`,
           createdByUserId: owner.id,
         });
+        const orderedCreatedAt = new Date(baseCreatedAt + index * 1_000);
         await database
           .update(webhooks)
-          .set({ created_at: new Date(baseCreatedAt + index * 1_000) })
+          .set({ created_at: orderedCreatedAt, updated_at: orderedCreatedAt })
           .where(eq(webhooks.id, webhook.id));
       }
 

@@ -86,9 +86,10 @@ describe('WebhookRepository (database)', () => {
           is_enabled: true,
           created_by_user_id: userId,
         });
+        const orderedCreatedAt = new Date(baseCreatedAt + index * 1_000);
         await database
           .update(webhooks)
-          .set({ created_at: new Date(baseCreatedAt + index * 1_000) })
+          .set({ created_at: orderedCreatedAt, updated_at: orderedCreatedAt })
           .where(eq(webhooks.id, created.id));
       }
     }
