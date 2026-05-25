@@ -16,12 +16,25 @@ import { NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
+import { PAGINATION } from '@/shared/constants/pagination.constants.js';
 
 const WEBHOOK_TEST_TIMEOUT_MS = 10_000;
 /** Maximum response body length returned to client (prevents leaking sensitive data from target) */
 const WEBHOOK_TEST_RESPONSE_BODY_MAX_LENGTH = 500;
 /** Maximum response body length persisted to the delivery-attempt record (bounds storage growth). */
 const WEBHOOK_TEST_RESPONSE_BODY_STORED_MAX_LENGTH = 2_000;
+
+export interface WebhookListOptions {
+  organization_public_id: string;
+  after?: string;
+  page?: number;
+  limit?: number;
+  include_total?: boolean;
+}
+
+export interface WebhookDeliveryAttemptListOptions extends WebhookListOptions {
+  webhook_public_id: string;
+}
 
 export class WebhookService {
   constructor(
@@ -30,12 +43,24 @@ export class WebhookService {
     private readonly deliveryAttemptRepository: WebhookDeliveryAttemptRepository,
   ) {}
 
-  async list(organization_public_id: string) {
+  async list(options: WebhookListOptions) {
+    const { organization_public_id } = options;
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-      const rows = await this.webhookRepository.listByOrganization(organization.id);
-      return WebhookSerializer.many(rows);
+      const result = await this.webhookRepository.listByOrganization(
+        organization.id,
+        omitUndefined({
+          after: options.after,
+          offset_page: options.page,
+          limit: options.limit ?? PAGINATION.DEFAULT_LIMIT,
+          include_total: options.include_total,
+        }),
+      );
+      return {
+        ...result,
+        items: WebhookSerializer.many(result.items),
+      };
     });
   }
 
@@ -149,11 +174,8 @@ export class WebhookService {
     }
   }
 
-  async listDeliveryAttempts(
-    organization_public_id: string,
-    webhook_public_id: string,
-    limit: number,
-  ) {
+  async listDeliveryAttempts(options: WebhookDeliveryAttemptListOptions) {
+    const { organization_public_id, webhook_public_id } = options;
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
@@ -162,7 +184,15 @@ export class WebhookService {
         organization.id,
       );
       if (webhookId === null || webhookId === undefined) throw new NotFoundError('Webhook');
-      return this.deliveryAttemptRepository.listByWebhook(webhookId, limit);
+      return this.deliveryAttemptRepository.listByWebhook(
+        webhookId,
+        omitUndefined({
+          after: options.after,
+          offset_page: options.page,
+          limit: options.limit ?? PAGINATION.DEFAULT_LIMIT,
+          include_total: options.include_total,
+        }),
+      );
     });
   }
 

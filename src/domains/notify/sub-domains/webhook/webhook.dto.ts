@@ -1,5 +1,18 @@
 import { z } from 'zod';
+import { cursorListQuerySchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedString } from '@/shared/utils/validation/validation.util.js';
+
+export const listWebhooksQueryDto = cursorListQuerySchema
+  .extend({
+    include_total: z.enum(['true', 'false']).optional().default('false'),
+  })
+  .strict();
+
+export const listWebhookDeliveryAttemptsQueryDto = cursorListQuerySchema
+  .extend({
+    include_total: z.enum(['true', 'false']).optional().default('false'),
+  })
+  .strict();
 
 export const CreateWebhookDto = z
   .object({
@@ -19,5 +32,9 @@ export const UpdateWebhookDto = z
   })
   .strict();
 
+export type ListWebhooksQueryInput = z.infer<typeof listWebhooksQueryDto>;
+export type ListWebhookDeliveryAttemptsQueryInput = z.infer<
+  typeof listWebhookDeliveryAttemptsQueryDto
+>;
 export type CreateWebhookInput = z.infer<typeof CreateWebhookDto>;
 export type UpdateWebhookInput = z.infer<typeof UpdateWebhookDto>;

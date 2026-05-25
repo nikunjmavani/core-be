@@ -1,20 +1,82 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { successResponse } from '@/shared/utils/http/response.util.js';
+import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { WebhookService } from './webhook.service.js';
 import { WebhookSerializer } from './webhook.serializer.js';
+import {
+  validateListWebhookDeliveryAttemptsQuery,
+  validateListWebhooksQuery,
+} from './webhook.validator.js';
+
+interface CursorPaginationResult {
+  limit: number;
+  page: number | undefined;
+  has_more: boolean;
+  next_cursor: string | null;
+  total: number | null;
+}
+
+function buildCursorPaginationMetadata(result: CursorPaginationResult) {
+  return {
+    per_page: result.limit,
+    next:
+      result.page !== undefined && result.has_more ? String(result.page + 1) : result.next_cursor,
+    has_more: result.has_more,
+    ...(result.total !== null ? { estimated_total: result.total } : {}),
+  };
+}
+
+function createListWebhooksHandler(service: WebhookService) {
+  return async (request: FastifyRequest<{ Params: { id: string } }>, _reply: FastifyReply) => {
+    requireAuth(request);
+    const parsed = validateListWebhooksQuery(request.query);
+    const result = await service.list(
+      omitUndefined({
+        organization_public_id: validatePublicIdParam(request.params.id, 'id'),
+        after: parsed.after,
+        page: parsed.page,
+        limit: parsed.limit,
+        include_total: parsed.include_total === 'true',
+      }),
+    );
+    return paginatedResponse(
+      result.items,
+      getRequestIdentifier(request),
+      buildCursorPaginationMetadata(result),
+    );
+  };
+}
+
+function createListDeliveryAttemptsHandler(service: WebhookService) {
+  return async (
+    request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
+    _reply: FastifyReply,
+  ) => {
+    requireAuth(request);
+    const parsed = validateListWebhookDeliveryAttemptsQuery(request.query);
+    const result = await service.listDeliveryAttempts(
+      omitUndefined({
+        organization_public_id: validatePublicIdParam(request.params.id, 'id'),
+        webhook_public_id: request.params.webhookId,
+        after: parsed.after,
+        page: parsed.page,
+        limit: parsed.limit,
+        include_total: parsed.include_total === 'true',
+      }),
+    );
+    return paginatedResponse(
+      WebhookSerializer.many(result.items),
+      getRequestIdentifier(request),
+      buildCursorPaginationMetadata(result),
+    );
+  };
+}
 
 export function createWebhookController(service: WebhookService) {
   return {
-    listWebhooks: async (
-      request: FastifyRequest<{ Params: { id: string } }>,
-      _reply: FastifyReply,
-    ) => {
-      requireAuth(request);
-      const data = await service.list(validatePublicIdParam(request.params.id, 'id'));
-      return successResponse(WebhookSerializer.many(data), getRequestIdentifier(request));
-    },
+    listWebhooks: createListWebhooksHandler(service),
     getWebhook: async (
       request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
       _reply: FastifyReply,
@@ -62,19 +124,7 @@ export function createWebhookController(service: WebhookService) {
       );
       return reply.code(204).send();
     },
-    listDeliveryAttempts: async (
-      request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
-      _reply: FastifyReply,
-    ) => {
-      requireAuth(request);
-      const limit = Number((request.query as { limit?: string }).limit) || 25;
-      const data = await service.listDeliveryAttempts(
-        validatePublicIdParam(request.params.id, 'id'),
-        request.params.webhookId,
-        limit,
-      );
-      return successResponse(WebhookSerializer.many(data), getRequestIdentifier(request));
-    },
+    listDeliveryAttempts: createListDeliveryAttemptsHandler(service),
     testWebhook: async (
       request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
       _reply: FastifyReply,

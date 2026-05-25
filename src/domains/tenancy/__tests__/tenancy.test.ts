@@ -286,6 +286,10 @@ describe('Tenancy Domain — Integration', () => {
         token,
       });
       expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        meta?: { pagination?: { has_more?: boolean; next?: string | null } };
+      };
+      expect(body.meta?.pagination).toMatchObject({ has_more: false, next: null });
     });
   });
 
