@@ -46,17 +46,22 @@ These are enforced by `pnpm db:migrate:lint` and cannot be overridden by the `--
      `-- migration-safety: allow <rule_id> reason="short justification"`
      Known `rule_id` values live in `migrationSafetyRuleIds` in [`src/scripts/validators/migration/lint-migrations.ts`](../../../src/scripts/validators/migration/lint-migrations.ts).
 6. **Verify locally** — always against the **local Docker** stack (Postgres 17), never a remote Neon dev branch. The compose Postgres is the only local environment with the `core_be_app` role wired up so RLS security tests can `SET ROLE core_be_app` and exercise policies exactly the way CI does:
+
    ```bash
    pnpm compose:up && pnpm compose:wait
    pnpm db:migrate:lint
    pnpm db:migrate
    pnpm typecheck
    ```
+
    When the migration adds, removes, or rewrites an **RLS policy** or a **`SECURITY DEFINER` function**, also run the security RLS shard:
+
    ```bash
    pnpm vitest run --project security src/tests/security/rls/
    ```
+
    Remote Neon dev fails these with `42501 permission denied to set role "core_be_app"` and silently masks RLS bugs — always run against Docker.
+
 7. **Seeds**: if new tables need reference/demo data, invoke **seed-maintainer**.
 8. **DBML diagram** (`docs/database/core-be.dbml`): regenerated automatically by the local `.husky/pre-commit` hook whenever `migrations/*.sql` is staged (`pnpm tool:generate-dbdiagram` → `git add`). The diagram captures columns, primary keys, foreign keys (with `ON DELETE` actions), unique constraints, RLS rules, and partitioning. It is **local only** — no CI check enforces it. Run `pnpm tool:generate-dbdiagram` manually if you want to preview the output before committing.
 
