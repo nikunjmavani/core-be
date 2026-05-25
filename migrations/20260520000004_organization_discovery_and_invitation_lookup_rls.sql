@@ -19,12 +19,36 @@
 --       grants USING/WITH CHECK access ONLY when app.current_user_id is set AND the user is
 --       the organization owner or an active member. Permissive policies are OR'd, so the
 --       existing organizations_tenant_isolation policy continues to gate org-context paths.
+--       The organization policy uses a SECURITY DEFINER membership predicate to avoid the
+--       recursive RLS chain organizations -> memberships -> organizations.
 --
 --     * Two SECURITY DEFINER helper functions resolve an invitation_public_id (or an email
 --       address) to the owning organization_public_id, mirroring the existing
 --       billing.resolve_organization_public_id_for_stripe_subscription pattern. The service
 --       layer then wraps the actual UPDATE in withOrganizationDatabaseContext so RLS sees
 --       the org GUC for the accept / revoke writes.
+
+CREATE OR REPLACE FUNCTION tenancy.user_has_active_membership_for_organization (
+  organization_id_param BIGINT,
+  user_public_id_param TEXT
+) RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = tenancy, auth, public
+SET row_security = off
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM tenancy.memberships AS member_row
+    INNER JOIN auth.users AS user_row ON user_row.id = member_row.user_id
+    WHERE member_row.organization_id = organization_id_param
+      AND member_row.status = 'ACTIVE'
+      AND member_row.deleted_at IS NULL
+      AND user_row.public_id = user_public_id_param
+      AND user_row.deleted_at IS NULL
+  );
+$$;
 
 DROP POLICY IF EXISTS organizations_user_discovery ON tenancy.organizations;
 CREATE POLICY organizations_user_discovery ON tenancy.organizations
@@ -40,18 +64,10 @@ CREATE POLICY organizations_user_discovery ON tenancy.organizations
         WHERE public_id = current_setting('app.current_user_id', true)
           AND deleted_at IS NULL
       )
-      OR EXISTS (
-        SELECT 1
-        FROM tenancy.memberships AS member_row
-        WHERE member_row.organization_id = tenancy.organizations.id
-          AND member_row.status = 'ACTIVE'
-          AND member_row.deleted_at IS NULL
-          AND member_row.user_id = (
-            SELECT id FROM auth.users
-            WHERE public_id = current_setting('app.current_user_id', true)
-              AND deleted_at IS NULL
-          )
-      )
+    OR tenancy.user_has_active_membership_for_organization(
+      tenancy.organizations.id,
+      current_setting('app.current_user_id', true)
+    )
     )
   )
   WITH CHECK (
@@ -90,6 +106,7 @@ CREATE OR REPLACE FUNCTION tenancy.resolve_member_invitation_lookup_by_public_id
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = tenancy, public
+SET row_security = off
 AS $$
   SELECT
     organization_row.public_id::text AS organization_public_id,
@@ -119,6 +136,7 @@ CREATE OR REPLACE FUNCTION tenancy.list_pending_member_invitations_for_email (
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = tenancy, public
+SET row_security = off
 AS $$
   SELECT
     invitation_row.public_id::text AS invitation_public_id,
@@ -139,3 +157,7 @@ AS $$
   ORDER BY invitation_row.created_at ASC
   LIMIT limit_param;
 $$;
+
+GRANT EXECUTE ON FUNCTION tenancy.user_has_active_membership_for_organization (BIGINT, TEXT) TO core_be_app;
+GRANT EXECUTE ON FUNCTION tenancy.resolve_member_invitation_lookup_by_public_id (TEXT) TO core_be_app;
+GRANT EXECUTE ON FUNCTION tenancy.list_pending_member_invitations_for_email (TEXT, INTEGER) TO core_be_app;
