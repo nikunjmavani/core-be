@@ -133,8 +133,18 @@ function getGitHubEnvironmentVariableEntries(
   });
 }
 
-function validateGitHubEnvironmentProtectionDrift(): boolean {
-  const results = validateGitHubEnvironmentsDrift();
+export function resolveGitHubEnvironment(config: string): string {
+  const ghEnvMap: Record<string, string> = {
+    dev: 'development',
+    development: 'development',
+    prod: 'production',
+    production: 'production',
+  };
+  return ghEnvMap[config] ?? config;
+}
+
+function validateGitHubEnvironmentProtectionDrift(environment: string): boolean {
+  const results = validateGitHubEnvironmentsDrift({ environmentNames: [environment] });
   if (!driftResultsHaveIssues(results)) {
     return true;
   }
@@ -148,8 +158,10 @@ function validateGitHubEnvironmentProtectionDrift(): boolean {
 }
 
 function main(): void {
+  const config = process.env.CONFIG ?? 'development';
+  const environment = resolveGitHubEnvironment(config);
   const skipGitHub = process.env.SKIP_GITHUB_ENV === '1' || process.env.SKIP_GITHUB_ENV === 'true';
-  if (!(skipGitHub || validateGitHubEnvironmentProtectionDrift())) {
+  if (!(skipGitHub || validateGitHubEnvironmentProtectionDrift(environment))) {
     process.exit(1);
   }
 
@@ -157,15 +169,6 @@ function main(): void {
     console.log('SKIP_GITHUB_ENV set — skipping GitHub environment protection drift check.');
     console.log('');
   }
-
-  const config = process.env['CONFIG'] ?? 'development';
-  const ghEnvMap: Record<string, string> = {
-    dev: 'development',
-    development: 'development',
-    prod: 'production',
-    production: 'production',
-  };
-  const environment = ghEnvMap[config] ?? config;
 
   console.log(`Validating GitHub environment: ${environment}`);
   console.log('Required variables source: Zod env schema (src/shared/config/env-schema.ts)');

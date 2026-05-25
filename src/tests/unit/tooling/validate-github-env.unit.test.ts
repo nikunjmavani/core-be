@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  resolveGitHubEnvironment,
   shouldReportMissingConditional,
   validateDeploymentProcessCountSecrets,
 } from '../../../../tooling/setup/github/validate.js';
+
+describe('resolveGitHubEnvironment', () => {
+  it('maps deploy aliases to canonical GitHub Environment names', () => {
+    expect(resolveGitHubEnvironment('dev')).toBe('development');
+    expect(resolveGitHubEnvironment('development')).toBe('development');
+    expect(resolveGitHubEnvironment('prod')).toBe('production');
+    expect(resolveGitHubEnvironment('production')).toBe('production');
+  });
+
+  it('leaves custom environment names unchanged', () => {
+    expect(resolveGitHubEnvironment('staging')).toBe('staging');
+  });
+});
 
 describe('validateDeploymentProcessCountSecrets', () => {
   it('returns undefined for environments outside the hosted-deployment set', () => {
