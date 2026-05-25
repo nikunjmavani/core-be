@@ -22,7 +22,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Skip the conventional-commits title check when the PR title starts with
+      # `Merge ` (e.g. `Merge dev into feature/foo` from an internal merge of a
+      # parent branch into a child branch). Commitlint's defaultIgnores already
+      # skips these on push to main/dev, so the title gate would otherwise be the
+      # only place a `Merge ...` title is rejected.
       - name: Validate PR title (conventional commits)
+        if: ${{ !startsWith(github.event.pull_request.title, 'Merge ') }}
         uses: amannn/action-semantic-pull-request@v5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
