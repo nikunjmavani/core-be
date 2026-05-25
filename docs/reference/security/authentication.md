@@ -4,14 +4,14 @@ core-be supports password login, magic links, OAuth (Google, GitHub), JWT access
 
 ## Current methods
 
-| Method | Entry routes | Notes |
-| ------ | ------------- | ----- |
-| Email + password | `POST /api/v1/auth/login` | May return MFA challenge |
-| Magic link | `POST /api/v1/auth/magic-link/*` | Passwordless email flow |
-| OAuth | `GET /api/v1/auth/oauth/{provider}` | PKCE + state cookie |
-| API key | `Authorization: Bearer` with key prefix | Organization-scoped permissions |
-| MFA | TOTP + recovery codes | Encrypted secrets at rest |
-| WebAuthn / passkeys | `POST /api/v1/auth/webauthn/*` | FIDO2 credentials in `auth.webauthn_credentials` |
+| Method              | Entry routes                            | Notes                                            |
+| ------------------- | --------------------------------------- | ------------------------------------------------ |
+| Email + password    | `POST /api/v1/auth/login`               | May return MFA challenge                         |
+| Magic link          | `POST /api/v1/auth/magic-link/*`        | Passwordless email flow                          |
+| OAuth               | `GET /api/v1/auth/oauth/{provider}`     | PKCE + state cookie                              |
+| API key             | `Authorization: Bearer` with key prefix | Organization-scoped permissions                  |
+| MFA                 | TOTP + recovery codes                   | Encrypted secrets at rest                        |
+| WebAuthn / passkeys | `POST /api/v1/auth/webauthn/*`          | FIDO2 credentials in `auth.webauthn_credentials` |
 
 Implementation lives under `src/domains/auth/` (see [sub-domains-layout.md](../architecture/sub-domains-layout.md)).
 
@@ -35,14 +35,24 @@ There is no separate `POST /auth/signup` route. New accounts are created through
 - `POST /api/v1/auth/email/verify`
 - `GET /api/v1/auth/oauth/:provider` (OAuth initiation)
 
-Default is `CAPTCHA_PROVIDER=disabled` (no CAPTCHA). In `development` / `test`, verification is skipped when Turnstile is not configured. Optional `CAPTCHA_BYPASS_HEADER` (non-production only) allows local testing. Failures return **401** with `errors:captchaRequired` or `errors:captchaInvalid`.
+Schema default is `CAPTCHA_PROVIDER=disabled`. In `development` / `test`, verification is skipped when Turnstile is not configured. Optional `CAPTCHA_BYPASS_HEADER` (non-production only) allows local testing. Failures return **401** with `errors:captchaRequired` or `errors:captchaInvalid`.
+
+**Production boot guard.** Because `captchaPreHandler` fail-closes when CAPTCHA is unconfigured, a production deploy with the default `CAPTCHA_PROVIDER=disabled` would turn login, magic-link, password recovery, email verification, and OAuth initiation into **401**s. To prevent that silent outage, the env schema rejects boot in production unless one of the following holds (see `src/shared/config/env-schema.ts`):
+
+| Posture                            | Required env                                              | Auth-route behavior                                                                                                                         |
+| ---------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CAPTCHA enforced** (recommended) | `CAPTCHA_PROVIDER=turnstile` + `CAPTCHA_SECRET`           | Verify `X-Captcha-Token`; fail-closed on missing or invalid tokens.                                                                         |
+| **Emergency override**             | `CAPTCHA_PROVIDER=disabled` + `CAPTCHA_DISABLED_ACK=true` | Middleware fail-opens (skips verification) so auth routes do not return 401. Use only as a short-term unblock; track re-enabling Turnstile. |
+| **Anything else in production**    | N/A                                                       | Boot fails fast with `In production, configure CAPTCHA ... or set CAPTCHA_DISABLED_ACK=true`.                                               |
+
+Outside production (`development`, `test`), the acknowledgement is ignored and the middleware fail-opens by default.
 
 ## Magic-link environment safety
 
 `MagicLinkService.send` **never** returns the raw magic-link token in the JSON body. The token leaves the service only via the `AUTH_EVENT.MAGIC_LINK_REQUESTED` event payload (consumed by the mail handler) and the resulting email URL — identical behavior across every environment.
 
-| Guard | When it runs |
-| ----- | ------------- |
+| Guard                     | When it runs                                                  |
+| ------------------------- | ------------------------------------------------------------- |
 | Zod `FRONTEND_URL` refine | Boot — when set, `FRONTEND_URL` must be a valid `http(s)` URL |
 
 **Test code path:** tests subscribe to `AUTH_EVENT.MAGIC_LINK_REQUESTED` via the `captureNextMagicLinkToken(email)` helper in `src/tests/helpers/magic-link.helper.ts` to obtain the raw token for assertions.
@@ -53,12 +63,12 @@ Default is `CAPTCHA_PROVIDER=disabled` (no CAPTCHA). In `development` / `test`, 
 
 Passkeys use `@simplewebauthn/server` with challenges stored in Redis (`webauthn:challenge:*`, 5-minute TTL).
 
-| Route | Auth | Purpose |
-| ----- | ---- | ------- |
-| `POST /api/v1/auth/webauthn/register/options` | JWT | Begin enrolment (returns `options` + `challenge_token`) |
-| `POST /api/v1/auth/webauthn/register/verify` | JWT | Complete enrolment; persists public key |
-| `POST /api/v1/auth/webauthn/authenticate/options` | Public | Begin sign-in (`email` required) |
-| `POST /api/v1/auth/webauthn/authenticate/verify` | Public | Complete sign-in; issues JWT + session cookie |
+| Route                                             | Auth   | Purpose                                                 |
+| ------------------------------------------------- | ------ | ------------------------------------------------------- |
+| `POST /api/v1/auth/webauthn/register/options`     | JWT    | Begin enrolment (returns `options` + `challenge_token`) |
+| `POST /api/v1/auth/webauthn/register/verify`      | JWT    | Complete enrolment; persists public key                 |
+| `POST /api/v1/auth/webauthn/authenticate/options` | Public | Begin sign-in (`email` required)                        |
+| `POST /api/v1/auth/webauthn/authenticate/verify`  | Public | Complete sign-in; issues JWT + session cookie           |
 
 Environment:
 

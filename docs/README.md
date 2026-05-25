@@ -45,14 +45,14 @@ flowchart TB
 
 ## Getting started
 
-| Doc                                                                                          | Description                                                                    |
-| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| [getting-started/setup.md](getting-started/setup.md)                                         | Local setup, testing, links to deployment and credentials.                     |
-| [getting-started/api-testing.md](getting-started/api-testing.md)                             | Manual API checklist and smoke after `pnpm db:seed:full`.                      |
-| [getting-started/requirement-intake.md](getting-started/requirement-intake.md)               | Format for new requirements; which skills and rules to run.                    |
-| [../CONTRIBUTING.md](../CONTRIBUTING.md)                                                     | Contributor quick start; links to **AGENTS.md** for the full PR checklist.     |
+| Doc                                                                                          | Description                                                                                                 |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| [getting-started/setup.md](getting-started/setup.md)                                         | Local setup, testing, links to deployment and credentials.                                                  |
+| [getting-started/api-testing.md](getting-started/api-testing.md)                             | Manual API checklist and smoke after `pnpm db:seed:full`.                                                   |
+| [getting-started/requirement-intake.md](getting-started/requirement-intake.md)               | Format for new requirements; which skills and rules to run.                                                 |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md)                                                     | Contributor quick start; links to **AGENTS.md** for the full PR checklist.                                  |
 | [deployment/runbooks/environment-variables.md](deployment/runbooks/environment-variables.md) | Env variable workflow (`.github/sync.config.json` → `pnpm github:sync` → edit values → `pnpm github:sync`). |
-| [integrations/credentials-and-env.md](integrations/credentials-and-env.md)                   | Per-provider credential acquisition (S3, Resend, OAuth, Stripe, Sentry, etc.). |
+| [integrations/credentials-and-env.md](integrations/credentials-and-env.md)                   | Per-provider credential acquisition (S3, Resend, OAuth, Stripe, Sentry, etc.).                              |
 
 ---
 
@@ -112,6 +112,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reference/api/api-versioning.md](reference/api/api-versioning.md)                                                 | `/api/v1`, deprecation, `Sunset` / `Deprecation` headers.                              |
 | [reference/data/data-lifecycle-deletion.md](reference/data/data-lifecycle-deletion.md)                             | Soft-delete, retention, Drizzle table inventory.                                       |
 | [reference/data/user-data-export.md](reference/data/user-data-export.md)                                           | Async GDPR export to S3, presigned download, offboarding cleanup.                      |
+| [reference/security/authentication.md](reference/security/authentication.md)                                       | Auth methods, rate limits, CAPTCHA (Turnstile) production boot guard.                  |
 | [reference/security/csrf-and-session-cookies.md](reference/security/csrf-and-session-cookies.md)                   | Session cookie CSRF posture and Origin checks.                                         |
 | [reference/reliability/chaos-testing.md](reference/reliability/chaos-testing.md)                                   | Toxiproxy chaos suite (`pnpm test:chaos`).                                             |
 | [reference/testing/contract-tests.md](reference/testing/contract-tests.md)                                         | Outbound contracts for Stripe, Resend, S3.                                             |
