@@ -24,22 +24,26 @@ export class MemberRoleService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
-      const page = pagination.offsetPage ?? 1;
       validateListMemberRolesQuery({
         limit: pagination.limit,
         after: pagination.after,
-        page,
+        page: pagination.offsetPage,
       });
       const result = await this.memberRoleRepository.findByOrganizationId(
         organization.id,
-        page,
-        pagination.limit,
+        omitUndefined({
+          after: pagination.after,
+          offset_page: pagination.offsetPage,
+          limit: pagination.limit,
+        }),
       );
       return {
         items: result.items.map(serializeMemberRole),
         page: result.page,
         limit: result.limit,
         total: result.total,
+        has_more: result.has_more,
+        next_cursor: result.next_cursor,
       };
     });
   }

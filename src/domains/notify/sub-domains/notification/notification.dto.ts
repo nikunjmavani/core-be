@@ -14,7 +14,12 @@ export const deleteNotificationParamsDto = z
   })
   .strict();
 
-export const listNotificationsQueryDto = cursorListQuerySchema.strict();
+export const listNotificationsQueryDto = cursorListQuerySchema
+  .extend({
+    // Opt in to count(*); defaults to false so the user inbox stays keyset-only.
+    include_total: z.enum(['true', 'false']).optional().default('false'),
+  })
+  .strict();
 
 export type GetNotificationParamsInput = z.infer<typeof getNotificationParamsDto>;
 export type DeleteNotificationParamsInput = z.infer<typeof deleteNotificationParamsDto>;

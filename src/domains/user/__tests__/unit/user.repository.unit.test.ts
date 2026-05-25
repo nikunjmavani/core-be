@@ -96,27 +96,19 @@ describe('UserRepository', () => {
     expect(await repository.updateMfaEnabled('missing', true)).toBeNull();
   });
 
-  it('findMany returns empty result when no rows match', async () => {
-    const mockOrderBy = vi.fn().mockResolvedValue([]);
-    const mockOffset = vi.fn(() => ({ orderBy: mockOrderBy }));
-    const mockLimit = vi.fn(() => ({ offset: mockOffset }));
-    const mockWhereForList = vi.fn(() => ({
-      limit: mockLimit,
-      returning: vi.fn(),
-      orderBy: vi.fn(() => ({ limit: mockLimit, offset: mockOffset })),
-      offset: mockOffset,
-    }));
-    mockSelect
-      .mockReturnValueOnce({ from: vi.fn(() => ({ where: mockWhereForList })) })
-      .mockReturnValueOnce({
-        from: vi.fn(() => ({
-          where: vi.fn().mockResolvedValue([{ count: 0 }]),
-        })),
-      });
+  it('findMany returns empty keyset result when no rows match (count(*) only when include_total=true or offset_page given)', async () => {
+    const rowsQueryThenable = Promise.resolve([]);
+    const rowsLimit = vi.fn(() => rowsQueryThenable);
+    const rowsOrderBy = vi.fn(() => ({ limit: rowsLimit }));
+    const rowsWhere = vi.fn(() => ({ orderBy: rowsOrderBy }));
+    const rowsFrom = vi.fn(() => ({ where: rowsWhere }));
+    mockSelect.mockReturnValueOnce({ from: rowsFrom } as never);
 
-    const result = await repository.findMany({ page: 1, limit: 20, search: 'none' });
+    const result = await repository.findMany({ limit: 20, search: 'none' });
 
     expect(result.items).toEqual([]);
-    expect(result.total).toBe(0);
+    expect(result.total).toBeNull();
+    expect(result.has_more).toBe(false);
+    expect(result.next_cursor).toBeNull();
   });
 });

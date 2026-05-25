@@ -51,7 +51,6 @@ describe('AuditRepository.findWithFilters from/to boundary semantics (database)'
     const onBoundaryId = await insertAuditLogAt(actor.id, boundary);
 
     const result = await repository.findWithFilters({
-      page: 1,
       limit: 50,
       actor_user_id: actor.id,
       from: boundary.toISOString(),
@@ -67,7 +66,6 @@ describe('AuditRepository.findWithFilters from/to boundary semantics (database)'
     const onBoundaryId = await insertAuditLogAt(actor.id, boundary);
 
     const result = await repository.findWithFilters({
-      page: 1,
       limit: 50,
       actor_user_id: actor.id,
       to: boundary.toISOString(),
@@ -93,7 +91,6 @@ describe('AuditRepository.findWithFilters from/to boundary semantics (database)'
     const insideId = await insertAuditLogAt(actor.id, new Date(lowerBoundary.getTime() + 60_000));
 
     const result = await repository.findWithFilters({
-      page: 1,
       limit: 50,
       actor_user_id: actor.id,
       from: lowerBoundary.toISOString(),

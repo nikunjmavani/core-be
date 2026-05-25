@@ -7,9 +7,10 @@ export interface AuditLogFilters {
   action?: string;
   from?: string;
   to?: string;
-  page: number;
+  after?: string;
+  offset_page?: number;
   limit: number;
-  /** When false, skip the expensive count(*) on this growing table; total is returned as null. */
+  /** When true, run the expensive count(*) on this growing table; total is otherwise null. */
   include_total?: boolean;
 }
 

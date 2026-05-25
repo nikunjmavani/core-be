@@ -25,6 +25,7 @@ Write production-grade, maintainable, scalable code. Preserve simplicity; avoid 
 - Remove dead code, unused imports, `console.log`, and commented-out code.
 - Use `logger` from `@/shared/utils/infrastructure/logger.util.js` in application code.
 - Avoid unnecessary dependencies.
+- **Object parameters only** for any function/method with 2+ inputs, except in `*.repository.ts` / `*.repository.unit.test.ts` and framework-mandated callbacks (Fastify handlers, BullMQ processors, DI constructors, test/Zod callbacks). See **[object-params.mdc](object-params.mdc)**.
 
 ## Architecture (brief)
 

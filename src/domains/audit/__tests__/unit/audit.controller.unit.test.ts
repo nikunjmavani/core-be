@@ -50,10 +50,10 @@ describe('createAuditController', () => {
     list: vi.fn().mockResolvedValue({
       items: [auditLogRow()],
       total: 1,
-      page: 1,
       limit: 20,
       total_pages: 1,
       has_more: false,
+      next_cursor: null,
     }),
   } as unknown as AuditService;
 
@@ -80,10 +80,10 @@ describe('createAuditController', () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [auditLogRow({ id: 1 }), auditLogRow({ id: 2 })],
       total: 4,
-      page: 1,
       limit: 2,
       total_pages: 2,
       has_more: true,
+      next_cursor: 'cursor_2',
     } as never);
     const response = await controller.listLogs(
       mockRequest({ query: { page: 1, limit: 2, include_total: 'true' } }),
@@ -93,7 +93,7 @@ describe('createAuditController', () => {
       meta: {
         pagination: expect.objectContaining({
           has_more: true,
-          next: '2',
+          next: 'cursor_2',
         }),
       },
     });
@@ -103,10 +103,10 @@ describe('createAuditController', () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [auditLogRow()],
       total: 1,
-      page: 1,
       limit: 20,
       total_pages: 1,
       has_more: false,
+      next_cursor: null,
     } as never);
     const response = await controller.listLogs(mockRequest(), mockReply());
     expect(response).toMatchObject({

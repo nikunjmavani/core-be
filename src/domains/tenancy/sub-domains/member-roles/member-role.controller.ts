@@ -17,9 +17,12 @@ export function createMemberRoleController(service: MemberRoleService) {
       const result = await service.list(organizationId, pagination);
       return paginatedResponse(result.items, getRequestIdentifier(request), {
         per_page: result.limit,
-        next: null,
-        has_more: result.page * result.limit < result.total,
-        estimated_total: result.total,
+        next:
+          result.page !== undefined && result.has_more
+            ? String(result.page + 1)
+            : result.next_cursor,
+        has_more: result.has_more,
+        ...(result.total !== null ? { estimated_total: result.total } : {}),
       });
     },
     getRole: async (request: FastifyRequest, _reply: FastifyReply) => {

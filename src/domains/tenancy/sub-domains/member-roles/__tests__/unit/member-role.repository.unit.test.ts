@@ -63,7 +63,7 @@ describe('MemberRoleRepository', () => {
       .mockImplementationOnce(() => ({ from: mockFromRows }))
       .mockImplementationOnce(() => ({ from: mockCountFrom }));
 
-    const result = await repository.findByOrganizationId(1, 1, 20);
+    const result = await repository.findByOrganizationId(1, { offset_page: 1, limit: 20 });
 
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
@@ -87,11 +87,11 @@ describe('MemberRoleRepository', () => {
       .mockImplementationOnce(() => ({ from: mockFromRows }))
       .mockImplementationOnce(() => ({ from: mockCountFrom }));
 
-    const result = await repository.findByOrganizationId(1, 1, 20);
+    const result = await repository.findByOrganizationId(1, { offset_page: 1, limit: 20 });
 
     expect(result.items).toHaveLength(1);
     expect(result.total).toBe(1);
-    expect(result.total_pages).toBe(1);
+    expect(result.has_more).toBe(false);
   });
 
   it('findByPublicId returns null when role is missing', async () => {

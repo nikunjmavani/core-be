@@ -52,7 +52,7 @@ describe('Performance: membership list', () => {
         });
       }
 
-      const result = await repository.findByOrganizationId(organization.id, 1, 50);
+      const result = await repository.findByOrganizationId(organization.id, { limit: 50 });
 
       expect(result.items).toHaveLength(MEMBER_COUNT);
       for (const row of result.items) {

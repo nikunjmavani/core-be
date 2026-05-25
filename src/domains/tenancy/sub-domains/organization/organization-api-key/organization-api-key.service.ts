@@ -43,11 +43,13 @@ export class OrganizationApiKeyService {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
-      const page = parsed.page ?? 1;
       const result = await this.apiKeyRepository.findByOrganizationId(
         organization.id,
-        page,
-        parsed.limit,
+        omitUndefined({
+          after: parsed.after,
+          offset_page: parsed.page,
+          limit: parsed.limit,
+        }),
       );
       return {
         ...result,

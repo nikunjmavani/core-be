@@ -59,11 +59,13 @@ export class MembershipService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
-      const page = parsed.page ?? 1;
       const result = await this.membershipRepository.findByOrganizationId(
         organization.id,
-        page,
-        parsed.limit,
+        omitUndefined({
+          after: parsed.after,
+          offset_page: parsed.page,
+          limit: parsed.limit,
+        }),
       );
       return {
         ...result,

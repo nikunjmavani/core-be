@@ -256,20 +256,23 @@ export class UserService {
 
   async listUsers(query: unknown) {
     const parsed = validateListUsers(query);
-    const page = parsed.page ?? 1;
     const result = await this.repository.findMany(
       omitUndefined({
-        page,
+        after: parsed.after,
+        offset_page: parsed.page,
         limit: parsed.limit,
         status: parsed.status,
         search: parsed.search,
+        include_total: parsed.include_total === 'true',
       }),
     );
     return {
       items: result.items.map(UserSerializer.one),
-      page,
-      limit: parsed.limit,
+      page: result.page,
+      limit: result.limit,
       total: result.total,
+      has_more: result.has_more,
+      next_cursor: result.next_cursor,
     };
   }
 

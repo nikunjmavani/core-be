@@ -52,7 +52,14 @@ describe('UserService', () => {
     updateMfaEnabled: vi.fn().mockResolvedValue(userRow),
     createFromOAuth: vi.fn().mockResolvedValue(userRow),
     softDelete: vi.fn().mockResolvedValue(userRow),
-    findMany: vi.fn().mockResolvedValue({ items: [userRow], total: 1 }),
+    findMany: vi.fn().mockResolvedValue({
+      items: [userRow],
+      total: null,
+      page: undefined,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    }),
     adminUpdate: vi.fn().mockResolvedValue(userRow),
     suspend: vi.fn().mockResolvedValue({ ...userRow, suspended_at: new Date() }),
     unsuspend: vi.fn().mockResolvedValue(userRow),
@@ -160,8 +167,11 @@ describe('UserService', () => {
   });
 
   it('listUsers, getUser, adminUpdateUser, suspend and unsuspend', async () => {
-    const listed = await service.listUsers({ page: 1, limit: 20 });
+    const listed = await service.listUsers({ limit: 20 });
     expect(listed.items).toHaveLength(1);
+    expect(listed.has_more).toBe(false);
+    expect(listed.next_cursor).toBeNull();
+    expect(listed.total).toBeNull();
     const profile = await service.getUser(userRow.public_id);
     expect(profile.id).toBe(userRow.public_id);
     await service.adminUpdateUser(userRow.public_id, { status: 'SUSPENDED' });

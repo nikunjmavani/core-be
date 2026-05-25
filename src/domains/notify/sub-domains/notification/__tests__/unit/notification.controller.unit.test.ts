@@ -21,8 +21,11 @@ describe('createNotificationController', () => {
   const service = {
     listForUser: vi.fn().mockResolvedValue({
       items: [notification],
-      next_cursor: null,
+      total: null,
+      page: undefined,
+      limit: 25,
       has_more: false,
+      next_cursor: null,
     }),
     get: vi.fn().mockResolvedValue(notification),
     markRead: vi.fn().mockResolvedValue(notification),
@@ -34,8 +37,18 @@ describe('createNotificationController', () => {
   const controller = createNotificationController(service as never);
 
   it('listNotifications returns paginated data', async () => {
-    await controller.listNotifications(mockRequest({ query: { limit: '25' } }), {} as FastifyReply);
-    expect(service.listForUser).toHaveBeenCalledWith(expect.any(String), { limit: 25 });
+    const response = await controller.listNotifications(
+      mockRequest({ query: { limit: '25' } }),
+      {} as FastifyReply,
+    );
+    expect(service.listForUser).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ limit: 25, include_total: false }),
+    );
+    expect(
+      (response as { meta: { pagination: { has_more: boolean; next: string | null } } }).meta
+        .pagination,
+    ).toMatchObject({ has_more: false, next: null });
   });
 
   it('listNotifications rejects limit above 100', async () => {
