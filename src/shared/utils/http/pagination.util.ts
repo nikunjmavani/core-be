@@ -27,7 +27,9 @@ export function ensureCursorOnlyPagination(query: unknown): void {
   }
 }
 
-export function rejectLegacyPagePagination(request: Pick<FastifyRequest, 'query'>): void {
+export async function rejectLegacyPagePagination(
+  request: Pick<FastifyRequest, 'query'>,
+): Promise<void> {
   ensureCursorOnlyPagination(request.query);
 }
 

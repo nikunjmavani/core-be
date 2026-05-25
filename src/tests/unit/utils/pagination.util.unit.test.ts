@@ -61,11 +61,11 @@ describe('pagination.util', () => {
       expect(() => ensureCursorOnlyPagination(42)).not.toThrow();
     });
 
-    it('supports Fastify pre-validation hooks', () => {
-      expect(() => rejectLegacyPagePagination({ query: { limit: '10' } })).not.toThrow();
-      expect(() => rejectLegacyPagePagination({ query: { page: '1', limit: '10' } })).toThrow(
-        ValidationError,
-      );
+    it('supports Fastify pre-validation hooks', async () => {
+      await expect(rejectLegacyPagePagination({ query: { limit: '10' } })).resolves.toBeUndefined();
+      await expect(
+        rejectLegacyPagePagination({ query: { page: '1', limit: '10' } }),
+      ).rejects.toThrow(ValidationError);
     });
   });
 });
