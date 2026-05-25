@@ -4,7 +4,7 @@ import {
   driftResultsHaveIssues,
   parseGitHubEnvironmentApiResponse,
   type GitHubEnvironmentConfig,
-} from '../../../../tooling/setup/github-environments.util.js';
+} from '../../../../tooling/setup/github/environments-util.js';
 
 describe('github-environments.util', () => {
   it('parses required reviewers and deployment branch policy from GitHub API response', () => {

@@ -7,6 +7,10 @@ export function createObjectStoragePortMock(
 ): Mocked<ObjectStoragePort> {
   return {
     createPresignedUploadUrl: vi.fn().mockResolvedValue('https://presigned.example/upload'),
+    createPresignedUploadPost: vi.fn().mockResolvedValue({
+      url: 'https://presigned.example/post',
+      fields: { key: 'k', 'Content-Type': 'image/png' },
+    }),
     verifyUploadedObject: vi
       .fn()
       .mockResolvedValue({ contentType: 'image/png', contentLength: 100 }),

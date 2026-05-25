@@ -19,7 +19,7 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 | Conventional commit on push | [protected-branch-commitlint.yml](workflows/protected-branch-commitlint.yml) | **Protected branch commitlint** | Push to `main`, `dev` | No |
 | Release versioning PRs | [release-please-versioning.yml](workflows/release-please-versioning.yml) | **Release Please** | Push to `main`, `dev` | No |
 | SBOM on GitHub Release | [release-attach-sbom.yml](workflows/release-attach-sbom.yml) | **Release SBOM** | `release: published` | No |
-| Dependabot safe auto-merge | [dependabot-auto-merge.yml](workflows/dependabot-auto-merge.yml) | **Dependabot** | Dependabot PRs | No |
+| Dependabot safe auto-merge | [dependabot-auto-merge.yml](workflows/dependabot-auto-merge.yml) | **Dependabot** | After `CI` succeeds on Dependabot PRs | No |
 
 ## Reusable workflows (called from `pr-branch-ci.yml` / `post-merge-ci.yml`)
 
@@ -44,7 +44,9 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 ## Other config
 
 - [dependabot.yml](dependabot.yml) — dependency update PRs
-- [labeler.yml](labeler.yml) — path-based PR labels (via PR Governance)
+- [labeler.yml](labeler.yml) — path-based PR labels (attached by PR Governance)
+- [labels.yml](labels.yml) — manual reference for label definitions (name + pastel color + description)
+- [release-please/](release-please/) — release-please configs + manifests for `main` (stable) and `dev` (prerelease) channels
 - [rulesets/](rulesets/) — branch protection JSON for `main`, `dev`
 - [CODEOWNERS](CODEOWNERS) — review assignments
 

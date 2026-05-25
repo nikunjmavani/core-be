@@ -1,0 +1,103 @@
+{
+  "project": {
+    "name": "core-be",
+    "displayName": "core-be",
+    "organization": "albetrios"
+  },
+  "environments": [
+    {
+      "name": "development",
+      "label": "Development",
+      "nodeEnvironment": "development",
+      "branch": "dev",
+      "protected": true,
+      "isDefault": true
+    },
+    {
+      "name": "production",
+      "label": "Production",
+      "nodeEnvironment": "production",
+      "branch": "main",
+      "protected": true
+    }
+  ],
+  "providers": {
+    "neon": {
+      "enabled": true,
+      "region": "aws-us-east-2",
+      "pgVersion": 17,
+      "computeSize": {
+        "min": 0.25,
+        "max": 1
+      }
+    },
+    "upstash": {
+      "enabled": true
+    },
+    "aws": {
+      "enabled": true,
+      "region": "us-east-1",
+      "s3BucketPrefix": "core-be",
+      "iamUserPrefix": "core-be-s3"
+    },
+    "sentry": {
+      "enabled": false,
+      "organization": "albetrios",
+      "project": "core-be",
+      "platform": "node",
+      "sampleRates": {
+        "development": {
+          "traces": 1,
+          "profile": 1
+        },
+        "production": {
+          "traces": 0.1,
+          "profile": 0.05
+        }
+      }
+    },
+    "resend": {
+      "enabled": true,
+      "fromAddress": "noreply@ig.albetrios.com",
+      "fromName": "core-be"
+    },
+    "stripe": {
+      "enabled": false
+    },
+    "oauth": {
+      "google": {
+        "enabled": false
+      },
+      "github": {
+        "enabled": false
+      }
+    },
+    "railway": {
+      "enabled": true
+    },
+    "github": {
+      "enabled": true,
+      "repository": "nikunjmavani/core-be"
+    },
+    "postman": {
+      "enabled": true
+    }
+  },
+  "app": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "rateLimitMax": {
+      "development": 10000,
+      "production": 100
+    },
+    "rateLimitWindowMs": 60000,
+    "frontendUrl": {
+      "development": "http://localhost:3000",
+      "production": ""
+    },
+    "allowedOrigins": {
+      "development": "http://localhost:3000",
+      "production": ""
+    }
+  }
+}

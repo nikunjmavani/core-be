@@ -1,68 +1,106 @@
-# Auto-labeling configuration for actions/labeler
-# Maps file path patterns to labels
+# PR auto-labeling config for actions/labeler@v5 (invoked by .github/workflows/pr-governance.yml).
+# Maps changed-file globs to labels. Label colors and descriptions live in .github/labels.yml
+# as the manual reference for GitHub label setup.
+#
+# Adding a new domain (src/domains/<new>/**):
+#   1. Add a `domain:<new>` block in the alphabetised domain section below.
+#   2. Add the same label name with pastel color + description in .github/labels.yml.
+#   3. (Optional) update .github/CODEOWNERS so the new domain has reviewers.
 
-domain:auth:
-  - changed-files:
-      - any-glob-to-any-file: 'src/domains/auth/**'
+# ---------- Domains (alphabetised — add new entries here) ----------
 
-domain:billing:
-  - changed-files:
-      - any-glob-to-any-file: 'src/domains/billing/**'
-
-domain:tenancy:
-  - changed-files:
-      - any-glob-to-any-file: 'src/domains/tenancy/**'
-
-domain:user:
-  - changed-files:
-      - any-glob-to-any-file: 'src/domains/user/**'
-
-domain:notify:
-  - changed-files:
-      - any-glob-to-any-file: 'src/domains/notify/**'
-
+# domain:audit — Audit log, retention and export (src/domains/audit)
 domain:audit:
   - changed-files:
       - any-glob-to-any-file: 'src/domains/audit/**'
 
+# domain:auth — Authentication, sessions, magic-link, MFA, passkeys (src/domains/auth)
+domain:auth:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/auth/**'
+
+# domain:billing — Plans, subscriptions and Stripe webhook (src/domains/billing)
+domain:billing:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/billing/**'
+
+# domain:notify — Notifications and webhook delivery (src/domains/notify)
+domain:notify:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/notify/**'
+
+# domain:tenancy — Organizations, membership, roles and permissions (src/domains/tenancy)
+domain:tenancy:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/tenancy/**'
+
+# domain:upload — File uploads and storage (src/domains/upload)
 domain:upload:
   - changed-files:
       - any-glob-to-any-file: 'src/domains/upload/**'
 
+# domain:user — User profile, settings, notification prefs, GDPR export (src/domains/user)
+domain:user:
+  - changed-files:
+      - any-glob-to-any-file: 'src/domains/user/**'
+
+# ---------- Layers ----------
+
+# infrastructure — Cross-domain runtime: database, cache, queue, mail, payment, storage, observability
 infrastructure:
   - changed-files:
       - any-glob-to-any-file: 'src/infrastructure/**'
 
+# shared — Shared utils, middlewares, config, errors, locales (src/shared)
 shared:
   - changed-files:
       - any-glob-to-any-file: 'src/shared/**'
 
+# ---------- Concerns ----------
+
+# ci — GitHub Actions workflows, composite actions, rulesets
 ci:
   - changed-files:
       - any-glob-to-any-file: '.github/**'
 
+# tests — Vitest, k6, chaos, contract and integration suites
 tests:
   - changed-files:
       - any-glob-to-any-file:
           - 'src/tests/**'
           - 'src/domains/**/__tests__/**'
           - 'vitest.config.ts'
+          - 'vitest.*.config.ts'
 
+# docs — Hand-written docs under docs/ and top-level *.md
 docs:
   - changed-files:
       - any-glob-to-any-file:
           - 'docs/**'
           - '*.md'
 
+# database — SQL migrations, Drizzle schemas and DB infrastructure
 database:
   - changed-files:
       - any-glob-to-any-file:
           - 'migrations/**'
           - 'src/domains/**/*.schema.ts'
+          - 'src/infrastructure/database/**'
           - 'drizzle.config.ts'
 
+# dependencies — package.json / pnpm lockfile / workspace updates (also set by Dependabot)
 dependencies:
   - changed-files:
       - any-glob-to-any-file:
           - 'package.json'
           - 'pnpm-lock.yaml'
+          - 'pnpm-workspace.yaml'
+
+# docker — Dockerfile, Compose and image base updates (also set by Dependabot)
+docker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'Dockerfile'
+          - 'Dockerfile.*'
+          - 'docker-compose*.yml'
+          - '.dockerignore'

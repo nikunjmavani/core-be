@@ -1,0 +1,164 @@
+import type { z } from 'zod';
+import type { setupConfigSchema } from './config.js';
+import type { setupSecretsSchema } from './secrets.js';
+import type { setupStateSchema } from './state.js';
+import type { StepDescriptor } from './interactive-step.js';
+
+export type SetupConfig = z.infer<typeof setupConfigSchema>;
+export type SetupSecrets = z.infer<typeof setupSecretsSchema>;
+export type SetupState = z.infer<typeof setupStateSchema>;
+
+export type SetupCommand = 'provision' | 'check' | 'status' | 'update' | 'destroy';
+
+export type EnvironmentName = string;
+
+export interface ProviderContext {
+  config: SetupConfig;
+  secrets: SetupSecrets;
+  state: SetupState;
+  environments: string[];
+}
+
+export interface ProviderResult {
+  success: boolean;
+  message: string;
+  stateUpdates?: Partial<SetupState>;
+}
+
+export interface HealthCheckResult {
+  provider: string;
+  environment?: string;
+  healthy: boolean;
+  message: string;
+}
+
+export interface EnvironmentVariables {
+  PORT: string;
+  HTTP_BIND_HOST: string;
+  NODE_ENV: string;
+  LOG_LEVEL: string;
+  DATABASE_URL: string;
+  DATABASE_MIGRATION_URL?: string;
+  REDIS_URL: string;
+  REDIS_BULLMQ_URL?: string;
+  JWT_SECRET: string;
+  JWT_PRIVATE_KEY?: string;
+  JWT_PUBLIC_KEY?: string;
+  JWT_SIGNING_KID?: string;
+  SECRETS_ENCRYPTION_KEY?: string;
+  ALLOWED_ORIGINS: string;
+  FRONTEND_URL?: string;
+  RATE_LIMIT_MAX: string;
+  RATE_LIMIT_WINDOW_MS: string;
+  METRICS_ENABLED?: string;
+  AUDIT_RETENTION_DAYS: string;
+  AUTH_SESSION_RETENTION_DAYS: string;
+  TOMBSTONE_RETENTION_DAYS?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM_ADDRESS?: string;
+  EMAIL_FROM_NAME?: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  OAUTH_GOOGLE_CLIENT_ID?: string;
+  OAUTH_GOOGLE_CLIENT_SECRET?: string;
+  OAUTH_GOOGLE_REDIRECT_URI?: string;
+  OAUTH_GITHUB_CLIENT_ID?: string;
+  OAUTH_GITHUB_CLIENT_SECRET?: string;
+  OAUTH_GITHUB_REDIRECT_URI?: string;
+  SENTRY_DSN?: string;
+  SENTRY_ENVIRONMENT?: string;
+  SENTRY_TRACES_SAMPLE_RATE?: string;
+  SENTRY_PROFILE_SAMPLE_RATE?: string;
+  S3_BUCKET?: string;
+  S3_REGION?: string;
+  S3_ACCESS_KEY_ID?: string;
+  S3_SECRET_ACCESS_KEY?: string;
+}
+
+export interface GuideStep {
+  stepNumber: number;
+  totalSteps: number;
+  providerName: string;
+  secretsKeys: string[];
+  browserUrl: string;
+  instructions: string[];
+}
+
+// ─── InfraProvider — uniform third-party provider contract ──────────────────
+//
+// Every third-party provider in `providers/setup-<name>/` exports a single
+// `setup<Name>Provider: InfraProvider` const. The orchestrator iterates the
+// registry in `providers/index.ts` and treats every provider the same way:
+// preview → settings-review → detect-existing → build interactive step →
+// check → destroy. Adding a third party = drop a folder + register in the
+// index.
+
+export interface InfraProviderContext {
+  config: SetupConfig;
+  secrets: SetupSecrets;
+  state: SetupState;
+  environments: string[];
+  applyStateUpdates: (updates: Partial<SetupState>) => void;
+}
+
+export interface InfraProviderPreview {
+  detail: string;
+  url: string;
+  configKey: string;
+}
+
+export interface InfraProviderSettingsEntry {
+  bucket: 'resource' | 'extra';
+  provider: string;
+  detail: string;
+}
+
+export interface InfraProviderDeleteInstruction {
+  /** Display name for the entry in the manual-delete guide. */
+  provider: string;
+  /** Dashboard URL where the user can delete the resources. */
+  dashboardUrl: string;
+  /** Optional list of step-by-step actions (rendered as bullets). */
+  steps?: string[];
+  /**
+   * Resources currently recorded in `.setup-state.json` that the user must
+   * delete in the dashboard. Empty array is allowed (we still print the URL
+   * so the user can audit). Identifier is whatever the dashboard shows
+   * (project ID, bucket name, etc.).
+   */
+  resources: Array<{ label: string; identifier: string }>;
+}
+
+export interface InfraProviderExistingResource {
+  provider: string;
+  detail: string;
+}
+
+export interface InfraProvider {
+  /** Stable kebab-case key matching the folder name (e.g. 'neon'). */
+  key: string;
+  /** Human-readable name for logs and tables. */
+  name: string;
+  /** True when the provider should run for the current config + secrets. */
+  isEnabled(context: InfraProviderContext): boolean;
+  /** Reason shown when `isEnabled` returns false. */
+  disabledReason(context: InfraProviderContext): string;
+  /** Browser-guided preview metadata (used by `runPreview`). */
+  preview?(context: InfraProviderContext): InfraProviderPreview | null;
+  /** Settings-review entries (used by `displaySettingsReview`). */
+  settingsReview?(context: InfraProviderContext): InfraProviderSettingsEntry[];
+  /** Pre-existence detection (used by `checkForExistingResources`). */
+  detectExisting?(context: InfraProviderContext): Promise<InfraProviderExistingResource[]>;
+  /** Remote resource detection for state reconstruction (used by --reconstruct). */
+  detectRemote?(context: InfraProviderContext): Promise<Record<string, unknown>>;
+  /** Build the interactive step descriptor for the provision loop. */
+  buildStep(context: InfraProviderContext): StepDescriptor<unknown>;
+  /** Health check used by `runCheck`. Return true when not applicable. */
+  check?(context: InfraProviderContext): Promise<boolean>;
+  /**
+   * Manual-delete guide. Returns the dashboard URL(s) and resource identifiers
+   * the user must remove themselves. setup:infra never deletes resources —
+   * `pnpm setup:infra --delete` only prints this guide.
+   */
+  deleteInstructions?(context: InfraProviderContext): InfraProviderDeleteInstruction[];
+}

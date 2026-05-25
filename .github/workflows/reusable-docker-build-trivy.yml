@@ -88,7 +88,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=core-be-worker
 
       - name: Scan API image with Trivy
-        uses: aquasecurity/trivy-action@v0.34.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: core-be:ci
           format: table
@@ -100,7 +100,7 @@ jobs:
           skip-files: /app/package.json,/app/pnpm-lock.yaml
 
       - name: Scan worker image with Trivy
-        uses: aquasecurity/trivy-action@v0.34.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: core-be-worker:ci
           format: table

@@ -53,6 +53,15 @@ export class UploadRepository {
     return rows[0] ?? null;
   }
 
+  async findByFileKey(file_key: string): Promise<UploadRow | null> {
+    const rows = await getRequestDatabase()
+      .select()
+      .from(uploads)
+      .where(and(eq(uploads.file_key, file_key), isNull(uploads.deleted_at)))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
   async findByPublicIdForUser(public_id: string, user_id: number): Promise<UploadRow | null> {
     const rows = await getRequestDatabase()
       .select()
@@ -72,6 +81,21 @@ export class UploadRepository {
     const rows = await getRequestDatabase()
       .update(uploads)
       .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .where(
+        and(
+          eq(uploads.public_id, public_id),
+          eq(uploads.user_id, user_id),
+          isNull(uploads.deleted_at),
+        ),
+      )
+      .returning();
+    return rows[0] ?? null;
+  }
+
+  async markStatus(public_id: string, user_id: number, status: string): Promise<UploadRow | null> {
+    const rows = await getRequestDatabase()
+      .update(uploads)
+      .set({ status, updated_at: databaseNowTimestamp })
       .where(
         and(
           eq(uploads.public_id, public_id),

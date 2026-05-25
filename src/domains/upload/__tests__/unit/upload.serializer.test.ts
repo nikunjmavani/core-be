@@ -10,12 +10,14 @@ describe('serializeUploadCreate', () => {
         uploadUrl: 'https://s3.example.com/presigned',
         key: 'avatars/user/abc.png',
         expiresAt,
+        uploadMethod: 'PUT',
       }),
     ).toEqual({
       publicId: 'abc123xyz',
       uploadUrl: 'https://s3.example.com/presigned',
       key: 'avatars/user/abc.png',
       expiresAt: expiresAt.toISOString(),
+      uploadMethod: 'PUT',
     });
   });
 });

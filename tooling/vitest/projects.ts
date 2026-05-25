@@ -246,7 +246,7 @@ export const vitestProjects = [
     },
   },
 
-  /** Toxiproxy chaos suite — own setup, runs via `vitest.chaos.config.ts`. */
+  /** Toxiproxy chaos suite — own setup, runs via `tooling/vitest/chaos.config.ts`. */
   {
     extends: true,
     test: {
@@ -262,7 +262,7 @@ export const vitestProjects = [
     },
   },
 
-  /** Outbound-HTTP contract tests — runs via `vitest.contract.config.ts`. */
+  /** Outbound-HTTP contract tests — runs via `tooling/vitest/contract.config.ts`. */
   {
     extends: true,
     test: {

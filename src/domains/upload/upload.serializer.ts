@@ -6,12 +6,16 @@ export function serializeUploadCreate(data: {
   uploadUrl: string;
   key: string;
   expiresAt: Date;
+  uploadMethod: 'PUT' | 'POST';
+  fields?: Record<string, string>;
 }): UploadCreateOutput {
   return {
     publicId: data.publicId,
     uploadUrl: data.uploadUrl,
     key: data.key,
     expiresAt: data.expiresAt.toISOString(),
+    uploadMethod: data.uploadMethod,
+    ...(data.fields !== undefined ? { fields: data.fields } : {}),
   };
 }
 
