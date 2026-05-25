@@ -45,6 +45,7 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 ## Other config
 
 - [dependabot.yml](dependabot.yml) — dependency update PRs
+- [workflows/dependabot-auto-merge.yml](workflows/dependabot-auto-merge.yml) — safe Dependabot auto-merge plus GitHub issue escalation for skipped security updates
 - [labeler.yml](labeler.yml) — path-based PR labels (attached by PR Governance)
 - [labels.yml](labels.yml) — manual reference for label definitions (name + pastel color + description)
 - [release-please/](release-please/) — release-please configs + manifests for `main` (stable) and `dev` (prerelease) channels

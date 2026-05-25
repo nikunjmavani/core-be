@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pull-requests: write
 
 jobs:
@@ -119,6 +120,7 @@ jobs:
 
           appendFileSync(outputPath, `should_merge=${shouldMerge}\n`);
           appendFileSync(outputPath, `reason=${reason}\n`);
+          appendFileSync(outputPath, `is_security_update=${isSecurityUpdate}\n`);
           appendFileSync(outputPath, `update_type=${updateType || 'unknown'}\n`);
           NODE
 
@@ -133,3 +135,57 @@ jobs:
         if: steps.policy.outputs.should_merge != 'true'
         run: |
           echo "Dependabot auto-merge skipped: ${{ steps.policy.outputs.reason }}"
+
+      - name: Escalate skipped security update
+        if: steps.policy.outputs.should_merge != 'true' && steps.policy.outputs.is_security_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+          SKIP_REASON: ${{ steps.policy.outputs.reason }}
+          UPDATE_TYPE: ${{ steps.policy.outputs.update_type }}
+        run: |
+          set -euo pipefail
+
+          pr_title="$(gh pr view "$PR_NUMBER" --json title --jq '.title')"
+          marker="dependabot-security-pr:$PR_NUMBER"
+          existing_issue="$(
+            gh issue list \
+              --state open \
+              --search "$marker in:body" \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+
+          body_file="$(mktemp)"
+          cat > "$body_file" <<EOF
+          ## Skipped Dependabot security update
+
+          Dependabot opened a security update that passed CI but was not eligible for auto-merge.
+
+          - PR: $PR_URL
+          - PR title: $pr_title
+          - Update type: $UPDATE_TYPE
+          - Auto-merge skip reason: $SKIP_REASON
+
+          ## Triage checklist
+
+          - [ ] Read the linked advisory in the Dependabot PR.
+          - [ ] Determine whether the vulnerable code path is reachable in this repository.
+          - [ ] Prefer a patch or minor update when it contains the fix.
+          - [ ] For transitive vulnerabilities, prefer pnpm.overrides before upgrading a direct dependency to a new major version.
+          - [ ] Run pnpm deps:audit, pnpm deps:audit:prod, pnpm validate, and pnpm test before merging a manual fix.
+          - [ ] If no fix is available, document the temporary mitigation, owner, and follow-up date here.
+
+          $marker
+          EOF
+
+          if [ -n "$existing_issue" ]; then
+            gh issue comment "$existing_issue" --body-file "$body_file"
+            echo "Updated existing skipped security update issue #$existing_issue"
+          else
+            gh issue create \
+              --title "Security dependency update requires review: PR #$PR_NUMBER" \
+              --label dependencies \
+              --body-file "$body_file"
+          fi
