@@ -24,7 +24,7 @@
  *   pnpm github:sync --yes
  *
  * Adding or removing a hosted environment: edit tooling/setup/setup.config.json, NODE_ENV,
- * deploy-railway.yml, and related IaC by hand — then run setup:github. There is no
+ * cd.yml, and related IaC by hand — then run setup:github. There is no
  * env:add / env:remove / branch:add script.
  */
 

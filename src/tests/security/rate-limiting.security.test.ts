@@ -20,7 +20,7 @@ describe('Security: Rate Limiting', () => {
   });
 
   it('should include rate limit headers in response', async () => {
-    const response = await request.get('/health/live');
+    const response = await request.get('/health');
     const rateLimitHeaders = [
       'x-ratelimit-limit',
       'x-ratelimit-remaining',
@@ -35,7 +35,7 @@ describe('Security: Rate Limiting', () => {
   it('should not rate limit health checks', async () => {
     const responses = [];
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      responses.push(await request.get('/health/live'));
+      responses.push(await request.get('/health'));
     }
     const rateLimited = responses.filter((response) => response.status === 429);
     expect(rateLimited.length).toBe(0);

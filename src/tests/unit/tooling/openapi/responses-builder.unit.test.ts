@@ -3,7 +3,7 @@ import { buildResponses } from '../../../../../tooling/openapi/emitters/response
 
 describe('responses-builder', () => {
   it('buildResponses includes standard error responses', () => {
-    const responses = buildResponses('GET', 'GET /health/live', {});
+    const responses = buildResponses('GET', 'GET /health', {});
 
     expect(responses['400']).toBeDefined();
     expect(responses['401']).toBeDefined();
@@ -18,7 +18,7 @@ describe('responses-builder', () => {
   });
 
   it('buildResponses uses route response map when defined', () => {
-    const responses = buildResponses('GET', 'GET /health/live', { success: 'OK' });
+    const responses = buildResponses('GET', 'GET /health', { success: 'OK' });
     expect(responses['200']).toMatchObject({ description: 'OK' });
   });
 });

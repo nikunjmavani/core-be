@@ -20,7 +20,7 @@ export type TransactionTailInput = {
 
 export type TailTransactionDecision = 'drop' | 'keep';
 
-const HEALTH_TRANSACTION_MARKERS = ['/health/', 'GET /health/live', 'GET /health/ready'] as const;
+const HEALTH_TRANSACTION_MARKERS = ['/health', 'GET /health'] as const;
 
 export function isHealthCheckTransaction(transactionName: string): boolean {
   if (HEALTH_TRANSACTION_MARKERS.some((marker) => transactionName === marker)) {

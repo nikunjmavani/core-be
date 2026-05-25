@@ -69,7 +69,7 @@ describe('generate-route-catalog', () => {
     expect(inferDomainSlug('user', '/api/v1/users/me')).toBe('user');
     expect(inferDomainSlug('upload', '/api/v1/uploads/')).toBe('upload');
     expect(inferDomainSlug('billing', '/api/v1/billing/plans')).toBe('billing');
-    expect(inferDomainSlug('health', '/health/ready')).toBe('health');
+    expect(inferDomainSlug('health', '/health')).toBe('health');
   });
 
   it('collectAllParsedRoutes includes billing, notify, health, and MCP routes', () => {
@@ -78,7 +78,7 @@ describe('generate-route-catalog', () => {
 
     expect(paths).toContain('GET /api/v1/billing/plans');
     expect(paths).toContain('GET /api/v1/notify/notifications');
-    expect(paths).toContain('GET /health/live');
+    expect(paths).toContain('GET /health');
     expect(paths).toContain('POST /api/v1/mcp');
     expect(routes.length).toBeGreaterThan(100);
   });

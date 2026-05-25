@@ -14,6 +14,6 @@ describe('operation-helpers', () => {
 
   it('inferTagFromPath title-cases the first API segment', () => {
     expect(inferTagFromPath('/api/v1/auth/login')).toBe('Auth');
-    expect(inferTagFromPath('/health/live')).toBe('General');
+    expect(inferTagFromPath('/health')).toBe('General');
   });
 });

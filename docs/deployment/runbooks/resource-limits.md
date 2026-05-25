@@ -57,7 +57,7 @@ If you set split counts instead of `DEPLOYMENT_TOTAL_REPLICA_COUNT`, the API and
 
 At startup, API and worker processes call `assertPostgresConnectionBudget()` ([`assert-connection-budget.ts`](../../../src/infrastructure/database/assert-connection-budget.ts)): any **hosted deployment** (`NODE_ENV=production`, or any environment that exposes `RAILWAY_GIT_COMMIT_SHA` / `KUBERNETES_SERVICE_HOST`) **fails fast** without deployment counts. Only local development (docker-compose without those markers) defaults to **1 API + 1 worker** when counts are unset.
 
-The pre-deploy CI job (`pnpm validate:github-env`) additionally fails the [`deploy-railway-after-ci.yml`](../../../.github/workflows/deploy-railway-after-ci.yml) workflow when the `development` or `production` GitHub Environment is missing `DEPLOYMENT_TOTAL_REPLICA_COUNT` **and** the split counts, so a misconfigured environment is caught before any container starts.
+The pre-deploy CI job (`pnpm validate:github-env`) additionally fails the [`cd.yml`](../../../.github/workflows/cd.yml) workflow when the `development` or `production` GitHub Environment is missing `DEPLOYMENT_TOTAL_REPLICA_COUNT` **and** the split counts, so a misconfigured environment is caught before any container starts.
 
 ### Worker Postgres pool demand (per process)
 
@@ -206,9 +206,9 @@ Alerting runs on API startup (`registerPostgresPoolMetrics` in `server.ts`) and 
 
    Replace `768` using the table above (and your plan’s MiB allowance).
 
-3. **Deploy workflow:** `NODE_OPTIONS` can be synced from GitHub Environment secrets (`NODE_OPTIONS`) via [deploy-railway.yml](../../../.github/workflows/deploy-railway.yml) (all environments). Until the worker has its own deploy workflow, set `NODE_OPTIONS` on the worker service in the Railway dashboard — same pattern, often with **equal or higher** heap than API if workers run heavier jobs.
+3. **CD workflow:** `NODE_OPTIONS` can be synced from GitHub Environment variables (`NODE_OPTIONS`) via [cd.yml](../../../.github/workflows/cd.yml) to both API and worker services. Use equal or higher heap for workers if they run heavier jobs.
 
-4. **Graceful drain:** On `SIGTERM`/`SIGINT`, the API sets a process-wide draining flag before `app.close()`. **`GET /health/ready` returns HTTP 503** with `status: "draining"` so the load balancer stops sending traffic while in-flight requests finish. **`/health/live` stays 200** until the process exits. Align platform **draining / health-check grace** with `SHUTDOWN_TIMEOUT_MS` (default 30s).
+4. **Graceful drain:** On `SIGTERM`/`SIGINT`, the API sets a process-wide draining flag before `app.close()`. **`GET /health` returns HTTP 503** with `status: "draining"` so the load balancer stops sending traffic while in-flight requests finish. Align platform **draining / health-check grace** with `SHUTDOWN_TIMEOUT_MS` (default 30s).
 
 ---
 

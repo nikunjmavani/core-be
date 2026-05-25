@@ -73,7 +73,7 @@ A startup **warning** is logged when BullMQ is configured to use a separate Redi
 
 ## Readiness
 
-`GET /health/ready` pings Redis and performs a representative BullMQ queue probe. If `REDIS_BULLMQ_URL` is explicitly configured to a different endpoint, readiness also pings that dedicated BullMQ Redis client.
+`GET /health` pings Redis and performs a representative BullMQ queue probe. If `REDIS_BULLMQ_URL` is explicitly configured to a different endpoint, readiness also pings that dedicated BullMQ Redis client.
 
 ---
 
@@ -84,7 +84,7 @@ Complete **before** deploying the single-instance topology:
 1. Confirm one managed Redis instance exists per environment and `REDIS_URL` points to it.
 2. Remove `REDIS_BULLMQ_URL` from GitHub `development` and `production` environment secrets, or set it equal to `REDIS_URL` during transition.
 3. Rolling restart API and worker services so the shared URL is loaded.
-4. Verify `GET /health/ready` — `redis` and `bullmq` should be `connected`.
+4. Verify `GET /health` — `redis` and `bullmq` should be `connected`.
 5. **Job migration:** queued jobs on a previous separate BullMQ Redis instance are **not** copied automatically. Drain workers or accept a brief maintenance window before cutover.
 
 ---

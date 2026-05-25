@@ -78,7 +78,7 @@ Skipped required checks do **not** block merge. `Quality` and `PR Governance` al
 
 Treat these as **post-merge gates**: failing runs still indicate problems on the branch tip after merge.
 
-[deploy-railway.yml](../../../.github/workflows/deploy-railway.yml) runs after **CI** succeeds (`workflow_run`) or via **workflow_dispatch**; it is **not** a PR status check.
+[cd.yml](../../../.github/workflows/cd.yml) runs after **CI** succeeds (`workflow_run`) or via **workflow_dispatch**; it is **not** a PR status check.
 
 ---
 

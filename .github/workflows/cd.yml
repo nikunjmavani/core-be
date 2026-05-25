@@ -1,9 +1,9 @@
-# Deploy to Railway after CI succeeds (workflow_run) or on manual dispatch.
+# CD to Railway after CI succeeds (workflow_run) or on manual dispatch.
 # Production API and worker run scanned CI images from GHCR (Trivy gate in docker-build job).
 # Optional environment secrets GHCR_API_IMAGE / GHCR_WORKER_IMAGE override the commit SHA tag
 # (for example digest pinning). See docs/deployment/ci-cd/cicd-and-deployment.md
 
-name: Deploy Railway after CI
+name: CD
 
 on:
   workflow_run:
@@ -21,7 +21,7 @@ on:
           - development
 
 concurrency:
-  group: deploy-railway-${{ github.event.workflow_run.head_branch || github.ref }}
+  group: cd-${{ github.event.workflow_run.head_branch || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -195,6 +195,27 @@ jobs:
           echo "Deploying API from GHCR image: ${{ steps.ghcr_images.outputs.api_image }}"
           railway redeploy --service "$RAILWAY_SERVICE_ID" --image "${{ steps.ghcr_images.outputs.api_image }}"
 
+      - name: Post-deploy API health check
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          api_domain_json="$(railway domain --service "$RAILWAY_SERVICE_ID" --json)"
+          api_base_url="$(printf '%s' "$api_domain_json" | node -e "
+            const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            const url = input.domain ?? input.domains?.[0];
+            if (!url) process.exit(1);
+            const host = String(url).replace(/\\/$/, '');
+            process.stdout.write(host.includes('://') ? host : 'https://' + host);
+          ")"
+          deadline=$(( $(date +%s) + 300 ))
+          until curl -sfS "$api_base_url/health" -o /tmp/api-health.json; do
+            [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::API /health timeout"; exit 1; }
+            sleep 5
+          done
+          node -e "const health = require('/tmp/api-health.json'); for (const key of ['database','redis','bullmq']) if (health[key] !== 'connected') { console.error('not connected:', key); process.exit(1); }"
+
       - name: Require worker service for deploy
         env:
           RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
@@ -231,5 +252,5 @@ jobs:
             process.stdout.write(host.includes('://') ? host : 'https://' + host);
           ")"
           export WORKER_HEALTH_URL="${worker_base_url%/*}:$WORKER_HEALTH_PORT"
-          echo "Probing worker readiness at $WORKER_HEALTH_URL/health/worker"
+          echo "Probing worker readiness at $WORKER_HEALTH_URL/health"
           pnpm tool:worker-readiness --url "$WORKER_HEALTH_URL"

@@ -1,6 +1,6 @@
 # GitHub production environment (manual approval)
 
-How **production** deploys are gated in GitHub Actions when using [deploy-railway.yml](../../.github/workflows/deploy-railway.yml). There is **no Terraform** in this repository — environment protection rules are declared in [`.github/environments/`](../../.github/environments/) and applied in the GitHub UI.
+How **production** deploys are gated in GitHub Actions when using [cd.yml](../../.github/workflows/cd.yml). There is **no Terraform** in this repository — environment protection rules are declared in [`.github/environments/`](../../.github/environments/) and applied in the GitHub UI.
 
 ---
 
@@ -49,7 +49,7 @@ Committed JSON under [`.github/environments/`](../../.github/environments/) is t
 | Command                             | Purpose                                                                                                                                                 |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm validate:github-environments` | Compare committed config vs live GitHub UI (all `*.json` in `.github/environments/`)                                                                    |
-| `pnpm validate:github-env`          | Same drift check **plus** `.env.example` secrets and `METRICS_*` deploy sync (runs in [deploy-railway.yml](../../.github/workflows/deploy-railway.yml)) |
+| `pnpm validate:github-env`          | Same drift check **plus** `.env.example` secrets and `METRICS_*` deploy sync (runs in [cd.yml](../../.github/workflows/cd.yml)) |
 
 Use `SKIP_GITHUB_ENV=1` to skip API calls locally when you only need deploy-sync or secret checks.
 

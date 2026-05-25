@@ -49,7 +49,7 @@ describe('Security: CORS', () => {
   it('should handle requests from allowed origins', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health/live',
+      url: '/health',
       headers: { origin: 'http://localhost:3000' },
     });
     // Response should include CORS headers for allowed origin

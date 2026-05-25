@@ -135,7 +135,7 @@ flowchart LR
 | dev    | development        | Development     |
 | main   | production         | Production      |
 
-Deploy workflow: [deploy-railway.yml](../../../.github/workflows/deploy-railway.yml) (runs after CI succeeds on push to `main` / `dev`, or manual `workflow_dispatch`).
+Deploy workflow: [cd.yml](../../../.github/workflows/cd.yml) (runs after CI succeeds on push to `main` / `dev`, or manual `workflow_dispatch`).
 
 **Branch protection:** Which CI jobs must be required on **`main`** and **`dev`**, plus committed ruleset JSON and apply steps — see [branch-protection.md](branch-protection.md).
 
@@ -208,7 +208,7 @@ flowchart TB
 3. Merge the release PR when ready → stable GitHub Release + tag (`v2.x.y`) → `release-sbom.yml` attaches the SBOM.
 4. CI `docker-build` job on `main` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (tags `:sha` and `:latest`).
 5. Deploy workflow runs on push to `main` (validate env → resolve GHCR images → migrate → `railway redeploy --image`).
-6. Optional smoke: `pnpm load:health` or `GET /health/ready`.
+6. Optional smoke: `pnpm load:health` or `GET /health`.
 
 **Development path (steps):** identical to production but on the `dev` branch, with a few differences:
 
@@ -282,13 +282,11 @@ Optional on Railway/GitHub only if overriding app default: **`TOMBSTONE_RETENTIO
 
 **Validate GitHub env:** Run `pnpm validate:github-env` (or `CONFIG=production pnpm validate:github-env`) to ensure all required vars from `.env.example` exist in the target GitHub environment. Deploy workflows use `environment: development|production` so secrets are scoped per env.
 
-**Not in deploy workflows today:**
+**Not synced to Railway by CD today:**
 
-| Item                    | Notes                                                                                                                                                                                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Migrations**          | `pnpm db:migrate` runs in deploy before `railway redeploy`. CI test jobs also migrate ephemeral Postgres. See [runbook-dev-to-production.md](../runbooks/runbook-dev-to-production.md).                                                                                                                      |
-| **Worker**              | Separate Railway service (`RAILWAY_WORKER_SERVICE_ID` required). Deploy uses the same GHCR worker image as CI (`core-be-worker:<commit-sha>`).                                                                                                                                                               |
-| **Integration secrets** | `pnpm setup:infra` can push `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via [build-env-vars.ts](../../../tooling/setup/build-env-vars.ts), but deploy workflows do **not** call `railway variable set` for those keys. Set them on Railway once or add them to the deploy workflow `for` loop. |
+| Item                    | Notes                                                                                                                                                                                                                                                                                              |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Integration secrets** | `pnpm setup:infra` can push `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via [build-env-vars.ts](../../../tooling/setup/build-env-vars.ts), but `cd.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
 
 ---
 
@@ -320,7 +318,7 @@ walks through the Secret-vs-Variable decision and the section placement in
    pnpm github:sync production
    ```
 
-6. **Add the key to [deploy-railway.yml](../../../.github/workflows/deploy-railway.yml)**
+6. **Add the key to [cd.yml](../../../.github/workflows/cd.yml)**
    if it must be synced through to the Railway service variables step.
 7. **Paste the "Environment variable changes" snippet** printed by
    `pnpm tool:sync-env-example` into the PR description so reviewers and the

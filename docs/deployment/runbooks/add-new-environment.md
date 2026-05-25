@@ -31,7 +31,7 @@ artefact:
 | `NODE_ENV` enum value | `src/shared/config/env-schema.ts` |
 | `.github/environments/<env>.json` | committed protection config |
 | Branch ruleset | `.github/rulesets/<branch>.json` |
-| Workflow case mapping | `.github/workflows/deploy-railway.yml` |
+| Workflow case mapping | `.github/workflows/cd.yml` |
 | GitHub Environment (secrets + variables) | live in GitHub UI (managed via `pnpm github:sync`) |
 | `.env.<environment>` | repo root, **gitignored** (operator-local; source of truth for `github:sync`) |
 
@@ -122,7 +122,7 @@ env var.
 
 ### 5. Wire the workflow
 
-Edit `.github/workflows/deploy-railway.yml`:
+Edit `.github/workflows/cd.yml`:
 
 ```yaml
 on:
@@ -169,7 +169,7 @@ All three must exit 0 before merging.
 2. `rm .github/environments/<name>.json`
 3. `rm .github/rulesets/<branch>.json`
 4. `rm .env.<name>` (local-only, already gitignored — but tidy up your machine)
-5. Edit `.github/workflows/deploy-railway.yml`: drop `<branch>` from `branches` and
+5. Edit `.github/workflows/cd.yml`: drop `<branch>` from `branches` and
    remove the corresponding case.
 6. Run `pnpm github:sync --check` to confirm.
 

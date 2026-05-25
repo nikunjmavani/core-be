@@ -59,11 +59,11 @@ describe('Integration: OpenAPI response validation', () => {
     await app.close();
   });
 
-  it('GET /health/live response includes OpenAPI-required fields', async () => {
-    const response = await injectUnauthenticated(app, { method: 'GET', url: '/health/live' });
+  it('GET /health response includes OpenAPI-required fields', async () => {
+    const response = await injectUnauthenticated(app, { method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
 
-    const required = requiredFieldsForPath(spec, '/health/live', 'get', '200');
+    const required = requiredFieldsForPath(spec, '/health', 'get', '200');
     for (const field of required) {
       expect(response.json()).toHaveProperty(field);
     }

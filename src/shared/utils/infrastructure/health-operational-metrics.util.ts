@@ -25,7 +25,7 @@ let cachedOperationalMetrics: {
 } | null = null;
 
 /**
- * Operational signals for `/health/ready` (cached 60s to limit DB/Redis load).
+ * Operational signals for `/health` (cached 60s to limit DB/Redis load).
  */
 export async function getCachedHealthOperationalMetrics(): Promise<HealthOperationalMetrics> {
   const now = Date.now();

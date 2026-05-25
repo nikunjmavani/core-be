@@ -3,8 +3,7 @@ import { createTestApp, type TestRequestAgent } from '@/tests/helpers/test-app.j
 import type { FastifyInstance } from 'fastify';
 
 const publicRoutes: Array<{ method: 'get' | 'post'; path: string }> = [
-  { method: 'get', path: '/health/live' },
-  { method: 'get', path: '/health/ready' },
+  { method: 'get', path: '/health' },
   { method: 'get', path: '/api/v1/billing/plans' },
   { method: 'get', path: '/api/v1/auth/oauth/providers' },
   { method: 'post', path: '/api/v1/auth/magic-link/send' },

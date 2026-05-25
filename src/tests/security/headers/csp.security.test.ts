@@ -44,7 +44,7 @@ describe('Security: Content-Security-Policy (Helmet)', () => {
   it('sets CSP on API routes without unsafe-inline or unsafe-eval', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health/live',
+      url: '/health',
     });
 
     const contentSecurityPolicy = getContentSecurityPolicyHeader(response.headers);

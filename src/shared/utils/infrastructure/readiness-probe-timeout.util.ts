@@ -1,5 +1,5 @@
 /**
- * Races {@link incomingPromise} against a timer. Used by `/health/ready` so a slow
+ * Races {@link incomingPromise} against a timer. Used by `/health` so a slow
  * dependency does not wedge the readiness handler.
  */
 export function readinessProbeTimeout<T>(

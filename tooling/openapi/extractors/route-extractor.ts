@@ -68,8 +68,7 @@ export function collectRoutes(): ExtractedRoute[] {
     routes.push({ method, path });
   }
 
-  addRoute('GET', '/health/live');
-  addRoute('GET', '/health/ready');
+  addRoute('GET', '/health');
   addRoute('GET', '/api/v1/mcp');
   addRoute('POST', '/api/v1/mcp');
 

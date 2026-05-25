@@ -4,7 +4,7 @@ import { wrapSuccess } from '../../../../../tooling/openapi/response-map/buildin
 
 describe('response-map', () => {
   it('routeResponseMap includes health and auth login responses', () => {
-    expect(routeResponseMap['GET /health/live']?.statusCode).toBe(200);
+    expect(routeResponseMap['GET /health']?.statusCode).toBe(200);
     expect(routeResponseMap['POST /api/v1/auth/login']?.statusCode).toBe(200);
   });
 

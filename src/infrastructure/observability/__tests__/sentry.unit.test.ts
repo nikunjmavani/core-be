@@ -48,10 +48,8 @@ describe('resolveTracesSampleRate (head / tracesSampler)', () => {
   });
 
   it('does not sample health-check transactions', () => {
-    expect(resolveTracesSampleRate({ name: 'GET /health/ready' }, BASELINE, SLOW_MS)).toBe(0);
-    expect(resolveTracesSampleRate({ name: 'GET /api/v1/health/worker' }, BASELINE, SLOW_MS)).toBe(
-      0,
-    );
+    expect(resolveTracesSampleRate({ name: 'GET /health' }, BASELINE, SLOW_MS)).toBe(0);
+    expect(resolveTracesSampleRate({ name: 'GET /api/v1/health' }, BASELINE, SLOW_MS)).toBe(0);
   });
 
   it('returns baseline rate for ordinary successful requests', () => {
@@ -141,12 +139,12 @@ describe('resolveTracesSampleRate (head / tracesSampler)', () => {
 
 describe('resolveTailTransactionDecision (tail / beforeSendTransaction)', () => {
   it('drops health-check transactions', () => {
-    expect(
-      resolveTailTransactionDecision({ transaction: 'GET /health/live' }, BASELINE, SLOW_MS),
-    ).toBe('drop');
-    expect(
-      resolveTailTransactionDecision({ transaction: 'GET /health/worker' }, BASELINE, SLOW_MS),
-    ).toBe('drop');
+    expect(resolveTailTransactionDecision({ transaction: 'GET /health' }, BASELINE, SLOW_MS)).toBe(
+      'drop',
+    );
+    expect(resolveTailTransactionDecision({ transaction: 'GET /health' }, BASELINE, SLOW_MS)).toBe(
+      'drop',
+    );
   });
 
   it('always keeps 5xx transactions at 100%', () => {
@@ -252,7 +250,7 @@ describe('resolveTailTransactionDecision (tail / beforeSendTransaction)', () => 
 
 describe('transaction tail helpers', () => {
   it('detects health checks', () => {
-    expect(isHealthCheckTransaction('GET /health/ready')).toBe(true);
+    expect(isHealthCheckTransaction('GET /health')).toBe(true);
     expect(isHealthCheckTransaction('GET /api/v1/tenancy/organizations')).toBe(false);
   });
 

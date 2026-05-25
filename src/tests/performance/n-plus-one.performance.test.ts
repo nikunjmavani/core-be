@@ -81,7 +81,7 @@ describe('Performance: N+1 Detection', () => {
     const promises: Array<PromiseLike<TestRequestResponse>> = [];
 
     for (let i = 0; i < CONCURRENT_REQUESTS; i++) {
-      promises.push(request.get('/health/live'));
+      promises.push(request.get('/health'));
     }
 
     const start = performance.now();

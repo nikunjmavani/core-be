@@ -24,14 +24,7 @@ export const ROUTE_PATH_PATTERN = /['"]([/][^'"]*)['"]/;
 export const SUPPLEMENTAL_ROUTES: ParsedRoute[] = [
   {
     method: 'GET',
-    fullPath: '/health/live',
-    access: 'PUBLIC',
-    domainKey: '/health',
-    domain: 'health',
-  },
-  {
-    method: 'GET',
-    fullPath: '/health/ready',
+    fullPath: '/health',
     access: 'PUBLIC',
     domainKey: '/health',
     domain: 'health',
