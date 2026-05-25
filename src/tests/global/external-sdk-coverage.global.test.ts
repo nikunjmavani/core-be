@@ -11,6 +11,7 @@ const EXTERNAL_SDK_ALLOWLIST = [
   'src/infrastructure/mail/mail.service.ts',
   'src/infrastructure/storage/s3-adapter.ts',
   'src/infrastructure/storage/storage.service.ts',
+  'src/infrastructure/outbound/',
 ] as const;
 
 const SDK_IMPORT_PATTERNS: { pattern: RegExp; packageName: string; allowTypeOnly: boolean }[] = [
@@ -71,19 +72,17 @@ describe('External SDK coverage (circuit breaker audit)', () => {
     expect(violations).toEqual([]);
   });
 
-  it('should wrap outbound calls in circuit breakers inside allowlisted SDK modules', () => {
-    const circuitByFile: Record<(typeof EXTERNAL_SDK_ALLOWLIST)[number], string> = {
-      'src/infrastructure/payment/stripe.client.ts': 'stripeCircuit',
-      'src/infrastructure/mail/mail.service.ts': 'resendCircuit',
-      'src/infrastructure/storage/s3-adapter.ts': 's3Circuit',
-      'src/infrastructure/storage/storage.service.ts': 's3Circuit',
-    };
+  it('should route SDK outbound calls through outboundCall in infrastructure wrappers', () => {
+    const sdkWrapperFiles = [
+      'src/infrastructure/payment/stripe.client.ts',
+      'src/infrastructure/mail/mail.service.ts',
+      'src/infrastructure/storage/s3-adapter.ts',
+      'src/infrastructure/storage/storage.service.ts',
+    ] as const;
 
-    for (const relativePath of EXTERNAL_SDK_ALLOWLIST) {
+    for (const relativePath of sdkWrapperFiles) {
       const content = readFileSync(join(ROOT, relativePath), 'utf-8');
-      const circuitName = circuitByFile[relativePath];
-      expect(content, `${relativePath} must import ${circuitName}`).toContain(circuitName);
-      expect(content, `${relativePath} must use circuit.execute()`).toMatch(/\.execute\s*\(/);
+      expect(content, `${relativePath} must use outboundCall`).toContain('outboundCall');
     }
   });
 });

@@ -1,16 +1,11 @@
 import { Resend } from 'resend';
 import { env } from '@/shared/config/env.config.js';
-import {
-  CircuitBreakerOpenError,
-  resendCircuit,
-} from '@/infrastructure/resilience/circuit-breaker.js';
-import {
-  isTransientNetworkError,
-  retryWithBackoff,
-} from '@/infrastructure/resilience/retry-with-backoff.util.js';
+import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
+import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outbound/index.js';
 import { ResendApiError } from '@/infrastructure/mail/resend-api.error.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { isTransientNetworkError } from '@/infrastructure/resilience/retry-with-backoff.util.js';
 
 let resendClient: Resend | null = null;
 
@@ -39,18 +34,18 @@ export interface SendEmailOptions {
   text?: string;
   replyTo?: string;
   tags?: { name: string; value: string }[];
+  requestId?: string;
 }
 
 async function sendEmailViaResend(
   options: SendEmailOptions,
   recipientCount: number,
+  signal: AbortSignal,
 ): Promise<string> {
   const fromAddress = env.EMAIL_FROM_ADDRESS ?? 'noreply@albetrios.com';
   const fromName = env.EMAIL_FROM_NAME ?? 'Core';
   const client = getClient();
-  const requestOptions: ResendEmailRequestOptions = {
-    signal: AbortSignal.timeout(env.RESEND_HTTP_TIMEOUT_MS),
-  };
+  const requestOptions: ResendEmailRequestOptions = { signal };
   const sendResult = await client.emails.send(
     omitUndefined({
       from: `${fromName} <${fromAddress}>`,
@@ -91,13 +86,19 @@ export async function sendEmail(options: SendEmailOptions): Promise<string> {
   const recipientCount = Array.isArray(options.to) ? options.to.length : 1;
 
   try {
-    const result = await resendCircuit.execute(async () =>
-      retryWithBackoff(async () => sendEmailViaResend(options, recipientCount), {
-        maxAttempts: 3,
-        baseDelayMs: 500,
-        shouldRetry: (error) =>
-          !(error instanceof ResendApiError || error instanceof CircuitBreakerOpenError) &&
-          isTransientNetworkError(error),
+    const result = await outboundCall(
+      buildOutboundCallOptions({
+        name: 'resend',
+        requestId: options.requestId,
+        rethrowIf: (error) => error instanceof ResendApiError,
+        retry: {
+          maxAttempts: 3,
+          baseDelayMs: 500,
+          shouldRetry: (error) =>
+            !(error instanceof ResendApiError || error instanceof CircuitBreakerOpenError) &&
+            isTransientNetworkError(error),
+        },
+        operation: async (signal) => sendEmailViaResend(options, recipientCount, signal),
       }),
     );
 

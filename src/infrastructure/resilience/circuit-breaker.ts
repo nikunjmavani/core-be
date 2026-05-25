@@ -329,6 +329,12 @@ export const resendCircuit = new CircuitBreaker({
   failureThreshold: 5,
   resetTimeoutMs: 60_000,
 });
+export const turnstileCircuit = new CircuitBreaker({
+  name: 'turnstile',
+  redis: redisConnection,
+  failureThreshold: 5,
+  resetTimeoutMs: 30_000,
+});
 
 export const STRIPE_CIRCUIT_RESET_TIMEOUT_MS = 30_000;
 export const S3_CIRCUIT_RESET_TIMEOUT_MS = 15_000;

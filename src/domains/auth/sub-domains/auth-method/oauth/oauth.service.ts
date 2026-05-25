@@ -52,19 +52,25 @@ export class OAuthService {
     );
   }
 
-  async handleCallback(
-    provider: string,
-    code: string,
-    state: string | undefined,
-    ipAddress: string = '127.0.0.1',
-    userAgent?: string,
-  ): Promise<{ access_token: string; session_public_id: string }> {
-    const normalizedProvider = await consumeOAuthState(this.redis, provider, state);
+  async handleCallback(options: {
+    provider: string;
+    code: string;
+    state: string | undefined;
+    ipAddress?: string;
+    userAgent?: string;
+    requestId?: string;
+  }): Promise<{ access_token: string; session_public_id: string }> {
+    const ipAddress = options.ipAddress ?? '127.0.0.1';
+    const normalizedProvider = await consumeOAuthState(this.redis, options.provider, options.state);
 
     const profile =
       normalizedProvider === 'google'
-        ? await exchangeGoogleOAuthCode(code)
-        : await exchangeGitHubOAuthCode(code);
+        ? await exchangeGoogleOAuthCode(
+            omitUndefined({ code: options.code, requestId: options.requestId }),
+          )
+        : await exchangeGitHubOAuthCode(
+            omitUndefined({ code: options.code, requestId: options.requestId }),
+          );
 
     const session = await completeOAuthUserSession(
       omitUndefined({
@@ -74,7 +80,7 @@ export class OAuthService {
         provider: normalizedProvider,
         profile,
         ipAddress,
-        userAgent,
+        userAgent: options.userAgent,
       }),
     );
 

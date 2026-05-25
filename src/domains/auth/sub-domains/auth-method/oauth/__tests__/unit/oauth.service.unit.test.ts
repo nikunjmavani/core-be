@@ -68,7 +68,11 @@ describe('OAuthService', () => {
   });
 
   it('handleCallback completes OAuth session for Google', async () => {
-    const result = await service.handleCallback('google', 'auth-code', 'oauth-state');
+    const result = await service.handleCallback({
+      provider: 'google',
+      code: 'auth-code',
+      state: 'oauth-state',
+    });
     expect(result.access_token).toBe('oauth-access');
     expect(result.session_public_id).toBe('session_oauth');
   });
@@ -77,7 +81,11 @@ describe('OAuthService', () => {
     const { completeOAuthUserSession } = await import(
       '@/domains/auth/sub-domains/auth-method/oauth/oauth-user-session.js'
     );
-    await service.handleCallback('google', 'auth-code', 'oauth-state');
+    await service.handleCallback({
+      provider: 'google',
+      code: 'auth-code',
+      state: 'oauth-state',
+    });
     expect(completeOAuthUserSession).toHaveBeenCalledWith(
       expect.objectContaining({ ipAddress: '127.0.0.1' }),
     );
@@ -89,13 +97,13 @@ describe('OAuthService', () => {
     );
     vi.mocked(consumeOAuthState).mockResolvedValue('github');
 
-    const result = await service.handleCallback(
-      'github',
-      'auth-code',
-      'oauth-state',
-      '10.0.0.1',
-      'vitest-agent',
-    );
+    const result = await service.handleCallback({
+      provider: 'github',
+      code: 'auth-code',
+      state: 'oauth-state',
+      ipAddress: '10.0.0.1',
+      userAgent: 'vitest-agent',
+    });
 
     expect(result.access_token).toBe('oauth-access');
   });
@@ -121,11 +129,23 @@ describe('OAuthService', () => {
     );
 
     vi.mocked(consumeOAuthState).mockResolvedValue('google');
-    await service.handleCallback('google', 'google-code', 'oauth-state');
-    expect(exchangeGoogleOAuthCode).toHaveBeenCalledWith('google-code');
+    await service.handleCallback({
+      provider: 'google',
+      code: 'google-code',
+      state: 'oauth-state',
+      requestId: 'req-google',
+    });
+    expect(exchangeGoogleOAuthCode).toHaveBeenCalledWith({
+      code: 'google-code',
+      requestId: 'req-google',
+    });
 
     vi.mocked(consumeOAuthState).mockResolvedValue('github');
-    await service.handleCallback('github', 'github-code', 'oauth-state');
-    expect(exchangeGitHubOAuthCode).toHaveBeenCalledWith('github-code');
+    await service.handleCallback({
+      provider: 'github',
+      code: 'github-code',
+      state: 'oauth-state',
+    });
+    expect(exchangeGitHubOAuthCode).toHaveBeenCalledWith({ code: 'github-code' });
   });
 });

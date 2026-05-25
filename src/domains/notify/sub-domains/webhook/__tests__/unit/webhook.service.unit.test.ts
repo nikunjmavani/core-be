@@ -139,7 +139,10 @@ describe('WebhookService', () => {
   it('testWebhook records successful delivery attempt', async () => {
     mockPinnedFetch.mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
 
-    const result = await service.testWebhook('org_public', 'webhook_public');
+    const result = await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
     expect(result.success).toBe(true);
     expect(deliveryAttemptRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'SENT' }),
@@ -149,14 +152,17 @@ describe('WebhookService', () => {
   it('testWebhook uses the SSRF-pinned fetch and signs the request', async () => {
     mockPinnedFetch.mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
 
-    await service.testWebhook('org_public', 'webhook_public');
+    await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
 
     expect(createPinnedWebhookFetchMock).toHaveBeenCalledWith(webhook.url);
     expect(mockPinnedFetch).toHaveBeenCalledTimes(1);
     const [, requestInit] = mockPinnedFetch.mock.calls[0] as [string, RequestInit];
-    const headers = requestInit.headers as Record<string, string>;
-    expect(headers['X-Webhook-Signature']).toMatch(/^t=\d+,v1=[a-f0-9]{64}$/);
-    expect(headers['X-Webhook-Timestamp']).toMatch(/^\d+$/);
+    const headers = new Headers(requestInit.headers);
+    expect(headers.get('X-Webhook-Signature')).toMatch(/^t=\d+,v1=[a-f0-9]{64}$/);
+    expect(headers.get('X-Webhook-Timestamp')).toMatch(/^\d+$/);
   });
 
   it('testWebhook rejects (and records nothing) when the URL is no longer SSRF-safe', async () => {
@@ -164,9 +170,12 @@ describe('WebhookService', () => {
       new ValidationError('errors:webhookUrlNotAllowed'),
     );
 
-    await expect(service.testWebhook('org_public', 'webhook_public')).rejects.toBeInstanceOf(
-      ValidationError,
-    );
+    await expect(
+      service.testWebhook({
+        organization_public_id: 'org_public',
+        webhook_public_id: 'webhook_public',
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
     expect(mockPinnedFetch).not.toHaveBeenCalled();
     expect(deliveryAttemptRepository.create).not.toHaveBeenCalled();
   });
@@ -175,7 +184,10 @@ describe('WebhookService', () => {
     const hugeBody = 'y'.repeat(5_000);
     mockPinnedFetch.mockResolvedValue({ ok: true, status: 200, text: async () => hugeBody });
 
-    await service.testWebhook('org_public', 'webhook_public');
+    await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
 
     const createArgument = vi.mocked(deliveryAttemptRepository.create).mock.calls[0]![0] as {
       response_body: string;
@@ -186,7 +198,10 @@ describe('WebhookService', () => {
   it('testWebhook records failed delivery on network error', async () => {
     mockPinnedFetch.mockRejectedValue(new Error('network error'));
 
-    const result = await service.testWebhook('org_public', 'webhook_public');
+    const result = await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
     expect(result.success).toBe(false);
   });
 
@@ -206,9 +221,12 @@ describe('WebhookService', () => {
 
   it('testWebhook throws NotFound when webhook is missing', async () => {
     vi.mocked(webhookRepository.findByPublicId).mockResolvedValue(null);
-    await expect(service.testWebhook('org_public', 'missing')).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(
+      service.testWebhook({
+        organization_public_id: 'org_public',
+        webhook_public_id: 'missing',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('testWebhook treats unreadable response body as null', async () => {
@@ -219,7 +237,10 @@ describe('WebhookService', () => {
         throw new Error('body read failed');
       },
     });
-    const result = await service.testWebhook('org_public', 'webhook_public');
+    const result = await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
     expect(result.success).toBe(true);
     expect(result.response_body).toBe('[parse error]');
   });
@@ -227,7 +248,10 @@ describe('WebhookService', () => {
   it('testWebhook truncates long response bodies', async () => {
     const longBody = 'x'.repeat(600);
     mockPinnedFetch.mockResolvedValue({ ok: true, status: 200, text: async () => longBody });
-    const result = await service.testWebhook('org_public', 'webhook_public');
+    const result = await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
     expect(result.response_body).toContain('[truncated]');
   });
 

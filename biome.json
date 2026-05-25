@@ -36,6 +36,17 @@
         "noUnusedVariables": "error"
       },
       "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "resend": "Import Resend only via src/infrastructure/mail/mail.service.ts or src/infrastructure/outbound/.",
+              "@aws-sdk/client-s3": "Import S3 SDK only via storage wrappers or src/infrastructure/outbound/.",
+              "@aws-sdk/s3-presigned-post": "Import S3 presigned-post only via storage wrappers or src/infrastructure/outbound/.",
+              "@aws-sdk/s3-request-presigner": "Import S3 presigner only via storage wrappers or src/infrastructure/outbound/."
+            }
+          }
+        },
         "useConst": "error",
         "useImportType": "error",
         "useCollapsedIf": "warn",
@@ -164,6 +175,22 @@
       }
     },
     {
+      "includes": [
+        "src/infrastructure/mail/mail.service.ts",
+        "src/infrastructure/storage/storage.service.ts",
+        "src/infrastructure/storage/s3-adapter.ts",
+        "src/infrastructure/outbound/**",
+        "src/tests/contract/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["src/domains/billing/sub-domains/subscription/subscription.controller.ts"],
       "linter": {
         "rules": {
@@ -177,6 +204,10 @@
       "includes": ["tooling/**/*.ts"],
       "linter": {
         "rules": {
+          "style": {
+            "noRestrictedImports": "off",
+            "noNonNullAssertion": "warn"
+          },
           "suspicious": {
             "noConsole": "off",
             "noExplicitAny": "error"
@@ -192,9 +223,6 @@
                 "maxAllowedComplexity": 95
               }
             }
-          },
-          "style": {
-            "noNonNullAssertion": "warn"
           }
         }
       }

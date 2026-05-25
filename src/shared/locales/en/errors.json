@@ -16,6 +16,7 @@
   "payloadTooLarge": "Payload too large",
   "unprocessableEntity": "Unprocessable entity",
   "serviceUnavailable": "Service temporarily unavailable",
+  "externalServiceUnavailable": "An external service is temporarily unavailable",
   "requestTimeout": "The request took too long to complete",
   "databaseTimeout": "The database operation timed out",
   "routeNotFound": "Route not found",

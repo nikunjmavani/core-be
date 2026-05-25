@@ -1,6 +1,7 @@
 import { NotImplementedError, UnauthorizedError } from '@/shared/errors/index.js';
 import { env } from '@/shared/config/env.config.js';
-import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
+import { ExternalServiceError } from '@/infrastructure/outbound/outbound-error.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { OAuthProfile } from '../oauth.types.js';
 
@@ -32,33 +33,47 @@ export function buildGitHubOAuthRedirectUrl(state: string): string {
   return `${GITHUB_AUTH_URL}?${params.toString()}`;
 }
 
-export async function exchangeGitHubOAuthCode(code: string): Promise<OAuthProfile> {
+export interface ExchangeGitHubOAuthCodeOptions {
+  code: string;
+  requestId?: string;
+}
+
+export async function exchangeGitHubOAuthCode(
+  options: ExchangeGitHubOAuthCodeOptions,
+): Promise<OAuthProfile> {
   const clientId = env.OAUTH_GITHUB_CLIENT_ID;
   const clientSecret = env.OAUTH_GITHUB_CLIENT_SECRET;
   if (!(clientId && clientSecret)) {
     throw new NotImplementedError('errors:githubOAuthNotConfigured');
   }
 
-  const tokenResponse = await fetch(GITHUB_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    signal: AbortSignal.timeout(10_000),
-    body: JSON.stringify({
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-    }),
-  });
-
-  if (!tokenResponse.ok) {
-    logger.error(
-      { status: tokenResponse.status, body: await tokenResponse.text() },
-      'oauth.github.token_exchange.failed',
+  let tokenResponse: Response;
+  try {
+    tokenResponse = await outboundFetch(
+      buildOutboundFetchOptions({
+        name: 'oauth-github',
+        url: GITHUB_TOKEN_URL,
+        requestId: options.requestId,
+        expectedStatus: 200,
+        init: {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            client_id: clientId,
+            client_secret: clientSecret,
+            code: options.code,
+          }),
+        },
+      }),
     );
-    throw new UnauthorizedError('errors:githubExchangeFailed');
+  } catch (error) {
+    if (error instanceof ExternalServiceError) {
+      throw new UnauthorizedError('errors:githubExchangeFailed');
+    }
+    throw error;
   }
 
   const tokenData = (await tokenResponse.json()) as {
@@ -73,16 +88,27 @@ export async function exchangeGitHubOAuthCode(code: string): Promise<OAuthProfil
     );
   }
 
-  const userResponse = await fetch(GITHUB_USER_URL, {
-    headers: {
-      Authorization: `Bearer ${tokenData.access_token}`,
-      Accept: 'application/vnd.github+json',
-    },
-    signal: AbortSignal.timeout(10_000),
-  });
-
-  if (!userResponse.ok) {
-    throw new UnauthorizedError('errors:githubFetchUserFailed');
+  let userResponse: Response;
+  try {
+    userResponse = await outboundFetch(
+      buildOutboundFetchOptions({
+        name: 'oauth-github',
+        url: GITHUB_USER_URL,
+        requestId: options.requestId,
+        expectedStatus: 200,
+        init: {
+          headers: {
+            Authorization: `Bearer ${tokenData.access_token}`,
+            Accept: 'application/vnd.github+json',
+          },
+        },
+      }),
+    );
+  } catch (error) {
+    if (error instanceof ExternalServiceError) {
+      throw new UnauthorizedError('errors:githubFetchUserFailed');
+    }
+    throw error;
   }
 
   const userInfo = (await userResponse.json()) as {
@@ -94,15 +120,22 @@ export async function exchangeGitHubOAuthCode(code: string): Promise<OAuthProfil
 
   let email = userInfo.email;
   if (!email) {
-    const emailsResponse = await fetch(GITHUB_EMAILS_URL, {
-      headers: {
-        Authorization: `Bearer ${tokenData.access_token}`,
-        Accept: 'application/vnd.github+json',
-      },
-      signal: AbortSignal.timeout(10_000),
-    });
+    try {
+      const emailsResponse = await outboundFetch(
+        buildOutboundFetchOptions({
+          name: 'oauth-github',
+          url: GITHUB_EMAILS_URL,
+          requestId: options.requestId,
+          expectedStatus: 200,
+          init: {
+            headers: {
+              Authorization: `Bearer ${tokenData.access_token}`,
+              Accept: 'application/vnd.github+json',
+            },
+          },
+        }),
+      );
 
-    if (emailsResponse.ok) {
       const emails = (await emailsResponse.json()) as {
         email: string;
         primary: boolean;
@@ -112,6 +145,8 @@ export async function exchangeGitHubOAuthCode(code: string): Promise<OAuthProfil
         (emailRecord) => emailRecord.primary && emailRecord.verified,
       );
       email = primaryEmail?.email ?? emails[0]?.email;
+    } catch {
+      // Email list is optional; profile resolution continues below.
     }
   }
 

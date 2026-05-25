@@ -72,7 +72,11 @@ export async function captchaPreHandler(
   }
 
   try {
-    const result = await verifyTurnstileToken(captchaToken, request.ip);
+    const result = await verifyTurnstileToken({
+      token: captchaToken,
+      remoteIp: request.ip,
+      requestId: request.id,
+    });
     if (!result.success) {
       throw new UnauthorizedError('errors:captchaInvalid');
     }

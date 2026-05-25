@@ -10,6 +10,7 @@ import {
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
 import { validateWebhookUrl } from '@/shared/utils/security/webhook-url.util.js';
+import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
 import { createPinnedWebhookFetch } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
 import { buildWebhookSignatureHeader } from '@/shared/utils/security/webhook-signature.util.js';
 import { NotFoundError } from '@/shared/errors/index.js';
@@ -18,7 +19,6 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
 
-const WEBHOOK_TEST_TIMEOUT_MS = 10_000;
 /** Maximum response body length returned to client (prevents leaking sensitive data from target) */
 const WEBHOOK_TEST_RESPONSE_BODY_MAX_LENGTH = 500;
 /** Maximum response body length persisted to the delivery-attempt record (bounds storage growth). */
@@ -196,7 +196,12 @@ export class WebhookService {
     });
   }
 
-  async testWebhook(organization_public_id: string, webhook_public_id: string) {
+  async testWebhook(options: {
+    organization_public_id: string;
+    webhook_public_id: string;
+    requestId?: string;
+  }) {
+    const { organization_public_id, webhook_public_id, requestId } = options;
     // Phase 1 (DB context): resolve the webhook under RLS scope.
     const webhook = await withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
@@ -233,23 +238,25 @@ export class WebhookService {
     let success = false;
 
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), WEBHOOK_TEST_TIMEOUT_MS);
-
-      const response = await pinnedFetch(webhook.url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'core-be-webhook/1.0',
-          'X-Webhook-Event': 'webhook.test',
-          'X-Webhook-Signature': signatureHeader,
-          'X-Webhook-Timestamp': String(signatureTimestamp),
-        },
-        body: payloadString,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
+      const response = await outboundFetch(
+        buildOutboundFetchOptions({
+          name: 'webhook-test',
+          url: webhook.url,
+          requestId,
+          fetchImplementation: pinnedFetch,
+          init: {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': 'core-be-webhook/1.0',
+              'X-Webhook-Event': 'webhook.test',
+              'X-Webhook-Signature': signatureHeader,
+              'X-Webhook-Timestamp': String(signatureTimestamp),
+            },
+            body: payloadString,
+          },
+        }),
+      );
       statusCode = response.status;
       try {
         responseBody = await response.text();

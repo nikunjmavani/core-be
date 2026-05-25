@@ -452,11 +452,13 @@ describe('createAuthController', () => {
       reply,
     );
     expect(oauthService.handleCallback).toHaveBeenCalledWith(
-      'google',
-      'auth-code',
-      'oauth-state',
-      '127.0.0.1',
-      'vitest',
+      expect.objectContaining({
+        provider: 'google',
+        code: 'auth-code',
+        state: 'oauth-state',
+        ipAddress: '127.0.0.1',
+        userAgent: 'vitest',
+      }),
     );
     expect(reply.setCookie).not.toHaveBeenCalled();
   });
