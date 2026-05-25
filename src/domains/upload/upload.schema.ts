@@ -64,6 +64,19 @@ export const uploads = uploadSchema
           )
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
       }),
+      // Owner access for user-scoped (NULL-org) uploads such as avatars. Permissive → OR'd with
+      // the tenant-isolation policy, so org-scoped access is unchanged; inert until a context
+      // sets app.current_user_id (withUserDatabaseContext).
+      pgPolicy('uploads_owner_access', {
+        as: 'permissive',
+        for: 'all',
+        to: 'public',
+        using: sql`${table.user_id} = (
+            SELECT id FROM auth.users
+            WHERE public_id = current_setting('app.current_user_id', true)
+              AND deleted_at IS NULL
+          )`,
+      }),
     ],
   )
   .enableRLS();

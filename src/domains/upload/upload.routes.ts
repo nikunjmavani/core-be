@@ -22,6 +22,11 @@ export const uploadRoutesPlugin: FastifyPluginAsync = async (app) => {
     { onRequest: [app.authenticate], ...MODERATE_AUTHED_RATE_LIMIT },
     controller.getUpload,
   );
+  zodApplication.post(
+    '/:publicId/confirm',
+    { onRequest: [app.authenticate], ...MODERATE_AUTHED_RATE_LIMIT },
+    controller.confirmUpload,
+  );
   zodApplication.delete(
     '/:publicId',
     { onRequest: [app.authenticate], ...MODERATE_AUTHED_RATE_LIMIT },

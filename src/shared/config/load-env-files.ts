@@ -21,11 +21,15 @@ import { resolve } from 'node:path';
 
 const projectRoot = process.cwd();
 
+const SAFE_KEY = /^[A-Z][A-Z0-9_]*$/;
+
 function applyDotenvFile(envFilePath: string): void {
   const result = config({ path: envFilePath });
   const parsed: DotenvParseOutput = result.parsed ?? {};
   for (const [key, value] of Object.entries(parsed)) {
+    if (!SAFE_KEY.test(key)) continue;
     if (value === '') {
+      // eslint-disable-next-line security/detect-object-injection -- key validated against /^[A-Z][A-Z0-9_]*$/ above
       delete process.env[key];
     }
   }

@@ -1,6 +1,6 @@
 # Setup Token Instructions
 
-Where to get each token and where to put it. Run `pnpm setup:infra:preview` to see the list and config. Run `pnpm setup:infra:init` to generate config and an env-style template interactively.
+Where to get each token and where to put it. Run `pnpm setup:infra:preview` to see the list and config. Run `pnpm setup --init` to generate config and an env-style template interactively.
 
 ---
 
@@ -12,7 +12,7 @@ Setup uses **tokens from `.env.setup`** only — no `gh auth login` or `railway 
 
 ## Init and GitHub token
 
-1. Run **`pnpm setup:infra:init`** to generate `tooling/setup.config.json` and `.env.setup` (template with URLs for each key). Init also asks for **Neon Organization ID** — get it from [Neon Console → Settings](https://console.neon.tech/app/settings) → select your **Organization** → **General** → **Organization ID** (e.g. `org-soft-block-10705736`). If you enter it, init writes it to `.env.setup` as `NEON_ORG_ID`. If either file already exists, init does not erase existing values; it only updates the header and prompt defaults from existing config.
+1. Run **`pnpm setup --init`** to generate `tooling/setup/setup.config.json` and `.env.setup` (template with URLs for each key). Init also asks for **Neon Organization ID** — get it from [Neon Console → Settings](https://console.neon.tech/app/settings) → select your **Organization** → **General** → **Organization ID** (e.g. `org-soft-block-10705736`). If you enter it, init writes it to `.env.setup` as `NEON_ORG_ID`. If either file already exists, init does not erase existing values; it only updates the header and prompt defaults from existing config.
 2. Fill **`.env.setup`** with your API keys. For automation (CI or headless), include at least:
    - **`GITHUB_TOKEN`** — [GitHub → Personal access tokens](https://github.com/settings/tokens) (scopes: `repo`, `admin:repo_hook`, or fine-grained with repo + secrets). Required if GitHub provider is enabled (repo/env secrets).
    - **`RAILWAY_TOKEN`** — [Railway → Tokens](https://railway.app/account/tokens). Required if Railway provider is enabled.
@@ -22,7 +22,7 @@ Setup uses **tokens from `.env.setup`** only — no `gh auth login` or `railway 
 
 ## Config and secrets
 
-- **Config:** `tooling/setup.config.json` — which providers and environments. Generate with `pnpm setup:infra:init` (asks org, project, envs, and Neon Organization ID).
+- **Config:** `tooling/setup/setup.config.json` — which providers and environments. Generate with `pnpm setup --init` (asks org, project, envs, and Neon Organization ID).
 - **Secrets:** `.env.setup` at project root — one `KEY=value` per line. Each variable has a comment above it with the **URL where to get the key**. Gitignored. You can also `export NEON_API_KEY=...` etc. and run `pnpm setup:infra`; process.env is merged with `.env.setup`.
 - **Per-environment files:** After provisioning, setup writes `.env.<environment>` (e.g. `.env.dev`, `.env.production`) with all app env vars for that environment. Use these to push values to GitHub Environment secrets (structure matches `.env.example`). Run `pnpm setup:infra:export-env` to regenerate anytime.
 

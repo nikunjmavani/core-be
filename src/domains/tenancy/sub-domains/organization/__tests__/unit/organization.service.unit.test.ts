@@ -57,10 +57,14 @@ describe('OrganizationService', () => {
 
   const objectStorage = createObjectStoragePortMock();
   const service = new OrganizationService(repository, objectStorage);
-  service.wireOffboardingUploadService({ deleteObject: vi.fn() } as never);
 
   beforeEach(() => {
     vi.clearAllMocks();
+    service.wireOffboardingUploadService({
+      deleteObject: vi.fn(),
+      tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(0),
+      assertKeyConfirmed: vi.fn().mockResolvedValue(undefined),
+    } as never);
     vi.mocked(objectStorage.headObject).mockResolvedValue({
       contentLength: 100,
       contentType: 'image/png',
@@ -158,6 +162,20 @@ describe('OrganizationService', () => {
     await expect(
       service.uploadLogo(organizationRow.public_id, { key: otherOrganizationKey }, 'owner_public'),
     ).rejects.toMatchObject({ name: 'ValidationError' });
+  });
+
+  it('uploadLogo rejects when the upload has not been confirmed', async () => {
+    service.wireOffboardingUploadService({
+      deleteObject: vi.fn(),
+      assertKeyConfirmed: vi
+        .fn()
+        .mockRejectedValue(new ValidationError('errors:validation.uploadNotConfirmed')),
+    } as never);
+    const key = `organization-logos/${organizationRow.public_id}/logo.png`;
+    await expect(
+      service.uploadLogo(organizationRow.public_id, { key }, 'owner_public'),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(repository.update).not.toHaveBeenCalled();
   });
 
   it('getBySlug throws when organization missing', async () => {

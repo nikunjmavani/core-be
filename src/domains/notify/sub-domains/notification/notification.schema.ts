@@ -59,6 +59,18 @@ export const notifications = notifySchema
           )
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
       }),
+      // Owner access so a user can read/manage their own notifications (the service queries by
+      // user_id). Permissive → OR'd with tenant isolation; inert until app.current_user_id is set.
+      pgPolicy('notifications_owner_access', {
+        as: 'permissive',
+        for: 'all',
+        to: 'public',
+        using: sql`${table.user_id} = (
+            SELECT id FROM auth.users
+            WHERE public_id = current_setting('app.current_user_id', true)
+              AND deleted_at IS NULL
+          )`,
+      }),
     ],
   )
   .enableRLS();
