@@ -5,6 +5,7 @@ import {
   cursorPaginationSchema,
   ensureCursorOnlyPagination,
   LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY,
+  rejectLegacyPagePagination,
 } from '@/shared/utils/http/pagination.util.js';
 
 describe('pagination.util', () => {
@@ -58,6 +59,13 @@ describe('pagination.util', () => {
       expect(() => ensureCursorOnlyPagination(['page'])).not.toThrow();
       expect(() => ensureCursorOnlyPagination('page')).not.toThrow();
       expect(() => ensureCursorOnlyPagination(42)).not.toThrow();
+    });
+
+    it('supports Fastify pre-validation hooks', () => {
+      expect(() => rejectLegacyPagePagination({ query: { limit: '10' } })).not.toThrow();
+      expect(() => rejectLegacyPagePagination({ query: { page: '1', limit: '10' } })).toThrow(
+        ValidationError,
+      );
     });
   });
 });

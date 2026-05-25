@@ -1,5 +1,6 @@
 import { and, eq, gt, lt, ne, or, type SQL } from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
 import { ValidationError } from '@/shared/errors/index.js';
@@ -24,6 +25,10 @@ export function ensureCursorOnlyPagination(query: unknown): void {
       { field: 'page', messageKey: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY },
     ]);
   }
+}
+
+export function rejectLegacyPagePagination(request: Pick<FastifyRequest, 'query'>): void {
+  ensureCursorOnlyPagination(request.query);
 }
 
 /**
