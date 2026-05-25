@@ -90,6 +90,7 @@
   "uploadOrganizationIdNotAllowed": "organizationId no permitido cuando \"for\" es \"user\"",
   "uploadOrganizationIdRequired": "organizationId requerido cuando \"for\" es \"organization\"",
   "uploadContentTypeNotAllowed": "El tipo de contenido \"{{contentType}}\" no está permitido para el propósito \"{{purpose}}\". Permitidos: {{allowed}}",
+  "uploadFilenameExtensionMismatch": "La extensión del archivo \"{{extension}}\" no coincide con el tipo de contenido \"{{contentType}}\". Extensiones permitidas: {{allowed}}",
   "uploadFileSizeExceeded": "El tamaño del archivo {{fileSize}} supera el máximo de {{maxSize}} bytes para el propósito \"{{purpose}}\"",
   "uploadNotPending": "La carga no está pendiente de confirmación",
   "uploadVerificationFailed": "No se pudo verificar el objeto cargado con su tipo y tamaño declarados",
