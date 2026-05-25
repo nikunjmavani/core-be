@@ -46,14 +46,14 @@ DEPLOYMENT_TOTAL_REPLICA_COUNT × DATABASE_POOL_MAX ≤ max_connections − POST
 
 If you set split counts instead of `DEPLOYMENT_TOTAL_REPLICA_COUNT`, the API and worker counts are added together before applying `DATABASE_POOL_MAX`.
 
-| Variable | Meaning | Default |
-| -------- | ------- | ------- |
-| `DEPLOYMENT_TOTAL_REPLICA_COUNT` | Shorthand: `api_replicas + worker_replicas` | required in production (or use split counts) |
-| `DEPLOYMENT_API_REPLICA_COUNT` | API service replica count | optional split count |
-| `DEPLOYMENT_WORKER_REPLICA_COUNT` | Worker service replica count | optional split count |
-| `DATABASE_POOL_MAX` | postgres.js pool `max` per pool | `10` |
-| `POSTGRES_RESERVED_CONNECTIONS` | Admin, migrations, monitoring headroom | `10` |
-| `POSTGRES_MAX_CONNECTIONS` | Optional override when `SHOW max_connections` is wrong (pooler) | query Postgres |
+| Variable                          | Meaning                                                         | Default                                      |
+| --------------------------------- | --------------------------------------------------------------- | -------------------------------------------- |
+| `DEPLOYMENT_TOTAL_REPLICA_COUNT`  | Shorthand: `api_replicas + worker_replicas`                     | required in production (or use split counts) |
+| `DEPLOYMENT_API_REPLICA_COUNT`    | API service replica count                                       | optional split count                         |
+| `DEPLOYMENT_WORKER_REPLICA_COUNT` | Worker service replica count                                    | optional split count                         |
+| `DATABASE_POOL_MAX`               | postgres.js pool `max` per pool                                 | `10`                                         |
+| `POSTGRES_RESERVED_CONNECTIONS`   | Admin, migrations, monitoring headroom                          | `10`                                         |
+| `POSTGRES_MAX_CONNECTIONS`        | Optional override when `SHOW max_connections` is wrong (pooler) | query Postgres                               |
 
 At startup, API and worker processes call `assertPostgresConnectionBudget()` ([`assert-connection-budget.ts`](../../../src/infrastructure/database/assert-connection-budget.ts)): any **hosted deployment** (`NODE_ENV=production`, or any environment that exposes `RAILWAY_GIT_COMMIT_SHA` / `KUBERNETES_SERVICE_HOST`) **fails fast** without deployment counts. Only local development (docker-compose without those markers) defaults to **1 API + 1 worker** when counts are unset.
 
@@ -78,22 +78,22 @@ Size the connection budget against Neon `max_connections` (see formula above).
 
 Org-scoped HTTP routes (`X-Organization-Id` set) hold **one pool checkout** for the full request via `organizationRlsTransactionMiddleware` (`BEGIN` + `SET LOCAL app.current_organization_id`). That keeps Postgres RLS policies aligned with the handler on a single connection.
 
-| Concern | Guidance |
-| ------- | -------- |
-| Effective concurrency | Treat **`DATABASE_POOL_MAX` as the per-process ceiling** for concurrent org-scoped requests |
-| Workers | Pass `organization_id` / `organizationPublicId` in queries — do not rely on session GUC |
-| Billing tables | PK / FK / RLS per table: [billing-database-schema.md](../../reference/data/billing-database-schema.md) |
-| System tables (no RLS) | [system-tables-without-tenant-rls.md](../../reference/security/system-tables-without-tenant-rls.md) |
+| Concern                | Guidance                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| Effective concurrency  | Treat **`DATABASE_POOL_MAX` as the per-process ceiling** for concurrent org-scoped requests            |
+| Workers                | Pass `organization_id` / `organizationPublicId` in queries — do not rely on session GUC                |
+| Billing tables         | PK / FK / RLS per table: [billing-database-schema.md](../../reference/data/billing-database-schema.md) |
+| System tables (no RLS) | [system-tables-without-tenant-rls.md](../../reference/security/system-tables-without-tenant-rls.md)    |
 
 ### HTTP and database statement timeouts
 
-| Variable | Default | Scope |
-| -------- | ------- | ----- |
-| `FASTIFY_REQUEST_TIMEOUT_MS` | `30000` | Entire HTTP request (Fastify) |
-| `FASTIFY_CONNECTION_TIMEOUT_MS` | `10000` | TCP connection accept |
-| `DATABASE_HTTP_STATEMENT_TIMEOUT_MS` | `5000` | `SET LOCAL statement_timeout` on org RLS and other pinned HTTP transactions (legacy mode); also the connection-level `statement_timeout` when scoped contexts are enabled |
-| `DATABASE_STATEMENT_TIMEOUT_MS` | `30000` | Connection-level default for workers and unpinned queries |
-| `DATABASE_RLS_SCOPED_CONTEXTS` | `true` | When `true` (default), the per-request transaction pin is bypassed and services wrap DB work in `withOrganizationDatabaseContext`. Set `false` to restore legacy request-pinned RLS transactions. |
+| Variable                             | Default | Scope                                                                                                                                                                                             |
+| ------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FASTIFY_REQUEST_TIMEOUT_MS`         | `30000` | Entire HTTP request (Fastify)                                                                                                                                                                     |
+| `FASTIFY_CONNECTION_TIMEOUT_MS`      | `10000` | TCP connection accept                                                                                                                                                                             |
+| `DATABASE_HTTP_STATEMENT_TIMEOUT_MS` | `5000`  | `SET LOCAL statement_timeout` on org RLS and other pinned HTTP transactions (legacy mode); also the connection-level `statement_timeout` when scoped contexts are enabled                         |
+| `DATABASE_STATEMENT_TIMEOUT_MS`      | `30000` | Connection-level default for workers and unpinned queries                                                                                                                                         |
+| `DATABASE_RLS_SCOPED_CONTEXTS`       | `true`  | When `true` (default), the per-request transaction pin is bypassed and services wrap DB work in `withOrganizationDatabaseContext`. Set `false` to restore legacy request-pinned RLS transactions. |
 
 When `DATABASE_RLS_SCOPED_CONTEXTS=false`, org-scoped routes hold a pool checkout for the **full** request. Slow outbound calls (Stripe, S3, Resend) inside that window still occupy the slot — keep external calls **outside** `withOrganizationDatabaseContext` blocks even in scoped mode.
 
@@ -106,19 +106,30 @@ When the flag is enabled:
 - `organization-rls-transaction.middleware` and `request-statement-timeout.middleware` are bypassed; no per-request DB checkout is held.
 - `statement_timeout` is set at the postgres.js connection level using `DATABASE_HTTP_STATEMENT_TIMEOUT_MS`, so every query inherits the tight HTTP budget without a transaction.
 - Services that touch RLS-FORCE tables MUST wrap their unit-of-work in `withOrganizationDatabaseContext(organizationPublicId, async (databaseHandle) => ...)`. Stripe / S3 / Resend calls run **outside** that callback (`stripeCircuit.execute(...)`, `s3Circuit.execute(...)` inside `withOrganizationDatabaseContext` is blocked by ESLint).
-- Rollout is incremental: enable on staging, watch DB pool gauges + Stripe latency, then promote per environment.
+- Cross-organization reads (organization list/get/getBySlug/create) and invitation flows (accept/decline/listPending) cannot rely on `app.current_organization_id` because they operate before or across tenants. They MUST either:
+  1. Wrap in `withUserDatabaseContext(userPublicId, ...)` so the `organizations_user_discovery` and `memberships_user_self_discovery` policies grant visibility (see migration `20260520000004_organization_discovery_and_invitation_lookup_rls.sql`).
+  2. Use the `tenancy.resolve_member_invitation_lookup_by_public_id` or `tenancy.list_pending_member_invitations_for_email` `SECURITY DEFINER` helpers to resolve the owning organization, then wrap subsequent writes in `withOrganizationDatabaseContext`.
+- Rollout is incremental: apply the discovery migration, deploy code, enable on staging, watch DB pool gauges + Stripe latency, then promote per environment.
+
+**Rollout sequence per environment:**
+
+1. Deploy code + migration `20260520000004_organization_discovery_and_invitation_lookup_rls.sql` with the env flag still set to `false` (no behavior change).
+2. Verify the new policies are active: run `pnpm test:security src/tests/security/rls/organization-user-discovery.security.test.ts` against the target environment’s schema.
+3. Flip `DATABASE_RLS_SCOPED_CONTEXTS=true` for that environment.
+4. Watch `db_pool_active_ratio`, `http_request_duration_seconds`, and the audit-log path (which uses `withUserDatabaseContext` when authenticated) for regressions.
+5. Roll back by setting the env var to `false` — no schema rollback is required because the policies are PERMISSIVE additions.
 
 ### Pool exhaustion alerting (API)
 
 The API process polls every `DATABASE_POOL_ALERT_POLL_INTERVAL_MS` (default **5s**) and may emit Sentry messages after consecutive over-threshold samples:
 
-| Variable | Default | Meaning |
-| -------- | ------- | ------- |
-| `DATABASE_POOL_ACTIVE_WARN_RATIO` | `0.8` | Warn when in-process org RLS checkouts ≥ `DATABASE_POOL_MAX × ratio` |
-| `DATABASE_POOL_ACTIVE_CRITICAL_RATIO` | `0.95` | Critical threshold for same signal |
-| `DATABASE_POOL_CLUSTER_WARN_RATIO` | `0.8` | Warn when cluster active+waiting connections exceed budget × ratio |
-| `DATABASE_POOL_CLUSTER_CRITICAL_RATIO` | `0.95` | Critical cluster threshold |
-| `DATABASE_POOL_ALERT_CONSECUTIVE_POLLS` | `2` | Consecutive polls before alerting |
+| Variable                                | Default | Meaning                                                              |
+| --------------------------------------- | ------- | -------------------------------------------------------------------- |
+| `DATABASE_POOL_ACTIVE_WARN_RATIO`       | `0.8`   | Warn when in-process org RLS checkouts ≥ `DATABASE_POOL_MAX × ratio` |
+| `DATABASE_POOL_ACTIVE_CRITICAL_RATIO`   | `0.95`  | Critical threshold for same signal                                   |
+| `DATABASE_POOL_CLUSTER_WARN_RATIO`      | `0.8`   | Warn when cluster active+waiting connections exceed budget × ratio   |
+| `DATABASE_POOL_CLUSTER_CRITICAL_RATIO`  | `0.95`  | Critical cluster threshold                                           |
+| `DATABASE_POOL_ALERT_CONSECUTIVE_POLLS` | `2`     | Consecutive polls before alerting                                    |
 
 Alerting runs on API startup (`registerPostgresPoolMetrics` in `server.ts`) and does **not** require `METRICS_ENABLED`. Optional Prometheus gauges use the same sampler when metrics are enabled.
 

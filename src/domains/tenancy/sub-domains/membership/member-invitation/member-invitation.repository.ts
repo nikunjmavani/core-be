@@ -1,11 +1,36 @@
-import { and, asc, eq, gt, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
+import { sql } from '@/infrastructure/database/connection.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
-import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { MemberInvitationRow } from './member-invitation.types.js';
+
+/**
+ * Cross-organization lookup result returned by the SECURITY DEFINER
+ * `tenancy.resolve_member_invitation_lookup_by_public_id` function. Used by
+ * `MemberInvitationService.accept/decline` so the caller can resolve the owning
+ * organization without RLS context, then wrap the actual UPDATE in
+ * `withOrganizationDatabaseContext`.
+ */
+export interface MemberInvitationOrganizationLookupRow {
+  organization_public_id: string;
+  organization_id: number;
+  membership_public_id: string;
+  membership_id: number;
+}
+
+export interface PendingMemberInvitationLookupRow {
+  invitation_public_id: string;
+  organization_public_id: string;
+  organization_id: number;
+  membership_public_id: string;
+  membership_id: number;
+  invitation_email: string;
+  invitation_expires_at: Date;
+  invitation_created_at: Date;
+}
 
 export class MemberInvitationRepository {
   async findByOrganizationId(organization_id: number, limit: number) {
@@ -25,28 +50,51 @@ export class MemberInvitationRepository {
     }));
   }
 
-  async findByEmailPending(email: string, limit: number) {
-    const now = new Date();
-    const rows = await getRequestDatabase()
-      .select({
-        invitation: member_invitations,
-        membership_public_id: memberships.public_id,
-        organization_public_id: organizations.public_id,
-      })
-      .from(member_invitations)
-      .innerJoin(memberships, eq(member_invitations.membership_id, memberships.id))
-      .innerJoin(organizations, eq(memberships.organization_id, organizations.id))
-      .where(
-        and(
-          eq(member_invitations.email, email),
-          isNull(member_invitations.accepted_at),
-          isNull(member_invitations.revoked_at),
-          gt(member_invitations.expires_at, now),
-        ),
-      )
-      .orderBy(asc(member_invitations.created_at))
-      .limit(limit);
-    return rows;
+  /**
+   * Cross-organization lookup of pending invitations by recipient email.
+   *
+   * Bypasses tenant RLS via the SECURITY DEFINER function
+   * `tenancy.list_pending_member_invitations_for_email` so the route can be served
+   * without an `app.current_organization_id` GUC. The function returns minimal
+   * non-sensitive metadata; the secret token hash and inviter id are not exposed.
+   */
+  async findByEmailPending(
+    email: string,
+    limit: number,
+  ): Promise<PendingMemberInvitationLookupRow[]> {
+    const rows = await sql<
+      Array<{
+        invitation_public_id: string;
+        organization_public_id: string;
+        organization_id: string | number;
+        membership_public_id: string;
+        membership_id: string | number;
+        invitation_email: string;
+        invitation_expires_at: Date;
+        invitation_created_at: Date;
+      }>
+    >`
+      SELECT
+        invitation_public_id,
+        organization_public_id,
+        organization_id,
+        membership_public_id,
+        membership_id,
+        invitation_email,
+        invitation_expires_at,
+        invitation_created_at
+      FROM tenancy.list_pending_member_invitations_for_email(${email}, ${limit})
+    `;
+    return rows.map((row) => ({
+      invitation_public_id: row.invitation_public_id,
+      organization_public_id: row.organization_public_id,
+      organization_id: Number(row.organization_id),
+      membership_public_id: row.membership_public_id,
+      membership_id: Number(row.membership_id),
+      invitation_email: row.invitation_email,
+      invitation_expires_at: new Date(row.invitation_expires_at),
+      invitation_created_at: new Date(row.invitation_created_at),
+    }));
   }
 
   async findByPublicId(public_id: string): Promise<MemberInvitationRow | null> {
@@ -56,6 +104,42 @@ export class MemberInvitationRepository {
       .where(eq(member_invitations.public_id, public_id))
       .limit(1);
     return (rows[0] ?? null) as MemberInvitationRow | null;
+  }
+
+  /**
+   * Cross-organization lookup of an invitation's owning organization by public id.
+   *
+   * Bypasses tenant RLS via the SECURITY DEFINER function
+   * `tenancy.resolve_member_invitation_lookup_by_public_id` so the public accept
+   * route and the user-driven decline route can resolve the organization without
+   * having `app.current_organization_id` set up front.
+   */
+  async lookupOrganizationByInvitationPublicId(
+    invitation_public_id: string,
+  ): Promise<MemberInvitationOrganizationLookupRow | null> {
+    const rows = await sql<
+      Array<{
+        organization_public_id: string;
+        organization_id: string | number;
+        membership_public_id: string;
+        membership_id: string | number;
+      }>
+    >`
+      SELECT
+        organization_public_id,
+        organization_id,
+        membership_public_id,
+        membership_id
+      FROM tenancy.resolve_member_invitation_lookup_by_public_id(${invitation_public_id})
+    `;
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      organization_public_id: row.organization_public_id,
+      organization_id: Number(row.organization_id),
+      membership_public_id: row.membership_public_id,
+      membership_id: Number(row.membership_id),
+    };
   }
 
   async create(data: {

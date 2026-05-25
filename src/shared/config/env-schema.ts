@@ -209,11 +209,22 @@ const envSchemaBase = z.object({
    * Rollout flag for scoped RLS contexts (item 2 of the production hardening plan). When true,
    * the per-HTTP-request `organization-rls-transaction` + `request-statement-timeout` pinning
    * is disabled and services are expected to wrap their unit-of-work calls in
-   * `withOrganizationDatabaseContext(...)`. When false (default), the existing request-pinned
-   * transaction model stays in place.
+   * `withOrganizationDatabaseContext(...)` or `withUserDatabaseContext(...)`. When false,
+   * the legacy request-pinned transaction model stays in place.
    *
-   * Roll out per-route or per-environment. See `docs/reference/data/migrations.md` and the
-   * RLS unpin chaos test for the migration sequencing.
+   * Prerequisites for safely enabling `true` in an environment:
+   *   1. Apply migration `20260520000004_organization_discovery_and_invitation_lookup_rls.sql`
+   *      (adds `organizations_user_discovery` + `memberships_user_self_discovery` policies and
+   *      the `tenancy.resolve_member_invitation_lookup_by_public_id` /
+   *      `tenancy.list_pending_member_invitations_for_email` SECURITY DEFINER helpers).
+   *   2. Confirm services on the deployment wrap cross-org reads in
+   *      `withUserDatabaseContext` (organization list/getByPublicId/getBySlug/create) and that
+   *      invitation accept/decline/listPending resolve the owning org via the SECURITY DEFINER
+   *      lookup before writing.
+   *
+   * Roll out per-environment by flipping the env var; the schema default remains `true` so new
+   * environments inherit the post-migration mode. See
+   * `docs/deployment/runbooks/resource-limits.md` for the full rollout sequence.
    */
   DATABASE_RLS_SCOPED_CONTEXTS: z.coerce.boolean().default(true),
   /** Per-connection idle_in_transaction_session_timeout (ms). Caps stuck transactions; 0 disables. Default: 30000. */
