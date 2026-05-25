@@ -127,6 +127,25 @@ export class UploadService {
     });
   }
 
+  /**
+   * Gate for cross-domain consumers (avatar/logo attach): the upload row for this storage key
+   * must exist and be in UPLOADED status — i.e. it went through confirmUpload. Ownership is
+   * enforced by the caller via the key prefix, so this only asserts the finalization state.
+   */
+  async assertKeyConfirmed(fileKey: string): Promise<void> {
+    const row = await this.repository.findByFileKey(fileKey);
+    if (!row) {
+      throw new ValidationError('errors:validation.uploadNotConfirmed', undefined, {
+        key: ['No upload exists for this key'],
+      });
+    }
+    if (row.status !== UPLOAD_STATUS.UPLOADED) {
+      throw new ValidationError('errors:validation.uploadNotConfirmed', undefined, {
+        key: ['Upload has not been confirmed'],
+      });
+    }
+  }
+
   async getUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
     const validatedPublicId = validateUploadPublicIdParam(public_id);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);

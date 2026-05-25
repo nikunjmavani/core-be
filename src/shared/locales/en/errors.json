@@ -38,6 +38,7 @@
     "avatarKeyMissing": "Invalid or missing avatarKey",
     "avatarKeyNotOwned": "Avatar key does not belong to this user",
     "logoKeyNotOwned": "Logo key does not belong to this organization",
+    "uploadNotConfirmed": "Upload must be confirmed before it can be attached",
     "invalidMfaMethodId": "Invalid MFA method id"
   },
   "missingSessionCookie": "Missing session cookie",

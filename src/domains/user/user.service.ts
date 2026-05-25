@@ -180,6 +180,10 @@ export class UserService {
         avatarKey: ['Avatar key does not belong to this user'],
       });
     }
+    if (!this.offboardingUploadService) {
+      throw new Error('UploadService is not wired for avatar-attach confirmation');
+    }
+    await this.offboardingUploadService.assertKeyConfirmed(avatarKey);
     const objectInfo = await this.objectStorage.headObject(avatarKey);
     if (!objectInfo) {
       throw new ValidationError('errors:validation.avatarNotFound');

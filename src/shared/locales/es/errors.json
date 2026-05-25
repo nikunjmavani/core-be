@@ -38,6 +38,7 @@
     "avatarKeyMissing": "Clave de avatar no válida o faltante",
     "avatarKeyNotOwned": "La clave de avatar no pertenece a este usuario",
     "logoKeyNotOwned": "La clave de logo no pertenece a esta organización",
+    "uploadNotConfirmed": "La carga debe confirmarse antes de poder adjuntarse",
     "invalidMfaMethodId": "ID de método MFA no válido"
   },
   "missingSessionCookie": "Falta la cookie de sesión",

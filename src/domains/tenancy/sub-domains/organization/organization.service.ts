@@ -274,6 +274,10 @@ export class OrganizationService {
         key: ['Logo key does not belong to this organization'],
       });
     }
+    if (!this.offboardingUploadService) {
+      throw new Error('UploadService is not wired for logo-attach confirmation');
+    }
+    await this.offboardingUploadService.assertKeyConfirmed(parsed.key);
     const metadata = await this.objectStorage.headObject(parsed.key);
     if (!metadata) {
       throw new ValidationError('errors:validation.logoNotFound', undefined, {

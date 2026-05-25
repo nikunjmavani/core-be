@@ -66,6 +66,17 @@ describe('UserService', () => {
     vi.mocked(repository.findByPublicId).mockResolvedValue(userRow as never);
     vi.mocked(repository.softDelete).mockResolvedValue(userRow as never);
     vi.mocked(repository.update).mockResolvedValue(userRow as never);
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions: vi.fn().mockResolvedValue(undefined) } as never,
+      authMethodService: { revokeAllForUser: vi.fn().mockResolvedValue(undefined) } as never,
+      uploadService: {
+        tombstoneAllByUserId: vi.fn().mockResolvedValue(0),
+        assertKeyConfirmed: vi.fn().mockResolvedValue(undefined),
+      } as never,
+      userDataExportService: {
+        deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
   });
 
   it('findByEmail returns user record', async () => {
@@ -111,6 +122,25 @@ describe('UserService', () => {
     await expect(
       service.uploadAvatar(userRow.public_id, { avatarKey: 'wrong/prefix.png' }),
     ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('uploadAvatar rejects when the upload has not been confirmed', async () => {
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions: vi.fn() } as never,
+      authMethodService: { revokeAllForUser: vi.fn() } as never,
+      uploadService: {
+        tombstoneAllByUserId: vi.fn().mockResolvedValue(0),
+        assertKeyConfirmed: vi
+          .fn()
+          .mockRejectedValue(new ValidationError('errors:validation.uploadNotConfirmed')),
+      } as never,
+      userDataExportService: { deleteAllExportsForUser: vi.fn() } as never,
+    });
+    const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
+    await expect(service.uploadAvatar(userRow.public_id, { avatarKey })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(objectStorage.headObject).not.toHaveBeenCalled();
   });
 
   it('deleteMe runs offboarding when dependencies attached', async () => {
