@@ -12,6 +12,7 @@ overrides:
   js-yaml: '>=4.1.1'
   fast-xml-parser: '>=5.7.0'
   hono: '>=4.12.18'
+  markdown-it: '>=14.1.1'
   minimatch: 10.2.5
   micromatch>picomatch: 4.0.4
   rollup: '>=4.59.0'
@@ -21,9 +22,9 @@ overrides:
   drizzle-orm: '>=0.45.2'
   i18next-fs-backend: '>=2.6.4'
   i18next-http-middleware: '>=3.9.3'
+  qs: '>=6.15.2'
   uuid: '>=11.1.1'
   yaml@1.10.2: 1.10.3
-  qs: '>=6.15.2'
 
 packageExtensionsChecksum: sha256-twx7wYqe04LeRfJrPtLfa4XgAE/MqkzVmdVQ8xx6Tx4=
 
@@ -3787,8 +3788,8 @@ packages:
     resolution: {integrity: sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==}
     engines: {node: '>=10'}
 
-  markdown-it@14.1.0:
-    resolution: {integrity: sha512-a54IwgWPaeBCAAsv13YgmALOF1elABB08FxO9i+r4VFk5Vl4pKokRPeX8u5TCgSsPi6ec1otfLjdOpVcgbpshg==}
+  markdown-it@14.2.0:
+    resolution: {integrity: sha512-1TGiQiJVRQ3NPmZH6sx5Cfnmg6GQm9jvC1ch4TK511NjSJvjzKLzn5pPfZRNZkRPZP0HqCioSndqH8v2nRaWVQ==}
     hasBin: true
 
   markdownlint-cli2-formatter-default@0.0.5:
@@ -9260,7 +9261,7 @@ snapshots:
     dependencies:
       semver: 7.8.0
 
-  markdown-it@14.1.0:
+  markdown-it@14.2.0:
     dependencies:
       argparse: 2.0.1
       entities: 4.5.0
@@ -9286,7 +9287,7 @@ snapshots:
 
   markdownlint@0.36.1:
     dependencies:
-      markdown-it: 14.1.0
+      markdown-it: 14.2.0
       markdownlint-micromark: 0.1.12
 
   math-intrinsics@1.1.0: {}

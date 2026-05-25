@@ -300,6 +300,7 @@
       "js-yaml": ">=4.1.1",
       "fast-xml-parser": ">=5.7.0",
       "hono": ">=4.12.18",
+      "markdown-it": ">=14.1.1",
       "minimatch": "10.2.5",
       "micromatch>picomatch": "4.0.4",
       "rollup": ">=4.59.0",
