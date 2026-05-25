@@ -6,7 +6,7 @@ This repo ships a production [Dockerfile](../../../Dockerfile) with no baked-in 
 
 ---
 
-## Why set explicit limits?
+## Why set explicit limits
 
 | Without heap cap aligned to cgroup                                                       | With aligned heap cap (`--max-old-space-size`)                                                                                                             |
 | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
