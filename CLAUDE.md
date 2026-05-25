@@ -324,15 +324,15 @@ Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, 
 - `pnpm docs:upload` — upload Postman Collection to workspace (requires `POSTMAN_API_KEY` + `POSTMAN_WORKSPACE_ID`)
 - `pnpm docs:all` — generate OpenAPI spec + Postman Collection in one step
 - `pnpm test` — run all Vitest tests (serial)
-- `pnpm test:unit` — unit only (`vitest.unit.config.ts`: `src/tests/unit` + domain `__tests__/unit/`)
+- `pnpm test:unit` — unit only (`--project unit` in `tooling/vitest/projects.ts`: `src/tests/unit` + domain `__tests__/unit/`)
 - `pnpm test:integration` — `src/tests/integration`
 - `pnpm test:e2e` — domain route tests (excludes `__tests__/unit/`)
 - `pnpm test:global` — global regression (`src/tests/global`; alias `pnpm test:regression`)
 - `pnpm test:coverage` — all tests with V8 coverage (CI)
 - `pnpm test:performance` — performance tests
 - `pnpm test:security` — security test suite
-- `pnpm test:chaos` — Toxiproxy chaos / fault-injection suite (`vitest.chaos.config.ts`; see `docs/reference/reliability/chaos-testing.md`)
-- `pnpm test:contract` — outbound HTTP contracts for Stripe, Resend, S3 (`vitest.contract.config.ts`; see `docs/reference/testing/contract-tests.md`)
+- `pnpm test:chaos` — Toxiproxy chaos / fault-injection suite (`tooling/vitest/chaos.config.ts`; see `docs/reference/reliability/chaos-testing.md`)
+- `pnpm test:contract` — outbound HTTP contracts for Stripe, Resend, S3 (`tooling/vitest/contract.config.ts`; see `docs/reference/testing/contract-tests.md`)
 - `pnpm chaos:up` / `pnpm chaos:down` — start/stop the Toxiproxy sidecar (`docker compose --profile chaos`)
 - `pnpm chaos:provision` — register Postgres + Redis listener proxies (`src/tests/chaos/provision-proxies.ts`)
 - `pnpm test:api-smoke` — live API smoke (server running + seed)

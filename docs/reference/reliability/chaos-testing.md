@@ -37,7 +37,7 @@ network differs.
 ## Adding a new chaos scenario
 
 1. Create `src/tests/chaos/<scenario>.chaos.test.ts` so Vitest only picks chaos files from the
-   dedicated config (`vitest.chaos.config.ts`).
+   dedicated config (`tooling/vitest/chaos.config.ts`).
 2. Prefer **`withTemporaryListeningProxyToxinForChaosAssertion`** helpers in
    [`src/tests/chaos/helpers/toxiproxy.client.ts`](../../../src/tests/chaos/helpers/toxiproxy.client.ts)
    so toxics are cleared between scenarios.
@@ -80,4 +80,4 @@ flowchart LR
 | `pnpm chaos:up`        | Starts the Toxiproxy container (compose profile `chaos`).          |
 | `pnpm chaos:down`      | Stops Toxiproxy (`docker compose --profile chaos stop toxiproxy`). |
 | `pnpm chaos:provision` | Registers listener proxies via the administration API.             |
-| `pnpm test:chaos`      | Executes `vitest.chaos.config.ts`.                                 |
+| `pnpm test:chaos`      | Executes `tooling/vitest/chaos.config.ts`.                         |

@@ -47,7 +47,7 @@ Keep these aligned in `.vscode/settings.json`:
 - **Prettier:** default formatter for `[typescript]`, `[json]`, `[jsonc]`, `[markdown]` (no typescriptreact, css, html unless needed for rare files).
 - **Search exclude:** node_modules, dist, .git, coverage, pnpm-lock.yaml.
 - **Terminal:** defaultProfile.osx zsh, scrollback 5000.
-- **Explorer:** fileNesting enabled, patterns: tsconfig → tsconfig._.json, package.json → pnpm-lock.yaml + .npmrc + .prettierrc + eslint configs, .env → .env._.
+- **Explorer:** fileNesting enabled, patterns: tsconfig → `tsconfig._.json`, package.json → pnpm-lock.yaml + .npmrc + .prettierrc + eslint configs, .env → `.env._`.
 - **envSwitcher:** glob.target `.env`, glob.presets `.env*`.
 - **Vitest (multi-config):** `vitest.workspaceConfig` → `.vscode/vitest.workspace.ts` (editor only; do **not** add root `vitest.workspace.ts` — that changes default `vitest run` / `pnpm test` behavior).
 - **cSpell.words:** Merge existing backend list; do not add frontend-only words (e.g. oklch, POSTHOG, signups, VITE).
@@ -69,7 +69,7 @@ Keep these aligned in `.vscode/settings.json`:
 
 ## Vitest workspace (editor only)
 
-When the repo has multiple Vitest configs (`vitest.config.ts`, `vitest.unit.config.ts`, `vitest.contract.config.ts`, `vitest.chaos.config.ts`), use **`.vscode/vitest.workspace.ts`** (not at repo root) plus:
+When the repo has multiple Vitest configs (`vitest.config.ts`, `tooling/vitest/contract.config.ts`, `tooling/vitest/chaos.config.ts`, `tooling/vitest/stryker.config.ts`), use **`.vscode/vitest.workspace.ts`** (not at repo root) plus:
 
 ```json
 "vitest.workspaceConfig": ".vscode/vitest.workspace.ts"

@@ -9,9 +9,9 @@ Mutation testing checks whether unit tests detect small code changes (mutants) i
 | Command | Purpose |
 | ------- | ------- |
 | `pnpm test:mutation` | Full Stryker run (enforces **≥ 70%** mutation score) |
-| `vitest run --config vitest.stryker.config.ts` | Dry-run the same unit tests Stryker uses (no mutation) |
+| `vitest run --config tooling/vitest/stryker.config.ts` | Dry-run the same unit tests Stryker uses (no mutation) |
 
-Configuration: [`stryker.config.json`](../../../stryker.config.json), [`vitest.stryker.config.ts`](../../../vitest.stryker.config.ts).
+Configuration: [`stryker.config.json`](../../../stryker.config.json), [`tooling/vitest/stryker.config.ts`](../../../tooling/vitest/stryker.config.ts).
 
 ---
 
@@ -47,7 +47,7 @@ Workflow: [.github/workflows/mutation-testing.yml](../../../.github/workflows/mu
 
 ## Local troubleshooting
 
-1. Run `vitest run --config vitest.stryker.config.ts` — all tests must pass before Stryker starts.
+1. Run `vitest run --config tooling/vitest/stryker.config.ts` — all tests must pass before Stryker starts.
 2. Open `reports/mutation/mutation-report.html` after a run to inspect surviving mutants.
 3. If Vitest reports “no related tests”, ensure the service has a `*service*.unit.test.ts` under `__tests__/unit/` and imports the service under test.
 

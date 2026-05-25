@@ -45,7 +45,7 @@
     "fileName": "reports/mutation/mutation-report.json"
   },
   "vitest": {
-    "configFile": "vitest.stryker.config.ts",
+    "configFile": "tooling/vitest/stryker.config.ts",
     "related": true
   },
   "timeoutMS": 60000,

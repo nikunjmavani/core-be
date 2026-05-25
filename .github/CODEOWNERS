@@ -47,7 +47,7 @@
 /pnpm-lock.yaml          @nikunjmavani
 /tsconfig.json           @nikunjmavani
 /vitest.config.ts        @nikunjmavani
-/vitest.unit.config.ts   @nikunjmavani
+/tooling/vitest/         @nikunjmavani
 /eslint.config.mjs      @nikunjmavani
 /.gitleaks.toml          @nikunjmavani
 /.semgrepignore          @nikunjmavani

@@ -1,6 +1,6 @@
 ---
 description: When adding or removing a third-party provider in setup:infra, run the setup-infra-maintainer skill so all dependent files stay in sync.
-globs: tooling/setup/**/*.ts, tooling/setup.config.json, docs/deployment/setup/setup-token-instructions.md
+globs: tooling/setup/**/*.ts, tooling/setup/setup.config.json, docs/deployment/setup/setup-token-instructions.md
 alwaysApply: false
 ---
 

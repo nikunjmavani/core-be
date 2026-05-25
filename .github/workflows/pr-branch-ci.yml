@@ -73,9 +73,6 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'Dockerfile.agent'
               - 'vitest.config.ts'
-              - 'vitest.unit.config.ts'
-              - 'vitest.chaos.config.ts'
-              - 'vitest.contract.config.ts'
               - 'tooling/**'
             docker:
               - 'Dockerfile'
@@ -129,10 +126,6 @@ jobs:
               - 'package.json'
             vitest-config:
               - 'vitest.config.ts'
-              - 'vitest.base.ts'
-              - 'vitest.unit.config.ts'
-              - 'vitest.chaos.config.ts'
-              - 'vitest.contract.config.ts'
               - 'tooling/vitest/**'
 
       - name: Resolve test scope and mode

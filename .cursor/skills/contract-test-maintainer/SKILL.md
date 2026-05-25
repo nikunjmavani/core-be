@@ -20,7 +20,7 @@ Keeps **nock + fixture** contract tests aligned with outbound integrations. See 
 | `src/tests/contract/*.contract.test.ts` | Specs per integration                   |
 | `src/tests/contract/fixtures/**`        | Curated JSON responses                  |
 | `src/tests/contract/helpers/**`         | Stripe form-body matchers, shared setup |
-| `vitest.contract.config.ts`             | Dedicated Vitest config                 |
+| `tooling/vitest/contract.config.ts`     | Dedicated Vitest config                 |
 | `src/tests/contract-vitest-setup.ts`    | nock preload                            |
 
 ## Commands
