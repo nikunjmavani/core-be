@@ -130,10 +130,11 @@ export function createWebhookController(service: WebhookService) {
       _reply: FastifyReply,
     ) => {
       requireAuth(request);
-      const data = await service.testWebhook(
-        validatePublicIdParam(request.params.id, 'id'),
-        request.params.webhookId,
-      );
+      const data = await service.testWebhook({
+        organization_public_id: validatePublicIdParam(request.params.id, 'id'),
+        webhook_public_id: request.params.webhookId,
+        requestId: getRequestIdentifier(request),
+      });
       return successResponse(WebhookSerializer.one(data), getRequestIdentifier(request));
     },
   };

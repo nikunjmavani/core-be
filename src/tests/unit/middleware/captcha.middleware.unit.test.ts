@@ -14,6 +14,7 @@ function buildRequest(headers: Record<string, string> = {}): FastifyRequest {
   return {
     headers,
     ip: '127.0.0.1',
+    id: 'req-1',
   } as FastifyRequest;
 }
 
@@ -69,6 +70,10 @@ describe('captchaPreHandler', () => {
     await expect(
       captchaPreHandler(buildRequest({ 'x-captcha-token': 'tok' }), {} as FastifyReply),
     ).resolves.toBeUndefined();
-    expect(verifyTurnstileTokenMock).toHaveBeenCalledWith('tok', '127.0.0.1');
+    expect(verifyTurnstileTokenMock).toHaveBeenCalledWith({
+      token: 'tok',
+      remoteIp: '127.0.0.1',
+      requestId: 'req-1',
+    });
   });
 });

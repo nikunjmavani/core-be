@@ -8,7 +8,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { env } from '@/shared/config/env.config.js';
-import { s3Circuit } from '@/infrastructure/resilience/circuit-breaker.js';
+import { outboundCall } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import type {
   ObjectStoragePort,
@@ -140,17 +140,21 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
     const bucket = requireBucket();
 
     try {
-      return await s3Circuit.execute(async () => {
-        const response = await getS3Client().send(
-          new HeadObjectCommand({
-            Bucket: bucket,
-            Key: key,
-          }),
-        );
-        return {
-          contentType: response.ContentType,
-          contentLength: response.ContentLength,
-        };
+      return await outboundCall({
+        name: 's3',
+        operation: async (signal) => {
+          const response = await getS3Client().send(
+            new HeadObjectCommand({
+              Bucket: bucket,
+              Key: key,
+            }),
+            { abortSignal: signal },
+          );
+          return {
+            contentType: response.ContentType,
+            contentLength: response.ContentLength,
+          };
+        },
       });
     } catch (error) {
       logger.error({ error, key, bucket }, 's3.headObject.failed');
@@ -161,23 +165,27 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
   async getObject(key: string): Promise<{ body: Buffer; contentType: string | undefined }> {
     const bucket = requireBucket();
 
-    return s3Circuit.execute(async () => {
-      const response = await getS3Client().send(
-        new GetObjectCommand({
-          Bucket: bucket,
-          Key: key,
-        }),
-      );
+    return outboundCall({
+      name: 's3',
+      operation: async (signal) => {
+        const response = await getS3Client().send(
+          new GetObjectCommand({
+            Bucket: bucket,
+            Key: key,
+          }),
+          { abortSignal: signal },
+        );
 
-      const body = await response.Body?.transformToByteArray();
-      if (!body) {
-        throw new Error('upload object body empty');
-      }
+        const body = await response.Body?.transformToByteArray();
+        if (!body) {
+          throw new Error('upload object body empty');
+        }
 
-      return {
-        body: Buffer.from(body),
-        contentType: response.ContentType,
-      };
+        return {
+          body: Buffer.from(body),
+          contentType: response.ContentType,
+        };
+      },
     });
   }
 
@@ -188,16 +196,20 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
     metadata?: Record<string, string>;
   }): Promise<void> {
     const bucket = requireBucket();
-    await s3Circuit.execute(async () => {
-      await getS3Client().send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: options.key,
-          Body: options.body,
-          ContentType: options.contentType,
-          Metadata: options.metadata,
-        }),
-      );
+    await outboundCall({
+      name: 's3',
+      operation: async (signal) => {
+        await getS3Client().send(
+          new PutObjectCommand({
+            Bucket: bucket,
+            Key: options.key,
+            Body: options.body,
+            ContentType: options.contentType,
+            Metadata: options.metadata,
+          }),
+          { abortSignal: signal },
+        );
+      },
     });
   }
 
@@ -205,13 +217,17 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
     const bucket = requireBucket();
 
     try {
-      await s3Circuit.execute(async () => {
-        await getS3Client().send(
-          new DeleteObjectCommand({
-            Bucket: bucket,
-            Key: key,
-          }),
-        );
+      await outboundCall({
+        name: 's3',
+        operation: async (signal) => {
+          await getS3Client().send(
+            new DeleteObjectCommand({
+              Bucket: bucket,
+              Key: key,
+            }),
+            { abortSignal: signal },
+          );
+        },
       });
       return true;
     } catch (error) {

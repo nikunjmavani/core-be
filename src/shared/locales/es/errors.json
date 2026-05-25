@@ -16,6 +16,7 @@
   "payloadTooLarge": "Carga demasiado grande",
   "unprocessableEntity": "Entidad no procesable",
   "serviceUnavailable": "Servicio no disponible temporalmente",
+  "externalServiceUnavailable": "Un servicio externo no está disponible temporalmente",
   "requestTimeout": "La solicitud tardó demasiado en completarse",
   "databaseTimeout": "La operación de base de datos agotó el tiempo de espera",
   "routeNotFound": "Ruta no encontrada",

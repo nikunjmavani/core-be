@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outbound/index.js';
 import { createPinnedWebhookFetch } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
 import { getWebhookWorkerOptions } from '@/infrastructure/queue/worker-runtime/worker-options.js';
 import {
@@ -145,21 +146,29 @@ async function processWebhookDeliveryAttemptInContext(
         ? await createPinnedWebhookFetch(webhookUrl)
         : fetchImplementation;
 
-    const response = await fetchWebhookWithCircuitBreaker(
-      webhookUrl,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Webhook-Signature': `t=${timestamp},v1=${signature}`,
-          'X-Webhook-Event': eventType,
-          'X-Webhook-Timestamp': String(timestamp),
-          ...(jobContext.requestId ? { 'X-Request-Id': jobContext.requestId } : {}),
-        },
-        body: payloadString,
-        signal: AbortSignal.timeout(30_000),
-      },
-      pinnedFetch,
+    const response = await outboundCall(
+      buildOutboundCallOptions({
+        name: 'webhook',
+        circuit: null,
+        requestId: jobContext.requestId,
+        operation: async (signal) =>
+          fetchWebhookWithCircuitBreaker(
+            webhookUrl,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Webhook-Signature': `t=${timestamp},v1=${signature}`,
+                'X-Webhook-Event': eventType,
+                'X-Webhook-Timestamp': String(timestamp),
+                ...(jobContext.requestId ? { 'X-Request-Id': jobContext.requestId } : {}),
+              },
+              body: payloadString,
+              signal,
+            },
+            pinnedFetch,
+          ),
+      }),
     );
 
     let responseBody: string;

@@ -22,7 +22,7 @@ describe('verifyTurnstileToken', () => {
   it('returns success when Turnstile siteverify succeeds', async () => {
     nock(TURNSTILE_HOST).post('/turnstile/v0/siteverify').reply(200, { success: true });
 
-    const result = await verifyTurnstileToken('valid-token', '127.0.0.1');
+    const result = await verifyTurnstileToken({ token: 'valid-token', remoteIp: '127.0.0.1' });
     expect(result.success).toBe(true);
   });
 
@@ -31,7 +31,7 @@ describe('verifyTurnstileToken', () => {
       .post('/turnstile/v0/siteverify')
       .reply(200, { success: false, 'error-codes': ['invalid-input-response'] });
 
-    const result = await verifyTurnstileToken('bad-token');
+    const result = await verifyTurnstileToken({ token: 'bad-token' });
     expect(result.success).toBe(false);
     expect(result.errorCodes).toContain('invalid-input-response');
   });

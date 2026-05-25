@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 import { env } from '@/shared/config/env.config.js';
-import { stripeCircuit } from '@/infrastructure/resilience/circuit-breaker.js';
+import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
@@ -65,27 +65,47 @@ export async function createStripeCustomer(options: {
   email: string;
   name: string;
   metadata?: Record<string, string>;
+  requestId?: string;
 }): Promise<Stripe.Customer> {
-  return stripeCircuit.execute(async () => {
-    const stripe = getStripeClient();
-    return stripe.customers.create(
-      omitUndefined({
-        email: options.email,
-        name: options.name,
-        metadata: options.metadata,
-      }),
-    );
-  });
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId: options.requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        return stripe.customers.create(
+          omitUndefined({
+            email: options.email,
+            name: options.name,
+            metadata: options.metadata,
+          }),
+        );
+      },
+    }),
+  );
 }
 
-export async function getStripeCustomer(customerId: string): Promise<Stripe.Customer | null> {
+export async function getStripeCustomer(
+  customerId: string,
+  requestId?: string,
+): Promise<Stripe.Customer | null> {
   const stripe = getStripeClient();
   try {
-    return await stripeCircuit.execute(async () => {
-      const customer = await stripe.customers.retrieve(customerId);
-      if (customer.deleted) return null;
-      return customer as Stripe.Customer;
-    });
+    return await outboundCall(
+      buildOutboundCallOptions({
+        name: 'stripe',
+        requestId,
+        enforceAbortTimeout: false,
+        rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+        operation: async () => {
+          const customer = await stripe.customers.retrieve(customerId);
+          if (customer.deleted) return null;
+          return customer as Stripe.Customer;
+        },
+      }),
+    );
   } catch (error) {
     if (
       error instanceof Stripe.errors.StripeInvalidRequestError &&
@@ -97,11 +117,22 @@ export async function getStripeCustomer(customerId: string): Promise<Stripe.Cust
   }
 }
 
-export async function retrieveStripeEvent(stripeEventId: string): Promise<Stripe.Event> {
-  return stripeCircuit.execute(async () => {
-    const stripe = getStripeClient();
-    return stripe.events.retrieve(stripeEventId);
-  });
+export async function retrieveStripeEvent(
+  stripeEventId: string,
+  requestId?: string,
+): Promise<Stripe.Event> {
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        return stripe.events.retrieve(stripeEventId);
+      },
+    }),
+  );
 }
 
 // ── Subscription helpers ──────────────────────────────────────
@@ -112,46 +143,73 @@ export async function createStripeSubscription(options: {
   trialEnd?: number;
   metadata?: Record<string, string>;
   idempotencyKey?: string;
+  requestId?: string;
 }): Promise<Stripe.Subscription> {
-  return stripeCircuit.execute(async () => {
-    const stripe = getStripeClient();
-    return stripe.subscriptions.create(
-      omitUndefined({
-        customer: options.customerId,
-        items: [{ price: options.priceId }],
-        trial_end: options.trialEnd,
-        metadata: options.metadata,
-        payment_behavior: 'default_incomplete' as const,
-      }),
-      options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
-    );
-  });
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId: options.requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        return stripe.subscriptions.create(
+          omitUndefined({
+            customer: options.customerId,
+            items: [{ price: options.priceId }],
+            trial_end: options.trialEnd,
+            metadata: options.metadata,
+            payment_behavior: 'default_incomplete' as const,
+          }),
+          options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+        );
+      },
+    }),
+  );
 }
 
 export async function cancelStripeSubscription(
   subscriptionId: string,
   cancelAtPeriodEnd = true,
+  requestId?: string,
 ): Promise<Stripe.Subscription> {
-  return stripeCircuit.execute(async () => {
-    const stripe = getStripeClient();
-    if (cancelAtPeriodEnd) {
-      return stripe.subscriptions.update(subscriptionId, {
-        cancel_at_period_end: true,
-      });
-    }
-    return stripe.subscriptions.cancel(subscriptionId);
-  });
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        if (cancelAtPeriodEnd) {
+          return stripe.subscriptions.update(subscriptionId, {
+            cancel_at_period_end: true,
+          });
+        }
+        return stripe.subscriptions.cancel(subscriptionId);
+      },
+    }),
+  );
 }
 
 export async function resumeStripeSubscription(
   subscriptionId: string,
+  requestId?: string,
 ): Promise<Stripe.Subscription> {
-  return stripeCircuit.execute(async () => {
-    const stripe = getStripeClient();
-    return stripe.subscriptions.update(subscriptionId, {
-      cancel_at_period_end: false,
-    });
-  });
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        return stripe.subscriptions.update(subscriptionId, {
+          cancel_at_period_end: false,
+        });
+      },
+    }),
+  );
 }
 
 export async function updateStripeSubscription(
@@ -159,26 +217,35 @@ export async function updateStripeSubscription(
   options: {
     priceId?: string;
     metadata?: Record<string, string>;
+    requestId?: string;
   },
 ): Promise<Stripe.Subscription> {
-  return stripeCircuit.execute(async () => {
-    const stripe = getStripeClient();
-    const params: Stripe.SubscriptionUpdateParams = {};
+  return outboundCall(
+    buildOutboundCallOptions({
+      name: 'stripe',
+      requestId: options.requestId,
+      enforceAbortTimeout: false,
+      rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
+      operation: async () => {
+        const stripe = getStripeClient();
+        const params: Stripe.SubscriptionUpdateParams = {};
 
-    if (options.priceId) {
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      const itemId = subscription.items.data[0]?.id;
-      if (itemId) {
-        params.items = [{ id: itemId, price: options.priceId }];
-      }
-    }
+        if (options.priceId) {
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+          const itemId = subscription.items.data[0]?.id;
+          if (itemId) {
+            params.items = [{ id: itemId, price: options.priceId }];
+          }
+        }
 
-    if (options.metadata) {
-      params.metadata = options.metadata;
-    }
+        if (options.metadata) {
+          params.metadata = options.metadata;
+        }
 
-    return stripe.subscriptions.update(subscriptionId, params);
-  });
+        return stripe.subscriptions.update(subscriptionId, params);
+      },
+    }),
+  );
 }
 
 // ── Webhook verification ──────────────────────────────────────
