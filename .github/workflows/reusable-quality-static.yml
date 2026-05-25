@@ -90,10 +90,22 @@ jobs:
       - name: Production dependency audit (fail on any vulnerability)
         run: pnpm deps:audit:prod
 
-      - name: Gitleaks (secret detection)
-        uses: gitleaks/gitleaks-action@v2
+      # Use the official gitleaks CLI binary instead of gitleaks/gitleaks-action@v2.
+      # The action still targets Node.js 20 (no release since v2.3.9, Apr 2025), so it
+      # triggers the Node 20 deprecation warning. The binary install matches what the
+      # pre-commit hook uses (`brew install gitleaks`) and honors .gitleaks.toml.
+      - name: Install gitleaks
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          sudo chmod +x /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Gitleaks (secret detection)
+        run: gitleaks detect --redact --verbose --no-banner --config .gitleaks.toml
 
       - name: Setup Python for Semgrep
         uses: actions/setup-python@v6
