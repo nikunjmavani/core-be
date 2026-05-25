@@ -172,9 +172,9 @@ const envSchemaBase = z.object({
   WORKER_CONCURRENCY_NOTIFY: z.coerce.number().int().min(1).max(20).optional(),
   WORKER_CONCURRENCY_WEBHOOK: z.coerce.number().int().min(1).max(20).optional(),
   WORKER_CONCURRENCY_STRIPE: z.coerce.number().int().min(1).max(20).optional(),
-  /** HTTP port for worker GET /health/live, /health/worker, and optional /metrics (default 9090). */
+  /** HTTP port for worker GET /health, /health, and optional /metrics (default 9090). */
   WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(9090),
-  /** Max age of throughput queue heartbeats before /health/live returns 503 (default 5 min). */
+  /** Max age of throughput queue heartbeats before /health returns 503 (default 5 min). */
   WORKER_HEALTH_STALL_TIMEOUT_MS: z.coerce
     .number()
     .int()

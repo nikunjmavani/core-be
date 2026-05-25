@@ -79,7 +79,7 @@ describe('rate-limit.middleware', () => {
     await expect(options.max({ organizationId: null })).resolves.toBe(100);
     await expect(options.max({ organizationId: 'org_public' })).resolves.toBe(200);
     expect(options.timeWindow).toBe(60_000);
-    expect(options.allowList({ url: '/health/live' })).toBe(true);
+    expect(options.allowList({ url: '/health' })).toBe(true);
     expect(options.allowList({ url: testApiPath('/auth/login') })).toBe(false);
   });
 
@@ -177,8 +177,8 @@ describe('rate-limit.middleware', () => {
       };
       // Real health endpoints are allowed
       expect(options.allowList({ url: '/health' })).toBe(true);
-      expect(options.allowList({ url: '/health/live' })).toBe(true);
-      expect(options.allowList({ url: '/health/ready' })).toBe(true);
+      expect(options.allowList({ url: '/health' })).toBe(true);
+      expect(options.allowList({ url: '/health' })).toBe(true);
 
       // Look-alike paths must NOT be allowed (defense-in-depth: prefix match, not contains)
       expect(options.allowList({ url: '/api/v1/healthcheck' })).toBe(false);

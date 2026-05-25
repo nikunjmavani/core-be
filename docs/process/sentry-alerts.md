@@ -7,7 +7,7 @@ Operational alerts for **core-be** use **Sentry** issue and metric alerts only. 
 ## Prerequisites
 
 1. `SENTRY_DSN` configured on API and worker services ([observability runbook](../deployment/runbooks/observability.md)).
-2. `RAILWAY_GIT_COMMIT_SHA` set on deploy so releases group regressions by commit ([deploy-railway.yml](../../.github/workflows/deploy-railway.yml)).
+2. `RAILWAY_GIT_COMMIT_SHA` set on deploy so releases group regressions by commit ([cd.yml](../../.github/workflows/cd.yml)).
 3. Production environment tag: `SENTRY_ENVIRONMENT=production` (or per-env names).
 
 ---
@@ -32,7 +32,7 @@ Pool exhaustion alerts are emitted by the API process when org-scoped RLS checko
 
 ## What we do not alert on in Sentry
 
-- `/health/live`, `/health/ready`, `/health`, `/health/worker` transactions (dropped in `beforeSendTransaction`).
+- `/health`, `/health`, `/health`, `/health` transactions (dropped in `beforeSendTransaction`).
 - Expected `401` / `403` auth noise (review periodically; add inbound filters if noisy).
 - Stripe webhook signature failures from scanners (use Sentry inbound filters on user-agent or path if needed).
 

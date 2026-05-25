@@ -221,7 +221,7 @@ export async function assertPostgresConnectionBudget(
       'DEPLOYMENT_TOTAL_REPLICA_COUNT (or DEPLOYMENT_API_REPLICA_COUNT + DEPLOYMENT_WORKER_REPLICA_COUNT) ' +
         'is required for hosted deployments (production, or any environment with RAILWAY_GIT_COMMIT_SHA / ' +
         'KUBERNETES_SERVICE_HOST set) to validate Postgres connection budget. ' +
-        'Set the secret in the GitHub Environment so deploy-railway.yml forwards it to the service. ' +
+        'Set the secret in the GitHub Environment so cd.yml forwards it to the service. ' +
         'See docs/deployment/runbooks/resource-limits.md',
     );
   }

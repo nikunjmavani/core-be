@@ -15,10 +15,6 @@ vi.mock('@/infrastructure/queue/health.js', () => ({
   pingBullMQ: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js', () => ({
-  readWorkerQueueHeartbeats: vi.fn().mockResolvedValue([]),
-}));
-
 vi.mock('@/shared/utils/infrastructure/application-lifecycle.util.js', () => ({
   isApplicationDraining: vi.fn().mockReturnValue(false),
 }));
@@ -28,6 +24,8 @@ vi.mock('@/shared/utils/infrastructure/health-operational-metrics.util.js', () =
     migration_version: '20260501000000_test.sql',
     mail_outbox_pending: 0,
     dlq_depth: 0,
+    draining: false,
+    worker_queues: [],
   }),
 }));
 
@@ -63,14 +61,24 @@ describe('health.middleware', () => {
     }
   });
 
-  it('returns ok for live probe', async () => {
+  it('returns readiness payload at GET /health', async () => {
     application = Fastify();
     await application.register(healthMiddleware);
     await application.ready();
 
-    const response = await application.inject({ method: 'GET', url: '/health/live' });
+    const response = await application.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok' });
+    expect(response.json()).toMatchObject({
+      status: 'ok',
+      database: 'connected',
+      redis: 'connected',
+      bullmq: 'connected',
+      migration_version: '20260501000000_test.sql',
+      mail_outbox_pending: 0,
+      dlq_depth: 0,
+      draining: false,
+      worker_queues: [],
+    });
   });
 
   it('returns ok when all readiness dependencies succeed', async () => {
@@ -78,7 +86,7 @@ describe('health.middleware', () => {
     await application.register(healthMiddleware);
     await application.ready();
 
-    const response = await application.inject({ method: 'GET', url: '/health/ready' });
+    const response = await application.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
     expect(response.json().status).toBe('ok');
     expect(response.json().database).toBe('connected');
@@ -93,7 +101,7 @@ describe('health.middleware', () => {
     await application.register(healthMiddleware);
     await application.ready();
 
-    const response = await application.inject({ method: 'GET', url: '/health/ready' });
+    const response = await application.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(503);
     expect(response.json().status).toBe('draining');
   });
@@ -110,7 +118,7 @@ describe('health.middleware', () => {
     await application.register(healthMiddleware);
     await application.ready();
 
-    const response = await application.inject({ method: 'GET', url: '/health/ready' });
+    const response = await application.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(503);
     expect(response.json().redis).toBe('unavailable');
   });
@@ -127,44 +135,19 @@ describe('health.middleware', () => {
     await application.register(healthMiddleware);
     await application.ready();
 
-    const response = await application.inject({ method: 'GET', url: '/health/ready' });
+    const response = await application.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(503);
     expect(response.json().bullmq).toBe('unavailable');
   });
 
-  it('sets Deprecation and Sunset on aggregate GET /health', async () => {
+  it('does not set deprecation headers on canonical GET /health', async () => {
     application = Fastify();
     await application.register(healthMiddleware);
     await application.ready();
 
     const response = await application.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
-    expect(response.headers.deprecation).toBe('true');
-    expect(response.headers.sunset).toBeDefined();
-  });
-
-  it('returns aggregate health with live ok when dependencies succeed', async () => {
-    application = Fastify();
-    await application.register(healthMiddleware);
-    await application.ready();
-
-    const response = await application.inject({ method: 'GET', url: '/health' });
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      status: 'ok',
-      live: 'ok',
-      database: 'connected',
-    });
-  });
-
-  it('returns worker dependency view at /health/worker', async () => {
-    application = Fastify();
-    await application.register(healthMiddleware);
-    await application.ready();
-
-    const response = await application.inject({ method: 'GET', url: '/health/worker' });
-    expect(response.statusCode).toBe(200);
-    expect(response.json().role).toBe('api');
-    expect(response.json().bullmq).toBe('connected');
+    expect(response.headers.deprecation).toBeUndefined();
+    expect(response.headers.sunset).toBeUndefined();
   });
 });

@@ -3,16 +3,10 @@ import type { RouteMetadata } from './types.js';
 
 export const healthMcpAuthMetadata: Record<string, RouteMetadata> = {
   // ── Health ──
-  'GET /health/live': {
-    summary: 'Liveness check',
+  'GET /health': {
+    summary: 'Health check',
     description:
-      'Returns 200 if the server process is alive. Used by orchestrators for basic health monitoring.',
-    tags: ['Health'],
-  },
-  'GET /health/ready': {
-    summary: 'Readiness check',
-    description:
-      'Returns 200 when Postgres, Redis (cache), and BullMQ (representative notification queue Redis client) respond within timeouts. Parallel probes — returns 503 with per-dependency unavailable flags if any probe fails.',
+      'Returns 200 when the service is ready: Postgres, Redis, and BullMQ respond within timeouts. Returns 503 with per-dependency unavailable flags if any probe fails.',
     tags: ['Health'],
   },
 

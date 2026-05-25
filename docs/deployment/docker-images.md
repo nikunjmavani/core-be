@@ -106,7 +106,7 @@ RUN pnpm build && pnpm build:check \
 
 **MCP SDK:** `@modelcontextprotocol/sdk` is an **optional** dependency. Production images omit it by default (`INSTALL_MCP_OPTIONAL=false`). When `ENABLE_MCP_SERVER=true`, set `INSTALL_MCP_OPTIONAL=true` at image build time (or run `pnpm install` without `--no-optional` outside Docker).
 
-**Health:** `HEALTHCHECK` uses Node 24 `fetch` against `GET http://127.0.0.1:3000/health/ready` (no extra OS packages).
+**Health:** `HEALTHCHECK` uses Node 24 `fetch` against `GET http://127.0.0.1:3000/health` (no extra OS packages).
 
 **`.dockerignore`:** Host `docs/` is excluded from the build context; docs are **generated inside the build stage**, not copied from the host.
 
@@ -116,7 +116,7 @@ Standalone Dockerfile with the same `build` / `runtime` pattern as the root file
 
 **Health / monitoring:** No `HEALTHCHECK` in the worker image. Use orchestrator process monitoring (e.g. Railway restarts on exit, logs/metrics).
 
-**Railway:** Point the worker service at `Dockerfile.worker`. Set `RAILWAY_WORKER_SERVICE_ID` in the GitHub environment for deploy workflows to run `railway up` on the worker service.
+**Railway:** `cd.yml` deploys the scanned GHCR worker image to the separate worker service. Set `RAILWAY_WORKER_SERVICE_ID` in the GitHub environment so CD can sync shared variables, redeploy the image, and probe worker `GET /health`.
 
 ## Running production images locally
 
@@ -137,7 +137,7 @@ pnpm compose:up
 pnpm compose:wait          # optional: wait for Postgres
 pnpm db:migrate            # if DB is empty — required for connected health
 pnpm docker:smoke:up       # builds api-smoke on first run (profile smoke)
-curl -sf http://localhost:3000/health/ready
+curl -sf http://localhost:3000/health
 pnpm docker:smoke:logs     # optional
 pnpm docker:smoke:down
 ```
@@ -175,14 +175,14 @@ On **every pull request and push**, the `docker-build` job:
 2. Builds `core-be:ci` (API) and `core-be-worker:ci` (`Dockerfile.worker`)
 3. Trivy-scans both images (CRITICAL/HIGH; fails the job on findings)
 4. Worker: `node --check` + native module imports
-5. API: boot container with `NODE_ENV=test`, verify `GET /health/ready`
+5. API: boot container with `NODE_ENV=test`, verify `GET /health`
 
 On **push to `main`** (after scan), images are pushed to GHCR:
 
 - `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `:latest`
 - `ghcr.io/<owner>/<repo>/core-be-worker:<commit-sha>` and `:latest`
 
-[deploy-railway.yml](../../.github/workflows/deploy-railway.yml) deploys those refs with `railway redeploy --image` (optional `GHCR_API_IMAGE` / `GHCR_WORKER_IMAGE` secrets override the commit tag).
+[cd.yml](../../.github/workflows/cd.yml) deploys those refs with `railway redeploy --image` (optional `GHCR_API_IMAGE` / `GHCR_WORKER_IMAGE` secrets override the commit tag).
 
 Adds roughly 3–8 minutes to PR checks. See [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md).
 

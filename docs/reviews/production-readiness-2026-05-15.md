@@ -1,7 +1,6 @@
 # Pre-production review — 2026-05-15
 
 > **Current deferrals (not duplicated here):** see [observability.md](../deployment/runbooks/observability.md). This file is a **dated snapshot**; add a new file under `docs/reviews/` for later reviews.
-
 > **Update (2026-05-15):** Prometheus/Grafana integration was **temporarily removed** (`prom-client`, `/metrics`, worker metrics port, `METRICS_*` env vars, deploy secrets). **Still in place:** Sentry, Pino logs, health probes, idempotency cache cardinality sampling (bounded Redis SCAN + log / Sentry thresholds via worker), and all security items below (MCP auth, idempotency scoping, RLS, tests).
 
 ## Summary
@@ -14,7 +13,7 @@ Baseline quality gates pass locally (`pnpm audit`, `pnpm validate`, `pnpm valida
 - **CI quality pipeline** — lint, typecheck, domain validation, Gitleaks, Semgrep (`.github/workflows/ci.yml`)
 - **Security middleware** — Helmet, CORS (prod allowlist), JWT (RS256 in production), rate limits, idempotency (`src/shared/middlewares/`)
 - **RLS** — Multi-tenant tables in `migrations/20260215000002_enable_rls.sql` + `notify.notifications` in `migrations/20260515000001_notifications_rls.sql`
-- **Observability** — Sentry (errors/traces/profiling), Pino structured logs, health probes (`/health/live`, `/health/ready`)
+- **Observability** — Sentry (errors/traces/profiling), Pino structured logs, health probe (`/health`)
 - ~~**Prometheus metrics**~~ — removed temporarily (was `GET /metrics` + BullMQ counters)
 - **Circuit breakers** — Stripe, S3, Resend (`src/infrastructure/resilience/circuit-breaker.ts`)
 - **Worker hardening** — RSS monitoring, stalled job config, graceful shutdown
@@ -28,7 +27,7 @@ Baseline quality gates pass locally (`pnpm audit`, `pnpm validate`, `pnpm valida
 | Missing RLS on notifications | Database      | Migration `20260515000001_notifications_rls.sql`                                                                                                                                                    |
 | No Prometheus/Grafana path   | Observability | Prometheus **removed temporarily**; **idempotency cardinality** covered by repeatable job `idempotency-cardinality` + `IDEMPOTENCY_CARDINALITY_*` env thresholds — re-enable Prometheus when needed |
 | Missing docker-compose       | DX            | `docker-compose.yml` (Postgres 16 + Redis 7)                                                                                                                                                        |
-| Deploy env gaps              | CI/CD         | `SENTRY_*`, `METRICS_*` in [deploy-railway.yml](../../.github/workflows/deploy-railway.yml)                                                                                                         |
+| Deploy env gaps              | CI/CD         | `SENTRY_*`, `METRICS_*` in [cd.yml](../../.github/workflows/cd.yml)                                                                                                                            |
 
 ## High (P1) — addressed in follow-up (2026-05-15)
 

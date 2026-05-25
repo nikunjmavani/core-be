@@ -66,7 +66,7 @@ The API **`Dockerfile`** now:
 1. Runs `pnpm routes:catalog` and `pnpm docs:generate:multilang` in the **build** stage (host `docs/` is in `.dockerignore`).
 2. Copies `docs/routes.txt` and `docs/openapi/` into the **runtime** image for MCP when `ENABLE_MCP_SERVER=true`.
 
-**Follow-up:** Multi-target `Dockerfile` (`build` → `runtime` → `worker` / `api`); `Dockerfile.worker` duplicates worker build/runtime stages (no MCP); `docker-compose.yml` uses `restart: unless-stopped` on Postgres/Redis; API `HEALTHCHECK` uses Node `fetch` on `/health/ready`; CI builds and scans both API and worker images.
+**Follow-up:** Multi-target `Dockerfile` (`build` → `runtime` → `worker` / `api`); `Dockerfile.worker` duplicates worker build/runtime stages (no MCP); `docker-compose.yml` uses `restart: unless-stopped` on Postgres/Redis; API `HEALTHCHECK` uses Node `fetch` on `/health`; CI builds and scans both API and worker images.
 
 ### Commands (Phase 3)
 

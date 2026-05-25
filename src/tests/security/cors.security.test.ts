@@ -40,7 +40,7 @@ describe('Security: CORS', () => {
   });
 
   it('should handle requests from allowed origins', async () => {
-    const response = await request.get('/health/live').set('Origin', 'http://localhost:3000');
+    const response = await request.get('/health').set('Origin', 'http://localhost:3000');
     // Response should include CORS headers for allowed origin
     expect([200, 204]).toContain(response.status);
   });

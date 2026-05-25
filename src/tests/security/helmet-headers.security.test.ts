@@ -20,7 +20,7 @@ describe('Security: Helmet Headers', () => {
   });
 
   it('should set X-Content-Type-Options header when present', async () => {
-    const response = await request.get('/health/live');
+    const response = await request.get('/health');
     const value =
       response.headers['x-content-type-options'] ?? response.headers['X-Content-Type-Options'];
     if (value) {
@@ -30,7 +30,7 @@ describe('Security: Helmet Headers', () => {
   });
 
   it('should set X-Frame-Options header', async () => {
-    const response = await request.get('/health/live');
+    const response = await request.get('/health');
     const frameOptions = response.headers['x-frame-options'];
     if (frameOptions) {
       expect(['DENY', 'SAMEORIGIN']).toContain(frameOptions);
@@ -38,7 +38,7 @@ describe('Security: Helmet Headers', () => {
   });
 
   it('should set Referrer-Policy header', async () => {
-    const response = await request.get('/health/live');
+    const response = await request.get('/health');
     const referrerPolicy = response.headers['referrer-policy'];
     if (referrerPolicy) {
       expect(typeof referrerPolicy).toBe('string');
@@ -47,7 +47,7 @@ describe('Security: Helmet Headers', () => {
   });
 
   it('should set Strict-Transport-Security header', async () => {
-    const response = await request.get('/health/live');
+    const response = await request.get('/health');
     const hsts = response.headers['strict-transport-security'];
     if (hsts) {
       expect(hsts).toContain('max-age');
@@ -55,7 +55,7 @@ describe('Security: Helmet Headers', () => {
   });
 
   it('should set at least one of CSP, X-XSS-Protection, X-Content-Type-Options, or other Helmet headers', async () => {
-    const response = await request.get('/health/live');
+    const response = await request.get('/health');
     const securityHeaderKeys = [
       'content-security-policy',
       'x-xss-protection',
@@ -75,7 +75,7 @@ describe('Security: Helmet Headers', () => {
   });
 
   it('should not expose server version', async () => {
-    const response = await request.get('/health/live');
+    const response = await request.get('/health');
     const server = response.headers['server'];
     // Should not reveal "fastify" or version info
     if (server) {

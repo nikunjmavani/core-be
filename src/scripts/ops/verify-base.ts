@@ -15,7 +15,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const BASE_URL_FOR_HEALTH = (process.env.BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-const HEALTH_READY_URL = `${BASE_URL_FOR_HEALTH}/health/ready`;
+const HEALTH_URL = `${BASE_URL_FOR_HEALTH}/health`;
 const POLL_INTERVAL_MILLISECONDS = 500;
 const HEALTH_CHECK_TIMEOUT_MILLISECONDS = 1000;
 const READY_WAIT_TIMEOUT_MILLISECONDS = 60_000;
@@ -94,7 +94,7 @@ async function fetchHealthReadyOk(): Promise<boolean> {
     controller.abort();
   }, HEALTH_CHECK_TIMEOUT_MILLISECONDS);
   try {
-    const response = await fetch(HEALTH_READY_URL, { signal: controller.signal });
+    const response = await fetch(HEALTH_URL, { signal: controller.signal });
     return response.ok && response.status === 200;
   } catch {
     return false;
@@ -113,7 +113,7 @@ async function waitForServerReady(): Promise<void> {
     await sleep(POLL_INTERVAL_MILLISECONDS);
   }
   throw new Error(
-    `Server did not become ready within ${READY_WAIT_TIMEOUT_MILLISECONDS / 1000}s (${HEALTH_READY_URL})`,
+    `Server did not become ready within ${READY_WAIT_TIMEOUT_MILLISECONDS / 1000}s (${HEALTH_URL})`,
   );
 }
 

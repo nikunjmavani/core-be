@@ -13,7 +13,7 @@ export const ROUTE_REGISTRY_ALLOWLIST = new Set<string>([
   'GET /admin/queues',
   'HEAD /admin/queues',
   'POST /api/v1/billing/stripe/webhook',
-  'GET /health/worker',
+  'GET /health',
 ]);
 
 export function normalizeRegisteredRouteKey(method: string, url: string): string {

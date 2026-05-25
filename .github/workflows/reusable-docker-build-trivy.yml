@@ -118,7 +118,7 @@ jobs:
           docker run --rm core-be-worker:ci node -e "import('argon2').then(()=>import('@sentry/profiling-node')).then(()=>console.log('native ok'))"
 
       # Publish scanned images to GHCR for ANY protected-branch push (dev or main).
-      # deploy-railway.yml then pulls these by commit SHA tag for both environments.
+      # cd.yml then pulls these by commit SHA tag for both environments.
       # Only `main` gets the floating `:latest` tag so dev never accidentally
       # becomes the default-consumed image.
       - name: Login to GitHub Container Registry
@@ -154,7 +154,7 @@ jobs:
             echo "Pushed ${WORKER_IMAGE}:latest"
           fi
 
-      - name: Boot API container and verify /health/ready
+      - name: Boot API container and verify /health
         env:
           DATABASE_URL: postgresql://core:core@localhost:5432/core
           REDIS_URL: redis://localhost:6379
@@ -194,7 +194,7 @@ jobs:
             -e METRICS_SCRAPE_TOKEN="$METRICS_SCRAPE_TOKEN" \
             -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
             core-be:ci
-          if ! timeout 90 bash -c 'until curl -sf http://localhost:3000/health/ready; do sleep 2; done'; then
+          if ! timeout 90 bash -c 'until curl -sf http://localhost:3000/health; do sleep 2; done'; then
             docker logs core-be-health --tail 200 || true
             docker rm -f core-be-health || true
             exit 1

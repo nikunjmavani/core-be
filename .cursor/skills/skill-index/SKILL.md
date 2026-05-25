@@ -162,7 +162,7 @@ After completing any task, scan the changes and invoke matching skills:
 ### Env schema add
 
 - **Trigger**: added, renamed, or removed env vars in `src/shared/config/env-schema.ts`, or edited `.env.example`; or changed `.github/sync.config.json` (new hosted environment)
-- **Action**: read and follow `env-schema-add` — for new keys, place under the correct `# GitHub Secrets` / `# GitHub Variables` half in `.env.example` (section IS classification), run `pnpm tool:sync-env-example`, run `pnpm github:sync <env> --dry-run` for each hosted environment. For a new hosted environment: add `NODE_ENV` enum value, edit `.github/sync.config.json`, update `deploy-railway.yml`, then `pnpm github:sync --check` and `pnpm github:sync`. Paste the PR description snippet from `tool:sync-env-example`.
+- **Action**: read and follow `env-schema-add` — for new keys, place under the correct `# GitHub Secrets` / `# GitHub Variables` half in `.env.example` (section IS classification), run `pnpm tool:sync-env-example`, run `pnpm github:sync <env> --dry-run` for each hosted environment. For a new hosted environment: add `NODE_ENV` enum value, edit `.github/sync.config.json`, update `cd.yml`, then `pnpm github:sync --check` and `pnpm github:sync`. Paste the PR description snippet from `tool:sync-env-example`.
 
 ### IDE productivity guard
 

@@ -20,7 +20,7 @@ const LOCALES_LOAD_PATH = join(LOCALES_DIR, '{{lng}}', '{{ns}}.json');
 const DEFAULT_LOCALE = 'en';
 const REQUIRED_NAMESPACES = ['common', 'errors', 'success', 'mail'] as const;
 
-const I18N_IGNORE_ROUTES = ['/health/live', '/health/ready', '/api/v1/mcp'];
+const I18N_IGNORE_ROUTES = ['/health', '/api/v1/mcp'];
 
 export function resolveRequestLanguageFromHeader(
   acceptLanguageHeader: string | string[] | undefined,
