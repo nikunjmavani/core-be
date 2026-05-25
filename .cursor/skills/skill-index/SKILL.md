@@ -249,7 +249,7 @@ The following `.cursor/rules/*.mdc` files auto-invoke skills based on file globs
 | `openapi-multilingual-sync.mdc`           | `src/shared/locales/*/openapi.json`, OpenAPI generator scripts                                                                                                                      | openapi-multilingual                                                       |
 | `contract-test-maintainer-sync.mdc`       | `src/tests/contract/**`, payment/mail/storage infra, `tooling/vitest/contract.config.ts`                                                                                            | contract-test-maintainer                                                   |
 | `chaos-test-maintainer-sync.mdc`          | `src/tests/chaos/**`, `tooling/vitest/chaos.config.ts`, chaos provision, `docker-compose.yml`                                                                                       | chaos-test-maintainer                                                      |
-| `setup-infra-maintainer-sync.mdc`         | `tooling/setup/**/*.ts`, `tooling/setup/setup.config.json`, `docs/deployment/setup/setup-token-instructions.md`                                                                     | setup-infra-maintainer                                                     |
+| `setup-infra-maintainer-sync.mdc`         | `tooling/setup/**/*.ts`, `tooling/setup.config.json`, `docs/deployment/setup/setup-token-instructions.md`                                                                           | setup-infra-maintainer                                                     |
 
 **supabase-porting** = manual only (Supabase Edge Functions → core-be).
 
