@@ -324,6 +324,14 @@ async function idempotencyOnSend(
   return payload;
 }
 
+export type IdempotencyOnResponseOptions = {
+  /**
+   * When true, always delete the in-flight placeholder and never persist a completed cache
+   * entry — used when the HTTP response was 2xx but the request DB transaction did not commit.
+   */
+  forceRelease?: boolean;
+};
+
 /**
  * Final-step Redis write. By running here (rather than in `onSend`) the completed cache
  * is only persisted after the request-level transaction has resolved — preventing the
@@ -337,6 +345,7 @@ async function idempotencyOnSend(
 export async function idempotencyOnResponse(
   request: FastifyRequest,
   reply: FastifyReply,
+  options?: IdempotencyOnResponseOptions,
 ): Promise<void> {
   const requestWithIdempotency = request as RequestWithIdempotency;
   if (!requestWithIdempotency._idempotencyClaimed) return;
@@ -350,6 +359,16 @@ export async function idempotencyOnResponse(
 
   const statusCode = reply.statusCode;
   const pending = requestWithIdempotency._idempotencyPendingCompleted;
+  if (options?.forceRelease === true) {
+    delete requestWithIdempotency._idempotencyPendingCompleted;
+    try {
+      await redisConnection.del(cacheKey);
+    } catch (error) {
+      logger.warn({ error, idempotencyKey }, 'idempotency.cache.release.failed');
+    }
+    return;
+  }
+
   if (statusCode < 400 && pending !== undefined) {
     const completed: CompletedIdempotencyEntry = {
       state: 'completed',

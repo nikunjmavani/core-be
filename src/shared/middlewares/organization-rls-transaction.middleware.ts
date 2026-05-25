@@ -13,6 +13,12 @@ import {
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+export type OrganizationRlsTransactionSettlementOutcome =
+  | 'committed'
+  | 'rolled_back'
+  | 'no_transaction'
+  | 'settle_failed';
+
 type OrganizationRlsTransactionCompletion = {
   resolve: () => void;
   reject: (reason: Error) => void;
@@ -74,7 +80,11 @@ function settleOrganizationRlsTransaction(request: FastifyRequest, reply: Fastif
 export async function settleAndAwaitOrganizationRlsTransaction(
   request: FastifyRequest,
   reply: FastifyReply,
-): Promise<void> {
+): Promise<OrganizationRlsTransactionSettlementOutcome> {
+  const hadCompletion = organizationRlsTransactionCompletions.has(request);
+  const statusCode = reply.statusCode ?? 200;
+  const intendedRollback = hadCompletion && statusCode >= 400;
+
   settleOrganizationRlsTransaction(request, reply);
 
   const outerPromise = organizationRlsTransactionOuterPromises.get(request);
@@ -82,17 +92,26 @@ export async function settleAndAwaitOrganizationRlsTransaction(
     organizationRlsTransactionOuterPromises.delete(request);
     try {
       await outerPromise;
+      if (organizationRlsCheckoutHeld.delete(request)) {
+        decrementOrganizationRlsCheckoutCount();
+      }
+      return intendedRollback ? 'rolled_back' : 'committed';
     } catch (error) {
       logger.warn(
         { error, organizationPublicId: getOrganizationPublicIdFromRequest(request) },
         'organization.rls.transaction.settle_await_error',
       );
+      if (organizationRlsCheckoutHeld.delete(request)) {
+        decrementOrganizationRlsCheckoutCount();
+      }
+      return intendedRollback ? 'rolled_back' : 'settle_failed';
     }
   }
 
   if (organizationRlsCheckoutHeld.delete(request)) {
     decrementOrganizationRlsCheckoutCount();
   }
+  return 'no_transaction';
 }
 
 /**
@@ -164,11 +183,16 @@ const organizationRlsTransactionMiddlewarePlugin: FastifyPluginAsync = async (ap
       })
       .catch((error: unknown) => {
         organizationRlsTransactionCompletions.delete(request);
+        const normalizedError = error instanceof Error ? error : new Error(String(error));
         if (!hookDone) {
-          safeDone(error instanceof Error ? error : new Error(String(error)));
+          safeDone(normalizedError);
           return;
         }
-        logger.warn({ error }, 'organization.rls.transaction.failure_after_on_request');
+        logger.warn(
+          { error: normalizedError },
+          'organization.rls.transaction.failure_after_on_request',
+        );
+        throw normalizedError;
       });
     organizationRlsTransactionOuterPromises.set(request, outerPromise);
   });

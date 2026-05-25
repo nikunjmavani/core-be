@@ -1,6 +1,9 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import organizationRlsTransactionMiddleware from '@/shared/middlewares/organization-rls-transaction.middleware.js';
+import organizationRlsTransactionMiddleware, {
+  settleAndAwaitOrganizationRlsTransaction,
+  type OrganizationRlsTransactionSettlementOutcome,
+} from '@/shared/middlewares/organization-rls-transaction.middleware.js';
 import requestLifecycleMiddleware from '@/shared/middlewares/request-lifecycle.middleware.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
@@ -11,6 +14,16 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 async function registerLifecyclePlugins(application: FastifyInstance): Promise<void> {
   await application.register(requestLifecycleMiddleware);
   await application.register(organizationRlsTransactionMiddleware);
+}
+
+async function registerOrganizationRlsWithSettlementCapture(
+  application: FastifyInstance,
+  capture: { outcome?: OrganizationRlsTransactionSettlementOutcome },
+): Promise<void> {
+  await application.register(organizationRlsTransactionMiddleware);
+  application.addHook('onResponse', async (request, reply) => {
+    capture.outcome = await settleAndAwaitOrganizationRlsTransaction(request, reply);
+  });
 }
 
 const mockExecute = vi.fn().mockResolvedValue(undefined);
@@ -338,6 +351,83 @@ describe('organization-rls-transaction.middleware', () => {
     const response = await scopedApplication.inject({ method: 'GET', url: '/no-status' });
     expect(response.statusCode).toBe(200);
     expect(transactionRejected).toBe(false);
+    await scopedApplication.close();
+  });
+
+  it('returns no_transaction when no organization id was set', async () => {
+    const capture: { outcome?: OrganizationRlsTransactionSettlementOutcome } = {};
+    const scopedApplication = Fastify({ logger: false });
+    await registerOrganizationRlsWithSettlementCapture(scopedApplication, capture);
+    scopedApplication.get('/probe', async () => ({ ok: true }));
+    await scopedApplication.ready();
+
+    await scopedApplication.inject({ method: 'GET', url: '/probe' });
+    expect(capture.outcome).toBe('no_transaction');
+    await scopedApplication.close();
+  });
+
+  it('returns committed after a successful org-scoped response', async () => {
+    const organizationPublicId = generatePublicId();
+    const capture: { outcome?: OrganizationRlsTransactionSettlementOutcome } = {};
+    const scopedApplication = Fastify({ logger: false });
+    scopedApplication.addHook('onRequest', (request, _reply, done) => {
+      (request as { organizationId?: string }).organizationId = organizationPublicId;
+      done();
+    });
+    await registerOrganizationRlsWithSettlementCapture(scopedApplication, capture);
+    scopedApplication.get('/probe', async () => ({ ok: true }));
+    await scopedApplication.ready();
+
+    const response = await scopedApplication.inject({ method: 'GET', url: '/probe' });
+    expect(response.statusCode).toBe(200);
+    expect(capture.outcome).toBe('committed');
+    await scopedApplication.close();
+  });
+
+  it('returns rolled_back when the HTTP response is 4xx', async () => {
+    const organizationPublicId = generatePublicId();
+    const capture: { outcome?: OrganizationRlsTransactionSettlementOutcome } = {};
+    const scopedApplication = Fastify({ logger: false });
+    scopedApplication.addHook('onRequest', (request, _reply, done) => {
+      (request as { organizationId?: string }).organizationId = organizationPublicId;
+      done();
+    });
+    await registerOrganizationRlsWithSettlementCapture(scopedApplication, capture);
+    scopedApplication.get('/fail', async (_request, reply) => {
+      reply.status(404).send({ error: 'not_found' });
+    });
+    await scopedApplication.ready();
+
+    const response = await scopedApplication.inject({ method: 'GET', url: '/fail' });
+    expect(response.statusCode).toBe(404);
+    expect(capture.outcome).toBe('rolled_back');
+    await scopedApplication.close();
+  });
+
+  it('returns settle_failed when commit was intended but the outer transaction rejects', async () => {
+    mockTransaction.mockImplementationOnce(async (callback) => {
+      try {
+        await callback({ execute: mockExecute });
+      } catch {
+        /* inner rejection from HTTP 2xx path should not happen here */
+      }
+      throw new Error('commit failed after resolve');
+    });
+
+    const organizationPublicId = generatePublicId();
+    const capture: { outcome?: OrganizationRlsTransactionSettlementOutcome } = {};
+    const scopedApplication = Fastify({ logger: false });
+    scopedApplication.addHook('onRequest', (request, _reply, done) => {
+      (request as { organizationId?: string }).organizationId = organizationPublicId;
+      done();
+    });
+    await registerOrganizationRlsWithSettlementCapture(scopedApplication, capture);
+    scopedApplication.get('/probe', async () => ({ ok: true }));
+    await scopedApplication.ready();
+
+    const response = await scopedApplication.inject({ method: 'GET', url: '/probe' });
+    expect(response.statusCode).toBe(200);
+    expect(capture.outcome).toBe('settle_failed');
     await scopedApplication.close();
   });
 

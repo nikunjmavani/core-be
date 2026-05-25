@@ -734,4 +734,27 @@ describe('idempotency middleware happy paths and conflicts', () => {
     expect(mockRedisDel).toHaveBeenCalled();
     expect(mockRedisSet).not.toHaveBeenCalled();
   });
+
+  it('onResponse with forceRelease deletes placeholder and never caches a 2xx body', async () => {
+    const { onSend, onResponse } = await registerIdempotencyHooks();
+    const request = {
+      _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+      _idempotencyClaimed: true,
+      _idempotencyScope: {
+        userId: TEST_USER_PUBLIC_ID,
+        organizationId: TEST_ORGANIZATION_PUBLIC_ID,
+      },
+    } as unknown as FastifyRequest & { _idempotencyPendingCompleted?: unknown };
+    const reply = {
+      statusCode: 201,
+      getHeader: vi.fn().mockReturnValue('application/json'),
+    } as unknown as FastifyReply;
+
+    await onSend(request, reply, { id: 'created' });
+    await onResponse(request, reply, { forceRelease: true });
+
+    expect(mockRedisDel).toHaveBeenCalled();
+    expect(mockRedisSet).not.toHaveBeenCalled();
+    expect(request._idempotencyPendingCompleted).toBeUndefined();
+  });
 });
