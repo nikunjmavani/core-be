@@ -43,6 +43,9 @@ export const webhooks = notifySchema
     (table) => [
       uniqueIndex('idx_webhooks_public_id').on(table.public_id),
       index('idx_webhooks_org_enabled').on(table.organization_id, table.is_enabled),
+      index('idx_webhooks_org_created_id_active')
+        .on(table.organization_id, table.created_at, table.id)
+        .where(sql`${table.deleted_at} IS NULL`),
       uniqueIndex('idx_webhooks_organization_id_url_unique').on(table.organization_id, table.url),
       check('chk_webhooks_url', sql`${table.url} ~ '^https://'`),
       check('chk_webhooks_updated', sql`${table.updated_at} >= ${table.created_at}`),
@@ -84,6 +87,11 @@ export const webhook_delivery_attempts = notifySchema
         table.webhook_id,
         table.event_type,
         table.created_at,
+      ),
+      index('idx_webhook_attempts_webhook_created_id').on(
+        table.webhook_id,
+        table.created_at,
+        table.id,
       ),
       index('idx_webhook_attempts_retry').on(table.status, table.next_retry_at),
       uniqueIndex('idx_webhook_delivery_attempts_pending_event_key')

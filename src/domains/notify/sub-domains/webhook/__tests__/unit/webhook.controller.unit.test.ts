@@ -30,12 +30,26 @@ describe('createWebhookController', () => {
   const webhook = { public_id: webhookPublicId, url: 'https://example.com/hook' };
 
   const service = {
-    list: vi.fn().mockResolvedValue([webhook]),
+    list: vi.fn().mockResolvedValue({
+      items: [webhook],
+      total: null,
+      page: undefined,
+      limit: 25,
+      has_more: false,
+      next_cursor: null,
+    }),
     get: vi.fn().mockResolvedValue(webhook),
     create: vi.fn().mockResolvedValue(webhook),
     update: vi.fn().mockResolvedValue(webhook),
     delete: vi.fn().mockResolvedValue(undefined),
-    listDeliveryAttempts: vi.fn().mockResolvedValue([]),
+    listDeliveryAttempts: vi.fn().mockResolvedValue({
+      items: [],
+      total: null,
+      page: undefined,
+      limit: 25,
+      has_more: false,
+      next_cursor: null,
+    }),
     testWebhook: vi.fn().mockResolvedValue({ delivered: true }),
   } as unknown as WebhookService;
 
@@ -46,7 +60,9 @@ describe('createWebhookController', () => {
       mockRequest({ params: { id: organizationPublicId } }) as never,
       mockReply(),
     );
-    expect(service.list).toHaveBeenCalled();
+    expect(service.list).toHaveBeenCalledWith(
+      expect.objectContaining({ organization_public_id: organizationPublicId, limit: 25 }),
+    );
 
     await controller.getWebhook(
       mockRequest({ params: { id: organizationPublicId, webhookId: webhookPublicId } }) as never,
@@ -93,7 +109,13 @@ describe('createWebhookController', () => {
       }) as never,
       mockReply(),
     );
-    expect(service.listDeliveryAttempts).toHaveBeenCalled();
+    expect(service.listDeliveryAttempts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organization_public_id: organizationPublicId,
+        webhook_public_id: webhookPublicId,
+        limit: 10,
+      }),
+    );
 
     await controller.testWebhook(
       mockRequest({ params: { id: organizationPublicId, webhookId: webhookPublicId } }) as never,
@@ -111,9 +133,236 @@ describe('createWebhookController', () => {
       mockReply(),
     );
     expect(service.listDeliveryAttempts).toHaveBeenCalledWith(
-      organizationPublicId,
-      webhookPublicId,
-      25,
+      expect.objectContaining({
+        organization_public_id: organizationPublicId,
+        webhook_public_id: webhookPublicId,
+        limit: 25,
+      }),
     );
+  });
+
+  describe('listWebhooks (cursor pagination)', () => {
+    it('forwards after, limit, and include_total=true to the service', async () => {
+      await controller.listWebhooks(
+        mockRequest({
+          params: { id: organizationPublicId },
+          query: { after: 'cursor-token', limit: '5', include_total: 'true' },
+        }) as never,
+        mockReply(),
+      );
+      expect(service.list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organization_public_id: organizationPublicId,
+          after: 'cursor-token',
+          limit: 5,
+          include_total: true,
+        }),
+      );
+    });
+
+    it('emits next_cursor in next field when service signals more pages (keyset)', async () => {
+      vi.mocked(service.list).mockResolvedValueOnce({
+        items: [webhook],
+        total: null,
+        page: undefined,
+        limit: 1,
+        has_more: true,
+        next_cursor: 'opaque-cursor-2',
+      } as never);
+      const response = await controller.listWebhooks(
+        mockRequest({ params: { id: organizationPublicId }, query: { limit: '1' } }) as never,
+        mockReply(),
+      );
+      expect(response).toMatchObject({
+        meta: {
+          pagination: expect.objectContaining({
+            has_more: true,
+            next: 'opaque-cursor-2',
+            per_page: 1,
+          }),
+        },
+      });
+      expect(
+        (response as { meta: { pagination: Record<string, unknown> } }).meta.pagination,
+      ).not.toHaveProperty('estimated_total');
+    });
+
+    it('clears next when on the final page and omits estimated_total without include_total', async () => {
+      vi.mocked(service.list).mockResolvedValueOnce({
+        items: [webhook],
+        total: null,
+        page: undefined,
+        limit: 25,
+        has_more: false,
+        next_cursor: null,
+      } as never);
+      const response = await controller.listWebhooks(
+        mockRequest({ params: { id: organizationPublicId } }) as never,
+        mockReply(),
+      );
+      expect(response).toMatchObject({
+        meta: {
+          pagination: expect.objectContaining({ has_more: false, next: null, per_page: 25 }),
+        },
+      });
+      expect(
+        (response as { meta: { pagination: Record<string, unknown> } }).meta.pagination,
+      ).not.toHaveProperty('estimated_total');
+    });
+
+    it('returns page+1 string in next for legacy offset pagination', async () => {
+      vi.mocked(service.list).mockResolvedValueOnce({
+        items: [webhook, webhook],
+        total: 4,
+        page: 1,
+        limit: 2,
+        has_more: true,
+        next_cursor: null,
+      } as never);
+      const response = await controller.listWebhooks(
+        mockRequest({
+          params: { id: organizationPublicId },
+          query: { page: '1', limit: '2', include_total: 'true' },
+        }) as never,
+        mockReply(),
+      );
+      expect(response).toMatchObject({
+        meta: {
+          pagination: expect.objectContaining({
+            has_more: true,
+            next: '2',
+            per_page: 2,
+            estimated_total: 4,
+          }),
+        },
+      });
+    });
+
+    it('exposes estimated_total when service returns a total', async () => {
+      vi.mocked(service.list).mockResolvedValueOnce({
+        items: [webhook],
+        total: 1,
+        page: undefined,
+        limit: 25,
+        has_more: false,
+        next_cursor: null,
+      } as never);
+      const response = await controller.listWebhooks(
+        mockRequest({
+          params: { id: organizationPublicId },
+          query: { include_total: 'true' },
+        }) as never,
+        mockReply(),
+      );
+      expect(response).toMatchObject({
+        meta: {
+          pagination: expect.objectContaining({ estimated_total: 1, has_more: false, next: null }),
+        },
+      });
+    });
+  });
+
+  describe('listDeliveryAttempts (cursor pagination)', () => {
+    it('forwards after cursor and include_total to the service', async () => {
+      await controller.listDeliveryAttempts(
+        mockRequest({
+          params: { id: organizationPublicId, webhookId: webhookPublicId },
+          query: { after: 'cursor-attempt', limit: '50', include_total: 'true' },
+        }) as never,
+        mockReply(),
+      );
+      expect(service.listDeliveryAttempts).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organization_public_id: organizationPublicId,
+          webhook_public_id: webhookPublicId,
+          after: 'cursor-attempt',
+          limit: 50,
+          include_total: true,
+        }),
+      );
+    });
+
+    it('emits next_cursor and estimated_total when service signals more pages with total', async () => {
+      vi.mocked(service.listDeliveryAttempts).mockResolvedValueOnce({
+        items: [
+          { id: 1, status: 'SENT' },
+          { id: 2, status: 'FAILED' },
+        ],
+        total: 10,
+        page: undefined,
+        limit: 2,
+        has_more: true,
+        next_cursor: 'opaque-attempts-2',
+      } as never);
+      const response = await controller.listDeliveryAttempts(
+        mockRequest({
+          params: { id: organizationPublicId, webhookId: webhookPublicId },
+          query: { limit: '2', include_total: 'true' },
+        }) as never,
+        mockReply(),
+      );
+      expect(response).toMatchObject({
+        meta: {
+          pagination: expect.objectContaining({
+            has_more: true,
+            next: 'opaque-attempts-2',
+            estimated_total: 10,
+            per_page: 2,
+          }),
+        },
+      });
+    });
+
+    it('clears next on the final page (keyset)', async () => {
+      vi.mocked(service.listDeliveryAttempts).mockResolvedValueOnce({
+        items: [{ id: 1, status: 'SENT' }],
+        total: null,
+        page: undefined,
+        limit: 25,
+        has_more: false,
+        next_cursor: null,
+      } as never);
+      const response = await controller.listDeliveryAttempts(
+        mockRequest({
+          params: { id: organizationPublicId, webhookId: webhookPublicId },
+        }) as never,
+        mockReply(),
+      );
+      expect(response).toMatchObject({
+        meta: {
+          pagination: expect.objectContaining({ has_more: false, next: null }),
+        },
+      });
+    });
+
+    it('emits page+1 in next for legacy offset pagination', async () => {
+      vi.mocked(service.listDeliveryAttempts).mockResolvedValueOnce({
+        items: [
+          { id: 1, status: 'SENT' },
+          { id: 2, status: 'FAILED' },
+        ],
+        total: 6,
+        page: 1,
+        limit: 2,
+        has_more: true,
+        next_cursor: null,
+      } as never);
+      const response = await controller.listDeliveryAttempts(
+        mockRequest({
+          params: { id: organizationPublicId, webhookId: webhookPublicId },
+          query: { page: '1', limit: '2', include_total: 'true' },
+        }) as never,
+        mockReply(),
+      );
+      expect(response).toMatchObject({
+        meta: {
+          pagination: expect.objectContaining({
+            has_more: true,
+            next: '2',
+            estimated_total: 6,
+          }),
+        },
+      });
+    });
   });
 });

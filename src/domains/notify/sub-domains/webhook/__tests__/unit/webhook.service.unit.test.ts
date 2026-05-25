@@ -55,7 +55,14 @@ describe('WebhookService', () => {
   } as unknown as OrganizationService;
 
   const webhookRepository = {
-    listByOrganization: vi.fn().mockResolvedValue([webhook]),
+    listByOrganization: vi.fn().mockResolvedValue({
+      items: [webhook],
+      total: null,
+      page: undefined,
+      limit: 25,
+      has_more: false,
+      next_cursor: null,
+    }),
     findByPublicId: vi.fn().mockResolvedValue(webhook),
     create: vi.fn().mockResolvedValue(webhook),
     update: vi.fn().mockResolvedValue(webhook),
@@ -65,7 +72,14 @@ describe('WebhookService', () => {
 
   const deliveryAttemptRepository = {
     getWebhookId: vi.fn().mockResolvedValue(webhook.id),
-    listByWebhook: vi.fn().mockResolvedValue([]),
+    listByWebhook: vi.fn().mockResolvedValue({
+      items: [],
+      total: null,
+      page: undefined,
+      limit: 10,
+      has_more: false,
+      next_cursor: null,
+    }),
     create: vi.fn().mockResolvedValue({ id: 1 }),
     createPending: vi.fn().mockResolvedValue(88),
   } as unknown as WebhookDeliveryAttemptRepository;
@@ -86,7 +100,8 @@ describe('WebhookService', () => {
   });
 
   it('lists, gets, creates, updates, and deletes webhooks', async () => {
-    await service.list('org_public');
+    const listed = await service.list({ organization_public_id: 'org_public' });
+    expect(listed.items).toHaveLength(1);
     await service.get('org_public', 'webhook_public');
     await service.create(
       'org_public',
@@ -99,15 +114,26 @@ describe('WebhookService', () => {
   });
 
   it('listDeliveryAttempts resolves webhook id', async () => {
-    await service.listDeliveryAttempts('org_public', 'webhook_public', 10);
-    expect(deliveryAttemptRepository.listByWebhook).toHaveBeenCalled();
+    await service.listDeliveryAttempts({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+      limit: 10,
+    });
+    expect(deliveryAttemptRepository.listByWebhook).toHaveBeenCalledWith(
+      webhook.id,
+      expect.objectContaining({ limit: 10 }),
+    );
   });
 
   it('listDeliveryAttempts throws when webhook missing', async () => {
     vi.mocked(deliveryAttemptRepository.getWebhookId).mockResolvedValue(null);
-    await expect(service.listDeliveryAttempts('org_public', 'missing', 10)).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(
+      service.listDeliveryAttempts({
+        organization_public_id: 'org_public',
+        webhook_public_id: 'missing',
+        limit: 10,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('testWebhook records successful delivery attempt', async () => {
@@ -252,7 +278,11 @@ describe('WebhookService', () => {
   it('listDeliveryAttempts throws when webhook id is undefined', async () => {
     vi.mocked(deliveryAttemptRepository.getWebhookId).mockResolvedValue(null);
     await expect(
-      service.listDeliveryAttempts('org_public', 'webhook_public', 10),
+      service.listDeliveryAttempts({
+        organization_public_id: 'org_public',
+        webhook_public_id: 'webhook_public',
+        limit: 10,
+      }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 

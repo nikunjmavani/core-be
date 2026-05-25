@@ -14,6 +14,7 @@ import type { MemberInvitationOutput } from './member-invitation.types.js';
 import {
   validateCreateMemberInvitation,
   validateAcceptMemberInvitation,
+  validateListMemberInvitationsQuery,
   validateResendMemberInvitation,
 } from './member-invitation.validator.js';
 import { serializeMemberInvitation } from './member-invitation.serializer.js';
@@ -23,8 +24,14 @@ import {
   MEMBER_INVITATION_EVENT,
   type MemberInvitationEmailPayload,
 } from '@/domains/tenancy/sub-domains/membership/member-invitation/events/member-invitation.events.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
 const MEMBER_INVITATION_RESOURCE = 'Member invitation';
+
+export interface MemberInvitationListOptions {
+  organization_public_id: string;
+  query: unknown;
+}
 
 export class MemberInvitationService {
   constructor(
@@ -34,15 +41,35 @@ export class MemberInvitationService {
     private readonly userService?: UserService,
   ) {}
 
-  async list(organization_public_id: string, limit = 100): Promise<MemberInvitationOutput[]> {
+  async list(options: MemberInvitationListOptions): Promise<{
+    items: MemberInvitationOutput[];
+    total: number | null;
+    page: number | undefined;
+    limit: number;
+    has_more: boolean;
+    next_cursor: string | null;
+  }> {
+    const { organization_public_id } = options;
+    const parsed = validateListMemberInvitationsQuery(options.query);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
-      const rows = await this.invitationRepository.findByOrganizationId(organization.id, limit);
-      type RowWithPublicId = (typeof rows)[number] & { membership_public_id: string };
-      return rows.map((row) =>
-        serializeMemberInvitation(row, (row as RowWithPublicId).membership_public_id),
+      const result = await this.invitationRepository.findByOrganizationId(
+        organization.id,
+        omitUndefined({
+          after: parsed.after,
+          offset_page: parsed.page,
+          limit: parsed.limit,
+          include_total: parsed.include_total === 'true',
+        }),
       );
+      type RowWithPublicId = (typeof result.items)[number] & { membership_public_id: string };
+      return {
+        ...result,
+        items: result.items.map((row) =>
+          serializeMemberInvitation(row, (row as RowWithPublicId).membership_public_id),
+        ),
+      };
     });
   }
 

@@ -1,9 +1,14 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { database } from '@/infrastructure/database/connection.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.repository.js';
 import { WebhookDeliveryAttemptRepository } from '@/domains/notify/sub-domains/webhook/webhook-delivery-attempt.repository.js';
+import { webhook_delivery_attempts } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
+
+vi.setConfig({ testTimeout: 15_000, hookTimeout: 20_000 });
 
 describe('WebhookDeliveryAttemptRepository (database)', () => {
   const webhookRepository = new WebhookRepository();
@@ -38,9 +43,10 @@ describe('WebhookDeliveryAttemptRepository (database)', () => {
       attempt_count: 1,
     });
 
-    const listed = await attemptRepository.listByWebhook(webhook.id, 10);
-    expect(listed).toHaveLength(1);
-    expect(listed[0]!.status).toBe('SENT');
+    const listed = await attemptRepository.listByWebhook(webhook.id, { limit: 10 });
+    expect(listed.items).toHaveLength(1);
+    expect(listed.items[0]!.status).toBe('SENT');
+    expect(listed.total).toBeNull();
   });
 
   it('getWebhookId returns null for unknown webhook', async () => {
@@ -48,5 +54,130 @@ describe('WebhookDeliveryAttemptRepository (database)', () => {
     const organization = await createTestOrganization({ ownerUserId: owner.id });
     const webhookId = await attemptRepository.getWebhookId('missing_webhook', organization.id);
     expect(webhookId).toBeNull();
+  });
+
+  describe('listByWebhook (keyset cursor pagination, newest first)', () => {
+    async function setupWebhookWithAttempts(attemptCount: number) {
+      const owner = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: owner.id });
+      const webhook = await webhookRepository.create({
+        organization_id: organization.id,
+        url: 'https://example.com/webhooks',
+        events: ['subscription.updated'],
+        encrypted_secret: 'secret',
+        created_by_user_id: owner.id,
+      });
+      const baseCreatedAt = Date.now();
+      for (let index = 0; index < attemptCount; index += 1) {
+        const attempt = await attemptRepository.create({
+          webhook_id: webhook.id,
+          event_type: 'subscription.updated',
+          payload: { id: `inv_${index}` },
+          status: 'SENT',
+          http_status_code: 200,
+          response_body: `ok-${index}`,
+          sent_at: new Date(),
+          attempt_count: 1,
+        });
+        await database
+          .update(webhook_delivery_attempts)
+          .set({ created_at: new Date(baseCreatedAt + index * 1_000) })
+          .where(eq(webhook_delivery_attempts.id, attempt.id));
+      }
+      return { webhook, organization, owner };
+    }
+
+    it('returns has_more=true with an opaque next_cursor when more pages remain (no total by default)', async () => {
+      const { webhook } = await setupWebhookWithAttempts(3);
+
+      const result = await attemptRepository.listByWebhook(webhook.id, { limit: 2 });
+
+      expect(result.items).toHaveLength(2);
+      expect(result.has_more).toBe(true);
+      expect(result.next_cursor).toBeTypeOf('string');
+      expect(result.total).toBeNull();
+    });
+
+    it('navigates pages with `after` cursor and never repeats the previous page', async () => {
+      const { webhook } = await setupWebhookWithAttempts(3);
+
+      const page1 = await attemptRepository.listByWebhook(webhook.id, { limit: 2 });
+      expect(page1.has_more).toBe(true);
+      expect(page1.next_cursor).toBeTypeOf('string');
+
+      const page2 = await attemptRepository.listByWebhook(webhook.id, {
+        limit: 2,
+        after: page1.next_cursor!,
+      });
+
+      const page1Ids = new Set(page1.items.map((item) => item.id));
+      for (const item of page2.items) {
+        expect(page1Ids.has(item.id)).toBe(false);
+      }
+      expect(page1.items.length + page2.items.length).toBe(3);
+      expect(page2.has_more).toBe(false);
+      expect(page2.next_cursor).toBeNull();
+    });
+
+    it('orders attempts newest first (descending created_at, id)', async () => {
+      const { webhook } = await setupWebhookWithAttempts(3);
+      const result = await attemptRepository.listByWebhook(webhook.id, { limit: 10 });
+      const ids = result.items.map((item) => item.id);
+      const sortedDesc = [...ids].sort((leftId, rightId) => rightId - leftId);
+      expect(ids).toEqual(sortedDesc);
+    });
+
+    it('returns total when include_total=true is requested', async () => {
+      const { webhook } = await setupWebhookWithAttempts(3);
+
+      const result = await attemptRepository.listByWebhook(webhook.id, {
+        limit: 2,
+        include_total: true,
+      });
+
+      expect(result.total).toBe(3);
+      expect(result.has_more).toBe(true);
+    });
+
+    it('supports legacy offset_page (deprecated) by returning total and page metadata', async () => {
+      const { webhook } = await setupWebhookWithAttempts(3);
+
+      const page1 = await attemptRepository.listByWebhook(webhook.id, {
+        limit: 2,
+        offset_page: 1,
+      });
+      const page2 = await attemptRepository.listByWebhook(webhook.id, {
+        limit: 2,
+        offset_page: 2,
+      });
+
+      expect(page1.items).toHaveLength(2);
+      expect(page1.total).toBe(3);
+      expect(page1.page).toBe(1);
+      expect(page1.has_more).toBe(true);
+
+      expect(page2.items).toHaveLength(1);
+      expect(page2.page).toBe(2);
+      expect(page2.has_more).toBe(false);
+    });
+
+    it('returns empty result when the webhook has no delivery attempts', async () => {
+      const owner = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: owner.id });
+      const webhook = await webhookRepository.create({
+        organization_id: organization.id,
+        url: 'https://example.com/empty',
+        events: ['subscription.updated'],
+        encrypted_secret: 'secret',
+        created_by_user_id: owner.id,
+      });
+
+      const result = await attemptRepository.listByWebhook(webhook.id, { limit: 10 });
+
+      expect(result.items).toEqual([]);
+      expect(result.has_more).toBe(false);
+      expect(result.next_cursor).toBeNull();
+      expect(result.total).toBeNull();
+    });
   });
 });

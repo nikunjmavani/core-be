@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, type SQL } from 'drizzle-orm';
 import { sql } from '@/infrastructure/database/connection.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
@@ -6,6 +6,11 @@ import { memberships } from '@/domains/tenancy/sub-domains/membership/membership
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { MemberInvitationRow } from './member-invitation.types.js';
+import {
+  buildAscendingCreatedAtIdCursorCondition,
+  createOpaqueCursorFromRow,
+  parseListCursor,
+} from '@/shared/utils/http/pagination.util.js';
 
 /**
  * Cross-organization lookup result returned by the SECURITY DEFINER
@@ -32,22 +37,71 @@ export interface PendingMemberInvitationLookupRow {
   invitation_created_at: Date;
 }
 
+export interface MemberInvitationListPagination {
+  after?: string;
+  offset_page?: number;
+  limit: number;
+  include_total?: boolean;
+}
+
 export class MemberInvitationRepository {
-  async findByOrganizationId(organization_id: number, limit: number) {
-    const rows = await getRequestDatabase()
+  async findByOrganizationId(organization_id: number, pagination: MemberInvitationListPagination) {
+    const { after, offset_page, limit } = pagination;
+    const includeTotal = pagination.include_total === true || offset_page !== undefined;
+    const filterConditions: SQL[] = [
+      eq(memberships.organization_id, organization_id),
+      isNull(memberships.deleted_at)!,
+    ];
+    const countWhere = and(...filterConditions);
+    const cursorCondition =
+      offset_page === undefined
+        ? buildAscendingCreatedAtIdCursorCondition(
+            member_invitations.created_at,
+            member_invitations.id,
+            parseListCursor(after),
+          )
+        : undefined;
+    const where =
+      cursorCondition !== undefined ? and(...filterConditions, cursorCondition) : countWhere;
+
+    const rowsQuery = getRequestDatabase()
       .select({
         invitation: member_invitations,
         membership_public_id: memberships.public_id,
       })
       .from(member_invitations)
       .innerJoin(memberships, eq(member_invitations.membership_id, memberships.id))
-      .where(and(eq(memberships.organization_id, organization_id), isNull(memberships.deleted_at)))
-      .orderBy(asc(member_invitations.created_at))
-      .limit(limit);
-    return rows.map((row) => ({
+      .where(where)
+      .orderBy(asc(member_invitations.created_at), asc(member_invitations.id))
+      .limit(limit + 1);
+    const rowsPromise =
+      offset_page !== undefined ? rowsQuery.offset((offset_page - 1) * limit) : rowsQuery;
+
+    const countPromise = includeTotal
+      ? getRequestDatabase()
+          .select({ count: count() })
+          .from(member_invitations)
+          .innerJoin(memberships, eq(member_invitations.membership_id, memberships.id))
+          .where(countWhere)
+          .then((rows) => rows[0]?.count ?? 0)
+      : Promise.resolve(null);
+
+    const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);
+    const hasMore = fetchedRows.length > limit;
+    const rows = hasMore ? fetchedRows.slice(0, limit) : fetchedRows;
+    const items = rows.map((row) => ({
       ...row.invitation,
       membership_public_id: row.membership_public_id,
     }));
+    const lastItem = items.at(-1);
+    return {
+      items,
+      total,
+      page: offset_page,
+      limit,
+      has_more: hasMore,
+      next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
+    };
   }
 
   /**

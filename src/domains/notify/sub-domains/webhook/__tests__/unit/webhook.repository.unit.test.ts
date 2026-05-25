@@ -3,7 +3,13 @@ import { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.
 
 const mockReturning = vi.fn();
 const mockLimit = vi.fn();
-const mockWhere = vi.fn(() => ({ limit: mockLimit, returning: mockReturning }));
+const mockOffset = vi.fn();
+const mockOrderBy = vi.fn(() => ({ limit: mockLimit, offset: mockOffset }));
+const mockWhere = vi.fn(() => ({
+  limit: mockLimit,
+  orderBy: mockOrderBy,
+  returning: mockReturning,
+}));
 const mockFrom = vi.fn(() => ({ where: mockWhere }));
 const mockSelect = vi.fn(() => ({ from: mockFrom }));
 const mockSet = vi.fn(() => ({ where: mockWhere }));
@@ -36,6 +42,7 @@ describe('WebhookRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLimit.mockReset();
+    mockOffset.mockReset();
     mockReturning.mockReset();
   });
 
@@ -45,9 +52,11 @@ describe('WebhookRepository', () => {
     ];
     mockLimit.mockResolvedValue(rows);
 
-    const result = await repository.listByOrganization(10);
+    const result = await repository.listByOrganization(10, { limit: 20 });
 
-    expect(result).toEqual(rows);
+    expect(result.items).toEqual(rows);
+    expect(result.total).toBeNull();
+    expect(result.has_more).toBe(false);
   });
 
   it('listEnabledSubscribedToEvent filters by event subscription', async () => {
