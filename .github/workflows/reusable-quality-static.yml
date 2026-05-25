@@ -96,7 +96,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Setup Python for Semgrep
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 

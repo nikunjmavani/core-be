@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload RTO report
         if: success()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: restore-drill-rto
           path: restore-drill-rto.json
@@ -148,7 +148,7 @@ jobs:
           exit 1
 
       - name: Download automated RTO report
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: restore-drill-rto
 
@@ -194,7 +194,7 @@ jobs:
 
       - name: Upload consolidated RTO report
         if: success()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: restore-drill-rto-report
           path: restore-drill-rto-report.json
