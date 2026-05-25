@@ -21,6 +21,7 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 | Release versioning PRs                   | [release-please-versioning.yml](workflows/release-please-versioning.yml)         | **Release Please**                     | Push to `main`, `dev`                 | No                                     |
 | SBOM on GitHub Release                   | [release-attach-sbom.yml](workflows/release-attach-sbom.yml)                     | **Release SBOM**                       | `release: published`                  | No                                     |
 | Dependabot safe auto-merge               | [dependabot-auto-merge.yml](workflows/dependabot-auto-merge.yml)                 | **Dependabot**                         | After `CI` succeeds on Dependabot PRs | No                                     |
+| Sync production fixes back to dev        | [sync-main-into-dev.yml](workflows/sync-main-into-dev.yml)                       | **Sync main into dev**                 | Push to `main` + manual               | No                                     |
 
 ## Reusable workflows (called from `pr-branch-ci.yml` / `post-merge-ci.yml`)
 
