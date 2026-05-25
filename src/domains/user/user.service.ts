@@ -183,7 +183,8 @@ export class UserService {
     if (!this.offboardingUploadService) {
       throw new Error('UploadService is not wired for avatar-attach confirmation');
     }
-    await this.offboardingUploadService.assertKeyConfirmed(avatarKey);
+    // External I/O (S3) runs outside the DB context; the confirmed-status read of the
+    // user-scoped upload row runs in the user context so the owner RLS policy applies.
     const objectInfo = await this.objectStorage.headObject(avatarKey);
     if (!objectInfo) {
       throw new ValidationError('errors:validation.avatarNotFound');
@@ -200,6 +201,9 @@ export class UserService {
         `Invalid avatar content type: ${objectInfo.contentType}`,
       );
     }
+    await withUserDatabaseContext(ownerPublicId, () =>
+      this.offboardingUploadService!.assertKeyConfirmed(avatarKey),
+    );
   }
 
   // ── Self-service ────────────────────────────────────────────

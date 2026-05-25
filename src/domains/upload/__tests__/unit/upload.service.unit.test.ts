@@ -17,6 +17,12 @@ vi.mock('@/shared/config/env.config.js', () => ({
   env: { S3_BUCKET: 'test-bucket', LOG_LEVEL: 'silent', UPLOAD_ALLOW_SVG: false },
 }));
 
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
 const userPublicId = generatePublicId();
 const uploadPublicId = generatePublicId();
 const user = { id: 1, public_id: userPublicId };

@@ -140,7 +140,7 @@ describe('UserService', () => {
     await expect(service.uploadAvatar(userRow.public_id, { avatarKey })).rejects.toBeInstanceOf(
       ValidationError,
     );
-    expect(objectStorage.headObject).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
   });
 
   it('deleteMe runs offboarding when dependencies attached', async () => {

@@ -8,6 +8,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/shared/errors/index.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -104,18 +105,22 @@ export class UploadService {
 
     const expiresAt = new Date(Date.now() + PRESIGNED_URL_EXPIRY_SECONDS * 1000);
 
-    const row = await this.repository.create({
-      user_id: user.id,
-      organization_id: organizationInternalId,
-      file_name: input.fileName,
-      file_key: key,
-      mime_type: input.contentType,
-      file_size: input.fileSize,
-      storage_provider: 's3',
-      bucket,
-      status: 'PENDING',
-      created_by_user_id: user.id,
-    });
+    // Presigned URL generation (S3) is done above, outside the DB context; only the insert
+    // runs in the user-scoped context so the owner RLS policy authorizes the row.
+    const row = await withUserDatabaseContext(userPublicId, () =>
+      this.repository.create({
+        user_id: user.id,
+        organization_id: organizationInternalId,
+        file_name: input.fileName,
+        file_key: key,
+        mime_type: input.contentType,
+        file_size: input.fileSize,
+        storage_provider: 's3',
+        bucket,
+        status: 'PENDING',
+        created_by_user_id: user.id,
+      }),
+    );
 
     return serializeUploadCreate({
       publicId: row.public_id,
@@ -149,18 +154,12 @@ export class UploadService {
   async getUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
     const validatedPublicId = validateUploadPublicIdParam(public_id);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
-    const row = await this.repository.findByPublicIdForUser(validatedPublicId, user.id);
+    const row = await withUserDatabaseContext(userPublicId, () =>
+      this.repository.findByPublicIdForUser(validatedPublicId, user.id),
+    );
     if (!row) throw new NotFoundError('Upload');
 
-    let organizationPublicId: string | null = null;
-    if (row.organization_id !== null) {
-      const organization = await this.organizationService.findOrganizationByInternalId(
-        row.organization_id,
-      );
-      organizationPublicId = organization?.public_id ?? null;
-    }
-
-    return serializeUploadDetail(row, organizationPublicId);
+    return this.toUploadDetail(row);
   }
 
   /**
@@ -172,7 +171,9 @@ export class UploadService {
   async confirmUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
     const validatedPublicId = validateUploadPublicIdParam(public_id);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
-    const row = await this.repository.findByPublicIdForUser(validatedPublicId, user.id);
+    const row = await withUserDatabaseContext(userPublicId, () =>
+      this.repository.findByPublicIdForUser(validatedPublicId, user.id),
+    );
     if (!row) throw new NotFoundError('Upload');
 
     if (row.status === UPLOAD_STATUS.UPLOADED) {
@@ -204,10 +205,12 @@ export class UploadService {
       verified = false;
     }
 
-    const updated = await this.repository.markStatus(
-      validatedPublicId,
-      user.id,
-      verified ? UPLOAD_STATUS.UPLOADED : UPLOAD_STATUS.FAILED,
+    const updated = await withUserDatabaseContext(userPublicId, () =>
+      this.repository.markStatus(
+        validatedPublicId,
+        user.id,
+        verified ? UPLOAD_STATUS.UPLOADED : UPLOAD_STATUS.FAILED,
+      ),
     );
     if (!updated) throw new NotFoundError('Upload');
 
@@ -234,9 +237,12 @@ export class UploadService {
   async deleteUpload(public_id: string, userPublicId: string): Promise<void> {
     const validatedPublicId = validateUploadPublicIdParam(public_id);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
-    const row = await this.repository.findByPublicIdForUser(validatedPublicId, user.id);
+    const row = await withUserDatabaseContext(userPublicId, () =>
+      this.repository.findByPublicIdForUser(validatedPublicId, user.id),
+    );
     if (!row) throw new NotFoundError('Upload');
 
+    // S3 delete runs outside the DB context.
     const objectDeleted = await this.objectStorage.deleteObject(row.file_key);
     if (!objectDeleted) {
       logger.warn(
@@ -245,7 +251,9 @@ export class UploadService {
       );
     }
 
-    const deleted = await this.repository.softDelete(validatedPublicId, user.id);
+    const deleted = await withUserDatabaseContext(userPublicId, () =>
+      this.repository.softDelete(validatedPublicId, user.id),
+    );
     if (!deleted) throw new NotFoundError('Upload');
   }
 
