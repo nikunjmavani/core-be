@@ -38,7 +38,7 @@ jobs:
 
       - name: Run release-please (main — stable)
         if: github.ref_name == 'main' && env.RELEASE_PLEASE_TOKEN != ''
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ env.RELEASE_PLEASE_TOKEN }}
           target-branch: main
@@ -47,7 +47,7 @@ jobs:
 
       - name: Run release-please (dev — prerelease)
         if: github.ref_name == 'dev' && env.RELEASE_PLEASE_TOKEN != ''
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ env.RELEASE_PLEASE_TOKEN }}
           target-branch: dev
