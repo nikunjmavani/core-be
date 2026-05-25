@@ -1,6 +1,6 @@
 ---
 description: When changing chaos tests, Toxiproxy provision, or chaos Vitest config, run chaos-test-maintainer.
-globs: src/tests/chaos/**/*.ts, vitest.chaos.config.ts, src/scripts/**/provision-proxies.ts, docker-compose.yml
+globs: src/tests/chaos/**/*.ts, tooling/vitest/chaos.config.ts, src/scripts/**/provision-proxies.ts, docker-compose.yml
 alwaysApply: false
 ---
 

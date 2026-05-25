@@ -37,7 +37,7 @@ Vitest tests live under `src/` in **two places only**. Do not mix responsibiliti
 
 Use for infrastructure and behavior that is **not owned by a single domain**:
 
-```
+```text
 src/tests/
   helpers/          # test-app, test-auth, test-database, test-organization
   factories/        # shared factories (user, organization, plan, …)
@@ -57,7 +57,7 @@ src/tests/
 
 Each domain has a root `__tests__/` folder. **Sub-domains** (under `sub-domains/<resource>/`) hold co-located unit, event-handler, and nested e2e tests.
 
-```
+```text
 src/domains/<domain>/__tests__/
   <domain>.test.ts              # bundled domain inject suite (auth, billing, notify, user, tenancy)
   factories/                    # domain-wide test helpers (e.g. tenancy permission.factory.ts)
@@ -174,7 +174,7 @@ k6 scenarios and helpers live in `src/tests/load/k6/` (`.js` files, not Vitest).
 ### 4. Commands before considering tests done
 
 ```bash
-pnpm test:unit          # vitest.unit.config.ts (common unit + all domain __tests__/unit)
+pnpm test:unit          # --project unit (common unit + all domain __tests__/unit)
 pnpm test:integration   # src/tests/integration touched
 pnpm test:e2e           # domain __tests__ touched (stop pnpm dev first)
 pnpm test:security      # auth, middleware, RLS touched

@@ -1,0 +1,554 @@
+import * as logger from '../../../common/logger.js';
+import { isSecretFilled } from '../../../common/secrets.js';
+import type {
+  SetupConfig,
+  SetupState,
+  ProviderResult,
+  InfraProvider,
+  InfraProviderContext,
+} from '../../../common/types.js';
+
+const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
+
+async function railwayGraphQL<T>(
+  token: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<T> {
+  const response = await fetch(RAILWAY_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Railway GraphQL failed (${response.status}): ${errorBody}`);
+  }
+
+  const result = (await response.json()) as { data?: T; errors?: Array<{ message: string }> };
+
+  if (result.errors?.length) {
+    throw new Error(
+      `Railway GraphQL errors: ${result.errors.map((error) => error.message).join(', ')}`,
+    );
+  }
+
+  return result.data as T;
+}
+
+async function findExistingProjectId(
+  token: string,
+  projectName: string,
+): Promise<string | undefined> {
+  const result = await railwayGraphQL<{
+    projects?: { edges?: Array<{ node?: { id: string; name: string } }> };
+  }>(
+    token,
+    `
+    query {
+      projects {
+        edges {
+          node {
+            id
+            name
+          }
+        }
+      }
+    }
+  `,
+  );
+  return result.projects?.edges
+    ?.map((edge) => edge.node)
+    .find((project) => project?.name === projectName)?.id;
+}
+
+interface RailwayProjectDetails {
+  environments: Array<{
+    id: string;
+    name: string;
+    serviceInstances: Array<{ serviceId: string; serviceName: string }>;
+  }>;
+  services: Array<{ id: string; name: string }>;
+}
+
+async function fetchProjectDetails(
+  token: string,
+  projectId: string,
+): Promise<RailwayProjectDetails> {
+  const result = await railwayGraphQL<{
+    project?: {
+      environments?: {
+        edges?: Array<{
+          node?: {
+            id: string;
+            name: string;
+            serviceInstances?: {
+              edges?: Array<{ node?: { serviceId: string; serviceName: string } }>;
+            };
+          };
+        }>;
+      };
+      services?: {
+        edges?: Array<{ node?: { id: string; name: string } }>;
+      };
+    };
+  }>(
+    token,
+    `
+    query($id: String!) {
+      project(id: $id) {
+        environments {
+          edges {
+            node {
+              id
+              name
+              serviceInstances {
+                edges {
+                  node {
+                    serviceId
+                    serviceName
+                  }
+                }
+              }
+            }
+          }
+        }
+        services {
+          edges {
+            node {
+              id
+              name
+            }
+          }
+        }
+      }
+    }
+  `,
+    { id: projectId },
+  );
+
+  const environments = (result.project?.environments?.edges ?? [])
+    .map((edge) => edge.node)
+    .filter((node): node is NonNullable<typeof node> => node !== undefined)
+    .map((node) => ({
+      id: node.id,
+      name: node.name,
+      serviceInstances: (node.serviceInstances?.edges ?? [])
+        .map((serviceEdge) => serviceEdge.node)
+        .filter(
+          (serviceNode): serviceNode is NonNullable<typeof serviceNode> =>
+            serviceNode !== undefined,
+        )
+        .map((serviceNode) => ({
+          serviceId: serviceNode.serviceId,
+          serviceName: serviceNode.serviceName,
+        })),
+    }));
+
+  const services = (result.project?.services?.edges ?? [])
+    .map((edge) => edge.node)
+    .filter((node): node is NonNullable<typeof node> => node !== undefined);
+
+  return { environments, services };
+}
+
+async function stageAndCommitServiceAttachments(
+  token: string,
+  environmentId: string,
+  serviceIds: string[],
+  commitMessage: string,
+): Promise<void> {
+  if (serviceIds.length === 0) return;
+
+  const stagePayload = {
+    services: Object.fromEntries(serviceIds.map((serviceId) => [serviceId, { isCreated: true }])),
+  };
+
+  await railwayGraphQL<{ environmentStageChanges: { id: string; status: string } }>(
+    token,
+    `
+    mutation($environmentId: String!, $input: EnvironmentConfig!, $merge: Boolean) {
+      environmentStageChanges(environmentId: $environmentId, input: $input, merge: $merge) {
+        id
+        status
+      }
+    }
+  `,
+    { environmentId, input: stagePayload, merge: true },
+  );
+
+  await railwayGraphQL<{ environmentPatchCommitStaged: string }>(
+    token,
+    `
+    mutation($environmentId: String!, $commitMessage: String, $skipDeploys: Boolean) {
+      environmentPatchCommitStaged(
+        environmentId: $environmentId
+        commitMessage: $commitMessage
+        skipDeploys: $skipDeploys
+      )
+    }
+  `,
+    { environmentId, commitMessage, skipDeploys: true },
+  );
+}
+
+const RAILWAY_SERVICE_NAMES = ['api', 'worker'];
+
+function formatRailwayEnvironmentPlan(config: SetupConfig): string {
+  return config.environments
+    .map(
+      (environment) =>
+        `${environment.name} (${environment.label}; branch ${environment.branch}; services: ${RAILWAY_SERVICE_NAMES.join(', ')})`,
+    )
+    .join(', ');
+}
+
+export async function provision(
+  config: SetupConfig,
+  secrets: { railway: { token: string } },
+  state: SetupState,
+  environments: string[],
+): Promise<ProviderResult> {
+  const token = secrets.railway.token;
+  const projectName = config.project.name;
+
+  if (!token) {
+    return { success: true, message: 'Railway: skipped (no token)' };
+  }
+
+  const spinner = logger.startSpinner('Setting up Railway project...');
+
+  try {
+    let projectId = state.railway?.projectId;
+    const services: Record<string, { serviceId: string; environmentId?: string; url?: string }> =
+      state.railway?.services ? { ...state.railway.services } : {};
+    const railwayEnvironments: Record<
+      string,
+      {
+        environmentId: string;
+        services: Record<string, { serviceId: string; environmentId: string }>;
+      }
+    > = state.railway?.environments ? { ...state.railway.environments } : {};
+
+    // Adopt remote project by name when local state is missing the project ID.
+    if (!projectId) {
+      const existingProjectId = await findExistingProjectId(token, projectName);
+      if (existingProjectId) {
+        projectId = existingProjectId;
+        logger.stopSpinner(spinner, `Railway project adopted: ${projectId}`);
+      }
+    }
+
+    // Create project if needed
+    if (!projectId) {
+      const createProjectResult = await railwayGraphQL<{
+        projectCreate: { id: string; name: string };
+      }>(
+        token,
+        `
+        mutation($input: ProjectCreateInput!) {
+          projectCreate(input: $input) {
+            id
+            name
+          }
+        }
+      `,
+        {
+          input: { name: projectName },
+        },
+      );
+
+      projectId = createProjectResult.projectCreate.id;
+      logger.stopSpinner(spinner, `Railway project created: ${projectId}`);
+    } else {
+      logger.stopSpinner(spinner, `Railway project already exists: ${projectId}`);
+    }
+
+    const projectDetails = await fetchProjectDetails(token, projectId!);
+    const remoteEnvironmentsByName = new Map(
+      projectDetails.environments.map((environment) => [environment.name, environment]),
+    );
+    const remoteServicesByName = new Map(
+      projectDetails.services.map((service) => [service.name, service.id]),
+    );
+    logger.info(
+      `Railway topology: project "${projectName}" → ${formatRailwayEnvironmentPlan(config)}.`,
+    );
+    const attachedServicesByEnvironment = new Map<string, Set<string>>(
+      projectDetails.environments.map((environment) => [
+        environment.id,
+        new Set(environment.serviceInstances.map((instance) => instance.serviceId)),
+      ]),
+    );
+    const pendingAttachmentsByEnvironment = new Map<
+      string,
+      Array<{ serviceName: string; serviceId: string }>
+    >();
+
+    for (const environmentName of environments) {
+      if (!railwayEnvironments[environmentName]) {
+        const remoteEnvironment = remoteEnvironmentsByName.get(environmentName);
+        if (remoteEnvironment) {
+          railwayEnvironments[environmentName] = {
+            environmentId: remoteEnvironment.id,
+            services: Object.fromEntries(
+              remoteEnvironment.serviceInstances.map((service) => [
+                service.serviceName,
+                { serviceId: service.serviceId, environmentId: remoteEnvironment.id },
+              ]),
+            ),
+          };
+          logger.success(`  Environment "${environmentName}" adopted: ${remoteEnvironment.id}`);
+        } else {
+          const environmentSpinner = logger.startSpinner(
+            `Creating Railway environment: ${environmentName}...`,
+          );
+          const createEnvironmentResult = await railwayGraphQL<{
+            environmentCreate: { id: string };
+          }>(
+            token,
+            `
+            mutation($input: EnvironmentCreateInput!) {
+              environmentCreate(input: $input) {
+                id
+              }
+            }
+          `,
+            { input: { projectId, name: environmentName } },
+          );
+          const environmentId = createEnvironmentResult.environmentCreate.id;
+          railwayEnvironments[environmentName] = { environmentId, services: {} };
+          logger.stopSpinner(
+            environmentSpinner,
+            `Environment "${environmentName}" created: ${environmentId}`,
+          );
+        }
+      }
+
+      const environmentId = railwayEnvironments[environmentName].environmentId;
+
+      for (const serviceName of RAILWAY_SERVICE_NAMES) {
+        let serviceId = railwayEnvironments[environmentName].services[serviceName]?.serviceId;
+
+        if (!serviceId) {
+          const existingServiceId = remoteServicesByName.get(serviceName);
+          if (existingServiceId) {
+            serviceId = existingServiceId;
+            logger.success(`  Service "${serviceName}" (${environmentName}) adopted: ${serviceId}`);
+          } else {
+            const serviceSpinner = logger.startSpinner(
+              `Creating Railway service: ${serviceName}...`,
+            );
+            const createServiceResult = await railwayGraphQL<{
+              serviceCreate: { id: string };
+            }>(
+              token,
+              `
+              mutation($input: ServiceCreateInput!) {
+                serviceCreate(input: $input) {
+                  id
+                }
+              }
+            `,
+              { input: { projectId, name: serviceName } },
+            );
+            serviceId = createServiceResult.serviceCreate.id;
+            remoteServicesByName.set(serviceName, serviceId);
+            logger.stopSpinner(serviceSpinner, `Service "${serviceName}" created: ${serviceId}`);
+          }
+
+          railwayEnvironments[environmentName].services[serviceName] = {
+            serviceId,
+            environmentId,
+          };
+        }
+
+        services[serviceName] = { serviceId };
+
+        const attached = attachedServicesByEnvironment.get(environmentId) ?? new Set<string>();
+        if (!attached.has(serviceId)) {
+          pendingAttachmentsByEnvironment.set(environmentId, [
+            ...(pendingAttachmentsByEnvironment.get(environmentId) ?? []),
+            { serviceName, serviceId },
+          ]);
+        }
+      }
+    }
+
+    for (const [environmentId, pendingServices] of pendingAttachmentsByEnvironment) {
+      if (pendingServices.length === 0) continue;
+      const environmentName =
+        Object.entries(railwayEnvironments).find(
+          ([, value]) => value.environmentId === environmentId,
+        )?.[0] ?? environmentId;
+      const attachSpinner = logger.startSpinner(
+        `Attaching ${pendingServices.map((service) => `"${service.serviceName}"`).join(', ')} to environment "${environmentName}"...`,
+      );
+      await stageAndCommitServiceAttachments(
+        token,
+        environmentId,
+        pendingServices.map((service) => service.serviceId),
+        `setup:infra - attach ${pendingServices.map((service) => service.serviceName).join(', ')} to ${environmentName}`,
+      );
+      logger.stopSpinner(
+        attachSpinner,
+        `Attached ${pendingServices.length} service(s) to environment "${environmentName}"`,
+      );
+    }
+
+    return {
+      success: true,
+      message: `Railway: ${Object.keys(railwayEnvironments).length} environments ready`,
+      stateUpdates: {
+        railway: { version: 2, projectId: projectId!, services, environments: railwayEnvironments },
+      },
+    };
+  } catch (provisionError) {
+    const message =
+      provisionError instanceof Error ? provisionError.message : String(provisionError);
+    logger.error(`Railway provisioning failed: ${message}`);
+    return { success: false, message };
+  }
+}
+
+export async function check(state: SetupState, token: string): Promise<boolean> {
+  if (!state.railway?.projectId) {
+    logger.error('Railway: no project in state');
+    return false;
+  }
+
+  try {
+    await railwayGraphQL(
+      token,
+      `
+      query($id: String!) {
+        project(id: $id) {
+          id
+          name
+        }
+      }
+    `,
+      { id: state.railway.projectId },
+    );
+
+    logger.success(`Railway project ${state.railway.projectId} — reachable`);
+    return true;
+  } catch {
+    logger.error(`Railway project ${state.railway.projectId} — unreachable`);
+    return false;
+  }
+}
+
+function railwayAlreadyProvisioned(state: SetupState, environments: string[]): boolean {
+  if (!state.railway?.projectId) return false;
+  const railwayEnvironments = state.railway.environments ?? {};
+  return environments.every((environmentName) => {
+    const environment = railwayEnvironments[environmentName];
+    if (!environment) return false;
+    return ['api', 'worker'].every((serviceName) =>
+      Boolean(environment.services[serviceName]?.serviceId),
+    );
+  });
+}
+
+export const setupRailwayProvider: InfraProvider = {
+  key: 'railway',
+  name: 'Railway',
+  isEnabled: ({ config, secrets }) =>
+    config.providers.railway.enabled && isSecretFilled(secrets.railway.token),
+  disabledReason: ({ config }) =>
+    !config.providers.railway.enabled
+      ? 'disabled in setup.config.json'
+      : 'RAILWAY_TOKEN missing in .env.setup',
+  preview: ({ config }) =>
+    config.providers.railway.enabled
+      ? {
+          detail: 'RAILWAY_TOKEN — no railway login when set (API-only)',
+          url: 'https://railway.app/account/tokens',
+          configKey: 'RAILWAY_TOKEN',
+        }
+      : null,
+  settingsReview: ({ config, environments }) =>
+    config.providers.railway.enabled
+      ? [
+          {
+            bucket: 'resource',
+            provider: 'Railway',
+            detail: `project "${config.project.name}" + ${environments.length} environments + services ${RAILWAY_SERVICE_NAMES.join(', ')} attached to each environment`,
+          },
+        ]
+      : [],
+  buildStep: (context: InfraProviderContext) => ({
+    name: 'Railway',
+    enabled: setupRailwayProvider.isEnabled(context),
+    enabledReason: setupRailwayProvider.disabledReason(context),
+    instructions: [
+      `Will create or adopt the Railway project "${context.config.project.name}".`,
+      `Will create or adopt Railway environments: ${formatRailwayEnvironmentPlan(context.config)}.`,
+      'Will create or adopt project-level services: api, worker.',
+      'Will attach api + worker to every Railway environment via staged-changes.',
+    ],
+    alreadyDone: () => railwayAlreadyProvisioned(context.state, context.environments),
+    alreadyDoneMessage: 'project + environments + api/worker attachments already in state',
+    execute: async () => {
+      const result = await provision(
+        context.config,
+        context.secrets,
+        context.state,
+        context.environments,
+      );
+      if (!result.success) throw new Error(result.message);
+      context.applyStateUpdates(result.stateUpdates ?? {});
+      return result;
+    },
+    verifyState: () => ({
+      ok: Boolean(context.state.railway?.projectId),
+      message: context.state.railway?.projectId
+        ? `project ${context.state.railway.projectId} with ${Object.keys(context.state.railway.environments ?? {}).length} environments`
+        : 'no Railway project recorded',
+    }),
+    verifyLive: async () => {
+      const ok = await check(context.state, context.secrets.railway.token);
+      return { ok, message: ok ? 'reachable' : 'unreachable' };
+    },
+  }),
+  check: ({ state, secrets }) => check(state, secrets.railway.token),
+  deleteInstructions: ({ state }) => {
+    if (!state.railway?.projectId) return [];
+    const resources: Array<{ label: string; identifier: string }> = [
+      { label: 'Project', identifier: state.railway.projectId },
+    ];
+    for (const [environmentName, environmentState] of Object.entries(
+      state.railway.environments ?? {},
+    )) {
+      resources.push({
+        label: `Environment (${environmentName})`,
+        identifier: environmentState.environmentId,
+      });
+      for (const serviceName of RAILWAY_SERVICE_NAMES) {
+        const serviceState = environmentState.services[serviceName];
+        if (serviceState?.serviceId) {
+          resources.push({
+            label: `  ${serviceName} service (${environmentName})`,
+            identifier: serviceState.serviceId,
+          });
+        }
+      }
+    }
+    return [
+      {
+        provider: 'Railway',
+        dashboardUrl: `https://railway.app/project/${state.railway.projectId}`,
+        steps: [
+          'Open the project page above.',
+          'Settings → Danger → Delete project (removes all environments + services), or open each service and use Settings → Delete service.',
+        ],
+        resources,
+      },
+    ];
+  },
+};

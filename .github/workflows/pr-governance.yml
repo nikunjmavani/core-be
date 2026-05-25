@@ -82,7 +82,7 @@ jobs:
           git fetch origin "${BASE_REF}" --depth=1 2>/dev/null || true
           ENV_FILES=$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null \
             | grep -E '^\.env(\.|$)' \
-            | grep -vE '^\.env\.(example|local\.example|development\.example|production\.example)$' || true)
+            | grep -vE '^\.env\.(example|local\.example|development\.example|production\.example|setup\.example)$' || true)
           if [ -n "$ENV_FILES" ]; then
             echo "::error::Environment files detected in PR diff: $ENV_FILES"
             echo "Remove .env files from the commit. Only committed templates (.env.example, .env.*.example) are allowed."

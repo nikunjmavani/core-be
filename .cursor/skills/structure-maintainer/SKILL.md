@@ -31,7 +31,7 @@ Then run the **Checklist** below and verify with `pnpm typecheck` (and tests if 
 
 Domain folder = DB schema. Multi-resource domains use `sub-domains/` for API resources. **Sub-domains may contain nested sub-domains** (aggregate children). Flat domains (`audit`, `upload`) keep layers at domain root.
 
-```
+```text
 src/domains/<domain>/
   <domain>.routes.ts
   <domain>.container.ts
@@ -51,7 +51,7 @@ Import: `@/domains/<domain>/sub-domains/<sub-domain>/...` or `@/domains/<domain>
 
 ### Infrastructure layout
 
-```
+```text
 src/infrastructure/
   database/
     connection.ts             # Postgres + Drizzle
@@ -76,7 +76,7 @@ src/infrastructure/
 
 ### Shared layout
 
-```
+```text
 src/shared/
   config/env.config.ts
   errors/{app,validation,auth}.error.ts, index.ts
@@ -90,17 +90,18 @@ src/shared/
 
 Outside `src/` — not part of the runtime app. Do not merge with `src/scripts/` (those may import `@/`).
 
-```
+```text
 tooling/
-  setup/              # External infra wizard (pnpm setup:infra*) — Neon, Railway, Stripe, GitHub secrets
-  setup.config.json   # Wizard config (committed)
+  setup-infra/        # External infra wizard (pnpm setup:infra*) — Neon, Railway, Stripe, GitHub secrets
+                      # Providers live under setup-infra/providers/setup-<name>/setup-<name>.provider.ts
+  setup-infra/setup.config.json   # Wizard config (committed)
   ci/                 # Build/CI guards (check-dockerfile-sync.mjs, check-dist-imports.mjs)
   dev/                # Local dev helpers (wait-for-local-postgres.sh → pnpm compose:wait)
 ```
 
 ### Build-time scripts
 
-```
+```text
 src/scripts/    # e.g. generate-openapi.ts → docs/openapi/openapi.json for ApiDog
 ```
 

@@ -13,6 +13,7 @@ dist/
 # to GitHub Environments via `pnpm github:sync <environment>`.
 .env*
 !.env.example
+!.env.setup.example
 
 # IDE
 .vscode/*

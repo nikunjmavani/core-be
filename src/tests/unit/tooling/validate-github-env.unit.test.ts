@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateDeploymentProcessCountSecrets } from '../../../../tooling/setup/validate-github-env.js';
+import { validateDeploymentProcessCountSecrets } from '../../../../tooling/setup/github/validate.js';
 
 describe('validateDeploymentProcessCountSecrets', () => {
   it('returns undefined for environments outside the hosted-deployment set', () => {

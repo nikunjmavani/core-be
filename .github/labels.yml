@@ -1,0 +1,93 @@
+# Manual reference for GitHub label name + color (pastel) + description.
+# Path-based attachment to PRs is handled by .github/labeler.yml; create/update
+# these labels in GitHub settings when label names, colors, or descriptions change.
+#
+# When adding a new domain:
+#   1. Add a `domain:<new>` entry under "Domains" below (keep alphabetised).
+#   2. Add the same key in .github/labeler.yml with its glob.
+#
+# Colors are 6-digit hex without `#` (GitHub label format).
+
+# ---------- Domains (pastel rainbow — one hue per domain) ----------
+
+- name: 'domain:audit'
+  color: 'E1BEE7'
+  description: 'Audit log, retention and export (src/domains/audit)'
+
+- name: 'domain:auth'
+  color: 'F8BBD0'
+  description: 'Authentication, sessions, magic-link, MFA, passkeys (src/domains/auth)'
+
+- name: 'domain:billing'
+  color: 'C8E6C9'
+  description: 'Plans, subscriptions and Stripe webhook (src/domains/billing)'
+
+- name: 'domain:notify'
+  color: 'FFE0B2'
+  description: 'Notifications and webhook delivery (src/domains/notify)'
+
+- name: 'domain:tenancy'
+  color: 'BBDEFB'
+  description: 'Organizations, membership, roles and permissions (src/domains/tenancy)'
+
+- name: 'domain:upload'
+  color: 'B2EBF2'
+  description: 'File uploads and storage (src/domains/upload)'
+
+- name: 'domain:user'
+  color: 'FFF9C4'
+  description: 'User profile, settings, notification prefs, GDPR export (src/domains/user)'
+
+# ---------- Layers ----------
+
+- name: 'infrastructure'
+  color: 'D7CCC8'
+  description: 'Cross-domain runtime: database, cache, queue, mail, payment, storage, observability'
+
+- name: 'shared'
+  color: 'CFD8DC'
+  description: 'Shared utils, middlewares, config, errors, locales (src/shared)'
+
+# ---------- Concerns ----------
+
+- name: 'ci'
+  color: 'F0F4C3'
+  description: 'GitHub Actions workflows, composite actions, rulesets'
+
+- name: 'tests'
+  color: 'B2DFDB'
+  description: 'Vitest, k6, chaos, contract and integration suites'
+
+- name: 'docs'
+  color: 'FFECB3'
+  description: 'Hand-written docs under docs/ and top-level *.md'
+
+- name: 'database'
+  color: 'DCEDC8'
+  description: 'SQL migrations, Drizzle schemas and DB infrastructure'
+
+- name: 'dependencies'
+  color: 'D1C4E9'
+  description: 'package.json / pnpm lockfile / workspace updates (also set by Dependabot)'
+
+- name: 'docker'
+  color: 'B3E5FC'
+  description: 'Dockerfile, Compose and image base updates (also set by Dependabot)'
+
+# ---------- PR size (set by .github/workflows/pr-governance.yml) ----------
+
+- name: 'size/small'
+  color: 'C8E6C9'
+  description: '≤ 50 added+deleted lines'
+
+- name: 'size/medium'
+  color: 'FFF9C4'
+  description: '51–200 added+deleted lines'
+
+- name: 'size/large'
+  color: 'FFE0B2'
+  description: '201–500 added+deleted lines'
+
+- name: 'size/x-large'
+  color: 'FFCDD2'
+  description: '> 500 added+deleted lines — consider splitting'

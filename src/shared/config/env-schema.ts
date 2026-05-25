@@ -416,7 +416,7 @@ export const envSchemaKeys = Object.keys(envSchemaBase.shape) as (keyof z.infer<
  * Keys whose schema entry has no default and is not marked `.optional()`. These must
  * always be present at runtime — the app Zod-rejects on first request otherwise.
  *
- * Used by `tooling/setup/validate-github-env.ts` to assert deploy-target secrets
+ * Used by `tooling/setup-infra/validate-github-env.ts` to assert deploy-target secrets
  * against the schema instead of treating every uncommented `.env.example` line as
  * required (which would also flag optional integrations like Stripe / OAuth / S3).
  */

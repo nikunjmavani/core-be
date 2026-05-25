@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const strykerConfigPath = join(process.cwd(), 'stryker.config.json');
 const workflowPath = join(process.cwd(), '.github/workflows/scheduled-stryker-mutation.yml');
-const vitestStrykerPath = join(process.cwd(), 'vitest.stryker.config.ts');
+const vitestStrykerPath = join(process.cwd(), 'tooling/vitest/stryker.config.ts');
 
 describe('Stryker mutation testing policy (#68)', () => {
   it('enforces 70% break threshold on auth, billing, tenancy, and security middleware', () => {
