@@ -29,7 +29,7 @@ describe('MembershipRepository (database)', () => {
       roleId: role.id,
     });
 
-    const page = await repository.findByOrganizationId(organization.id, 1, 20);
+    const page = await repository.findByOrganizationId(organization.id, { limit: 20 });
     expect(page.items.some((row) => row.public_id === membership.public_id)).toBe(true);
 
     const byPublicId = await repository.findByPublicId(membership.public_id, organization.id);

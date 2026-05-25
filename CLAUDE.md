@@ -26,6 +26,13 @@ For **any new requirement** (new domain, routes, worker, schema, etc.), use the 
 - Sub-domain folder **must** include the domain/resource prefix to avoid ambiguity.
 - Examples: `user-settings` (under user), `organization-settings` (under organization), `member-role-permission` (under member-roles), `webhook-event` (under webhook).
 
+### Object Parameters Only — Outside Repositories
+
+- Any function or method authored in `src/**/*.ts` with **two or more inputs** must take a **single named options object** (interface/type + destructuring).
+- **Exempt files**: `*.repository.ts` and `*.repository.unit.test.ts` keep positional params (e.g. `findByUserAndOrganization(user_id, organization_id)`).
+- **Exempt signatures** (framework-mandated, stay positional): Fastify handlers `(request, reply)`, Fastify plugins `(app, options)`, BullMQ processors `(job)` / `(job, token)`, DI constructors in `*.container.ts`, event-bus subscribers, `Array.sort` comparators, Vitest callbacks (`describe(name, fn)`, `it(name, fn)`), Zod refine callbacks.
+- See `.cursor/rules/object-params.mdc` for the full guide and worked examples.
+
 ## Domain Structure
 
 Domains live under `src/domains/<domain>/`. Each domain has sub-domains with this layout:

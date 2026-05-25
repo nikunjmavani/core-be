@@ -1,7 +1,36 @@
-import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { logs } from '@/domains/audit/audit.schema.js';
+import {
+  buildDescendingCreatedAtIdCursorCondition,
+  createOpaqueCursorFromRow,
+  parseListCursor,
+} from '@/shared/utils/http/pagination.util.js';
 import type { AuditLogFilters, NewAuditLog } from './audit.types.js';
+
+function buildAuditFilterConditions(filters: AuditLogFilters): SQL[] {
+  const conditions: SQL[] = [];
+  const { organization_id, actor_user_id, resource_type, action, from, to } = filters;
+  if (organization_id !== undefined && organization_id !== null) {
+    conditions.push(eq(logs.organization_id, organization_id));
+  }
+  if (actor_user_id !== undefined && actor_user_id !== null) {
+    conditions.push(eq(logs.actor_user_id, actor_user_id));
+  }
+  if (resource_type !== undefined && resource_type !== null) {
+    conditions.push(eq(logs.resource_type, resource_type));
+  }
+  if (action !== undefined && action !== null) {
+    conditions.push(eq(logs.action, action));
+  }
+  if (from !== undefined && from !== null) {
+    conditions.push(gte(logs.created_at, new Date(from)));
+  }
+  if (to !== undefined && to !== null) {
+    conditions.push(lte(logs.created_at, new Date(to)));
+  }
+  return conditions;
+}
 
 export class AuditRepository {
   async insert(entry: NewAuditLog): Promise<void> {
@@ -9,46 +38,54 @@ export class AuditRepository {
   }
 
   async findWithFilters(filters: AuditLogFilters) {
-    const { page, limit, organization_id, actor_user_id, resource_type, action, from, to } =
-      filters;
-    const includeTotal = filters.include_total !== false;
-    const offset = (page - 1) * limit;
-    const conditions = [];
-    if (organization_id !== undefined && organization_id !== null)
-      conditions.push(eq(logs.organization_id, organization_id));
-    if (actor_user_id !== undefined && actor_user_id !== null)
-      conditions.push(eq(logs.actor_user_id, actor_user_id));
-    if (resource_type !== undefined && resource_type !== null)
-      conditions.push(eq(logs.resource_type, resource_type));
-    if (action !== undefined && action !== null) conditions.push(eq(logs.action, action));
-    if (from !== undefined && from !== null) conditions.push(gte(logs.created_at, new Date(from)));
-    if (to !== undefined && to !== null) conditions.push(lte(logs.created_at, new Date(to)));
+    const { after, offset_page, limit } = filters;
+    const includeTotal = filters.include_total === true;
+    const filterConditions = buildAuditFilterConditions(filters);
+    const countWhere = filterConditions.length > 0 ? and(...filterConditions) : undefined;
+
+    const conditions = [...filterConditions];
+    if (offset_page === undefined) {
+      const cursorCondition = buildDescendingCreatedAtIdCursorCondition(
+        logs.created_at,
+        logs.id,
+        parseListCursor(after),
+      );
+      if (cursorCondition !== undefined) conditions.push(cursorCondition);
+    }
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     // Fetch one extra row so has_more is accurate without depending on count(*).
-    const rowsPromise = getRequestDatabase()
+    const rowsQuery = getRequestDatabase()
       .select()
       .from(logs)
       .where(where)
-      .orderBy(desc(logs.created_at))
-      .limit(limit + 1)
-      .offset(offset);
+      .orderBy(desc(logs.created_at), desc(logs.id))
+      .limit(limit + 1);
+    const rowsPromise =
+      offset_page !== undefined ? rowsQuery.offset((offset_page - 1) * limit) : rowsQuery;
 
     const countPromise = includeTotal
       ? getRequestDatabase()
           .select({ count: sql<number>`count(*)::int` })
           .from(logs)
-          .where(where)
+          .where(countWhere)
           .then((rows) => rows[0]?.count ?? 0)
       : Promise.resolve(null);
 
     const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);
     const hasMore = fetchedRows.length > limit;
     const items = hasMore ? fetchedRows.slice(0, limit) : fetchedRows;
-    return { items, total, hasMore };
+    const lastItem = items.at(-1);
+    const nextCursor =
+      hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null;
+    return { items, total, hasMore, nextCursor };
   }
 
   async findRecent(limit: number) {
-    return getRequestDatabase().select().from(logs).orderBy(desc(logs.created_at)).limit(limit);
+    return getRequestDatabase()
+      .select()
+      .from(logs)
+      .orderBy(desc(logs.created_at), desc(logs.id))
+      .limit(limit);
   }
 }

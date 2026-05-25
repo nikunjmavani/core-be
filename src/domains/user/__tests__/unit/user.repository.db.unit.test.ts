@@ -33,8 +33,16 @@ describe('UserRepository (database)', () => {
     const verified = await repository.findByPublicId(user.public_id);
     expect(verified?.is_email_verified).toBe(true);
 
-    const listed = await repository.findMany({ page: 1, limit: 20, search: 'repo-user' });
+    const listed = await repository.findMany({ limit: 20, search: 'repo-user' });
     expect(listed.items.some((row) => row.public_id === user.public_id)).toBe(true);
+    expect(listed.total).toBeNull();
+
+    const listedWithTotal = await repository.findMany({
+      limit: 20,
+      search: 'repo-user',
+      include_total: true,
+    });
+    expect(listedWithTotal.total).toBeGreaterThanOrEqual(1);
 
     const suspended = await repository.suspend(user.public_id);
     expect(suspended?.status).toBe('SUSPENDED');

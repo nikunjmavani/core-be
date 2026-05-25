@@ -40,6 +40,9 @@ export const roles = tenancySchema
     (table) => [
       uniqueIndex('idx_roles_public_id').on(table.public_id),
       index('idx_roles_org_name').on(table.organization_id, table.name),
+      index('idx_roles_org_name_id_active')
+        .on(table.organization_id, table.name, table.id)
+        .where(sql`${table.deleted_at} IS NULL`),
       index('idx_roles_org_system').on(table.organization_id, table.is_system),
       uniqueIndex('idx_roles_org_name_unique')
         .on(table.organization_id, table.name)

@@ -43,6 +43,9 @@ export const users = authSchema.table(
     uniqueIndex('idx_users_email_unique')
       .on(table.email)
       .where(sql`${table.deleted_at} IS NULL`),
+    index('idx_users_created_id_active')
+      .on(table.created_at, table.id)
+      .where(sql`${table.deleted_at} IS NULL`),
     index('idx_users_last_active_not_deleted')
       .on(table.last_active_at)
       .where(sql`${table.deleted_at} IS NULL`),

@@ -49,7 +49,6 @@ export class AuditService {
 
   async list(query: Record<string, unknown>) {
     const parsed = validateListAuditLogsQuery(query);
-    const page = parsed.page ?? 1;
 
     let organization_id: number | undefined;
     let actor_user_id: number | undefined;
@@ -73,20 +72,21 @@ export class AuditService {
       action: parsed.action,
       from: parsed.from,
       to: parsed.to,
-      page,
+      after: parsed.after,
+      offset_page: parsed.page,
       limit: parsed.limit,
-      include_total: parsed.include_total !== 'false',
+      include_total: parsed.include_total === 'true',
     });
 
-    const { items, total, hasMore } = await this.repository.findWithFilters(filters);
+    const { items, total, hasMore, nextCursor } = await this.repository.findWithFilters(filters);
 
     return {
       items,
       total,
-      page,
       limit: parsed.limit,
       total_pages: total !== null ? Math.ceil(total / parsed.limit) || 1 : null,
       has_more: hasMore,
+      next_cursor: nextCursor,
     };
   }
 }

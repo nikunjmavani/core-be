@@ -23,7 +23,6 @@ describe('AuditRepository (database)', () => {
     });
 
     const listed = await repository.findWithFilters({
-      page: 1,
       limit: 20,
       actor_user_id: actor.id,
     });
@@ -43,7 +42,6 @@ describe('AuditRepository (database)', () => {
     });
 
     const filtered = await repository.findWithFilters({
-      page: 1,
       limit: 10,
       actor_user_id: actor.id,
       resource_type: 'organization',
@@ -70,13 +68,12 @@ describe('AuditRepository (database)', () => {
     });
 
     const byOrganization = await repository.findWithFilters({
-      page: 1,
       limit: 10,
       organization_id: organization.id,
     });
     expect(byOrganization.items.some((row) => row.action === 'organization.viewed')).toBe(true);
 
-    const unfiltered = await repository.findWithFilters({ page: 1, limit: 5 });
+    const unfiltered = await repository.findWithFilters({ limit: 5 });
     expect(unfiltered.items.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -90,7 +87,6 @@ describe('AuditRepository (database)', () => {
     });
 
     const listed = await repository.findWithFilters({
-      page: 1,
       limit: 10,
       organization_id: null,
       actor_user_id: null,

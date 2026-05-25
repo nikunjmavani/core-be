@@ -19,12 +19,14 @@ export function createOrganizationController(
           sunset: new Date('2027-01-01T00:00:00.000Z'),
         });
       }
-      const hasMore = result.page * result.limit < result.total;
       return paginatedResponse(result.items, getRequestIdentifier(request), {
         per_page: result.limit,
-        next: hasMore ? String(result.page + 1) : null,
-        has_more: hasMore,
-        estimated_total: result.total,
+        next:
+          result.page !== undefined && result.has_more
+            ? String(result.page + 1)
+            : result.next_cursor,
+        has_more: result.has_more,
+        ...(result.total !== null ? { estimated_total: result.total } : {}),
       });
     },
     getOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -82,7 +84,7 @@ export function createOrganizationController(
       const result = await auditService.list(query);
       return paginatedResponse(result.items, getRequestIdentifier(request), {
         per_page: result.limit,
-        next: result.has_more ? String(result.page + 1) : null,
+        next: result.next_cursor,
         has_more: result.has_more,
         ...(result.total !== null ? { estimated_total: result.total } : {}),
       });

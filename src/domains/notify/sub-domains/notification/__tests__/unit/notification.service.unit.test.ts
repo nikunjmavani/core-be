@@ -31,7 +31,14 @@ describe('NotificationService', () => {
   } as unknown as UserService;
 
   const repository = {
-    findByUser: vi.fn().mockResolvedValue([notification]),
+    findByUser: vi.fn().mockResolvedValue({
+      items: [notification],
+      total: null,
+      page: undefined,
+      limit: 50,
+      has_more: false,
+      next_cursor: null,
+    }),
     findByPublicIdForUser: vi.fn().mockResolvedValue(notification),
     markRead: vi.fn().mockResolvedValue({ ...notification, read_at: new Date() }),
     markAllReadForUser: vi.fn().mockResolvedValue(2),
@@ -47,9 +54,25 @@ describe('NotificationService', () => {
     vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(user as never);
   });
 
-  it('listForUser returns notifications', async () => {
+  it('listForUser returns keyset paginated notifications', async () => {
     const result = await service.listForUser('user_public', 50);
-    expect(result).toHaveLength(1);
+    expect(result.items).toHaveLength(1);
+    expect(result.has_more).toBe(false);
+    expect(result.next_cursor).toBeNull();
+    expect(repository.findByUser).toHaveBeenCalledWith(1, { limit: 50 });
+  });
+
+  it('listForUser forwards keyset options to the repository', async () => {
+    await service.listForUser('user_public', {
+      after: 'cursor_prev',
+      limit: 25,
+      include_total: true,
+    });
+    expect(repository.findByUser).toHaveBeenLastCalledWith(1, {
+      after: 'cursor_prev',
+      limit: 25,
+      include_total: true,
+    });
   });
 
   it('get returns notification for user', async () => {

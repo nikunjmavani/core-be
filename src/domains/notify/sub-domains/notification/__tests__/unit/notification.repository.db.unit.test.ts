@@ -28,14 +28,16 @@ describe('NotificationRepository (database)', () => {
       await repository.findOrganizationPublicIdByNotificationId(notificationId);
     expect(organizationPublicId).toBe(organization.public_id);
 
-    const listed = await repository.findByUser(user.id, 10);
-    expect(listed).toHaveLength(1);
-    expect(listed[0]!.read_at).toBeNull();
+    const listed = await repository.findByUser(user.id, { limit: 10 });
+    expect(listed.items).toHaveLength(1);
+    expect(listed.items[0]!.read_at).toBeNull();
+    expect(listed.total).toBeNull();
+    expect(listed.has_more).toBe(false);
 
     const unreadBefore = await repository.countUnreadForUser(user.id);
     expect(unreadBefore).toBe(1);
 
-    const marked = await repository.markRead(listed[0]!.public_id, user.id);
+    const marked = await repository.markRead(listed.items[0]!.public_id, user.id);
     expect(marked?.read_at).not.toBeNull();
 
     const unreadAfterMark = await repository.countUnreadForUser(user.id);
@@ -56,10 +58,10 @@ describe('NotificationRepository (database)', () => {
     const markedAll = await repository.markAllReadForUser(user.id);
     expect(markedAll.length).toBeGreaterThanOrEqual(1);
 
-    const deleted = await repository.deleteByPublicIdForUser(listed[0]!.public_id, user.id);
-    expect(deleted?.public_id).toBe(listed[0]!.public_id);
+    const deleted = await repository.deleteByPublicIdForUser(listed.items[0]!.public_id, user.id);
+    expect(deleted?.public_id).toBe(listed.items[0]!.public_id);
 
-    const byPublicId = await repository.findByPublicIdForUser(listed[0]!.public_id, user.id);
+    const byPublicId = await repository.findByPublicIdForUser(listed.items[0]!.public_id, user.id);
     expect(byPublicId).toBeNull();
   });
 

@@ -37,6 +37,10 @@ export const ListUsersDto = z
     limit: z.coerce.number().int().min(1).max(100).default(25),
     status: z.enum(['ACTIVE', 'SUSPENDED', 'DELETED']).optional(),
     search: trimmedString().max(255).optional(),
+    // Opt in to the expensive count(*); defaults to false so the admin list stays keyset-only.
+    // String enum (no transform) so the schema renders to JSON Schema for OpenAPI; service
+    // coerces it to a boolean.
+    include_total: z.enum(['true', 'false']).optional().default('false'),
   })
   .strict();
 export type ListUsersInput = z.infer<typeof ListUsersDto>;

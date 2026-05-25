@@ -1,8 +1,17 @@
 import { UnauthorizedError } from '@/shared/errors/index.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { enqueueNotification } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
+import { PAGINATION } from '@/shared/constants/pagination.constants.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { NotificationRepository } from './notification.repository.js';
 import type { UserService } from '@/domains/user/user.service.js';
+
+export interface NotificationListServiceOptions {
+  after?: string;
+  page?: number;
+  limit?: number;
+  include_total?: boolean;
+}
 
 /**
  * Persists in-app notifications and enqueues delivery for the owning user.
@@ -20,13 +29,28 @@ export class NotificationService {
   }
 
   /**
-   * List notifications for a user. Accepts a numeric limit (legacy callers) or an options
-   * object so HTTP controllers can pass parsed pagination input forward unchanged.
+   * List notifications for a user using keyset pagination. Accepts a numeric limit (legacy
+   * callers) or an options object so HTTP controllers can pass parsed pagination input
+   * forward unchanged.
    */
-  async listForUser(user_public_id: string, options: number | { limit?: number } = 50) {
-    const limit = typeof options === 'number' ? options : (options.limit ?? 50);
+  async listForUser(
+    user_public_id: string,
+    options: number | NotificationListServiceOptions = PAGINATION.DEFAULT_LIMIT,
+  ) {
+    const resolved = typeof options === 'number' ? { limit: options } : options;
+    const limit = resolved.limit ?? PAGINATION.DEFAULT_LIMIT;
     const userId = await this.resolveUserId(user_public_id);
-    return withUserDatabaseContext(user_public_id, () => this.repository.findByUser(userId, limit));
+    return withUserDatabaseContext(user_public_id, () =>
+      this.repository.findByUser(
+        userId,
+        omitUndefined({
+          after: resolved.after,
+          offset_page: resolved.page,
+          limit,
+          include_total: resolved.include_total,
+        }),
+      ),
+    );
   }
 
   async get(public_id: string, user_public_id: string) {

@@ -170,14 +170,15 @@ export class OrganizationService {
    */
   async list(query: unknown, user_public_id: string, global_role?: GlobalRole) {
     const parsed = validateListOrganizationsQuery(query);
-    const cursorPage = parsed.after !== undefined ? Number.parseInt(parsed.after, 10) : undefined;
-    const page =
-      Number.isFinite(cursorPage) && cursorPage !== undefined ? cursorPage : (parsed.page ?? 1);
-    const { limit } = parsed;
+    const pagination = omitUndefined({
+      after: parsed.after,
+      offset_page: parsed.page,
+      limit: parsed.limit,
+    });
     return withUserDatabaseContext(user_public_id, async () => {
       const result = this.isGlobalAdmin(global_role)
-        ? await this.repository.findAll(page, limit)
-        : await this.repository.findAllForUser(user_public_id, page, limit);
+        ? await this.repository.findAll(pagination)
+        : await this.repository.findAllForUser(user_public_id, pagination);
       return {
         ...result,
         items: result.items.map(serializeOrganization),

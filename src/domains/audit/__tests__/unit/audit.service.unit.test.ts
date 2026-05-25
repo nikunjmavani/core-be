@@ -23,9 +23,12 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
 describe('AuditService', () => {
   const repository = {
     insert: vi.fn().mockResolvedValue(undefined),
-    findWithFilters: vi
-      .fn()
-      .mockResolvedValue({ items: [{ action: 'user.login' }], total: 1, hasMore: false }),
+    findWithFilters: vi.fn().mockResolvedValue({
+      items: [{ action: 'user.login' }],
+      total: 1,
+      hasMore: false,
+      nextCursor: null,
+    }),
   } as unknown as AuditRepository;
 
   const organizationService = {
@@ -84,12 +87,12 @@ describe('AuditService', () => {
         actor_user_id: 5,
         resource_type: 'user',
         action: 'user.login',
-        page: 1,
+        offset_page: 1,
         limit: 20,
       }),
     );
     expect(result.total).toBe(1);
-    expect(result.page).toBe(1);
+    expect(result.next_cursor).toBeNull();
   });
 
   it('list omits organization id when organization not found', async () => {
@@ -111,6 +114,7 @@ describe('AuditService', () => {
       items: [],
       total: 0,
       hasMore: false,
+      nextCursor: null,
     });
     const result = await service.list({ page: 1, limit: 20 });
     expect(result.items).toEqual([]);
@@ -122,13 +126,15 @@ describe('AuditService', () => {
       items: [{ action: 'user.login' }],
       total: null,
       hasMore: true,
+      nextCursor: 'cursor_2',
     } as never);
-    const result = await service.list({ page: 1, limit: 20, include_total: 'false' });
+    const result = await service.list({ limit: 20, include_total: 'false' });
     expect(repository.findWithFilters).toHaveBeenCalledWith(
       expect.objectContaining({ include_total: false }),
     );
     expect(result.total).toBeNull();
     expect(result.total_pages).toBeNull();
     expect(result.has_more).toBe(true);
+    expect(result.next_cursor).toBe('cursor_2');
   });
 });

@@ -40,11 +40,15 @@ export const logs = auditSchema
     },
     (table) => [
       index('idx_audit_logs_org_created').on(table.organization_id, table.created_at),
+      index('idx_audit_logs_org_created_id').on(table.organization_id, table.created_at, table.id),
       index('idx_audit_logs_actor_created').on(table.actor_user_id, table.created_at),
+      index('idx_audit_logs_actor_created_id').on(table.actor_user_id, table.created_at, table.id),
       index('idx_audit_logs_resource').on(table.resource_type, table.resource_id, table.created_at),
       index('idx_audit_logs_created_at').on(table.created_at),
+      index('idx_audit_logs_created_id').on(table.created_at, table.id),
       index('idx_audit_logs_severity_created').on(table.severity, table.created_at),
       index('idx_audit_logs_action_created').on(table.action, table.created_at),
+      index('idx_audit_logs_action_created_id').on(table.action, table.created_at, table.id),
       check(
         'chk_audit_severity',
         sql`${table.severity} IN ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')`,

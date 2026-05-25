@@ -42,6 +42,9 @@ export const organizations = tenancySchema
       index('idx_organizations_owner').on(table.owner_user_id),
       index('idx_organizations_status_deleted').on(table.status, table.deleted_at),
       index('idx_organizations_created_at').on(table.created_at),
+      index('idx_organizations_created_id_active')
+        .on(table.created_at, table.id)
+        .where(sql`${table.deleted_at} IS NULL`),
       index('idx_organizations_active')
         .on(table.name)
         .where(sql`${table.deleted_at} IS NULL AND ${table.status} = 'ACTIVE'`),

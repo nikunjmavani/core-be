@@ -93,7 +93,10 @@ describe('MembershipService', () => {
     const result = await service.list('org_public', { page: 1, limit: 20 });
     expect(result.items).toHaveLength(1);
     expect(result.total).toBe(1);
-    expect(membershipRepository.findByOrganizationId).toHaveBeenCalledWith(1, 1, 20);
+    expect(membershipRepository.findByOrganizationId).toHaveBeenCalledWith(1, {
+      offset_page: 1,
+      limit: 20,
+    });
   });
 
   it('getByPublicId returns membership', async () => {

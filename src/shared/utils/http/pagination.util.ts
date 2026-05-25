@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { and, eq, gt, lt, or, type SQL } from 'drizzle-orm';
+import { and, eq, gt, lt, ne, or, type SQL } from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
 import { z } from 'zod';
 import { GoneError } from '@/shared/errors/index.js';
@@ -49,6 +49,7 @@ export function parseListLimitQuery(query: unknown): ListLimitQueryInput {
 export const listCursorPayloadSchema = z
   .object({
     created_at: z.string().datetime(),
+    sort_value: z.string().optional(),
     public_id: z.string().min(1).max(21).optional(),
     id: z.number().int().positive().optional(),
   })
@@ -57,7 +58,7 @@ export const listCursorPayloadSchema = z
 export type ListCursorPayload = z.infer<typeof listCursorPayloadSchema>;
 
 export type ParsedListCursor =
-  | { kind: 'opaque'; created_at: Date; public_id?: string; id?: number }
+  | { kind: 'opaque'; created_at: Date; sort_value?: string; public_id?: string; id?: number }
   | { kind: 'legacy'; id: number };
 
 export type ResolvedListPagination = {
@@ -89,6 +90,7 @@ export function parseListCursor(after: string | undefined): ParsedListCursor | n
     return omitUndefined({
       kind: 'opaque' as const,
       created_at: new Date(opaque.created_at),
+      sort_value: opaque.sort_value,
       public_id: opaque.public_id,
       id: opaque.id,
     });
@@ -102,12 +104,14 @@ export function parseListCursor(after: string | undefined): ParsedListCursor | n
 
 export function createOpaqueCursorFromRow(row: {
   created_at: Date;
+  sort_value?: string;
   public_id?: string;
   id: number;
 }): string {
   return encodeListCursor(
     omitUndefined({
       created_at: row.created_at.toISOString(),
+      sort_value: row.sort_value,
       public_id: row.public_id,
       id: row.id,
     }),
@@ -188,6 +192,47 @@ export function buildAscendingIdCursorCondition(
   return gt(idColumn, afterId);
 }
 
+export function buildAscendingCreatedAtIdCursorCondition(
+  createdAtColumn: AnyColumn,
+  idColumn: AnyColumn,
+  cursor: ParsedListCursor | null,
+): SQL | undefined {
+  if (cursor === null) {
+    return undefined;
+  }
+  if (cursor.kind === 'legacy') {
+    return gt(idColumn, cursor.id);
+  }
+  const cursorId = cursor.id;
+  if (cursorId === undefined) {
+    return gt(createdAtColumn, cursor.created_at);
+  }
+  // PostgreSQL stores microseconds, while JavaScript Date serializes milliseconds.
+  // Exclude the boundary row by id so precision loss cannot repeat it.
+  return or(
+    and(gt(createdAtColumn, cursor.created_at), ne(idColumn, cursorId)),
+    and(eq(createdAtColumn, cursor.created_at), gt(idColumn, cursorId)),
+  )!;
+}
+
+export function buildAscendingTextIdCursorCondition(
+  textColumn: AnyColumn,
+  idColumn: AnyColumn,
+  cursor: ParsedListCursor | null,
+): SQL | undefined {
+  if (cursor === null) {
+    return undefined;
+  }
+  if (cursor.kind === 'legacy') {
+    return gt(idColumn, cursor.id);
+  }
+  const sortValue = cursor.sort_value;
+  if (sortValue === undefined || cursor.id === undefined) {
+    return undefined;
+  }
+  return or(gt(textColumn, sortValue), and(eq(textColumn, sortValue), gt(idColumn, cursor.id)))!;
+}
+
 export function buildDescendingCreatedAtIdCursorCondition(
   createdAtColumn: AnyColumn,
   idColumn: AnyColumn,
@@ -203,8 +248,10 @@ export function buildDescendingCreatedAtIdCursorCondition(
   if (cursorId === undefined) {
     return lt(createdAtColumn, cursor.created_at);
   }
+  // PostgreSQL stores microseconds, while JavaScript Date serializes milliseconds.
+  // Exclude the boundary row by id so precision loss cannot repeat it.
   return or(
-    lt(createdAtColumn, cursor.created_at),
+    and(lt(createdAtColumn, cursor.created_at), ne(idColumn, cursorId)),
     and(eq(createdAtColumn, cursor.created_at), lt(idColumn, cursorId)),
   )!;
 }
