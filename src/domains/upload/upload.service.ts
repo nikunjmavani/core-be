@@ -21,6 +21,7 @@ import {
   buildOrganizationLogoKeyPrefix,
   buildUserAvatarKeyPrefix,
 } from './upload.constants.js';
+import { getCanonicalExtensionForContentType } from './upload-content-type.util.js';
 import { UPLOAD_PERMISSIONS } from './upload.permissions.js';
 import type { CreateUploadInput, UploadCreateOutput, UploadDetailOutput } from './upload.types.js';
 import type { UploadRepository, UploadRow } from './upload.repository.js';
@@ -37,6 +38,28 @@ export class UploadService {
 
   async createUpload(input: CreateUploadInput, userPublicId: string): Promise<UploadCreateOutput> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+
+    // Enforce a per-user cap on in-flight PENDING uploads. Stops a single authed user from
+    // exhausting storage by repeatedly requesting presigned URLs without ever calling confirm.
+    // The PENDING sweeper eventually reconciles the rows, but the cap is the immediate guard.
+    const pendingCap = getEnv().UPLOAD_MAX_PENDING_PER_USER;
+    const pendingCount = await withUserDatabaseContext(userPublicId, () =>
+      this.repository.countPendingByUserId(user.id),
+    );
+    if (pendingCount >= pendingCap) {
+      throw new ValidationError(
+        'errors:uploadPendingQuotaExceeded',
+        { limit: pendingCap, pending: pendingCount },
+        undefined,
+        [
+          {
+            field: 'fileSize',
+            messageKey: 'errors:uploadPendingQuotaExceeded',
+            messageParams: { limit: pendingCap, pending: pendingCount },
+          },
+        ],
+      );
+    }
 
     let organizationInternalId: number | null = null;
     if (input.for === UPLOAD_TARGETS.ORGANIZATION && input.organizationId) {
@@ -60,7 +83,7 @@ export class UploadService {
     }
 
     const config = UPLOAD_PURPOSE_CONFIG[input.purpose];
-    const extension = this.getExtensionFromContentType(input.contentType);
+    const extension = getCanonicalExtensionForContentType(input.contentType);
     const ownerSegment =
       input.for === UPLOAD_TARGETS.ORGANIZATION ? input.organizationId! : userPublicId;
     let key: string;
@@ -290,17 +313,5 @@ export class UploadService {
   /** Tombstones org-scoped uploads (DB only; S3 removed on retention purge or per-upload DELETE). */
   async tombstoneAllByOrganizationId(organization_id: number): Promise<number> {
     return this.repository.softDeleteAllByOrganizationId(organization_id);
-  }
-
-  private getExtensionFromContentType(contentType: string): string {
-    const extensionMap: Record<string, string> = {
-      'image/png': '.png',
-      'image/jpeg': '.jpg',
-      'image/webp': '.webp',
-      'image/svg+xml': '.svg',
-      'application/pdf': '.pdf',
-    };
-    // eslint-disable-next-line security/detect-object-injection -- contentType from allowlist
-    return extensionMap[contentType] ?? '';
   }
 }

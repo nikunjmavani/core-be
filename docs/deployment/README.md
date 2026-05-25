@@ -43,9 +43,10 @@ Hand-written guides grouped by **setup**, **CI/CD**, and **runbooks**.
 
 ### [runbooks/](runbooks/)
 
-| Doc                                                                         | Description                                                                |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [runbook-dev-to-production.md](runbooks/runbook-dev-to-production.md)       | Local gates, path-to-production gate, env checklist, build, deploy, smoke. |
-| [resource-limits.md](runbooks/resource-limits.md)                           | Railway/K8s memory and `NODE_OPTIONS`.                                     |
-| [observability.md](runbooks/observability.md)                               | Sentry, logs, health; Prometheus re-enable checklist.                      |
-| [jwt-key-rotation.md](runbooks/jwt-key-rotation.md)                         | JWT PEM rotation; deferred `kid` multi-key verify.                         |
+| Doc                                                                   | Description                                                                |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [runbook-dev-to-production.md](runbooks/runbook-dev-to-production.md) | Local gates, path-to-production gate, env checklist, build, deploy, smoke. |
+| [resource-limits.md](runbooks/resource-limits.md)                     | Railway/K8s memory and `NODE_OPTIONS`.                                     |
+| [observability.md](runbooks/observability.md)                         | Sentry, logs, health; Prometheus re-enable checklist.                      |
+| [jwt-key-rotation.md](runbooks/jwt-key-rotation.md)                   | JWT PEM rotation; deferred `kid` multi-key verify.                         |
+| [upload-storage.md](runbooks/upload-storage.md)                       | Direct-to-S3 upload hardening: validation, sweeper, lifecycle policy.      |

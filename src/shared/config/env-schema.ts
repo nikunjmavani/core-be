@@ -147,10 +147,16 @@ const envSchemaBase = z.object({
     .transform((value) => value === 'true' || value === '1'),
   /**
    * Use presigned POST (with an S3-enforced content-length-range) instead of presigned PUT
-   * for direct client uploads. Off by default; the response then carries `uploadMethod` and,
+   * for direct client uploads. On by default; the response carries `uploadMethod` and,
    * for POST, the policy `fields` clients must submit with the file.
    */
-  UPLOAD_USE_PRESIGNED_POST: booleanString('false'),
+  UPLOAD_USE_PRESIGNED_POST: booleanString('true'),
+  /**
+   * Per-user cap on concurrent PENDING uploads (rows awaiting confirm). Stops a single
+   * authenticated user from exhausting storage by repeatedly requesting presigned URLs
+   * and never calling confirm. Reconciled lazily by the PENDING sweeper worker. Default 100.
+   */
+  UPLOAD_MAX_PENDING_PER_USER: z.coerce.number().int().min(1).default(100),
   S3_BUCKET: z.string().min(1).optional(),
   S3_REGION: z.string().min(1).optional(),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
@@ -294,6 +300,14 @@ const envSchemaBase = z.object({
   MEMBER_ROLE_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   UPLOAD_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
+  /** Cron for the PENDING upload sweeper (auto-confirm matches, hard-delete orphans). */
+  UPLOAD_PENDING_SWEEP_CRON: z.string().min(1).optional(),
+  /**
+   * Extra grace beyond `PRESIGNED_URL_EXPIRY_SECONDS` before a PENDING upload row becomes
+   * eligible for sweeping. Prevents reconciling rows whose presigned URL has only just
+   * expired and whose client confirm call is still in flight. Default 1 hour.
+   */
+  UPLOAD_PENDING_SWEEP_GRACE_SECONDS: z.coerce.number().int().min(60).default(3600),
 
   /** Bounded SCAN cap for idempotency Redis key cardinality sampling (worker). */
   IDEMPOTENCY_CARDINALITY_SCAN_MAX: z.coerce.number().int().min(1).default(200_000),

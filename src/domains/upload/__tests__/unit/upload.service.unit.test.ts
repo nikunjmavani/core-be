@@ -13,8 +13,18 @@ vi.mock('@/domains/tenancy/sub-domains/permission/authorization.service.js', () 
 }));
 
 vi.mock('@/shared/config/env.config.js', () => ({
-  getEnv: vi.fn(() => ({ S3_BUCKET: 'test-bucket', LOG_LEVEL: 'silent', UPLOAD_ALLOW_SVG: false })),
-  env: { S3_BUCKET: 'test-bucket', LOG_LEVEL: 'silent', UPLOAD_ALLOW_SVG: false },
+  getEnv: vi.fn(() => ({
+    S3_BUCKET: 'test-bucket',
+    LOG_LEVEL: 'silent',
+    UPLOAD_ALLOW_SVG: false,
+    UPLOAD_MAX_PENDING_PER_USER: 100,
+  })),
+  env: {
+    S3_BUCKET: 'test-bucket',
+    LOG_LEVEL: 'silent',
+    UPLOAD_ALLOW_SVG: false,
+    UPLOAD_MAX_PENDING_PER_USER: 100,
+  },
 }));
 
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
@@ -52,6 +62,7 @@ describe('UploadService', () => {
     softDelete: vi.fn().mockResolvedValue(uploadRow),
     softDeleteAllByUserId: vi.fn().mockResolvedValue(1),
     softDeleteAllByOrganizationId: vi.fn().mockResolvedValue(2),
+    countPendingByUserId: vi.fn().mockResolvedValue(0),
   } as unknown as UploadRepository;
 
   const userService = {
@@ -66,10 +77,18 @@ describe('UploadService', () => {
   const objectStorage = createObjectStoragePortMock();
   const service = new UploadService(repository, userService, organizationService, objectStorage);
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { getEnv } = await import('@/shared/config/env.config.js');
+    vi.mocked(getEnv).mockReturnValue({
+      S3_BUCKET: 'test-bucket',
+      LOG_LEVEL: 'silent',
+      UPLOAD_ALLOW_SVG: false,
+      UPLOAD_MAX_PENDING_PER_USER: 100,
+    } as ReturnType<typeof getEnv>);
     vi.mocked(repository.findByPublicIdForUser).mockResolvedValue(uploadRow as never);
     vi.mocked(repository.softDelete).mockResolvedValue(uploadRow as never);
+    vi.mocked(repository.countPendingByUserId).mockResolvedValue(0);
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
   });
 
@@ -90,11 +109,13 @@ describe('UploadService', () => {
 
   it('createUpload returns a presigned POST with content-length-range when enabled', async () => {
     const { getEnv } = await import('@/shared/config/env.config.js');
-    vi.mocked(getEnv).mockReturnValueOnce({
+    // createUpload calls getEnv twice (once for the pending cap, once for the bucket/presign env).
+    vi.mocked(getEnv).mockReturnValue({
       S3_BUCKET: 'test-bucket',
       LOG_LEVEL: 'silent',
       UPLOAD_ALLOW_SVG: false,
       UPLOAD_USE_PRESIGNED_POST: true,
+      UPLOAD_MAX_PENDING_PER_USER: 100,
     } as ReturnType<typeof getEnv>);
     vi.mocked(objectStorage.createPresignedUploadPost).mockResolvedValueOnce({
       url: 'https://s3.example/post',
@@ -256,12 +277,49 @@ describe('UploadService', () => {
     );
   });
 
+  it('createUpload rejects when the user is at the PENDING upload cap', async () => {
+    vi.mocked(repository.countPendingByUserId).mockResolvedValueOnce(100);
+
+    await expect(
+      service.createUpload(
+        {
+          purpose: 'avatar',
+          for: 'user',
+          contentType: 'image/png',
+          fileName: 'avatar.png',
+          fileSize: 1024,
+        },
+        userPublicId,
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('createUpload allows when pending count is just below the cap', async () => {
+    vi.mocked(repository.countPendingByUserId).mockResolvedValueOnce(99);
+
+    const result = await service.createUpload(
+      {
+        purpose: 'avatar',
+        for: 'user',
+        contentType: 'image/png',
+        fileName: 'avatar.png',
+        fileSize: 1024,
+      },
+      userPublicId,
+    );
+
+    expect(result.uploadUrl).toContain('https://');
+    expect(repository.create).toHaveBeenCalled();
+  });
+
   it('createUpload throws when S3 bucket is not configured', async () => {
     const { getEnv } = await import('@/shared/config/env.config.js');
-    vi.mocked(getEnv).mockReturnValueOnce({
+    vi.mocked(getEnv).mockReturnValue({
       S3_BUCKET: undefined,
       LOG_LEVEL: 'silent',
       UPLOAD_ALLOW_SVG: false,
+      UPLOAD_MAX_PENDING_PER_USER: 100,
     } as ReturnType<typeof getEnv>);
     await expect(
       service.createUpload(

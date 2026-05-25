@@ -49,6 +49,9 @@ export const uploads = uploadSchema
       index('idx_uploads_organization_id')
         .on(table.organization_id)
         .where(sql`${table.organization_id} IS NOT NULL`),
+      index('idx_uploads_pending_created_at')
+        .on(table.created_at)
+        .where(sql`${table.status} = 'PENDING' AND ${table.deleted_at} IS NULL`),
       check('chk_uploads_file_size', sql`${table.file_size} >= 0`),
       check('chk_uploads_status', sql`${table.status} IN ('PENDING', 'UPLOADED', 'FAILED')`),
       pgPolicy('uploads_tenant_isolation', {

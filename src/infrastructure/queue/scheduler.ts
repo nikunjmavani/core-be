@@ -15,6 +15,7 @@ import { MEMBERSHIP_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub
 import { MEMBER_ROLE_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/member-roles/workers/member-role-tombstone-retention.constants.js';
 import { ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/organization-api-key/workers/organization-api-key-tombstone-retention.constants.js';
 import { UPLOAD_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/upload/workers/upload-tombstone-retention.constants.js';
+import { UPLOAD_PENDING_SWEEP_QUEUE_NAME } from '@/domains/upload/workers/upload-pending-sweep.constants.js';
 import { USER_DATA_EXPORT_RETENTION_QUEUE_NAME } from '@/domains/user/sub-domains/user-data-export/workers/user-data-export-retention.constants.js';
 import { IDEMPOTENCY_CARDINALITY_QUEUE_NAME } from '@/infrastructure/observability/idempotency-cardinality/idempotency-cardinality.constants.js';
 import { DLQ_DEPTH_QUEUE_NAME } from '@/infrastructure/observability/dlq-depth/dlq-depth.constants.js';
@@ -54,6 +55,8 @@ const DEFAULT_USER_TOMBSTONE_RETENTION_CRON = '53 5 * * *';
 const DEFAULT_IDEMPOTENCY_CARDINALITY_CRON = '*/15 * * * *';
 const DEFAULT_DLQ_DEPTH_CRON = '*/15 * * * *';
 const DEFAULT_MAIL_OUTBOX_SWEEPER_CRON = '*/10 * * * *';
+/** PENDING upload reconciliation runs hourly (independent of tombstone retention). */
+const DEFAULT_UPLOAD_PENDING_SWEEP_CRON = '15 * * * *';
 const DEFAULT_STRIPE_WEBHOOK_EVENT_RECLAIM_CRON = '*/5 * * * *';
 const DEFAULT_STRIPE_WEBHOOK_EVENT_RETENTION_CRON = '0 3 * * *';
 const DEFAULT_AUDIT_EXPORT_CRON = '15 2 * * *';
@@ -183,6 +186,12 @@ export function getScheduledJobs(): ScheduledJob[] {
       schedulerId: 'mail-outbox-sweeper',
       jobName: 're-enqueue-stale-pending-mail',
       cronPattern: env.MAIL_OUTBOX_SWEEPER_CRON ?? DEFAULT_MAIL_OUTBOX_SWEEPER_CRON,
+    }),
+    withSchedulerTimezone(timezone, {
+      queueName: UPLOAD_PENDING_SWEEP_QUEUE_NAME,
+      schedulerId: 'upload-pending-sweep',
+      jobName: 'reconcile-stale-pending-uploads',
+      cronPattern: env.UPLOAD_PENDING_SWEEP_CRON ?? DEFAULT_UPLOAD_PENDING_SWEEP_CRON,
     }),
     withSchedulerTimezone(timezone, {
       queueName: STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME,
