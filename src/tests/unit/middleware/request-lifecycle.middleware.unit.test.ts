@@ -1,13 +1,14 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { OrganizationRlsTransactionSettlementOutcome } from '@/shared/middlewares/organization-rls-transaction.middleware.js';
 
 /**
  * Regression test for production hardening item #1 — hook-order lifecycle.
  *
  * Asserts the request lifecycle coordinator runs onResponse steps in the order:
  *   1. RLS transaction settle (await commit/rollback)
- *   2. Idempotency cache write
- *   3. Outbox flush
+ *   2. Idempotency cache write or forced placeholder release
+ *   3. Outbox flush (only after successful commit / no org transaction)
  *
  * Failure mode being prevented: side effects (idempotency cache, BullMQ enqueue) running
  * before the request DB transaction commits, so a rolled-back write can be replayed as a
@@ -16,12 +17,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const callOrder: string[] = [];
 
-const settleAndAwaitOrganizationRlsTransactionMock = vi.fn(async () => {
-  callOrder.push('rls_settle');
-});
+const settleAndAwaitOrganizationRlsTransactionMock = vi.fn(
+  async (): Promise<OrganizationRlsTransactionSettlementOutcome> => {
+    callOrder.push('rls_settle');
+    return 'committed';
+  },
+);
 
 const idempotencyOnResponseMock = vi.fn(async () => {
-  callOrder.push('idempotency_cache_write');
+  callOrder.push('idempotency');
 });
 
 const flushOnCommitMock = vi.fn(async () => {
@@ -53,6 +57,10 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
   beforeEach(() => {
     callOrder.length = 0;
     settleAndAwaitOrganizationRlsTransactionMock.mockClear();
+    settleAndAwaitOrganizationRlsTransactionMock.mockImplementation(async () => {
+      callOrder.push('rls_settle');
+      return 'committed';
+    });
     idempotencyOnResponseMock.mockClear();
     flushOnCommitMock.mockClear();
   });
@@ -61,7 +69,7 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
     vi.restoreAllMocks();
   });
 
-  it('runs settle → idempotency → outbox-flush in that order on a successful request', async () => {
+  it('runs settle → idempotency → outbox-flush in that order on successful commit', async () => {
     const { default: requestLifecycleMiddleware } =
       await import('@/shared/middlewares/request-lifecycle.middleware.js');
     const application = Fastify({ logger: false });
@@ -74,13 +82,67 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
 
     expect(settleAndAwaitOrganizationRlsTransactionMock).toHaveBeenCalledTimes(1);
     expect(idempotencyOnResponseMock).toHaveBeenCalledTimes(1);
+    expect(idempotencyOnResponseMock).toHaveBeenCalledWith(expect.anything(), expect.anything());
+    expect(idempotencyOnResponseMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { forceRelease: true },
+    );
     expect(flushOnCommitMock).toHaveBeenCalledTimes(1);
-    expect(callOrder).toEqual(['rls_settle', 'idempotency_cache_write', 'outbox_flush']);
+    expect(callOrder).toEqual(['rls_settle', 'idempotency', 'outbox_flush']);
 
     await application.close();
   });
 
-  it('continues to idempotency + outbox even if RLS settle throws', async () => {
+  it('force-releases idempotency and skips outbox when settlement is rolled_back', async () => {
+    settleAndAwaitOrganizationRlsTransactionMock.mockImplementationOnce(async () => {
+      callOrder.push('rls_settle');
+      return 'rolled_back';
+    });
+
+    const { default: requestLifecycleMiddleware } =
+      await import('@/shared/middlewares/request-lifecycle.middleware.js');
+    const application = Fastify({ logger: false });
+    await application.register(requestLifecycleMiddleware);
+    application.post('/probe', async () => ({ ok: true }));
+    await application.ready();
+
+    const response = await application.inject({ method: 'POST', url: '/probe' });
+    expect(response.statusCode).toBe(200);
+    expect(idempotencyOnResponseMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+      forceRelease: true,
+    });
+    expect(flushOnCommitMock).not.toHaveBeenCalled();
+    expect(callOrder).toEqual(['rls_settle', 'idempotency']);
+
+    await application.close();
+  });
+
+  it('force-releases idempotency and skips outbox when settlement fails', async () => {
+    settleAndAwaitOrganizationRlsTransactionMock.mockImplementationOnce(async () => {
+      callOrder.push('rls_settle');
+      return 'settle_failed';
+    });
+
+    const { default: requestLifecycleMiddleware } =
+      await import('@/shared/middlewares/request-lifecycle.middleware.js');
+    const application = Fastify({ logger: false });
+    await application.register(requestLifecycleMiddleware);
+    application.post('/probe', async () => ({ ok: true }));
+    await application.ready();
+
+    const response = await application.inject({ method: 'POST', url: '/probe' });
+    expect(response.statusCode).toBe(200);
+    expect(idempotencyOnResponseMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+      forceRelease: true,
+    });
+    expect(flushOnCommitMock).not.toHaveBeenCalled();
+    expect(callOrder).toEqual(['rls_settle', 'idempotency']);
+
+    await application.close();
+  });
+
+  it('treats settle throw as settle_failed and skips outbox', async () => {
     settleAndAwaitOrganizationRlsTransactionMock.mockImplementationOnce(async () => {
       callOrder.push('rls_settle_threw');
       throw new Error('settle_boom');
@@ -95,12 +157,16 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
 
     const response = await application.inject({ method: 'POST', url: '/probe' });
     expect(response.statusCode).toBe(200);
-    expect(callOrder).toEqual(['rls_settle_threw', 'idempotency_cache_write', 'outbox_flush']);
+    expect(idempotencyOnResponseMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+      forceRelease: true,
+    });
+    expect(flushOnCommitMock).not.toHaveBeenCalled();
+    expect(callOrder).toEqual(['rls_settle_threw', 'idempotency']);
 
     await application.close();
   });
 
-  it('does not throw out of onResponse when idempotency cache write fails', async () => {
+  it('flushes outbox after idempotency when commit succeeded even if cache write throws', async () => {
     idempotencyOnResponseMock.mockImplementationOnce(async () => {
       callOrder.push('idempotency_threw');
       throw new Error('cache_boom');
@@ -115,6 +181,7 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
 
     const response = await application.inject({ method: 'POST', url: '/probe' });
     expect(response.statusCode).toBe(200);
+    expect(flushOnCommitMock).toHaveBeenCalledTimes(1);
     expect(callOrder).toEqual(['rls_settle', 'idempotency_threw', 'outbox_flush']);
 
     await application.close();

@@ -2,7 +2,10 @@ import type { FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 import { eventBus } from '@/core/events/event-bus.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import { settleAndAwaitOrganizationRlsTransaction } from './organization-rls-transaction.middleware.js';
+import {
+  settleAndAwaitOrganizationRlsTransaction,
+  type OrganizationRlsTransactionSettlementOutcome,
+} from './organization-rls-transaction.middleware.js';
 import { idempotencyOnResponse } from './idempotency.middleware.js';
 
 /**
@@ -17,22 +20,40 @@ import { idempotencyOnResponse } from './idempotency.middleware.js';
  *   2. Persist the idempotency cache entry (only meaningful after commit).
  *   3. Flush the on-commit outbox (enqueue BullMQ side-effect jobs).
  *
- * Each step is independently guarded so a failure in one does not skip later steps; the
- * RLS settle is the only step whose outcome influences correctness of the others, and any
- * error there is already logged inside `settleAndAwaitOrganizationRlsTransaction`.
+ * Idempotency cache writes and outbox flushes run only when settlement reports
+ * `committed` or `no_transaction` (autocommit / non-org routes). Rollback and settle
+ * failures release idempotency placeholders without caching 2xx responses and skip
+ * `flushOnCommit` so workers never observe uncommitted writes.
  */
+function mayPersistPostCommitSideEffects(
+  outcome: OrganizationRlsTransactionSettlementOutcome,
+): boolean {
+  return outcome === 'committed' || outcome === 'no_transaction';
+}
+
 const requestLifecycleMiddleware: FastifyPluginAsync = async (app) => {
   app.addHook('onResponse', async (request, reply) => {
+    let settlementOutcome: OrganizationRlsTransactionSettlementOutcome = 'settle_failed';
     try {
-      await settleAndAwaitOrganizationRlsTransaction(request, reply);
+      settlementOutcome = await settleAndAwaitOrganizationRlsTransaction(request, reply);
     } catch (error) {
       logger.warn({ error, requestId: request.id }, 'request.lifecycle.rls_settle_failed');
     }
 
+    const persistSideEffects = mayPersistPostCommitSideEffects(settlementOutcome);
+
     try {
-      await idempotencyOnResponse(request, reply);
+      if (persistSideEffects) {
+        await idempotencyOnResponse(request, reply);
+      } else {
+        await idempotencyOnResponse(request, reply, { forceRelease: true });
+      }
     } catch (error) {
       logger.warn({ error, requestId: request.id }, 'request.lifecycle.idempotency_failed');
+    }
+
+    if (!persistSideEffects) {
+      return;
     }
 
     try {
