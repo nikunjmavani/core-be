@@ -21,6 +21,48 @@ Include, where possible:
 - We aim to provide status updates at least every **7 business days** until the issue is resolved or closed.
 - We follow a **coordinated disclosure** process: we may reserve up to **90 days** to develop and ship a fix before public disclosure, depending on severity and third-party coordination. We will work with you on a reasonable timeline.
 
+## Dependency vulnerability response
+
+Dependency vulnerabilities are handled through Dependabot, CI dependency audit gates, and manual review when an update is outside the safe auto-merge policy.
+
+### Intake paths
+
+- **Dependabot security updates:** Dependabot opens a pull request against the default branch. Patch updates, and security minor updates, may auto-merge only after the required CI checks pass.
+- **Skipped Dependabot security updates:** Major updates, ambiguous updates, or updates outside the safe policy create a GitHub issue for maintainer triage.
+- **CI audit failures:** Any pull request that introduces a vulnerable dependency is blocked by `pnpm deps:audit` and `pnpm deps:audit:prod`.
+- **Private reports:** Security reports for this repository's own source code follow the private reporting and coordinated disclosure process above.
+
+### Triage targets
+
+Use the advisory severity, exploitability, and reachability in this codebase to set the response target:
+
+| Severity              | Target                                                |
+| --------------------- | ----------------------------------------------------- |
+| Critical (CVSS 9.0+)  | Fix, merge, or mitigate within **24 hours**.          |
+| High (CVSS 7.0-8.9)   | Fix, merge, or mitigate within **3 business days**.   |
+| Medium (CVSS 4.0-6.9) | Fix, merge, or mitigate within **7 business days**.   |
+| Low (CVSS < 4.0)      | Handle in the regular weekly dependency update batch. |
+
+### Manual dependency fix checklist
+
+For any dependency security update that does not auto-merge:
+
+1. Read the linked advisory and determine whether the vulnerable code path is reachable.
+2. Prefer patch or minor updates when they contain the fix.
+3. For transitive vulnerabilities, prefer a `pnpm.overrides` entry that pins the vulnerable package to a patched version before upgrading a direct dependency to a new major version.
+4. If a direct dependency requires a major upgrade, review the changelog, update the affected call sites, and keep the fix in the same pull request.
+5. Run the dependency and quality gates before merging:
+
+   ```bash
+   pnpm deps:audit
+   pnpm deps:audit:prod
+   pnpm validate
+   pnpm test
+   ```
+
+6. Commit `package.json` and `pnpm-lock.yaml` together when dependency versions or overrides change.
+7. If no fix is available, document the temporary mitigation, owner, and follow-up date in the tracking issue.
+
 ## Supported versions
 
 Security fixes are provided for the **latest release line** on the default branch (`main`), when applicable. Older releases may not receive backports.
@@ -31,7 +73,7 @@ This policy applies to **security vulnerabilities in the source code of this rep
 
 **Out of scope** includes, without limitation:
 
-- Issues in third-party dependencies (report to the upstream project or advisory database).
+- Issues in third-party dependencies reported by external researchers (report to the upstream project or advisory database). Maintainers still track and remediate dependency advisories internally through Dependabot and CI audit gates.
 - Social engineering or physical security.
 - Deployments, configurations, or integrations outside this repository’s maintainers’ control.
 
