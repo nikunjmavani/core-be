@@ -54,7 +54,8 @@ const envSchemaBase = z.object({
     .optional(),
 
   // Auth
-  JWT_SECRET: z.string().min(32),
+  /** Deprecated: unused at runtime (RS256 only). Retained for backward-compatible deploy templates. */
+  JWT_SECRET: z.string().min(32).optional(),
   /** RS256 PEM private key. Required in every runtime; NODE_ENV is metadata only. */
   JWT_PRIVATE_KEY: z.string().min(1),
   /** RS256 PEM public key. Required in every runtime; NODE_ENV is metadata only. */

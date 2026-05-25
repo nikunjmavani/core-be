@@ -77,7 +77,7 @@ Flat domains (`audit`, `upload`) keep layers at domain root (no `sub-domains/`).
 | **auth**        | auth-method (magic-link, oauth as services in auth-method/), auth-session, auth-mfa, auth-webauthn                                                                              |
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
-| **billing**     | plan, subscription, stripe-webhook                                                                                                 |
+| **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
 | **notify**      | notification, webhook (webhook-event)                                                                                                                                           |
 | **upload**      | (single domain, no sub-domains)                                                                                                                                                 |
 
@@ -220,10 +220,10 @@ Typical flow: `service` → `eventBus.emit` → handler → `enqueueEmail()` →
 - **Example (core path):** `tenancy/sub-domains/membership/member-invitation/` — service emits; handler calls `enqueueEmail()`.
 - **Example (container path):** `notify/events/notify.event-handlers.ts` — `registerBillingWebhookEventHandlers({ webhookRepository })`, webhook delivery enqueue, billing subscription notifications.
 
-| Registrar                               | Event types (examples)                                                | Side effect                            |
-| --------------------------------------- | --------------------------------------------------------------------- | -------------------------------------- |
-| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.MAGIC_LINK_REQUESTED`, password reset, email verification | Mail queue                             |
-| `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                           | Mail queue                             |
+| Registrar                               | Event types (examples)                                                    | Side effect                            |
+| --------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
+| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.MAGIC_LINK_REQUESTED`, password reset, email verification     | Mail queue                             |
+| `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                               | Mail queue                             |
 | `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`, `BILLING_EVENT.SUBSCRIPTION_*` | BullMQ notification / webhook delivery |
 
 Billing event helpers and types live with the billing sub-domains that emit them — listeners live under notify.
@@ -242,7 +242,7 @@ Billing event helpers and types live with the billing sub-domains that emit them
 - **Responses**: Helpers from `src/shared/utils/http/response.util.ts` (`successResponse`, `paginatedResponse`) + global formatting in `src/shared/middlewares/error-handler.middleware.ts`
 - **i18n**: All user-facing response messages (error `detail`, validation `errors[].message`, success `message`) go through i18next. Use translation keys in errors and success payloads; error handler and controllers translate with `request.t()`. English is the default locale; add new keys to `src/shared/locales/en/` first, then other locales. See **`docs/reference/runtime/internationalization.md`**.
 - **Request helpers**: `src/shared/utils/http/request.util.ts` exports `getRequestIdentifier(request)` and `requireAuth(request)` — use these in ALL controllers.
-- **Auth**: Fastify auth plugin in `src/shared/middlewares/auth.middleware.ts`, decorates `request.auth` (JWT HS256 via `JWT_SECRET`). Session cookie (`session_id`) CSRF model and Origin checks for refresh: **`docs/reference/security/csrf-and-session-cookies.md`**
+- **Auth**: Fastify auth plugin in `src/shared/middlewares/auth.middleware.ts`, decorates `request.auth` (JWT RS256 via `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`). Session cookie (`session_id`) CSRF model and Origin checks for refresh: **`docs/reference/security/csrf-and-session-cookies.md`**
 - **Tenant**: `X-Organization-Id` header → `request.organizationId` via `src/shared/middlewares/tenant.middleware.ts`
 - **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call or import `getRequestDatabase()` (ESLint blocks `request-database.context` under `*.worker.ts` / `*.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/retention-database.context.ts` and migration `20260530000001_global_retention_cleanup_rls.sql`.
 - **DB**: `src/infrastructure/database/connection.ts` singleton + Drizzle queries in repositories; repositories may extend `src/infrastructure/database/base-repository.ts` for `paginate()`

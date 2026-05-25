@@ -9,7 +9,7 @@ import {
 
 /**
  * JWT security tests — verify token signing, verification, claims,
- * expiry enforcement, and RS256/HS256 algorithm support.
+ * expiry enforcement, and RS256-only algorithm policy.
  */
 describe('Security: JWT', () => {
   it('should sign and verify a valid access token', async () => {

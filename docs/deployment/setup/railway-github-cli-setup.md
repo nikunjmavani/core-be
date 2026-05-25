@@ -24,7 +24,7 @@ flowchart LR
 
 - **Railway account** (sign up at [railway.app](https://railway.app) if needed).
 - **GitHub repo** for core-be.
-- **Local `.env`** with at least `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `ALLOWED_ORIGINS` (see [.env.example](../../../.env.example)). You will add these to GitHub environment secrets.
+- **Local `.env`** with at least `DATABASE_URL`, `REDIS_URL`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `ALLOWED_ORIGINS` (see [.env.example](../../../.env.example)). You will add these to GitHub environment secrets.
 
 ---
 
@@ -75,21 +75,23 @@ Repo → Settings → Environments → New environment. Create **development** a
 
 For each environment (development, production), add Environment secrets:
 
-| Secret name          | Value                              |
-| -------------------- | ---------------------------------- |
-| RAILWAY_TOKEN        | From Railway (step 2.3)            |
-| RAILWAY_SERVICE_ID   | Service ID for that environment    |
-| DATABASE_URL         | Postgres connection string         |
-| REDIS_URL            | Redis connection string            |
-| JWT_SECRET           | Min 32 characters                  |
-| ALLOWED_ORIGINS      | Comma-separated frontend origins   |
-| NODE_ENV             | development or production          |
-| PORT                 | 3000                               |
-| HOST                 | 0.0.0.0                            |
-| LOG_LEVEL            | debug or info                      |
-| FRONTEND_URL         | Frontend URL for that env          |
-| RATE_LIMIT_MAX       | 10000 (development), 100 (production) |
-| RATE_LIMIT_WINDOW_MS | 60000                              |
+| Secret name          | Value                                             |
+| -------------------- | ------------------------------------------------- |
+| RAILWAY_TOKEN        | From Railway (step 2.3)                           |
+| RAILWAY_SERVICE_ID   | Service ID for that environment                   |
+| DATABASE_URL         | Postgres connection string                        |
+| REDIS_URL            | Redis connection string                           |
+| JWT_PRIVATE_KEY      | RS256 PEM private key                             |
+| JWT_PUBLIC_KEY       | RS256 PEM public key                              |
+| JWT_SECRET           | Optional deprecated no-op (min 32 chars when set) |
+| ALLOWED_ORIGINS      | Comma-separated frontend origins                  |
+| NODE_ENV             | development or production                         |
+| PORT                 | 3000                                              |
+| HOST                 | 0.0.0.0                                           |
+| LOG_LEVEL            | debug or info                                     |
+| FRONTEND_URL         | Frontend URL for that env                         |
+| RATE_LIMIT_MAX       | 10000 (development), 100 (production)             |
+| RATE_LIMIT_WINDOW_MS | 60000                                             |
 
 ### 3.3 Via CLI (optional)
 

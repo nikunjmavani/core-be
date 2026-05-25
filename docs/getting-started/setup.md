@@ -63,16 +63,16 @@ Environment via `gh secret set` or `gh api .../variables`. See
 for the full lifecycle, and [credentials-and-env.md](../integrations/credentials-and-env.md)
 for per-provider credential acquisition.
 
-Set at least: **DATABASE_URL**, **REDIS_URL**, **JWT_SECRET** (min 32 chars),
-**SECRETS_ENCRYPTION_KEY** (64 hex chars), **JWT_PRIVATE_KEY** /
-**JWT_PUBLIC_KEY** (RS256 PEM pair). The runtime loader
+Set at least: **DATABASE_URL**, **REDIS_URL**, **JWT_PRIVATE_KEY** /
+**JWT_PUBLIC_KEY** (RS256 PEM pair), **SECRETS_ENCRYPTION_KEY** (64 hex chars).
+`JWT_SECRET` is optional and unused at runtime (deprecated deploy-template no-op). The runtime loader
 (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV}` — defaults
 to `.env.development` when `NODE_ENV` is unset, with a safety-net fallback
 to `.env.development` for `NODE_ENV=test`.
 
-| File               | Status         | Purpose                                                                          |
-| ------------------ | -------------- | -------------------------------------------------------------------------------- |
-| `.env.example`     | committed      | Single template; every schema key lives here under the right half + sub-section. |
+| File               | Status         | Purpose                                                                             |
+| ------------------ | -------------- | ----------------------------------------------------------------------------------- |
+| `.env.example`     | committed      | Single template; every schema key lives here under the right half + sub-section.    |
 | `.env.development` | **gitignored** | Local + dev-environment values; source of truth for `pnpm github:sync development`. |
 | `.env.production`  | **gitignored** | Production values; source of truth for `pnpm github:sync production`.               |
 

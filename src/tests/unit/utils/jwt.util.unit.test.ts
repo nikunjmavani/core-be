@@ -1,6 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { TextEncoder } from 'node:util';
-import { SignJWT, decodeProtectedHeader } from 'jose';
+import { SignJWT, decodeProtectedHeader, importPKCS8 } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetEnvCacheForTests } from '@/shared/config/env.config.js';
 import * as envConfigModule from '@/shared/config/env.config.js';
@@ -111,22 +110,20 @@ describe('jwt.util', () => {
   });
 
   describe('algorithm-confusion and claim validation', () => {
-    const sharedSecret = 'test-jwt-secret-min-32-chars-xxxxxxxx';
     const keyPair = generateRsaPemKeyPair();
-    const encoder = new TextEncoder();
     const now = Math.floor(Date.now() / 1000);
+    let signingKey: CryptoKey;
 
-    beforeEach(() => {
-      process.env.JWT_SECRET = sharedSecret;
+    beforeEach(async () => {
       process.env.JWT_PRIVATE_KEY = keyPair.privateKey;
       process.env.JWT_PUBLIC_KEY = keyPair.publicKey;
       delete process.env.JWT_SIGNING_KID;
       resetEnvCacheForTests();
       resetJwtCachesForTests();
+      signingKey = await importPKCS8(keyPair.privateKey, 'RS256');
     });
 
     it('rejects tokens signed with alg=none (unsigned token)', async () => {
-      // Unsigned JWT with `alg: none` and valid claims
       const headerSegment = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString(
         'base64url',
       );
@@ -146,66 +143,60 @@ describe('jwt.util', () => {
 
     it('rejects token with wrong issuer', async () => {
       const token = await new SignJWT({})
-        .setProtectedHeader({ alg: 'HS256' })
+        .setProtectedHeader({ alg: 'RS256' })
         .setSubject('user-wrong-iss')
         .setIssuer('attacker.example')
         .setAudience(JWT_AUDIENCE)
         .setIssuedAt(now)
         .setExpirationTime(now + 60)
-        .sign(encoder.encode(sharedSecret));
+        .sign(signingKey);
 
       await expect(verifyAccessToken(token)).rejects.toThrow();
     });
 
     it('rejects token with wrong audience', async () => {
       const token = await new SignJWT({})
-        .setProtectedHeader({ alg: 'HS256' })
+        .setProtectedHeader({ alg: 'RS256' })
         .setSubject('user-wrong-aud')
         .setIssuer(JWT_ISSUER)
         .setAudience('not-our-api')
         .setIssuedAt(now)
         .setExpirationTime(now + 60)
-        .sign(encoder.encode(sharedSecret));
+        .sign(signingKey);
 
       await expect(verifyAccessToken(token)).rejects.toThrow();
     });
 
     it('rejects token missing subject', async () => {
       const token = await new SignJWT({})
-        .setProtectedHeader({ alg: 'HS256' })
+        .setProtectedHeader({ alg: 'RS256' })
         .setIssuer(JWT_ISSUER)
         .setAudience(JWT_AUDIENCE)
         .setIssuedAt(now)
         .setExpirationTime(now + 60)
-        .sign(encoder.encode(sharedSecret));
+        .sign(signingKey);
 
       await expect(verifyAccessToken(token)).rejects.toThrow();
     });
   });
 
-  describe('production RS256-only policy', () => {
+  describe('RS256-only policy', () => {
     const sharedSecret = 'test-jwt-secret-min-32-chars-xxxxxxxx';
     const keyPair = generateRsaPemKeyPair();
     const now = Math.floor(Date.now() / 1000);
-    let getEnvSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
-      const baseEnv = envConfigModule.getEnv();
-      getEnvSpy = vi
-        .spyOn(envConfigModule, 'getEnv')
-        .mockReturnValue({ ...baseEnv, NODE_ENV: 'production' });
+      process.env.JWT_PRIVATE_KEY = keyPair.privateKey;
+      process.env.JWT_PUBLIC_KEY = keyPair.publicKey;
+      resetEnvCacheForTests();
       resetJwtCachesForTests();
     });
 
-    afterEach(() => {
-      getEnvSpy.mockRestore();
-      resetJwtCachesForTests();
-    });
-
-    it('rejects an HS256 token at verify time in production', async () => {
+    it('rejects an HS256 token at verify time', async () => {
+      const { TextEncoder } = await import('node:util');
       const hsToken = await new SignJWT({})
         .setProtectedHeader({ alg: 'HS256' })
-        .setSubject('user-hs256-prod')
+        .setSubject('user-hs256')
         .setIssuer(JWT_ISSUER)
         .setAudience(JWT_AUDIENCE)
         .setIssuedAt(now)
@@ -215,34 +206,26 @@ describe('jwt.util', () => {
       await expect(verifyAccessToken(hsToken)).rejects.toThrow(/RS256 only/);
     });
 
-    it('signs and verifies RS256 in production', async () => {
-      const baseEnv = envConfigModule.getEnv();
-      getEnvSpy.mockReturnValue({
-        ...baseEnv,
-        NODE_ENV: 'production',
-        JWT_PRIVATE_KEY: keyPair.privateKey,
-        JWT_PUBLIC_KEY: keyPair.publicKey,
-      });
-      resetJwtCachesForTests();
-
-      const token = await signAccessToken({ userId: 'user-rs256-prod' });
+    it('signs and verifies RS256 tokens', async () => {
+      const token = await signAccessToken({ userId: 'user-rs256-only' });
       expect(decodeProtectedHeader(token).alg).toBe('RS256');
       const payload = await verifyAccessToken(token);
-      expect(payload.userId).toBe('user-rs256-prod');
+      expect(payload.userId).toBe('user-rs256-only');
     });
 
-    it('refuses to sign with HS256 in production when no private key is configured', async () => {
+    it('refuses to sign when JWT_PRIVATE_KEY is unset', async () => {
       const baseEnv = envConfigModule.getEnv();
-      getEnvSpy.mockReturnValue({
+      const getEnvSpy = vi.spyOn(envConfigModule, 'getEnv').mockReturnValue({
         ...baseEnv,
-        NODE_ENV: 'production',
-        JWT_PRIVATE_KEY: undefined,
+        JWT_PRIVATE_KEY: '',
       });
       resetJwtCachesForTests();
 
       await expect(signAccessToken({ userId: 'user-no-key' })).rejects.toThrow(
-        /JWT_PRIVATE_KEY is required in production/,
+        /JWT_PRIVATE_KEY is required/,
       );
+
+      getEnvSpy.mockRestore();
     });
   });
 });

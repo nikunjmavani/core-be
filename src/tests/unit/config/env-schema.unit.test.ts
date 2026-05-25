@@ -127,6 +127,24 @@ describe('env-schema', () => {
     }
   });
 
+  it('parses without JWT_SECRET when RS256 keys are set', () => {
+    const environmentInput = { ...process.env };
+    delete environmentInput.JWT_SECRET;
+    const parsed = envSchema.safeParse({
+      ...environmentInput,
+      DATABASE_URL: DATABASE_URL_FIXTURE,
+      REDIS_URL: REDIS_URL_FIXTURE,
+      NODE_ENV: 'test',
+      JWT_PRIVATE_KEY: 'test-private-key',
+      JWT_PUBLIC_KEY: 'test-public-key',
+      AUDIT_RETENTION_DAYS: '30',
+      AUTH_SESSION_RETENTION_DAYS: '30',
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.JWT_SECRET).toBeUndefined();
+  });
+
   it('accepts optional RS256 JWT key pair alongside JWT_SECRET', () => {
     const parsed = envSchema.safeParse({
       ...process.env,
