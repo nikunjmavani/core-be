@@ -40,14 +40,14 @@ Applied in [src/domains/upload/upload.validator.ts](../../../src/domains/upload/
 
 ## Presigned PUT vs presigned POST
 
-`UPLOAD_USE_PRESIGNED_POST` (default `false`) selects the upload mechanism:
+`UPLOAD_USE_PRESIGNED_POST` (default `true`) selects the upload mechanism:
 
 | Mode           | Pros                                                                                                                                             | Notes                                                                                                                               |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Presigned PUT  | Simplest client integration; signed `Content-Type` + `Content-Length`.                                                                           | S3 enforces the signed headers, but the client may omit `Content-Length` on some HTTP stacks and still upload via chunked encoding. |
 | Presigned POST | S3 enforces a `content-length-range` policy condition and explicit `eq` on `$Content-Type`; ideal for browser uploads via `multipart/form-data`. | Response carries `uploadMethod: 'POST'` plus `fields` the client must submit alongside the file.                                    |
 
-**Production default:** set `UPLOAD_USE_PRESIGNED_POST=true`. Roll out by updating the value via `pnpm github:sync production` after confirming clients consume the discriminated upload response. See [environment-variables.md](environment-variables.md) for the sync workflow.
+**Production default:** leave `UPLOAD_USE_PRESIGNED_POST=true` unless a client compatibility rollback is needed. If you must fall back to presigned PUT temporarily, update the value via `pnpm github:sync <environment>` and file a follow-up to restore POST once clients consume the discriminated upload response. See [environment-variables.md](environment-variables.md) for the sync workflow.
 
 ## Confirm and attach gate
 
@@ -109,7 +109,7 @@ Additional bucket hardening:
 | `S3_BUCKET`                          | *required*   | Object storage bucket name.                                                                                                     |
 | `S3_REGION`                          | `us-east-1`  | AWS region.                                                                                                                     |
 | `S3_MAX_ATTEMPTS`                    | `3`          | AWS SDK retry attempts.                                                                                                         |
-| `UPLOAD_USE_PRESIGNED_POST`          | `false`      | When `true`, return a presigned POST with `content-length-range` instead of a presigned PUT URL.                                |
+| `UPLOAD_USE_PRESIGNED_POST`          | `true`       | When `true`, return a presigned POST with `content-length-range` instead of a presigned PUT URL.                                |
 | `UPLOAD_ALLOW_SVG`                   | `false`      | Allow `image/svg+xml` uploads (sanitized via DOMPurify on confirm).                                                             |
 | `UPLOAD_MAX_PENDING_PER_USER`        | `100`        | Per-user cap on concurrent PENDING uploads. New `createUpload` calls return `400 errors:uploadPendingQuotaExceeded` at the cap. |
 | `UPLOAD_PENDING_SWEEP_CRON`          | `15 * * * *` | Cron pattern for the PENDING sweeper.                                                                                           |

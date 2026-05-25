@@ -147,10 +147,10 @@ const envSchemaBase = z.object({
     .transform((value) => value === 'true' || value === '1'),
   /**
    * Use presigned POST (with an S3-enforced content-length-range) instead of presigned PUT
-   * for direct client uploads. Off by default; the response then carries `uploadMethod` and,
+   * for direct client uploads. On by default; the response carries `uploadMethod` and,
    * for POST, the policy `fields` clients must submit with the file.
    */
-  UPLOAD_USE_PRESIGNED_POST: booleanString('false'),
+  UPLOAD_USE_PRESIGNED_POST: booleanString('true'),
   /**
    * Per-user cap on concurrent PENDING uploads (rows awaiting confirm). Stops a single
    * authenticated user from exhausting storage by repeatedly requesting presigned URLs
