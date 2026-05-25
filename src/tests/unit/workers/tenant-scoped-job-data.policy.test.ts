@@ -14,6 +14,7 @@ const TENANT_SCOPING_EXEMPT_QUEUE_NAME_PATTERNS = [
   /stripe-webhook/i,
   /audit-export/i,
   /user-data-export/i,
+  /pending-sweep/i,
 ] as const;
 
 function collectWorkerFiles(directory: string, collected: string[] = []): string[] {
