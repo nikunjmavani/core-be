@@ -123,7 +123,7 @@ Pre-commit mirrors a **subset** of [`.github/workflows/reusable/quality-static.y
 
 | Step | Tool                          | What it catches                                         |
 | ---- | ----------------------------- | ------------------------------------------------------- |
-| 1    | `gitleaks/gitleaks-action@v2` | Full-repo secret scan (AWS keys, tokens, passwords)     |
+| 1    | `gitleaks` CLI (binary, v8)   | Full-repo secret scan (AWS keys, tokens, passwords)     |
 | 2    | `semgrep scan --config auto`  | SAST: SQL injection, XSS, insecure crypto, OWASP Top 10 |
 
 ### `test` job (runs after `quality` passes)
