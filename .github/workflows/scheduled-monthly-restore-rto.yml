@@ -1,6 +1,6 @@
-# Monthly disaster-recovery drill — checklist plus optional automated restore verification.
-# Set NEON_DRILL_DATABASE_URL in repository secrets to run migrations + integration tests against a throwaway Neon branch.
-# Records restore duration and fails when elapsed >= RTO_MINUTES. See docs/process/backup-drills.md.
+# Monthly disaster-recovery drill — automated restore verification and RTO measurement.
+# Requires DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL in repository secrets. See docs/process/backup-drills.md.
+# For human end-to-end RTO evidence after a manual drill, use manual-dr-rto-record.yml (non-required).
 
 name: Monthly backup restore & RTO drill
 
@@ -8,13 +8,6 @@ on:
   schedule:
     - cron: '0 6 1 * *'
   workflow_dispatch:
-    inputs:
-      recorded_rto_minutes:
-        description: >-
-          Optional human-measured end-to-end RTO in minutes (Neon branch restore through smoke).
-          Recorded and checked against RTO_MINUTES when automated restore is skipped.
-        required: false
-        type: string
 
 env:
   RTO_MINUTES: '60'
@@ -58,7 +51,8 @@ jobs:
           --health-retries=20
     env:
       NODE_ENV: test
-      DATABASE_URL: ${{ secrets.NEON_DRILL_DATABASE_URL }}
+      DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL: ${{ secrets.DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL }}
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
       ALLOWED_ORIGINS: http://localhost:3000
@@ -68,32 +62,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # A scheduled run must actually restore-and-measure. Without a drill database it would
-      # otherwise skip every step and report green, masking that no restore was tested.
-      - name: Require drill database on scheduled runs
-        if: github.event_name == 'schedule' && env.NEON_DRILL_DATABASE_URL == ''
+      - name: Require drill database URL
+        if: env.DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL == ''
         run: |
-          echo "::error title=Restore drill not measured::NEON_DRILL_DATABASE_URL is required for scheduled DR drills so RTO is actually measured. Set it as a repository secret, or run the manual workflow to record a documented RTO."
+          echo "::error title=Restore drill not measured::DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL is required so RTO is actually measured (migrate + integration smoke). Set it as a repository secret. For documented human drill evidence only, use the Manual DR RTO record workflow."
           exit 1
 
       - name: Setup Node and pnpm
-        if: env.NEON_DRILL_DATABASE_URL != ''
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Mark restore window start
-        if: env.NEON_DRILL_DATABASE_URL != ''
         run: echo "RESTORE_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Run migrations on restored branch
-        if: env.NEON_DRILL_DATABASE_URL != ''
         run: pnpm db:migrate
 
       - name: Integration smoke on restored database
-        if: env.NEON_DRILL_DATABASE_URL != ''
         run: pnpm test:integration -- --run src/domains/auth/__tests__/integration/auth.integration.test.ts
 
       - name: Record restore duration and assert RTO
-        if: always() && env.NEON_DRILL_DATABASE_URL != ''
+        if: success()
         run: |
           set -euo pipefail
           restore_end_epoch=$(date +%s)
@@ -136,7 +124,7 @@ jobs:
           fi
 
       - name: Upload RTO report
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v5
         with:
           name: restore-drill-rto
@@ -153,113 +141,39 @@ jobs:
       restore_seconds: ${{ steps.publish.outputs.restore_seconds }}
       rto_minutes: ${{ steps.publish.outputs.rto_minutes }}
     steps:
+      - name: Fail when automated restore did not complete
+        if: needs.restore-integration.result != 'success'
+        run: |
+          echo "::error title=Restore drill not measured::Automated restore did not complete successfully. Configure DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL and ensure migrate + integration smoke pass."
+          exit 1
+
       - name: Download automated RTO report
-        if: needs.restore-integration.result == 'success'
         uses: actions/download-artifact@v5
         with:
           name: restore-drill-rto
 
-      - name: Record manual RTO from workflow input
-        if: github.event_name == 'workflow_dispatch' && inputs.recorded_rto_minutes != ''
-        run: |
-          set -euo pipefail
-          if ! [[ "${{ inputs.recorded_rto_minutes }}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-            echo "::error::recorded_rto_minutes must be a positive number"
-            exit 1
-          fi
-          manual_minutes="${{ inputs.recorded_rto_minutes }}"
-          manual_seconds=$(awk "BEGIN {printf \"%d\", ${manual_minutes} * 60}")
-          rto_minutes="${RTO_MINUTES}"
-          rto_target_seconds=$((rto_minutes * 60))
-          within_rto_target=false
-          if (( manual_seconds < rto_target_seconds )); then
-            within_rto_target=true
-          fi
-
-          cat > restore-drill-rto-manual.json <<EOF
-          {
-            "recorded_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "workflow_run_id": "${GITHUB_RUN_ID}",
-            "metric": "manual_end_to_end_minutes",
-            "restore_minutes": ${manual_minutes},
-            "restore_seconds": ${manual_seconds},
-            "rto_minutes": ${rto_minutes},
-            "rto_target_seconds": ${rto_target_seconds},
-            "within_rto_target": ${within_rto_target}
-          }
-          EOF
-
-          {
-            echo "## Restore drill — manual RTO"
-            echo ""
-            echo "| Field | Value |"
-            echo "| ----- | ----- |"
-            echo "| Metric | Human end-to-end (Neon branch through smoke) |"
-            echo "| Restore time | **${manual_minutes} min** (${manual_seconds}s) |"
-            echo "| RTO target | **${rto_minutes} min** (${rto_target_seconds}s) |"
-            echo "| Within target | ${within_rto_target} |"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          echo "::notice title=Restore drill manual RTO::restore_minutes=${manual_minutes} within_target=${within_rto_target}"
-
-          if [[ "${within_rto_target}" != "true" ]]; then
-            echo "::error title=RTO exceeded::Manual RTO ${manual_minutes} min exceeds ${rto_minutes}-minute target."
-            exit 1
-          fi
-
-      - name: Upload manual RTO report
-        if: github.event_name == 'workflow_dispatch' && inputs.recorded_rto_minutes != ''
-        uses: actions/upload-artifact@v5
-        with:
-          name: restore-drill-rto-manual
-          path: restore-drill-rto-manual.json
-
-      - name: Note when RTO was not measured
-        if: >-
-          needs.restore-integration.result != 'success' &&
-          (github.event_name != 'workflow_dispatch' || inputs.recorded_rto_minutes == '')
-        run: |
-          rto_minutes="${RTO_MINUTES}"
-          cat > restore-drill-rto-report.json <<EOF
-          {
-            "recorded_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "workflow_run_id": "${GITHUB_RUN_ID}",
-            "metric": "rto_not_recorded",
-            "rto_minutes": ${rto_minutes},
-            "rto_target_seconds": $((rto_minutes * 60)),
-            "within_rto_target": null
-          }
-          EOF
-          {
-            echo "## Restore drill — RTO not recorded"
-            echo ""
-            echo "Set repository secret \`NEON_DRILL_DATABASE_URL\` for automated migrate + smoke timing,"
-            echo "or re-run with workflow input \`recorded_rto_minutes\` after a human drill."
-            echo ""
-            echo "Target: **< ${rto_minutes} minutes** (see docs/process/backup-drills.md)."
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "::warning title=Restore drill::RTO not recorded — configure NEON_DRILL_DATABASE_URL or provide recorded_rto_minutes"
-
       - name: Publish consolidated RTO report
         id: publish
-        if: always()
         run: |
           set -euo pipefail
           rto_minutes="${RTO_MINUTES}"
           rto_target_seconds=$((rto_minutes * 60))
 
-          if [[ -f restore-drill-rto.json ]]; then
-            cp restore-drill-rto.json restore-drill-rto-report.json
-          elif [[ -f restore-drill-rto-manual.json ]]; then
-            cp restore-drill-rto-manual.json restore-drill-rto-report.json
-          elif [[ ! -f restore-drill-rto-report.json ]]; then
-            echo "::error::No RTO report produced"
+          if [[ ! -f restore-drill-rto.json ]]; then
+            echo "::error::No automated RTO report artifact"
             exit 1
           fi
+
+          cp restore-drill-rto.json restore-drill-rto-report.json
 
           within_rto_target=$(jq -r '.within_rto_target' restore-drill-rto-report.json)
           restore_seconds=$(jq -r '.restore_seconds // empty' restore-drill-rto-report.json)
           metric=$(jq -r '.metric' restore-drill-rto-report.json)
+
+          if [[ "${within_rto_target}" != "true" ]]; then
+            echo "::error title=RTO not within target::Consolidated report has within_rto_target=${within_rto_target}"
+            exit 1
+          fi
 
           echo "within_rto_target=${within_rto_target}" >> "$GITHUB_OUTPUT"
           echo "restore_seconds=${restore_seconds}" >> "$GITHUB_OUTPUT"
@@ -279,7 +193,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload consolidated RTO report
-        if: always() && hashFiles('restore-drill-rto-report.json') != ''
+        if: success()
         uses: actions/upload-artifact@v5
         with:
           name: restore-drill-rto-report

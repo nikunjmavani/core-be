@@ -1,0 +1,84 @@
+# Optional: record human-measured end-to-end RTO after a manual restore drill.
+# Not required for monthly compliance; the scheduled restore drill must pass with DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL.
+# See docs/process/backup-drills.md — Human drill checklist.
+
+name: Manual DR RTO record (optional)
+
+on:
+  workflow_dispatch:
+    inputs:
+      recorded_rto_minutes:
+        description: >-
+          Human-measured end-to-end RTO in minutes (Neon branch restore through smoke).
+          Checked against RTO_MINUTES.
+        required: true
+        type: string
+
+env:
+  RTO_MINUTES: '60'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-dr-rto-record
+  cancel-in-progress: false
+
+jobs:
+  record-manual-rto:
+    name: Record manual RTO evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate and record manual RTO
+        run: |
+          set -euo pipefail
+          if ! [[ "${{ inputs.recorded_rto_minutes }}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            echo "::error::recorded_rto_minutes must be a positive number"
+            exit 1
+          fi
+          manual_minutes="${{ inputs.recorded_rto_minutes }}"
+          manual_seconds=$(awk "BEGIN {printf \"%d\", ${manual_minutes} * 60}")
+          rto_minutes="${RTO_MINUTES}"
+          rto_target_seconds=$((rto_minutes * 60))
+          within_rto_target=false
+          if (( manual_seconds < rto_target_seconds )); then
+            within_rto_target=true
+          fi
+
+          cat > restore-drill-rto-manual.json <<EOF
+          {
+            "recorded_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "workflow_run_id": "${GITHUB_RUN_ID}",
+            "metric": "manual_end_to_end_minutes",
+            "restore_minutes": ${manual_minutes},
+            "restore_seconds": ${manual_seconds},
+            "rto_minutes": ${rto_minutes},
+            "rto_target_seconds": ${rto_target_seconds},
+            "within_rto_target": ${within_rto_target}
+          }
+          EOF
+
+          {
+            echo "## Restore drill — manual RTO (optional evidence)"
+            echo ""
+            echo "| Field | Value |"
+            echo "| ----- | ----- |"
+            echo "| Metric | Human end-to-end (Neon branch through smoke) |"
+            echo "| Restore time | **${manual_minutes} min** (${manual_seconds}s) |"
+            echo "| RTO target | **${rto_minutes} min** (${rto_target_seconds}s) |"
+            echo "| Within target | ${within_rto_target} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::notice title=Restore drill manual RTO::restore_minutes=${manual_minutes} within_target=${within_rto_target}"
+
+          if [[ "${within_rto_target}" != "true" ]]; then
+            echo "::error title=RTO exceeded::Manual RTO ${manual_minutes} min exceeds ${rto_minutes}-minute target."
+            exit 1
+          fi
+
+      - name: Upload manual RTO report
+        uses: actions/upload-artifact@v5
+        with:
+          name: restore-drill-rto-manual
+          path: restore-drill-rto-manual.json
+          if-no-files-found: error

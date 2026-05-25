@@ -208,7 +208,25 @@ Implementation lives under `src/domains/auth/sub-domains/auth-method/oauth/` —
 
 ---
 
-## 7. Postman (optional) — upload API collection
+## 7. Monthly restore drill — `DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL`
+
+**Used for:** [Monthly backup restore & RTO drill](../process/backup-drills.md) workflow ([scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml)).
+
+This is a **repository-level GitHub Actions secret** — it is **not** an app runtime variable, **not** in `.env.example`'s GitHub Secrets/Variables halves, and **not** pushed by `pnpm github:sync`. The scheduled workflow reads it directly from `secrets.DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL` to run migrate + integration smoke against a throwaway Neon branch and measure RTO.
+
+| Secret                                   | Where to get it                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL` | Throwaway Neon branch connection string (PITR snapshot or branch from production). Format `postgresql://...` |
+
+**Steps:** Neon Console → project → **Branches** → create branch from production at a recent timestamp → copy connection string → GitHub repo **Settings → Secrets and variables → Actions → New repository secret** → name `DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL`.
+
+Without this secret, the monthly workflow **fails** (intended behaviour: a green run must always reflect a real measured RTO).
+
+For optional human-measured RTO evidence after a manual drill, use the [`manual-dr-rto-record.yml`](../../.github/workflows/manual-dr-rto-record.yml) workflow — see [backup-drills.md](../process/backup-drills.md).
+
+---
+
+## 8. Postman (optional) — upload API collection
 
 **Used for:** `pnpm docs:upload` to push the generated collection to a Postman workspace. CI runs this on **push** to `dev` and `main` using GitHub Environment secrets (`development`, `production`).
 
