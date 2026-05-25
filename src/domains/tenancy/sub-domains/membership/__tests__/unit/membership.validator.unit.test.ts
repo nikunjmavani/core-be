@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
+import { LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY } from '@/shared/utils/http/pagination.util.js';
 import {
   validateCreateMembership,
   validateListMembershipsQuery,
@@ -23,6 +24,16 @@ describe('membership validators', () => {
 
   it('validateListMembershipsQuery applies defaults', () => {
     expect(validateListMembershipsQuery({})).toMatchObject({ limit: 25 });
+  });
+
+  it('validateListMembershipsQuery rejects legacy page query parameter', () => {
+    try {
+      validateListMembershipsQuery({ page: '1', limit: '10' });
+      expect.fail('expected ValidationError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).messageKey).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY);
+    }
   });
 
   it('validateTransferOwnership accepts new_owner_user_id', () => {

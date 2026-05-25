@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
+import { LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY } from '@/shared/utils/http/pagination.util.js';
 import {
   validateAdminUpdateUser,
   validateListUsers,
@@ -32,6 +33,16 @@ describe('user.validator', () => {
 
   it('validateListUsers rejects invalid status filter', () => {
     expect(() => validateListUsers({ status: 'INVALID' })).toThrow(ValidationError);
+  });
+
+  it('validateListUsers rejects legacy page query parameter', () => {
+    try {
+      validateListUsers({ page: '1', limit: '10' });
+      expect.fail('expected ValidationError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).messageKey).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY);
+    }
   });
 
   it('validateUpdateMe rejects strict unknown keys', () => {

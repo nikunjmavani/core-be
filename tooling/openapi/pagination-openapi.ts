@@ -6,7 +6,7 @@
 import { PAGINATION } from '@/shared/constants/index.js';
 
 /** Appended to list-operation descriptions in route metadata. */
-export const CURSOR_PAGINATION_DESCRIPTION_SUFFIX = ` Uses cursor pagination: pass \`limit\` (default ${PAGINATION.DEFAULT_LIMIT}, max ${PAGINATION.MAX_LIMIT}) and optional \`after\` (opaque cursor from the previous response \`meta.pagination.next\`).`;
+export const CURSOR_PAGINATION_DESCRIPTION_SUFFIX = ` Uses cursor pagination: pass \`limit\` (default ${PAGINATION.DEFAULT_LIMIT}, max ${PAGINATION.MAX_LIMIT}) and optional \`after\` (opaque cursor from the previous response \`meta.pagination.next\`). The legacy \`page\` query parameter is no longer supported and returns HTTP 400.`;
 
 /**
  * GET list routes that use cursor pagination (`cursorPaginationSchema` or extensions).

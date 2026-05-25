@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
+import { LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY } from '@/shared/utils/http/pagination.util.js';
 import { validateListNotificationsQuery } from '@/domains/notify/sub-domains/notification/notification.validator.js';
 
 describe('notification.validator', () => {
@@ -28,5 +29,15 @@ describe('notification.validator', () => {
     expect(() => validateListNotificationsQuery({ limit: 10, unexpected: true })).toThrow(
       ValidationError,
     );
+  });
+
+  it('validateListNotificationsQuery rejects legacy page query parameter', () => {
+    try {
+      validateListNotificationsQuery({ page: '1', limit: 10 });
+      expect.fail('expected ValidationError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).messageKey).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY);
+    }
   });
 });

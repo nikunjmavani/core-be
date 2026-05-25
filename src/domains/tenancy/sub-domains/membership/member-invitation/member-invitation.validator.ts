@@ -1,4 +1,5 @@
 import { ValidationError } from '@/shared/errors/index.js';
+import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
   acceptMemberInvitationDto,
   createMemberInvitationDto,
@@ -11,6 +12,7 @@ import {
 } from './member-invitation.dto.js';
 
 export function validateListMemberInvitationsQuery(data: unknown): ListMemberInvitationsQueryInput {
+  ensureCursorOnlyPagination(data);
   const result = listMemberInvitationsQueryDto.safeParse(data);
   if (!result.success) {
     throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);

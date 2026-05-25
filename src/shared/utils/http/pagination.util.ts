@@ -2,7 +2,29 @@ import { and, eq, gt, lt, ne, or, type SQL } from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
 import { z } from 'zod';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
+import { ValidationError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+
+/** i18n key for the friendly error when a legacy `page` query parameter is sent. */
+export const LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY = 'errors:validation.legacyPageNotSupported';
+
+/**
+ * Throws a clear ValidationError when the request query contains the legacy
+ * `page` parameter. List endpoints accept cursor pagination only (`limit` +
+ * `after`); the older offset-based `page` is no longer supported.
+ */
+export function ensureCursorOnlyPagination(query: unknown): void {
+  if (
+    query !== null &&
+    typeof query === 'object' &&
+    !Array.isArray(query) &&
+    Object.hasOwn(query, 'page')
+  ) {
+    throw new ValidationError(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY, undefined, undefined, [
+      { field: 'page', messageKey: LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY },
+    ]);
+  }
+}
 
 /**
  * Cursor-based pagination query schema.

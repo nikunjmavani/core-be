@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
+import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
   UpdateMeDto,
   ListUsersDto,
@@ -30,6 +31,7 @@ export function validateUpdateMe(body: unknown): UpdateMeInput {
 }
 
 export function validateListUsers(query: unknown): ListUsersInput {
+  ensureCursorOnlyPagination(query);
   return parseWithSchema(ListUsersDto, query);
 }
 

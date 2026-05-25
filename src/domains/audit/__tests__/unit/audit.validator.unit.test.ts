@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
+import { LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY } from '@/shared/utils/http/pagination.util.js';
 import { validateListAuditLogsQuery } from '@/domains/audit/audit.validator.js';
 
 describe('audit.validator', () => {
@@ -23,5 +24,15 @@ describe('audit.validator', () => {
 
   it('validateListAuditLogsQuery rejects invalid to datetime', () => {
     expect(() => validateListAuditLogsQuery({ to: '2026-13-40' })).toThrow(ValidationError);
+  });
+
+  it('validateListAuditLogsQuery rejects legacy page query parameter', () => {
+    try {
+      validateListAuditLogsQuery({ page: '1', limit: '20' });
+      expect.fail('expected ValidationError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).messageKey).toBe(LEGACY_PAGE_NOT_SUPPORTED_MESSAGE_KEY);
+    }
   });
 });

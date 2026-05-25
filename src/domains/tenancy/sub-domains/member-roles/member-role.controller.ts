@@ -1,7 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
-import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
+import {
+  cursorPaginationSchema,
+  ensureCursorOnlyPagination,
+} from '@/shared/utils/http/pagination.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import type { MemberRoleService } from './member-role.service.js';
@@ -13,6 +16,7 @@ export function createMemberRoleController(service: MemberRoleService) {
         (request.params as { id: string }).id ?? '',
         'id',
       );
+      ensureCursorOnlyPagination(request.query);
       const pagination = cursorPaginationSchema.parse(request.query);
       const result = await service.list(organizationId, pagination);
       return paginatedResponse(result.items, getRequestIdentifier(request), {
