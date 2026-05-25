@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, lt } from 'drizzle-orm';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
@@ -112,6 +112,21 @@ export class UploadRepository {
       )
       .returning();
     return rows[0] ?? null;
+  }
+
+  /** Number of in-flight PENDING uploads for a user (active, not soft-deleted). */
+  async countPendingByUserId(user_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: count() })
+      .from(uploads)
+      .where(
+        and(
+          eq(uploads.user_id, user_id),
+          eq(uploads.status, 'PENDING'),
+          isNull(uploads.deleted_at),
+        ),
+      );
+    return rows[0]?.value ?? 0;
   }
 
   async findActiveByUserId(user_id: number): Promise<Pick<UploadRow, 'id' | 'file_key'>[]> {

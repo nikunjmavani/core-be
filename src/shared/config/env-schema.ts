@@ -151,6 +151,12 @@ const envSchemaBase = z.object({
    * for POST, the policy `fields` clients must submit with the file.
    */
   UPLOAD_USE_PRESIGNED_POST: booleanString('false'),
+  /**
+   * Per-user cap on concurrent PENDING uploads (rows awaiting confirm). Stops a single
+   * authenticated user from exhausting storage by repeatedly requesting presigned URLs
+   * and never calling confirm. Reconciled lazily by the PENDING sweeper worker. Default 100.
+   */
+  UPLOAD_MAX_PENDING_PER_USER: z.coerce.number().int().min(1).default(100),
   S3_BUCKET: z.string().min(1).optional(),
   S3_REGION: z.string().min(1).optional(),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),

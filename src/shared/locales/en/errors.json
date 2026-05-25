@@ -93,6 +93,7 @@
   "uploadContentTypeNotAllowed": "Content type \"{{contentType}}\" is not allowed for purpose \"{{purpose}}\". Allowed: {{allowed}}",
   "uploadFilenameExtensionMismatch": "Filename extension \"{{extension}}\" does not match content type \"{{contentType}}\". Allowed extensions: {{allowed}}",
   "uploadFileSizeExceeded": "File size {{fileSize}} exceeds maximum {{maxSize}} bytes for purpose \"{{purpose}}\"",
+  "uploadPendingQuotaExceeded": "Too many pending uploads ({{pending}} of {{limit}}). Confirm or wait for the sweeper to reconcile before requesting another upload URL.",
   "uploadNotPending": "Upload is not awaiting confirmation",
   "uploadVerificationFailed": "Uploaded object could not be verified against its declared type and size",
   "webhookUrlInvalid": "Invalid webhook URL format",
