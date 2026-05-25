@@ -278,8 +278,9 @@ describe('organization-rls-transaction.middleware', () => {
   });
 
   it('ignores duplicate safeDone calls from request database storage', async () => {
-    const { organizationRequestDatabaseStorage } =
-      await import('@/infrastructure/database/contexts/request-database.context.js');
+    const { organizationRequestDatabaseStorage } = await import(
+      '@/infrastructure/database/contexts/request-database.context.js'
+    );
     const runSpy = vi
       .spyOn(organizationRequestDatabaseStorage, 'run')
       .mockImplementation((_store, callback) => {

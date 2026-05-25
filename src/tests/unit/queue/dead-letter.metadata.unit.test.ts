@@ -127,8 +127,9 @@ describe('enqueueDeadLetter metadata', () => {
     process.on('unhandledRejection', onUnhandled);
 
     try {
-      const { attachDeadLetterAndAlerting } =
-        await import('@/infrastructure/queue/dlq/dead-letter.js');
+      const { attachDeadLetterAndAlerting } = await import(
+        '@/infrastructure/queue/dlq/dead-letter.js'
+      );
       const fakeWorker = new EventEmitter() as unknown as Worker;
       attachDeadLetterAndAlerting(fakeWorker, 'mail');
 
@@ -153,8 +154,9 @@ describe('enqueueDeadLetter metadata', () => {
   });
 
   it('dead-letter hook for final failure captures Sentry exactly once', async () => {
-    const { attachDeadLetterAndAlerting } =
-      await import('@/infrastructure/queue/dlq/dead-letter.js');
+    const { attachDeadLetterAndAlerting } = await import(
+      '@/infrastructure/queue/dlq/dead-letter.js'
+    );
     const fakeWorker = new EventEmitter() as unknown as Worker;
     attachDeadLetterAndAlerting(fakeWorker, 'notification');
 

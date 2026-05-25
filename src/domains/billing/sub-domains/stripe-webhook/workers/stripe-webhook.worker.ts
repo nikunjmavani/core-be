@@ -50,7 +50,7 @@ export function createStripeWebhookWorker(
 export function createStripeWebhookWorkerIfConfigured(
   billingContainer: StripeWebhookWorkerBillingContainer,
 ): WorkerHandle | null {
-  if (!isStripeConfigured() || !isStripeWebhookIngressConfigured()) {
+  if (!(isStripeConfigured() && isStripeWebhookIngressConfigured())) {
     return null;
   }
   return createStripeWebhookWorker(billingContainer);

@@ -44,8 +44,9 @@ describe('stripe-webhook — enqueue correlation id', () => {
       getBullMQConnectionOptions: () => ({}),
     }));
 
-    const { enqueueStripeWebhook } =
-      await import('@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js');
+    const { enqueueStripeWebhook } = await import(
+      '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js'
+    );
     const event = {
       id: 'evt_enqueue_test',
       type: 'account.updated',

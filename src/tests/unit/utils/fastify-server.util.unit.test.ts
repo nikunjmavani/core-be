@@ -38,8 +38,9 @@ describe('fastify-server.util', () => {
     envState.FASTIFY_REQUEST_TIMEOUT_MS = 45_000;
     envState.FASTIFY_CONNECTION_TIMEOUT_MS = 15_000;
     vi.resetModules();
-    const { buildFastifyServerOptions: buildTimeoutOptions } =
-      await import('@/shared/utils/http/fastify-server.util.js');
+    const { buildFastifyServerOptions: buildTimeoutOptions } = await import(
+      '@/shared/utils/http/fastify-server.util.js'
+    );
     const options = buildTimeoutOptions();
     expect(options.requestTimeout).toBe(45_000);
     expect(options.connectionTimeout).toBe(15_000);
@@ -61,8 +62,9 @@ describe('fastify-server.util', () => {
     envState.NODE_ENV = 'production';
     envState.TRUST_PROXY = undefined;
     vi.resetModules();
-    const { buildFastifyServerOptions: buildProductionOptions } =
-      await import('@/shared/utils/http/fastify-server.util.js');
+    const { buildFastifyServerOptions: buildProductionOptions } = await import(
+      '@/shared/utils/http/fastify-server.util.js'
+    );
     expect(buildProductionOptions().trustProxy).toBe(false);
     envState.NODE_ENV = 'test';
     envState.TRUST_PROXY = false;
@@ -72,8 +74,9 @@ describe('fastify-server.util', () => {
   it('honors TRUST_PROXY hop count', async () => {
     envState.TRUST_PROXY = 2;
     vi.resetModules();
-    const { buildFastifyServerOptions: buildHopCountOptions } =
-      await import('@/shared/utils/http/fastify-server.util.js');
+    const { buildFastifyServerOptions: buildHopCountOptions } = await import(
+      '@/shared/utils/http/fastify-server.util.js'
+    );
     expect(buildHopCountOptions().trustProxy).toBe(2);
     envState.TRUST_PROXY = false;
     vi.resetModules();
@@ -92,8 +95,9 @@ describe('fastify-server.util', () => {
     envState.NODE_ENV = 'production';
     envState.TRUST_PROXY = false;
     vi.resetModules();
-    const { buildFastifyServerOptions: buildProductionOptions } =
-      await import('@/shared/utils/http/fastify-server.util.js');
+    const { buildFastifyServerOptions: buildProductionOptions } = await import(
+      '@/shared/utils/http/fastify-server.util.js'
+    );
     expect(buildProductionOptions().trustProxy).toBe(false);
     envState.NODE_ENV = 'test';
     vi.resetModules();
@@ -103,8 +107,9 @@ describe('fastify-server.util', () => {
     envState.TRUST_PROXY = true;
     envState.NODE_ENV = 'test';
     vi.resetModules();
-    const { buildFastifyServerOptions: buildTrustedProxyOptions } =
-      await import('@/shared/utils/http/fastify-server.util.js');
+    const { buildFastifyServerOptions: buildTrustedProxyOptions } = await import(
+      '@/shared/utils/http/fastify-server.util.js'
+    );
     expect(buildTrustedProxyOptions().trustProxy).toBe(true);
     envState.TRUST_PROXY = false;
     vi.resetModules();
@@ -136,8 +141,9 @@ describe('fastify-server.util', () => {
     envState.NODE_ENV = 'local';
     envState.TRUST_PROXY = false;
     vi.resetModules();
-    const { buildFastifyServerOptions: buildLocalOptions } =
-      await import('@/shared/utils/http/fastify-server.util.js');
+    const { buildFastifyServerOptions: buildLocalOptions } = await import(
+      '@/shared/utils/http/fastify-server.util.js'
+    );
     const options = buildLocalOptions();
     expect(options.logger).toMatchObject({
       transport: expect.objectContaining({ target: 'pino-pretty' }),

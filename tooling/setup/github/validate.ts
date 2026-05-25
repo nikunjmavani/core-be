@@ -149,7 +149,7 @@ function validateGitHubEnvironmentProtectionDrift(): boolean {
 
 function main(): void {
   const skipGitHub = process.env.SKIP_GITHUB_ENV === '1' || process.env.SKIP_GITHUB_ENV === 'true';
-  if (!skipGitHub && !validateGitHubEnvironmentProtectionDrift()) {
+  if (!(skipGitHub || validateGitHubEnvironmentProtectionDrift())) {
     process.exit(1);
   }
 

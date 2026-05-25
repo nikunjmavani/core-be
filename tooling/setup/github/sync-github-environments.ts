@@ -168,7 +168,7 @@ function parseEnvFile(filePath: string): EnvEntry[] {
     if (!match) continue;
 
     const name = match[1]!;
-    let value = match[2]!;
+    const value = match[2]!;
 
     // Reassemble multi-line double-quoted values
     if (value.startsWith('"') && !value.endsWith('"')) {

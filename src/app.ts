@@ -58,8 +58,9 @@ export async function buildApp(options?: BuildAppOptions) {
   await registerRoutes(app);
 
   if (getEnv().ENABLE_API_REFERENCE) {
-    const { registerScalarApiReference } =
-      await import('@/infrastructure/api-reference/scalar-api-reference.js');
+    const { registerScalarApiReference } = await import(
+      '@/infrastructure/api-reference/scalar-api-reference.js'
+    );
     await registerScalarApiReference(app);
   }
 

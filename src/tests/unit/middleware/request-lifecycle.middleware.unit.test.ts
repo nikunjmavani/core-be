@@ -70,8 +70,9 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
   });
 
   it('runs settle → idempotency → outbox-flush in that order on successful commit', async () => {
-    const { default: requestLifecycleMiddleware } =
-      await import('@/shared/middlewares/request-lifecycle.middleware.js');
+    const { default: requestLifecycleMiddleware } = await import(
+      '@/shared/middlewares/request-lifecycle.middleware.js'
+    );
     const application = Fastify({ logger: false });
     await application.register(requestLifecycleMiddleware);
     application.post('/probe', async () => ({ ok: true }));
@@ -100,8 +101,9 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
       return 'rolled_back';
     });
 
-    const { default: requestLifecycleMiddleware } =
-      await import('@/shared/middlewares/request-lifecycle.middleware.js');
+    const { default: requestLifecycleMiddleware } = await import(
+      '@/shared/middlewares/request-lifecycle.middleware.js'
+    );
     const application = Fastify({ logger: false });
     await application.register(requestLifecycleMiddleware);
     application.post('/probe', async () => ({ ok: true }));
@@ -124,8 +126,9 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
       return 'settle_failed';
     });
 
-    const { default: requestLifecycleMiddleware } =
-      await import('@/shared/middlewares/request-lifecycle.middleware.js');
+    const { default: requestLifecycleMiddleware } = await import(
+      '@/shared/middlewares/request-lifecycle.middleware.js'
+    );
     const application = Fastify({ logger: false });
     await application.register(requestLifecycleMiddleware);
     application.post('/probe', async () => ({ ok: true }));
@@ -148,8 +151,9 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
       throw new Error('settle_boom');
     });
 
-    const { default: requestLifecycleMiddleware } =
-      await import('@/shared/middlewares/request-lifecycle.middleware.js');
+    const { default: requestLifecycleMiddleware } = await import(
+      '@/shared/middlewares/request-lifecycle.middleware.js'
+    );
     const application = Fastify({ logger: false });
     await application.register(requestLifecycleMiddleware);
     application.post('/probe', async () => ({ ok: true }));
@@ -172,8 +176,9 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
       throw new Error('cache_boom');
     });
 
-    const { default: requestLifecycleMiddleware } =
-      await import('@/shared/middlewares/request-lifecycle.middleware.js');
+    const { default: requestLifecycleMiddleware } = await import(
+      '@/shared/middlewares/request-lifecycle.middleware.js'
+    );
     const application = Fastify({ logger: false });
     await application.register(requestLifecycleMiddleware);
     application.post('/probe', async () => ({ ok: true }));

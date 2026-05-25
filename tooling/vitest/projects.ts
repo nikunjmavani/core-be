@@ -85,10 +85,7 @@ function buildE2eIncludes(): string[] {
 function buildIntegrationIncludes(): string[] {
   const filter = parseDomainFilter();
   if (!filter) {
-    return [
-      'src/tests/integration/**/*.test.ts',
-      'src/**/__tests__/integration/**/*.test.ts',
-    ];
+    return ['src/tests/integration/**/*.test.ts', 'src/**/__tests__/integration/**/*.test.ts'];
   }
   const patterns: string[] = [];
   for (const domain of filter.domains) {

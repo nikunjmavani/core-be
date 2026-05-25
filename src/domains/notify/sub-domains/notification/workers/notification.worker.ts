@@ -65,7 +65,7 @@ export async function processNotificationDispatchJob(
   for (const channel of channels) {
     switch (channel) {
       case 'email': {
-        if (!isMailConfigured() || !email) {
+        if (!(isMailConfigured() && email)) {
           logger.warn({ channel, notificationId }, 'notification.worker.channel_skipped');
           break;
         }

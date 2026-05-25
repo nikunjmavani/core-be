@@ -175,7 +175,7 @@ describe('webhook-delivery.worker — status transitions', () => {
 
     const queueReference = queue;
     const queueEventsReference = queueEvents;
-    if (!queueReference || !queueEventsReference) {
+    if (!(queueReference && queueEventsReference)) {
       throw new Error('queue or queueEvents was not initialized');
     }
 

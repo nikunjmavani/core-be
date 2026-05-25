@@ -53,7 +53,7 @@ async function main(): Promise<void> {
         const srcIdx = args.indexOf('--clone');
         const src = args[srcIdx + 1];
         const dst = args[srcIdx + 2];
-        if (!src || !dst) {
+        if (!(src && dst)) {
           logger.error('Usage: pnpm setup:envs --clone <source> <target>');
           process.exit(1);
         }

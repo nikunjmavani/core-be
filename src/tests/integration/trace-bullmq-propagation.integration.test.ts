@@ -21,8 +21,9 @@ describe('Integration: trace context propagation to BullMQ', () => {
   });
 
   it('should include requestId in notification job payload when provided', async () => {
-    const { enqueueNotification } =
-      await import('@/domains/notify/sub-domains/notification/queues/notification.queue.js');
+    const { enqueueNotification } = await import(
+      '@/domains/notify/sub-domains/notification/queues/notification.queue.js'
+    );
     await enqueueNotification(42, 'org_public_123', 'req-correlation-abc');
 
     expect(addMock).toHaveBeenCalledWith(

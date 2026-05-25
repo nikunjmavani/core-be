@@ -40,7 +40,7 @@ export function loadProtectedRoutesFromCatalog(
     const methodRaw = match[1];
     const rawPath = match[2];
     const accessToken = match[3];
-    if (!methodRaw || !rawPath || !accessToken) continue;
+    if (!(methodRaw && rawPath && accessToken)) continue;
     if (accessToken === 'PUBLIC') continue;
 
     const method = methodRaw.toLowerCase() as ProtectedRouteFromCatalog['method'];

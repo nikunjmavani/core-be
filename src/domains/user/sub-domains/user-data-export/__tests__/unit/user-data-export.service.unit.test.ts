@@ -104,8 +104,9 @@ describe('UserDataExportService', () => {
   });
 
   it('requestExport creates row and defers enqueue until flushOnCommit', async () => {
-    const { enqueueUserDataExport } =
-      await import('@/domains/user/sub-domains/user-data-export/queues/user-data-export.queue.js');
+    const { enqueueUserDataExport } = await import(
+      '@/domains/user/sub-domains/user-data-export/queues/user-data-export.queue.js'
+    );
     exportRepository.create.mockResolvedValue({
       public_id: 'exp_test',
       status: USER_DATA_EXPORT_STATUSES.PENDING,

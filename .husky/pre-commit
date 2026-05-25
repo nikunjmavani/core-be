@@ -1,9 +1,9 @@
 # ── Layer 2: Pre-commit checks ───────────────────────────────
 
 # 1. Lint + format staged files
-#    - src/**/*.ts, tooling/**/*.ts   -> eslint --fix + prettier --write
-#    - *.{json,yaml,yml}              -> prettier --write
-#    - *.md                           -> prettier --write + markdownlint-cli2 --fix
+#    - src/**/*.ts, tooling/**/*.{ts,mjs} -> biome check --write
+#    - *.{json,yaml,yml}                  -> biome format --write
+#    - *.md                               -> markdownlint-cli2 --fix
 #                                        (same .markdownlint.json + pinned cli2
 #                                         version as the GitHub Actions Docs lane;
 #                                         catches MD031 / MD026 / etc. locally).

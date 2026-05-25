@@ -232,8 +232,9 @@ describe('WebhookService', () => {
   });
 
   it('requestWebhookDelivery emits delivery event with webhook payload', async () => {
-    const { emitWebhookDeliveryRequested } =
-      await import('@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js');
+    const { emitWebhookDeliveryRequested } = await import(
+      '@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js'
+    );
     await service.requestWebhookDelivery({
       webhookId: 2,
       eventType: 'subscription.updated',

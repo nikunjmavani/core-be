@@ -24,12 +24,7 @@ export default defineConfig({
     execArgv: ['--import=nock'],
     server: {
       deps: {
-        external: [
-          'stripe',
-          'resend',
-          '@aws-sdk/client-s3',
-          '@aws-sdk/s3-request-presigner',
-        ],
+        external: ['stripe', 'resend', '@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
       },
     },
   },

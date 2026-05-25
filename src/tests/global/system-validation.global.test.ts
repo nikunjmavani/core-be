@@ -26,8 +26,9 @@ describe('System Validation', () => {
     });
 
     it('migration up files should have monotonic YYYYMMDDHHMMSS prefixes', async () => {
-      const { lintMigrationTimestamps } =
-        await import('@/scripts/validators/migration/lint-migrations.js');
+      const { lintMigrationTimestamps } = await import(
+        '@/scripts/validators/migration/lint-migrations.js'
+      );
       const upFilenames = readdirSync(MIGRATIONS_DIR).filter(
         (file) => file.endsWith('.sql') && !file.endsWith('.down.sql'),
       );

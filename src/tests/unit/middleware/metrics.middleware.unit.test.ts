@@ -34,8 +34,9 @@ describe('metrics.middleware', () => {
   it('does not register /metrics when METRICS_ENABLED is false', async () => {
     process.env.METRICS_ENABLED = 'false';
     resetEnvCacheForTests();
-    const { default: metricsMiddleware } =
-      await import('@/shared/middlewares/metrics.middleware.js');
+    const { default: metricsMiddleware } = await import(
+      '@/shared/middlewares/metrics.middleware.js'
+    );
     const application = Fastify();
     await application.register(metricsMiddleware);
     const response = await application.inject({ method: 'GET', url: '/metrics' });
@@ -58,8 +59,9 @@ describe('metrics.middleware', () => {
       refreshMetricsBeforeScrape: async () => {},
       renderMetrics: () => 'process_cpu 1\n',
     }));
-    const { default: metricsMiddleware } =
-      await import('@/shared/middlewares/metrics.middleware.js');
+    const { default: metricsMiddleware } = await import(
+      '@/shared/middlewares/metrics.middleware.js'
+    );
     const application = Fastify();
     await application.register(metricsMiddleware);
     const unauthorized = await application.inject({ method: 'GET', url: '/metrics' });
@@ -83,8 +85,9 @@ describe('metrics.middleware', () => {
       refreshMetricsBeforeScrape: async () => {},
       renderMetrics: async () => 'process_cpu 1\n',
     }));
-    const { default: metricsMiddleware } =
-      await import('@/shared/middlewares/metrics.middleware.js');
+    const { default: metricsMiddleware } = await import(
+      '@/shared/middlewares/metrics.middleware.js'
+    );
     const application = Fastify();
     await application.register(metricsMiddleware);
     const response = await application.inject({

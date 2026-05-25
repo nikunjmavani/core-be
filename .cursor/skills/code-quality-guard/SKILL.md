@@ -1,6 +1,6 @@
 ---
 name: code-quality-guard
-description: Maintains the 3-layer code quality and security pipeline (editor ESLint plugins, Husky pre-commit hooks, CI security scanning). Use after changing ESLint rules, pre-commit hooks, CI workflows, lint-staged config, or adding new security tooling.
+description: Maintains the 3-layer code quality and security pipeline (editor Biome, Husky pre-commit hooks, CI security scanning). Use after changing Biome rules, pre-commit hooks, CI workflows, lint-staged config, or adding new security tooling.
 ---
 
 # Code Quality Guard (core-be)
@@ -9,9 +9,9 @@ Maintains the layered code quality and security checking pipeline. Run this skil
 
 ## Architecture: 3 layers
 
-```
-Layer 1 (Editor)  -- ESLint plugins give real-time feedback while coding
-Layer 2 (Pre-commit) -- Husky runs lint-staged, typecheck, Gitleaks, guards
+```text
+Layer 1 (Editor)  -- Biome extension gives real-time lint + format while coding
+Layer 2 (Pre-commit) -- Husky runs lint-staged (Biome), typecheck, Gitleaks, guards
 Layer 3 (CI)      -- Full validation, Semgrep SAST, Gitleaks full-repo, tests
 ```
 
@@ -19,10 +19,9 @@ Layer 3 (CI)      -- Full validation, Semgrep SAST, Gitleaks full-repo, tests
 
 | File                                | Layer | Purpose                                                                                                                                                                                                       |
 | ----------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `eslint.config.mjs`                 | 1 + 2 | ESLint rules (TypeScript, sonarjs code smells, security plugin)                                                                                                                                               |
-| `.prettierrc`                       | 1 + 2 | Formatting rules                                                                                                                                                                                              |
-| `.prettierignore`                   | 1 + 2 | Files Prettier skips                                                                                                                                                                                          |
-| `.vscode/settings.json`             | 1     | Editor auto-fix on save, ESLint validation                                                                                                                                                                    |
+| `biome.json`                        | 1 + 2 | Biome lint + format rules and per-path overrides                                                                                                                                                              |
+| `.biomeignore`                      | 1 + 2 | Paths Biome skips (e.g. migrations, lockfile)                                                                                                                                                                 |
+| `.vscode/settings.json`             | 1     | Editor format on save, Biome fix on save                                                                                                                                                                      |
 | `.husky/pre-commit`                 | 2     | Pre-commit hook script (subset of CI quality job; fast local sync gate)                                                                                                                                       |
 | `.husky/pre-push`                   | 2     | Pre-push: typecheck, build, build:check, unit tests                                                                                                                                                           |
 | `.husky/commit-msg`                 | 2     | Validates commit messages with commitlint (conventional commits)                                                                                                                                              |
@@ -35,7 +34,7 @@ Layer 3 (CI)      -- Full validation, Semgrep SAST, Gitleaks full-repo, tests
 
 ## When to run this skill
 
-- Adding or changing ESLint rules or plugins
+- Adding or changing Biome rules in `biome.json`
 - Modifying `.husky/pre-commit` hook steps
 - Adding `.husky/commit-msg` or changing commitlint config
 - Changing `lint-staged` config in `package.json`
@@ -44,23 +43,16 @@ Layer 3 (CI)      -- Full validation, Semgrep SAST, Gitleaks full-repo, tests
 
 ## Layer 1: Editor (real-time while coding)
 
-### ESLint plugins (installed as devDependencies)
+### Biome (`@biomejs/biome` devDependency)
 
-| Plugin                   | Detects                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| `@typescript-eslint`     | Type errors, unused vars, any usage, consistent imports                      |
-| `eslint-plugin-sonarjs`  | Cognitive complexity, duplicate strings, identical functions, collapsible if |
-| `eslint-plugin-security` | eval, unsafe regex, non-literal require, object injection, timing attacks    |
+| Area        | Examples in `biome.json`                                                                 |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| Correctness | `noUnusedVariables`, `noExplicitAny`                                                     |
+| Style       | `useConst`, `useImportType`, `noParameterAssign`                                       |
+| Complexity  | `noExcessiveCognitiveComplexity`, `noExcessiveLinesPerFunction`                        |
+| Security    | `noGlobalEval`, `noImpliedEval` (nursery)                                                |
 
-### Key rules in `eslint.config.mjs`
-
-```
-Code quality:       complexity (15), max-depth (4), max-lines-per-function (80)
-Code smells:        sonarjs/cognitive-complexity (15), sonarjs/no-duplicate-string (3)
-Security:           no-eval, no-implied-eval, no-new-func (error)
-                    security/detect-unsafe-regex, security/detect-eval-with-expression (error)
-                    security/detect-object-injection, security/detect-possible-timing-attacks (warn)
-```
+Architectural import restrictions previously in ESLint (`no-restricted-imports`, `no-restricted-syntax`) are enforced by global tests (e.g. `external-sdk-coverage.global.test.ts`, worker RLS security tests) and code review.
 
 ### VS Code settings (`.vscode/settings.json`)
 
@@ -68,10 +60,12 @@ Must include:
 
 ```json
 {
-  "eslint.validate": ["typescript"],
-  "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" }
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.codeActionsOnSave": { "source.fixAll.biome": "explicit" }
 }
 ```
+
+Extension: `biomejs.biome` (see `.vscode/extensions.json`).
 
 ## Layer 2: Pre-commit (`.husky/pre-commit`)
 
@@ -81,7 +75,7 @@ Pre-commit mirrors a **subset** of [`.github/workflows/reusable/quality-static.y
 
 | Step | Command                                                                                   | What it catches                                                                                                                                                      |
 | ---- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `pnpm lint-staged`                                                                        | ESLint + Prettier on staged `src/**/*.ts`, `tooling/setup/**/*.ts`, and `*.{json,yaml,yml,md}`                                                                       |
+| 1    | `pnpm lint-staged`                                                                        | Biome on staged `src/**/*.ts`, `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; markdownlint on `*.md`                                                  |
 | 2    | `pnpm typecheck`                                                                          | TypeScript type errors in `src/`                                                                                                                                     |
 | 3    | `pnpm validate:domain:strict`                                                             | Domain structure (canonical layout, routes; warnings fail)                                                                                                           |
 | 4a   | `pnpm routes:catalog` + stage `docs/routes.txt`                                          | Stale route catalog; local commits always regenerate and stage the checked-in catalog before push                                                                     |
@@ -112,9 +106,10 @@ Pre-commit mirrors a **subset** of [`.github/workflows/reusable/quality-static.y
 
 ```json
 "lint-staged": {
-  "src/**/*.ts": ["eslint --fix", "prettier --write"],
-  "tooling/setup/**/*.ts": ["eslint --fix", "prettier --write"],
-  "*.{json,yaml,yml,md}": ["prettier --write"]
+  "src/**/*.ts": ["biome check --write --no-errors-on-unmatched"],
+  "tooling/**/*.{ts,mjs}": ["biome check --write --no-errors-on-unmatched"],
+  "*.{json,yaml,yml}": ["biome format --write --no-errors-on-unmatched"],
+  "*.md": ["markdownlint-cli2 --config .markdownlint.json --fix"]
 }
 ```
 
@@ -150,27 +145,25 @@ Pre-commit mirrors a **subset** of [`.github/workflows/reusable/quality-static.y
 | ----------------------- | -------------------------------------------------------- |
 | `pnpm security:secrets` | Manual full-repo Gitleaks scan (requires `gitleaks` CLI) |
 | `pnpm security:sast`    | Manual Semgrep scan (requires `semgrep` CLI)             |
-| `pnpm validate`         | lint + format:check + typecheck (same as CI)             |
+| `pnpm validate`         | biome check + typecheck (same as CI)                     |
+| `pnpm lint`             | `biome check src tooling`                                |
+| `pnpm format`           | `biome format --write src tooling`                       |
 
 ## Checklist (run after changes)
 
-1. **ESLint config valid?** -- run `pnpm lint` and confirm no config errors
+1. **Biome config valid?** -- run `pnpm lint` and confirm no config errors
 2. **Pre-commit hook executable?** -- `.husky/pre-commit` must have execute permission
 3. **lint-staged patterns correct?** -- ensure patterns match actual file locations
 4. **CI workflow valid YAML?** -- check `.github/workflows/ci.yml` syntax
 5. **Ignore files up to date?** -- `.gitleaks.toml` and `.semgrepignore` include new generated/vendor paths
-6. **VS Code settings preserved?** -- ESLint validate + codeActionsOnSave still present
-7. **Dependencies installed?** -- `eslint-plugin-sonarjs` and `eslint-plugin-security` in devDependencies
+6. **VS Code settings preserved?** -- Biome default formatter + `source.fixAll.biome` on save
+7. **Dependencies installed?** -- `@biomejs/biome` in devDependencies; no `eslint` / `prettier` packages
 
-## Adding new rules or plugins
+## Adding new Biome rules
 
-When adding a new ESLint plugin:
-
-1. Install: `pnpm add -D eslint-plugin-<name>`
-2. Import in `eslint.config.mjs` and add to `plugins` object
-3. Add rules to the `rules` object (use `warn` for code smells, `error` for security)
-4. Run `pnpm lint` to verify no false positives on existing code
-5. Update this skill's Layer 1 tables above
+1. Edit `biome.json` (use `overrides` for tests, scripts, tooling paths)
+2. Run `pnpm lint` to verify no false positives on existing code
+3. Update this skill's Layer 1 tables above
 
 When adding a new pre-commit check:
 

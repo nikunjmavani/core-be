@@ -96,8 +96,9 @@ describe('NotificationService', () => {
   });
 
   it('dispatchNotification enqueues delivery job', async () => {
-    const { enqueueNotification } =
-      await import('@/domains/notify/sub-domains/notification/queues/notification.queue.js');
+    const { enqueueNotification } = await import(
+      '@/domains/notify/sub-domains/notification/queues/notification.queue.js'
+    );
     await service.dispatchNotification(2);
     expect(enqueueNotification).toHaveBeenCalledWith(2, 'org_public');
   });

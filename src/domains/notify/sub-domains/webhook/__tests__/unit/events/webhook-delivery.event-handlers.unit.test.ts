@@ -23,10 +23,12 @@ describe('webhook delivery event handlers', () => {
 
   it('enqueues webhook delivery on notify.webhook_delivery.requested', async () => {
     const { eventBus, runWithOnCommitScope } = await import('@/core/events/event-bus.js');
-    const { NOTIFY_EVENT } =
-      await import('@/domains/notify/sub-domains/webhook/events/notify.events.js');
-    const { registerWebhookDeliveryEventHandlers } =
-      await import('@/domains/notify/sub-domains/webhook/events/webhook-delivery.event-handlers.js');
+    const { NOTIFY_EVENT } = await import(
+      '@/domains/notify/sub-domains/webhook/events/notify.events.js'
+    );
+    const { registerWebhookDeliveryEventHandlers } = await import(
+      '@/domains/notify/sub-domains/webhook/events/webhook-delivery.event-handlers.js'
+    );
     registerWebhookDeliveryEventHandlers();
 
     await runWithOnCommitScope(async () => {

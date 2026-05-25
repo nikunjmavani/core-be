@@ -6,11 +6,9 @@ import { API_PREFIX } from './config.js';
  * Uses the test user credentials set in environment variables.
  */
 export function login(email, password) {
-  const response = http.post(
-    `${API_PREFIX}/auth/login`,
-    JSON.stringify({ email, password }),
-    { headers: { 'Content-Type': 'application/json' } },
-  );
+  const response = http.post(`${API_PREFIX}/auth/login`, JSON.stringify({ email, password }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
 
   if (response.status === 200) {
     const body = JSON.parse(response.body);

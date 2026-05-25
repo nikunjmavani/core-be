@@ -25,9 +25,15 @@ import { subscriptions } from '@/domains/billing/sub-domains/subscription/subscr
 import { constructStripeWebhookEvent } from '@/infrastructure/payment/stripe.client.js';
 import { env } from '@/shared/config/env.config.js';
 
-import webhookSubscriptionCreatedBaseline from './fixtures/stripe/events/customer.subscription.created.json' with { type: 'json' };
-import webhookSubscriptionDeletedBaseline from './fixtures/stripe/events/customer.subscription.deleted.json' with { type: 'json' };
-import webhookSubscriptionUpdatedBaseline from './fixtures/stripe/events/customer.subscription.updated.json' with { type: 'json' };
+import webhookSubscriptionCreatedBaseline from './fixtures/stripe/events/customer.subscription.created.json' with {
+  type: 'json',
+};
+import webhookSubscriptionDeletedBaseline from './fixtures/stripe/events/customer.subscription.deleted.json' with {
+  type: 'json',
+};
+import webhookSubscriptionUpdatedBaseline from './fixtures/stripe/events/customer.subscription.updated.json' with {
+  type: 'json',
+};
 import { buildStripeWebhookTestSignatureHeader } from './helpers/stripe-signature.js';
 import { registerThirdPartyContractTestIsolationHooks } from './helpers/register-contract-test-hooks.js';
 import { StripeEventEnvelopeSubscriptionWebhookContractSchema } from './schemas/stripe.schemas.js';

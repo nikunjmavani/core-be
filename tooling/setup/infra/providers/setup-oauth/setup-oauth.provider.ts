@@ -72,7 +72,7 @@ export async function provision(
   const googleEnabled = config.providers.oauth.google.enabled;
   const githubEnabled = config.providers.oauth.github.enabled;
 
-  if (!googleEnabled && !githubEnabled) {
+  if (!(googleEnabled || githubEnabled)) {
     return { success: true, message: 'OAuth: skipped (disabled)' };
   }
 

@@ -63,8 +63,9 @@ describe('session-cleanup.worker', () => {
   });
 
   it('runs session cleanup inside the session retention database context', async () => {
-    const { createSessionCleanupWorker } =
-      await import('@/domains/auth/sub-domains/auth-session/workers/session-cleanup.worker.js');
+    const { createSessionCleanupWorker } = await import(
+      '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.worker.js'
+    );
 
     const handle = createSessionCleanupWorker();
     const result = await workerState.processor?.();

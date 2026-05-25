@@ -168,75 +168,73 @@ describe('Webhook Sub-Domain — Integration', () => {
   });
 
   describe('GET /api/v1/notify/organizations/:id/webhooks/:webhookId/delivery-attempts', () => {
-    it(
-      'paginates delivery attempts with after cursor (newest first)',
-      { timeout: 30_000 },
-      async () => {
-        const { organization, token } = await createAuthorizedContext([
-          NOTIFY_PERMISSIONS.WEBHOOK_READ,
-        ]);
-        const owner = await createTestUser({
-          email: `attempt-cursor-owner-${Date.now()}@test.com`,
+    it('paginates delivery attempts with after cursor (newest first)', {
+      timeout: 30_000,
+    }, async () => {
+      const { organization, token } = await createAuthorizedContext([
+        NOTIFY_PERMISSIONS.WEBHOOK_READ,
+      ]);
+      const owner = await createTestUser({
+        email: `attempt-cursor-owner-${Date.now()}@test.com`,
+      });
+      const webhook = await createTestWebhook({
+        organizationId: organization.id,
+        url: `https://example.com/attempts-${Date.now()}`,
+        createdByUserId: owner.id,
+      });
+      const attemptRepository = new WebhookDeliveryAttemptRepository();
+      const baseCreatedAt = Date.now();
+      for (let index = 0; index < 3; index += 1) {
+        const attempt = await attemptRepository.create({
+          webhook_id: webhook.id,
+          event_type: 'subscription.updated',
+          payload: { id: `evt_${index}` },
+          status: 'SENT',
+          http_status_code: 200,
+          response_body: 'ok',
+          sent_at: new Date(),
+          attempt_count: 1,
         });
-        const webhook = await createTestWebhook({
-          organizationId: organization.id,
-          url: `https://example.com/attempts-${Date.now()}`,
-          createdByUserId: owner.id,
-        });
-        const attemptRepository = new WebhookDeliveryAttemptRepository();
-        const baseCreatedAt = Date.now();
-        for (let index = 0; index < 3; index += 1) {
-          const attempt = await attemptRepository.create({
-            webhook_id: webhook.id,
-            event_type: 'subscription.updated',
-            payload: { id: `evt_${index}` },
-            status: 'SENT',
-            http_status_code: 200,
-            response_body: 'ok',
-            sent_at: new Date(),
-            attempt_count: 1,
-          });
-          await database
-            .update(webhook_delivery_attempts)
-            .set({ created_at: new Date(baseCreatedAt + index * 1_000) })
-            .where(eq(webhook_delivery_attempts.id, attempt.id));
-        }
+        await database
+          .update(webhook_delivery_attempts)
+          .set({ created_at: new Date(baseCreatedAt + index * 1_000) })
+          .where(eq(webhook_delivery_attempts.id, attempt.id));
+      }
 
-        const page1Response = await injectAuthenticated(app, {
-          method: 'GET',
-          url: testApiPath(
-            `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/delivery-attempts`,
-          ),
-          token,
-          organizationPublicId: organization.public_id,
-          query: { limit: '2' },
-        });
-        expect(page1Response.statusCode).toBe(200);
-        const page1Body = page1Response.json() as {
-          data: unknown[];
-          meta?: { pagination?: { has_more?: boolean; next?: string | null } };
-        };
-        expect(page1Body.data).toHaveLength(2);
-        expect(page1Body.meta?.pagination).toMatchObject({ has_more: true });
-        expect(page1Body.meta?.pagination?.next).toBeTypeOf('string');
+      const page1Response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(
+          `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/delivery-attempts`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+        query: { limit: '2' },
+      });
+      expect(page1Response.statusCode).toBe(200);
+      const page1Body = page1Response.json() as {
+        data: unknown[];
+        meta?: { pagination?: { has_more?: boolean; next?: string | null } };
+      };
+      expect(page1Body.data).toHaveLength(2);
+      expect(page1Body.meta?.pagination).toMatchObject({ has_more: true });
+      expect(page1Body.meta?.pagination?.next).toBeTypeOf('string');
 
-        const page2Response = await injectAuthenticated(app, {
-          method: 'GET',
-          url: testApiPath(
-            `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/delivery-attempts`,
-          ),
-          token,
-          organizationPublicId: organization.public_id,
-          query: { limit: '2', after: page1Body.meta!.pagination!.next! },
-        });
-        expect(page2Response.statusCode).toBe(200);
-        const page2Body = page2Response.json() as {
-          data: unknown[];
-          meta?: { pagination?: { has_more?: boolean; next?: string | null } };
-        };
-        expect(page1Body.data.length + page2Body.data.length).toBe(3);
-        expect(page2Body.meta?.pagination).toMatchObject({ has_more: false, next: null });
-      },
-    );
+      const page2Response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(
+          `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/delivery-attempts`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+        query: { limit: '2', after: page1Body.meta!.pagination!.next! },
+      });
+      expect(page2Response.statusCode).toBe(200);
+      const page2Body = page2Response.json() as {
+        data: unknown[];
+        meta?: { pagination?: { has_more?: boolean; next?: string | null } };
+      };
+      expect(page1Body.data.length + page2Body.data.length).toBe(3);
+      expect(page2Body.meta?.pagination).toMatchObject({ has_more: false, next: null });
+    });
   });
 });

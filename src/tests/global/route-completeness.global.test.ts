@@ -111,7 +111,7 @@ describe('Route Completeness', () => {
     for (const route of registeredRouteKeys) {
       const [method, ...pathParts] = route.split(' ');
       const path = pathParts.join(' ');
-      if (!method || !path || !isApiRoutePath(path)) continue;
+      if (!(method && path && isApiRoutePath(path))) continue;
       if (registryKeys.has(route)) continue;
       if (isAllowlistedRegisteredRoute(method, path)) continue;
       unlisted.push(route);

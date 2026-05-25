@@ -45,14 +45,13 @@ describe('OpenAPI cursor pagination', () => {
     }
   });
 
-  it.each(CURSOR_PAGINATED_LIST_ROUTE_KEYS)(
-    'documents limit and after query parameters on %s',
-    (routeKey) => {
-      const queryNames = getQueryParameterNames(spec, routeKey);
-      expect(queryNames, `${routeKey} query params: ${queryNames.join(', ')}`).toContain('limit');
-      expect(queryNames, `${routeKey} query params: ${queryNames.join(', ')}`).toContain('after');
-    },
-  );
+  it.each(
+    CURSOR_PAGINATED_LIST_ROUTE_KEYS,
+  )('documents limit and after query parameters on %s', (routeKey) => {
+    const queryNames = getQueryParameterNames(spec, routeKey);
+    expect(queryNames, `${routeKey} query params: ${queryNames.join(', ')}`).toContain('limit');
+    expect(queryNames, `${routeKey} query params: ${queryNames.join(', ')}`).toContain('after');
+  });
 
   it('documents deprecated page parameter on cursor list routes', () => {
     const queryNames = getQueryParameterNames(spec, 'GET /api/v1/tenancy/organizations');
