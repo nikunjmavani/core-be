@@ -93,7 +93,7 @@ describe('System Validation', () => {
 
       const content = readFileSync(jwtUtilPath, 'utf-8');
       expect(content).toContain('RS256');
-      expect(content).toContain('HS256');
+      expect(content).toContain('JWT algorithm not allowed: RS256 only');
     });
 
     it('should enforce 15-minute access token expiry', () => {

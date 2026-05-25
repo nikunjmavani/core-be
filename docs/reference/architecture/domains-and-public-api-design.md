@@ -49,7 +49,7 @@ src/domains/<domain>/              # domain = DB schema
 | **auth**        | auth-method (magic-link, oauth), auth-session, auth-mfa, auth-webauthn                                                                                                          |
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
-| **billing**     | plan, subscription, stripe-webhook                                                                                                 |
+| **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
 | **notify**      | notification, webhook (webhook-event)                                                                                                                                           |
 | **upload**      | (single domain, no sub-domains)                                                                                                                                                 |
 
@@ -97,14 +97,14 @@ Nested sub-domains use the same layer files and optional `events/`, `queues/`, `
 
 ### 1.5 Tests (layout)
 
-| Layer                     | Location                                                                            | Example                                                                   |
-| ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Cross-cutting             | `src/tests/`                                                                        | security, performance, helpers, shared factories                          |
-| Domain bundled e2e        | `<domain>/__tests__/<domain>.test.ts`                                               | `billing.test.ts`, `auth.test.ts`                                         |
-| Domain unit / policy      | `<domain>/__tests__/unit/`                                                          | `billing-ledger-immutability.test.ts`                                     |
-| Domain test factories     | `<domain>/__tests__/factories/`                                                     | `tenancy/__tests__/factories/permission.factory.ts`                       |
-| Sub-domain unit           | `sub-domains/<r>/__tests__/unit/` or `sub-domains/<parent>/<child>/__tests__/unit/` | `plan.validator.test.ts`, `organization-api-key.validator.test.ts`        |
-| Sub-domain e2e (optional) | `sub-domains/<parent>/<child>/__tests__/<child>.test.ts`                            | `organization-api-key.test.ts`                                            |
+| Layer                     | Location                                                                            | Example                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Cross-cutting             | `src/tests/`                                                                        | security, performance, helpers, shared factories                                 |
+| Domain bundled e2e        | `<domain>/__tests__/<domain>.test.ts`                                               | `billing.test.ts`, `auth.test.ts`                                                |
+| Domain unit / policy      | `<domain>/__tests__/unit/`                                                          | `billing-ledger-immutability.test.ts`                                            |
+| Domain test factories     | `<domain>/__tests__/factories/`                                                     | `tenancy/__tests__/factories/permission.factory.ts`                              |
+| Sub-domain unit           | `sub-domains/<r>/__tests__/unit/` or `sub-domains/<parent>/<child>/__tests__/unit/` | `plan.validator.test.ts`, `organization-api-key.validator.test.ts`               |
+| Sub-domain e2e (optional) | `sub-domains/<parent>/<child>/__tests__/<child>.test.ts`                            | `organization-api-key.test.ts`                                                   |
 | Event handlers / emit     | `sub-domains/<r>/events/__tests__/`                                                 | `auth-method.event-handlers.test.ts`, `member-invitation.event-handlers.test.ts` |
 
 Do **not** add per-sub-domain `factories/` unless the helper is truly local; prefer `src/tests/factories/` or domain `__tests__/factories/`. Full pyramid and commands: **`.cursor/skills/test-generator/SKILL.md`** and **`.cursor/rules/testing-conventions.mdc`**.
@@ -336,7 +336,7 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 
 ### Phase 3 — Security hardening
 
-- [x] JWT: RS256/HS256, 15-min access token expiry, issuer + audience claims
+- [x] JWT: RS256 only, 15-min access token expiry, issuer + audience claims
 - [x] Argon2id password hashing (`src/shared/utils/security/password.util.ts`) — Argon2id only
 - [x] NIST 12-character minimum password length enforced in DTOs (ResetPasswordDto, ChangePasswordDto)
 - [x] Account lockout after 10 failed attempts (30-min window)

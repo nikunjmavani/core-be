@@ -88,16 +88,16 @@ flowchart TB
   MainOnly -->|main| Commitlint
 ```
 
-| Job              | When                                          | What                                                                                                                                                                   |
-| ---------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Quality**      | Every PR and push                             | `pnpm deps:audit`, `pnpm deps:audit:prod`, `pnpm validate`, `pnpm validate:domain`, routes:catalog, `pnpm docs:check`, tool:sync-env-example, Gitleaks, `semgrep scan` |
-| **Test**         | PR/push when `src/**` (etc.) changed          | Postgres + Redis → `pnpm db:migrate` → `pnpm test:coverage`. Skipped on docs-only PRs.                                                                                 |
-| **API smoke**    | PR/push when `src/**` (etc.) changed          | Migrate → seed → API server → `pnpm test:api-smoke`. Skipped on docs-only PRs.                                                                                         |
-| **Chaos**        | Push to `main` when `src/**` (etc.) changed   | Toxiproxy + `pnpm test:chaos` — runs from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml), not required on PRs. See [branch-protection.md](branch-protection.md).                                                |
-| **Docker build** | PR/push when Docker/deps paths change         | BuildKit + Trivy + health container. Required on PRs (skipped when no `docker` paths). See [branch-protection.md](branch-protection.md).                               |
-| **Docs**         | Push to `dev` / `main` (after quality)        | `pnpm docs:all`; validate OpenAPI; upload artifacts; Postman + Scalar upload via GitHub Environment secrets (`development`, `production`)                              |
-| **PR checks**    | On every PR                                   | Conventional commit title, PR size label, **.env guard** (fail if `.env` other than `.env.example` in diff)                                                            |
-| **Commitlint**   | Push to **main**, **dev**                     | Validates every commit in the push against [commitlint.config.cjs](../../../commitlint.config.cjs) (covers squash-merge and merge-commit messages, not only PR titles) |
+| Job              | When                                        | What                                                                                                                                                                                |
+| ---------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Quality**      | Every PR and push                           | `pnpm deps:audit`, `pnpm deps:audit:prod`, `pnpm validate`, `pnpm validate:domain`, routes:catalog, `pnpm docs:check`, tool:sync-env-example, Gitleaks, `semgrep scan`              |
+| **Test**         | PR/push when `src/**` (etc.) changed        | Postgres + Redis → `pnpm db:migrate` → `pnpm test:coverage`. Skipped on docs-only PRs.                                                                                              |
+| **API smoke**    | PR/push when `src/**` (etc.) changed        | Migrate → seed → API server → `pnpm test:api-smoke`. Skipped on docs-only PRs.                                                                                                      |
+| **Chaos**        | Push to `main` when `src/**` (etc.) changed | Toxiproxy + `pnpm test:chaos` — runs from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml), not required on PRs. See [branch-protection.md](branch-protection.md). |
+| **Docker build** | PR/push when Docker/deps paths change       | BuildKit + Trivy + health container. Required on PRs (skipped when no `docker` paths). See [branch-protection.md](branch-protection.md).                                            |
+| **Docs**         | Push to `dev` / `main` (after quality)      | `pnpm docs:all`; validate OpenAPI; upload artifacts; Postman + Scalar upload via GitHub Environment secrets (`development`, `production`)                                           |
+| **PR checks**    | On every PR                                 | Conventional commit title, PR size label, **.env guard** (fail if `.env` other than `.env.example` in diff)                                                                         |
+| **Commitlint**   | Push to **main**, **dev**                   | Validates every commit in the push against [commitlint.config.cjs](../../../commitlint.config.cjs) (covers squash-merge and merge-commit messages, not only PR titles)              |
 
 Workflow files: [.github/workflows/ci.yml](../../../.github/workflows/ci.yml), [.github/workflows/pr-checks.yml](../../../.github/workflows/pr-checks.yml), [.github/workflows/commit-lint.yml](../../../.github/workflows/commit-lint.yml). Index: [.github/README.md](../../../.github/README.md).
 
@@ -147,10 +147,10 @@ Release-please turns **conventional commits** into a **release PR** (CHANGELOG +
 
 There are **two release channels** — each tracks its own version via a dedicated manifest, so they never collide:
 
-| Channel        | Branch | Tag style       | Config file                                                                 | Manifest file                                                                   | Changelog          |
-| -------------- | ------ | --------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------ |
-| **Stable**     | `main` | `v2.1.0`        | [.github/release-please/config.json](../../../.github/release-please/config.json)         | [.github/release-please/manifest.json](../../../.github/release-please/manifest.json)         | `CHANGELOG.md`     |
-| **Prerelease** | `dev`  | `v2.1.0-dev.0`  | [.github/release-please/config.dev.json](../../../.github/release-please/config.dev.json) | [.github/release-please/manifest.dev.json](../../../.github/release-please/manifest.dev.json) | `CHANGELOG-dev.md` |
+| Channel        | Branch | Tag style      | Config file                                                                               | Manifest file                                                                                 | Changelog          |
+| -------------- | ------ | -------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------ |
+| **Stable**     | `main` | `v2.1.0`       | [.github/release-please/config.json](../../../.github/release-please/config.json)         | [.github/release-please/manifest.json](../../../.github/release-please/manifest.json)         | `CHANGELOG.md`     |
+| **Prerelease** | `dev`  | `v2.1.0-dev.0` | [.github/release-please/config.dev.json](../../../.github/release-please/config.dev.json) | [.github/release-please/manifest.dev.json](../../../.github/release-please/manifest.dev.json) | `CHANGELOG-dev.md` |
 
 The dev config sets `prerelease: true` + `prerelease-type: "dev"` and writes its own `CHANGELOG-dev.md`, so a `dev → main` promotion never collides with main's `CHANGELOG.md`. Both channels publish GitHub Releases (`release: published`), so [release-sbom.yml](../../../.github/workflows/release-sbom.yml) attaches a CycloneDX SBOM in either case.
 
@@ -162,7 +162,7 @@ Local commits are validated by **commitlint** via [.husky/commit-msg](../../../.
 
 | What         | Where                                                                                                                          |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Runs on**  | Push to **main** (stable) and **dev** (prerelease)                                                                              |
+| **Runs on**  | Push to **main** (stable) and **dev** (prerelease)                                                                             |
 | **Workflow** | [.github/workflows/release-please-versioning.yml](../../../.github/workflows/release-please-versioning.yml)                    |
 | **Token**    | **RELEASE_PLEASE_TOKEN** (Personal Access Token) in repository secrets — use a PAT so that merging the release PR triggers CI. |
 
@@ -272,7 +272,7 @@ Steps in each deploy workflow:
 
 **Variables synced to Railway on deploy** (when present in GitHub environment secrets):
 
-`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `ALLOWED_ORIGINS`, `NODE_ENV`, `PORT`, `HOST`, `LOG_LEVEL`, `FRONTEND_URL`, `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`, `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_PROFILE_SAMPLE_RATE`, `AUDIT_RETENTION_DAYS`, `AUTH_SESSION_RETENTION_DAYS`, `NODE_OPTIONS`, `DEPLOYMENT_TOTAL_REPLICA_COUNT`, `DEPLOYMENT_API_REPLICA_COUNT`, `DEPLOYMENT_WORKER_REPLICA_COUNT`, `DATABASE_POOL_MAX`, `POSTGRES_RESERVED_CONNECTIONS`, `POSTGRES_MAX_CONNECTIONS`.
+`DATABASE_URL`, `REDIS_URL`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `ALLOWED_ORIGINS`, `NODE_ENV`, `PORT`, `HOST`, `LOG_LEVEL`, `FRONTEND_URL`, `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`, `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_PROFILE_SAMPLE_RATE`, `AUDIT_RETENTION_DAYS`, `AUTH_SESSION_RETENTION_DAYS`, `NODE_OPTIONS`, `DEPLOYMENT_TOTAL_REPLICA_COUNT`, `DEPLOYMENT_API_REPLICA_COUNT`, `DEPLOYMENT_WORKER_REPLICA_COUNT`, `DATABASE_POOL_MAX`, `POSTGRES_RESERVED_CONNECTIONS`, `POSTGRES_MAX_CONNECTIONS`.
 
 Set **`DEPLOYMENT_TOTAL_REPLICA_COUNT`** to `api_replicas + worker_replicas` on **both** Railway API and worker services (production **required** — startup fails without it). You can use **`DEPLOYMENT_API_REPLICA_COUNT`** and **`DEPLOYMENT_WORKER_REPLICA_COUNT`** instead when split counts are clearer. Optional **`POSTGRES_MAX_CONNECTIONS`** when `SHOW max_connections` is misleading behind a pooler. See [resource-limits.md](../runbooks/resource-limits.md).
 
@@ -384,8 +384,8 @@ flowchart TB
 
 | Where                                                        | What                                                                                                                                                                                                                                                                          | Used for                                                                                                                   |
 | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Local** (`.env.<environment>` at project root, gitignored) | `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` (min 32 chars), `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` (RS256), `SECRETS_ENCRYPTION_KEY` (64 hex), `ALLOWED_ORIGINS`. Optional: Resend, Stripe, OAuth, S3, Sentry (see [.env.example](../../../.env.example))                         | `pnpm dev` / `pnpm dev:worker` — loader reads `.env.${NODE_ENV}`. **Never commit any `.env.*` other than `.env.example`.** |
-| **GitHub** → Environments (development, production)          | All keys from `.env.<environment>`, classified by section: anything under `# GitHub Secrets ###` becomes a Secret; anything under `# GitHub Variables ###` becomes a Variable. Plus **RAILWAY_TOKEN**, **RAILWAY_SERVICE_ID**, **RAILWAY_WORKER_SERVICE_ID** (workflow-only). | Deploy workflows. Populated by `pnpm github:sync <environment>` — idempotent, overwrites in place.                            |
+| **Local** (`.env.<environment>` at project root, gitignored) | `DATABASE_URL`, `REDIS_URL`, `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` (RS256, required), `SECRETS_ENCRYPTION_KEY` (64 hex), `ALLOWED_ORIGINS`. `JWT_SECRET` optional deprecated no-op. Optional: Resend, Stripe, OAuth, S3, Sentry (see [.env.example](../../../.env.example))    | `pnpm dev` / `pnpm dev:worker` — loader reads `.env.${NODE_ENV}`. **Never commit any `.env.*` other than `.env.example`.** |
+| **GitHub** → Environments (development, production)          | All keys from `.env.<environment>`, classified by section: anything under `# GitHub Secrets ###` becomes a Secret; anything under `# GitHub Variables ###` becomes a Variable. Plus **RAILWAY_TOKEN**, **RAILWAY_SERVICE_ID**, **RAILWAY_WORKER_SERVICE_ID** (workflow-only). | Deploy workflows. Populated by `pnpm github:sync <environment>` — idempotent, overwrites in place.                         |
 | **Railway**                                                  | Create **project token** → put in GitHub env as **RAILWAY_TOKEN**. Create **service(s)** → copy **Service ID** into GitHub env as **RAILWAY_SERVICE_ID** / **RAILWAY_WORKER_SERVICE_ID**.                                                                                     | Token and service IDs are stored in GitHub Environments only.                                                              |
 
 **Summary:**
@@ -404,7 +404,7 @@ Use this once to get CI and deployment working.
 
 - [ ] Create environments **development** and **production** in the repo: Settings → Environments → New environment.
 - [ ] Run `pnpm setup:infra` — it provisions Neon, Redis, Railway, etc., and pushes all secrets to GitHub (repository + environment secrets).
-- [ ] Or manually: add **RAILWAY_TOKEN**, **RAILWAY_SERVICE_ID**, **DATABASE_URL**, **REDIS_URL**, **JWT_SECRET**, **ALLOWED_ORIGINS** (and other app vars) to each environment’s Environment secrets.
+- [ ] Or manually: add **RAILWAY_TOKEN**, **RAILWAY_SERVICE_ID**, **DATABASE_URL**, **REDIS_URL**, **JWT_PRIVATE_KEY**, **JWT_PUBLIC_KEY**, **ALLOWED_ORIGINS** (and other app vars) to each environment’s Environment secrets.
 
 ### 8.2 Railway
 
@@ -467,12 +467,12 @@ gh secret set DATABASE_URL --env development --body "postgresql://..."
 
 ## 10. Quick reference
 
-| Step                   | Railway                                           | GitHub                                                                  |
-| ---------------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
-| Install                | `npm i -g @railway/cli` or `brew install railway` | `brew install gh`                                                       |
-| Auth                   | `railway login`                                   | `gh auth login`                                                         |
-| Create project/service | `railway init` then `railway add`                 | Create environments development, production in repo Settings            |
-| Get service ID         | `railway status --json`                           | —                                                                       |
+| Step                   | Railway                                           | GitHub                                                                          |
+| ---------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Install                | `npm i -g @railway/cli` or `brew install railway` | `brew install gh`                                                               |
+| Auth                   | `railway login`                                   | `gh auth login`                                                                 |
+| Create project/service | `railway init` then `railway add`                 | Create environments development, production in repo Settings                    |
+| Get service ID         | `railway status --json`                           | —                                                                               |
 | Set secrets            | Use dashboard for project token                   | `gh secret set NAME --env development --body "value"` or run `pnpm setup:infra` |
 
 No Doppler. All deploy secrets live in GitHub Environments.

@@ -21,7 +21,7 @@ flowchart TB
   subgraph required [Required for app]
     DB[DATABASE_URL]
     Redis[REDIS_URL]
-    JWT[JWT_SECRET + RS256 PEM pair]
+    JWT[RS256 PEM pair JWT_PRIVATE_KEY JWT_PUBLIC_KEY]
     Origins[ALLOWED_ORIGINS]
     Secrets[SECRETS_ENCRYPTION_KEY]
   end
@@ -252,7 +252,7 @@ ordering and grouping below mirrors `.env.example`:
 # --- under # GitHub Secrets ---
 DATABASE_URL=postgresql://...
 REDIS_URL=redis://...
-JWT_SECRET=at-least-32-characters-secret
+# JWT_SECRET=optional deprecated no-op (min 32 chars when set)
 JWT_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
 SECRETS_ENCRYPTION_KEY=<64 hex chars; node -e "console.log(require('crypto').randomBytes(32).toString('hex'))">
 RESEND_API_KEY=re_...
