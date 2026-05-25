@@ -33,8 +33,9 @@ describe('Security: Webhook URL SSRF', () => {
       ReturnType<typeof lookup>
     >);
 
-    const { resolveAndPinWebhookUrl } =
-      await import('@/shared/utils/security/webhook-outbound-fetch.util.js');
+    const { resolveAndPinWebhookUrl } = await import(
+      '@/shared/utils/security/webhook-outbound-fetch.util.js'
+    );
     const firstPin = await resolveAndPinWebhookUrl('https://partner.example/hook');
     expect(firstPin.pinnedAddress).toBe('93.184.216.34');
 

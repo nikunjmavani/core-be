@@ -94,8 +94,9 @@ describe('MfaService', () => {
   });
 
   it('verifyLoginMfa issues session after valid recovery code', async () => {
-    const { consumeMfaRecoveryCode } =
-      await import('@/domains/auth/sub-domains/auth-mfa/mfa-recovery-code.repository.js');
+    const { consumeMfaRecoveryCode } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/mfa-recovery-code.repository.js'
+    );
     vi.mocked(consumeMfaRecoveryCode).mockResolvedValueOnce(true);
 
     const result = await service.verifyLoginMfa(
@@ -107,8 +108,9 @@ describe('MfaService', () => {
   });
 
   it('verifyLoginMfa rejects already-used recovery codes', async () => {
-    const { consumeMfaRecoveryCode } =
-      await import('@/domains/auth/sub-domains/auth-mfa/mfa-recovery-code.repository.js');
+    const { consumeMfaRecoveryCode } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/mfa-recovery-code.repository.js'
+    );
     vi.mocked(consumeMfaRecoveryCode).mockResolvedValueOnce(false);
 
     await expect(

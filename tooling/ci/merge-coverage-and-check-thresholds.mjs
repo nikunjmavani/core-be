@@ -67,9 +67,7 @@ function parseArguments(argv) {
     inputs.push(token);
   }
   if (inputs.length === 0) {
-    throw new Error(
-      'No coverage inputs provided. Pass one or more `coverage-final.json` paths.',
-    );
+    throw new Error('No coverage inputs provided. Pass one or more `coverage-final.json` paths.');
   }
   return { inputs, thresholds, outputPath, reportOnly };
 }

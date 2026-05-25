@@ -282,7 +282,8 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
       {
         export_id: 'exp_k7x9m2pqr4w8n1v3',
         status: 'completed',
-        download_url: 'https://bucket.s3.amazonaws.com/user-data-export/usr/exp.json.gz?X-Amz-Signature=example',
+        download_url:
+          'https://bucket.s3.amazonaws.com/user-data-export/usr/exp.json.gz?X-Amz-Signature=example',
         expires_at: '2026-05-27T12:00:00.000Z',
         completed_at: '2026-05-20T12:05:00.000Z',
         failed_at: null,

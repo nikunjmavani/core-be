@@ -29,8 +29,9 @@ describe('event-loop-metrics', () => {
     process.env.METRICS_ENABLED = 'false';
     resetEnvCacheForTests();
 
-    const { refreshEventLoopMetrics } =
-      await import('@/infrastructure/observability/metrics/event-loop-metrics.js');
+    const { refreshEventLoopMetrics } = await import(
+      '@/infrastructure/observability/metrics/event-loop-metrics.js'
+    );
     const { renderMetrics } = await import('@/infrastructure/observability/metrics/metrics.js');
 
     refreshEventLoopMetrics();
@@ -42,8 +43,9 @@ describe('event-loop-metrics', () => {
     process.env.METRICS_ENABLED = 'true';
     resetEnvCacheForTests();
 
-    const { registerEventLoopMetrics, refreshEventLoopMetrics } =
-      await import('@/infrastructure/observability/metrics/event-loop-metrics.js');
+    const { registerEventLoopMetrics, refreshEventLoopMetrics } = await import(
+      '@/infrastructure/observability/metrics/event-loop-metrics.js'
+    );
     const { renderMetrics } = await import('@/infrastructure/observability/metrics/metrics.js');
 
     /** Use the focused refresh — `refreshMetricsBeforeScrape()` also fans out to BullMQ

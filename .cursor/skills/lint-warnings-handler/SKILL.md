@@ -1,13 +1,13 @@
 ---
 name: lint-warnings-handler
-description: Detail guide for resolving ESLint warnings. Invoked by code-smells-and-best-practices only — not a separate auto-trigger. Handle warnings yourself; prefer fixing over disabling.
+description: Detail guide for resolving Biome lint warnings. Invoked by code-smells-and-best-practices only — not a separate auto-trigger. Handle warnings yourself; prefer fixing over disabling.
 ---
 
 # Skill: Lint Warnings Handler
 
 ## Purpose
 
-**Detail guide** for ESLint warnings. The **code-smells-and-best-practices** skill owns quality for `src/` edits; read this file when you need per-rule fix patterns. **Do not ask the user** how to handle a warning—apply the guidance below.
+**Detail guide** for Biome lint warnings. The **code-smells-and-best-practices** skill owns quality for `src/` edits; read this file when you need per-rule fix patterns. **Do not ask the user** how to handle a warning—apply the guidance below.
 
 ## Rule
 

@@ -331,7 +331,7 @@ export const setupAwsProvider: InfraProvider = {
         ]
       : [],
   detectExisting: async ({ config, secrets, environments }) => {
-    if (!config.providers.aws.enabled || !isSecretFilled(secrets.aws.accessKeyId)) return [];
+    if (!(config.providers.aws.enabled && isSecretFilled(secrets.aws.accessKeyId))) return [];
     const s3Client = new S3Client({
       region: config.providers.aws.region,
       credentials: {

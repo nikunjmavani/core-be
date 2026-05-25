@@ -47,7 +47,7 @@ function listGithubEnvironmentConfigs(): string[] {
   const entries = readdirSync(githubEnvironmentsDirectory, { withFileTypes: true });
   const names: string[] = [];
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+    if (!(entry.isFile() && entry.name.endsWith('.json'))) continue;
     const content = readFileSync(resolve(githubEnvironmentsDirectory, entry.name), 'utf-8');
     const parsed: unknown = JSON.parse(content);
     if (typeof parsed === 'object' && parsed !== null && 'name' in parsed) {

@@ -48,14 +48,16 @@ describe('initOpenTelemetry / shutdownOpenTelemetry', () => {
     startMock.mockClear();
     otlpExporterConstructorMock.mockClear();
     getEnvMock.mockReset();
-    const { resetOpenTelemetryStateForTests } =
-      await import('@/infrastructure/observability/tracing/otel.js');
+    const { resetOpenTelemetryStateForTests } = await import(
+      '@/infrastructure/observability/tracing/otel.js'
+    );
     resetOpenTelemetryStateForTests();
   });
 
   afterEach(async () => {
-    const { resetOpenTelemetryStateForTests } =
-      await import('@/infrastructure/observability/tracing/otel.js');
+    const { resetOpenTelemetryStateForTests } = await import(
+      '@/infrastructure/observability/tracing/otel.js'
+    );
     resetOpenTelemetryStateForTests();
   });
 
@@ -67,8 +69,9 @@ describe('initOpenTelemetry / shutdownOpenTelemetry', () => {
       NODE_ENV: 'test',
     });
 
-    const { initOpenTelemetry, shutdownOpenTelemetry } =
-      await import('@/infrastructure/observability/tracing/otel.js');
+    const { initOpenTelemetry, shutdownOpenTelemetry } = await import(
+      '@/infrastructure/observability/tracing/otel.js'
+    );
 
     initOpenTelemetry('core-be-api');
     await shutdownOpenTelemetry();
@@ -102,8 +105,9 @@ describe('initOpenTelemetry / shutdownOpenTelemetry', () => {
       NODE_ENV: 'test',
     });
 
-    const { initOpenTelemetry, shutdownOpenTelemetry } =
-      await import('@/infrastructure/observability/tracing/otel.js');
+    const { initOpenTelemetry, shutdownOpenTelemetry } = await import(
+      '@/infrastructure/observability/tracing/otel.js'
+    );
 
     initOpenTelemetry('core-be-worker');
     await shutdownOpenTelemetry();

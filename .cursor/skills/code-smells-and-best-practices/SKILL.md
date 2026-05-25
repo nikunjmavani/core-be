@@ -1,6 +1,6 @@
 ---
 name: code-smells-and-best-practices
-description: When adding or modifying code in src/, fix ESLint issues in touched files. Full validate runs on pre-commit and CI — do not duplicate. Uses lint-warnings-handler for warning details.
+description: When adding or modifying code in src/, fix Biome lint issues in touched files. Full validate runs on pre-commit and CI — do not duplicate. Uses lint-warnings-handler for warning details.
 ---
 
 # Skill: Code Smells and Best Practices
@@ -15,7 +15,7 @@ Single owner for **code quality** under `src/`. Fix issues in files you change. 
 
 ## Checklist
 
-1. **Fix ESLint issues** in touched files (errors always; warnings per guidance below and in `.cursor/skills/lint-warnings-handler/SKILL.md`).
+1. **Fix Biome lint issues** in touched files (errors always; warnings per guidance below and in `.cursor/skills/lint-warnings-handler/SKILL.md`).
 2. **Full-repo checks** — only when:
    - Pre-commit or CI failed → use **before-commit-guard**
    - Large PR-sized change before handoff → `pnpm validate`
@@ -25,16 +25,14 @@ Single owner for **code quality** under `src/`. Fix issues in files you change. 
 
 ### Lint errors (must fix)
 
-- **consistent-type-imports**: Use `import type` for type-only imports (e.g. `import type { z } from 'zod'`).
-- **security/detect-unsafe-regex**: Use bounded patterns or add `eslint-disable` with justification (`-- bounded env key pattern`).
-- **security/detect-object-injection**: Use typed keys or allowlist; add disable with reason when keys are from validated schema or server-controlled data.
+- **useImportType**: Use `import type` for type-only imports (e.g. `import type { z } from 'zod'`).
+- **Unsafe regex / dynamic keys**: Use bounded patterns or typed maps; add `biome-ignore` with justification when keys are from validated schema or server-controlled data.
 
 ### Lint warnings (prefer fixing)
 
-- **max-lines-per-function**: Split long functions; use disable with reason only for route aggregators, test suites, CLI entry.
-- **sonarjs/no-duplicate-string**: Extract repeated strings to constants.
-- **sonarjs/cognitive-complexity**: Simplify conditionals, extract helpers.
-- **no-console**: Use `logger` from `@/shared/utils/infrastructure/logger.util.js`; allow console only in standalone CLI scripts.
+- **noExcessiveLinesPerFunction**: Split long functions; use `biome-ignore` with reason only for route aggregators, test suites, CLI entry.
+- **noExcessiveCognitiveComplexity**: Simplify conditionals, extract helpers.
+- **noConsole**: Use `logger` from `@/shared/utils/infrastructure/logger.util.js`; allow console only in standalone CLI scripts (`src/scripts/**` overrides allow it).
 
 ### Best practices
 

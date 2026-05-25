@@ -142,8 +142,9 @@ describe('UploadService', () => {
   });
 
   it('createUpload rejects organization upload without manage permission', async () => {
-    const { resolveUserOrganizationPermissions } =
-      await import('@/domains/tenancy/sub-domains/permission/authorization.service.js');
+    const { resolveUserOrganizationPermissions } = await import(
+      '@/domains/tenancy/sub-domains/permission/authorization.service.js'
+    );
     vi.mocked(resolveUserOrganizationPermissions).mockResolvedValueOnce([]);
 
     await expect(

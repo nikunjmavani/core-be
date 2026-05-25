@@ -4,7 +4,9 @@ import nock from 'nock';
 import { getDefaultS3ObjectStorageAdapter } from '@/infrastructure/storage/s3-adapter.js';
 import { env } from '@/shared/config/env.config.js';
 
-import headObjectOutboundMetadataFixture from './fixtures/s3/head-object.metadata.fixture.json' with { type: 'json' };
+import headObjectOutboundMetadataFixture from './fixtures/s3/head-object.metadata.fixture.json' with {
+  type: 'json',
+};
 import {
   normalizedPresignedQueryParameterMap,
   parsePresignedAmazonWebServicesUrl,

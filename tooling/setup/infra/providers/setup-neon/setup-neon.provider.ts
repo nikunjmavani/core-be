@@ -454,7 +454,7 @@ export const setupNeonProvider: InfraProvider = {
         ]
       : [],
   detectExisting: async ({ config, secrets }) => {
-    if (!config.providers.neon.enabled || !isSecretFilled(secrets.neon.apiKey)) return [];
+    if (!(config.providers.neon.enabled && isSecretFilled(secrets.neon.apiKey))) return [];
     try {
       const response = await fetch('https://console.neon.tech/api/v2/projects', {
         headers: {

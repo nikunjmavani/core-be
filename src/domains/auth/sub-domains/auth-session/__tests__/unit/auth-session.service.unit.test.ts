@@ -130,16 +130,18 @@ describe('AuthSessionService', () => {
   });
 
   it('verifyActiveAccessToken uses cache when hit', async () => {
-    const { getCachedSessionTokenValid } =
-      await import('@/domains/auth/sub-domains/auth-session/session-token-cache.service.js');
+    const { getCachedSessionTokenValid } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
     vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(true);
     await service.verifyActiveAccessToken('cached-token');
     expect(sessionRepository.findActiveByTokenHash).not.toHaveBeenCalled();
   });
 
   it('verifyActiveAccessToken loads session and caches on miss', async () => {
-    const { getCachedSessionTokenValid, setCachedSessionTokenValid } =
-      await import('@/domains/auth/sub-domains/auth-session/session-token-cache.service.js');
+    const { getCachedSessionTokenValid, setCachedSessionTokenValid } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
     vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(false);
     await service.verifyActiveAccessToken('fresh-token');
     expect(sessionRepository.findActiveByTokenHash).toHaveBeenCalled();

@@ -178,7 +178,7 @@ export const setupSentryProvider: InfraProvider = {
         ]
       : [],
   detectExisting: async ({ config, secrets }) => {
-    if (!config.providers.sentry.enabled || !isSecretFilled(secrets.sentry.authToken)) return [];
+    if (!(config.providers.sentry.enabled && isSecretFilled(secrets.sentry.authToken))) return [];
     try {
       const response = await fetch(
         `https://sentry.io/api/0/projects/${config.providers.sentry.organization}/${config.project.name}/`,

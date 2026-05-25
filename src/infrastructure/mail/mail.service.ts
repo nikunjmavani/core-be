@@ -96,8 +96,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<string> {
         maxAttempts: 3,
         baseDelayMs: 500,
         shouldRetry: (error) =>
-          !(error instanceof ResendApiError) &&
-          !(error instanceof CircuitBreakerOpenError) &&
+          !(error instanceof ResendApiError || error instanceof CircuitBreakerOpenError) &&
           isTransientNetworkError(error),
       }),
     );

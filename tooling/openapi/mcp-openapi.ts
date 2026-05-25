@@ -57,8 +57,7 @@ export function buildMcpCapabilitiesMarkdown(): string {
     (tool) => `| \`${tool.name}\` | ${tool.title} | ${tool.description} |`,
   ).join('\n');
   const resourceRows = MCP_RESOURCES.map(
-    (resource) =>
-      `| \`${resource.uri}\` | \`${resource.mimeType}\` | ${resource.description} |`,
+    (resource) => `| \`${resource.uri}\` | \`${resource.mimeType}\` | ${resource.description} |`,
   ).join('\n');
 
   return [

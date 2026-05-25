@@ -144,7 +144,7 @@ async function ensureDatabaseForEnvironment(
 ): Promise<{ database: UpstashDatabaseResponse; adopted: boolean }> {
   const match = existing.find((entry) => entry.database_name === name);
   if (match) {
-    if (!match.password || !match.endpoint) {
+    if (!(match.password && match.endpoint)) {
       const full = await getDatabase(secrets, match.database_id);
       return { database: full, adopted: true };
     }
@@ -160,7 +160,7 @@ export async function provision(
   state: SetupState,
   environments: string[],
 ): Promise<ProviderResult> {
-  if (!isSecretFilled(secrets.upstash.email) || !isSecretFilled(secrets.upstash.apiKey)) {
+  if (!(isSecretFilled(secrets.upstash.email) && isSecretFilled(secrets.upstash.apiKey))) {
     return {
       success: false,
       message: 'Upstash: UPSTASH_EMAIL and UPSTASH_API_KEY must be set in .env.setup.',
@@ -275,9 +275,11 @@ export const setupUpstashProvider: InfraProvider = {
       : [],
   detectExisting: async ({ config, secrets }) => {
     if (
-      !config.providers.upstash.enabled ||
-      !isSecretFilled(secrets.upstash.email) ||
-      !isSecretFilled(secrets.upstash.apiKey)
+      !(
+        config.providers.upstash.enabled &&
+        isSecretFilled(secrets.upstash.email) &&
+        isSecretFilled(secrets.upstash.apiKey)
+      )
     ) {
       return [];
     }

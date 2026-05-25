@@ -86,8 +86,9 @@ describe('Performance: worker concurrency bulkheads', () => {
 
   it('registers mail and webhook-delivery on separate queues with independent concurrency', async () => {
     const { createMailWorker } = await import('@/infrastructure/mail/workers/mail.worker.js');
-    const { createWebhookDeliveryWorker } =
-      await import('@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js');
+    const { createWebhookDeliveryWorker } = await import(
+      '@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js'
+    );
 
     const mailHandle = createMailWorker();
     const webhookHandle = createWebhookDeliveryWorker();
@@ -109,10 +110,12 @@ describe('Performance: worker concurrency bulkheads', () => {
   });
 
   it('notification and stripe webhook workers use their own bulkhead concurrency', async () => {
-    const { createNotificationWorker } =
-      await import('@/domains/notify/sub-domains/notification/workers/notification.worker.js');
-    const { createStripeWebhookWorker } =
-      await import('@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook.worker.js');
+    const { createNotificationWorker } = await import(
+      '@/domains/notify/sub-domains/notification/workers/notification.worker.js'
+    );
+    const { createStripeWebhookWorker } = await import(
+      '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook.worker.js'
+    );
 
     const notificationHandle = createNotificationWorker();
     const stripeHandle = createStripeWebhookWorker({

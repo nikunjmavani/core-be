@@ -49,8 +49,9 @@ describe('rate-limit.middleware', () => {
         REDIS_URL: 'redis://127.0.0.1:6379',
       },
     }));
-    const { default: redisRateLimitMiddleware } =
-      await import('@/shared/middlewares/rate-limit.middleware.js');
+    const { default: redisRateLimitMiddleware } = await import(
+      '@/shared/middlewares/rate-limit.middleware.js'
+    );
     application = Fastify();
     await application.register(redisRateLimitMiddleware);
     await application.ready();
@@ -95,8 +96,9 @@ describe('rate-limit.middleware', () => {
         REDIS_URL: undefined,
       },
     }));
-    const { default: developmentRateLimitMiddleware } =
-      await import('@/shared/middlewares/rate-limit.middleware.js');
+    const { default: developmentRateLimitMiddleware } = await import(
+      '@/shared/middlewares/rate-limit.middleware.js'
+    );
     application = Fastify();
     await application.register(developmentRateLimitMiddleware);
     await application.ready();
@@ -120,8 +122,9 @@ describe('rate-limit.middleware', () => {
         REDIS_URL: 'redis://127.0.0.1:6379',
       },
     }));
-    const { default: productionRateLimitMiddleware } =
-      await import('@/shared/middlewares/rate-limit.middleware.js');
+    const { default: productionRateLimitMiddleware } = await import(
+      '@/shared/middlewares/rate-limit.middleware.js'
+    );
     application = Fastify();
     await application.register(productionRateLimitMiddleware);
     await application.ready();

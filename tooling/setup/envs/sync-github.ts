@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   logger.blank();
 
   // Confirmation
-  if (!dryRun && !skipConfirmation) {
+  if (!(dryRun || skipConfirmation)) {
     if (!isInteractiveShell()) {
       logger.error('Non-interactive shell — re-run with --yes to push.');
       process.exit(1);

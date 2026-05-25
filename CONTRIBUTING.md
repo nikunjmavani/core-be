@@ -41,7 +41,7 @@ Committed files at the project root (not directories) group as follows:
 | Category           | Examples                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------- |
 | Package / Node     | `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, `.nvmrc`, `.node-version`, `.npmrc`             |
-| Quality            | `eslint.config.mjs`, `.prettierrc`, `.editorconfig`, `vitest*.config.ts`                           |
+| Quality            | `biome.json`, `.biomeignore`, `.editorconfig`, `tooling/vitest/`                                   |
 | Data               | `drizzle.config.ts`, `migrations/`                                                                 |
 | Containers         | `Dockerfile`, `Dockerfile.worker`, `Dockerfile.agent`, `docker-bake.hcl`, `docker-compose.yml`     |
 | Env                | `.env.example` (committed); every `.env.*` per-environment file gitignored                         |
@@ -75,7 +75,7 @@ Commits should follow **[Conventional Commits](https://www.conventionalcommits.o
 
 | Hook           | Script                                   | What runs                                                                                                                                                                                                                                                                  |
 | -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | `lint-staged` (ESLint + Prettier on `src/**/*.ts` and `tooling/setup/**/*.ts`), `typecheck`, `validate:domain:strict`, route catalog / OpenAPI sync when relevant files change, env-example sync, optional Gitleaks on staged files, conflict-marker and large-file guards |
+| **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | `lint-staged` (Biome on `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; markdownlint on `*.md`), `typecheck`, `validate:domain:strict`, route catalog / OpenAPI sync when relevant files change, env-example sync, optional Gitleaks on staged files, conflict-marker and large-file guards |
 | **commit-msg** | [`.husky/commit-msg`](.husky/commit-msg) | [Conventional Commits](https://www.conventionalcommits.org/) via commitlint                                                                                                                                                                                                |
 | **pre-push**   | [`.husky/pre-push`](.husky/pre-push)     | `typecheck`, `build`, `build:check`, `test:unit`                                                                                                                                                                                                                           |
 

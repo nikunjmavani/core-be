@@ -26,8 +26,9 @@ describe('http-metrics.plugin', () => {
     process.env.METRICS_ENABLED = 'true';
     resetEnvCacheForTests();
 
-    const { recordHttpRequest } =
-      await import('@/infrastructure/observability/metrics/prometheus-metrics.js');
+    const { recordHttpRequest } = await import(
+      '@/infrastructure/observability/metrics/prometheus-metrics.js'
+    );
     const { renderMetrics } = await import('@/infrastructure/observability/metrics/metrics.js');
 
     recordHttpRequest('GET', '/direct', 200, 0.01);
@@ -44,8 +45,9 @@ describe('http-metrics.plugin', () => {
     const { isMetricsEnabled } = await import('@/infrastructure/observability/metrics/metrics.js');
     expect(isMetricsEnabled()).toBe(true);
 
-    const { default: httpMetricsPlugin } =
-      await import('@/infrastructure/observability/metrics/http-metrics.plugin.js');
+    const { default: httpMetricsPlugin } = await import(
+      '@/infrastructure/observability/metrics/http-metrics.plugin.js'
+    );
     const { renderMetrics } = await import('@/infrastructure/observability/metrics/metrics.js');
 
     const application = Fastify();

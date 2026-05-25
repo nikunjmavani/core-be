@@ -84,8 +84,9 @@ describe('worker-health.server', () => {
   });
 
   it('returns 503 on /health/live when throughput heartbeats are stale', async () => {
-    const { readWorkerQueueHeartbeats } =
-      await import('@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js');
+    const { readWorkerQueueHeartbeats } = await import(
+      '@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js'
+    );
     vi.mocked(readWorkerQueueHeartbeats).mockResolvedValueOnce([
       {
         queue: 'mail',

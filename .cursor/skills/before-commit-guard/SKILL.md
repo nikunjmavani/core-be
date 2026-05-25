@@ -23,7 +23,7 @@ The hook in `.husky/pre-commit` runs these steps in order. If any step fails, th
 
 | Step | Command / check                                                     | What to do if it fails                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ---- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `pnpm lint-staged`                                                  | ESLint + Prettier on staged `src/**/*.ts`, `tooling/**/*.ts`, Prettier on `*.{json,yaml,yml}`, and Prettier + `markdownlint-cli2 --fix` on `*.md` (pinned `markdownlint-cli2@0.15.0` matches the GitHub Actions Docs lane). Run `pnpm lint` / `pnpm format` for code; for markdown failures run `pnpm docs:lint:fix` and re-stage. Fix per **code-smells-and-best-practices** (warning details in **lint-warnings-handler**). |
+| 1    | `pnpm lint-staged`                                                  | Biome on staged `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; `markdownlint-cli2 --fix` on `*.md` (pinned `markdownlint-cli2@0.15.0` matches the GitHub Actions Docs lane). Run `pnpm lint` / `pnpm format` for code; for markdown failures run `pnpm docs:lint:fix` and re-stage. Fix per **code-smells-and-best-practices** (warning details in **lint-warnings-handler**). |
 | 2    | `pnpm typecheck`                                                    | TypeScript errors in `src/`. Run `pnpm typecheck`, fix types (no `any`, correct imports).                                                                                                                                                                                                                                                                                                                                     |
 | 3    | `pnpm validate:domain:strict`                                       | Domain structure; warnings fail. Fix per **domain-generator** and CLAUDE.md.                                                                                                                                                                                                                                                                                                                                                  |
 | 4a   | `pnpm routes:catalog` + `git add docs/routes.txt`                   | Regenerates the checked-in route catalog on every local commit; re-stages generated file so it is included in the commit that will be pushed to GitHub.                                                                                                                                                                                                                                                                       |
@@ -57,7 +57,7 @@ Full PR gate: `pnpm ci:local` or wait for CI (`quality` + `test` + `api-smoke` +
 Before committing, the user (or AI) can run:
 
 ```bash
-pnpm validate                  # lint + format:check + typecheck
+pnpm validate                  # biome check + typecheck
 pnpm validate:domain:strict    # domain structure (warnings fail; same as hook step 3)
 pnpm routes:catalog:check      # docs/routes.txt in sync
 pnpm docs:check                # OpenAPI specs in sync (when routes or openapi inputs change)
@@ -74,8 +74,8 @@ If all pass, the pre-commit hook should pass. If `deps:audit` fails, see **depen
 
 These one-time or ongoing practices are part of keeping the repo commit-clean:
 
-1. **Format** — Prettier on `src/**/*.ts`; `pnpm format` to fix, `pnpm format:check` in CI/validate.
-2. **Lint** — ESLint with no new warnings; resolve per **code-smells-and-best-practices** / **lint-warnings-handler**.
+1. **Format + lint** — Biome on `src/` and `tooling/`; `pnpm format` / `pnpm lint` to fix; `pnpm validate` runs `biome check` + typecheck.
+2. **Lint warnings** — Resolve per **code-smells-and-best-practices** / **lint-warnings-handler**.
 3. **Typecheck** — `tsc --noEmit`; fix all type errors.
 4. **Domain structure** — `pnpm validate:domain`; domains and sub-domains must match CLAUDE.md layout.
 5. **Dependency audit** — `pnpm audit`; use `pnpm.overrides` for transitive vulns when safe; see **dependency-security**.

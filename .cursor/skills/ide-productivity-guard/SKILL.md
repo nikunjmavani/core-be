@@ -18,14 +18,13 @@ Run this skill when **any** of the following apply:
 | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Edit `.vscode/extensions.json` or `.vscode/settings.json`                                                  | Apply checklist below; keep extensions backend-only, settings aligned.                          |
 | User asks for productivity/IDE recommendations                                                             | Suggest from curated list; add to `.vscode` if user agrees.                                     |
-| Add or change dependency/config with a popular extension (Vitest, Drizzle, BullMQ, ESLint, Prettier, etc.) | Consider adding that extension to `extensions.json` and any useful settings to `settings.json`. |
+| Add or change dependency/config with a popular extension (Vitest, Drizzle, BullMQ, Biome, etc.) | Consider adding that extension to `extensions.json` and any useful settings to `settings.json`. |
 
 ## Curated extensions (core-be)
 
 Backend-only. Do **not** add: Tailwind, React snippets, Playwright UI, or HTML/JSX-only extensions.
 
-- `esbenp.prettier-vscode` — Prettier
-- `dbaeumer.vscode-eslint` — ESLint
+- `biomejs.biome` — Biome (lint + format)
 - `ms-vscode.vscode-typescript-next` — TypeScript (workspace)
 - `vitest.explorer` — Vitest
 - `christian-kohler.path-intellisense` — Path Intellisense
@@ -40,14 +39,13 @@ Backend-only. Do **not** add: Tailwind, React snippets, Playwright UI, or HTML/J
 
 Keep these aligned in `.vscode/settings.json`:
 
-- **Editor:** format on save, tab size 2, rulers [90], bracket pairs, sticky scroll, quickSuggestions.strings, codeActionsOnSave (fixAll eslint, organizeImports never).
+- **Editor:** format on save, tab size 2, rulers [90], bracket pairs, sticky scroll, quickSuggestions.strings, codeActionsOnSave (`source.fixAll.biome`, organizeImports never).
 - **Files:** eol `\n`, trimTrailingWhitespace, insertFinalNewline, exclude (node_modules, dist, .git, coverage), watcherExclude.
 - **TypeScript:** workspace TS SDK, importModuleSpecifier non-relative, importModuleSpecifierEnding `js`, autoImports, updateImportsOnFileMove always.
-- **ESLint:** useFlatConfig true, validate `["typescript"]` only (no typescriptreact), workingDirectories `["."]`.
-- **Prettier:** default formatter for `[typescript]`, `[json]`, `[jsonc]`, `[markdown]` (no typescriptreact, css, html unless needed for rare files).
+- **Biome:** `editor.defaultFormatter` = `biomejs.biome` for `[typescript]`, `[json]`, `[jsonc]` (markdown: markdownlint for lint; optional Biome format in editor).
 - **Search exclude:** node_modules, dist, .git, coverage, pnpm-lock.yaml.
 - **Terminal:** defaultProfile.osx zsh, scrollback 5000.
-- **Explorer:** fileNesting enabled, patterns: tsconfig → `tsconfig._.json`, package.json → pnpm-lock.yaml + .npmrc + .prettierrc + eslint configs, .env → `.env._`.
+- **Explorer:** fileNesting enabled, patterns: tsconfig → `tsconfig._.json`, package.json → pnpm-lock.yaml + biome.json + .biomeignore, .env → `.env._`.
 - **envSwitcher:** glob.target `.env`, glob.presets `.env*`.
 - **Vitest (multi-config):** `vitest.workspaceConfig` → `.vscode/vitest.workspace.ts` (editor only; do **not** add root `vitest.workspace.ts` — that changes default `vitest run` / `pnpm test` behavior).
 - **cSpell.words:** Merge existing backend list; do not add frontend-only words (e.g. oklch, POSTHOG, signups, VITE).
@@ -79,7 +77,7 @@ in `settings.json`. List all config paths as a default export array (Vitest 4: n
 
 ## When adding new tooling
 
-When you add or change a dependency or config that has a popular VS Code extension (e.g. Vitest, Drizzle, BullMQ, ESLint, Prettier), consider adding that extension to `.vscode/extensions.json` and any useful settings to `.vscode/settings.json`. Document briefly why (e.g. "Vitest Explorer for test run/debug from editor").
+When you add or change a dependency or config that has a popular VS Code extension (e.g. Vitest, Drizzle, BullMQ, Biome), consider adding that extension to `.vscode/extensions.json` and any useful settings to `.vscode/settings.json`. Document briefly why (e.g. "Vitest Explorer for test run/debug from editor").
 
 ## Checklist
 

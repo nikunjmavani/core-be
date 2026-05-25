@@ -232,35 +232,33 @@ describe('Notify Domain — Integration', () => {
       expect(response.statusCode).toBe(403);
     });
 
-    it(
-      'should send test delivery and return result with manage permission',
-      { timeout: 15_000 },
-      async () => {
-        const { organization, user, token } = await createAuthorizedNotifyContext();
-        const webhook = await createTestWebhook({
-          organizationId: organization.id,
-          url: 'https://httpbin.org/post',
-          createdByUserId: user.id,
-        });
+    it('should send test delivery and return result with manage permission', {
+      timeout: 15_000,
+    }, async () => {
+      const { organization, user, token } = await createAuthorizedNotifyContext();
+      const webhook = await createTestWebhook({
+        organizationId: organization.id,
+        url: 'https://httpbin.org/post',
+        createdByUserId: user.id,
+      });
 
-        const response = await injectAuthenticatedOrganizationMutation(app, {
-          method: 'POST',
-          url: `/api/v1/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/test`,
-          token,
-        });
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/test`,
+        token,
+      });
 
-        // External httpbin.org may be slow or return 5xx
-        expect([200, 500]).toContain(response.statusCode);
-        if (response.statusCode === 200) {
-          const body = response.json() as {
-            data: { success: boolean; delivered_at: string };
-          };
-          expect(body.data).toHaveProperty('success');
-          expect(body.data).toHaveProperty('delivered_at');
-          expect(typeof body.data.success).toBe('boolean');
-        }
-      },
-    );
+      // External httpbin.org may be slow or return 5xx
+      expect([200, 500]).toContain(response.statusCode);
+      if (response.statusCode === 200) {
+        const body = response.json() as {
+          data: { success: boolean; delivered_at: string };
+        };
+        expect(body.data).toHaveProperty('success');
+        expect(body.data).toHaveProperty('delivered_at');
+        expect(typeof body.data.success).toBe('boolean');
+      }
+    });
 
     it('should return 404 for non-existent webhook', async () => {
       const { organization, token } = await createAuthorizedNotifyContext();

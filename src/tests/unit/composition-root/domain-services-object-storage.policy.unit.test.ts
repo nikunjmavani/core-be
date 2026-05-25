@@ -33,15 +33,14 @@ function collectServiceFiles(directory: string, accumulator: string[] = []): str
 const ALL_DOMAIN_SERVICE_FILES = collectServiceFiles(DOMAINS_ROOT);
 
 describe('Policy: domain services use ObjectStoragePort injection', () => {
-  it.each(TARGET_SERVICE_FILES)(
-    '%s imports ObjectStoragePort and not storage.service',
-    (servicePath) => {
-      const source = readFileSync(join(PROJECT_ROOT, servicePath), 'utf8');
-      expect(source).toMatch(/ObjectStoragePort/);
-      expect(source).not.toMatch(/from\s+['"]@\/infrastructure\/storage\/storage\.service/);
-      expect(source).not.toMatch(/from\s+['"]@aws-sdk\//);
-    },
-  );
+  it.each(
+    TARGET_SERVICE_FILES,
+  )('%s imports ObjectStoragePort and not storage.service', (servicePath) => {
+    const source = readFileSync(join(PROJECT_ROOT, servicePath), 'utf8');
+    expect(source).toMatch(/ObjectStoragePort/);
+    expect(source).not.toMatch(/from\s+['"]@\/infrastructure\/storage\/storage\.service/);
+    expect(source).not.toMatch(/from\s+['"]@aws-sdk\//);
+  });
 
   it('no domain *.service.ts imports @aws-sdk', () => {
     const offenders = ALL_DOMAIN_SERVICE_FILES.filter((servicePath) => {

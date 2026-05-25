@@ -62,8 +62,9 @@ describe('observability workers', () => {
       scanTruncated: false,
     });
 
-    const { createIdempotencyCardinalityWorker } =
-      await import('@/infrastructure/observability/idempotency-cardinality/idempotency-cardinality.worker.js');
+    const { createIdempotencyCardinalityWorker } = await import(
+      '@/infrastructure/observability/idempotency-cardinality/idempotency-cardinality.worker.js'
+    );
 
     const handle = createIdempotencyCardinalityWorker();
     const result = await workerState.processors.get('idempotency-cardinality')?.();
@@ -81,8 +82,9 @@ describe('observability workers', () => {
       depths: [{ queueName: 'mail-dlq', failedCount: 2 }],
     });
 
-    const { createDlqDepthWorker } =
-      await import('@/infrastructure/observability/dlq-depth/dlq-depth.worker.js');
+    const { createDlqDepthWorker } = await import(
+      '@/infrastructure/observability/dlq-depth/dlq-depth.worker.js'
+    );
 
     const handle = createDlqDepthWorker();
     const result = await workerState.processors.get('dlq-depth')?.();

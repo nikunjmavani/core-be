@@ -52,8 +52,9 @@ describe('idempotency middleware fail-closed behavior', () => {
   });
 
   it('returns 503 when Redis is unavailable during claim', async () => {
-    const { default: idempotencyPlugin } =
-      await import('@/shared/middlewares/idempotency.middleware.js');
+    const { default: idempotencyPlugin } = await import(
+      '@/shared/middlewares/idempotency.middleware.js'
+    );
 
     let claimPreHandler: ((request: FastifyRequest, reply: FastifyReply) => Promise<void>) | null =
       null;
@@ -97,8 +98,9 @@ describe('idempotency middleware fail-closed behavior', () => {
       auth: { userId: TEST_USER_PUBLIC_ID },
     } as unknown as FastifyRequest & { _idempotencyKey?: string };
 
-    const { parseIdempotencyKeyHeader } =
-      await import('@/shared/utils/idempotency/idempotency-key.util.js');
+    const { parseIdempotencyKeyHeader } = await import(
+      '@/shared/utils/idempotency/idempotency-key.util.js'
+    );
     const parsed = parseIdempotencyKeyHeader(request.headers[IDEMPOTENCY_KEY_HEADER]);
     if (parsed.kind === 'valid') {
       (request as { _idempotencyKey?: string })._idempotencyKey = parsed.value;
@@ -651,8 +653,9 @@ describe('idempotency middleware happy paths and conflicts', () => {
   });
 
   it('onRoute skips non-write methods and appends claim handler for write routes', async () => {
-    const { default: idempotencyPlugin } =
-      await import('@/shared/middlewares/idempotency.middleware.js');
+    const { default: idempotencyPlugin } = await import(
+      '@/shared/middlewares/idempotency.middleware.js'
+    );
     const mockApp = { addHook: vi.fn() };
     await idempotencyPlugin(mockApp as never, {} as never);
 

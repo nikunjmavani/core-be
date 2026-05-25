@@ -17,8 +17,9 @@ describe('partition-maintenance.processor', () => {
   });
 
   it('runPartitionMaintenanceJob ensures partitions then drops empty expired children', async () => {
-    const { runPartitionMaintenanceJob } =
-      await import('@/infrastructure/queue/partition-maintenance/partition-maintenance.processor.js');
+    const { runPartitionMaintenanceJob } = await import(
+      '@/infrastructure/queue/partition-maintenance/partition-maintenance.processor.js'
+    );
 
     const result = await runPartitionMaintenanceJob();
 

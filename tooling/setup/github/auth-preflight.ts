@@ -61,10 +61,8 @@ function activeAccountFromStatus(statusOutput: string): ActiveAccount | null {
       currentLogin = loginMatch[1];
     }
 
-    if (/^- Active account:\s*true/i.test(line)) {
-      if (currentLogin && currentHost) {
-        return { login: currentLogin, host: currentHost };
-      }
+    if (/^- Active account:\s*true/i.test(line) && currentLogin && currentHost) {
+      return { login: currentLogin, host: currentHost };
     }
   }
 

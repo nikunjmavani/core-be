@@ -37,7 +37,7 @@ export function buildGoogleOAuthRedirectUrl(state: string): string {
 export async function exchangeGoogleOAuthCode(code: string): Promise<OAuthProfile> {
   const clientId = env.OAUTH_GOOGLE_CLIENT_ID;
   const clientSecret = env.OAUTH_GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
+  if (!(clientId && clientSecret)) {
     throw new NotImplementedError('errors:googleOAuthNotConfigured');
   }
 
@@ -83,7 +83,7 @@ export async function exchangeGoogleOAuthCode(code: string): Promise<OAuthProfil
     picture?: string;
   };
 
-  if (!userInfo.email || !userInfo.sub) {
+  if (!(userInfo.email && userInfo.sub)) {
     throw new UnauthorizedError('errors:googleUserMissingEmailOrSub');
   }
 

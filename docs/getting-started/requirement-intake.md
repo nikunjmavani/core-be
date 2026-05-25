@@ -169,7 +169,7 @@ flowchart LR
 **Details to provide:**
 
 - **What changes**: e.g. "add rule X", "run Semgrep in CI", "change audit level"
-- **Files**: `eslint.config.mjs`, `.husky/pre-commit`, `.github/workflows/ci.yml`, `.gitleaks.toml`, `.semgrepignore`, etc.
+- **Files**: `biome.json`, `.husky/pre-commit`, `.github/workflows/ci.yml`, `.gitleaks.toml`, `.semgrepignore`, etc.
 
 **Skills to run (in order):**
 
@@ -318,7 +318,7 @@ All `.cursor/rules/*.mdc` whose globs match the files you change (see skill inde
 | domain-generator-sync.mdc               | `src/domains/**/*.container.ts`, `*.routes.ts`, `src/routes.ts`                                      | domain-generator + route-catalog + openapi-route-sync (routes) |
 | testing-conventions.mdc                 | tests, validators, serializers                                                                       | test-generator                                                 |
 | workers-events-sync.mdc                 | `**/events/**`, `**/queues/**`, `**/workers/**`, `src/infrastructure/queue/**`, `src/core/events/**` | workers-events                                                 |
-| code-quality-guard-sync.mdc             | `eslint.config.mjs`, `.husky/pre-commit`, `.github/workflows/**`, `.gitleaks.toml`, `.semgrepignore` | code-quality-guard                                             |
+| code-quality-guard-sync.mdc             | `biome.json`, `.biomeignore`, `.husky/pre-commit`, `.github/workflows/**`, `.gitleaks.toml`, `.semgrepignore` | code-quality-guard                                             |
 | structure-maintainer-sync.mdc           | `CLAUDE.md`, `README.md`, `.cursor/rules/**`, `.cursor/skills/**`                                    | structure-maintainer                                           |
 | code-smells-and-best-practices-sync.mdc | `src/**/*.ts`                                                                                        | code-smells-and-best-practices (single quality owner)          |
 | sql-design-guard-sync.mdc               | `src/domains/**/*.schema.ts`                                                                         | sql-design-guard + schema conventions                          |

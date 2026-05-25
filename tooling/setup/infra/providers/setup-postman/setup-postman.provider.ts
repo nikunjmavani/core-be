@@ -34,7 +34,7 @@ export async function provision(
   secrets: SetupSecrets,
   state: SetupState,
 ): Promise<ProviderResult> {
-  if (!secrets.postman?.apiKey || !secrets.postman?.workspaceId) {
+  if (!(secrets.postman?.apiKey && secrets.postman?.workspaceId)) {
     return { success: true, message: 'Postman: skipped (no API key or workspace ID)' };
   }
 
@@ -78,7 +78,7 @@ export async function provision(
     const collectionContent = readFileSync(COLLECTION_PATH, 'utf-8');
     const collectionData = JSON.parse(collectionContent);
 
-    let collectionId = state.postman?.collectionId;
+    const collectionId = state.postman?.collectionId;
     let method: string;
     let url: string;
 

@@ -63,8 +63,9 @@ describe('assertPostgresConnectionBudget', () => {
       WORKER_CONCURRENCY: 4,
     });
 
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(/connection budget exceeded/i);
     expect(sqlMock).not.toHaveBeenCalled();
@@ -80,8 +81,9 @@ describe('assertPostgresConnectionBudget', () => {
       WORKER_CONCURRENCY: 4,
     });
 
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
 
     await expect(assertPostgresConnectionBudget()).resolves.toBeUndefined();
   });
@@ -95,8 +97,9 @@ describe('assertPostgresConnectionBudget', () => {
       WORKER_CONCURRENCY: 4,
     });
 
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(
       /DEPLOYMENT_TOTAL_REPLICA_COUNT/i,
@@ -118,8 +121,9 @@ describe('assertPostgresConnectionBudget', () => {
       queues: [],
     });
 
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
 
     await expect(assertPostgresConnectionBudget({ assertWorkerConcurrency: true })).rejects.toThrow(
       /Worker Postgres pool demand/i,
@@ -142,8 +146,9 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
 
     await assertPostgresConnectionBudget({ assertWorkerConcurrency: true });
     expect(logger.warn).toHaveBeenCalledWith(
@@ -163,8 +168,9 @@ describe('assertPostgresConnectionBudget', () => {
       WORKER_CONCURRENCY: 4,
     });
 
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
 
     await expect(assertPostgresConnectionBudget()).resolves.toBeUndefined();
   });
@@ -180,8 +186,9 @@ describe('assertPostgresConnectionBudget', () => {
       WORKER_CONCURRENCY: 4,
     });
 
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(/connection budget exceeded/i);
   });
@@ -196,8 +203,9 @@ describe('assertPostgresConnectionBudget', () => {
       WORKER_CONCURRENCY: 4,
     });
 
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(/must both be set/i);
   });
@@ -211,8 +219,9 @@ describe('assertPostgresConnectionBudget', () => {
       WORKER_CONCURRENCY: 4,
     });
 
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(/connection budget exceeded/i);
     expect(sqlMock).not.toHaveBeenCalled();
@@ -228,8 +237,9 @@ describe('assertPostgresConnectionBudget', () => {
       RAILWAY_GIT_COMMIT_SHA: 'deadbeef',
     });
 
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(
       /DEPLOYMENT_TOTAL_REPLICA_COUNT/i,
@@ -247,8 +257,9 @@ describe('assertPostgresConnectionBudget', () => {
       WORKER_CONCURRENCY: 4,
     });
 
-    const { assertPostgresConnectionBudget } =
-      await import('@/infrastructure/database/assert-connection-budget.js');
+    const { assertPostgresConnectionBudget } = await import(
+      '@/infrastructure/database/assert-connection-budget.js'
+    );
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(
       /DEPLOYMENT_TOTAL_REPLICA_COUNT/i,
     );

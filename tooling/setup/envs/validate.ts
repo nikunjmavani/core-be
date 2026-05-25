@@ -107,7 +107,7 @@ export function validateEnvFile(environment: string): EnvValidationResult {
       'S3_ACCESS_KEY_ID',
       'S3_SECRET_ACCESS_KEY',
     ];
-    if (!REQUIRED_VARS.includes(key) && !knownOptionals.includes(key)) {
+    if (!(REQUIRED_VARS.includes(key) || knownOptionals.includes(key))) {
       extra.push(key);
     }
   }

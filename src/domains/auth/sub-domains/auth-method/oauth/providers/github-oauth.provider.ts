@@ -35,7 +35,7 @@ export function buildGitHubOAuthRedirectUrl(state: string): string {
 export async function exchangeGitHubOAuthCode(code: string): Promise<OAuthProfile> {
   const clientId = env.OAUTH_GITHUB_CLIENT_ID;
   const clientSecret = env.OAUTH_GITHUB_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
+  if (!(clientId && clientSecret)) {
     throw new NotImplementedError('errors:githubOAuthNotConfigured');
   }
 
@@ -115,7 +115,7 @@ export async function exchangeGitHubOAuthCode(code: string): Promise<OAuthProfil
     }
   }
 
-  if (!email || !userInfo.id) {
+  if (!(email && userInfo.id)) {
     throw new UnauthorizedError('errors:githubUserMissingEmailOrId');
   }
 

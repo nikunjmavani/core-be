@@ -48,6 +48,7 @@
 /tsconfig.json           @nikunjmavani
 /vitest.config.ts        @nikunjmavani
 /tooling/vitest/         @nikunjmavani
-/eslint.config.mjs      @nikunjmavani
+/biome.json             @nikunjmavani
+/.biomeignore           @nikunjmavani
 /.gitleaks.toml          @nikunjmavani
 /.semgrepignore          @nikunjmavani

@@ -27,7 +27,7 @@ Compare to default branch (`main`). Use `CODEOWNERS` / path ownership when prese
 | **Routes + OpenAPI + seeds** | `*.routes.ts`, `openapi-enricher.ts`, `locales/*/openapi.json`, `*.seed.ts` | Keep route catalog + OpenAPI + seeds together |
 | **Workers / queues**         | `**/events/**`, `**/queues/**`, `**/workers/**`, `infrastructure/queue/**`  | After schema if jobs touch new tables         |
 | **Tests only**               | `__tests__/**`, `src/tests/**`                                              | Stack on feature PR or follow-up              |
-| **CI / tooling**             | `.github/workflows/**`, `eslint.config.mjs`, `.husky/**`                    | Isolate from product code                     |
+| **CI / tooling**             | `.github/workflows/**`, `biome.json`, `.husky/**`                           | Isolate from product code                     |
 | **Docs**                     | `docs/**/*.md`                                                              | **docs-maintainer** after moves               |
 
 ## 2. Propose the split
