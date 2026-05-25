@@ -78,6 +78,10 @@ On **push** to **`dev`** or **`main`** (after Quality passes), CI regenerates sp
 | Scalar Registry | `pnpm docs:upload:scalar` | `SCALAR_API_KEY`, `SCALAR_NAMESPACE`; optional `SCALAR_SLUG` (default `core-be`) |
 | Both | `pnpm docs:upload:hosted` | All of the above |
 
+Hosted publish steps are best-effort in post-merge CI: OpenAPI/Postman generation,
+sync checks, and artifacts stay required, while invalid or expired third-party
+tokens surface as warnings instead of failing the whole post-merge workflow.
+
 Registry URL pattern:
 
 `https://registry.scalar.com/@<namespace>/apis/<slug>/latest`

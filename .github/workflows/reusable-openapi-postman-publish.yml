@@ -68,6 +68,7 @@ jobs:
 
       - name: Upload Postman Collection to workspace
         if: inputs.publish_hosted_docs && env.POSTMAN_API_KEY != ''
+        continue-on-error: true
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           POSTMAN_WORKSPACE_ID: ${{ secrets.POSTMAN_WORKSPACE_ID }}
@@ -77,6 +78,7 @@ jobs:
 
       - name: Upload OpenAPI to Scalar Registry
         if: inputs.publish_hosted_docs && env.SCALAR_API_KEY != ''
+        continue-on-error: true
         env:
           SCALAR_API_KEY: ${{ secrets.SCALAR_API_KEY }}
           SCALAR_NAMESPACE: ${{ secrets.SCALAR_NAMESPACE }}
