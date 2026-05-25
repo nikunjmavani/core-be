@@ -239,7 +239,14 @@ describe('Security: organization user-discovery RLS + invitation SECURITY DEFINE
         email: invitationEmail,
         token_hash: 'hash-expired',
         invited_by_user_id: ownerA.id,
-        /** Expired invitation must be filtered out. */
+        /**
+         * Expired invitation must be filtered out by
+         * `list_pending_member_invitations_for_email`. `created_at` is
+         * pinned earlier than `expires_at` so the `chk_member_inv_expires`
+         * check constraint (`expires_at > created_at`) still holds while
+         * the row remains past its `expires_at`.
+         */
+        created_at: new Date(Date.now() - 48 * 60 * 60 * 1000),
         expires_at: new Date(Date.now() - 24 * 60 * 60 * 1000),
       },
     ]);
