@@ -16,11 +16,9 @@ describe('post-merge CI trigger policy', () => {
     expect(workflow).not.toMatch(/^\s+push:\s*$/m);
   });
 
-  it('does not run full DB integration or chaos matrices in CI', () => {
+  it('does not run chaos matrix in post-merge CI', () => {
     const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
-    expect(workflow).not.toContain('reusable-vitest-postgres-redis.yml');
     expect(workflow).not.toContain('reusable-chaos-toxiproxy.yml');
-    expect(workflow).not.toMatch(/^\s+integration-tests:/m);
     expect(workflow).not.toMatch(/^\s+chaos:/m);
   });
 
@@ -30,13 +28,15 @@ describe('post-merge CI trigger policy', () => {
     expect(workflow).not.toContain('Sync main into dev');
   });
 
-  it('chains release-please after docker, release-sbom after sbom + release-please, deploy last', () => {
+  it('runs matrix tests before release-please and deploys after resolve-environment', () => {
     const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
-    expect(workflow).toMatch(/release-please:[\s\S]*?needs:\s*\[gate,\s*docker-build-push\]/);
+    expect(workflow).toMatch(/matrix-tests:[\s\S]*?reusable-vitest-postgres-redis\.yml/);
     expect(workflow).toMatch(
-      /attach-release-sbom:[\s\S]*?needs:\s*\[gate,\s*sbom,\s*release-please\]/,
+      /release-please:[\s\S]*?needs:\s*\[docker-build-push,\s*matrix-tests,\s*sbom\]/,
     );
-    expect(workflow).toMatch(/deploy:[\s\S]*?- attach-release-sbom/);
+    expect(workflow).toMatch(/attach-release-sbom:[\s\S]*?needs:\s*\[sbom,\s*release-please\]/);
+    expect(workflow).toMatch(/resolve-environment:[\s\S]*?- attach-release-sbom/);
+    expect(workflow).toMatch(/deploy:[\s\S]*?needs:\s*[\s\S]*-\s*resolve-environment/);
   });
 
   it('reuses sbom artifact for release-sbom (no duplicate generation)', () => {

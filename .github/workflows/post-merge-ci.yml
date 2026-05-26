@@ -5,14 +5,14 @@ name: Post-merge CI
 # security, and contract/property. Post-merge runs publish/deploy automation only.
 #
 # Optimized flow (top to bottom dependencies):
-#   gate → changes → docker (build + Trivy + GHCR + container smoke)
-#                  ↘ sbom (CycloneDX artifact)
-#                  ↘ api-docs (OpenAPI + Postman)
-#   commitlint (parallel after gate)
-#   docker → release-please → release-sbom (only if release published)
-#                           ↘ deploy (resolve env → migrate → redeploy → smoke)
-#
-# Full DB integration/chaos suites are local-only (`pnpm test:integration`, `pnpm test:chaos`).
+#   detect changes → commitlint
+#       ├─ docker / build + trivy
+#       ├─ matrix tests
+#       └─ sbom
+#   then release-please
+#       ├─ release sbom
+#       └─ api docs
+#   then resolve environment → deploy → API smoke on deployed URL
 #
 # Branch → GitHub Environment mapping for deploy (only difference between dev and main):
 #   dev  → development
@@ -36,35 +36,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  gate:
-    name: Verify merge
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
-    outputs:
-      post_merge_sha: ${{ steps.target.outputs.post_merge_sha }}
-      post_merge_branch: ${{ steps.target.outputs.post_merge_branch }}
-    steps:
-      - name: Resolve post-merge target
-        id: target
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "post_merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-            echo "post_merge_branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "post_merge_sha=${{ github.event.pull_request.merge_commit_sha }}" >> "$GITHUB_OUTPUT"
-            echo "post_merge_branch=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Post-merge target
-        run: |
-          echo "Post-merge CI for branch ${POST_MERGE_BRANCH} at ${POST_MERGE_SHA}"
-        env:
-          POST_MERGE_BRANCH: ${{ steps.target.outputs.post_merge_branch }}
-          POST_MERGE_SHA: ${{ steps.target.outputs.post_merge_sha }}
-
   changes:
     name: Detect changes
-    needs: gate
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
       src-code: ${{ steps.filter.outputs.src-code }}
@@ -75,29 +49,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ needs.gate.outputs.post_merge_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
-
-      - name: Resolve diff base
-        id: diff_base
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if git rev-parse "${{ needs.gate.outputs.post_merge_sha }}^" >/dev/null 2>&1; then
-              echo "sha=$(git rev-parse "${{ needs.gate.outputs.post_merge_sha }}^")" >> "$GITHUB_OUTPUT"
-            else
-              echo "sha=${{ needs.gate.outputs.post_merge_sha }}" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "sha=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Path filter
         uses: dorny/paths-filter@v4
         id: filter
         with:
-          base: ${{ steps.diff_base.outputs.sha }}
-          ref: ${{ needs.gate.outputs.post_merge_sha }}
           filters: |
             src-code:
               - 'src/**'
@@ -121,13 +79,13 @@ jobs:
 
   commitlint:
     name: Commitlint
-    needs: gate
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ needs.gate.outputs.post_merge_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
 
       - name: Setup Node and pnpm
@@ -141,7 +99,7 @@ jobs:
             AFTER="${{ github.sha }}"
           else
             BEFORE="${{ github.event.pull_request.base.sha }}"
-            AFTER="${{ needs.gate.outputs.post_merge_sha }}"
+            AFTER="${{ github.event.pull_request.merge_commit_sha }}"
           fi
 
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
@@ -162,9 +120,10 @@ jobs:
 
   docker-build-push:
     name: Docker
-    needs: [gate, changes]
+    needs: [changes, commitlint]
     if: |
       always() &&
+      needs.commitlint.result == 'success' &&
       (
         needs.changes.outputs.src-code == 'true' ||
         needs.changes.outputs.docker == 'true' ||
@@ -173,21 +132,38 @@ jobs:
     uses: ./.github/workflows/reusable-docker-build-trivy.yml
     secrets: inherit
     with:
-      merge_commit_sha: ${{ needs.gate.outputs.post_merge_sha }}
-      target_branch: ${{ needs.gate.outputs.post_merge_branch }}
+      merge_commit_sha: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
+      target_branch: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref }}
+
+  matrix-tests:
+    name: Matrix Tests
+    needs: [changes, commitlint]
+    if: |
+      always() &&
+      needs.commitlint.result == 'success' &&
+      (
+        needs.changes.outputs.src-code == 'true' ||
+        needs.changes.outputs.ci-config == 'true'
+      )
+    uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
+    secrets: inherit
+    with:
+      merge_commit_sha: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
+      target_branch: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref }}
 
   sbom:
     name: SBOM
-    needs: [gate, changes]
+    needs: [changes, commitlint]
     if: |
       always() &&
+      needs.commitlint.result == 'success' &&
       needs.changes.outputs.src-code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ needs.gate.outputs.post_merge_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0.24.0
@@ -204,25 +180,28 @@ jobs:
 
   api-docs:
     name: API docs
-    needs: [gate, changes]
+    needs: [release-please, changes]
     if: |
       always() &&
+      needs.release-please.result != 'failure' &&
+      needs.release-please.result != 'cancelled' &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
     uses: ./.github/workflows/reusable-openapi-postman-publish.yml
     secrets: inherit
     with:
-      merge_commit_sha: ${{ needs.gate.outputs.post_merge_sha }}
-      target_branch: ${{ needs.gate.outputs.post_merge_branch }}
-      github_environment: ${{ needs.gate.outputs.post_merge_branch == 'main' && 'production' || 'development' }}
+      merge_commit_sha: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
+      target_branch: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref }}
+      github_environment: ${{ (github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref) == 'main' && 'production' || 'development' }}
       publish_hosted_docs: true
 
   release-please:
     name: Release Please
-    needs: [gate, docker-build-push]
+    needs: [docker-build-push, matrix-tests, sbom]
     if: |
       always() &&
-      needs.gate.result == 'success' &&
-      (needs.docker-build-push.result == 'success' || needs.docker-build-push.result == 'skipped')
+      (needs.docker-build-push.result == 'success' || needs.docker-build-push.result == 'skipped') &&
+      (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped') &&
+      (needs.sbom.result == 'success' || needs.sbom.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -232,12 +211,12 @@ jobs:
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created == 'true' && 'true' || 'false' }}
     env:
-      CHANNEL_SUFFIX: ${{ needs.gate.outputs.post_merge_branch == 'dev' && '.dev' || '' }}
+      CHANNEL_SUFFIX: ${{ (github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref) == 'dev' && '.dev' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ needs.gate.outputs.post_merge_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
 
       - name: Run release-please
@@ -245,13 +224,13 @@ jobs:
         uses: googleapis/release-please-action@v5
         with:
           token: ${{ github.token }}
-          target-branch: ${{ needs.gate.outputs.post_merge_branch }}
+          target-branch: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref }}
           config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
           manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
 
   attach-release-sbom:
     name: Release SBOM
-    needs: [gate, sbom, release-please]
+    needs: [sbom, release-please]
     if: |
       always() &&
       needs.release-please.outputs.releases_created == 'true' &&
@@ -289,28 +268,61 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-  deploy:
-    name: Deploy
+  resolve-environment:
+    name: Resolve Environment
     needs:
-      - gate
-      - commitlint
       - docker-build-push
-      - sbom
+      - matrix-tests
       - api-docs
       - release-please
       - attach-release-sbom
+    runs-on: ubuntu-latest
+    outputs:
+      post_merge_sha: ${{ steps.target.outputs.post_merge_sha }}
+      post_merge_branch: ${{ steps.target.outputs.post_merge_branch }}
+      github_environment: ${{ steps.target.outputs.github_environment }}
     if: |
       always() &&
       needs.docker-build-push.result == 'success' &&
-      needs.commitlint.result != 'failure' &&
-      needs.commitlint.result != 'cancelled' &&
+      (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped') &&
+      (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped') &&
       needs.release-please.result != 'failure' &&
       needs.release-please.result != 'cancelled' &&
-      (needs.sbom.result == 'success' || needs.sbom.result == 'skipped') &&
-      (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped') &&
       (needs.attach-release-sbom.result == 'success' || needs.attach-release-sbom.result == 'skipped')
+    steps:
+      - name: Resolve post-merge target and environment
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "post_merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "post_merge_branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "post_merge_sha=${{ github.event.pull_request.merge_commit_sha }}" >> "$GITHUB_OUTPUT"
+            echo "post_merge_branch=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            branch="${{ github.ref_name }}"
+          else
+            branch="${{ github.event.pull_request.base.ref }}"
+          fi
+
+          if [ "$branch" = "main" ]; then
+            echo "github_environment=production" >> "$GITHUB_OUTPUT"
+          elif [ "$branch" = "dev" ]; then
+            echo "github_environment=development" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Unsupported branch for deployment: $branch"
+            exit 1
+          fi
+
+  deploy:
+    name: Deploy
+    needs:
+      - resolve-environment
+    if: needs.resolve-environment.result == 'success'
     uses: ./.github/workflows/reusable-railway-deploy.yml
     secrets: inherit
     with:
-      merge_commit_sha: ${{ needs.gate.outputs.post_merge_sha }}
-      target_branch: ${{ needs.gate.outputs.post_merge_branch }}
+      merge_commit_sha: ${{ needs.resolve-environment.outputs.post_merge_sha }}
+      target_branch: ${{ needs.resolve-environment.outputs.post_merge_branch }}
