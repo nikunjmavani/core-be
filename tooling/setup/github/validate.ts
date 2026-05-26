@@ -21,6 +21,11 @@ export type DeploymentCountIssue =
   | { readonly kind: 'missing' }
   | { readonly kind: 'partial-split'; readonly present: string };
 
+export type RuntimeEnvironmentEntries = {
+  readonly allPresent: string[];
+  readonly variableValues: ReadonlyMap<string, string>;
+};
+
 /**
  * Apply the either-or rule used by `assertPostgresConnectionBudget`:
  * `DEPLOYMENT_TOTAL_REPLICA_COUNT` OR both `DEPLOYMENT_API_REPLICA_COUNT` and
@@ -58,6 +63,19 @@ export function validateDeploymentProcessCountSecrets(
  */
 function getRequiredVariables(): string[] {
   return [...envSchemaRequiredKeys];
+}
+
+export function getRuntimeEnvironmentEntries(
+  environmentValues: Readonly<Record<string, string | undefined>>,
+): RuntimeEnvironmentEntries {
+  const entries = Object.entries(environmentValues).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].trim() !== '',
+  );
+
+  return {
+    allPresent: entries.map(([name]) => name),
+    variableValues: new Map(entries),
+  };
 }
 
 /**
@@ -177,23 +195,37 @@ function main(): void {
   const requiredVariables = getRequiredVariables();
   console.log(`Required schema keys: ${requiredVariables.length}`);
 
-  let secretNames: string[];
-  let variableEntries: { name: string; value: string }[];
-  try {
-    secretNames = getGitHubEnvironmentSecretNames(environment);
-    variableEntries = getGitHubEnvironmentVariableEntries(environment);
-  } catch (fetchError) {
-    console.error(fetchError instanceof Error ? fetchError.message : String(fetchError));
-    process.exit(1);
+  const validationSource = process.env.GITHUB_ENV_VALIDATION_SOURCE ?? 'github-api';
+  let allPresent: string[];
+  let variableValues: ReadonlyMap<string, string>;
+
+  if (validationSource === 'runtime') {
+    const runtimeEntries = getRuntimeEnvironmentEntries(process.env);
+    allPresent = runtimeEntries.allPresent;
+    variableValues = runtimeEntries.variableValues;
+
+    console.log('Validation source: runtime environment');
+    console.log(`Runtime entries:   ${allPresent.length}`);
+  } else {
+    let secretNames: string[];
+    let variableEntries: { name: string; value: string }[];
+    try {
+      secretNames = getGitHubEnvironmentSecretNames(environment);
+      variableEntries = getGitHubEnvironmentVariableEntries(environment);
+    } catch (fetchError) {
+      console.error(fetchError instanceof Error ? fetchError.message : String(fetchError));
+      process.exit(1);
+    }
+
+    const variableNames = variableEntries.map((entry) => entry.name);
+    allPresent = [...secretNames, ...variableNames];
+    variableValues = new Map(variableEntries.map((entry) => [entry.name, entry.value]));
+
+    console.log('Validation source: GitHub API');
+    console.log(`GitHub secrets:   ${secretNames.length}`);
+    console.log(`GitHub variables: ${variableNames.length}`);
+    console.log(`Total present:    ${allPresent.length}`);
   }
-
-  const variableNames = variableEntries.map((entry) => entry.name);
-  const allPresent = [...secretNames, ...variableNames];
-  const variableValues = new Map(variableEntries.map((entry) => [entry.name, entry.value]));
-
-  console.log(`GitHub secrets:   ${secretNames.length}`);
-  console.log(`GitHub variables: ${variableNames.length}`);
-  console.log(`Total present:    ${allPresent.length}`);
   console.log('');
 
   const missingVariables = requiredVariables.filter((variable) => !allPresent.includes(variable));
