@@ -4,4 +4,13 @@
 pnpm typecheck
 pnpm build
 pnpm build:check
-pnpm test:unit
+
+# Unit tests (matches PR CI unit lane; excludes DB project)
+# Run only when pushed commits include unit-relevant files.
+PUSHED_UNIT_RELEVANT=$(git diff --name-only @{u}...HEAD 2>/dev/null | rg \
+  '^(src/|tooling/vitest/|vitest\.config\.ts$|package\.json$|pnpm-lock\.yaml$)' || true)
+if [ -n "$PUSHED_UNIT_RELEVANT" ]; then
+  pnpm test:unit
+else
+  echo "Skipping unit tests on pre-push (no unit-relevant changes)."
+fi
