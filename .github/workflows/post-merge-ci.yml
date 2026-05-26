@@ -181,6 +181,40 @@ jobs:
           config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
           manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
 
+      - name: Enable auto-merge on release PRs
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
+        run: |
+          set -euo pipefail
+          pr_numbers="$(
+            jq -rn --arg pr "${RELEASE_PR}" --arg prs "${RELEASE_PRS}" '
+              def parse_object($raw):
+                try ($raw | fromjson) catch null;
+              def parse_array($raw):
+                try ($raw | fromjson) catch [];
+              (
+                [parse_object($pr) | .number // empty] +
+                [parse_array($prs)[] | .number // empty]
+              )
+              | map(select(. != null))
+              | unique
+              | .[]
+            '
+          )"
+
+          if [ -z "${pr_numbers}" ]; then
+            echo "::warning::Release Please reported PR creation but no PR numbers were resolved."
+            exit 0
+          fi
+
+          for pr_number in ${pr_numbers}; do
+            echo "Enabling auto-merge for release PR #${pr_number}"
+            gh pr merge "${pr_number}" --auto --squash --delete-branch=false
+          done
+
   attach-release-sbom:
     name: Release SBOM
     needs: [sbom, release-please]
