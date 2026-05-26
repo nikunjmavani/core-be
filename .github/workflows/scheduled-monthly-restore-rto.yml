@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - name: Print drill steps
         run: |
@@ -81,7 +81,7 @@ jobs:
       AUTH_SESSION_RETENTION_DAYS: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
 
       - name: Require restore drill secrets
         run: |
@@ -96,6 +96,7 @@ jobs:
         run: bash tooling/ci/restore-drill-neon.sh create
 
       - name: Setup Node and pnpm
+        if: env.NEON_DRILL_DATABASE_URL != ''
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Run migrations on restored branch
