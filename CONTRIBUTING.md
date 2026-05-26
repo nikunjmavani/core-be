@@ -67,7 +67,7 @@ Use prefixes such as:
 
 ## Commits and releases
 
-Commits should follow **[Conventional Commits](https://www.conventionalcommits.org/)** (e.g. `feat:`, `fix:`, `feat!:` for breaking changes). **[Release Please](.github/workflows/release-please-versioning.yml)** uses that history for changelog and versioning on both release channels: `main` produces stable releases (e.g. `v2.1.0`); `dev` produces pre-releases (e.g. `v2.1.0-dev.0`). Each channel tracks its own version via a dedicated manifest (under [.github/release-please/](.github/release-please/)), so they never collide.
+Commits should follow **[Conventional Commits](https://www.conventionalcommits.org/)** (e.g. `feat:`, `fix:`, `feat!:` for breaking changes). **[Release Please](.github/workflows/post-merge-ci.yml)** (job inside Post-merge CI) uses that history for changelog and versioning on both release channels: `main` produces stable releases (e.g. `v2.1.0`); `dev` produces pre-releases (e.g. `v2.1.0-dev.0`). Each channel tracks its own version via a dedicated manifest (under [.github/release-please/](.github/release-please/)), so they never collide.
 
 ## Git hooks (Husky)
 

@@ -1,36 +1,10 @@
-name: Reusable — test with Postgres and Redis
+name: Reusable — integration tests with Postgres and Redis
 
-# Two modes (selected by caller via `mode` input):
-#
-#   full  (default)  — runs the complete matrix split into 4 shards:
-#                       1) fast              (unit + property + global)
-#                       2) db-tenancy-billing (e2e for tenancy + billing + their integration)
-#                       3) db-auth-user      (e2e for auth + user + their integration)
-#                       4) db-rest           (e2e for notify + audit + upload + unit-db + remaining integration + security + performance)
-#                      Used when a PR/push touches anything outside src/domains/ (infra,
-#                      shared, migrations, lockfile, Dockerfiles, vitest configs).
-#
-#   smart            — runs only the fast shard + a single db-bound shard that uses
-#                      `vitest --changed=origin/${BASE_REF}` so test selection is driven
-#                      by the import graph rather than path filters. Caller passes
-#                      `base-ref` so vitest knows where the PR branched from.
-#                      Used when the PR's diff is confined to src/domains/ (a "safe
-#                      domain scope") — the fast shard, api-smoke, and quality jobs
-#                      stay as the cross-cutting safety net.
+# Post-merge integration gate: three parallel DB shards (no unit/global — those run on PR).
+# Always migrates against ephemeral Postgres + Redis and enforces merged coverage thresholds.
 
 on:
   workflow_call:
-    inputs:
-      mode:
-        description: Test selection mode — "full" or "smart"
-        required: false
-        type: string
-        default: full
-      base-ref:
-        description: Base ref for `vitest --changed` in smart mode (e.g. "main")
-        required: false
-        type: string
-        default: ''
     secrets:
       RESEND_API_KEY:
         required: false
@@ -40,6 +14,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   matrix-config:
     name: Matrix
@@ -47,18 +24,11 @@ jobs:
     outputs:
       shards: ${{ steps.config.outputs.shards }}
     steps:
-      - name: Pick matrix for mode=${{ inputs.mode }}
+      - name: Integration shard matrix
         id: config
         run: |
           set -euo pipefail
-          if [ "${{ inputs.mode }}" = "smart" ]; then
-            # Smart mode: fast shard (full breadth) + a single db-bound shard driven
-            # by `vitest --changed`. We still execute every db-bound project so the
-            # import graph can pick up tests in any tier; --changed filters them.
-            shards_compact='[{"name":"unit + property + global","id":"fast","projects":"--project unit --project property --project global","domain_filter":"","use_changed":false},{"name":"db (changed)","id":"db-smart","projects":"--project unit-db --project e2e --project integration --project security --project performance","domain_filter":"","use_changed":true}]'
-          else
-            shards_compact='[{"name":"unit + property + global","id":"fast","projects":"--project unit --project property --project global","domain_filter":"","use_changed":false},{"name":"tenancy + billing","id":"db-tenancy-billing","projects":"--project e2e --project integration","domain_filter":"tenancy,billing","use_changed":false},{"name":"auth + user","id":"db-auth-user","projects":"--project e2e --project integration","domain_filter":"auth,user","use_changed":false},{"name":"notify + audit + upload","id":"db-rest","projects":"--project unit-db --project e2e --project integration --project security --project performance","domain_filter":"notify,audit,upload,rest","use_changed":false}]'
-          fi
+          shards_compact='[{"name":"tenancy + billing","id":"db-tenancy-billing","projects":"--project e2e --project integration","domain_filter":"tenancy,billing"},{"name":"auth + user","id":"db-auth-user","projects":"--project e2e --project integration","domain_filter":"auth,user"},{"name":"notify + audit + upload","id":"db-rest","projects":"--project unit-db --project e2e --project integration --project security --project performance","domain_filter":"notify,audit,upload,rest"}]'
           echo "shards=${shards_compact}" >> "$GITHUB_OUTPUT"
           echo "Selected shards:"
           jq . <<<"${shards_compact}"
@@ -114,26 +84,25 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v6
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
 
+      - name: Cache Vitest
+        uses: actions/cache@v5
+        with:
+          path: node_modules/.vitest
+          key: vitest-integration-${{ runner.os }}-${{ matrix.shard.id }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            vitest-integration-${{ runner.os }}-${{ matrix.shard.id }}-
+            vitest-integration-${{ runner.os }}-
+
       - name: Export shared CI test env (JWT keys + retention + secrets-encryption)
         uses: ./.github/actions/test-env
 
-      - name: Fetch base ref for `vitest --changed`
-        if: matrix.shard.use_changed && inputs.base-ref != ''
-        run: git fetch origin ${{ inputs.base-ref }} --depth=1
-
       - name: Run migrations
         run: pnpm db:migrate
-
-      - name: Generate OpenAPI artifact for global tests
-        if: matrix.shard.id == 'fast'
-        run: pnpm docs:generate
 
       - name: Run ${{ matrix.shard.id }} test shard with coverage
         id: run-tests
@@ -141,14 +110,6 @@ jobs:
           VITEST_DOMAIN_FILTER: ${{ matrix.shard.domain_filter }}
         run: |
           set -euo pipefail
-          CHANGED_ARG=""
-          if [ "${{ matrix.shard.use_changed }}" = "true" ] && [ -n "${{ inputs.base-ref }}" ]; then
-            CHANGED_ARG="--changed origin/${{ inputs.base-ref }}"
-            echo "Smart mode: running with ${CHANGED_ARG}"
-          fi
-          # `--passWithNoTests` lets domain-filtered shards exit cleanly when no
-          # matching test files exist (e.g. db-tenancy-billing shard on a PR that
-          # only touched docs in tenancy).
           pnpm exec vitest run \
             --coverage \
             --coverage.thresholds.lines=0 \
@@ -156,8 +117,7 @@ jobs:
             --coverage.thresholds.statements=0 \
             --coverage.thresholds.branches=0 \
             --passWithNoTests \
-            ${{ matrix.shard.projects }} \
-            ${CHANGED_ARG}
+            ${{ matrix.shard.projects }}
 
       - name: Rename coverage report for shard
         if: always() && hashFiles('coverage/**') != ''
@@ -165,7 +125,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: always() && hashFiles(format('coverage-{0}/**', matrix.shard.id)) != ''
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.shard.id }}
           path: coverage-${{ matrix.shard.id }}/
@@ -192,28 +152,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Download all shard coverage artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: coverage-*
           path: coverage-shards
           merge-multiple: false
 
       - name: Merge coverage and check thresholds
-        # Thresholds come from tooling/ci/coverage-thresholds.json — same source
-        # vitest.config.ts uses, so local and CI gates stay in lockstep.
-        # The merger accepts any number of coverage-final.json paths, so this
-        # naturally adapts to the smart mode (2 shards) vs full mode (4 shards).
-        #
-        # Smart mode runs only tests touched by the PR diff, so the merged
-        # shard coverage is intentionally a subset and cannot meet the full
-        # threshold. Pass `--report-only` so the gate still publishes the
-        # summary without failing — the same `full` matrix runs on every push
-        # to `main` / `dev` and keeps the post-merge gate enforced.
-        env:
-          TEST_MODE: ${{ inputs.mode }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -227,18 +175,13 @@ jobs:
             echo "::warning::No shard coverage artifacts found — skipping merged gate."
             exit 0
           fi
-          extra=()
-          if [ "${TEST_MODE}" = "smart" ]; then
-            extra+=("--report-only")
-          fi
           node tooling/ci/merge-coverage-and-check-thresholds.mjs \
             "${inputs[@]}" \
-            --output coverage-merged/coverage-final.json \
-            "${extra[@]}"
+            --output coverage-merged/coverage-final.json
 
       - name: Upload merged coverage artifact
         if: always() && hashFiles('coverage-merged/**') != ''
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-merged
           path: coverage-merged/

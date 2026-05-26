@@ -110,8 +110,9 @@ curl -H "Authorization: Bearer $METRICS_SCRAPE_TOKEN" http://localhost:9090/metr
 
 - API service: `GET /health` on the API public domain
 - Worker service: `GET /health` on `WORKER_HEALTH_PORT`, plus `pnpm tool:worker-readiness` DLQ and queue heartbeat checks
+- Deployed API smoke: `pnpm test:api-smoke` against the Railway API base URL (after API + worker are healthy). Uses `SMOKE_DEMO_EMAIL` / `SMOKE_DEMO_PASSWORD` GitHub Environment secrets when set; otherwise defaults to the full-seed demo user (`demo@example.com`). Ensure the target environment database is seeded accordingly.
 
-Do not run the full seeded API smoke test against production as a deploy health gate; it logs in as the demo user and can exercise mutating routes.
+**Fully live:** When this smoke step succeeds, CD completes and the GitHub Environment (development or production) is considered fully live for traffic. Earlier probes only confirm process and dependency connectivity; smoke validates real HTTP routes end-to-end on the deployed URL.
 
 ## Local Checks
 

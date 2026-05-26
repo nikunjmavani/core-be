@@ -106,7 +106,7 @@ Review this runbook at the start of each calendar quarter (January, April, July,
 ## Related
 
 - [docs/index.md](../index.md) — documentation index (links here)
-- [backup-drills.md](backup-drills.md) — monthly drill (`DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL` required); optional manual RTO record workflow
+- [backup-drills.md](backup-drills.md) — monthly automated restore drill (`MONTHLY_DATABASE_RESTORE_DRILL_NEON_*` secrets; parent branch = workflow ref)
 - [restore-drill.md](../deployment/restore-drill.md) — workflow secrets and CI artifact names
 - [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md) — deploy and secrets
 - [runbook-dev-to-production.md](../deployment/runbooks/runbook-dev-to-production.md) — production promotion

@@ -1,6 +1,6 @@
-# Monthly disaster-recovery drill — automated restore verification and RTO measurement.
-# Requires DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL in repository secrets. See docs/process/backup-drills.md.
-# For human end-to-end RTO evidence after a manual drill, use manual-dr-rto-record.yml (non-required).
+# Monthly disaster-recovery drill — fully automated RTO measurement.
+# Creates a throwaway Neon PITR branch from the workflow ref (main/dev), runs migrate +
+# integration smoke, asserts RTO, then deletes the branch. See docs/process/backup-drills.md.
 
 name: Monthly backup restore & RTO drill
 
@@ -11,33 +11,54 @@ on:
 
 env:
   RTO_MINUTES: '60'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: restore-drill
+  group: restore-drill-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
+  resolve-environment:
+    name: Resolve environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.map.outputs.environment }}
+    steps:
+      - name: Map branch to GitHub Environment
+        # Canonical mapping (see docs/deployment/runbooks/add-new-environment.md):
+        #   main → production
+        #   dev  → development
+        id: map
+        run: |
+          set -euo pipefail
+          case "${{ github.ref_name }}" in
+            main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
+            dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
+            *)    echo "::error::Unsupported branch for restore drill: ${{ github.ref_name }} (Neon parent must be main or dev)" && exit 1 ;;
+          esac
+
   checklist:
     name: DR drill checklist
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Print drill steps
         run: |
           set -euo pipefail
-          echo "::notice title=Restore drill::See docs/process/backup-drills.md and docs/process/dr-runbook.md"
+          echo "::notice title=Restore drill::Parent Neon branch: ${{ github.ref_name }}. See docs/process/backup-drills.md"
           test -f docs/process/backup-drills.md
           test -f docs/process/dr-runbook.md
 
   restore-integration:
     name: Restore branch — migrate and integration smoke
-    needs: checklist
+    needs: [checklist, resolve-environment]
     runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-environment.outputs.environment }}
     timeout-minutes: 45
     services:
       redis:
@@ -50,9 +71,10 @@ jobs:
           --health-timeout=5s
           --health-retries=20
     env:
+      MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: ${{ secrets.MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY }}
+      MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID: ${{ secrets.MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID }}
+      RESTORE_DRILL_PARENT_BRANCH_NAME: ${{ github.ref_name }}
       NODE_ENV: test
-      DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL: ${{ secrets.DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL }}
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
       ALLOWED_ORIGINS: http://localhost:3000
@@ -60,28 +82,43 @@ jobs:
       AUTH_SESSION_RETENTION_DAYS: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
-      - name: Require drill database URL
-        if: env.DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL == ''
+      - name: Require restore drill secrets
         run: |
-          echo "::error title=Restore drill not measured::DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL is required so RTO is actually measured (migrate + integration smoke). Set it as a repository secret. For documented human drill evidence only, use the Manual DR RTO record workflow."
-          exit 1
+          set -euo pipefail
+          if [ -z "${MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY}" ]; then
+            echo "::error::GitHub Environment secret MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY is required (sync via pnpm github:sync)."
+            exit 1
+          fi
+          if [ -z "${MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID}" ]; then
+            echo "::error::GitHub Environment secret MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID is required (sync via pnpm github:sync)."
+            exit 1
+          fi
+
+      - name: Provision Neon PITR restore branch
+        id: neon_drill
+        run: bash tooling/ci/restore-drill-neon.sh create
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Mark restore window start
-        run: echo "RESTORE_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
-
       - name: Run migrations on restored branch
+        env:
+          DATABASE_URL: ${{ steps.neon_drill.outputs.database_url }}
         run: pnpm db:migrate
 
       - name: Integration smoke on restored database
+        env:
+          DATABASE_URL: ${{ steps.neon_drill.outputs.database_url }}
         run: pnpm test:integration -- --run src/domains/auth/__tests__/integration/auth.integration.test.ts
 
       - name: Record restore duration and assert RTO
         if: success()
+        env:
+          RESTORE_START_EPOCH: ${{ steps.neon_drill.outputs.restore_start_epoch }}
+          RESTORE_SOURCE: ${{ steps.neon_drill.outputs.restore_source }}
+          PARENT_BRANCH_NAME: ${{ steps.neon_drill.outputs.parent_branch_name }}
         run: |
           set -euo pipefail
           restore_end_epoch=$(date +%s)
@@ -97,7 +134,8 @@ jobs:
           {
             "recorded_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "workflow_run_id": "${GITHUB_RUN_ID}",
-            "metric": "migrate_and_integration_smoke_seconds",
+            "metric": "${RESTORE_SOURCE}",
+            "parent_branch_name": "${PARENT_BRANCH_NAME}",
             "restore_seconds": ${restore_seconds},
             "rto_minutes": ${rto_minutes},
             "rto_target_seconds": ${rto_target_seconds},
@@ -110,13 +148,14 @@ jobs:
             echo ""
             echo "| Field | Value |"
             echo "| ----- | ----- |"
-            echo "| Metric | \`db:migrate\` + auth integration smoke |"
+            echo "| Parent Neon branch | ${PARENT_BRANCH_NAME} |"
+            echo "| Metric | ${RESTORE_SOURCE} |"
             echo "| Restore time | **${restore_seconds}s** ($(awk "BEGIN {printf \"%.1f\", ${restore_seconds}/60}") min) |"
             echo "| RTO target | **${rto_minutes} min** (${rto_target_seconds}s) |"
             echo "| Within target | ${within_rto_target} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          echo "::notice title=Restore drill RTO::restore_seconds=${restore_seconds} rto_minutes=${rto_minutes} within_target=${within_rto_target}"
+          echo "::notice title=Restore drill RTO::parent=${PARENT_BRANCH_NAME} restore_seconds=${restore_seconds} within_target=${within_rto_target}"
 
           if [[ "${within_rto_target}" != "true" ]]; then
             echo "::error title=RTO exceeded::Restore took ${restore_seconds}s; target is ${rto_target_seconds}s (${rto_minutes} min)."
@@ -125,11 +164,19 @@ jobs:
 
       - name: Upload RTO report
         if: success()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: restore-drill-rto
           path: restore-drill-rto.json
           if-no-files-found: error
+
+      - name: Delete Neon restore drill branch
+        if: always() && steps.neon_drill.outputs.branch_id != ''
+        env:
+          DRILL_BRANCH_ID: ${{ steps.neon_drill.outputs.branch_id }}
+          MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: ${{ secrets.MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY }}
+          MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID: ${{ secrets.MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID }}
+        run: bash tooling/ci/restore-drill-neon.sh delete
 
   record-rto:
     name: Record and publish RTO
@@ -144,11 +191,11 @@ jobs:
       - name: Fail when automated restore did not complete
         if: needs.restore-integration.result != 'success'
         run: |
-          echo "::error title=Restore drill not measured::Automated restore did not complete successfully. Configure DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL and ensure migrate + integration smoke pass."
+          echo "::error title=Restore drill not measured::Configure MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY and MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID, ensure Neon branch names match git refs (main/dev), and verify migrate + integration smoke pass."
           exit 1
 
       - name: Download automated RTO report
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: restore-drill-rto
 
@@ -169,6 +216,7 @@ jobs:
           within_rto_target=$(jq -r '.within_rto_target' restore-drill-rto-report.json)
           restore_seconds=$(jq -r '.restore_seconds // empty' restore-drill-rto-report.json)
           metric=$(jq -r '.metric' restore-drill-rto-report.json)
+          parent_branch_name=$(jq -r '.parent_branch_name // empty' restore-drill-rto-report.json)
 
           if [[ "${within_rto_target}" != "true" ]]; then
             echo "::error title=RTO not within target::Consolidated report has within_rto_target=${within_rto_target}"
@@ -184,6 +232,9 @@ jobs:
             echo ""
             echo "| Field | Value |"
             echo "| ----- | ----- |"
+            if [[ -n "${parent_branch_name}" && "${parent_branch_name}" != "null" ]]; then
+              echo "| Parent Neon branch | ${parent_branch_name} |"
+            fi
             echo "| Source | ${metric} |"
             echo "| RTO target | **${rto_minutes} min** (${rto_target_seconds}s) |"
             if [[ -n "${restore_seconds}" && "${restore_seconds}" != "null" ]]; then
@@ -194,7 +245,7 @@ jobs:
 
       - name: Upload consolidated RTO report
         if: success()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: restore-drill-rto-report
           path: restore-drill-rto-report.json

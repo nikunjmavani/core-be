@@ -12,6 +12,9 @@ concurrency:
   group: load-tests-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   k6:
     name: k6 SLO gate and scenarios
@@ -57,7 +60,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -172,7 +175,7 @@ jobs:
 
       - name: Upload k6 summaries and server log
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: k6-load-test-artifacts
           path: |

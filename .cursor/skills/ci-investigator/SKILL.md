@@ -20,9 +20,9 @@ Produce a **short root-cause summary** for **one** failing check (not full PR ba
 
    | CI job name               | Workflow                           | Local reproduction                                           |
    | ------------------------- | ---------------------------------- | ------------------------------------------------------------ |
-   | Quality                   | `reusable-quality-static.yml`      | `pnpm ci:quality`                                            |
+   | PR CI (lint, security, …) | `pr-ci.yml`                        | `pnpm ci:quality` (local aggregate; CI splits jobs)          |
    | Tests                     | `reusable-vitest-postgres-redis.yml` | `pnpm compose:up` → `pnpm db:migrate` → `pnpm test`        |
-   | API smoke                 | `reusable/api-smoke-with-db.yml`   | `pnpm verify:base` or `pnpm test:api-smoke`                  |
+   | API smoke (local only)    | CD post-deploy or local verify     | `pnpm verify:base` or `pnpm test:api-smoke`                  |
    | Chaos (Toxiproxy)         | `reusable/chaos-toxiproxy.yml`     | `pnpm chaos:up` → `pnpm chaos:provision` → `pnpm test:chaos` |
    | Docker                    | `reusable-docker-build-trivy.yml`  | `node tooling/ci/check-dockerfile-sync.mjs` + docker build   |
    | API Docs                  | `reusable/docs-generate.yml`       | `pnpm docs:all` / `pnpm docs:check`                          |

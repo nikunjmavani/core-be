@@ -9,99 +9,86 @@ Single reference for what runs in CI, how deployment to Railway works, and **whi
 ## 1. Overview
 
 ```mermaid
-flowchart LR
-  subgraph triggers [Triggers]
-    PR[pull_request]
-    Push[push]
-  end
+flowchart TD
+  PR[pull_request to main or dev] --> PRCI[PR CI]
+  PRCI --> Lint[Lint]
+  PRCI --> Typecheck[Typecheck]
+  PRCI --> Unit[Unit tests]
+  PRCI --> MigLint[Migration lint]
+  PRCI --> BuildVerify[Build verify]
+  PRCI --> Sec[Security scan]
+  PRCI --> Contract[Contract + property]
 
-  subgraph branches [Branches]
-    main[main]
-    dev[dev]
-  end
+  Merge[PR merge] --> Push[push to main or dev]
+  Push --> PostMerge[Post-merge CI]
 
-  subgraph ci [CI Pipeline]
-    Quality[Quality and static security]
-    Test[Test]
-    ApiSmoke[API smoke]
-    Docker[Docker Build]
-    Docs[Docs]
-  end
+  PostMerge --> Commitlint[Commitlint]
+  PostMerge --> ReleasePlease[Release Please]
+  PostMerge --> Integration[Integration tests]
+  PostMerge --> Docker[Docker Trivy GHCR]
+  PostMerge --> Chaos[Chaos]
+  PostMerge --> SBOM[SBOM artifact]
+  PostMerge --> APIDocs[API docs]
+  PostMerge --> SyncMain[Sync main into dev]
 
-  subgraph deploy [Deploy]
-    DevDeploy[Deploy dev]
-    ProdDeploy[Deploy prod]
-  end
+  Docker --> Deploy[Deploy via CD reusable]
+  Integration --> Deploy
+  Commitlint --> Deploy
+  ReleasePlease --> Deploy
 
-  PR --> Quality
-  Quality --> Test
-  Quality --> ApiSmoke
-  Quality --> Docker
-  Push --> Quality
-  Quality --> Test
-  Quality --> ApiSmoke
-  Quality --> Docker
-  Push --> Docs
-  dev --> DevDeploy
-  main --> ProdDeploy
+  Deploy --> Railway[Railway development or production]
+
+  ReleasePlease --> ReleaseSBOM[Release SBOM attach]
 ```
 
-- **CI** runs on every **pull_request** and **push** to **main** and **dev** (quality + static security, tests, live HTTP API smoke, Docker image build + scan on PR and push, docs on push only).
-- **Deploy** runs on **push** to **dev** (development) or **main** (production); each uses GitHub environment secrets and deploys to Railway.
-- On **main** and **dev**, **release-please** and **commitlint** run on push. `main` produces stable releases (`v2.1.0`); `dev` produces pre-releases (`v2.1.0-dev.0`). Both publish GitHub Releases, so [release-sbom.yml](../../../.github/workflows/release-sbom.yml) attaches a CycloneDX SBOM to either channel. See [§4.1 Release and deploy flow](#41-release-and-deploy-flow-feature--production) below.
+- **PR CI** ([pr-ci.yml](../../../.github/workflows/pr-ci.yml)) runs on every **pull_request** to **main** and **dev**: seven parallel jobs (lint, typecheck, unit + global with `vitest --changed`, migration safety lint, TS + Docker build verify, security scan, contract + property). No Postgres/Redis and no GHCR push on PR.
+- **Post-merge CI** ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)) is the **single post-merge pipeline** on push to `dev` or `main` (same jobs on both branches): commitlint, release-please, integration tests, Docker build + Trivy + GHCR push, chaos, SBOM artifact, API docs, sync main→dev (main only), Railway deploy, and release SBOM attachment when release-please publishes a release. Lint/typecheck/unit are **not** re-run — the same commit SHA already passed PR CI.
+- **Deploy** runs inside Post-merge CI via reusable [cd.yml](../../../.github/workflows/cd.yml). Only the GitHub Environment differs: `dev` → **development**, `main` → **production**. Manual `workflow_dispatch` on CD remains for emergency redeploys. **When post-deploy API smoke passes, that environment is fully live** — the deploy job is the last gate before traffic.
+- Release-please runs inside Post-merge CI on both channels (`main` stable, `dev` prerelease). When it publishes a GitHub Release in the same run, **Release SBOM** attaches CycloneDX to that release.
 
 ---
 
 ## 2. CI pipeline (what runs)
 
-```mermaid
-flowchart TB
-  subgraph ci_jobs [CI Jobs]
-    Quality[Quality: audit, validate, Gitleaks, Semgrep]
-    Test[Test: Postgres + Redis, migrate, test:coverage]
-    ApiSmoke[API smoke: migrate, seed full, tsx server, test:api-smoke]
-    Docker[Docker Build: build image, verify HEALTHCHECK]
-    Docs[Docs: OpenAPI + Postman, upload on dev/main]
-  end
+### PR lane ([pr-ci.yml](../../../.github/workflows/pr-ci.yml))
 
-  subgraph pr_checks [PR Checks]
-    Title[Conventional commit title]
-    Size[PR size label]
-    EnvGuard[.env file guard]
-  end
+All jobs run **in parallel** (~2–3 min target). Caching: `actions/setup-node` with `cache: pnpm`, Vitest `node_modules/.vitest`, Docker BuildKit GHA cache scopes `core-be-api` / `core-be-worker`.
 
-  subgraph main_push [Push to main only]
-    Commitlint[Commitlint: commit messages]
-  end
+| Job | What |
+| --- | ---- |
+| **Lint** | `pnpm lint` (Biome) |
+| **Typecheck** | `pnpm typecheck` |
+| **Unit** | `vitest --project unit --project global --changed origin/{base}` (no DB) |
+| **Migration lint** | `pnpm db:migrate:lint` (static migration safety) |
+| **Build verify** | `pnpm build` + Docker API/worker build (`load: true`, no push, no Trivy) |
+| **Security scan** | `pnpm deps:audit`, gitleaks, semgrep |
+| **Contract + property** | `pnpm test:contract`, `pnpm test:property` |
 
-  Start[PR or Push] --> Quality
-  Quality --> Test
-  Quality --> ApiSmoke
-  Quality --> Docker
-  Start --> PR_Entry[PR opened]
-  PR_Entry --> Title
-  PR_Entry --> Size
-  PR_Entry --> EnvGuard
-  Quality --> PushOnly[Push]
-  PushOnly --> Docs
-  PushOnly --> MainOnly{branch main?}
-  MainOnly -->|main| Commitlint
-```
+### Post-merge lane ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml))
 
-| Job              | When                                        | What                                                                                                                                                                                |
-| ---------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Quality**      | Every PR and push                           | `pnpm deps:audit`, `pnpm deps:audit:prod`, `pnpm validate`, `pnpm validate:domain`, routes:catalog, `pnpm docs:check`, tool:sync-env-example, Gitleaks, `semgrep scan`              |
-| **Test**         | PR/push when `src/**` (etc.) changed        | Postgres + Redis → `pnpm db:migrate` → `pnpm test:coverage`. Skipped on docs-only PRs.                                                                                              |
-| **API smoke**    | PR/push when `src/**` (etc.) changed        | Migrate → seed → API server → `pnpm test:api-smoke`. Skipped on docs-only PRs.                                                                                                      |
-| **Chaos**        | Push to `main` when `src/**` (etc.) changed | Toxiproxy + `pnpm test:chaos` — runs from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml), not required on PRs. See [branch-protection.md](branch-protection.md). |
-| **Docker build** | PR/push when Docker/deps paths change       | BuildKit + Trivy + health container. Required on PRs (skipped when no `docker` paths). See [branch-protection.md](branch-protection.md).                                            |
-| **Docs**         | Push to `dev` / `main` (after quality)      | `pnpm docs:all`; validate OpenAPI; upload artifacts; Postman + Scalar upload via GitHub Environment secrets (`development`, `production`)                                           |
-| **PR checks**    | On every PR                                 | Conventional commit title, PR size label, **.env guard** (fail if `.env` other than `.env.example` in diff)                                                                         |
-| **Commitlint**   | Push to **main**, **dev**                   | Validates every commit in the push against [commitlint.config.cjs](../../../commitlint.config.cjs) (covers squash-merge and merge-commit messages, not only PR titles)              |
+Runs on **push** to `main` / `dev` after merge. Does **not** re-run lint, typecheck, or unit tests.
 
-Workflow files: [.github/workflows/ci.yml](../../../.github/workflows/ci.yml), [.github/workflows/pr-checks.yml](../../../.github/workflows/pr-checks.yml), [.github/workflows/commit-lint.yml](../../../.github/workflows/commit-lint.yml). Index: [.github/README.md](../../../.github/README.md).
+| Job | When | What |
+| --- | ---- | ---- |
+| **Integration** | `src-code` or `ci-config` | Postgres + Redis → migrate → 3 Vitest DB shards + coverage gate |
+| **Docker** | `src-code`, `docker`, or `ci-config` | Build + Trivy + `/health` smoke + push `ghcr.io/.../core-be-api:{sha}` (and `:latest` on `main`) |
+| **Chaos** | `src-code` | Toxiproxy + `pnpm test:chaos` |
+| **SBOM** | `src-code` | CycloneDX artifact (workflow artifact) |
+| **API docs** | `src-code` or openapi paths | `pnpm docs:all`, Postman + Scalar publish |
+| **Commitlint** | Every push | Conventional commit messages on the push |
+| **Release Please** | Every push | Opens/updates release PR; may publish GitHub Release |
+| **Sync main into dev** | Push to `main` only | Opens/updates automation PR to keep `dev` aligned |
+| **Deploy** | Docker job succeeded + gates green | Reusable [cd.yml](../../../.github/workflows/cd.yml) → migrate → redeploy → `/health` → worker readiness → **`pnpm test:api-smoke`** → **fully live** |
+| **Release SBOM** | Release Please published a release | CycloneDX SBOM attached to GitHub Release |
 
-**Path filters (docs-only PRs):** [pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) uses `dorny/paths-filter` — when only `docs/**` or markdown changes (no `src-code`), **Test** and **API smoke** are skipped on pull requests (required checks still pass). **Quality** always runs. Markdown PRs also trigger [pr-docs-lane.yml](../../../.github/workflows/pr-docs-lane.yml) for markdownlint + lychee link check. See [branch-protection.md](branch-protection.md).
+| Other | When | What |
+| ----- | ---- | ---- |
+| **PR Governance** | Every PR | Conventional title, labels, `.env` guard — [pr-governance.yml](../../../.github/workflows/pr-governance.yml) |
+| **Docs lane** | PR touches `*.md` | markdownlint + lychee — [pr-docs-lane.yml](../../../.github/workflows/pr-docs-lane.yml) |
+
+Index: [.github/README.md](../../../.github/README.md). Required PR check names: [branch-protection.md](branch-protection.md).
+
+**Path filters (docs-only PRs):** [pr-ci.yml](../../../.github/workflows/pr-ci.yml) skips all PR CI jobs when the diff is markdown/docs only. Markdown PRs also trigger [pr-docs-lane.yml](../../../.github/workflows/pr-docs-lane.yml).
 
 ---
 
@@ -135,7 +122,7 @@ flowchart LR
 | dev    | development        | Development     |
 | main   | production         | Production      |
 
-Deploy workflow: [cd.yml](../../../.github/workflows/cd.yml) (runs after CI succeeds on push to `main` / `dev`, or manual `workflow_dispatch`).
+Deploy workflow: reusable [cd.yml](../../../.github/workflows/cd.yml) called from **Post-merge CI** (or manual `workflow_dispatch` for emergency redeploy).
 
 **Branch protection:** Which CI jobs must be required on **`main`** and **`dev`**, plus committed ruleset JSON and apply steps — see [branch-protection.md](branch-protection.md).
 
@@ -156,15 +143,14 @@ The dev config sets `prerelease: true` + `prerelease-type: "dev"` and writes its
 
 > **`package.json` version on `dev`** — release-please's `node` release-type also bumps `package.json` on each dev release (e.g. `2.1.0-dev.0`). When you eventually promote `dev → main`, expect a `package.json` merge conflict on the release-PR line; resolve it by **keeping `main`'s version**. The next release-please run on `main` then bumps to the matching stable version.
 
-Local commits are validated by **commitlint** via [.husky/commit-msg](../../../.husky/commit-msg); pushes to **main** run [.github/workflows/commit-lint.yml](../../../.github/workflows/commit-lint.yml).
+Local commits are validated by **commitlint** via [.husky/commit-msg](../../../.husky/commit-msg); pushes to **main** and **dev** run **Commitlint** inside [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml).
 
-**Branch protection:** Require the CI and PR-check jobs listed in [branch-protection.md](branch-protection.md); apply policies via GitHub Rulesets using [`.github/rulesets/`](../../../.github/rulesets/) or the GitHub UI. On **`main`**, use **Squash and merge** only with the default squash message taken from the PR title so every commit stays conventional (PR checks validate the title; [Commitlint](../../../.github/workflows/commit-lint.yml) validates pushes).
+**Branch protection:** Require the CI and PR-check jobs listed in [branch-protection.md](branch-protection.md); apply policies via GitHub Rulesets using [`.github/rulesets/`](../../../.github/rulesets/) or the GitHub UI. On **`main`**, use **Squash and merge** only with the default squash message taken from the PR title so every commit stays conventional (PR checks validate the title; Post-merge **Commitlint** validates pushes).
 
 | What         | Where                                                                                                                          |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Runs on**  | Push to **main** (stable) and **dev** (prerelease)                                                                             |
-| **Workflow** | [.github/workflows/release-please-versioning.yml](../../../.github/workflows/release-please-versioning.yml)                    |
-| **Token**    | **RELEASE_PLEASE_TOKEN** (Personal Access Token) in repository secrets — use a PAT so that merging the release PR triggers CI. |
+| **Runs on**  | Push to **main** (stable) and **dev** (prerelease) — job inside [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) |
+| **Token**    | Built-in **`github.token`** (no extra GitHub Environment secret required) |
 
 ### 4.1 Release and deploy flow (feature → production)
 
@@ -207,8 +193,8 @@ flowchart TB
 2. Release-please creates or updates the release PR on push to `main`.
 3. Merge the release PR when ready → stable GitHub Release + tag (`v2.x.y`) → `release-sbom.yml` attaches the SBOM.
 4. CI `docker-build` job on `main` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (tags `:sha` and `:latest`).
-5. Deploy workflow runs on push to `main` (validate env → resolve GHCR images → migrate → `railway redeploy --image`).
-6. Optional smoke: `pnpm load:health` or `GET /health`.
+5. Deploy workflow runs on push to `main` (validate env → resolve GHCR images → migrate → `railway redeploy --image` → `/health` → worker readiness → `pnpm test:api-smoke` on the Railway API URL).
+6. Optional load check: `pnpm load:health` against the deployed base URL.
 
 **Development path (steps):** identical to production but on the `dev` branch, with a few differences:
 
@@ -224,7 +210,7 @@ flowchart TB
 
 On GitHub, after merging a change that touches release-please files:
 
-1. Open **Actions** → workflow **Release Please** → confirm the latest runs on **both** `main` and `dev` succeeded (if **RELEASE_PLEASE_TOKEN** is missing or lacks scope, the job fails).
+1. Open **Actions** → **Post-merge CI** → confirm **Release Please** succeeded on **both** `main` and `dev`.
 2. Confirm a **release-please** PR exists or is updated when there are new conventional commits since the channel's manifest version (or that the workflow completes with no release until the next qualifying commit). Each channel produces its own PR.
 3. Ensure git tag **`v1.0.0`** exists at the historical 1.0.0 commit if you rely on tag-based archaeology; create it once if absent.
 4. After you **merge** an automated release PR, confirm the matching **GitHub Release** + tag exist and that `CHANGELOG.md` / `package.json` were updated by the bot — `main` → stable `v2.x.y`, `dev` → prerelease `v2.x.y-dev.N`.

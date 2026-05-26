@@ -208,21 +208,18 @@ Implementation lives under `src/domains/auth/sub-domains/auth-method/oauth/` —
 
 ---
 
-## 7. Monthly restore drill — `DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL`
+## 7. Monthly restore drill — Neon API
 
 **Used for:** [Monthly backup restore & RTO drill](../process/backup-drills.md) workflow ([scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml)).
 
-This is a **repository-level GitHub Actions secret** — it is **not** an app runtime variable, **not** in `.env.example`'s GitHub Secrets/Variables halves, and **not** pushed by `pnpm github:sync`. The scheduled workflow reads it directly from `secrets.DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL` to run migrate + integration smoke against a throwaway Neon branch and measure RTO.
+These are **GitHub Environment secrets** (not API/worker runtime vars). Add them to `.env.development` / `.env.production` under the GitHub Secrets half and push with `pnpm github:sync`. The scheduled workflow uses the Neon API to create a PITR child branch from the parent branch named **`github.ref_name`** (`main` on schedule → `production` env; `dev` on manual dispatch → `development` env).
 
-| Secret                                   | Where to get it                                                                                              |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL` | Throwaway Neon branch connection string (PITR snapshot or branch from production). Format `postgresql://...` |
+| Secret | Where to get it |
+| ------ | --------------- |
+| `MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY` | [Neon Console → Developer settings → API keys](https://console.neon.tech/app/settings/api-keys) |
+| `MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID` | Neon project **Settings → General → Project ID** |
 
-**Steps:** Neon Console → project → **Branches** → create branch from production at a recent timestamp → copy connection string → GitHub repo **Settings → Secrets and variables → Actions → New repository secret** → name `DATABASE_URL_FOR_MONTHLY_RESTORE_DRILL`.
-
-Without this secret, the monthly workflow **fails** (intended behaviour: a green run must always reflect a real measured RTO).
-
-For optional human-measured RTO evidence after a manual drill, use the [`manual-dr-rto-record.yml`](../../.github/workflows/manual-dr-rto-record.yml) workflow — see [backup-drills.md](../process/backup-drills.md).
+Neon branch names must match git refs (`main`, `dev`). Without both secrets, the monthly workflow **fails**.
 
 ---
 

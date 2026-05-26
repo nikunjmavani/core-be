@@ -1,0 +1,70 @@
+name: Reusable — Vitest unit (no DB)
+
+# Fast PR lane: unit + global Vitest projects with import-graph selection via
+# `--changed`. No Postgres/Redis services and no migrations.
+
+on:
+  workflow_call:
+    inputs:
+      base-ref:
+        description: Base branch for `vitest --changed` (e.g. dev or main)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  run:
+    name: Unit + global
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
+      JWT_PRIVATE_KEY: test-private-key
+      JWT_PUBLIC_KEY: test-public-key
+      ALLOWED_ORIGINS: http://localhost:3000
+      AUDIT_RETENTION_DAYS: 90
+      AUTH_SESSION_RETENTION_DAYS: 30
+      METRICS_SCRAPE_TOKEN: test-metrics-token-min-32-characters
+      SECRETS_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Cache Vitest
+        uses: actions/cache@v5
+        with:
+          path: node_modules/.vitest
+          key: vitest-unit-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            vitest-unit-${{ runner.os }}-
+
+      - name: Fetch base ref for `vitest --changed`
+        run: git fetch origin ${{ inputs.base-ref }} --depth=1
+
+      - name: Generate OpenAPI artifact for global tests
+        run: pnpm docs:generate
+
+      - name: Run unit + global tests (changed)
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run \
+            --project unit \
+            --project global \
+            --changed "origin/${{ inputs.base-ref }}" \
+            --passWithNoTests
