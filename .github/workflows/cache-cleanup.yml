@@ -1,0 +1,162 @@
+name: Cleanup caches
+
+# Keeps the repository's GitHub Actions cache footprint well below the 10 GB
+# repo cap. When the cap is hit, GitHub silently stops scheduling workflow
+# runs (no banner, no error, just zero new runs and HTTP 500 on dispatch),
+# which has bitten this repo before.
+#
+# Triggers:
+#   - pull_request closed (merged or not)          → drop every cache scoped
+#                                                    to the PR ref. PR caches
+#                                                    have no use once the PR
+#                                                    is closed.
+#   - workflow_run completed for our top-level CI  → for PR runs, drop all
+#                                                    caches on that PR ref;
+#                                                    for dev/main runs, keep
+#                                                    only the most-recent N
+#                                                    caches per key so post-
+#                                                    merge runs stay fast.
+#   - workflow_dispatch                            → manual prune (defaults
+#                                                    to the dispatching ref).
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_run:
+    workflows:
+      - "PR CI"
+      - "PR Governance"
+      - "Docs lane"
+      - "Post-merge CI"
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to clean (e.g. refs/heads/dev or refs/pull/123/merge). Defaults to the dispatching ref."
+        required: false
+        default: ""
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: cache-cleanup-${{ github.event.pull_request.number || github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: false
+
+env:
+  KEEP_PER_BRANCH: "10"
+
+jobs:
+  cleanup:
+    name: Delete caches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve cache scope
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          DISPATCH_REF: ${{ inputs.ref }}
+          DEFAULT_REF: ${{ github.ref }}
+          WF_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WF_RUN_EVENT: ${{ github.event.workflow_run.event }}
+          WF_RUN_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          set -euo pipefail
+
+          ref=""
+          mode="full"
+
+          case "$EVENT_NAME" in
+            pull_request)
+              ref="refs/pull/${PR_NUMBER}/merge"
+              ;;
+            workflow_run)
+              if [ "$WF_RUN_EVENT" = "pull_request" ] && [ -n "${WF_RUN_PR_NUMBER:-}" ]; then
+                ref="refs/pull/${WF_RUN_PR_NUMBER}/merge"
+              elif [ -n "${WF_RUN_BRANCH:-}" ]; then
+                ref="refs/heads/${WF_RUN_BRANCH}"
+                if [ "$WF_RUN_BRANCH" = "dev" ] || [ "$WF_RUN_BRANCH" = "main" ]; then
+                  mode="lru"
+                fi
+              fi
+              ;;
+            workflow_dispatch)
+              if [ -n "${DISPATCH_REF:-}" ]; then
+                ref="$DISPATCH_REF"
+              else
+                ref="$DEFAULT_REF"
+              fi
+              ;;
+            *)
+              echo "Unsupported event: $EVENT_NAME"
+              ;;
+          esac
+
+          if [ -z "$ref" ]; then
+            echo "Could not resolve a cache ref; nothing to do."
+            echo "ref=" >> "$GITHUB_OUTPUT"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Cleaning caches for ref=$ref (mode=$mode)"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
+      - name: Install gh actions-cache extension
+        if: steps.scope.outputs.mode != 'skip'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh extension install actions/gh-actions-cache --force
+
+      - name: Delete caches
+        if: steps.scope.outputs.mode != 'skip'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ steps.scope.outputs.ref }}
+          MODE: ${{ steps.scope.outputs.mode }}
+          KEEP_PER_BRANCH: ${{ env.KEEP_PER_BRANCH }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t entries < <(
+            gh actions-cache list --repo "$REPO" --ref "$REF" --limit 100 \
+              --order desc --sort last-used \
+              | awk 'NF' || true
+          )
+
+          if [ "${#entries[@]}" -eq 0 ]; then
+            echo "No caches found for $REF."
+            exit 0
+          fi
+
+          if [ "$MODE" = "full" ]; then
+            echo "Deleting all ${#entries[@]} cache entries for $REF."
+            for entry in "${entries[@]}"; do
+              key="$(printf '%s' "$entry" | awk '{print $1}')"
+              [ -n "$key" ] || continue
+              gh actions-cache delete "$key" --repo "$REPO" --ref "$REF" --confirm || true
+            done
+            exit 0
+          fi
+
+          # LRU mode: keep the most-recent KEEP_PER_BRANCH per cache key.
+          declare -A seen
+          deleted=0
+          kept=0
+          for entry in "${entries[@]}"; do
+            key="$(printf '%s' "$entry" | awk '{print $1}')"
+            [ -n "$key" ] || continue
+            count="${seen[$key]:-0}"
+            if [ "$count" -lt "$KEEP_PER_BRANCH" ]; then
+              seen[$key]=$((count + 1))
+              kept=$((kept + 1))
+              continue
+            fi
+            gh actions-cache delete "$key" --repo "$REPO" --ref "$REF" --confirm || true
+            deleted=$((deleted + 1))
+          done
+          echo "LRU prune complete for $REF — kept $kept, deleted $deleted."
