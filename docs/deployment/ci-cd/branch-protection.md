@@ -43,7 +43,7 @@ GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `n
 | ------------- | ---------------- | ----------- | --------------------- |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Lint` | `PR CI / Lint` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Typecheck` | `PR CI / Typecheck` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Unit` | `PR CI / Unit` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Unit + global (pull_request)` | `PR CI / Unit + global (pull_request)` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Migration lint` | `PR CI / Migration lint` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Build verify` | `PR CI / Build verify` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security scan` | `PR CI / Security scan` |
@@ -62,7 +62,7 @@ When the PR touches **src** but not only docs, these jobs may still skip individ
 
 | Job `name:` | Skipped when |
 | ----------- | ------------ |
-| `Unit` | No `src-code` or `ci-config` paths |
+| `Unit + global (pull_request)` | No `src-code` or `ci-config` paths |
 | `Build verify` | No `src-code`, `docker`, or `ci-config` paths |
 
 `Lint`, `Typecheck`, `Migration lint`, `Security scan`, and `Contract + property` run on every non-docs-only PR.

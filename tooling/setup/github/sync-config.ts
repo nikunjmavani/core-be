@@ -244,7 +244,7 @@ function buildBranchRuleset(branch: string): string {
           required_status_checks: [
             { context: 'PR CI / Lint' },
             { context: 'PR CI / Typecheck' },
-            { context: 'PR CI / Unit' },
+            { context: 'PR CI / Unit + global (pull_request)' },
             { context: 'PR CI / Migration lint' },
             { context: 'PR CI / Build verify' },
             { context: 'PR CI / Security scan' },

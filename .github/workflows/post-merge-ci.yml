@@ -228,7 +228,6 @@ jobs:
       - matrix-tests
       - api-docs
       - release-please
-      - attach-release-sbom
     runs-on: ubuntu-latest
     outputs:
       post_merge_sha: ${{ steps.target.outputs.post_merge_sha }}
@@ -240,8 +239,7 @@ jobs:
       (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped') &&
       (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped') &&
       needs.release-please.result != 'failure' &&
-      needs.release-please.result != 'cancelled' &&
-      (needs.attach-release-sbom.result == 'success' || needs.attach-release-sbom.result == 'skipped')
+      needs.release-please.result != 'cancelled'
     steps:
       - name: Resolve post-merge target and environment
         id: target

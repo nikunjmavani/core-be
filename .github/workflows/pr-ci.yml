@@ -80,7 +80,6 @@ jobs:
       - run: pnpm typecheck
 
   unit:
-    name: Unit
     needs: [changes]
     if: |
       needs.changes.outputs.docs-only-md != 'true' &&
