@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { validateDeploymentProcessCountSecrets } from '../../../../tooling/setup/validate-github-env.js';
+import {
+  getRuntimeEnvironmentEntries,
+  validateDeploymentProcessCountSecrets,
+} from '../../../../tooling/setup/validate-github-env.js';
 
 describe('validateDeploymentProcessCountSecrets', () => {
   it('returns undefined for environments outside the hosted-deployment set', () => {
@@ -46,5 +49,22 @@ describe('validateDeploymentProcessCountSecrets', () => {
     for (const environment of ['development', 'production']) {
       expect(validateDeploymentProcessCountSecrets(environment, [])).toEqual({ kind: 'missing' });
     }
+  });
+});
+
+describe('getRuntimeEnvironmentEntries', () => {
+  it('treats non-empty runtime environment values as present', () => {
+    const entries = getRuntimeEnvironmentEntries({
+      DATABASE_URL: 'postgres://example',
+      EMPTY_SECRET: '',
+      WHITESPACE_VARIABLE: '   ',
+      METRICS_ENABLED: 'false',
+    });
+
+    expect(entries.allPresent).toEqual(['DATABASE_URL', 'METRICS_ENABLED']);
+    expect(entries.variableValues.get('DATABASE_URL')).toBe('postgres://example');
+    expect(entries.variableValues.get('METRICS_ENABLED')).toBe('false');
+    expect(entries.variableValues.has('EMPTY_SECRET')).toBe(false);
+    expect(entries.variableValues.has('WHITESPACE_VARIABLE')).toBe(false);
   });
 });
