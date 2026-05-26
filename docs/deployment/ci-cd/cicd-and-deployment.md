@@ -22,23 +22,25 @@ flowchart TD
   Merge[PR merge into dev or main] --> PostMerge[Post-merge CI]
 
   PostMerge --> Commitlint[Commitlint]
-  PostMerge --> ReleasePlease[Release Please]
   PostMerge --> Docker[Docker Trivy GHCR]
   PostMerge --> SBOM[SBOM artifact]
   PostMerge --> APIDocs[API docs]
-  PostMerge --> SyncMain[Sync main into dev]
 
-  Docker --> Deploy[Deploy via CD reusable]
+  Docker --> ReleasePlease[Release Please]
+  ReleasePlease --> ReleaseSBOM[Release SBOM attach]
+  SBOM --> ReleaseSBOM
+  ReleaseSBOM --> Deploy[Deploy via reusable-railway-deploy]
+  Docker --> Deploy
+  SBOM --> Deploy
+  APIDocs --> Deploy
   Commitlint --> Deploy
-  ReleasePlease --> Deploy
 
   Deploy --> Railway[Railway development or production]
 
-  ReleasePlease --> ReleaseSBOM[Release SBOM attach]
 ```
 
 - **PR CI** ([pr-ci.yml](../../../.github/workflows/pr-ci.yml)) runs on every **pull_request** to **main** and **dev**: seven parallel jobs (lint, typecheck, unit + global with `vitest --changed`, migration safety lint, TS + Docker build verify, security scan, contract + property). No Postgres/Redis and no GHCR push on PR.
-- **Post-merge CI** ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)) is the **single post-merge pipeline** when a PR **merges** into `dev` or `main`: commitlint, release-please, Docker build + Trivy + GHCR push, SBOM artifact, API docs, sync main→dev (main only), Railway deploy, and release SBOM attachment when release-please publishes a release. It does **not** re-run PR CI jobs or full DB integration/chaos suites (those are local: `pnpm test:integration`, `pnpm test:chaos`). Manual `workflow_dispatch` remains for emergency reruns.
+- **Post-merge CI** ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)) runs when a PR **merges** into `dev` or `main`. Optimized chain: `gate → (commitlint, docker, sbom, api-docs in parallel) → release-please (after docker) → release-sbom (re-uses sbom artifact) → deploy`. It does **not** re-run PR CI jobs or full DB integration/chaos suites (those are local: `pnpm test:integration`, `pnpm test:chaos`). Manual `workflow_dispatch` remains for emergency reruns.
 - **Deploy** runs inside Post-merge CI via reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml). Only the GitHub Environment differs: `dev` → **development**, `main` → **production**. Manual `workflow_dispatch` on CD remains for emergency redeploys. **When post-deploy API smoke passes, that environment is fully live** — the deploy job is the last gate before traffic.
 - Release-please runs inside Post-merge CI on both channels (`main` stable, `dev` prerelease). When it publishes a GitHub Release in the same run, **Release SBOM** attaches CycloneDX to that release.
 
@@ -64,16 +66,15 @@ All jobs run **in parallel** (~2–3 min target). Caching: `actions/setup-node` 
 
 Runs when a PR **merges** into `main` / `dev` (or manual dispatch). Does **not** re-run PR CI or full DB Vitest matrices.
 
-| Job | When | What |
-| --- | ---- | ---- |
-| **Docker** | `src-code`, `docker`, or `ci-config` | Build + Trivy + ephemeral Postgres/Redis container smoke + push `ghcr.io/.../core-be-api:{sha}` (and `:latest` on `main`) |
-| **SBOM** | `src-code` | CycloneDX artifact (workflow artifact) |
-| **API docs** | `src-code` or openapi paths | `pnpm docs:all`, Postman + Scalar publish |
-| **Commitlint** | Every merge | Conventional commit messages on merged commits |
-| **Release Please** | Every merge | Opens/updates release PR; may publish GitHub Release |
-| **Sync main into dev** | Merge to `main` only | Opens/updates automation PR to keep `dev` aligned |
-| **Deploy** | Docker job succeeded + gates green | Reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) → migrate → redeploy → `/health` → worker readiness → **`pnpm test:api-smoke`** → **fully live** |
-| **Release SBOM** | Release Please published a release | CycloneDX SBOM attached to GitHub Release |
+| Job | Order | When | What |
+| --- | --- | ---- | ---- |
+| **Commitlint** | parallel | Every merge | Conventional commit messages on merged commits |
+| **Docker** | parallel | `src-code`, `docker`, or `ci-config` | Build + Trivy + ephemeral Postgres/Redis container smoke + push `ghcr.io/.../core-be-api:{sha}` (and `:latest` on `main`) |
+| **SBOM** | parallel | `src-code` | CycloneDX artifact (workflow artifact) |
+| **API docs** | parallel | `src-code` or openapi paths | `pnpm docs:all`, Postman + Scalar publish |
+| **Release Please** | after Docker | Every merge | Opens/updates release PR; may publish GitHub Release |
+| **Release SBOM** | after SBOM + Release Please | Release Please published a release | Downloads `sbom` artifact and attaches it to the GitHub Release |
+| **Deploy** | last | Docker green + gates green | Reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) → resolve env → migrate → redeploy → `/health` → worker readiness → **`pnpm test:api-smoke`** → **fully live** |
 
 **Local-only (not in CI):** `pnpm test:integration`, `pnpm test:chaos` — run before pushing when touching DB/worker paths.
 
