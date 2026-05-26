@@ -2,7 +2,7 @@ import { envSchemaKeys } from '../../../src/shared/config/env-schema.js';
 
 export const METRICS_ENVIRONMENT_VARIABLE_PREFIX = 'METRICS_';
 
-const RAILWAY_SYNC_LOOP_PATTERN = /for var in\s*\\?\s*([\s\S]*?)\s*; do/;
+const RAILWAY_SYNC_LOOP_PATTERN = /for var in\s*\\?\s*([\s\S]*?)\s*; do/g;
 
 /** Env schema keys for Prometheus metrics (METRICS_*). */
 export function metricsEnvironmentVariableNames(): string[] {
@@ -11,17 +11,25 @@ export function metricsEnvironmentVariableNames(): string[] {
     .sort();
 }
 
-/** Variable names listed in reusable-railway-deploy.yml `railway variable set` loop. */
+/**
+ * Variable names listed in every `for var in ... ; do` loop inside
+ * reusable-railway-deploy.yml `railway variable set` step. The deploy step
+ * uses two loops (one for GitHub Secrets, one for GitHub Variables); both
+ * contribute names so the caller sees a single deduplicated list.
+ */
 export function parseRailwaySyncVariableNames(deployWorkflowContent: string): string[] {
-  const loopMatch = deployWorkflowContent.match(RAILWAY_SYNC_LOOP_PATTERN);
-  if (!loopMatch?.[1]) {
-    return [];
+  const names = new Set<string>();
+  for (const match of deployWorkflowContent.matchAll(RAILWAY_SYNC_LOOP_PATTERN)) {
+    const body = match[1];
+    if (!body) continue;
+    for (const token of body.split(/\s+/)) {
+      const trimmed = token.trim();
+      if (/^[A-Z][A-Z0-9_]*$/.test(trimmed)) {
+        names.add(trimmed);
+      }
+    }
   }
-
-  return loopMatch[1]
-    .split(/\s+/)
-    .map((name) => name.trim())
-    .filter((name) => /^[A-Z][A-Z0-9_]*$/.test(name));
+  return [...names];
 }
 
 export type MetricsDeploySyncValidation = {

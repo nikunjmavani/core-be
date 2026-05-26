@@ -3,6 +3,7 @@ dist/
 coverage/
 coverage-*/
 CHANGELOG.md
+CHANGELOG-dev.md
 docs/openapi/
 docs/postman-collection.json
 docs/routes.txt
