@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Print drill steps
         run: |
@@ -81,7 +81,7 @@ jobs:
       AUTH_SESSION_RETENTION_DAYS: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Require restore drill secrets
         run: |

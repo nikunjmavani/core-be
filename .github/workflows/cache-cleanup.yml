@@ -45,6 +45,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   KEEP_PER_BRANCH: "10"
 
 jobs:
