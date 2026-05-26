@@ -383,6 +383,14 @@ const envSchemaBase = z.object({
   // Monthly database restore drill (GitHub Actions only — not loaded by API/worker at runtime)
   /** Neon API key for scheduled monthly PITR restore drill. GitHub Environment secret via `pnpm github:sync`. */
   MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: z.string().min(1).optional(),
+
+  // Railway deploy (GitHub Actions only — consumed by .github/workflows/reusable-railway-deploy.yml)
+  /** Railway project token used by the deploy job to call `railway redeploy`. GitHub Environment secret via `pnpm github:sync`. */
+  RAILWAY_TOKEN: z.string().min(1).optional(),
+  /** Railway API service ID for the `core-be-api` service (target of `railway redeploy --service`). */
+  RAILWAY_SERVICE_ID: z.string().min(1).optional(),
+  /** Railway worker service ID for the `core-be-worker` service (target of `railway redeploy --service`). */
+  RAILWAY_WORKER_SERVICE_ID: z.string().min(1).optional(),
 });
 
 export const envSchema = envSchemaBase
