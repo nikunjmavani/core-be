@@ -73,11 +73,11 @@ Commits should follow **[Conventional Commits](https://www.conventionalcommits.o
 
 [Husky](.husky/) runs checks locally. Fix failures rather than skipping hooks (`--no-verify`).
 
-| Hook           | Script                                   | What runs                                                                                                                                                                                                                                                                  |
-| -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hook | Script | What runs |
+| --- | --- | --- |
 | **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | `lint-staged` (Biome on `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; markdownlint on `*.md`), `typecheck`, `validate:domain:strict`, route catalog / OpenAPI sync when relevant files change, env-example sync, optional Gitleaks on staged files, conflict-marker and large-file guards |
-| **commit-msg** | [`.husky/commit-msg`](.husky/commit-msg) | [Conventional Commits](https://www.conventionalcommits.org/) via commitlint                                                                                                                                                                                                |
-| **pre-push**   | [`.husky/pre-push`](.husky/pre-push)     | `typecheck`, `build`, `build:check`, `test:unit`                                                                                                                                                                                                                           |
+| **commit-msg** | [`.husky/commit-msg`](.husky/commit-msg) | [Conventional Commits](https://www.conventionalcommits.org/) via commitlint |
+| **pre-push** | [`.husky/pre-push`](.husky/pre-push) | `typecheck`, `build`, `build:check`, `test:unit` |
 
 **Gitleaks:** Install the [Gitleaks CLI](https://github.com/gitleaks/gitleaks) so pre-commit secret scanning is not skipped. CI always runs a full-repo scan. Manual check: `pnpm security:secrets`.
 

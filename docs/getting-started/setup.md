@@ -172,14 +172,14 @@ That document includes:
 
 ## 5. Quick reference
 
-| Goal                  | Command or action                                                                            |
-| --------------------- | -------------------------------------------------------------------------------------------- |
-| Local run             | `pnpm compose:up` → `pnpm compose:wait` → `pnpm db:migrate` → `pnpm dev` + `pnpm dev:worker` |
-| Before PR             | `pnpm validate && pnpm test`                                                                 |
-| Before release        | + `pnpm test:security`, `pnpm load:stress`                                                   |
-| Smoke after deploy    | `pnpm load:health` or `GET /health`                                                    |
-| Load-test credentials | `pnpm tool:load-test-credentials` (server + full seed)                                       |
-| Admin token (k6)      | `pnpm tool:admin-token`                                                                      |
+| Goal | Command or action |
+| --- | --- |
+| Local run | `pnpm compose:up` → `pnpm compose:wait` → `pnpm db:migrate` → `pnpm dev` + `pnpm dev:worker` |
+| Before PR | `pnpm validate && pnpm test` |
+| Before release | + `pnpm test:security`, `pnpm load:stress` |
+| Smoke after deploy | `pnpm load:health` or `GET /health` |
+| Load-test credentials | `pnpm tool:load-test-credentials` (server + full seed) |
+| Admin token (k6) | `pnpm tool:admin-token` |
 
 See [README.md](../../README.md) for the full **Available Scripts** table, [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md) for tokens and deploy, and [runbook-dev-to-production.md](../deployment/runbooks/runbook-dev-to-production.md) for the path to production runbook.
 

@@ -73,10 +73,10 @@ Keep **zero known vulnerabilities** in dependencies and avoid **breaking changes
 
 ## Scripts (package.json)
 
-| Script             | Purpose                                                                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm deps:audit`  | Run `pnpm audit` (same as CI; must pass).                                                                                                   |
-| `pnpm deps:audit:prod` | Run `pnpm audit --prod` (production dependency tree only; same as CI quality job).                                                    |
+| Script | Purpose |
+| --- | --- |
+| `pnpm deps:audit` | Run `pnpm audit` (same as CI; must pass). |
+| `pnpm deps:audit:prod` | Run `pnpm audit --prod` (production dependency tree only; same as CI quality job). |
 | `pnpm deps:update` | Run `pnpm update --recursive` for safe patch/minor updates within current ranges. Run `pnpm audit` and `pnpm validate` + `pnpm test` after. |
 
 ## CI

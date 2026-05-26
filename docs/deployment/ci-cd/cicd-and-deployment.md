@@ -147,10 +147,10 @@ Local commits are validated by **commitlint** via [.husky/commit-msg](../../../.
 
 **Branch protection:** Require the CI and PR-check jobs listed in [branch-protection.md](branch-protection.md); apply policies via GitHub Rulesets using [`.github/rulesets/`](../../../.github/rulesets/) or the GitHub UI. On **`main`**, use **Squash and merge** only with the default squash message taken from the PR title so every commit stays conventional (PR checks validate the title; Post-merge **Commitlint** validates pushes).
 
-| What         | Where                                                                                                                          |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Runs on**  | Push to **main** (stable) and **dev** (prerelease) — job inside [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) |
-| **Token**    | Built-in **`github.token`** (no extra GitHub Environment secret required) |
+| What | Where |
+| --- | --- |
+| **Runs on** | Push to **main** (stable) and **dev** (prerelease) — job inside [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) |
+| **Token** | Built-in **`github.token`** (no extra GitHub Environment secret required) |
 
 ### 4.1 Release and deploy flow (feature → production)
 
@@ -270,8 +270,8 @@ Optional on Railway/GitHub only if overriding app default: **`TOMBSTONE_RETENTIO
 
 **Not synced to Railway by CD today:**
 
-| Item                    | Notes                                                                                                                                                                                                                                                                                              |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Item | Notes |
+| --- | --- |
 | **Integration secrets** | `pnpm setup:infra` can push `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via [build-env-vars.ts](../../../tooling/setup/build-env-vars.ts), but `cd.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
 
 ---

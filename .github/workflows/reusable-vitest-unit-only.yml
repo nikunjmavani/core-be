@@ -21,7 +21,18 @@ jobs:
   run:
     name: Unit + global
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:8.6.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     env:
+      VITEST_SKIP_DATABASE: 'true'
       NODE_ENV: test
       LOG_LEVEL: warn
       HOST: 0.0.0.0

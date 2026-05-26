@@ -8,9 +8,9 @@ The **[scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-mont
 
 ## RTO threshold (`RTO_MINUTES`)
 
-| Setting       | Default | Where                                                                                          |
-| ------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| `RTO_MINUTES` | `60`    | Workflow `env` in [scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml) |
+| Setting | Default | Where |
+| --- | --- | --- |
+| `RTO_MINUTES` | `60` | Workflow `env` in [scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml) |
 
 Elapsed restore time must be **strictly less than** `RTO_MINUTES × 60` seconds. The workflow **fails** when elapsed time meets or exceeds the threshold.
 
