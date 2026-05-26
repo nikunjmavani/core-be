@@ -16,9 +16,9 @@ describe('dependabot CI triage policy', () => {
     expect(workflow).not.toContain('--auto');
   });
 
-  it('does not auto-merge main to dev sync PRs', () => {
+  it('does not run main->dev sync automation in post-merge', () => {
     const postMerge = readFileSync(join(ROOT, '.github/workflows/post-merge-ci.yml'), 'utf8');
-    expect(postMerge).not.toContain('gh pr merge');
-    expect(postMerge).not.toContain('--auto');
+    expect(postMerge).not.toContain('sync-main-into-dev');
+    expect(postMerge).not.toContain('Sync main into dev');
   });
 });
