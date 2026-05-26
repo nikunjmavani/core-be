@@ -43,7 +43,7 @@ flowchart TD
 
 - **PR CI** ([pr-ci.yml](../../../.github/workflows/pr-ci.yml)) runs on every **pull_request** to **main** and **dev**: seven parallel jobs (lint, typecheck, unit + global with `vitest --changed`, migration safety lint, TS + Docker build verify, security scan, contract + property). No Postgres/Redis and no GHCR push on PR.
 - **Post-merge CI** ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)) is the **single post-merge pipeline** on push to `dev` or `main` (same jobs on both branches): commitlint, release-please, integration tests, Docker build + Trivy + GHCR push, chaos, SBOM artifact, API docs, sync main→dev (main only), Railway deploy, and release SBOM attachment when release-please publishes a release. Lint/typecheck/unit are **not** re-run — the same commit SHA already passed PR CI.
-- **Deploy** runs inside Post-merge CI via reusable [cd.yml](../../../.github/workflows/cd.yml). Only the GitHub Environment differs: `dev` → **development**, `main` → **production**. Manual `workflow_dispatch` on CD remains for emergency redeploys. **When post-deploy API smoke passes, that environment is fully live** — the deploy job is the last gate before traffic.
+- **Deploy** runs inside Post-merge CI via reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml). Only the GitHub Environment differs: `dev` → **development**, `main` → **production**. Manual `workflow_dispatch` on CD remains for emergency redeploys. **When post-deploy API smoke passes, that environment is fully live** — the deploy job is the last gate before traffic.
 - Release-please runs inside Post-merge CI on both channels (`main` stable, `dev` prerelease). When it publishes a GitHub Release in the same run, **Release SBOM** attaches CycloneDX to that release.
 
 ---
@@ -78,7 +78,7 @@ Runs on **push** to `main` / `dev` after merge. Does **not** re-run lint, typech
 | **Commitlint** | Every push | Conventional commit messages on the push |
 | **Release Please** | Every push | Opens/updates release PR; may publish GitHub Release |
 | **Sync main into dev** | Push to `main` only | Opens/updates automation PR to keep `dev` aligned |
-| **Deploy** | Docker job succeeded + gates green | Reusable [cd.yml](../../../.github/workflows/cd.yml) → migrate → redeploy → `/health` → worker readiness → **`pnpm test:api-smoke`** → **fully live** |
+| **Deploy** | Docker job succeeded + gates green | Reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) → migrate → redeploy → `/health` → worker readiness → **`pnpm test:api-smoke`** → **fully live** |
 | **Release SBOM** | Release Please published a release | CycloneDX SBOM attached to GitHub Release |
 
 | Other | When | What |
@@ -122,7 +122,7 @@ flowchart LR
 | dev    | development        | Development     |
 | main   | production         | Production      |
 
-Deploy workflow: reusable [cd.yml](../../../.github/workflows/cd.yml) called from **Post-merge CI** (or manual `workflow_dispatch` for emergency redeploy).
+Deploy workflow: reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) called from **Post-merge CI** (or manual `workflow_dispatch` for emergency redeploy).
 
 **Branch protection:** Which CI jobs must be required on **`main`** and **`dev`**, plus committed ruleset JSON and apply steps — see [branch-protection.md](branch-protection.md).
 
@@ -272,7 +272,7 @@ Optional on Railway/GitHub only if overriding app default: **`TOMBSTONE_RETENTIO
 
 | Item | Notes |
 | --- | --- |
-| **Integration secrets** | `pnpm setup:infra` can push `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via [build-env-vars.ts](../../../tooling/setup/build-env-vars.ts), but `cd.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
+| **Integration secrets** | `pnpm setup:infra` can push `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via [build-env-vars.ts](../../../tooling/setup/build-env-vars.ts), but `reusable-railway-deploy.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
 
 ---
 
@@ -304,7 +304,7 @@ walks through the Secret-vs-Variable decision and the section placement in
    pnpm github:sync production
    ```
 
-6. **Add the key to [cd.yml](../../../.github/workflows/cd.yml)**
+6. **Add the key to [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml)**
    if it must be synced through to the Railway service variables step.
 7. **Paste the "Environment variable changes" snippet** printed by
    `pnpm tool:sync-env-example` into the PR description so reviewers and the

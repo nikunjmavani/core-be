@@ -8,7 +8,10 @@ import {
   validateMetricsDeploySync,
 } from '../../../../tooling/setup/github/deploy-sync.js';
 
-const DEPLOY_WORKFLOW_PATH = resolve(import.meta.dirname, '../../../../.github/workflows/cd.yml');
+const DEPLOY_WORKFLOW_PATH = resolve(
+  import.meta.dirname,
+  '../../../../.github/workflows/reusable-railway-deploy.yml',
+);
 
 describe('deploy-env-sync.util', () => {
   it('lists METRICS_* keys from env schema', () => {

@@ -6,7 +6,7 @@ description: |
   CI workflow does not have to inline the same 80-line YAML blob.
 
   These values are CI-only test fixtures. Production secrets are injected by the
-  `cd.yml` workflow from the matching GitHub Environment.
+  `reusable-railway-deploy.yml` workflow from the matching GitHub Environment.
 
 inputs:
   jwt-secret:

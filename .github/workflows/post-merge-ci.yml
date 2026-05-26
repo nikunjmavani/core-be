@@ -289,7 +289,7 @@ jobs:
       (needs.chaos.result == 'success' || needs.chaos.result == 'skipped') &&
       (needs.sbom.result == 'success' || needs.sbom.result == 'skipped') &&
       (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped')
-    uses: ./.github/workflows/cd.yml
+    uses: ./.github/workflows/reusable-railway-deploy.yml
     secrets: inherit
 
   attach-release-sbom:

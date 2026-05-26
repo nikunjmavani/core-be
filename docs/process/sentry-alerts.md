@@ -7,7 +7,7 @@ Operational alerts for **core-be** use **Sentry** issue and metric alerts only. 
 ## Prerequisites
 
 1. `SENTRY_DSN` configured on API and worker services ([observability runbook](../deployment/runbooks/observability.md)).
-2. `RAILWAY_GIT_COMMIT_SHA` set on deploy so releases group regressions by commit ([cd.yml](../../.github/workflows/cd.yml)).
+2. `RAILWAY_GIT_COMMIT_SHA` set on deploy so releases group regressions by commit ([reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml)).
 3. Production environment tag: `SENTRY_ENVIRONMENT=production` (or per-env names).
 
 ---

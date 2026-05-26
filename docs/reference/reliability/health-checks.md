@@ -106,7 +106,7 @@ curl -H "Authorization: Bearer $METRICS_SCRAPE_TOKEN" http://localhost:9090/metr
 
 ## Deploy Probes
 
-[`cd.yml`](../../../.github/workflows/cd.yml) deploys the API and worker from scanned GHCR images, syncs shared Railway variables to both services, then probes:
+[`reusable-railway-deploy.yml`](../../../.github/workflows/reusable-railway-deploy.yml) deploys the API and worker from scanned GHCR images, syncs shared Railway variables to both services, then probes:
 
 - API service: `GET /health` on the API public domain
 - Worker service: `GET /health` on `WORKER_HEALTH_PORT`, plus `pnpm tool:worker-readiness` DLQ and queue heartbeat checks

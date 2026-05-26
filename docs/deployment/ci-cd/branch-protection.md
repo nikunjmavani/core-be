@@ -83,12 +83,12 @@ When the PR touches **src** but not only docs, these jobs may still skip individ
 | `Commitlint` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Conventional commits on protected-branch push |
 | `Release Please` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Release PR / GitHub Release automation |
 | `Sync main into dev` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Keeps `dev` aligned after `main` merges |
-| `Deploy` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Railway deploy via reusable [cd.yml](../../../.github/workflows/cd.yml) |
+| `Deploy` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Railway deploy via reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) |
 | `Release SBOM` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | CycloneDX SBOM attached when a release is published |
 
 Treat these as **post-merge gates**: failing runs still indicate problems on the branch tip after merge.
 
-Manual emergency redeploy: [cd.yml](../../../.github/workflows/cd.yml) `workflow_dispatch` only (not a PR status check).
+Manual emergency redeploy: [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) `workflow_dispatch` only (not a PR status check).
 
 ---
 

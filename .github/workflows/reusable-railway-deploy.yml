@@ -5,7 +5,7 @@
 # Optional environment secrets GHCR_API_IMAGE / GHCR_WORKER_IMAGE override the commit SHA tag
 # (for example digest pinning). See docs/deployment/ci-cd/cicd-and-deployment.md
 
-name: CD
+name: Reusable — Railway deploy
 
 on:
   workflow_call:

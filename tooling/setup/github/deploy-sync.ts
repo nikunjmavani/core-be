@@ -11,7 +11,7 @@ export function metricsEnvironmentVariableNames(): string[] {
     .sort();
 }
 
-/** Variable names listed in cd.yml `railway variable set` loop. */
+/** Variable names listed in reusable-railway-deploy.yml `railway variable set` loop. */
 export function parseRailwaySyncVariableNames(deployWorkflowContent: string): string[] {
   const loopMatch = deployWorkflowContent.match(RAILWAY_SYNC_LOOP_PATTERN);
   if (!loopMatch?.[1]) {

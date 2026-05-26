@@ -12,7 +12,7 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 | PR title, labels, `.env` guard | [pr-governance.yml](workflows/pr-governance.yml) | **PR Governance** | Every PR event | Yes (`Checks`) |
 | Post-merge pipeline (integration, Docker, deploy, release) | [post-merge-ci.yml](workflows/post-merge-ci.yml) | **Post-merge CI** | Push to `main`, `dev`; manual | No |
 | Docs lint + link check (markdown only) | [pr-docs-lane.yml](workflows/pr-docs-lane.yml) | **Docs lane** | PR that touches `*.md` | No |
-| Manual Railway deploy (emergency) | [cd.yml](workflows/cd.yml) | **CD** | `workflow_dispatch` only | No |
+| Manual Railway deploy (emergency) | [reusable-railway-deploy.yml](workflows/reusable-railway-deploy.yml) | **Reusable — Railway deploy** | `workflow_dispatch` only | No |
 | Nightly k6 load + SLO gate | [scheduled-k6-load-slo.yml](workflows/scheduled-k6-load-slo.yml) | **Scheduled k6 API load & SLO** | Daily 02:00 UTC + manual | No |
 | Monthly backup restore + RTO | [scheduled-monthly-restore-rto.yml](workflows/scheduled-monthly-restore-rto.yml) | **Monthly backup restore & RTO drill** | 1st of month 06:00 UTC + manual (fully automated Neon PITR) | No |
 | Stryker mutation score | [scheduled-stryker-mutation.yml](workflows/scheduled-stryker-mutation.yml) | **Scheduled Stryker mutation testing** | Weekly Sunday + manual | No |
@@ -27,7 +27,7 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 | Toxiproxy chaos suite | [reusable-chaos-toxiproxy.yml](workflows/reusable-chaos-toxiproxy.yml) | Reusable — chaos via Toxiproxy |
 | Docker build, Trivy, GHCR push, container smoke | [reusable-docker-build-trivy.yml](workflows/reusable-docker-build-trivy.yml) | Reusable — Docker build and verify |
 | OpenAPI + Postman + Scalar publish | [reusable-openapi-postman-publish.yml](workflows/reusable-openapi-postman-publish.yml) | Reusable — generate API docs |
-| Railway deploy (+ post-deploy API smoke) | [cd.yml](workflows/cd.yml) | CD |
+| Railway deploy (+ post-deploy API smoke) | [reusable-railway-deploy.yml](workflows/reusable-railway-deploy.yml) | Reusable — Railway deploy |
 
 ## Composite actions
 

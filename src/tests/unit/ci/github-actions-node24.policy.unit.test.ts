@@ -52,6 +52,18 @@ describe('GitHub Actions Node.js 24 policy', () => {
     }
   });
 
+  it('names reusable workflow files with reusable- prefix and Reusable — display name', () => {
+    for (const workflowPath of listWorkflowFiles()) {
+      const fileName = workflowPath.split('/').pop() ?? workflowPath;
+      const contents = readFileSync(workflowPath, 'utf8');
+      if (!contents.includes('workflow_call:')) continue;
+      if (fileName === 'post-merge-ci.yml' || fileName === 'pr-ci.yml') continue;
+
+      expect(fileName, workflowPath).toMatch(/^reusable-.*\.ya?ml$/);
+      expect(contents, workflowPath).toMatch(/^name: Reusable — /m);
+    }
+  });
+
   it('installs project Node from .nvmrc via setup-node v6 composite', () => {
     const setupNodePnpm = readFileSync(
       join(ROOT, '.github/actions/setup-node-pnpm/action.yml'),

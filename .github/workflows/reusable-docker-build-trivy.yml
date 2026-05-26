@@ -121,7 +121,7 @@ jobs:
           docker run --rm core-be-worker:ci node -e "import('argon2').then(()=>import('@sentry/profiling-node')).then(()=>console.log('native ok'))"
 
       # Publish scanned images to GHCR for ANY protected-branch push (dev or main).
-      # cd.yml then pulls these by commit SHA tag for both environments.
+      # reusable-railway-deploy.yml then pulls these by commit SHA tag for both environments.
       # Only `main` gets the floating `:latest` tag so dev never accidentally
       # becomes the default-consumed image.
       - name: Login to GitHub Container Registry
