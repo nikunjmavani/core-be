@@ -242,11 +242,14 @@ function buildBranchRuleset(branch: string): string {
         parameters: {
           strict_required_status_checks_policy: true,
           required_status_checks: [
-            { context: 'CI / Quality' },
-            { context: 'CI / Tests' },
-            { context: 'CI / API smoke' },
+            { context: 'PR CI / Lint' },
+            { context: 'PR CI / Typecheck' },
+            { context: 'PR CI / Unit' },
+            { context: 'PR CI / Migration lint' },
+            { context: 'PR CI / Build verify' },
+            { context: 'PR CI / Security scan' },
+            { context: 'PR CI / Contract + property' },
             { context: 'PR Governance / Checks' },
-            { context: 'CI / Docker' },
           ],
         },
       },

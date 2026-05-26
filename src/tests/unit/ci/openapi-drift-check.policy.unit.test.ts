@@ -17,7 +17,7 @@ function resolveDocsCheckScript(command: string): string {
 }
 
 describe('OpenAPI drift check policy', () => {
-  it('runs docs:check in ci:quality and quality-static workflow', () => {
+  it('runs docs:check in ci:quality and post-merge API docs workflow', () => {
     const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
       scripts: Record<string, string>;
     };
@@ -29,9 +29,6 @@ describe('OpenAPI drift check policy', () => {
     expect(scriptPath).toContain('src/scripts/codegen/check-api-docs-sync.ts');
 
     expect(packageJson.scripts['ci:quality']).toMatch(/pnpm docs:check/);
-
-    const qualityStatic = readWorkflow('.github/workflows/reusable-quality-static.yml');
-    expect(qualityStatic).toContain('pnpm docs:check');
 
     const docsGenerate = readWorkflow('.github/workflows/reusable-openapi-postman-publish.yml');
     expect(docsGenerate).toContain('pnpm docs:check');

@@ -7,6 +7,9 @@ permissions:
   contents: read
   packages: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   run:
     name: Build + Trivy
@@ -41,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -125,7 +128,7 @@ jobs:
         if: |
           github.event_name == 'push' &&
           contains(fromJSON('["refs/heads/main","refs/heads/dev"]'), github.ref)
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

@@ -1,10 +1,18 @@
 name: Post-merge CI
 
-# Jobs that only need to run after a merge into a protected branch.
-# Kept in a separate workflow so they do not show as "Skipped" on every PR.
+# Single post-merge pipeline for protected-branch pushes (dev + main).
+# PR CI already validated the same SHA; this workflow runs integration, Docker publish,
+# chaos, SBOM artifact, API docs, commitlint, release-please, optional main→dev sync,
+# Railway deploy, and release SBOM attachment — one trigger, one flow.
+#
+# Branch → GitHub Environment mapping for deploy (only difference between dev and main):
+#   dev  → development
+#   main → production
+
 on:
   push:
     branches: [main, dev]
+  workflow_dispatch:
 
 concurrency:
   group: post-merge-ci-${{ github.ref }}
@@ -14,16 +22,21 @@ permissions:
   contents: read
   packages: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
     outputs:
       src-code: ${{ steps.filter.outputs.src-code }}
+      docker: ${{ steps.filter.outputs.docker }}
+      ci-config: ${{ steps.filter.outputs.ci-config }}
       docs-artifacts: ${{ steps.filter.outputs.docs-artifacts }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Path filter
         uses: dorny/paths-filter@v4
@@ -35,17 +48,184 @@ jobs:
               - 'migrations/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
+              - 'Dockerfile.agent'
+              - 'vitest.config.ts'
               - 'tooling/**'
+            docker:
+              - 'Dockerfile'
+              - 'Dockerfile.worker'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tooling/ci/check-dockerfile-sync.mjs'
+            ci-config:
+              - '.github/**'
             docs-artifacts:
               - 'docs/openapi/**'
               - 'docs/postman-collection.json'
+
+  commitlint:
+    name: Commitlint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Validate commit messages
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            COMMITS="$(git rev-list --first-parent --reverse "$AFTER")"
+          else
+            COMMITS="$(git rev-list --first-parent --reverse "$BEFORE..$AFTER")"
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            echo "No first-parent commits to lint."
+            exit 0
+          fi
+
+          for COMMIT in $COMMITS; do
+            echo "Linting commit $COMMIT"
+            git log -1 --format=%B "$COMMIT" | pnpm exec commitlint --verbose
+          done
+
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created == 'true' && 'true' || 'false' }}
+    env:
+      CHANNEL_SUFFIX: ${{ github.ref_name == 'dev' && '.dev' || '' }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ github.token }}
+          target-branch: ${{ github.ref_name }}
+          config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
+          manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
+
+  sync-main-into-dev:
+    name: Sync main into dev
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      SYNC_BRANCH: automation/sync-main-into-dev
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Open main to dev sync PR
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin main dev
+
+          if git merge-base --is-ancestor origin/main origin/dev; then
+            echo "dev already contains main; no sync PR needed."
+            exit 0
+          fi
+
+          git switch --force-create "$SYNC_BRANCH" origin/dev
+
+          if ! git merge --no-edit origin/main; then
+            echo "::error::Automatic main -> dev merge conflicted. Resolve manually by opening a PR from main into dev."
+            exit 1
+          fi
+
+          git push --force-with-lease origin "$SYNC_BRANCH"
+
+          existing_pr="$(
+            gh pr list \
+              --base dev \
+              --head "$SYNC_BRANCH" \
+              --state open \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+
+          body_file="$(mktemp)"
+          cat > "$body_file" <<'EOF'
+          ## Summary
+
+          - Syncs `main` back into `dev` so production-only fixes, including urgent security fixes, stay in the development branch.
+          - Generated automatically after a push to `main`.
+
+          ## Test plan
+
+          - [ ] CI green on this PR.
+          - [ ] Resolve merge conflicts manually if GitHub reports any after the branch is updated.
+
+          EOF
+
+          if [ -n "$existing_pr" ]; then
+            gh pr edit "$existing_pr" \
+              --title "chore: sync main into dev" \
+              --body-file "$body_file"
+            echo "Updated existing sync PR #$existing_pr"
+          else
+            gh pr create \
+              --base dev \
+              --head "$SYNC_BRANCH" \
+              --title "chore: sync main into dev" \
+              --body-file "$body_file"
+            echo "Opened sync main into dev PR (merge manually after review and PR CI)."
+          fi
+
+  integration-tests:
+    name: Integration
+    needs: [changes]
+    if: |
+      always() &&
+      (
+        needs.changes.outputs.src-code == 'true' ||
+        needs.changes.outputs.ci-config == 'true'
+      )
+    uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
+    secrets: inherit
+
+  docker-build-push:
+    name: Docker
+    needs: [changes]
+    if: |
+      always() &&
+      (
+        needs.changes.outputs.src-code == 'true' ||
+        needs.changes.outputs.docker == 'true' ||
+        needs.changes.outputs.ci-config == 'true'
+      )
+    uses: ./.github/workflows/reusable-docker-build-trivy.yml
+    secrets: inherit
 
   chaos:
     name: Chaos
     needs: [changes]
     if: |
       always() &&
-      github.ref == 'refs/heads/main' &&
       needs.changes.outputs.src-code == 'true'
     uses: ./.github/workflows/reusable-chaos-toxiproxy.yml
     secrets: inherit
@@ -59,17 +239,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Generate SBOM
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@v0.24.0
         with:
           path: .
           format: cyclonedx-json
           output-file: sbom.cyclonedx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: sbom.cyclonedx.json
           path: sbom.cyclonedx.json
@@ -85,3 +265,72 @@ jobs:
     with:
       github_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
       publish_hosted_docs: true
+
+  deploy:
+    name: Deploy
+    needs:
+      - commitlint
+      - release-please
+      - sync-main-into-dev
+      - integration-tests
+      - docker-build-push
+      - chaos
+      - sbom
+      - api-docs
+    if: |
+      always() &&
+      needs.docker-build-push.result == 'success' &&
+      needs.commitlint.result != 'failure' &&
+      needs.commitlint.result != 'cancelled' &&
+      needs.release-please.result != 'failure' &&
+      needs.release-please.result != 'cancelled' &&
+      (needs.sync-main-into-dev.result == 'success' || needs.sync-main-into-dev.result == 'skipped') &&
+      (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped') &&
+      (needs.chaos.result == 'success' || needs.chaos.result == 'skipped') &&
+      (needs.sbom.result == 'success' || needs.sbom.result == 'skipped') &&
+      (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped')
+    uses: ./.github/workflows/cd.yml
+    secrets: inherit
+
+  attach-release-sbom:
+    name: Release SBOM
+    needs: release-please
+    if: needs.release-please.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag_name="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
+          if [ -z "${tag_name}" ] || [ "${tag_name}" = "null" ]; then
+            echo "::error::No GitHub Release found after release-please."
+            exit 1
+          fi
+          echo "tag_name=${tag_name}" >> "$GITHUB_OUTPUT"
+          echo "Attaching SBOM to release ${tag_name}"
+
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.tag.outputs.tag_name }}
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+
+      - name: Upload SBOM to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          files: sbom.cyclonedx.json
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

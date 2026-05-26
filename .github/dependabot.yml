@@ -1,5 +1,5 @@
-# Dependabot version updates. Auto-merge policy: .github/workflows/dependabot-automerge.yml
-# (production patch; dev patch+minor; security patch+minor — never dev/production major via automerge).
+# Dependabot version updates. CI failure triage: .github/workflows/dependabot-ci-triage.yml
+# All Dependabot PRs require manual review and merge (branch protection).
 
 version: 2
 

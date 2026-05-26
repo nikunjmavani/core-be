@@ -67,17 +67,17 @@ Use prefixes such as:
 
 ## Commits and releases
 
-Commits should follow **[Conventional Commits](https://www.conventionalcommits.org/)** (e.g. `feat:`, `fix:`, `feat!:` for breaking changes). **[Release Please](.github/workflows/release-please-versioning.yml)** uses that history for changelog and versioning on both release channels: `main` produces stable releases (e.g. `v2.1.0`); `dev` produces pre-releases (e.g. `v2.1.0-dev.0`). Each channel tracks its own version via a dedicated manifest (under [.github/release-please/](.github/release-please/)), so they never collide.
+Commits should follow **[Conventional Commits](https://www.conventionalcommits.org/)** (e.g. `feat:`, `fix:`, `feat!:` for breaking changes). **[Release Please](.github/workflows/post-merge-ci.yml)** (job inside Post-merge CI) uses that history for changelog and versioning on both release channels: `main` produces stable releases (e.g. `v2.1.0`); `dev` produces pre-releases (e.g. `v2.1.0-dev.0`). Each channel tracks its own version via a dedicated manifest (under [.github/release-please/](.github/release-please/)), so they never collide.
 
 ## Git hooks (Husky)
 
 [Husky](.husky/) runs checks locally. Fix failures rather than skipping hooks (`--no-verify`).
 
-| Hook           | Script                                   | What runs                                                                                                                                                                                                                                                                  |
-| -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hook | Script | What runs |
+| --- | --- | --- |
 | **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | `lint-staged` (Biome on `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; markdownlint on `*.md`), `typecheck`, `validate:domain:strict`, route catalog / OpenAPI sync when relevant files change, env-example sync, optional Gitleaks on staged files, conflict-marker and large-file guards |
-| **commit-msg** | [`.husky/commit-msg`](.husky/commit-msg) | [Conventional Commits](https://www.conventionalcommits.org/) via commitlint                                                                                                                                                                                                |
-| **pre-push**   | [`.husky/pre-push`](.husky/pre-push)     | `typecheck`, `build`, `build:check`, `test:unit`                                                                                                                                                                                                                           |
+| **commit-msg** | [`.husky/commit-msg`](.husky/commit-msg) | [Conventional Commits](https://www.conventionalcommits.org/) via commitlint |
+| **pre-push** | [`.husky/pre-push`](.husky/pre-push) | `typecheck`, `build`, `build:check`, `test:unit` |
 
 **Gitleaks:** Install the [Gitleaks CLI](https://github.com/gitleaks/gitleaks) so pre-commit secret scanning is not skipped. CI always runs a full-repo scan. Manual check: `pnpm security:secrets`.
 

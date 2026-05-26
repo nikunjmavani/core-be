@@ -20,6 +20,11 @@ export default async function globalSetup(): Promise<void> {
     return;
   }
 
+  /** PR unit lane — unit + global policy scans without Postgres. See reusable-vitest-unit-only.yml. */
+  if (process.env.VITEST_SKIP_DATABASE === 'true') {
+    return;
+  }
+
   process.env.DATABASE_URL ??= 'postgresql://core:core@localhost:5432/core';
   const migrationUrl = process.env.DATABASE_URL;
   if (!migrationUrl) {

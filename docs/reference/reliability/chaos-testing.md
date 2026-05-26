@@ -25,9 +25,9 @@ replay) against **live Postgres + Redis**, with failures injected by
 
 ## Continuous integration
 
-The **CI / Chaos** job in [`.github/workflows/pr-branch-ci.yml`](../../../.github/workflows/pr-branch-ci.yml) (post-merge on `main` only):
+The **Post-merge CI / Chaos** job in [`.github/workflows/post-merge-ci.yml`](../../../.github/workflows/post-merge-ci.yml) (push to `main` or `dev` when source code changed):
 
-- Runs after **Quality** alongside the main test job.
+- Runs after merge alongside the integration, Docker, SBOM, and API docs jobs.
 - Executes `pnpm chaos:provision`, `pnpm db:migrate` against proxied `DATABASE_URL`, then `pnpm test:chaos`.
 
 Upstream addresses inside the proxy container default to `postgres:5432` and `redis:6379`; override

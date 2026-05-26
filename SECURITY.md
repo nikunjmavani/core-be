@@ -23,12 +23,12 @@ Include, where possible:
 
 ## Dependency vulnerability response
 
-Dependency vulnerabilities are handled through Dependabot, CI dependency audit gates, and manual review when an update is outside the safe auto-merge policy.
+Dependency vulnerabilities are handled through Dependabot, CI dependency audit gates, and manual review before merge.
 
 ### Intake paths
 
-- **Dependabot security updates:** Dependabot opens a pull request against the default branch. Patch updates, and security minor updates, may auto-merge only after the required CI checks pass.
-- **Skipped Dependabot security updates:** Major updates, ambiguous updates, or updates outside the safe policy create a GitHub issue for maintainer triage.
+- **Dependabot security updates:** Dependabot opens a pull request. Review and merge manually after required PR CI checks pass, including `pnpm deps:audit`.
+- **Dependabot PR CI failures:** When PR CI fails on a Dependabot PR, [`.github/workflows/dependabot-ci-triage.yml`](../../.github/workflows/dependabot-ci-triage.yml) opens or updates a GitHub issue for maintainer triage (security failures use an urgent title).
 - **CI audit failures:** Any pull request that introduces a vulnerable dependency is blocked by `pnpm deps:audit` and `pnpm deps:audit:prod`.
 - **Private reports:** Security reports for this repository's own source code follow the private reporting and coordinated disclosure process above.
 
@@ -45,7 +45,7 @@ Use the advisory severity, exploitability, and reachability in this codebase to 
 
 ### Manual dependency fix checklist
 
-For any dependency security update that does not auto-merge:
+For any dependency security update that requires manual merge:
 
 1. Read the linked advisory and determine whether the vulnerable code path is reachable.
 2. Prefer patch or minor updates when they contain the fix.

@@ -379,6 +379,10 @@ const envSchemaBase = z.object({
   SECRETS_ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-f]{64}$/i, 'SECRETS_ENCRYPTION_KEY must be 64 hex characters (32 bytes)'),
+
+  // Monthly database restore drill (GitHub Actions only — not loaded by API/worker at runtime)
+  /** Neon API key for scheduled monthly PITR restore drill. GitHub Environment secret via `pnpm github:sync`. */
+  MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: z.string().min(1).optional(),
 });
 
 export const envSchema = envSchemaBase
