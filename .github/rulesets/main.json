@@ -43,7 +43,7 @@
             "context": "PR CI / Typecheck"
           },
           {
-            "context": "PR CI / Unit"
+            "context": "PR CI / Unit + global (pull_request)"
           },
           {
             "context": "PR CI / Migration lint"
