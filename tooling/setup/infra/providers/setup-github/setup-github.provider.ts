@@ -81,21 +81,17 @@ export async function provision(
 
     const setSecretNames: string[] = [];
 
-    // Repository-level secrets (shared across environments)
+    // Repository-level secrets (single value, not env-scoped).
+    // Note: Per-environment deploy-provider IDs (RAILWAY_SERVICE_ID,
+    // RAILWAY_WORKER_SERVICE_ID) and third-party publishing secrets
+    // (POSTMAN_API_KEY, POSTMAN_WORKSPACE_ID) flow through the per-environment
+    // loop below via `buildEnvironmentVariables()` so each GitHub Environment
+    // resolves them via `${{ secrets.* }}` independently.
     if (secrets.railway.token) {
       const secretSpinner = logger.startSpinner('Setting RAILWAY_TOKEN (repo)...');
       setGitHubSecret(repository, 'RAILWAY_TOKEN', secrets.railway.token);
       logger.stopSpinner(secretSpinner, 'RAILWAY_TOKEN set');
       setSecretNames.push('RAILWAY_TOKEN');
-    }
-
-    if (secrets.postman?.apiKey) {
-      setGitHubSecret(repository, 'POSTMAN_API_KEY', secrets.postman.apiKey);
-      setSecretNames.push('POSTMAN_API_KEY');
-    }
-    if (secrets.postman?.workspaceId) {
-      setGitHubSecret(repository, 'POSTMAN_WORKSPACE_ID', secrets.postman.workspaceId);
-      setSecretNames.push('POSTMAN_WORKSPACE_ID');
     }
 
     // Per-environment secrets (GitHub Environments: development, production)
@@ -111,12 +107,6 @@ export async function provision(
       );
 
       const envSecrets: Array<{ name: string; value: string }> = [];
-      if (apiServiceId) {
-        envSecrets.push({ name: 'RAILWAY_SERVICE_ID', value: apiServiceId });
-      }
-      if (workerServiceId) {
-        envSecrets.push({ name: 'RAILWAY_WORKER_SERVICE_ID', value: workerServiceId });
-      }
       for (const [key, value] of Object.entries(envVars)) {
         if (value !== undefined && value !== '') {
           envSecrets.push({ name: key, value });
@@ -219,7 +209,7 @@ export const setupGithubProvider: InfraProvider = {
     instructions: [
       `Will sync repository "${context.config.providers.github.repository}" branches, rulesets, and GitHub Environments.`,
       `Branch/environment plan: ${formatGitHubEnvironmentPlan(context.config)}.`,
-      'Will push environment-scoped secrets and variables, including RAILWAY_SERVICE_ID (api) and RAILWAY_WORKER_SERVICE_ID (worker) when Railway state is available.',
+      'Will push environment-scoped secrets and variables per environment, including RAILWAY_SERVICE_ID, RAILWAY_WORKER_SERVICE_ID, POSTMAN_API_KEY, and POSTMAN_WORKSPACE_ID when their respective state/secrets are available.',
     ],
     execute: async () => {
       await syncGithubFoundations();

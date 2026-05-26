@@ -391,6 +391,12 @@ const envSchemaBase = z.object({
   RAILWAY_SERVICE_ID: z.string().min(1).optional(),
   /** Railway worker service ID for the `core-be-worker` service (target of `railway redeploy --service`). */
   RAILWAY_WORKER_SERVICE_ID: z.string().min(1).optional(),
+
+  // Postman API documentation publishing (GitHub Actions only — consumed by .github/workflows/reusable-openapi-postman-publish.yml and `pnpm docs:upload`)
+  /** Postman API key used by `pnpm docs:upload` to push the generated collection. GitHub Environment secret via `pnpm github:sync`. */
+  POSTMAN_API_KEY: z.string().min(1).optional(),
+  /** Postman workspace ID where the API documentation collection is published. GitHub Environment secret via `pnpm github:sync`. */
+  POSTMAN_WORKSPACE_ID: z.string().min(1).optional(),
 });
 
 export const envSchema = envSchemaBase

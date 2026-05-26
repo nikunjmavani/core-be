@@ -142,6 +142,11 @@ function classifyKey(key: string): 'secret' | 'variable' {
   if (key.endsWith('_ENCRYPTION_KEY')) return 'secret';
   if (key.endsWith('_TOKEN')) return 'secret';
   if (key.endsWith('_DSN')) return 'secret';
+  // Deploy-provider service / workspace IDs (e.g. RAILWAY_SERVICE_ID,
+  // RAILWAY_WORKER_SERVICE_ID, POSTMAN_WORKSPACE_ID) are read via `secrets.*`
+  // in workflows, so they ship as Secrets, not Variables.
+  if (key.endsWith('_SERVICE_ID')) return 'secret';
+  if (key.endsWith('_WORKSPACE_ID')) return 'secret';
 
   // Connection strings with embedded credentials → Secret
   if (key === 'DATABASE_URL' || key === 'DATABASE_MIGRATION_URL') return 'secret';
