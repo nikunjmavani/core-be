@@ -16,6 +16,9 @@ name: Post-merge CI
 # Branch → GitHub Environment mapping for deploy (only difference between dev and main):
 #   dev  → development
 #   main → production
+#
+# Re-triggered after a merge whose push event was silently dropped by GitHub Actions
+# while a previous run was still in flight under the same concurrency group.
 
 on:
   push:
