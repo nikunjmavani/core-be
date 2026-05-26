@@ -52,7 +52,7 @@ GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `n
 
 ### Same checks on both branches
 
-Require **all eight** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge integration, Docker (Trivy + GHCR), chaos, SBOM, and API docs run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) on push only (not required PR checks).
+Require **all eight** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge integration, Docker (Trivy + GHCR), chaos, SBOM, and API docs run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks).
 
 ### Skipped PR CI jobs on docs-only pull requests
 

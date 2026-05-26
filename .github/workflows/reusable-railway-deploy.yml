@@ -9,6 +9,15 @@ name: Reusable — Railway deploy
 
 on:
   workflow_call:
+    inputs:
+      merge_commit_sha:
+        description: Commit SHA on the target branch after merge (optional when invoked via workflow_dispatch)
+        required: false
+        type: string
+      target_branch:
+        description: Protected branch that received the merge (main or dev)
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       target:
@@ -20,7 +29,7 @@ on:
           - development
 
 concurrency:
-  group: cd-${{ github.ref_name }}
+  group: railway-deploy-${{ inputs.target_branch || github.ref_name }}-${{ inputs.merge_commit_sha || github.sha }}
   cancel-in-progress: false
 
 permissions:
@@ -46,6 +55,18 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "environment=${{ inputs.target }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.target_branch }}" ]; then
+            case "${{ inputs.target_branch }}" in
+              main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
+              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
+              *)    echo "::error::Unsupported branch for deploy: ${{ inputs.target_branch }}" && exit 1 ;;
+            esac
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            case "${{ github.event.pull_request.base.ref }}" in
+              main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
+              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
+              *)    echo "::error::Unsupported base branch for deploy: ${{ github.event.pull_request.base.ref }}" && exit 1 ;;
+            esac
           else
             case "${{ github.ref_name }}" in
               main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
@@ -62,6 +83,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.merge_commit_sha || github.sha }}
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -114,7 +137,7 @@ jobs:
         env:
           GHCR_API_IMAGE: ${{ secrets.GHCR_API_IMAGE }}
           GHCR_WORKER_IMAGE: ${{ secrets.GHCR_WORKER_IMAGE }}
-          RAILWAY_GIT_COMMIT_SHA: ${{ github.sha }}
+          RAILWAY_GIT_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
         run: |
           set -euo pipefail
           API_BASE="ghcr.io/${{ github.repository }}/core-be-api"
@@ -200,7 +223,7 @@ jobs:
 
       - name: Deploy API to Railway
         env:
-          RAILWAY_GIT_COMMIT_SHA: ${{ github.sha }}
+          RAILWAY_GIT_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
         run: |
@@ -243,7 +266,7 @@ jobs:
 
       - name: Deploy worker to Railway
         env:
-          RAILWAY_GIT_COMMIT_SHA: ${{ github.sha }}
+          RAILWAY_GIT_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
         run: |

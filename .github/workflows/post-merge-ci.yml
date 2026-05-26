@@ -1,6 +1,6 @@
 name: Post-merge CI
 
-# Single post-merge pipeline for protected-branch pushes (dev + main).
+# Single post-merge pipeline after a PR merges into dev or main (or manual workflow_dispatch).
 # PR CI already validated the same SHA; this workflow runs integration, Docker publish,
 # chaos, SBOM artifact, API docs, commitlint, release-please, optional main→dev sync,
 # Railway deploy, and release SBOM attachment — one trigger, one flow.
@@ -10,12 +10,13 @@ name: Post-merge CI
 #   main → production
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches: [main, dev]
   workflow_dispatch:
 
 concurrency:
-  group: post-merge-ci-${{ github.ref }}
+  group: post-merge-ci-${{ github.event_name == 'workflow_dispatch' && github.ref || format('refs/heads/{0}', github.event.pull_request.base.ref) }}
   cancel-in-progress: false
 
 permissions:
@@ -24,10 +25,25 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  POST_MERGE_SHA: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
+  POST_MERGE_BRANCH: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref }}
 
 jobs:
+  gate:
+    name: Verify merge
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post-merge target
+        run: |
+          echo "Post-merge CI for branch ${POST_MERGE_BRANCH} at ${POST_MERGE_SHA}"
+        env:
+          POST_MERGE_BRANCH: ${{ env.POST_MERGE_BRANCH }}
+          POST_MERGE_SHA: ${{ env.POST_MERGE_SHA }}
+
   changes:
     name: Detect changes
+    needs: gate
     runs-on: ubuntu-latest
     outputs:
       src-code: ${{ steps.filter.outputs.src-code }}
@@ -37,11 +53,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.POST_MERGE_SHA }}
+          fetch-depth: 0
+
+      - name: Resolve diff base
+        id: diff_base
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if git rev-parse "${{ env.POST_MERGE_SHA }}^" >/dev/null 2>&1; then
+              echo "sha=$(git rev-parse "${{ env.POST_MERGE_SHA }}^")" >> "$GITHUB_OUTPUT"
+            else
+              echo "sha=${{ env.POST_MERGE_SHA }}" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "sha=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Path filter
         uses: dorny/paths-filter@v4
         id: filter
         with:
+          base: ${{ steps.diff_base.outputs.sha }}
+          ref: ${{ env.POST_MERGE_SHA }}
           filters: |
             src-code:
               - 'src/**'
@@ -65,11 +100,13 @@ jobs:
 
   commitlint:
     name: Commitlint
+    needs: gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          ref: ${{ env.POST_MERGE_SHA }}
           fetch-depth: 0
 
       - name: Setup Node and pnpm
@@ -78,8 +115,13 @@ jobs:
       - name: Validate commit messages
         run: |
           set -euo pipefail
-          BEFORE="${{ github.event.before }}"
-          AFTER="${{ github.sha }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.sha }}"
+          else
+            BEFORE="${{ github.event.pull_request.base.sha }}"
+            AFTER="${{ env.POST_MERGE_SHA }}"
+          fi
 
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             COMMITS="$(git rev-list --first-parent --reverse "$AFTER")"
@@ -99,6 +141,7 @@ jobs:
 
   release-please:
     name: Release Please
+    needs: gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -108,20 +151,27 @@ jobs:
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created == 'true' && 'true' || 'false' }}
     env:
-      CHANNEL_SUFFIX: ${{ github.ref_name == 'dev' && '.dev' || '' }}
+      CHANNEL_SUFFIX: ${{ env.POST_MERGE_BRANCH == 'dev' && '.dev' || '' }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.POST_MERGE_SHA }}
+          fetch-depth: 0
+
       - name: Run release-please
         id: release
         uses: googleapis/release-please-action@v5
         with:
           token: ${{ github.token }}
-          target-branch: ${{ github.ref_name }}
+          target-branch: ${{ env.POST_MERGE_BRANCH }}
           config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
           manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
 
   sync-main-into-dev:
     name: Sync main into dev
-    if: github.ref == 'refs/heads/main'
+    needs: gate
+    if: env.POST_MERGE_BRANCH == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -173,7 +223,7 @@ jobs:
           ## Summary
 
           - Syncs `main` back into `dev` so production-only fixes, including urgent security fixes, stay in the development branch.
-          - Generated automatically after a push to `main`.
+          - Generated automatically after a PR merges into `main`.
 
           ## Test plan
 
@@ -198,7 +248,7 @@ jobs:
 
   integration-tests:
     name: Integration
-    needs: [changes]
+    needs: [gate, changes]
     if: |
       always() &&
       (
@@ -207,10 +257,13 @@ jobs:
       )
     uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
     secrets: inherit
+    with:
+      merge_commit_sha: ${{ env.POST_MERGE_SHA }}
+      target_branch: ${{ env.POST_MERGE_BRANCH }}
 
   docker-build-push:
     name: Docker
-    needs: [changes]
+    needs: [gate, changes]
     if: |
       always() &&
       (
@@ -220,19 +273,25 @@ jobs:
       )
     uses: ./.github/workflows/reusable-docker-build-trivy.yml
     secrets: inherit
+    with:
+      merge_commit_sha: ${{ env.POST_MERGE_SHA }}
+      target_branch: ${{ env.POST_MERGE_BRANCH }}
 
   chaos:
     name: Chaos
-    needs: [changes]
+    needs: [gate, changes]
     if: |
       always() &&
       needs.changes.outputs.src-code == 'true'
     uses: ./.github/workflows/reusable-chaos-toxiproxy.yml
     secrets: inherit
+    with:
+      merge_commit_sha: ${{ env.POST_MERGE_SHA }}
+      target_branch: ${{ env.POST_MERGE_BRANCH }}
 
   sbom:
     name: SBOM
-    needs: [changes]
+    needs: [gate, changes]
     if: |
       always() &&
       needs.changes.outputs.src-code == 'true'
@@ -240,6 +299,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.POST_MERGE_SHA }}
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0.24.0
@@ -256,19 +317,22 @@ jobs:
 
   api-docs:
     name: API docs
-    needs: [changes]
+    needs: [gate, changes]
     if: |
       always() &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
     uses: ./.github/workflows/reusable-openapi-postman-publish.yml
     secrets: inherit
     with:
-      github_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      merge_commit_sha: ${{ env.POST_MERGE_SHA }}
+      target_branch: ${{ env.POST_MERGE_BRANCH }}
+      github_environment: ${{ env.POST_MERGE_BRANCH == 'main' && 'production' || 'development' }}
       publish_hosted_docs: true
 
   deploy:
     name: Deploy
     needs:
+      - gate
       - commitlint
       - release-please
       - sync-main-into-dev
@@ -291,10 +355,13 @@ jobs:
       (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped')
     uses: ./.github/workflows/reusable-railway-deploy.yml
     secrets: inherit
+    with:
+      merge_commit_sha: ${{ env.POST_MERGE_SHA }}
+      target_branch: ${{ env.POST_MERGE_BRANCH }}
 
   attach-release-sbom:
     name: Release SBOM
-    needs: release-please
+    needs: [gate, release-please]
     if: needs.release-please.outputs.releases_created == 'true'
     runs-on: ubuntu-latest
     permissions:

@@ -10,7 +10,7 @@ Workflow **file names** describe *what* runs; the YAML `name:` field is what app
 | ------------ | ---- | ------------------------ | ------------ | --------------- |
 | PR merge gate (lint, typecheck, unit, build) | [pr-ci.yml](workflows/pr-ci.yml) | **PR CI** | `pull_request` → `main`, `dev` | Yes (7 parallel jobs) |
 | PR title, labels, `.env` guard | [pr-governance.yml](workflows/pr-governance.yml) | **PR Governance** | Every PR event | Yes (`Checks`) |
-| Post-merge pipeline (integration, Docker, deploy, release) | [post-merge-ci.yml](workflows/post-merge-ci.yml) | **Post-merge CI** | Push to `main`, `dev`; manual | No |
+| Post-merge pipeline (integration, Docker, deploy, release) | [post-merge-ci.yml](workflows/post-merge-ci.yml) | **Post-merge CI** | PR merged into `main`/`dev`; manual | No |
 | Docs lint + link check (markdown only) | [pr-docs-lane.yml](workflows/pr-docs-lane.yml) | **Docs lane** | PR that touches `*.md` | No |
 | Manual Railway deploy (emergency) | [reusable-railway-deploy.yml](workflows/reusable-railway-deploy.yml) | **Reusable — Railway deploy** | `workflow_dispatch` only | No |
 | Nightly k6 load + SLO gate | [scheduled-k6-load-slo.yml](workflows/scheduled-k6-load-slo.yml) | **Scheduled k6 API load & SLO** | Daily 02:00 UTC + manual | No |

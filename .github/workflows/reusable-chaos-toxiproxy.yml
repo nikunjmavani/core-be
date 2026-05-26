@@ -2,6 +2,15 @@ name: Reusable — chaos via Toxiproxy
 
 on:
   workflow_call:
+    inputs:
+      merge_commit_sha:
+        description: Commit SHA on the target branch after merge
+        required: true
+        type: string
+      target_branch:
+        description: Protected branch that received the merge (main or dev)
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -64,6 +73,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.merge_commit_sha }}
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm

@@ -5,6 +5,15 @@ name: Reusable — integration tests with Postgres and Redis
 
 on:
   workflow_call:
+    inputs:
+      merge_commit_sha:
+        description: Commit SHA on the target branch after merge (or branch tip for manual dispatch)
+        required: true
+        type: string
+      target_branch:
+        description: Protected branch that received the merge (main or dev)
+        required: true
+        type: string
     secrets:
       RESEND_API_KEY:
         required: false
@@ -85,6 +94,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.merge_commit_sha }}
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -141,8 +152,8 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_WORKFLOW: ${{ github.workflow }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ inputs.target_branch }}
+          GITHUB_SHA: ${{ inputs.merge_commit_sha }}
           GITHUB_ACTOR: ${{ github.actor }}
         run: pnpm tool:test-report-email
 
@@ -153,6 +164,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.merge_commit_sha }}
 
       - name: Download all shard coverage artifacts
         uses: actions/download-artifact@v8

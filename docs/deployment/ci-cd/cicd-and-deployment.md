@@ -19,8 +19,7 @@ flowchart TD
   PRCI --> Sec[Security scan]
   PRCI --> Contract[Contract + property]
 
-  Merge[PR merge] --> Push[push to main or dev]
-  Push --> PostMerge[Post-merge CI]
+  Merge[PR merge into dev or main] --> PostMerge[Post-merge CI]
 
   PostMerge --> Commitlint[Commitlint]
   PostMerge --> ReleasePlease[Release Please]
@@ -42,7 +41,7 @@ flowchart TD
 ```
 
 - **PR CI** ([pr-ci.yml](../../../.github/workflows/pr-ci.yml)) runs on every **pull_request** to **main** and **dev**: seven parallel jobs (lint, typecheck, unit + global with `vitest --changed`, migration safety lint, TS + Docker build verify, security scan, contract + property). No Postgres/Redis and no GHCR push on PR.
-- **Post-merge CI** ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)) is the **single post-merge pipeline** on push to `dev` or `main` (same jobs on both branches): commitlint, release-please, integration tests, Docker build + Trivy + GHCR push, chaos, SBOM artifact, API docs, sync main→dev (main only), Railway deploy, and release SBOM attachment when release-please publishes a release. Lint/typecheck/unit are **not** re-run — the same commit SHA already passed PR CI.
+- **Post-merge CI** ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)) is the **single post-merge pipeline** when a PR **merges** into `dev` or `main` (same jobs on both branches): commitlint, release-please, integration tests, Docker build + Trivy + GHCR push, chaos, SBOM artifact, API docs, sync main→dev (main only), Railway deploy, and release SBOM attachment when release-please publishes a release. Lint/typecheck/unit are **not** re-run — the same commit SHA already passed PR CI. Manual `workflow_dispatch` remains for emergency reruns.
 - **Deploy** runs inside Post-merge CI via reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml). Only the GitHub Environment differs: `dev` → **development**, `main` → **production**. Manual `workflow_dispatch` on CD remains for emergency redeploys. **When post-deploy API smoke passes, that environment is fully live** — the deploy job is the last gate before traffic.
 - Release-please runs inside Post-merge CI on both channels (`main` stable, `dev` prerelease). When it publishes a GitHub Release in the same run, **Release SBOM** attaches CycloneDX to that release.
 
