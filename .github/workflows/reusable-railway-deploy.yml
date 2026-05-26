@@ -195,7 +195,7 @@ jobs:
           # Verify the token actually authenticates against Railway before we run
           # database migrations or any `railway variable set` calls. Catches
           # revoked, expired, or wrong-project tokens with an actionable error.
-          if ! whoami_output="$(railway whoami 2>&1)"; then
+          if ! whoami_output="$(railway status 2>&1)"; then
             echo "::error::Railway rejected RAILWAY_TOKEN for GitHub Environment '${ENVIRONMENT}': ${whoami_output}"
             echo "::error::Rotate the Railway project token (Railway → Project → Settings → Tokens) and update the GitHub Environment secret. See docs/deployment/setup/railway-github-cli-setup.md#rotating-an-invalid-or-expired-railway-token."
             exit 1
