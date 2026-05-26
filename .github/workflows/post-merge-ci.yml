@@ -92,7 +92,7 @@ jobs:
 
   matrix-tests:
     name: Matrix Tests
-    needs: [changes, docker-build-push]
+    needs: [changes, sbom, docker-build-push]
     if: |
       always() &&
       needs.docker-build-push.result == 'success' &&
@@ -134,12 +134,11 @@ jobs:
 
   api-docs:
     name: API docs
-    needs: [release-please, changes]
+    needs: [release-please]
     if: |
       always() &&
       needs.release-please.result != 'failure' &&
-      needs.release-please.result != 'cancelled' &&
-      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
+      needs.release-please.result != 'cancelled'
     uses: ./.github/workflows/reusable-openapi-postman-publish.yml
     secrets: inherit
     with:
@@ -150,11 +149,10 @@ jobs:
 
   release-please:
     name: Release Please
-    needs: [matrix-tests, sbom]
+    needs: [matrix-tests]
     if: |
       always() &&
-      (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped') &&
-      (needs.sbom.result == 'success' || needs.sbom.result == 'skipped')
+      (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -215,7 +213,7 @@ jobs:
             gh pr merge "${pr_number}" --auto --squash --delete-branch=false
           done
 
-  attach-release-sbom:
+  release-sbom:
     name: Release SBOM
     needs: [sbom, release-please]
     if: |
@@ -258,10 +256,8 @@ jobs:
   resolve-environment:
     name: Resolve Environment
     needs:
-      - docker-build-push
-      - matrix-tests
       - api-docs
-      - release-please
+      - release-sbom
     runs-on: ubuntu-latest
     outputs:
       post_merge_sha: ${{ steps.target.outputs.post_merge_sha }}
@@ -269,11 +265,8 @@ jobs:
       github_environment: ${{ steps.target.outputs.github_environment }}
     if: |
       always() &&
-      needs.docker-build-push.result == 'success' &&
-      (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped') &&
       (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped') &&
-      needs.release-please.result != 'failure' &&
-      needs.release-please.result != 'cancelled'
+      (needs.release-sbom.result == 'success' || needs.release-sbom.result == 'skipped')
     steps:
       - name: Resolve post-merge target and environment
         id: target
