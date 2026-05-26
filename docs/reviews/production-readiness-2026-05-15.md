@@ -27,7 +27,7 @@ Baseline quality gates pass locally (`pnpm audit`, `pnpm validate`, `pnpm valida
 | Missing RLS on notifications | Database      | Migration `20260515000001_notifications_rls.sql`                                                                                                                                                    |
 | No Prometheus/Grafana path   | Observability | Prometheus **removed temporarily**; **idempotency cardinality** covered by repeatable job `idempotency-cardinality` + `IDEMPOTENCY_CARDINALITY_*` env thresholds — re-enable Prometheus when needed |
 | Missing docker-compose       | DX            | `docker-compose.yml` (Postgres 16 + Redis 7)                                                                                                                                                        |
-| Deploy env gaps              | CI/CD         | `SENTRY_*`, `METRICS_*` in [cd.yml](../../.github/workflows/cd.yml)                                                                                                                            |
+| Deploy env gaps              | CI/CD         | `SENTRY_*`, `METRICS_*` in [reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml)                                                                                                                            |
 
 ## High (P1) — addressed in follow-up (2026-05-15)
 

@@ -116,7 +116,7 @@ Standalone Dockerfile with the same `build` / `runtime` pattern as the root file
 
 **Health / monitoring:** No `HEALTHCHECK` in the worker image. Use orchestrator process monitoring (e.g. Railway restarts on exit, logs/metrics).
 
-**Railway:** `cd.yml` deploys the scanned GHCR worker image to the separate worker service. Set `RAILWAY_WORKER_SERVICE_ID` in the GitHub environment so CD can sync shared variables, redeploy the image, and probe worker `GET /health`.
+**Railway:** `reusable-railway-deploy.yml` deploys the scanned GHCR worker image to the separate worker service. Set `RAILWAY_WORKER_SERVICE_ID` in the GitHub environment so CD can sync shared variables, redeploy the image, and probe worker `GET /health`.
 
 ## Running production images locally
 
@@ -182,7 +182,7 @@ On **push to `main`** (after scan), images are pushed to GHCR:
 - `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `:latest`
 - `ghcr.io/<owner>/<repo>/core-be-worker:<commit-sha>` and `:latest`
 
-[cd.yml](../../.github/workflows/cd.yml) deploys those refs with `railway redeploy --image` (optional `GHCR_API_IMAGE` / `GHCR_WORKER_IMAGE` secrets override the commit tag).
+[reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml) deploys those refs with `railway redeploy --image` (optional `GHCR_API_IMAGE` / `GHCR_WORKER_IMAGE` secrets override the commit tag).
 
 Adds roughly 3–8 minutes to PR checks. See [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md).
 

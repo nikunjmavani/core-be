@@ -8,7 +8,7 @@ const environmentExamplePath = resolve(projectRoot, '.env.example');
 const environmentSchemaPath = resolve(projectRoot, 'src/shared/config/env-schema.ts');
 const githubEnvironmentsDirectory = resolve(projectRoot, '.github/environments');
 const githubRulesetsDirectory = resolve(projectRoot, '.github/rulesets');
-const deployWorkflowPath = resolve(projectRoot, '.github/workflows/cd.yml');
+const deployWorkflowPath = resolve(projectRoot, '.github/workflows/reusable-railway-deploy.yml');
 
 export interface GitHubSyncScaffoldResult {
   readonly createdEnvironmentFiles: string[];
@@ -119,7 +119,7 @@ export function validateGithubSyncConsistency(config: SetupConfig): GitHubSyncCo
   for (const env of workflowEnvs) {
     if (!nodeEnvironmentValues.has(env)) {
       issues.push({
-        dimension: 'cd.yml',
+        dimension: 'reusable-railway-deploy.yml',
         detail: `Workflow targets environment "${env}" which is not in the NODE_ENV enum.`,
       });
     }
@@ -128,13 +128,13 @@ export function validateGithubSyncConsistency(config: SetupConfig): GitHubSyncCo
   for (const [branch, env] of workflowMap.entries()) {
     if (!configuredBranches.has(branch)) {
       issues.push({
-        dimension: 'cd.yml ↔ setup.config.json',
+        dimension: 'reusable-railway-deploy.yml ↔ setup.config.json',
         detail: `Workflow branch "${branch}" is not listed in setup.config.json.`,
       });
     }
     if (!configuredEnvironmentNames.has(env)) {
       issues.push({
-        dimension: 'cd.yml ↔ setup.config.json',
+        dimension: 'reusable-railway-deploy.yml ↔ setup.config.json',
         detail: `Workflow environment "${env}" is not listed in setup.config.json.`,
       });
     }
@@ -143,8 +143,8 @@ export function validateGithubSyncConsistency(config: SetupConfig): GitHubSyncCo
   for (const env of syncEnvironments) {
     if (workflowMap.get(env.branch) !== env.name) {
       issues.push({
-        dimension: 'setup.config.json ↔ cd.yml',
-        detail: `Configured branch "${env.branch}" must map to environment "${env.name}" in cd.yml.`,
+        dimension: 'setup.config.json ↔ reusable-railway-deploy.yml',
+        detail: `Configured branch "${env.branch}" must map to environment "${env.name}" in reusable-railway-deploy.yml.`,
       });
     }
   }

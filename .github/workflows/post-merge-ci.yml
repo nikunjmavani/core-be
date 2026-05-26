@@ -1,21 +1,31 @@
 name: Post-merge CI
 
-# Single post-merge pipeline for protected-branch pushes (dev + main).
-# PR CI already validated the same SHA; this workflow runs integration, Docker publish,
-# chaos, SBOM artifact, API docs, commitlint, release-please, optional main→dev sync,
-# Railway deploy, and release SBOM attachment — one trigger, one flow.
+# Single post-merge pipeline after a PR merges into dev or main (or manual workflow_dispatch).
+# PR CI (pr-ci.yml) is the merge gate — same SHA already passed lint, typecheck, unit, build,
+# security, and contract/property. Post-merge runs publish/deploy automation only.
+#
+# Optimized flow (top to bottom dependencies):
+#   gate → changes → docker (build + Trivy + GHCR + container smoke)
+#                  ↘ sbom (CycloneDX artifact)
+#                  ↘ api-docs (OpenAPI + Postman)
+#   commitlint (parallel after gate)
+#   docker → release-please → release-sbom (only if release published)
+#                           ↘ deploy (resolve env → migrate → redeploy → smoke)
+#
+# Full DB integration/chaos suites are local-only (`pnpm test:integration`, `pnpm test:chaos`).
 #
 # Branch → GitHub Environment mapping for deploy (only difference between dev and main):
 #   dev  → development
 #   main → production
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches: [main, dev]
   workflow_dispatch:
 
 concurrency:
-  group: post-merge-ci-${{ github.ref }}
+  group: post-merge-ci-${{ github.event_name == 'workflow_dispatch' && github.ref || format('refs/heads/{0}', github.event.pull_request.base.ref) }}
   cancel-in-progress: false
 
 permissions:
@@ -24,10 +34,25 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  POST_MERGE_SHA: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
+  POST_MERGE_BRANCH: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref }}
 
 jobs:
+  gate:
+    name: Verify merge
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post-merge target
+        run: |
+          echo "Post-merge CI for branch ${POST_MERGE_BRANCH} at ${POST_MERGE_SHA}"
+        env:
+          POST_MERGE_BRANCH: ${{ env.POST_MERGE_BRANCH }}
+          POST_MERGE_SHA: ${{ env.POST_MERGE_SHA }}
+
   changes:
     name: Detect changes
+    needs: gate
     runs-on: ubuntu-latest
     outputs:
       src-code: ${{ steps.filter.outputs.src-code }}
@@ -37,11 +62,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.POST_MERGE_SHA }}
+          fetch-depth: 0
+
+      - name: Resolve diff base
+        id: diff_base
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if git rev-parse "${{ env.POST_MERGE_SHA }}^" >/dev/null 2>&1; then
+              echo "sha=$(git rev-parse "${{ env.POST_MERGE_SHA }}^")" >> "$GITHUB_OUTPUT"
+            else
+              echo "sha=${{ env.POST_MERGE_SHA }}" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "sha=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Path filter
         uses: dorny/paths-filter@v4
         id: filter
         with:
+          base: ${{ steps.diff_base.outputs.sha }}
+          ref: ${{ env.POST_MERGE_SHA }}
           filters: |
             src-code:
               - 'src/**'
@@ -65,11 +109,13 @@ jobs:
 
   commitlint:
     name: Commitlint
+    needs: gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          ref: ${{ env.POST_MERGE_SHA }}
           fetch-depth: 0
 
       - name: Setup Node and pnpm
@@ -78,8 +124,13 @@ jobs:
       - name: Validate commit messages
         run: |
           set -euo pipefail
-          BEFORE="${{ github.event.before }}"
-          AFTER="${{ github.sha }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.sha }}"
+          else
+            BEFORE="${{ github.event.pull_request.base.sha }}"
+            AFTER="${{ env.POST_MERGE_SHA }}"
+          fi
 
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             COMMITS="$(git rev-list --first-parent --reverse "$AFTER")"
@@ -97,120 +148,9 @@ jobs:
             git log -1 --format=%B "$COMMIT" | pnpm exec commitlint --verbose
           done
 
-  release-please:
-    name: Release Please
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-    outputs:
-      releases_created: ${{ steps.release.outputs.releases_created == 'true' && 'true' || 'false' }}
-    env:
-      CHANNEL_SUFFIX: ${{ github.ref_name == 'dev' && '.dev' || '' }}
-    steps:
-      - name: Run release-please
-        id: release
-        uses: googleapis/release-please-action@v5
-        with:
-          token: ${{ github.token }}
-          target-branch: ${{ github.ref_name }}
-          config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
-          manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
-
-  sync-main-into-dev:
-    name: Sync main into dev
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-      pull-requests: write
-    env:
-      SYNC_BRANCH: automation/sync-main-into-dev
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Open main to dev sync PR
-        run: |
-          set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git fetch origin main dev
-
-          if git merge-base --is-ancestor origin/main origin/dev; then
-            echo "dev already contains main; no sync PR needed."
-            exit 0
-          fi
-
-          git switch --force-create "$SYNC_BRANCH" origin/dev
-
-          if ! git merge --no-edit origin/main; then
-            echo "::error::Automatic main -> dev merge conflicted. Resolve manually by opening a PR from main into dev."
-            exit 1
-          fi
-
-          git push --force-with-lease origin "$SYNC_BRANCH"
-
-          existing_pr="$(
-            gh pr list \
-              --base dev \
-              --head "$SYNC_BRANCH" \
-              --state open \
-              --json number \
-              --jq '.[0].number // empty'
-          )"
-
-          body_file="$(mktemp)"
-          cat > "$body_file" <<'EOF'
-          ## Summary
-
-          - Syncs `main` back into `dev` so production-only fixes, including urgent security fixes, stay in the development branch.
-          - Generated automatically after a push to `main`.
-
-          ## Test plan
-
-          - [ ] CI green on this PR.
-          - [ ] Resolve merge conflicts manually if GitHub reports any after the branch is updated.
-
-          EOF
-
-          if [ -n "$existing_pr" ]; then
-            gh pr edit "$existing_pr" \
-              --title "chore: sync main into dev" \
-              --body-file "$body_file"
-            echo "Updated existing sync PR #$existing_pr"
-          else
-            gh pr create \
-              --base dev \
-              --head "$SYNC_BRANCH" \
-              --title "chore: sync main into dev" \
-              --body-file "$body_file"
-            echo "Opened sync main into dev PR (merge manually after review and PR CI)."
-          fi
-
-  integration-tests:
-    name: Integration
-    needs: [changes]
-    if: |
-      always() &&
-      (
-        needs.changes.outputs.src-code == 'true' ||
-        needs.changes.outputs.ci-config == 'true'
-      )
-    uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
-    secrets: inherit
-
   docker-build-push:
     name: Docker
-    needs: [changes]
+    needs: [gate, changes]
     if: |
       always() &&
       (
@@ -220,19 +160,13 @@ jobs:
       )
     uses: ./.github/workflows/reusable-docker-build-trivy.yml
     secrets: inherit
-
-  chaos:
-    name: Chaos
-    needs: [changes]
-    if: |
-      always() &&
-      needs.changes.outputs.src-code == 'true'
-    uses: ./.github/workflows/reusable-chaos-toxiproxy.yml
-    secrets: inherit
+    with:
+      merge_commit_sha: ${{ env.POST_MERGE_SHA }}
+      target_branch: ${{ env.POST_MERGE_BRANCH }}
 
   sbom:
     name: SBOM
-    needs: [changes]
+    needs: [gate, changes]
     if: |
       always() &&
       needs.changes.outputs.src-code == 'true'
@@ -240,6 +174,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.POST_MERGE_SHA }}
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0.24.0
@@ -256,46 +192,58 @@ jobs:
 
   api-docs:
     name: API docs
-    needs: [changes]
+    needs: [gate, changes]
     if: |
       always() &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
     uses: ./.github/workflows/reusable-openapi-postman-publish.yml
     secrets: inherit
     with:
-      github_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      merge_commit_sha: ${{ env.POST_MERGE_SHA }}
+      target_branch: ${{ env.POST_MERGE_BRANCH }}
+      github_environment: ${{ env.POST_MERGE_BRANCH == 'main' && 'production' || 'development' }}
       publish_hosted_docs: true
 
-  deploy:
-    name: Deploy
-    needs:
-      - commitlint
-      - release-please
-      - sync-main-into-dev
-      - integration-tests
-      - docker-build-push
-      - chaos
-      - sbom
-      - api-docs
+  release-please:
+    name: Release Please
+    needs: [gate, docker-build-push]
     if: |
       always() &&
-      needs.docker-build-push.result == 'success' &&
-      needs.commitlint.result != 'failure' &&
-      needs.commitlint.result != 'cancelled' &&
-      needs.release-please.result != 'failure' &&
-      needs.release-please.result != 'cancelled' &&
-      (needs.sync-main-into-dev.result == 'success' || needs.sync-main-into-dev.result == 'skipped') &&
-      (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped') &&
-      (needs.chaos.result == 'success' || needs.chaos.result == 'skipped') &&
-      (needs.sbom.result == 'success' || needs.sbom.result == 'skipped') &&
-      (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped')
-    uses: ./.github/workflows/cd.yml
-    secrets: inherit
+      needs.gate.result == 'success' &&
+      (needs.docker-build-push.result == 'success' || needs.docker-build-push.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created == 'true' && 'true' || 'false' }}
+    env:
+      CHANNEL_SUFFIX: ${{ env.POST_MERGE_BRANCH == 'dev' && '.dev' || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.POST_MERGE_SHA }}
+          fetch-depth: 0
+
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ github.token }}
+          target-branch: ${{ env.POST_MERGE_BRANCH }}
+          config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
+          manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
 
   attach-release-sbom:
     name: Release SBOM
-    needs: release-please
-    if: needs.release-please.outputs.releases_created == 'true'
+    needs: [gate, sbom, release-please]
+    if: |
+      always() &&
+      needs.release-please.outputs.releases_created == 'true' &&
+      needs.sbom.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -314,17 +262,11 @@ jobs:
           echo "tag_name=${tag_name}" >> "$GITHUB_OUTPUT"
           echo "Attaching SBOM to release ${tag_name}"
 
-      - name: Checkout release tag
-        uses: actions/checkout@v6
+      - name: Download SBOM artifact from sbom job
+        uses: actions/download-artifact@v8
         with:
-          ref: ${{ steps.tag.outputs.tag_name }}
-
-      - name: Generate CycloneDX SBOM
-        uses: anchore/sbom-action@v0.24.0
-        with:
+          name: sbom.cyclonedx.json
           path: .
-          format: cyclonedx-json
-          output-file: sbom.cyclonedx.json
 
       - name: Upload SBOM to GitHub Release
         uses: softprops/action-gh-release@v3
@@ -334,3 +276,29 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+  deploy:
+    name: Deploy
+    needs:
+      - gate
+      - commitlint
+      - docker-build-push
+      - sbom
+      - api-docs
+      - release-please
+      - attach-release-sbom
+    if: |
+      always() &&
+      needs.docker-build-push.result == 'success' &&
+      needs.commitlint.result != 'failure' &&
+      needs.commitlint.result != 'cancelled' &&
+      needs.release-please.result != 'failure' &&
+      needs.release-please.result != 'cancelled' &&
+      (needs.sbom.result == 'success' || needs.sbom.result == 'skipped') &&
+      (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped') &&
+      (needs.attach-release-sbom.result == 'success' || needs.attach-release-sbom.result == 'skipped')
+    uses: ./.github/workflows/reusable-railway-deploy.yml
+    secrets: inherit
+    with:
+      merge_commit_sha: ${{ env.POST_MERGE_SHA }}
+      target_branch: ${{ env.POST_MERGE_BRANCH }}

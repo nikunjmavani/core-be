@@ -145,10 +145,10 @@ Code is ready for **Google** and **GitHub** when env vars are set ([credentials-
 
 | Branch | Workflow                                                                                 | GitHub environment |
 | ------ | ---------------------------------------------------------------------------------------- | ------------------ |
-| `dev`  | [cd.yml](../../../.github/workflows/cd.yml) (after CI on `dev`)  | `development`      |
-| `main` | [cd.yml](../../../.github/workflows/cd.yml) (after CI on `main`) | `production`       |
+| `dev`  | [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) (after CI on `dev`)  | `development`      |
+| `main` | [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) (after CI on `main`) | `production`       |
 
-`cd.yml` runs migrations, syncs shared Railway variables, deploys both API and worker services, and performs post-deploy health checks. Optional integration env (`RESEND_*`, `STRIPE_*`, etc.) still needs to be configured on Railway or added to the CD variable loop.
+`reusable-railway-deploy.yml` runs migrations, syncs shared Railway variables, deploys both API and worker services, and performs post-deploy health checks. Optional integration env (`RESEND_*`, `STRIPE_*`, etc.) still needs to be configured on Railway or added to the CD variable loop.
 
 Deploy **two** services: API (`Dockerfile` / `api` target) and worker (`Dockerfile.worker`). Each service exposes `GET /health`.
 

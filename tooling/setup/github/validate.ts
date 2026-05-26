@@ -271,7 +271,7 @@ function main(): void {
       console.error(
         `GitHub environment "${environment}" is missing the Postgres connection-budget secret(s). ` +
           'Set DEPLOYMENT_TOTAL_REPLICA_COUNT (api_replicas + worker_replicas) or both ' +
-          'DEPLOYMENT_API_REPLICA_COUNT and DEPLOYMENT_WORKER_REPLICA_COUNT so cd.yml ' +
+          'DEPLOYMENT_API_REPLICA_COUNT and DEPLOYMENT_WORKER_REPLICA_COUNT so reusable-railway-deploy.yml ' +
           'forwards them and assertPostgresConnectionBudget() can validate sizing at startup.',
       );
     }
