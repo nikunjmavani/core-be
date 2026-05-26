@@ -45,6 +45,13 @@ describe('GitHub Actions Node.js 24 policy', () => {
     }
   });
 
+  it('does not use secrets: inherit under on.workflow_call (caller-only keyword)', () => {
+    for (const workflowPath of listWorkflowFiles()) {
+      const contents = readFileSync(workflowPath, 'utf8');
+      expect(contents, workflowPath).not.toMatch(/workflow_call:\s*\n\s*secrets:\s*inherit/);
+    }
+  });
+
   it('installs project Node from .nvmrc via setup-node v6 composite', () => {
     const setupNodePnpm = readFileSync(
       join(ROOT, '.github/actions/setup-node-pnpm/action.yml'),
