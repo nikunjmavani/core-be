@@ -178,6 +178,10 @@ jobs:
           if [ -z "${RAILWAY_WORKER_SERVICE_ID:-}" ]; then
             missing+=("RAILWAY_WORKER_SERVICE_ID")
           fi
+          echo "RAILWAY_TOKEN: ${RAILWAY_TOKEN}"
+          echo "RAILWAY_SERVICE_ID: ${RAILWAY_SERVICE_ID}"
+          echo "RAILWAY_WORKER_SERVICE_ID: ${RAILWAY_WORKER_SERVICE_ID}"
+
           if [ "${#missing[@]}" -gt 0 ]; then
             echo "::error::Missing required Railway deploy secrets in GitHub Environment '${ENVIRONMENT}': ${missing[*]}"
             echo "::error::Set these in GitHub → Settings → Environments → ${ENVIRONMENT}. See docs/deployment/runbooks/runbook-dev-to-production.md and docs/deployment/setup/railway-github-cli-setup.md."
