@@ -6,11 +6,11 @@ import {
   metricsEnvironmentVariableNames,
   parseRailwaySyncVariableNames,
   validateMetricsDeploySync,
-} from '../../../../tooling/setup/deploy-env-sync.util.js';
+} from '../../../../tooling/setup/github/deploy-sync.js';
 
 const DEPLOY_WORKFLOW_PATH = resolve(
   import.meta.dirname,
-  '../../../../.github/workflows/deploy-railway-after-ci.yml',
+  '../../../../.github/workflows/reusable-railway-deploy.yml',
 );
 
 describe('deploy-env-sync.util', () => {

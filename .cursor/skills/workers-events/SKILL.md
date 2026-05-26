@@ -58,7 +58,7 @@ For a visual flow diagram (Service → EventBus → Handler → Queue → Redis 
 
 **Tenancy — member invitation**
 
-```
+```text
 member-invitation.service.ts  →  eventBus.emit(tenancy.member_invitation.created|resent)
 tenancy/sub-domains/membership/member-invitation/events/*.ts  →  enqueueEmail()
 tenancy/events/index.ts  →  registerTenancyEventHandlers()
@@ -66,7 +66,7 @@ tenancy/events/index.ts  →  registerTenancyEventHandlers()
 
 **Auth — transactional email** (magic link, password reset, email verification)
 
-```
+```text
 magic-link.service.ts / auth-method.service.ts  →  eventBus.emit(auth.*.requested)
 auth/sub-domains/auth-method/events/*.ts  →  enqueueEmail()
 auth/events/index.ts  →  registerAuthEventHandlers()
@@ -74,14 +74,14 @@ auth/events/index.ts  →  registerAuthEventHandlers()
 
 **Notify — cross-domain notifications** (billing subscription lifecycle)
 
-```
+```text
 stripe-webhook / subscription.service  →  emit billing.subscription.created|updated|canceled|payment_failed
 notify/sub-domains/notification/events/billing-notification.event-handlers.ts  →  createAndDispatchNotification()
 ```
 
 **Notify — outbound webhook delivery**
 
-```
+```text
 emitWebhookDeliveryRequested()  →  notify/sub-domains/webhook/events/
 notify/sub-domains/webhook/events/webhook-delivery.event-handlers.ts  →  enqueueWebhookDeliveryByAttemptId()
 billing events  →  notify/sub-domains/webhook/events/billing-webhook.event-handlers.ts
@@ -120,8 +120,8 @@ billing events  →  notify/sub-domains/webhook/events/billing-webhook.event-han
      - Pass `databaseHandle` into `createWorker*Repository(databaseHandle)` factories; factories call `assertWorkerDatabaseContext` for the expected kind
 
 4. **Bootstrap**
-   - Register repeatable retention schedules in `src/infrastructure/queue/scheduler.ts` (wired from `bootstrap.ts`).
-   - Register domain workers in `src/infrastructure/queue/bootstrap.ts` (called from `src/worker.ts`).
+   - **Register every BullMQ worker in `src/infrastructure/queue/worker-runtime/worker-registration.registry.ts`** — the single source of truth for both startup (`bootstrap.ts`) and Postgres connection budgeting (`worker-connection-budget.ts`). Never register a worker directly in `bootstrap.ts`; never duplicate concurrency in the budget file.
+   - Register repeatable retention schedules in `src/infrastructure/queue/scheduler.ts` (wired from `bootstrap.ts`). The scheduler is filtered to **active queues for the selected `WORKER_QUEUE_FAMILIES`** — pass the same `queueName` the registry uses.
 
 5. **Shutdown**
    - On SIGTERM/SIGINT:
@@ -130,9 +130,70 @@ billing events  →  notify/sub-domains/webhook/events/billing-webhook.event-han
      - close Redis connection
      - exit with code 0
 
+## Worker registration registry (Postgres pool budget)
+
+Every BullMQ worker is registered exactly once in [`worker-registration.registry.ts`](../../../src/infrastructure/queue/worker-runtime/worker-registration.registry.ts). The registry powers three things in one place:
+
+1. **Startup** — `bootstrap.ts` reads the registry filtered by `WORKER_QUEUE_FAMILIES`.
+2. **Connection budget** — `worker-connection-budget.ts` sums Postgres demand from the same definitions and `assertPostgresConnectionBudget()` enforces it (warn on monolithic, fail-fast on split).
+3. **Scheduler filtering** — `scheduler.ts` only registers crons for queue names active in this process.
+
+### Registration shape
+
+```typescript
+{
+  queueName: '<unique BullMQ queue>',
+  family: 'mail' | 'notify' | 'webhook' | 'stripe' | 'retention' | 'observability',
+  logLabel: 'human-readable worker name',
+  usesPostgres: true | false,
+  scheduled: true | false,
+  criticality: 'throughput' | 'maintenance' | 'observability',
+  holdsConnectionDuringExternalIo?: true | false,
+  resolvePostgresConcurrency?: (workerContainers) => number,
+  isEnabled?: (workerContainers) => boolean,
+  create: (workerContainers) => WorkerHandle,
+}
+```
+
+`retentionDefinition({ ... })` defaults `usesPostgres: true`, `resolvePostgresConcurrency: () => RETENTION_WORKER_CONCURRENCY`, `scheduled: true`, and `criticality: 'maintenance'`. Override `scheduled` only for orphan workers (registered but no cron yet).
+
+### Field decisions
+
+| Field                             | How to choose                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `family`                          | Pick the smallest family that fits. Throughput workers → `mail` / `notify` / `webhook` / `stripe`. Crons / sweepers / tombstone / partition / GDPR retention → `retention`. Redis-only monitoring → `observability`.                                                                                                                                                                                                     |
+| `usesPostgres`                    | `true` if the processor checks out a postgres.js connection at any point during a job. `false` only when the processor talks exclusively to Redis / external HTTP (e.g. `dlq-depth`, `idempotency-cardinality`).                                                                                                                                                                                                         |
+| `scheduled`                       | `true` when there is a matching `upsertJobScheduler` entry in `scheduler.ts`. `false` for event-driven workers (`mail`, `webhook-delivery`, `notification`, `user-data-export`, `stripe-webhook`). `scheduler-registry-audit.ts` cross-checks both directions and logs `worker.registry.scheduler_mismatch` on drift.                                                                                                    |
+| `criticality`                     | `throughput` for workers that drive user-visible latency (event-driven mail/notify/webhook/stripe). `maintenance` for retention/cron/sweeper/reclaim. `observability` for metrics-only workers (`dlq-depth`, `idempotency-cardinality`). Surfaced in `worker.queue_families.selected` and pool alerts.                                                                                                                   |
+| `holdsConnectionDuringExternalIo` | `true` when the Postgres checkout is held during an outbound HTTP / S3 / Resend / Stripe call. Examples: `webhook-delivery` (tenant transaction wraps outbound HTTP), `audit-export` / `upload-tombstone-retention` / `upload-pending-sweep` / `user-data-export(-retention)` (S3 calls during DB context). Omit / `false` when the DB context closes before any external IO. Only meaningful when `usesPostgres: true`. |
+| `resolvePostgresConcurrency`      | Throughput: `() => getWorkerConcurrencyMail()` / `_Notify()` / `_Webhook()` / `_Stripe()` from `@/shared/config/worker-concurrency.util.js`. Cron / retention / sweeper: use the `retentionDefinition()` helper (concurrency `RETENTION_WORKER_CONCURRENCY = 1`). Required when `usesPostgres: true`.                                                                                                                    |
+| `isEnabled`                       | Only when the worker is conditional on env config (e.g. mail disabled in CI, Stripe disabled when keys absent). Omit when always enabled.                                                                                                                                                                                                                                                                                |
+| `create`                          | Factory that returns a `WorkerHandle`. May accept `workerContainers` for cross-domain service deps (e.g. user-data-export needs `userDomain.userDataExportService`).                                                                                                                                                                                                                                                     |
+
+### Checklist when adding a new worker
+
+1. Implement the worker file under `src/domains/<domain>/<sub-domain>/workers/*.worker.ts` and export a `createXxxWorker()` factory that returns `WorkerHandle`.
+2. Add a constants file (`<queue>.constants.ts`) exporting the queue name string.
+3. **Add a single entry to `worker-registration.registry.ts`** — pick `family`, `usesPostgres`, `resolvePostgresConcurrency`, `scheduled`, `criticality`, and (when relevant) `holdsConnectionDuringExternalIo`. Use `retentionDefinition({ ... })` for single-concurrency cron workers (it defaults `scheduled: true` + `criticality: 'maintenance'`).
+4. If it is a repeatable / cron job, add an `upsertJobScheduler` entry in `scheduler.ts` using the same `queueName` constant — and set `scheduled: true` in the registration. The startup audit will warn if these disagree.
+5. Run targeted tests: `pnpm test:unit src/infrastructure/queue/worker-runtime/__tests__/unit/` and `pnpm test:unit src/infrastructure/database/__tests__/unit/assert-connection-budget.unit.test.ts` (asserts new demand is bounded).
+6. Update the worker count and family breakdown in [`docs/deployment/runbooks/resource-limits.md`](../../../docs/deployment/runbooks/resource-limits.md#per-family-registry-breakdown-25-workers-23-use-postgres) when the totals change, including the **External-IO holding** column when `holdsConnectionDuringExternalIo: true`.
+
+### Anti-patterns
+
+- **Do not** register workers directly in `bootstrap.ts` — the registry is canonical.
+- **Do not** add a parallel concurrency number anywhere else (env, config, budget file). The registry's `resolvePostgresConcurrency` is the only source.
+- **Do not** put a worker in the wrong family — split deployments rely on `WORKER_QUEUE_FAMILIES` selecting correctly.
+- **Do not** mark `usesPostgres: false` if any code path opens a transaction or calls a repository — the budget will under-count and the pool can starve.
+- **Do not** add an `upsertJobScheduler` cron without flipping `scheduled: true` (or vice versa) — the startup audit will log `worker.registry.scheduler_mismatch`.
+- **Do not** mark `holdsConnectionDuringExternalIo: false` for workers that wrap S3 / Resend / Stripe / outbound HTTP inside a DB context — the at-risk demand metric will under-count pool starvation risk during external slowness.
+
+---
+
 ## Don'ts
 
 - Don't call integrations directly from services (emit events instead).
 - Don't push jobs from HTTP controllers; keep it in services/events so behavior stays consistent across entrypoints.
 - Don't place **processor** implementations in `src/infrastructure/queue/` — they belong in `src/domains/<domain>/<sub-domain>/workers/*`. Event-driven **queue + enqueue** helpers belong in `src/domains/<domain>/<sub-domain>/queues/*`. Exception: `scheduler.ts` registers repeatable **`upsertJobScheduler`** entries only (no processors).
 - Don't call `getRequestDatabase()` from workers, processors, or `batch-delete.util.ts` — ESLint blocks `request-database.context` and global `database` pool imports there; use explicit handles from context wrappers and `createWorker*Repository` factories.
+- Don't register a worker outside the registry (`worker-registration.registry.ts`). Budget drift is the most common production-incident class this registry prevents.

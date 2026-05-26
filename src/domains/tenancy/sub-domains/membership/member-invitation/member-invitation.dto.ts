@@ -1,11 +1,15 @@
 import { z } from 'zod';
 import { organizationIdParamsDto } from '@/domains/tenancy/sub-domains/organization/organization.dto.js';
-import { listLimitQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedEmail, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 export const listMemberInvitationsParamsDto = organizationIdParamsDto;
 
-export const listMemberInvitationsQueryDto = listLimitQuerySchema;
+export const listMemberInvitationsQueryDto = cursorPaginationSchema
+  .extend({
+    include_total: z.enum(['true', 'false']).optional().default('false'),
+  })
+  .strict();
 
 export const memberInvitationIdParamsDto = z
   .object({
@@ -38,5 +42,6 @@ export const resendMemberInvitationDto = z
   .strict();
 
 export type CreateMemberInvitationInput = z.infer<typeof createMemberInvitationDto>;
+export type ListMemberInvitationsQueryInput = z.infer<typeof listMemberInvitationsQueryDto>;
 export type AcceptMemberInvitationInput = z.infer<typeof acceptMemberInvitationDto>;
 export type ResendMemberInvitationInput = z.infer<typeof resendMemberInvitationDto>;

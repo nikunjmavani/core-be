@@ -13,8 +13,7 @@ const buildStageStart = /^FROM node:24-alpine AS build$/m;
 const runtimeStageStart = /^FROM node:24-alpine AS runtime$/m;
 const userNodeLine = /^USER node$/m;
 
-const mcpBuildRunPattern =
-  /RUN pnpm build && pnpm build:check[\s\S]*?^\s*fi\s*$/m;
+const mcpBuildRunPattern = /RUN pnpm build && pnpm build:check[\s\S]*?^\s*fi\s*$/m;
 
 function readDockerfile(fileName) {
   return readFileSync(join(repositoryRoot, fileName), 'utf8');
@@ -23,7 +22,7 @@ function readDockerfile(fileName) {
 function extractBuildAndRuntime(dockerfileContents) {
   const buildMatch = buildStageStart.exec(dockerfileContents);
   const runtimeMatch = runtimeStageStart.exec(dockerfileContents);
-  if (!buildMatch || !runtimeMatch) {
+  if (!(buildMatch && runtimeMatch)) {
     throw new Error('Could not find build or runtime stage markers');
   }
 
@@ -36,8 +35,7 @@ function extractBuildAndRuntime(dockerfileContents) {
   }
 
   const build = dockerfileContents.slice(buildStartIndex, runtimeStartIndex);
-  const runtimeEndIndex =
-    runtimeStartIndex + userNodeMatch.index + userNodeMatch[0].length;
+  const runtimeEndIndex = runtimeStartIndex + userNodeMatch.index + userNodeMatch[0].length;
   const runtime = dockerfileContents.slice(runtimeStartIndex, runtimeEndIndex);
 
   return { build, runtime };
@@ -55,10 +53,7 @@ function normalizeBuild(build, { isMainDockerfile }) {
   let text = build;
   if (isMainDockerfile) {
     text = text.replace(/^ARG GENERATE_MCP_DOCS\s*$\n?/m, '');
-    text = text.replace(
-      mcpBuildRunPattern,
-      'RUN pnpm build && pnpm build:check',
-    );
+    text = text.replace(mcpBuildRunPattern, 'RUN pnpm build && pnpm build:check');
   }
   return normalizeLines(text);
 }
@@ -115,9 +110,7 @@ function main() {
 
   if (normalizedMainRuntime !== normalizedWorkerRuntime) {
     hasError = true;
-    console.error(
-      'Dockerfile.worker runtime stage is out of sync with Dockerfile.',
-    );
+    console.error('Dockerfile.worker runtime stage is out of sync with Dockerfile.');
     printUnifiedDiff(
       'Dockerfile (runtime)',
       normalizedMainRuntime,
@@ -133,9 +126,7 @@ function main() {
     process.exit(1);
   }
 
-  console.log(
-    'Dockerfile.worker build/runtime stages are in sync with Dockerfile.',
-  );
+  console.log('Dockerfile.worker build/runtime stages are in sync with Dockerfile.');
 }
 
 main();

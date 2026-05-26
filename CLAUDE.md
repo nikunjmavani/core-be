@@ -26,6 +26,13 @@ For **any new requirement** (new domain, routes, worker, schema, etc.), use the 
 - Sub-domain folder **must** include the domain/resource prefix to avoid ambiguity.
 - Examples: `user-settings` (under user), `organization-settings` (under organization), `member-role-permission` (under member-roles), `webhook-event` (under webhook).
 
+### Object Parameters Only — Outside Repositories
+
+- Any function or method authored in `src/**/*.ts` with **two or more inputs** must take a **single named options object** (interface/type + destructuring).
+- **Exempt files**: `*.repository.ts` and `*.repository.unit.test.ts` keep positional params (e.g. `findByUserAndOrganization(user_id, organization_id)`).
+- **Exempt signatures** (framework-mandated, stay positional): Fastify handlers `(request, reply)`, Fastify plugins `(app, options)`, BullMQ processors `(job)` / `(job, token)`, DI constructors in `*.container.ts`, event-bus subscribers, `Array.sort` comparators, Vitest callbacks (`describe(name, fn)`, `it(name, fn)`), Zod refine callbacks.
+- See `.cursor/rules/object-params.mdc` for the full guide and worked examples.
+
 ## Domain Structure
 
 Domains live under `src/domains/<domain>/`. Each domain has sub-domains with this layout:
@@ -77,7 +84,7 @@ Flat domains (`audit`, `upload`) keep layers at domain root (no `sub-domains/`).
 | **auth**        | auth-method (magic-link, oauth as services in auth-method/), auth-session, auth-mfa, auth-webauthn                                                                              |
 | **user**        | user-settings, user-notification-preferences, user-data-export                                                                                                                  |
 | **tenancy**     | organization (organization-settings, organization-notification-policy, organization-api-key), membership (member-invitation), member-roles (member-role-permission), permission |
-| **billing**     | plan, subscription, stripe-webhook                                                                                                 |
+| **billing**     | plan, subscription, stripe-webhook                                                                                                                                              |
 | **notify**      | notification, webhook (webhook-event)                                                                                                                                           |
 | **upload**      | (single domain, no sub-domains)                                                                                                                                                 |
 
@@ -173,7 +180,7 @@ src/shared/
     api-versioning.util.ts    # buildPublicApiPrefix; applyDeprecatedEndpointHeaders (Sunset / Deprecation)
     request.util.ts           # getRequestIdentifier, requireAuth (shared controller helpers)
     authorization.util.ts     # requireRole, requireOrganizationPermission preHandlers
-    pagination.util.ts        # paginationSchema, cursorPaginationSchema
+    pagination.util.ts        # cursorPaginationSchema, listLimitQuerySchema
     public-id.util.ts         # generatePublicId
     uuid.util.ts              # uuidSchema
   middleware/
@@ -220,10 +227,10 @@ Typical flow: `service` → `eventBus.emit` → handler → `enqueueEmail()` →
 - **Example (core path):** `tenancy/sub-domains/membership/member-invitation/` — service emits; handler calls `enqueueEmail()`.
 - **Example (container path):** `notify/events/notify.event-handlers.ts` — `registerBillingWebhookEventHandlers({ webhookRepository })`, webhook delivery enqueue, billing subscription notifications.
 
-| Registrar                               | Event types (examples)                                                | Side effect                            |
-| --------------------------------------- | --------------------------------------------------------------------- | -------------------------------------- |
-| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.MAGIC_LINK_REQUESTED`, password reset, email verification | Mail queue                             |
-| `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                           | Mail queue                             |
+| Registrar                               | Event types (examples)                                                    | Side effect                            |
+| --------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
+| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.MAGIC_LINK_REQUESTED`, password reset, email verification     | Mail queue                             |
+| `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                               | Mail queue                             |
 | `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`, `BILLING_EVENT.SUBSCRIPTION_*` | BullMQ notification / webhook delivery |
 
 Billing event helpers and types live with the billing sub-domains that emit them — listeners live under notify.
@@ -242,9 +249,9 @@ Billing event helpers and types live with the billing sub-domains that emit them
 - **Responses**: Helpers from `src/shared/utils/http/response.util.ts` (`successResponse`, `paginatedResponse`) + global formatting in `src/shared/middlewares/error-handler.middleware.ts`
 - **i18n**: All user-facing response messages (error `detail`, validation `errors[].message`, success `message`) go through i18next. Use translation keys in errors and success payloads; error handler and controllers translate with `request.t()`. English is the default locale; add new keys to `src/shared/locales/en/` first, then other locales. See **`docs/reference/runtime/internationalization.md`**.
 - **Request helpers**: `src/shared/utils/http/request.util.ts` exports `getRequestIdentifier(request)` and `requireAuth(request)` — use these in ALL controllers.
-- **Auth**: Fastify auth plugin in `src/shared/middlewares/auth.middleware.ts`, decorates `request.auth` (JWT HS256 via `JWT_SECRET`). Session cookie (`session_id`) CSRF model and Origin checks for refresh: **`docs/reference/security/csrf-and-session-cookies.md`**
+- **Auth**: Fastify auth plugin in `src/shared/middlewares/auth.middleware.ts`, decorates `request.auth` (JWT RS256 via `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`). Session cookie (`session_id`) CSRF model and Origin checks for refresh: **`docs/reference/security/csrf-and-session-cookies.md`**
 - **Tenant**: `X-Organization-Id` header → `request.organizationId` via `src/shared/middlewares/tenant.middleware.ts`
-- **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call or import `getRequestDatabase()` (ESLint blocks `request-database.context` under `*.worker.ts` / `*.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/retention-database.context.ts` and migration `20260530000001_global_retention_cleanup_rls.sql`.
+- **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call or import `getRequestDatabase()` (enforced by global tests and code review; do not import `request-database.context` under `*.worker.ts` / `*.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/retention-database.context.ts` and migration `20260530000001_global_retention_cleanup_rls.sql`.
 - **DB**: `src/infrastructure/database/connection.ts` singleton + Drizzle queries in repositories; repositories may extend `src/infrastructure/database/base-repository.ts` for `paginate()`
 - **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) are gitignored. Hosted environment mapping lives in `.github/sync.config.json` (edit by hand when adding/removing environments). Scaffold and push with `pnpm github:sync`. Consistency and remote drift: `pnpm github:sync --check`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'development'}`.
 
@@ -310,8 +317,8 @@ Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, 
 - `pnpm build` — compile to `dist/` (`tsc` + `tsc-alias`); `pnpm build:check` fails if `@/` aliases remain
 - `pnpm dev` — run Fastify server (tsx watch)
 - `pnpm dev:worker` — run BullMQ worker process (tsx watch)
-- `pnpm lint` — run ESLint
-- `pnpm format` — run Prettier
+- `pnpm lint` — run Biome (lint + format check on `src/` and `tooling/`)
+- `pnpm format` — run Biome formatter (`biome format --write`)
 - `pnpm typecheck` — TypeScript type check
 - `pnpm compose:up` / `pnpm compose:down` — start/stop Postgres + Redis (Docker Compose)
 - `pnpm compose:wait` — wait until Compose Postgres accepts connections (fails fast if service not running)
@@ -324,15 +331,15 @@ Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, 
 - `pnpm docs:upload` — upload Postman Collection to workspace (requires `POSTMAN_API_KEY` + `POSTMAN_WORKSPACE_ID`)
 - `pnpm docs:all` — generate OpenAPI spec + Postman Collection in one step
 - `pnpm test` — run all Vitest tests (serial)
-- `pnpm test:unit` — unit only (`vitest.unit.config.ts`: `src/tests/unit` + domain `__tests__/unit/`)
+- `pnpm test:unit` — unit only (`--project unit` in `tooling/vitest/projects.ts`: `src/tests/unit` + domain `__tests__/unit/`)
 - `pnpm test:integration` — `src/tests/integration`
 - `pnpm test:e2e` — domain route tests (excludes `__tests__/unit/`)
 - `pnpm test:global` — global regression (`src/tests/global`; alias `pnpm test:regression`)
 - `pnpm test:coverage` — all tests with V8 coverage (CI)
 - `pnpm test:performance` — performance tests
 - `pnpm test:security` — security test suite
-- `pnpm test:chaos` — Toxiproxy chaos / fault-injection suite (`vitest.chaos.config.ts`; see `docs/reference/reliability/chaos-testing.md`)
-- `pnpm test:contract` — outbound HTTP contracts for Stripe, Resend, S3 (`vitest.contract.config.ts`; see `docs/reference/testing/contract-tests.md`)
+- `pnpm test:chaos` — Toxiproxy chaos / fault-injection suite (`tooling/vitest/chaos.config.ts`; see `docs/reference/reliability/chaos-testing.md`)
+- `pnpm test:contract` — outbound HTTP contracts for Stripe, Resend, S3 (`tooling/vitest/contract.config.ts`; see `docs/reference/testing/contract-tests.md`)
 - `pnpm chaos:up` / `pnpm chaos:down` — start/stop the Toxiproxy sidecar (`docker compose --profile chaos`)
 - `pnpm chaos:provision` — register Postgres + Redis listener proxies (`src/tests/chaos/provision-proxies.ts`)
 - `pnpm test:api-smoke` — live API smoke (server running + seed)

@@ -1,8 +1,8 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { TextEncoder } from 'node:util';
-import { SignJWT, decodeProtectedHeader } from 'jose';
+import { SignJWT, decodeProtectedHeader, importPKCS8 } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetEnvCacheForTests } from '@/shared/config/env.config.js';
+import * as envConfigModule from '@/shared/config/env.config.js';
 import {
   ACCESS_TOKEN_EXPIRY_SECONDS,
   JWT_AUDIENCE,
@@ -110,22 +110,20 @@ describe('jwt.util', () => {
   });
 
   describe('algorithm-confusion and claim validation', () => {
-    const sharedSecret = 'test-jwt-secret-min-32-chars-xxxxxxxx';
     const keyPair = generateRsaPemKeyPair();
-    const encoder = new TextEncoder();
     const now = Math.floor(Date.now() / 1000);
+    let signingKey: CryptoKey;
 
-    beforeEach(() => {
-      process.env.JWT_SECRET = sharedSecret;
+    beforeEach(async () => {
       process.env.JWT_PRIVATE_KEY = keyPair.privateKey;
       process.env.JWT_PUBLIC_KEY = keyPair.publicKey;
       delete process.env.JWT_SIGNING_KID;
       resetEnvCacheForTests();
       resetJwtCachesForTests();
+      signingKey = await importPKCS8(keyPair.privateKey, 'RS256');
     });
 
     it('rejects tokens signed with alg=none (unsigned token)', async () => {
-      // Unsigned JWT with `alg: none` and valid claims
       const headerSegment = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString(
         'base64url',
       );
@@ -145,40 +143,89 @@ describe('jwt.util', () => {
 
     it('rejects token with wrong issuer', async () => {
       const token = await new SignJWT({})
-        .setProtectedHeader({ alg: 'HS256' })
+        .setProtectedHeader({ alg: 'RS256' })
         .setSubject('user-wrong-iss')
         .setIssuer('attacker.example')
         .setAudience(JWT_AUDIENCE)
         .setIssuedAt(now)
         .setExpirationTime(now + 60)
-        .sign(encoder.encode(sharedSecret));
+        .sign(signingKey);
 
       await expect(verifyAccessToken(token)).rejects.toThrow();
     });
 
     it('rejects token with wrong audience', async () => {
       const token = await new SignJWT({})
-        .setProtectedHeader({ alg: 'HS256' })
+        .setProtectedHeader({ alg: 'RS256' })
         .setSubject('user-wrong-aud')
         .setIssuer(JWT_ISSUER)
         .setAudience('not-our-api')
         .setIssuedAt(now)
         .setExpirationTime(now + 60)
-        .sign(encoder.encode(sharedSecret));
+        .sign(signingKey);
 
       await expect(verifyAccessToken(token)).rejects.toThrow();
     });
 
     it('rejects token missing subject', async () => {
       const token = await new SignJWT({})
-        .setProtectedHeader({ alg: 'HS256' })
+        .setProtectedHeader({ alg: 'RS256' })
         .setIssuer(JWT_ISSUER)
         .setAudience(JWT_AUDIENCE)
         .setIssuedAt(now)
         .setExpirationTime(now + 60)
-        .sign(encoder.encode(sharedSecret));
+        .sign(signingKey);
 
       await expect(verifyAccessToken(token)).rejects.toThrow();
+    });
+  });
+
+  describe('RS256-only policy', () => {
+    const sharedSecret = 'test-jwt-secret-min-32-chars-xxxxxxxx';
+    const keyPair = generateRsaPemKeyPair();
+    const now = Math.floor(Date.now() / 1000);
+
+    beforeEach(() => {
+      process.env.JWT_PRIVATE_KEY = keyPair.privateKey;
+      process.env.JWT_PUBLIC_KEY = keyPair.publicKey;
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+    });
+
+    it('rejects an HS256 token at verify time', async () => {
+      const { TextEncoder } = await import('node:util');
+      const hsToken = await new SignJWT({})
+        .setProtectedHeader({ alg: 'HS256' })
+        .setSubject('user-hs256')
+        .setIssuer(JWT_ISSUER)
+        .setAudience(JWT_AUDIENCE)
+        .setIssuedAt(now)
+        .setExpirationTime(now + 60)
+        .sign(new TextEncoder().encode(sharedSecret));
+
+      await expect(verifyAccessToken(hsToken)).rejects.toThrow(/RS256 only/);
+    });
+
+    it('signs and verifies RS256 tokens', async () => {
+      const token = await signAccessToken({ userId: 'user-rs256-only' });
+      expect(decodeProtectedHeader(token).alg).toBe('RS256');
+      const payload = await verifyAccessToken(token);
+      expect(payload.userId).toBe('user-rs256-only');
+    });
+
+    it('refuses to sign when JWT_PRIVATE_KEY is unset', async () => {
+      const baseEnv = envConfigModule.getEnv();
+      const getEnvSpy = vi.spyOn(envConfigModule, 'getEnv').mockReturnValue({
+        ...baseEnv,
+        JWT_PRIVATE_KEY: '',
+      });
+      resetJwtCachesForTests();
+
+      await expect(signAccessToken({ userId: 'user-no-key' })).rejects.toThrow(
+        /JWT_PRIVATE_KEY is required/,
+      );
+
+      getEnvSpy.mockRestore();
     });
   });
 });

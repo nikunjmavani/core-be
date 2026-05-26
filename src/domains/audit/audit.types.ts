@@ -7,8 +7,10 @@ export interface AuditLogFilters {
   action?: string;
   from?: string;
   to?: string;
-  page: number;
+  after?: string;
   limit: number;
+  /** When true, run the expensive count(*) on this growing table; total is otherwise null. */
+  include_total?: boolean;
 }
 
 /** Row shape for inserting into `audit.logs` (Drizzle insert). */

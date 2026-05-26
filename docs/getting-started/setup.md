@@ -63,16 +63,16 @@ Environment via `gh secret set` or `gh api .../variables`. See
 for the full lifecycle, and [credentials-and-env.md](../integrations/credentials-and-env.md)
 for per-provider credential acquisition.
 
-Set at least: **DATABASE_URL**, **REDIS_URL**, **JWT_SECRET** (min 32 chars),
-**SECRETS_ENCRYPTION_KEY** (64 hex chars), **JWT_PRIVATE_KEY** /
-**JWT_PUBLIC_KEY** (RS256 PEM pair). The runtime loader
+Set at least: **DATABASE_URL**, **REDIS_URL**, **JWT_PRIVATE_KEY** /
+**JWT_PUBLIC_KEY** (RS256 PEM pair), **SECRETS_ENCRYPTION_KEY** (64 hex chars).
+`JWT_SECRET` is optional and unused at runtime (deprecated deploy-template no-op). The runtime loader
 (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV}` — defaults
 to `.env.development` when `NODE_ENV` is unset, with a safety-net fallback
 to `.env.development` for `NODE_ENV=test`.
 
-| File               | Status         | Purpose                                                                          |
-| ------------------ | -------------- | -------------------------------------------------------------------------------- |
-| `.env.example`     | committed      | Single template; every schema key lives here under the right half + sub-section. |
+| File               | Status         | Purpose                                                                             |
+| ------------------ | -------------- | ----------------------------------------------------------------------------------- |
+| `.env.example`     | committed      | Single template; every schema key lives here under the right half + sub-section.    |
 | `.env.development` | **gitignored** | Local + dev-environment values; source of truth for `pnpm github:sync development`. |
 | `.env.production`  | **gitignored** | Production values; source of truth for `pnpm github:sync production`.               |
 
@@ -150,7 +150,7 @@ Long-lived branches: **`dev`** → **`main`**. Short-lived branches use `feature
 - Before commit → `pnpm validate && pnpm test:unit`
 - Before PR → `pnpm validate && pnpm test`
 - Before release → add `pnpm test:security`, `pnpm load:stress` (and optionally `pnpm load:stress:api`)
-- After deploy → smoke (`pnpm load:health` or hit `/health/ready`)
+- After deploy → smoke (`pnpm load:health` or hit `/health`)
 
 Full k6 scenarios: [load-testing.md](../reference/testing/load-testing.md) and [src/tests/load/k6/README.md](../../src/tests/load/k6/README.md).
 
@@ -172,14 +172,14 @@ That document includes:
 
 ## 5. Quick reference
 
-| Goal                  | Command or action                                                                            |
-| --------------------- | -------------------------------------------------------------------------------------------- |
-| Local run             | `pnpm compose:up` → `pnpm compose:wait` → `pnpm db:migrate` → `pnpm dev` + `pnpm dev:worker` |
-| Before PR             | `pnpm validate && pnpm test`                                                                 |
-| Before release        | + `pnpm test:security`, `pnpm load:stress`                                                   |
-| Smoke after deploy    | `pnpm load:health` or `GET /health/ready`                                                    |
-| Load-test credentials | `pnpm tool:load-test-credentials` (server + full seed)                                       |
-| Admin token (k6)      | `pnpm tool:admin-token`                                                                      |
+| Goal | Command or action |
+| --- | --- |
+| Local run | `pnpm compose:up` → `pnpm compose:wait` → `pnpm db:migrate` → `pnpm dev` + `pnpm dev:worker` |
+| Before PR | `pnpm validate && pnpm test` |
+| Before release | + `pnpm test:security`, `pnpm load:stress` |
+| Smoke after deploy | `pnpm load:health` or `GET /health` |
+| Load-test credentials | `pnpm tool:load-test-credentials` (server + full seed) |
+| Admin token (k6) | `pnpm tool:admin-token` |
 
 See [README.md](../../README.md) for the full **Available Scripts** table, [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md) for tokens and deploy, and [runbook-dev-to-production.md](../deployment/runbooks/runbook-dev-to-production.md) for the path to production runbook.
 
@@ -189,6 +189,6 @@ See [README.md](../../README.md) for the full **Available Scripts** table, [cicd
 
 - Run **`pnpm deps:audit`** regularly; address findings with safe dependency updates or, when required, `pnpm.overrides` in root `package.json` (see the dependency-security skill in `.cursor/skills/`).
 - Run **`pnpm outdated`** locally or rely on weekly **Dependabot** PRs (see [`.github/dependabot.yml`](../../.github/dependabot.yml)). Dependabot uses conventional-commit-style titles (`chore(deps): …`) so PR title checks stay green.
-- **Auto-merge:** after CI passes, `.github/workflows/dependabot-automerge.yml` enables GitHub auto-merge for patch bumps, all devDependency bumps, and security patch/minor bumps. **Production minor and major version bumps** stay open for manual review and merge.
-- **Repository settings (maintainers):** turn on **Allow auto-merge** for the repo, and ensure branch protection **required status checks** include the CI gate that runs `pnpm audit`, validate/domain/routes:catalog/env/migrate lint, tests, and (on push) Docker **Trivy** — otherwise auto-merge cannot safely complete.
+- **Manual merge:** every Dependabot PR needs human review and merge per branch protection (`main` requires CODEOWNER review; `dev` requires one approval). When **PR CI fails** on a Dependabot PR, [`.github/workflows/dependabot-ci-triage.yml`](../../.github/workflows/dependabot-ci-triage.yml) opens or updates a triage issue. After a push to `main`, **Post-merge CI** opens a main→dev sync PR for manual merge.
+- **Required checks:** branch protection must include PR CI (including **`PR CI / Security scan`** with `pnpm deps:audit`) so dependency PRs cannot merge with known vulnerabilities.
 - **Major upgrades** (for example **Zod 3 to 4**) touch most DTO and validator code; schedule them as a dedicated migration, not mixed into routine dependency batches.

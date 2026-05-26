@@ -1,6 +1,7 @@
 import { NotImplementedError, UnauthorizedError } from '@/shared/errors/index.js';
 import { env } from '@/shared/config/env.config.js';
-import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
+import { ExternalServiceError } from '@/infrastructure/outbound/outbound-error.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { OAuthProfile } from '../oauth.types.js';
 
@@ -34,32 +35,46 @@ export function buildGoogleOAuthRedirectUrl(state: string): string {
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }
 
-export async function exchangeGoogleOAuthCode(code: string): Promise<OAuthProfile> {
+export interface ExchangeGoogleOAuthCodeOptions {
+  code: string;
+  requestId?: string;
+}
+
+export async function exchangeGoogleOAuthCode(
+  options: ExchangeGoogleOAuthCodeOptions,
+): Promise<OAuthProfile> {
   const clientId = env.OAUTH_GOOGLE_CLIENT_ID;
   const clientSecret = env.OAUTH_GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
+  if (!(clientId && clientSecret)) {
     throw new NotImplementedError('errors:googleOAuthNotConfigured');
   }
 
-  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    signal: AbortSignal.timeout(10_000),
-    body: new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: getGoogleRedirectUri(),
-      grant_type: 'authorization_code',
-    }),
-  });
-
-  if (!tokenResponse.ok) {
-    logger.error(
-      { status: tokenResponse.status, body: await tokenResponse.text() },
-      'oauth.google.token_exchange.failed',
+  let tokenResponse: Response;
+  try {
+    tokenResponse = await outboundFetch(
+      buildOutboundFetchOptions({
+        name: 'oauth-google',
+        url: GOOGLE_TOKEN_URL,
+        requestId: options.requestId,
+        expectedStatus: 200,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            code: options.code,
+            client_id: clientId,
+            client_secret: clientSecret,
+            redirect_uri: getGoogleRedirectUri(),
+            grant_type: 'authorization_code',
+          }),
+        },
+      }),
     );
-    throw new UnauthorizedError('errors:googleExchangeFailed');
+  } catch (error) {
+    if (error instanceof ExternalServiceError) {
+      throw new UnauthorizedError('errors:googleExchangeFailed');
+    }
+    throw error;
   }
 
   const tokenData = (await tokenResponse.json()) as { access_token?: string };
@@ -67,13 +82,24 @@ export async function exchangeGoogleOAuthCode(code: string): Promise<OAuthProfil
     throw new UnauthorizedError('errors:googleTokenMissingAccessToken');
   }
 
-  const userInfoResponse = await fetch(GOOGLE_USERINFO_URL, {
-    headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    signal: AbortSignal.timeout(10_000),
-  });
-
-  if (!userInfoResponse.ok) {
-    throw new UnauthorizedError('errors:googleFetchUserFailed');
+  let userInfoResponse: Response;
+  try {
+    userInfoResponse = await outboundFetch(
+      buildOutboundFetchOptions({
+        name: 'oauth-google',
+        url: GOOGLE_USERINFO_URL,
+        requestId: options.requestId,
+        expectedStatus: 200,
+        init: {
+          headers: { Authorization: `Bearer ${tokenData.access_token}` },
+        },
+      }),
+    );
+  } catch (error) {
+    if (error instanceof ExternalServiceError) {
+      throw new UnauthorizedError('errors:googleFetchUserFailed');
+    }
+    throw error;
   }
 
   const userInfo = (await userInfoResponse.json()) as {
@@ -83,7 +109,7 @@ export async function exchangeGoogleOAuthCode(code: string): Promise<OAuthProfil
     picture?: string;
   };
 
-  if (!userInfo.email || !userInfo.sub) {
+  if (!(userInfo.email && userInfo.sub)) {
     throw new UnauthorizedError('errors:googleUserMissingEmailOrSub');
   }
 

@@ -1,16 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const { mockPinnedFetch, createPinnedWebhookFetchMock } = vi.hoisted(() => ({
+  mockPinnedFetch: vi.fn(),
+  createPinnedWebhookFetchMock: vi.fn(),
+}));
+
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: vi.fn(
     async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
   ),
 }));
 
-import { NotFoundError } from '@/shared/errors/index.js';
+import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { WebhookService } from '@/domains/notify/sub-domains/webhook/webhook.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.repository.js';
 import type { WebhookDeliveryAttemptRepository } from '@/domains/notify/sub-domains/webhook/webhook-delivery-attempt.repository.js';
+import type * as FieldSecretEncryptionModule from '@/shared/utils/security/field-secret-encryption.util.js';
 
 vi.mock('@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js', () => ({
   emitWebhookDeliveryRequested: vi.fn().mockResolvedValue(undefined),
@@ -20,12 +26,22 @@ vi.mock('@/shared/utils/security/webhook-url.util.js', () => ({
   validateWebhookUrl: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/shared/utils/security/webhook-outbound-fetch.util.js', () => ({
+  createPinnedWebhookFetch: createPinnedWebhookFetchMock,
+}));
+
+vi.mock('@/shared/utils/security/field-secret-encryption.util.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof FieldSecretEncryptionModule>()),
+  decryptFieldSecret: vi.fn(() => 'test-signing-secret'),
+}));
+
 const organization = { id: 1, public_id: 'org_public' };
 const webhook = {
   id: 2,
   public_id: 'webhook_public',
   url: 'https://example.com/hook',
   organization_id: 1,
+  encrypted_secret: 'enc:secret',
   events: ['subscription.updated'],
   is_enabled: true,
   created_at: new Date('2026-01-01T00:00:00.000Z'),
@@ -39,7 +55,13 @@ describe('WebhookService', () => {
   } as unknown as OrganizationService;
 
   const webhookRepository = {
-    listByOrganization: vi.fn().mockResolvedValue([webhook]),
+    listByOrganization: vi.fn().mockResolvedValue({
+      items: [webhook],
+      total: null,
+      limit: 25,
+      has_more: false,
+      next_cursor: null,
+    }),
     findByPublicId: vi.fn().mockResolvedValue(webhook),
     create: vi.fn().mockResolvedValue(webhook),
     update: vi.fn().mockResolvedValue(webhook),
@@ -49,7 +71,13 @@ describe('WebhookService', () => {
 
   const deliveryAttemptRepository = {
     getWebhookId: vi.fn().mockResolvedValue(webhook.id),
-    listByWebhook: vi.fn().mockResolvedValue([]),
+    listByWebhook: vi.fn().mockResolvedValue({
+      items: [],
+      total: null,
+      limit: 10,
+      has_more: false,
+      next_cursor: null,
+    }),
     create: vi.fn().mockResolvedValue({ id: 1 }),
     createPending: vi.fn().mockResolvedValue(88),
   } as unknown as WebhookDeliveryAttemptRepository;
@@ -65,10 +93,13 @@ describe('WebhookService', () => {
     vi.mocked(webhookRepository.findByPublicId).mockResolvedValue(webhook as never);
     vi.mocked(webhookRepository.update).mockResolvedValue(webhook as never);
     vi.mocked(webhookRepository.softDelete).mockResolvedValue(webhook as never);
+    createPinnedWebhookFetchMock.mockResolvedValue(mockPinnedFetch);
+    mockPinnedFetch.mockReset();
   });
 
   it('lists, gets, creates, updates, and deletes webhooks', async () => {
-    await service.list('org_public');
+    const listed = await service.list({ organization_public_id: 'org_public' });
+    expect(listed.items).toHaveLength(1);
     await service.get('org_public', 'webhook_public');
     await service.create(
       'org_public',
@@ -81,41 +112,95 @@ describe('WebhookService', () => {
   });
 
   it('listDeliveryAttempts resolves webhook id', async () => {
-    await service.listDeliveryAttempts('org_public', 'webhook_public', 10);
-    expect(deliveryAttemptRepository.listByWebhook).toHaveBeenCalled();
+    await service.listDeliveryAttempts({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+      limit: 10,
+    });
+    expect(deliveryAttemptRepository.listByWebhook).toHaveBeenCalledWith(
+      webhook.id,
+      expect.objectContaining({ limit: 10 }),
+    );
   });
 
   it('listDeliveryAttempts throws when webhook missing', async () => {
     vi.mocked(deliveryAttemptRepository.getWebhookId).mockResolvedValue(null);
-    await expect(service.listDeliveryAttempts('org_public', 'missing', 10)).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(
+      service.listDeliveryAttempts({
+        organization_public_id: 'org_public',
+        webhook_public_id: 'missing',
+        limit: 10,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('testWebhook records successful delivery attempt', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: async () => 'ok',
-      }),
-    );
+    mockPinnedFetch.mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
 
-    const result = await service.testWebhook('org_public', 'webhook_public');
+    const result = await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
     expect(result.success).toBe(true);
     expect(deliveryAttemptRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'SENT' }),
     );
-    vi.unstubAllGlobals();
+  });
+
+  it('testWebhook uses the SSRF-pinned fetch and signs the request', async () => {
+    mockPinnedFetch.mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
+
+    await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
+
+    expect(createPinnedWebhookFetchMock).toHaveBeenCalledWith(webhook.url);
+    expect(mockPinnedFetch).toHaveBeenCalledTimes(1);
+    const [, requestInit] = mockPinnedFetch.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(requestInit.headers);
+    expect(headers.get('X-Webhook-Signature')).toMatch(/^t=\d+,v1=[a-f0-9]{64}$/);
+    expect(headers.get('X-Webhook-Timestamp')).toMatch(/^\d+$/);
+  });
+
+  it('testWebhook rejects (and records nothing) when the URL is no longer SSRF-safe', async () => {
+    createPinnedWebhookFetchMock.mockRejectedValue(
+      new ValidationError('errors:webhookUrlNotAllowed'),
+    );
+
+    await expect(
+      service.testWebhook({
+        organization_public_id: 'org_public',
+        webhook_public_id: 'webhook_public',
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(mockPinnedFetch).not.toHaveBeenCalled();
+    expect(deliveryAttemptRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('testWebhook caps the persisted response body even though the returned body is truncated shorter', async () => {
+    const hugeBody = 'y'.repeat(5_000);
+    mockPinnedFetch.mockResolvedValue({ ok: true, status: 200, text: async () => hugeBody });
+
+    await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
+
+    const createArgument = vi.mocked(deliveryAttemptRepository.create).mock.calls[0]![0] as {
+      response_body: string;
+    };
+    expect(createArgument.response_body).toHaveLength(2_000);
   });
 
   it('testWebhook records failed delivery on network error', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
+    mockPinnedFetch.mockRejectedValue(new Error('network error'));
 
-    const result = await service.testWebhook('org_public', 'webhook_public');
+    const result = await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
     expect(result.success).toBe(false);
-    vi.unstubAllGlobals();
   });
 
   it('get throws NotFound when webhook is missing', async () => {
@@ -134,46 +219,44 @@ describe('WebhookService', () => {
 
   it('testWebhook throws NotFound when webhook is missing', async () => {
     vi.mocked(webhookRepository.findByPublicId).mockResolvedValue(null);
-    await expect(service.testWebhook('org_public', 'missing')).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(
+      service.testWebhook({
+        organization_public_id: 'org_public',
+        webhook_public_id: 'missing',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('testWebhook treats unreadable response body as null', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: async () => {
-          throw new Error('body read failed');
-        },
-      }),
-    );
-    const result = await service.testWebhook('org_public', 'webhook_public');
+    mockPinnedFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => {
+        throw new Error('body read failed');
+      },
+    });
+    const result = await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
     expect(result.success).toBe(true);
     expect(result.response_body).toBe('[parse error]');
-    vi.unstubAllGlobals();
   });
 
   it('testWebhook truncates long response bodies', async () => {
     const longBody = 'x'.repeat(600);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: async () => longBody,
-      }),
-    );
-    const result = await service.testWebhook('org_public', 'webhook_public');
+    mockPinnedFetch.mockResolvedValue({ ok: true, status: 200, text: async () => longBody });
+    const result = await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
     expect(result.response_body).toContain('[truncated]');
-    vi.unstubAllGlobals();
   });
 
   it('requestWebhookDelivery emits delivery event with webhook payload', async () => {
-    const { emitWebhookDeliveryRequested } =
-      await import('@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js');
+    const { emitWebhookDeliveryRequested } = await import(
+      '@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js'
+    );
     await service.requestWebhookDelivery({
       webhookId: 2,
       eventType: 'subscription.updated',
@@ -218,7 +301,11 @@ describe('WebhookService', () => {
   it('listDeliveryAttempts throws when webhook id is undefined', async () => {
     vi.mocked(deliveryAttemptRepository.getWebhookId).mockResolvedValue(null);
     await expect(
-      service.listDeliveryAttempts('org_public', 'webhook_public', 10),
+      service.listDeliveryAttempts({
+        organization_public_id: 'org_public',
+        webhook_public_id: 'webhook_public',
+        limit: 10,
+      }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 

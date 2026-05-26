@@ -23,22 +23,6 @@ delete process.env.REDIS_KEY_PREFIX;
 delete process.env.WEBHOOK_URL_ALLOWLIST;
 
 /**
- * Placeholder smell — `.env.example` (and the seeded `.env.development`) use the literal
- * marker `__REPLACE_ME__` for secrets a contributor must replace before booting `pnpm dev`
- * against real services. The test harness has its own deterministic fixtures (see the
- * `??=` defaults below), so drop these values now and let the test fallback win.
- */
-function clearIfReplaceMePlaceholder(name: string): void {
-  const value = process.env[name];
-  if (value && value.includes('__REPLACE_ME__')) {
-    delete process.env[name];
-  }
-}
-clearIfReplaceMePlaceholder('METRICS_SCRAPE_TOKEN');
-clearIfReplaceMePlaceholder('JWT_SECRET');
-clearIfReplaceMePlaceholder('SECRETS_ENCRYPTION_KEY');
-
-/**
  * Placeholder smell — `.env.example` (and the seeded `.env.development`) use `host` as a
  * literal hostname placeholder for connection URLs (e.g. `redis://host:6379`,
  * `postgresql://user:pass@host:5432/core`). When a contributor copies the template but hasn't
@@ -99,7 +83,7 @@ AQIDAQAB
 `;
 
 function normalizeTestPem(value: string | undefined, marker: string, fallback: string): string {
-  if (!value?.includes(marker) || value.includes('__REPLACE_ME__') || value.includes('...')) {
+  if (!value?.includes(marker)) {
     return fallback;
   }
   return value.replaceAll('\\n', '\n');
@@ -130,6 +114,7 @@ process.env.HTTP_BIND_HOST = '127.0.0.1';
 process.env.DATABASE_URL ??= 'postgresql://core:core@localhost:5432/core';
 process.env.REDIS_URL ??= 'redis://localhost:6379';
 process.env.RUN_REDIS_TESTS ??= '1';
+/** Deprecated optional no-op; RS256 keys below are authoritative for JWT. */
 process.env.JWT_SECRET ??= 'test-jwt-secret-min-32-chars-xxxxxxxx';
 process.env.SECRETS_ENCRYPTION_KEY ??= 'a'.repeat(64);
 process.env.METRICS_SCRAPE_TOKEN ??= 'test-metrics-bearer-token-min-32-chars';

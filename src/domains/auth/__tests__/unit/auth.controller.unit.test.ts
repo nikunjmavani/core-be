@@ -8,20 +8,30 @@ vi.mock('@/shared/middlewares/cookie-session-origin.pre-handler.js', () => ({
   requireAllowedSourceOriginForCookieSessionRoute: vi.fn(),
 }));
 
-vi.mock('@/shared/config/env.config.js', () => ({
-  env: {
+/**
+ * NOTE: `DATABASE_URL` and the SSL/timeout fields are required because auth handlers
+ * import `audit-request-context.util.ts`, which now imports `user-database.context.ts`
+ * for scoped-RLS audit lookups. That transitively pulls in
+ * `infrastructure/database/connection.ts` at module-init time, and
+ * `parseSslMode(env.DATABASE_URL)` crashes on `undefined`.
+ *
+ * The factory is hoisted by vitest, so the object is inlined (no external refs).
+ */
+vi.mock('@/shared/config/env.config.js', () => {
+  const env = {
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
     AUTH_SESSION_MAX_AGE_DAYS: 7,
     COOKIE_SECURE: false,
-  },
-  getEnv: () => ({
-    NODE_ENV: 'test',
-    LOG_LEVEL: 'silent',
-    AUTH_SESSION_MAX_AGE_DAYS: 7,
-    COOKIE_SECURE: false,
-  }),
-}));
+    DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
+    DATABASE_SSL_ENABLED: false,
+    DATABASE_SSL_REJECT_UNAUTHORIZED: false,
+    DATABASE_RLS_SCOPED_CONTEXTS: false,
+    DATABASE_HTTP_STATEMENT_TIMEOUT_MS: 5_000,
+    DATABASE_STATEMENT_TIMEOUT_MS: 30_000,
+  } as const;
+  return { env, getEnv: () => env };
+});
 
 function mockRequest(overrides: Record<string, unknown> = {}): never {
   return {
@@ -442,11 +452,13 @@ describe('createAuthController', () => {
       reply,
     );
     expect(oauthService.handleCallback).toHaveBeenCalledWith(
-      'google',
-      'auth-code',
-      'oauth-state',
-      '127.0.0.1',
-      'vitest',
+      expect.objectContaining({
+        provider: 'google',
+        code: 'auth-code',
+        state: 'oauth-state',
+        ipAddress: '127.0.0.1',
+        userAgent: 'vitest',
+      }),
     );
     expect(reply.setCookie).not.toHaveBeenCalled();
   });

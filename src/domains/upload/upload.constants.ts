@@ -15,6 +15,19 @@ export const UPLOAD_TARGETS = {
 export type UploadTarget = (typeof UPLOAD_TARGETS)[keyof typeof UPLOAD_TARGETS];
 
 /**
+ * Upload lifecycle status. Matches the DB CHECK constraint
+ * (`status IN ('PENDING','UPLOADED','FAILED')`). Consumers must require `UPLOADED`
+ * before attaching an object (e.g. avatar/logo).
+ */
+export const UPLOAD_STATUS = {
+  PENDING: 'PENDING',
+  UPLOADED: 'UPLOADED',
+  FAILED: 'FAILED',
+} as const;
+
+export type UploadStatus = (typeof UPLOAD_STATUS)[keyof typeof UPLOAD_STATUS];
+
+/**
  * For presigned URL uploads, files go directly to S3 and we never see bytes.
  * When file bytes are available (e.g. server-side upload, S3 Object Lambda),
  * use verifyFileMagicBytes() from @/shared/utils/validation/file-magic.util.js to validate

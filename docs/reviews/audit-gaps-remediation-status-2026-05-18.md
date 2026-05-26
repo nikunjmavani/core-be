@@ -152,7 +152,7 @@ When remediation is complete, add a short **“Remediation (2026-05-18)”** sec
 
 - `pnpm routes:catalog` — confirm route catalog includes `POST /api/v1/uploads/:publicId/confirm` (present in `docs/routes.txt`).
 - Integration test: full magic-link + session cookie under `pnpm test:e2e` with Docker.
-- Staging: post-deploy `GET /health/ready` after Railway deploy (wired in `deploy-railway.yml`).
+- Staging: post-deploy `GET /health` after Railway deploy (wired in `reusable-railway-deploy.yml`).
 - Re-enable Prometheus when SLOs require it (P2-26).
 
 ---

@@ -1,28 +1,54 @@
-import { and, asc, count, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import {
+  buildAscendingTextIdCursorCondition,
+  createOpaqueCursorFromRow,
+  parseListCursor,
+} from '@/shared/utils/http/pagination.util.js';
 import type { MemberRoleRow } from './member-role.types.js';
 
+interface MemberRoleListPagination {
+  after?: string;
+  limit: number;
+}
+
 export class MemberRoleRepository extends BaseRepository {
-  async findByOrganizationId(organization_id: number, page: number, limit: number) {
-    const offset = (page - 1) * limit;
-    const where = and(eq(roles.organization_id, organization_id), isNull(roles.deleted_at));
-    const [rows, countResult] = await Promise.all([
-      getRequestDatabase()
-        .select()
-        .from(roles)
-        .where(where)
-        .orderBy(asc(roles.name))
-        .limit(limit)
-        .offset(offset),
-      getRequestDatabase().select({ count: count() }).from(roles).where(where),
-    ]);
-    const total = countResult[0]?.count ?? 0;
-    return this.paginate(rows as MemberRoleRow[], total, page, limit);
+  async findByOrganizationId(organization_id: number, pagination: MemberRoleListPagination) {
+    const { after, limit } = pagination;
+    const cursorCondition = buildAscendingTextIdCursorCondition(
+      roles.name,
+      roles.id,
+      parseListCursor(after),
+    );
+    const where = and(
+      eq(roles.organization_id, organization_id),
+      isNull(roles.deleted_at),
+      cursorCondition,
+    );
+    const rows = await getRequestDatabase()
+      .select()
+      .from(roles)
+      .where(where)
+      .orderBy(asc(roles.name), asc(roles.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const items = (hasMore ? rows.slice(0, limit) : rows) as MemberRoleRow[];
+    const lastItem = items.at(-1);
+    return {
+      items,
+      total: null,
+      limit,
+      has_more: hasMore,
+      next_cursor:
+        hasMore && lastItem !== undefined
+          ? createOpaqueCursorFromRow({ ...lastItem, sort_value: lastItem.name })
+          : null,
+    };
   }
 
   async findByPublicId(public_id: string, organization_id: number): Promise<MemberRoleRow | null> {

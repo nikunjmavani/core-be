@@ -3,6 +3,7 @@ import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { redactSensitive } from '@/shared/utils/security/sensitive-redaction.util.js';
 import {
   PRODUCTION_PROFILE_SESSION_SAMPLE_RATE,
   PRODUCTION_TRACES_SAMPLE_RATE,
@@ -12,6 +13,44 @@ import {
 } from '@/infrastructure/observability/sentry/sentry-sampling.util.js';
 
 let initialized = false;
+
+/**
+ * Scrubs secrets from a Sentry error event before it is sent upstream.
+ * Shared by `beforeSend` and unit tests.
+ */
+export function redactSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
+  if (event.breadcrumbs) {
+    for (const breadcrumb of event.breadcrumbs) {
+      if (breadcrumb.data) {
+        breadcrumb.data = redactSensitive(breadcrumb.data);
+      }
+    }
+  }
+  if (event.request) {
+    if (event.request.headers) {
+      event.request.headers = redactSensitive(event.request.headers);
+    }
+    if (event.request.cookies) {
+      event.request.cookies = redactSensitive(event.request.cookies);
+    }
+    if (event.request.data !== undefined) {
+      event.request.data = redactSensitive(event.request.data);
+    }
+    if (event.request.query_string !== undefined) {
+      event.request.query_string = redactSensitive(event.request.query_string);
+    }
+    if (event.request.url !== undefined) {
+      event.request.url = redactSensitive(event.request.url);
+    }
+  }
+  if (event.extra) {
+    event.extra = redactSensitive(event.extra);
+  }
+  if (event.contexts) {
+    event.contexts = redactSensitive(event.contexts);
+  }
+  return event;
+}
 
 /**
  * Initialize Sentry with error tracking, performance tracing, continuous
@@ -83,18 +122,7 @@ export function initSentry(): void {
 
     // ── Privacy / noise filters ─────────────────────────────────────
     beforeSend(event) {
-      // Redact Authorization headers from breadcrumbs
-      if (event.breadcrumbs) {
-        for (const breadcrumb of event.breadcrumbs) {
-          if (breadcrumb.data?.Authorization) {
-            breadcrumb.data.Authorization = '[REDACTED]';
-          }
-          if (breadcrumb.data?.cookie) {
-            breadcrumb.data.cookie = '[REDACTED]';
-          }
-        }
-      }
-      return event;
+      return redactSentryEvent(event);
     },
 
     beforeSendTransaction(event) {

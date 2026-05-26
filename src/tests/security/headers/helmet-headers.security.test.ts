@@ -21,7 +21,7 @@ describe('Security: Helmet Headers', () => {
   it('should set X-Content-Type-Options header when present', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health/live',
+      url: '/health',
     });
     const value =
       response.headers['x-content-type-options'] ?? response.headers['X-Content-Type-Options'];
@@ -34,7 +34,7 @@ describe('Security: Helmet Headers', () => {
   it('should set X-Frame-Options header', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health/live',
+      url: '/health',
     });
     const frameOptions = response.headers['x-frame-options'];
     if (frameOptions) {
@@ -45,7 +45,7 @@ describe('Security: Helmet Headers', () => {
   it('should set Referrer-Policy header', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health/live',
+      url: '/health',
     });
     const referrerPolicy = response.headers['referrer-policy'];
     if (referrerPolicy) {
@@ -57,7 +57,7 @@ describe('Security: Helmet Headers', () => {
   it('should set Strict-Transport-Security header', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health/live',
+      url: '/health',
     });
     const hsts = response.headers['strict-transport-security'];
     if (hsts) {
@@ -68,7 +68,7 @@ describe('Security: Helmet Headers', () => {
   it('should set at least one of CSP, X-XSS-Protection, X-Content-Type-Options, or other Helmet headers', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health/live',
+      url: '/health',
     });
     const securityHeaderKeys = [
       'content-security-policy',
@@ -91,7 +91,7 @@ describe('Security: Helmet Headers', () => {
   it('should not expose server version', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health/live',
+      url: '/health',
     });
     const server = response.headers['server'];
     // Should not reveal "fastify" or version info

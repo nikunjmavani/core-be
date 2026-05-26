@@ -6,7 +6,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '@/shared/config/env.config.js';
-import { s3Circuit } from '@/infrastructure/resilience/circuit-breaker.js';
+import { outboundCall } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const S3_BUCKET_NOT_CONFIGURED_MESSAGE = 'S3_BUCKET is not configured';
@@ -73,18 +73,22 @@ export async function headObject(
   if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
 
   try {
-    return await s3Circuit.execute(async () => {
-      const client = getS3Client();
-      const response = await client.send(
-        new HeadObjectCommand({
-          Bucket: bucket,
-          Key: key,
-        }),
-      );
-      return {
-        contentType: response.ContentType,
-        contentLength: response.ContentLength,
-      };
+    return await outboundCall({
+      name: 's3',
+      operation: async (signal) => {
+        const client = getS3Client();
+        const response = await client.send(
+          new HeadObjectCommand({
+            Bucket: bucket,
+            Key: key,
+          }),
+          { abortSignal: signal },
+        );
+        return {
+          contentType: response.ContentType,
+          contentLength: response.ContentLength,
+        };
+      },
     });
   } catch (error) {
     logger.error({ error, key, bucket }, 's3.headObject.failed');
@@ -104,17 +108,21 @@ export async function putObjectBuffer(options: {
   const bucket = env.S3_BUCKET;
   if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
 
-  await s3Circuit.execute(async () => {
-    const client = getS3Client();
-    await client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: options.key,
-        Body: options.body,
-        ContentType: options.contentType,
-        ...(options.metadata ? { Metadata: options.metadata } : {}),
-      }),
-    );
+  await outboundCall({
+    name: 's3',
+    operation: async (signal) => {
+      const client = getS3Client();
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: options.key,
+          Body: options.body,
+          ContentType: options.contentType,
+          ...(options.metadata ? { Metadata: options.metadata } : {}),
+        }),
+        { abortSignal: signal },
+      );
+    },
   });
 }
 
@@ -126,14 +134,18 @@ export async function deleteObject(key: string): Promise<boolean> {
   if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
 
   try {
-    await s3Circuit.execute(async () => {
-      const client = getS3Client();
-      await client.send(
-        new DeleteObjectCommand({
-          Bucket: bucket,
-          Key: key,
-        }),
-      );
+    await outboundCall({
+      name: 's3',
+      operation: async (signal) => {
+        const client = getS3Client();
+        await client.send(
+          new DeleteObjectCommand({
+            Bucket: bucket,
+            Key: key,
+          }),
+          { abortSignal: signal },
+        );
+      },
     });
     return true;
   } catch (error) {

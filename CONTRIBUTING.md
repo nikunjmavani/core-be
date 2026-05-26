@@ -24,15 +24,15 @@ Worker process (optional): `pnpm dev:worker`
 
 ## Repository layout
 
-| Path                                                   | Purpose                                                                                                                  |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| [`tooling/setup/`](tooling/setup/)                     | External infrastructure wizard (`pnpm setup:infra`) — Neon, Railway, Stripe, etc.; config in `tooling/setup.config.json` |
-| [`tooling/ci/`](tooling/ci/)                           | Build/CI guards — Dockerfile sync, `dist/` `@/` alias check (`pnpm docker:check-sync`, `pnpm build:check`)               |
-| [`tooling/dev/`](tooling/dev/)                         | Local dev helpers — e.g. `pnpm compose:wait` (Postgres readiness)                                                        |
-| [`src/scripts/`](src/scripts/)                         | Repo tooling invoked via `pnpm` — OpenAPI generation, route catalog, DB seeds, `verify-base`                             |
-| [`src/domains/<domain>/`](src/domains/)                | Business domains; route tests and domain unit tests live in `__tests__/` under each domain                               |
-| [`src/domains/<domain>/__tests__/unit/`](src/domains/) | Domain validator/serializer unit tests (not under `src/tests/unit/`)                                                     |
-| [`src/tests/`](src/tests/)                             | Cross-cutting tests — security, chaos, contract, global regression, shared helpers and factories                         |
+| Path                                                   | Purpose                                                                                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| [`tooling/setup/`](tooling/setup/)                     | External infrastructure wizard (`pnpm setup:infra`) — Neon, Railway, Stripe, etc.; config in `tooling/setup/setup.config.json` |
+| [`tooling/ci/`](tooling/ci/)                           | Build/CI guards — Dockerfile sync, `dist/` `@/` alias check (`pnpm docker:check-sync`, `pnpm build:check`)                     |
+| [`tooling/dev/`](tooling/dev/)                         | Local dev helpers — e.g. `pnpm compose:wait` (Postgres readiness)                                                              |
+| [`src/scripts/`](src/scripts/)                         | Repo tooling invoked via `pnpm` — OpenAPI generation, route catalog, DB seeds, `verify-base`                                   |
+| [`src/domains/<domain>/`](src/domains/)                | Business domains; route tests and domain unit tests live in `__tests__/` under each domain                                     |
+| [`src/domains/<domain>/__tests__/unit/`](src/domains/) | Domain validator/serializer unit tests (not under `src/tests/unit/`)                                                           |
+| [`src/tests/`](src/tests/)                             | Cross-cutting tests — security, chaos, contract, global regression, shared helpers and factories                               |
 
 ### Repository root
 
@@ -41,10 +41,10 @@ Committed files at the project root (not directories) group as follows:
 | Category           | Examples                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------- |
 | Package / Node     | `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, `.nvmrc`, `.node-version`, `.npmrc`             |
-| Quality            | `eslint.config.mjs`, `.prettierrc`, `.editorconfig`, `vitest*.config.ts`                           |
+| Quality            | `biome.json`, `.biomeignore`, `.editorconfig`, `tooling/vitest/`                                   |
 | Data               | `drizzle.config.ts`, `migrations/`                                                                 |
 | Containers         | `Dockerfile`, `Dockerfile.worker`, `Dockerfile.agent`, `docker-bake.hcl`, `docker-compose.yml`     |
-| Env                | `.env.example` (committed); every `.env.*` per-environment file gitignored                        |
+| Env                | `.env.example` (committed); every `.env.*` per-environment file gitignored                         |
 | Policy / community | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `CHANGELOG.md` |
 
 Application code, human docs, and automation live under `src/`, `docs/`, and `tooling/` respectively.
@@ -67,17 +67,17 @@ Use prefixes such as:
 
 ## Commits and releases
 
-Commits should follow **[Conventional Commits](https://www.conventionalcommits.org/)** (e.g. `feat:`, `fix:`, `feat!:` for breaking changes). **[Release Please](.github/workflows/release-please.yml)** uses that history for changelog and versioning on both release channels: `main` produces stable releases (e.g. `v2.1.0`); `dev` produces pre-releases (e.g. `v2.1.0-dev.0`). Each channel tracks its own version via a dedicated manifest, so they never collide.
+Commits should follow **[Conventional Commits](https://www.conventionalcommits.org/)** (e.g. `feat:`, `fix:`, `feat!:` for breaking changes). **[Release Please](.github/workflows/post-merge-ci.yml)** (job inside Post-merge CI) uses that history for changelog and versioning on both release channels: `main` produces stable releases (e.g. `v2.1.0`); `dev` produces pre-releases (e.g. `v2.1.0-dev.0`). Each channel tracks its own version via a dedicated manifest (under [.github/release-please/](.github/release-please/)), so they never collide.
 
 ## Git hooks (Husky)
 
 [Husky](.husky/) runs checks locally. Fix failures rather than skipping hooks (`--no-verify`).
 
-| Hook           | Script                                   | What runs                                                                                                                                                                                                                                                                  |
-| -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | `lint-staged` (ESLint + Prettier on `src/**/*.ts` and `tooling/setup/**/*.ts`), `typecheck`, `validate:domain:strict`, route catalog / OpenAPI sync when relevant files change, env-example sync, optional Gitleaks on staged files, conflict-marker and large-file guards |
-| **commit-msg** | [`.husky/commit-msg`](.husky/commit-msg) | [Conventional Commits](https://www.conventionalcommits.org/) via commitlint                                                                                                                                                                                                |
-| **pre-push**   | [`.husky/pre-push`](.husky/pre-push)     | `typecheck`, `build`, `build:check`, `test:unit`                                                                                                                                                                                                                           |
+| Hook | Script | What runs |
+| --- | --- | --- |
+| **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | `lint-staged` (Biome on `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; markdownlint on `*.md`), `typecheck`, `validate:domain:strict`, route catalog / OpenAPI sync when relevant files change, env-example sync, optional Gitleaks on staged files, conflict-marker and large-file guards |
+| **commit-msg** | [`.husky/commit-msg`](.husky/commit-msg) | [Conventional Commits](https://www.conventionalcommits.org/) via commitlint |
+| **pre-push** | [`.husky/pre-push`](.husky/pre-push) | `typecheck`, `build`, `build:check`, `test:unit` |
 
 **Gitleaks:** Install the [Gitleaks CLI](https://github.com/gitleaks/gitleaks) so pre-commit secret scanning is not skipped. CI always runs a full-repo scan. Manual check: `pnpm security:secrets`.
 
@@ -120,7 +120,7 @@ Errors and API messages must use i18n keys—see **[`.cursor/skills/i18n-message
 
 ## GitHub repository setup (maintainers)
 
-**Deploy secrets (per environment: `development`, `production`):** besides `RAILWAY_SERVICE_ID` (API), optionally set `RAILWAY_WORKER_SERVICE_ID` for the BullMQ worker service and `DATABASE_MIGRATION_URL` when migrations use an elevated DB user. Deploy workflows run `pnpm db:migrate` before `railway up`.
+**Deploy secrets (per environment: `development`, `production`):** besides `RAILWAY_SERVICE_ID` (API), set `RAILWAY_WORKER_SERVICE_ID` for the BullMQ worker service and `DATABASE_MIGRATION_URL` when migrations use an elevated DB user. CD runs `pnpm db:migrate` before `railway redeploy --image`.
 
 Completing this once avoids broken defaults for contributors:
 

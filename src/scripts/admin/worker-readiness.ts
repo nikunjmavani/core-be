@@ -31,7 +31,7 @@ function parseIsoMs(value: string | null): number | null {
 }
 
 async function fetchWorkerHealth(baseUrl: string): Promise<WorkerHealthPayload> {
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/health/worker`, {
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/health`, {
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) {

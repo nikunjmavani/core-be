@@ -34,17 +34,19 @@ function sendHttpGetRequestListeningForUrl(
 }
 
 describe('graceful shutdown drain', () => {
-  describe('/health/ready returns 503 while application is draining', () => {
+  describe('/health returns 503 while application is draining', () => {
     afterEach(() => {
       resetApplicationDrainingForTests();
       vi.restoreAllMocks();
     });
 
     it('returns 503 draining when the drain flag is set before the server closes', async () => {
-      const { default: healthMiddleware } =
-        await import('@/shared/middlewares/health.middleware.js');
-      const { setApplicationDraining } =
-        await import('@/shared/utils/infrastructure/application-lifecycle.util.js');
+      const { default: healthMiddleware } = await import(
+        '@/shared/middlewares/health.middleware.js'
+      );
+      const { setApplicationDraining } = await import(
+        '@/shared/utils/infrastructure/application-lifecycle.util.js'
+      );
 
       const applicationListeningForDrainObservation = Fastify({ logger: false });
       await applicationListeningForDrainObservation.register(healthMiddleware);
@@ -61,7 +63,7 @@ describe('graceful shutdown drain', () => {
       }
 
       const typedAddressListeningForObservation = addressListeningForObservation as AddressInfo;
-      const readyUrlListeningForObservation = `http://127.0.0.1:${typedAddressListeningForObservation.port}/health/ready`;
+      const readyUrlListeningForObservation = `http://127.0.0.1:${typedAddressListeningForObservation.port}/health`;
 
       setApplicationDraining(true);
 
@@ -77,8 +79,9 @@ describe('graceful shutdown drain', () => {
     }, 15_000);
 
     it('sets the drain flag before app.close on SIGTERM', async () => {
-      const { setApplicationDraining } =
-        await import('@/shared/utils/infrastructure/application-lifecycle.util.js');
+      const { setApplicationDraining } = await import(
+        '@/shared/utils/infrastructure/application-lifecycle.util.js'
+      );
       const setApplicationDrainingSpyListeningForObservation = vi.spyOn(
         await import('@/shared/utils/infrastructure/application-lifecycle.util.js'),
         'setApplicationDraining',
@@ -88,8 +91,9 @@ describe('graceful shutdown drain', () => {
       vi.spyOn(redisClient, 'closeRedis').mockResolvedValue(undefined);
       vi.spyOn(process, 'exit').mockImplementation((() => {}) as typeof process.exit);
 
-      const { default: shutdownMiddleware } =
-        await import('@/shared/middlewares/shutdown.middleware.js');
+      const { default: shutdownMiddleware } = await import(
+        '@/shared/middlewares/shutdown.middleware.js'
+      );
 
       const applicationListeningForDrainObservation = Fastify({ logger: false });
       const applicationCloseSpyListeningForObservation = vi.spyOn(
@@ -123,8 +127,9 @@ describe('graceful shutdown drain', () => {
       vi.spyOn(databaseConnection, 'closeDatabase').mockResolvedValue(undefined);
       vi.spyOn(redisClient, 'closeRedis').mockResolvedValue(undefined);
 
-      const { default: shutdownMiddleware } =
-        await import('@/shared/middlewares/shutdown.middleware.js');
+      const { default: shutdownMiddleware } = await import(
+        '@/shared/middlewares/shutdown.middleware.js'
+      );
 
       const applicationListeningForDrainObservation = Fastify({ logger: false });
       let handlerCompletedAtMillisecondsListeningForObservation = 0;

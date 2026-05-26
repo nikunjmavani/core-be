@@ -22,8 +22,9 @@ describe('sampleDeadLetterQueueDepths', () => {
   });
 
   it('returns depth samples for each dead-letter queue', async () => {
-    const { sampleDeadLetterQueueDepths } =
-      await import('@/infrastructure/observability/dlq-depth/dlq-depth.service.js');
+    const { sampleDeadLetterQueueDepths } = await import(
+      '@/infrastructure/observability/dlq-depth/dlq-depth.service.js'
+    );
 
     const result = await sampleDeadLetterQueueDepths();
 

@@ -1,4 +1,5 @@
 import { ValidationError } from '@/shared/errors/index.js';
+import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
   createMemberRoleDto,
   updateMemberRoleDto,
@@ -27,6 +28,7 @@ export function validateUpdateMemberRole(data: unknown): UpdateMemberRoleInput {
 }
 
 export function validateListMemberRolesQuery(data: unknown): ListMemberRolesQueryInput {
+  ensureCursorOnlyPagination(data);
   const result = listMemberRolesQueryDto.safeParse(data);
   if (!result.success) {
     throw new ValidationError(

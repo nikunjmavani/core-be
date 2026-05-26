@@ -12,6 +12,9 @@ concurrency:
   group: mutation-testing
   cancel-in-progress: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   stryker:
     name: Stryker mutation score

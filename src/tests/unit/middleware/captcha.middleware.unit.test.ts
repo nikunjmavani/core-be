@@ -14,6 +14,7 @@ function buildRequest(headers: Record<string, string> = {}): FastifyRequest {
   return {
     headers,
     ip: '127.0.0.1',
+    id: 'req-1',
   } as FastifyRequest;
 }
 
@@ -30,7 +31,19 @@ describe('captchaPreHandler', () => {
     delete process.env.CAPTCHA_PROVIDER;
     delete process.env.CAPTCHA_SECRET;
     delete process.env.CAPTCHA_BYPASS_HEADER;
+    delete process.env.CAPTCHA_DISABLED_ACK;
     resetEnvCacheForTests();
+  });
+
+  it('fails open when CAPTCHA is disabled but explicitly acknowledged', async () => {
+    // Simulate the production posture without flipping NODE_ENV (which would require the full
+    // production env): force fail-open off, then rely on the acknowledgement flag.
+    process.env.CAPTCHA_PROVIDER = 'disabled';
+    process.env.CAPTCHA_DISABLED_ACK = 'true';
+    resetEnvCacheForTests();
+
+    await expect(captchaPreHandler(buildRequest(), {} as FastifyReply)).resolves.toBeUndefined();
+    expect(verifyTurnstileTokenMock).not.toHaveBeenCalled();
   });
 
   it('skips verification when CAPTCHA is disabled in test', async () => {
@@ -57,6 +70,10 @@ describe('captchaPreHandler', () => {
     await expect(
       captchaPreHandler(buildRequest({ 'x-captcha-token': 'tok' }), {} as FastifyReply),
     ).resolves.toBeUndefined();
-    expect(verifyTurnstileTokenMock).toHaveBeenCalledWith('tok', '127.0.0.1');
+    expect(verifyTurnstileTokenMock).toHaveBeenCalledWith({
+      token: 'tok',
+      remoteIp: '127.0.0.1',
+      requestId: 'req-1',
+    });
   });
 });

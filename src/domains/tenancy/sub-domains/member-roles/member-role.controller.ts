@@ -1,25 +1,29 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
-import { resolveListPaginationQuery } from '@/shared/utils/http/pagination.util.js';
+import {
+  cursorPaginationSchema,
+  ensureCursorOnlyPagination,
+} from '@/shared/utils/http/pagination.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import type { MemberRoleService } from './member-role.service.js';
 
 export function createMemberRoleController(service: MemberRoleService) {
   return {
-    listRoles: async (request: FastifyRequest, reply: FastifyReply) => {
+    listRoles: async (request: FastifyRequest, _reply: FastifyReply) => {
       const organizationId = validatePublicIdParam(
         (request.params as { id: string }).id ?? '',
         'id',
       );
-      const pagination = resolveListPaginationQuery(request.query, reply);
+      ensureCursorOnlyPagination(request.query);
+      const pagination = cursorPaginationSchema.parse(request.query);
       const result = await service.list(organizationId, pagination);
       return paginatedResponse(result.items, getRequestIdentifier(request), {
         per_page: result.limit,
-        next: null,
-        has_more: result.page * result.limit < result.total,
-        estimated_total: result.total,
+        next: result.next_cursor,
+        has_more: result.has_more,
+        ...(result.total !== null ? { estimated_total: result.total } : {}),
       });
     },
     getRole: async (request: FastifyRequest, _reply: FastifyReply) => {

@@ -120,19 +120,18 @@ function runChild(
 }
 
 async function runLane(lane: Lane): Promise<{ name: string; code: number; ms: number }> {
-  const result = await runChild(`[${lane.name}]`, 'pnpm', ['exec', 'vitest', ...buildLaneArgs(lane)]);
+  const result = await runChild(`[${lane.name}]`, 'pnpm', [
+    'exec',
+    'vitest',
+    ...buildLaneArgs(lane),
+  ]);
   return { name: lane.name, ...result };
 }
 
 async function runMergedCoverageGate(): Promise<number> {
   const shardInputs = LANES.map((lane) => `coverage-${lane.name}/coverage-final.json`);
   const mergeScript = resolve(process.cwd(), 'tooling/ci/merge-coverage-and-check-thresholds.mjs');
-  const args = [
-    mergeScript,
-    ...shardInputs,
-    '--output',
-    'coverage/coverage-final.json',
-  ];
+  const args = [mergeScript, ...shardInputs, '--output', 'coverage/coverage-final.json'];
   const result = await runChild('[coverage-gate]', process.execPath, args);
   return result.code;
 }

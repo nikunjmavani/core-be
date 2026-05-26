@@ -8,6 +8,12 @@ vi.mock('@/domains/notify/sub-domains/notification/queues/notification.queue.js'
   enqueueNotification: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
 const user = { id: 1, public_id: 'user_public' };
 const notification = {
   id: 2,
@@ -25,7 +31,13 @@ describe('NotificationService', () => {
   } as unknown as UserService;
 
   const repository = {
-    findByUser: vi.fn().mockResolvedValue([notification]),
+    findByUser: vi.fn().mockResolvedValue({
+      items: [notification],
+      total: null,
+      limit: 50,
+      has_more: false,
+      next_cursor: null,
+    }),
     findByPublicIdForUser: vi.fn().mockResolvedValue(notification),
     markRead: vi.fn().mockResolvedValue({ ...notification, read_at: new Date() }),
     markAllReadForUser: vi.fn().mockResolvedValue(2),
@@ -41,9 +53,25 @@ describe('NotificationService', () => {
     vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(user as never);
   });
 
-  it('listForUser returns notifications', async () => {
+  it('listForUser returns keyset paginated notifications', async () => {
     const result = await service.listForUser('user_public', 50);
-    expect(result).toHaveLength(1);
+    expect(result.items).toHaveLength(1);
+    expect(result.has_more).toBe(false);
+    expect(result.next_cursor).toBeNull();
+    expect(repository.findByUser).toHaveBeenCalledWith(1, { limit: 50 });
+  });
+
+  it('listForUser forwards keyset options to the repository', async () => {
+    await service.listForUser('user_public', {
+      after: 'cursor_prev',
+      limit: 25,
+      include_total: true,
+    });
+    expect(repository.findByUser).toHaveBeenLastCalledWith(1, {
+      after: 'cursor_prev',
+      limit: 25,
+      include_total: true,
+    });
   });
 
   it('get returns notification for user', async () => {
@@ -67,8 +95,9 @@ describe('NotificationService', () => {
   });
 
   it('dispatchNotification enqueues delivery job', async () => {
-    const { enqueueNotification } =
-      await import('@/domains/notify/sub-domains/notification/queues/notification.queue.js');
+    const { enqueueNotification } = await import(
+      '@/domains/notify/sub-domains/notification/queues/notification.queue.js'
+    );
     await service.dispatchNotification(2);
     expect(enqueueNotification).toHaveBeenCalledWith(2, 'org_public');
   });

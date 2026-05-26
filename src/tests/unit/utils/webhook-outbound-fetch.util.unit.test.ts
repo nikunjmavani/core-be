@@ -26,8 +26,9 @@ describe('webhook-outbound-fetch.util', () => {
 
   it('resolveAndPinWebhookUrl returns pinned public IPv4 and port', async () => {
     mockDnsLookupAll([{ address: '93.184.216.34', family: 4 }]);
-    const { resolveAndPinWebhookUrl } =
-      await import('@/shared/utils/security/webhook-outbound-fetch.util.js');
+    const { resolveAndPinWebhookUrl } = await import(
+      '@/shared/utils/security/webhook-outbound-fetch.util.js'
+    );
     const resolution = await resolveAndPinWebhookUrl('https://hooks.example.com/path');
     expect(resolution.pinnedAddress).toBe('93.184.216.34');
     expect(resolution.port).toBe(443);
@@ -38,8 +39,9 @@ describe('webhook-outbound-fetch.util', () => {
   it('rejects hostname not on WEBHOOK_URL_ALLOWLIST when configured', async () => {
     vi.stubEnv('WEBHOOK_URL_ALLOWLIST', 'allowed.example.com');
     mockDnsLookupAll([{ address: '93.184.216.34', family: 4 }]);
-    const { resolveAndPinWebhookUrl } =
-      await import('@/shared/utils/security/webhook-outbound-fetch.util.js');
+    const { resolveAndPinWebhookUrl } = await import(
+      '@/shared/utils/security/webhook-outbound-fetch.util.js'
+    );
     await expect(resolveAndPinWebhookUrl('https://evil.example/hook')).rejects.toMatchObject({
       messageKey: 'errors:webhookUrlNotAllowed',
     });
@@ -48,8 +50,9 @@ describe('webhook-outbound-fetch.util', () => {
   it('allows subdomains of WEBHOOK_URL_ALLOWLIST entries', async () => {
     vi.stubEnv('WEBHOOK_URL_ALLOWLIST', 'allowed.example.com');
     mockDnsLookupAll([{ address: '93.184.216.34', family: 4 }]);
-    const { resolveAndPinWebhookUrl } =
-      await import('@/shared/utils/security/webhook-outbound-fetch.util.js');
+    const { resolveAndPinWebhookUrl } = await import(
+      '@/shared/utils/security/webhook-outbound-fetch.util.js'
+    );
     await expect(
       resolveAndPinWebhookUrl('https://hooks.allowed.example.com/path'),
     ).resolves.toMatchObject({ pinnedAddress: '93.184.216.34' });
@@ -75,8 +78,9 @@ describe('webhook-outbound-fetch.util', () => {
       return { on: vi.fn(), end: vi.fn() } as unknown as ReturnType<typeof httpRequest>;
     }) as typeof httpRequest);
 
-    const { createPinnedWebhookFetch } =
-      await import('@/shared/utils/security/webhook-outbound-fetch.util.js');
+    const { createPinnedWebhookFetch } = await import(
+      '@/shared/utils/security/webhook-outbound-fetch.util.js'
+    );
     const pinnedFetch = await createPinnedWebhookFetch('http://hooks.example.com/deliver');
     await pinnedFetch('http://hooks.example.com/deliver', { method: 'POST', body: '{}' });
 
@@ -113,8 +117,9 @@ describe('webhook-outbound-fetch.util', () => {
       return { on: vi.fn(), end: vi.fn() } as unknown as ReturnType<typeof httpRequest>;
     }) as typeof httpRequest);
 
-    const { createPinnedWebhookFetch } =
-      await import('@/shared/utils/security/webhook-outbound-fetch.util.js');
+    const { createPinnedWebhookFetch } = await import(
+      '@/shared/utils/security/webhook-outbound-fetch.util.js'
+    );
     const pinnedFetch = await createPinnedWebhookFetch('http://rebind.example/hook');
     await pinnedFetch('http://rebind.example/hook', { method: 'POST', body: '{}' });
 

@@ -35,7 +35,13 @@ describe('createMemberRoleController', () => {
   const role = { public_id: rolePublicId, name: 'Admin' };
 
   const service = {
-    list: vi.fn().mockResolvedValue({ items: [role], page: 1, limit: 25, total: 1 }),
+    list: vi.fn().mockResolvedValue({
+      items: [role],
+      limit: 25,
+      total: null,
+      has_more: false,
+      next_cursor: null,
+    }),
     getByPublicId: vi.fn().mockResolvedValue(role),
     create: vi.fn().mockResolvedValue(role),
     update: vi.fn().mockResolvedValue(role),
@@ -47,9 +53,10 @@ describe('createMemberRoleController', () => {
   it('listRoles returns paginated roles', async () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [role],
-      page: 1,
       limit: 25,
-      total: 50,
+      total: null,
+      has_more: true,
+      next_cursor: 'role_cursor_2',
     } as never);
     const response = await controller.listRoles(
       mockRequest({ params: { id: organizationPublicId } }),
@@ -58,7 +65,7 @@ describe('createMemberRoleController', () => {
     expect(service.list).toHaveBeenCalledWith(organizationPublicId, { limit: 25 });
     expect(response).toMatchObject({
       data: [role],
-      meta: { pagination: expect.objectContaining({ has_more: true, next: null }) },
+      meta: { pagination: expect.objectContaining({ has_more: true, next: 'role_cursor_2' }) },
     });
   });
 
@@ -107,9 +114,10 @@ describe('createMemberRoleController', () => {
   it('listRoles returns has_more false when all items fit page', async () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [role],
-      page: 1,
       limit: 25,
-      total: 1,
+      total: null,
+      has_more: false,
+      next_cursor: null,
     } as never);
     const response = await controller.listRoles(
       mockRequest({ params: { id: organizationPublicId } }),

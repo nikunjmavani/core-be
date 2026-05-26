@@ -13,6 +13,12 @@ import {
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+export type OrganizationRlsTransactionSettlementOutcome =
+  | 'committed'
+  | 'rolled_back'
+  | 'no_transaction'
+  | 'settle_failed';
+
 type OrganizationRlsTransactionCompletion = {
   resolve: () => void;
   reject: (reason: Error) => void;
@@ -22,6 +28,14 @@ const organizationRlsTransactionCompletions = new WeakMap<
   FastifyRequest,
   OrganizationRlsTransactionCompletion
 >();
+
+/**
+ * Outer `database.transaction()` promise per request. The request lifecycle coordinator
+ * awaits this so idempotency cache writes and outbox flushes only run after commit/rollback
+ * has actually settled — calling `resolve()` on the inner promise only lets the transaction
+ * callback return; the COMMIT still completes asynchronously.
+ */
+const organizationRlsTransactionOuterPromises = new WeakMap<FastifyRequest, Promise<void>>();
 
 const organizationRlsCheckoutHeld = new WeakMap<FastifyRequest, boolean>();
 
@@ -51,6 +65,53 @@ function settleOrganizationRlsTransaction(request: FastifyRequest, reply: Fastif
     return;
   }
   completion.resolve();
+}
+
+/**
+ * Signals settlement to the in-flight RLS transaction and awaits the outer
+ * `database.transaction()` promise so commit/rollback has finished before the caller
+ * proceeds. Also releases the pooled checkout counter. Safe to call for non-org
+ * requests (no-op when no transaction was opened).
+ *
+ * Intended to be invoked exclusively from the request lifecycle coordinator
+ * (`request-lifecycle.middleware.ts`) — it owns the post-response ordering across RLS,
+ * idempotency, and outbox flush.
+ */
+export async function settleAndAwaitOrganizationRlsTransaction(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<OrganizationRlsTransactionSettlementOutcome> {
+  const hadCompletion = organizationRlsTransactionCompletions.has(request);
+  const statusCode = reply.statusCode ?? 200;
+  const intendedRollback = hadCompletion && statusCode >= 400;
+
+  settleOrganizationRlsTransaction(request, reply);
+
+  const outerPromise = organizationRlsTransactionOuterPromises.get(request);
+  if (outerPromise !== undefined) {
+    organizationRlsTransactionOuterPromises.delete(request);
+    try {
+      await outerPromise;
+      if (organizationRlsCheckoutHeld.delete(request)) {
+        decrementOrganizationRlsCheckoutCount();
+      }
+      return intendedRollback ? 'rolled_back' : 'committed';
+    } catch (error) {
+      logger.warn(
+        { error, organizationPublicId: getOrganizationPublicIdFromRequest(request) },
+        'organization.rls.transaction.settle_await_error',
+      );
+      if (organizationRlsCheckoutHeld.delete(request)) {
+        decrementOrganizationRlsCheckoutCount();
+      }
+      return intendedRollback ? 'rolled_back' : 'settle_failed';
+    }
+  }
+
+  if (organizationRlsCheckoutHeld.delete(request)) {
+    decrementOrganizationRlsCheckoutCount();
+  }
+  return 'no_transaction';
 }
 
 /**
@@ -96,7 +157,7 @@ const organizationRlsTransactionMiddlewarePlugin: FastifyPluginAsync = async (ap
 
     organizationRlsCheckoutHeld.set(request, true);
     incrementOrganizationRlsCheckoutCount();
-    void database
+    const outerPromise = database
       .transaction(async (transaction) => {
         await transaction.execute(
           drizzleSql`SELECT set_config('app.current_organization_id', ${organizationPublicId}, true)`,
@@ -122,26 +183,18 @@ const organizationRlsTransactionMiddlewarePlugin: FastifyPluginAsync = async (ap
       })
       .catch((error: unknown) => {
         organizationRlsTransactionCompletions.delete(request);
+        const normalizedError = error instanceof Error ? error : new Error(String(error));
         if (!hookDone) {
-          safeDone(error instanceof Error ? error : new Error(String(error)));
+          safeDone(normalizedError);
           return;
         }
-        logger.warn({ error }, 'organization.rls.transaction.failure_after_on_request');
+        logger.warn(
+          { error: normalizedError },
+          'organization.rls.transaction.failure_after_on_request',
+        );
+        throw normalizedError;
       });
-  });
-
-  application.addHook('onResponse', (request: FastifyRequest, reply, done) => {
-    try {
-      settleOrganizationRlsTransaction(request, reply);
-    } catch (error: unknown) {
-      done(error instanceof Error ? error : new Error(String(error)));
-      return;
-    } finally {
-      if (organizationRlsCheckoutHeld.delete(request)) {
-        decrementOrganizationRlsCheckoutCount();
-      }
-    }
-    done();
+    organizationRlsTransactionOuterPromises.set(request, outerPromise);
   });
 };
 

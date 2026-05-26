@@ -1,16 +1,15 @@
 import { sql } from '@/infrastructure/database/connection.js';
+import { computeWorkerPostgresPoolDemand } from '@/infrastructure/queue/worker-runtime/worker-connection-budget.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const DEFAULT_POOL_MAX_CONNECTIONS = 10;
-/** Retention workers use concurrency 1 each; six slots reserved on the worker process. */
-const RETENTION_WORKER_POOL_SLOT_RESERVE = 6;
 /** Local docker-compose default: one API + one worker process. */
 const LOCAL_DEFAULT_API_PROCESS_COUNT = 1;
 const LOCAL_DEFAULT_WORKER_PROCESS_COUNT = 1;
 
 export type AssertConnectionBudgetOptions = {
-  /** When true, validates WORKER_CONCURRENCY against DATABASE_POOL_MAX minus retention worker slots. */
+  /** When true, validates per-queue Postgres demand for the selected WORKER_QUEUE_FAMILIES. */
   readonly assertWorkerConcurrency?: boolean;
 };
 
@@ -222,20 +221,52 @@ export async function assertPostgresConnectionBudget(
       'DEPLOYMENT_TOTAL_REPLICA_COUNT (or DEPLOYMENT_API_REPLICA_COUNT + DEPLOYMENT_WORKER_REPLICA_COUNT) ' +
         'is required for hosted deployments (production, or any environment with RAILWAY_GIT_COMMIT_SHA / ' +
         'KUBERNETES_SERVICE_HOST set) to validate Postgres connection budget. ' +
-        'Set the secret in the GitHub Environment so deploy-railway.yml forwards it to the service. ' +
+        'Set the secret in the GitHub Environment so reusable-railway-deploy.yml forwards it to the service. ' +
         'See docs/deployment/runbooks/resource-limits.md',
     );
   }
 
   if (options.assertWorkerConcurrency) {
-    const workerConcurrency = env.WORKER_CONCURRENCY;
-    const maxWorkerConcurrency = poolMaxConnections - RETENTION_WORKER_POOL_SLOT_RESERVE;
-    if (workerConcurrency > maxWorkerConcurrency) {
-      throw new Error(
-        `WORKER_CONCURRENCY (${workerConcurrency}) exceeds DATABASE_POOL_MAX (${poolMaxConnections}) minus ` +
-          `${RETENTION_WORKER_POOL_SLOT_RESERVE} retention worker slots (max ${maxWorkerConcurrency}). ` +
-          'Raise DATABASE_POOL_MAX on the worker service or lower WORKER_CONCURRENCY.',
-      );
+    const poolDemand = computeWorkerPostgresPoolDemand();
+    const { peakPostgresConcurrency, monolithicWorker, selectedFamilies, queues } = poolDemand;
+
+    logger.info(
+      {
+        poolMaxConnections,
+        peakPostgresConcurrency,
+        selectedFamilies,
+        monolithicWorker,
+        enabledQueues: queues
+          .filter((entry) => entry.enabled && entry.postgresConcurrency > 0)
+          .map((entry) => ({
+            queueName: entry.queueName,
+            family: entry.family,
+            postgresConcurrency: entry.postgresConcurrency,
+          })),
+      },
+      'database.connection_budget.worker_demand',
+    );
+
+    if (peakPostgresConcurrency > poolMaxConnections) {
+      const message =
+        `Worker Postgres pool demand (${peakPostgresConcurrency}) exceeds DATABASE_POOL_MAX (${poolMaxConnections}) ` +
+        `for WORKER_QUEUE_FAMILIES [${selectedFamilies.join(', ')}]. ` +
+        'Raise DATABASE_POOL_MAX on the worker service, lower WORKER_CONCURRENCY_* overrides, ' +
+        'or split worker services by queue family. See docs/deployment/runbooks/resource-limits.md';
+
+      if (monolithicWorker) {
+        logger.warn(
+          {
+            poolMaxConnections,
+            peakPostgresConcurrency,
+            selectedFamilies,
+            queues: queues.filter((entry) => entry.enabled && entry.postgresConcurrency > 0),
+          },
+          'database.connection_budget.worker_pool_pressure',
+        );
+      } else {
+        throw new Error(message);
+      }
     }
   }
 }

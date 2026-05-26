@@ -2,24 +2,30 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { NotFoundError } from '@/shared/errors/index.js';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
-import { parseListLimitQuery } from '@/shared/utils/http/pagination.util.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { NotificationService } from './notification.service.js';
 import { NotificationSerializer } from './notification.serializer.js';
+import { validateListNotificationsQuery } from './notification.validator.js';
 
 export function createNotificationController(service: NotificationService) {
   return {
     listNotifications: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const { limit } = parseListLimitQuery(request.query);
-      const items = await service.listForUser(auth.userId, { limit });
-      const serialized = NotificationSerializer.many(items);
-      const nextCursor = null;
-      const hasMore = false;
+      const parsed = validateListNotificationsQuery(request.query);
+      const result = await service.listForUser(
+        auth.userId,
+        omitUndefined({
+          after: parsed.after,
+          limit: parsed.limit,
+          include_total: parsed.include_total === 'true',
+        }),
+      );
+      const serialized = NotificationSerializer.many(result.items);
       return paginatedResponse(serialized, getRequestIdentifier(request), {
-        per_page: serialized.length,
-        next: nextCursor,
-        has_more: hasMore,
-        estimated_total: serialized.length,
+        per_page: result.limit,
+        next: result.next_cursor,
+        has_more: result.has_more,
+        ...(result.total !== null ? { estimated_total: result.total } : {}),
       });
     },
     getNotification: async (

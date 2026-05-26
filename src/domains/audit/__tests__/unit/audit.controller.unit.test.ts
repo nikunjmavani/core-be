@@ -21,7 +21,7 @@ function mockRequest(
   overrides: Partial<FastifyRequest<{ Querystring: ListAuditLogsQuery }>> = {},
 ): FastifyRequest<{ Querystring: ListAuditLogsQuery }> {
   return {
-    query: { page: 1, limit: 20 },
+    query: { limit: 20 },
     id: 'request-id',
     ...overrides,
   } as FastifyRequest<{ Querystring: ListAuditLogsQuery }>;
@@ -50,9 +50,9 @@ describe('createAuditController', () => {
     list: vi.fn().mockResolvedValue({
       items: [auditLogRow()],
       total: 1,
-      page: 1,
       limit: 20,
-      total_pages: 1,
+      has_more: false,
+      next_cursor: null,
     }),
   } as unknown as AuditService;
 
@@ -60,7 +60,7 @@ describe('createAuditController', () => {
 
   it('listLogs returns paginated audit entries with sanitized metadata', async () => {
     const response = await controller.listLogs(
-      mockRequest({ query: { page: 1, limit: 20 } }),
+      mockRequest({ query: { limit: 20, include_total: 'true' } }),
       mockReply(),
     );
     expect(service.list).toHaveBeenCalled();
@@ -79,19 +79,19 @@ describe('createAuditController', () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [auditLogRow({ id: 1 }), auditLogRow({ id: 2 })],
       total: 4,
-      page: 1,
       limit: 2,
-      total_pages: 2,
+      has_more: true,
+      next_cursor: 'cursor_2',
     } as never);
     const response = await controller.listLogs(
-      mockRequest({ query: { page: 1, limit: 2 } }),
+      mockRequest({ query: { limit: 2, include_total: 'true' } }),
       mockReply(),
     );
     expect(response).toMatchObject({
       meta: {
         pagination: expect.objectContaining({
           has_more: true,
-          next: '2',
+          next: 'cursor_2',
         }),
       },
     });
@@ -101,9 +101,9 @@ describe('createAuditController', () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [auditLogRow()],
       total: 1,
-      page: 1,
       limit: 20,
-      total_pages: 1,
+      has_more: false,
+      next_cursor: null,
     } as never);
     const response = await controller.listLogs(mockRequest(), mockReply());
     expect(response).toMatchObject({

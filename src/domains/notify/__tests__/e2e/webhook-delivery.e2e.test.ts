@@ -65,5 +65,9 @@ describe('Notify e2e: webhook delivery', () => {
       organizationPublicId: organization.public_id,
     });
     expect(listResponse.statusCode).toBe(200);
+    const listBody = listResponse.json() as {
+      meta?: { pagination?: { has_more?: boolean; next?: string | null } };
+    };
+    expect(listBody.meta?.pagination).toMatchObject({ has_more: false, next: null });
   });
 });

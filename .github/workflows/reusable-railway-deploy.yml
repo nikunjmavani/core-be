@@ -1,0 +1,435 @@
+# Reusable Railway deploy (called from post-merge-ci.yml) or manual workflow_dispatch.
+# Gate sequence: migrate → redeploy API/worker → /health → worker readiness → API smoke.
+# When post-deploy API smoke succeeds, the environment is fully live for traffic.
+# Production API and worker run scanned CI images from GHCR (Trivy gate in docker-build job).
+# Optional environment secrets GHCR_API_IMAGE / GHCR_WORKER_IMAGE override the commit SHA tag
+# (for example digest pinning). See docs/deployment/ci-cd/cicd-and-deployment.md
+
+name: Reusable — Railway deploy
+
+on:
+  workflow_call:
+    inputs:
+      merge_commit_sha:
+        description: Commit SHA on the target branch after merge (optional when invoked via workflow_dispatch)
+        required: false
+        type: string
+      target_branch:
+        description: Protected branch that received the merge (main or dev)
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      target:
+        description: GitHub Environment to deploy
+        required: true
+        type: choice
+        options:
+          - production
+          - development
+
+concurrency:
+  group: railway-deploy-${{ inputs.target_branch || github.ref_name }}-${{ inputs.merge_commit_sha || github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  resolve-environment:
+    name: Resolve environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.map.outputs.environment }}
+    steps:
+      - name: Map branch or input to environment
+        # Canonical mapping (see docs/deployment/runbooks/add-new-environment.md):
+        #   main → production
+        #   dev  → development
+        # Branch name → GitHub Environment name → NODE_ENV value must stay 1:1.
+        id: map
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ inputs.target }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.target_branch }}" ]; then
+            case "${{ inputs.target_branch }}" in
+              main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
+              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
+              *)    echo "::error::Unsupported branch for deploy: ${{ inputs.target_branch }}" && exit 1 ;;
+            esac
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            case "${{ github.event.pull_request.base.ref }}" in
+              main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
+              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
+              *)    echo "::error::Unsupported base branch for deploy: ${{ github.event.pull_request.base.ref }}" && exit 1 ;;
+            esac
+          else
+            case "${{ github.ref_name }}" in
+              main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
+              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
+              *)    echo "::error::Unsupported branch for deploy: ${{ github.ref_name }}" && exit 1 ;;
+            esac
+          fi
+
+  deploy:
+    name: Deploy (${{ needs.resolve-environment.outputs.environment }})
+    needs: resolve-environment
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-environment.outputs.environment }}
+    outputs:
+      api_base_url: ${{ steps.api_health.outputs.api_base_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.merge_commit_sha || github.sha }}
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Validate GitHub environment secrets
+        env:
+          CONFIG: ${{ needs.resolve-environment.outputs.environment }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
+          GITHUB_ENV_VALIDATION_SOURCE: runtime
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+          SECRETS_ENCRYPTION_KEY: ${{ secrets.SECRETS_ENCRYPTION_KEY }}
+          METRICS_SCRAPE_TOKEN: ${{ secrets.METRICS_SCRAPE_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          WEBHOOK_URL_ALLOWLIST: ${{ secrets.WEBHOOK_URL_ALLOWLIST }}
+          JWT_PUBLIC_KEY: ${{ vars.JWT_PUBLIC_KEY }}
+          JWT_SIGNING_KID: ${{ vars.JWT_SIGNING_KID }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+          COOKIE_SECURE: ${{ vars.COOKIE_SECURE }}
+          DATABASE_SSL_ENABLED: ${{ vars.DATABASE_SSL_ENABLED }}
+          NODE_ENV: ${{ vars.NODE_ENV }}
+          PORT: ${{ vars.PORT }}
+          HTTP_BIND_HOST: ${{ vars.HTTP_BIND_HOST }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+          RATE_LIMIT_MAX: ${{ vars.RATE_LIMIT_MAX }}
+          RATE_LIMIT_WINDOW_MS: ${{ vars.RATE_LIMIT_WINDOW_MS }}
+          SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ vars.SENTRY_TRACES_SAMPLE_RATE }}
+          SENTRY_PROFILE_SAMPLE_RATE: ${{ vars.SENTRY_PROFILE_SAMPLE_RATE }}
+          AUDIT_RETENTION_DAYS: ${{ vars.AUDIT_RETENTION_DAYS }}
+          AUTH_SESSION_RETENTION_DAYS: ${{ vars.AUTH_SESSION_RETENTION_DAYS }}
+          NODE_OPTIONS: ${{ vars.NODE_OPTIONS }}
+          DEPLOYMENT_TOTAL_REPLICA_COUNT: ${{ vars.DEPLOYMENT_TOTAL_REPLICA_COUNT }}
+          DEPLOYMENT_API_REPLICA_COUNT: ${{ vars.DEPLOYMENT_API_REPLICA_COUNT }}
+          DEPLOYMENT_WORKER_REPLICA_COUNT: ${{ vars.DEPLOYMENT_WORKER_REPLICA_COUNT }}
+          DATABASE_POOL_MAX: ${{ vars.DATABASE_POOL_MAX }}
+          POSTGRES_RESERVED_CONNECTIONS: ${{ vars.POSTGRES_RESERVED_CONNECTIONS }}
+          POSTGRES_MAX_CONNECTIONS: ${{ vars.POSTGRES_MAX_CONNECTIONS }}
+          METRICS_ENABLED: ${{ vars.METRICS_ENABLED }}
+          CAPTCHA_PROVIDER: ${{ vars.CAPTCHA_PROVIDER }}
+          CAPTCHA_DISABLED_ACK: ${{ vars.CAPTCHA_DISABLED_ACK }}
+        run: pnpm validate:github-env
+
+      - name: Resolve scanned CI images from GHCR
+        id: ghcr_images
+        env:
+          GHCR_API_IMAGE: ${{ secrets.GHCR_API_IMAGE }}
+          GHCR_WORKER_IMAGE: ${{ secrets.GHCR_WORKER_IMAGE }}
+          RAILWAY_GIT_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          API_BASE="ghcr.io/${{ github.repository }}/core-be-api"
+          WORKER_BASE="ghcr.io/${{ github.repository }}/core-be-worker"
+          if [ -n "${GHCR_API_IMAGE:-}" ]; then
+            api_image="${GHCR_API_IMAGE}"
+          else
+            api_image="${API_BASE}:${RAILWAY_GIT_COMMIT_SHA}"
+          fi
+          if [ -n "${GHCR_WORKER_IMAGE:-}" ]; then
+            worker_image="${GHCR_WORKER_IMAGE}"
+          else
+            worker_image="${WORKER_BASE}:${RAILWAY_GIT_COMMIT_SHA}"
+          fi
+          echo "api_image=${api_image}" >> "$GITHUB_OUTPUT"
+          echo "worker_image=${worker_image}" >> "$GITHUB_OUTPUT"
+          echo "API image: ${api_image}"
+          echo "Worker image: ${worker_image}"
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY: ${{ vars.JWT_PUBLIC_KEY }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+          AUDIT_RETENTION_DAYS: ${{ vars.AUDIT_RETENTION_DAYS }}
+          AUTH_SESSION_RETENTION_DAYS: ${{ vars.AUTH_SESSION_RETENTION_DAYS }}
+          SECRETS_ENCRYPTION_KEY: ${{ secrets.SECRETS_ENCRYPTION_KEY }}
+          METRICS_ENABLED: 'false'
+        run: pnpm db:migrate
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Set Railway service variables
+        # Mirror every runtime key declared in .env.example into each Railway service.
+        # Two loops (secrets, variables) keep the GitHub Secret vs Variable split visible;
+        # the env block below forwards values from the GitHub Environment to the runner
+        # process so `${!var}` can read each one. Empty values are skipped so Railway
+        # never gets blanked out by unset optional keys.
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
+
+          # --- GitHub Secrets (runtime) ---
+          CAPTCHA_SECRET: ${{ secrets.CAPTCHA_SECRET }}
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          METRICS_SCRAPE_TOKEN: ${{ secrets.METRICS_SCRAPE_TOKEN }}
+          OAUTH_GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
+          OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}
+          REDIS_BULLMQ_URL: ${{ secrets.REDIS_BULLMQ_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESPONSE_ENCRYPTION_KEY: ${{ secrets.RESPONSE_ENCRYPTION_KEY }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          SECRETS_ENCRYPTION_KEY: ${{ secrets.SECRETS_ENCRYPTION_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+
+          # --- GitHub Variables (runtime) ---
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+          API_DOCS_BASE_URL: ${{ vars.API_DOCS_BASE_URL }}
+          AUDIT_EXPORT_BATCH_SIZE: ${{ vars.AUDIT_EXPORT_BATCH_SIZE }}
+          AUDIT_EXPORT_CRON: ${{ vars.AUDIT_EXPORT_CRON }}
+          AUDIT_EXPORT_ENABLED: ${{ vars.AUDIT_EXPORT_ENABLED }}
+          AUDIT_EXPORT_S3_PREFIX: ${{ vars.AUDIT_EXPORT_S3_PREFIX }}
+          AUDIT_RETENTION_CRON: ${{ vars.AUDIT_RETENTION_CRON }}
+          AUDIT_RETENTION_DAYS: ${{ vars.AUDIT_RETENTION_DAYS }}
+          AUTH_SESSION_CLEANUP_CRON: ${{ vars.AUTH_SESSION_CLEANUP_CRON }}
+          AUTH_SESSION_MAX_AGE_DAYS: ${{ vars.AUTH_SESSION_MAX_AGE_DAYS }}
+          AUTH_SESSION_RETENTION_DAYS: ${{ vars.AUTH_SESSION_RETENTION_DAYS }}
+          BLOCK_DISPOSABLE_EMAIL: ${{ vars.BLOCK_DISPOSABLE_EMAIL }}
+          CAPTCHA_BYPASS_HEADER: ${{ vars.CAPTCHA_BYPASS_HEADER }}
+          CAPTCHA_DISABLED_ACK: ${{ vars.CAPTCHA_DISABLED_ACK }}
+          CAPTCHA_PROVIDER: ${{ vars.CAPTCHA_PROVIDER }}
+          CAPTCHA_SITE_KEY: ${{ vars.CAPTCHA_SITE_KEY }}
+          COOKIE_SECURE: ${{ vars.COOKIE_SECURE }}
+          DATABASE_POOL_MAX: ${{ vars.DATABASE_POOL_MAX }}
+          DATABASE_RLS_SCOPED_CONTEXTS: ${{ vars.DATABASE_RLS_SCOPED_CONTEXTS }}
+          DATABASE_SSL_ENABLED: ${{ vars.DATABASE_SSL_ENABLED }}
+          DATABASE_SSL_REJECT_UNAUTHORIZED: ${{ vars.DATABASE_SSL_REJECT_UNAUTHORIZED }}
+          DEPLOYMENT_API_REPLICA_COUNT: ${{ vars.DEPLOYMENT_API_REPLICA_COUNT }}
+          DEPLOYMENT_TOTAL_REPLICA_COUNT: ${{ vars.DEPLOYMENT_TOTAL_REPLICA_COUNT }}
+          DEPLOYMENT_WORKER_REPLICA_COUNT: ${{ vars.DEPLOYMENT_WORKER_REPLICA_COUNT }}
+          DLQ_DEPTH_CRON: ${{ vars.DLQ_DEPTH_CRON }}
+          EMAIL_FROM_ADDRESS: ${{ vars.EMAIL_FROM_ADDRESS }}
+          EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME }}
+          ENABLE_API_REFERENCE: ${{ vars.ENABLE_API_REFERENCE }}
+          ENABLE_MCP_SERVER: ${{ vars.ENABLE_MCP_SERVER }}
+          ENABLE_QUEUE_DASHBOARD: ${{ vars.ENABLE_QUEUE_DASHBOARD }}
+          ENABLE_QUEUE_DASHBOARD_MUTATIONS: ${{ vars.ENABLE_QUEUE_DASHBOARD_MUTATIONS }}
+          ENABLE_RESPONSE_ENCRYPTION: ${{ vars.ENABLE_RESPONSE_ENCRYPTION }}
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+          GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS: ${{ vars.GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS }}
+          GLOBAL_ADMIN_EMAILS: ${{ vars.GLOBAL_ADMIN_EMAILS }}
+          HTTP_BIND_HOST: ${{ vars.HTTP_BIND_HOST }}
+          IDEMPOTENCY_CARDINALITY_CRON: ${{ vars.IDEMPOTENCY_CARDINALITY_CRON }}
+          IDEMPOTENCY_CARDINALITY_SCAN_MAX: ${{ vars.IDEMPOTENCY_CARDINALITY_SCAN_MAX }}
+          JWT_PUBLIC_KEY: ${{ vars.JWT_PUBLIC_KEY }}
+          JWT_SIGNING_KID: ${{ vars.JWT_SIGNING_KID }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          MAIL_OUTBOX_SWEEPER_CRON: ${{ vars.MAIL_OUTBOX_SWEEPER_CRON }}
+          MAIL_OUTBOX_SWEEP_BATCH_SIZE: ${{ vars.MAIL_OUTBOX_SWEEP_BATCH_SIZE }}
+          MAIL_OUTBOX_SWEEP_PENDING_MINUTES: ${{ vars.MAIL_OUTBOX_SWEEP_PENDING_MINUTES }}
+          MEMBERSHIP_TOMBSTONE_RETENTION_CRON: ${{ vars.MEMBERSHIP_TOMBSTONE_RETENTION_CRON }}
+          MEMBER_ROLE_TOMBSTONE_RETENTION_CRON: ${{ vars.MEMBER_ROLE_TOMBSTONE_RETENTION_CRON }}
+          METRICS_ENABLED: ${{ vars.METRICS_ENABLED }}
+          NODE_ENV: ${{ vars.NODE_ENV }}
+          NODE_OPTIONS: ${{ vars.NODE_OPTIONS }}
+          NOTIFICATION_RETENTION_DAYS: ${{ vars.NOTIFICATION_RETENTION_DAYS }}
+          OAUTH_GITHUB_CLIENT_ID: ${{ vars.OAUTH_GITHUB_CLIENT_ID }}
+          OAUTH_GITHUB_REDIRECT_URI: ${{ vars.OAUTH_GITHUB_REDIRECT_URI }}
+          OAUTH_GOOGLE_CLIENT_ID: ${{ vars.OAUTH_GOOGLE_CLIENT_ID }}
+          OAUTH_GOOGLE_REDIRECT_URI: ${{ vars.OAUTH_GOOGLE_REDIRECT_URI }}
+          OPENAPI_SPEC_PATH: ${{ vars.OPENAPI_SPEC_PATH }}
+          ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON: ${{ vars.ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON }}
+          ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_CRON: ${{ vars.ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_CRON }}
+          ORGANIZATION_TOMBSTONE_RETENTION_CRON: ${{ vars.ORGANIZATION_TOMBSTONE_RETENTION_CRON }}
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          OTEL_SERVICE_NAME: ${{ vars.OTEL_SERVICE_NAME }}
+          PORT: ${{ vars.PORT }}
+          POSTGRES_MAX_CONNECTIONS: ${{ vars.POSTGRES_MAX_CONNECTIONS }}
+          POSTGRES_RESERVED_CONNECTIONS: ${{ vars.POSTGRES_RESERVED_CONNECTIONS }}
+          RATE_LIMIT_MAX: ${{ vars.RATE_LIMIT_MAX }}
+          RATE_LIMIT_ORG_MAX: ${{ vars.RATE_LIMIT_ORG_MAX }}
+          RATE_LIMIT_WINDOW_MS: ${{ vars.RATE_LIMIT_WINDOW_MS }}
+          REDIS_KEY_PREFIX: ${{ vars.REDIS_KEY_PREFIX }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          S3_MAX_ATTEMPTS: ${{ vars.S3_MAX_ATTEMPTS }}
+          S3_REGION: ${{ vars.S3_REGION }}
+          SCHEDULER_ENABLED: ${{ vars.SCHEDULER_ENABLED }}
+          SCHEDULER_TIMEZONE: ${{ vars.SCHEDULER_TIMEZONE }}
+          SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT }}
+          SENTRY_PROFILE_SAMPLE_RATE: ${{ vars.SENTRY_PROFILE_SAMPLE_RATE }}
+          SENTRY_SLOW_TRANSACTION_MS: ${{ vars.SENTRY_SLOW_TRANSACTION_MS }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ vars.SENTRY_TRACES_SAMPLE_RATE }}
+          STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: ${{ vars.STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE }}
+          STRIPE_WEBHOOK_EVENT_RECLAIM_CRON: ${{ vars.STRIPE_WEBHOOK_EVENT_RECLAIM_CRON }}
+          STRIPE_WEBHOOK_EVENT_RETENTION_CRON: ${{ vars.STRIPE_WEBHOOK_EVENT_RETENTION_CRON }}
+          STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: ${{ vars.STRIPE_WEBHOOK_EVENT_RETENTION_DAYS }}
+          TOMBSTONE_RETENTION_DAYS: ${{ vars.TOMBSTONE_RETENTION_DAYS }}
+          TRUST_PROXY: ${{ vars.TRUST_PROXY }}
+          UPLOAD_ALLOW_SVG: ${{ vars.UPLOAD_ALLOW_SVG }}
+          UPLOAD_MAX_PENDING_PER_USER: ${{ vars.UPLOAD_MAX_PENDING_PER_USER }}
+          UPLOAD_PENDING_SWEEP_CRON: ${{ vars.UPLOAD_PENDING_SWEEP_CRON }}
+          UPLOAD_PENDING_SWEEP_GRACE_SECONDS: ${{ vars.UPLOAD_PENDING_SWEEP_GRACE_SECONDS }}
+          UPLOAD_TOMBSTONE_RETENTION_CRON: ${{ vars.UPLOAD_TOMBSTONE_RETENTION_CRON }}
+          UPLOAD_USE_PRESIGNED_POST: ${{ vars.UPLOAD_USE_PRESIGNED_POST }}
+          USER_TOMBSTONE_RETENTION_CRON: ${{ vars.USER_TOMBSTONE_RETENTION_CRON }}
+          WEBAUTHN_RP_ID: ${{ vars.WEBAUTHN_RP_ID }}
+          WEBAUTHN_RP_NAME: ${{ vars.WEBAUTHN_RP_NAME }}
+          WEBHOOK_TOMBSTONE_RETENTION_CRON: ${{ vars.WEBHOOK_TOMBSTONE_RETENTION_CRON }}
+          WEBHOOK_URL_ALLOWLIST: ${{ vars.WEBHOOK_URL_ALLOWLIST }}
+          WORKER_CONCURRENCY: ${{ vars.WORKER_CONCURRENCY }}
+          WORKER_CONCURRENCY_MAIL: ${{ vars.WORKER_CONCURRENCY_MAIL }}
+          WORKER_CONCURRENCY_NOTIFY: ${{ vars.WORKER_CONCURRENCY_NOTIFY }}
+          WORKER_CONCURRENCY_STRIPE: ${{ vars.WORKER_CONCURRENCY_STRIPE }}
+          WORKER_CONCURRENCY_WEBHOOK: ${{ vars.WORKER_CONCURRENCY_WEBHOOK }}
+          WORKER_HEALTH_PORT: ${{ vars.WORKER_HEALTH_PORT }}
+          WORKER_QUEUE_FAMILIES: ${{ vars.WORKER_QUEUE_FAMILIES }}
+        run: |
+          set -euo pipefail
+          services="$RAILWAY_SERVICE_ID"
+          if [ -n "${RAILWAY_WORKER_SERVICE_ID:-}" ]; then
+            services="$services $RAILWAY_WORKER_SERVICE_ID"
+          fi
+          for service in $services; do
+            for var in CAPTCHA_SECRET DATABASE_MIGRATION_URL DATABASE_URL JWT_PRIVATE_KEY JWT_SECRET METRICS_SCRAPE_TOKEN OAUTH_GITHUB_CLIENT_SECRET OAUTH_GOOGLE_CLIENT_SECRET REDIS_BULLMQ_URL REDIS_URL RESEND_API_KEY RESPONSE_ENCRYPTION_KEY S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY SECRETS_ENCRYPTION_KEY SENTRY_DSN STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET; do
+              val="${!var-}"
+              if [ -n "$val" ]; then
+                railway variable set --service "$service" "$var=$val"
+              fi
+            done
+            for var in ALLOWED_ORIGINS API_DOCS_BASE_URL AUDIT_EXPORT_BATCH_SIZE AUDIT_EXPORT_CRON AUDIT_EXPORT_ENABLED AUDIT_EXPORT_S3_PREFIX AUDIT_RETENTION_CRON AUDIT_RETENTION_DAYS AUTH_SESSION_CLEANUP_CRON AUTH_SESSION_MAX_AGE_DAYS AUTH_SESSION_RETENTION_DAYS BLOCK_DISPOSABLE_EMAIL CAPTCHA_BYPASS_HEADER CAPTCHA_DISABLED_ACK CAPTCHA_PROVIDER CAPTCHA_SITE_KEY COOKIE_SECURE DATABASE_POOL_MAX DATABASE_RLS_SCOPED_CONTEXTS DATABASE_SSL_ENABLED DATABASE_SSL_REJECT_UNAUTHORIZED DEPLOYMENT_API_REPLICA_COUNT DEPLOYMENT_TOTAL_REPLICA_COUNT DEPLOYMENT_WORKER_REPLICA_COUNT DLQ_DEPTH_CRON EMAIL_FROM_ADDRESS EMAIL_FROM_NAME ENABLE_API_REFERENCE ENABLE_MCP_SERVER ENABLE_QUEUE_DASHBOARD ENABLE_QUEUE_DASHBOARD_MUTATIONS ENABLE_RESPONSE_ENCRYPTION FRONTEND_URL GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS GLOBAL_ADMIN_EMAILS HTTP_BIND_HOST IDEMPOTENCY_CARDINALITY_CRON IDEMPOTENCY_CARDINALITY_SCAN_MAX JWT_PUBLIC_KEY JWT_SIGNING_KID LOG_LEVEL MAIL_OUTBOX_SWEEPER_CRON MAIL_OUTBOX_SWEEP_BATCH_SIZE MAIL_OUTBOX_SWEEP_PENDING_MINUTES MEMBERSHIP_TOMBSTONE_RETENTION_CRON MEMBER_ROLE_TOMBSTONE_RETENTION_CRON METRICS_ENABLED NODE_ENV NODE_OPTIONS NOTIFICATION_RETENTION_DAYS OAUTH_GITHUB_CLIENT_ID OAUTH_GITHUB_REDIRECT_URI OAUTH_GOOGLE_CLIENT_ID OAUTH_GOOGLE_REDIRECT_URI OPENAPI_SPEC_PATH ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_CRON ORGANIZATION_TOMBSTONE_RETENTION_CRON OTEL_EXPORTER_OTLP_ENDPOINT OTEL_SERVICE_NAME PORT POSTGRES_MAX_CONNECTIONS POSTGRES_RESERVED_CONNECTIONS RATE_LIMIT_MAX RATE_LIMIT_ORG_MAX RATE_LIMIT_WINDOW_MS REDIS_KEY_PREFIX S3_BUCKET S3_MAX_ATTEMPTS S3_REGION SCHEDULER_ENABLED SCHEDULER_TIMEZONE SENTRY_ENVIRONMENT SENTRY_PROFILE_SAMPLE_RATE SENTRY_SLOW_TRANSACTION_MS SENTRY_TRACES_SAMPLE_RATE STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE STRIPE_WEBHOOK_EVENT_RECLAIM_CRON STRIPE_WEBHOOK_EVENT_RETENTION_CRON STRIPE_WEBHOOK_EVENT_RETENTION_DAYS TOMBSTONE_RETENTION_DAYS TRUST_PROXY UPLOAD_ALLOW_SVG UPLOAD_MAX_PENDING_PER_USER UPLOAD_PENDING_SWEEP_CRON UPLOAD_PENDING_SWEEP_GRACE_SECONDS UPLOAD_TOMBSTONE_RETENTION_CRON UPLOAD_USE_PRESIGNED_POST USER_TOMBSTONE_RETENTION_CRON WEBAUTHN_RP_ID WEBAUTHN_RP_NAME WEBHOOK_TOMBSTONE_RETENTION_CRON WEBHOOK_URL_ALLOWLIST WORKER_CONCURRENCY WORKER_CONCURRENCY_MAIL WORKER_CONCURRENCY_NOTIFY WORKER_CONCURRENCY_STRIPE WORKER_CONCURRENCY_WEBHOOK WORKER_HEALTH_PORT WORKER_QUEUE_FAMILIES; do
+              val="${!var-}"
+              if [ -n "$val" ]; then
+                railway variable set --service "$service" "$var=$val"
+              fi
+            done
+          done
+
+      - name: Deploy API to Railway
+        env:
+          RAILWAY_GIT_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          railway variable set --service "$RAILWAY_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
+          echo "Deploying API from GHCR image: ${{ steps.ghcr_images.outputs.api_image }}"
+          railway redeploy --service "$RAILWAY_SERVICE_ID" --image "${{ steps.ghcr_images.outputs.api_image }}"
+
+      - name: Post-deploy API health check
+        id: api_health
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          api_domain_json="$(railway domain --service "$RAILWAY_SERVICE_ID" --json)"
+          api_base_url="$(printf '%s' "$api_domain_json" | node -e "
+            const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            const url = input.domain ?? input.domains?.[0];
+            if (!url) process.exit(1);
+            const host = String(url).replace(/\\/$/, '');
+            process.stdout.write(host.includes('://') ? host : 'https://' + host);
+          ")"
+          echo "api_base_url=${api_base_url}" >> "$GITHUB_OUTPUT"
+          deadline=$(( $(date +%s) + 300 ))
+          until curl -sfS "$api_base_url/health" -o /tmp/api-health.json; do
+            [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::API /health timeout"; exit 1; }
+            sleep 5
+          done
+          node -e "const health = require('/tmp/api-health.json'); for (const key of ['database','redis','bullmq']) if (health[key] !== 'connected') { console.error('not connected:', key); process.exit(1); }"
+
+      - name: Require worker service for deploy
+        env:
+          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
+        run: |
+          if [ -z "$RAILWAY_WORKER_SERVICE_ID" ]; then
+            echo "::error::RAILWAY_WORKER_SERVICE_ID must be set in this GitHub environment."
+            exit 1
+          fi
+
+      - name: Deploy worker to Railway
+        env:
+          RAILWAY_GIT_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          railway variable set --service "$RAILWAY_WORKER_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
+          echo "Deploying worker from GHCR image: ${{ steps.ghcr_images.outputs.worker_image }}"
+          railway redeploy --service "$RAILWAY_WORKER_SERVICE_ID" --image "${{ steps.ghcr_images.outputs.worker_image }}"
+
+      - name: Post-deploy worker health check
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
+          WORKER_HEALTH_PORT: ${{ secrets.WORKER_HEALTH_PORT || '9090' }}
+        run: |
+          set -euo pipefail
+          worker_domain_json="$(railway domain --service "$RAILWAY_WORKER_SERVICE_ID" --json)"
+          worker_base_url="$(printf '%s' "$worker_domain_json" | node -e "
+            const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            const url = input.domain ?? input.domains?.[0];
+            if (!url) process.exit(1);
+            const host = String(url).replace(/\\/$/, '');
+            process.stdout.write(host.includes('://') ? host : 'https://' + host);
+          ")"
+          export WORKER_HEALTH_URL="${worker_base_url%/*}:$WORKER_HEALTH_PORT"
+          echo "Probing worker readiness at $WORKER_HEALTH_URL/health"
+          pnpm tool:worker-readiness --url "$WORKER_HEALTH_URL"
+
+  api-smoke:
+    name: API smoke (${{ needs.resolve-environment.outputs.environment }})
+    needs: [resolve-environment, deploy]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-environment.outputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.merge_commit_sha || github.sha }}
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run post-deploy API smoke
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.api_base_url }}
+          TEST_EMAIL: ${{ secrets.SMOKE_DEMO_EMAIL || vars.SMOKE_DEMO_EMAIL || 'demo@example.com' }}
+          TEST_PASSWORD: ${{ secrets.SMOKE_DEMO_PASSWORD || 'DemoPassword123!' }}
+        run: |
+          set -euo pipefail
+          echo "Running API smoke against ${BASE_URL}"
+          pnpm test:api-smoke
+
+      - name: Environment fully live
+        env:
+          ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
+          API_BASE_URL: ${{ needs.deploy.outputs.api_base_url }}
+        run: |
+          set -euo pipefail
+          echo "::notice title=Fully live::${ENVIRONMENT} is fully live at ${API_BASE_URL} (migrate, health, worker readiness, and API smoke passed)."

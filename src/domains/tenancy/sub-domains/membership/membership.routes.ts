@@ -5,9 +5,10 @@ import {
   STRICT_AUTHED_RATE_LIMIT,
   STRICT_PUBLIC_RATE_LIMIT,
 } from '@/shared/middlewares/rate-limit-presets.constants.js';
-import { listLimitQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
 import type { MembershipService } from './membership.service.js';
 import type { MemberInvitationService } from './member-invitation/member-invitation.service.js';
+import { listMemberInvitationsQueryDto } from './member-invitation/member-invitation.dto.js';
 import { createMembershipController } from './membership.controller.js';
 import { createMemberInvitationController } from './member-invitation/member-invitation.controller.js';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
@@ -88,8 +89,9 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     zodApplication.get(
       '/organizations/:id/invitations',
       {
-        schema: { querystring: listLimitQuerySchema },
+        schema: { querystring: listMemberInvitationsQueryDto },
         onRequest: [app.authenticate],
+        preValidation: [rejectLegacyPagePagination],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE, 'id')],
       },
       invitationController.listMemberInvitations,

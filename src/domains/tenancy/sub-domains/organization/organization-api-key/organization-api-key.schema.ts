@@ -44,10 +44,11 @@ export const api_keys = tenancySchema
       uniqueIndex('idx_api_keys_public_id').on(table.public_id),
       index('idx_api_keys_organization').on(table.organization_id),
       index('idx_api_keys_organization_status').on(table.organization_id, table.status),
-      index('idx_api_keys_key_prefix').on(table.key_prefix),
-      index('idx_api_keys_deleted')
-        .on(table.deleted_at)
+      index('idx_api_keys_org_created_id_active')
+        .on(table.organization_id, table.created_at, table.id)
         .where(sql`${table.deleted_at} IS NULL`),
+      index('idx_api_keys_key_prefix').on(table.key_prefix),
+      index('idx_api_keys_deleted').on(table.deleted_at).where(sql`${table.deleted_at} IS NULL`),
       index('idx_api_keys_scopes_gin').using('gin', table.scopes),
       check('chk_api_keys_status', sql`${table.status} IN ('ACTIVE', 'REVOKED')`),
       check('chk_api_keys_updated', sql`${table.updated_at} >= ${table.created_at}`),

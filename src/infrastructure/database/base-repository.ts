@@ -6,19 +6,6 @@ export interface CursorPaginatedResult<T> {
 
 export abstract class BaseRepository {
   /**
-   * Offset-based pagination helper.
-   */
-  protected paginate<T>(items: T[], total: number, page: number, limit: number) {
-    return {
-      items,
-      total,
-      page,
-      limit,
-      total_pages: Math.ceil(total / limit),
-    };
-  }
-
-  /**
    * Cursor-based pagination helper.
    * Expects items to be fetched with limit + 1 to detect has_more.
    * The cursor is the last item's ID (or any sortable unique field).

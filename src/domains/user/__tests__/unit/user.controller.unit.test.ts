@@ -28,7 +28,13 @@ describe('createUserController', () => {
     getMe: vi.fn().mockResolvedValue({ id: userPublicId }),
     updateMe: vi.fn().mockResolvedValue({ id: userPublicId }),
     deleteMe: vi.fn().mockResolvedValue(undefined),
-    listUsers: vi.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0 }),
+    listUsers: vi.fn().mockResolvedValue({
+      items: [],
+      limit: 20,
+      total: null,
+      has_more: false,
+      next_cursor: null,
+    }),
     getUser: vi.fn().mockResolvedValue({ id: userPublicId }),
     adminUpdateUser: vi.fn().mockResolvedValue({ id: userPublicId }),
     deleteUser: vi.fn().mockResolvedValue(undefined),
@@ -87,19 +93,20 @@ describe('createUserController', () => {
     expect(userNotificationPreferencesService.put).toHaveBeenCalled();
   });
 
-  it('listUsers sets has_more when more pages exist', async () => {
+  it('listUsers sets has_more and emits cursor when more pages exist', async () => {
     vi.mocked(userService.listUsers).mockResolvedValueOnce({
       items: [{ id: userPublicId }],
-      page: 1,
       limit: 1,
-      total: 50,
+      total: null,
+      has_more: true,
+      next_cursor: 'cursor_next',
     } as never);
     const response = await controller.listUsers(
-      mockRequest({ query: { limit: 1, after: '1' } }),
+      mockRequest({ query: { limit: 1, after: 'cursor_prev' } }),
       {} as FastifyReply,
     );
     expect(response).toMatchObject({
-      meta: { pagination: { has_more: true, next: null } },
+      meta: { pagination: { has_more: true, next: 'cursor_next' } },
     });
   });
 
@@ -156,35 +163,40 @@ describe('createUserController', () => {
     expect(userService.deleteAvatar).toHaveBeenCalled();
   });
 
-  it('listUsers paginates with has_more when additional pages exist', async () => {
+  it('listUsers exposes estimated_total when include_total opts into count(*)', async () => {
     vi.mocked(userService.listUsers).mockResolvedValueOnce({
       items: [{ id: userPublicId }],
-      page: 1,
       limit: 10,
       total: 50,
+      has_more: true,
+      next_cursor: 'cursor_next',
     } as never);
     const response = await controller.listUsers(
-      mockRequest({ query: { limit: 10 } }),
+      mockRequest({ query: { limit: 10, include_total: 'true' } }),
       {} as FastifyReply,
     );
     expect(
-      (response as { meta: { pagination: { has_more: boolean } } }).meta.pagination.has_more,
-    ).toBe(true);
+      (response as { meta: { pagination: { has_more: boolean; next: string | null } } }).meta
+        .pagination,
+    ).toMatchObject({ has_more: true, next: 'cursor_next', estimated_total: 50 });
   });
 
   it('listUsers sets has_more false on the last page', async () => {
     vi.mocked(userService.listUsers).mockResolvedValueOnce({
       items: [],
+      limit: 10,
+      total: null,
       has_more: false,
       next_cursor: null,
     } as never);
     const response = await controller.listUsers(
-      mockRequest({ query: { limit: 10, after: '100' } }),
+      mockRequest({ query: { limit: 10, after: 'cursor_prev' } }),
       {} as FastifyReply,
     );
     expect(
-      (response as { meta: { pagination: { has_more: boolean } } }).meta.pagination.has_more,
-    ).toBe(false);
+      (response as { meta: { pagination: { has_more: boolean; next: string | null } } }).meta
+        .pagination,
+    ).toMatchObject({ has_more: false, next: null });
   });
 
   it('admin handlers treat missing userId param as empty string', async () => {

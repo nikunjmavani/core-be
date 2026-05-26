@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, isNull, or } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
@@ -7,7 +7,17 @@ import { users as authUsers } from '@/domains/user/user.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import {
+  buildAscendingCreatedAtIdCursorCondition,
+  createOpaqueCursorFromRow,
+  parseListCursor,
+} from '@/shared/utils/http/pagination.util.js';
 import type { Organization } from './organization.types.js';
+
+interface OrganizationListPagination {
+  after?: string;
+  limit: number;
+}
 
 export class OrganizationRepository extends BaseRepository {
   async resolveUserIdByPublicId(public_id: string): Promise<number | null> {
@@ -46,31 +56,52 @@ export class OrganizationRepository extends BaseRepository {
     return (rows[0] ?? null) as Organization | null;
   }
 
-  async findAll(page: number, limit: number, _owner_user_id?: number) {
-    const offset = (page - 1) * limit;
-    const where = isNull(organizations.deleted_at);
-    const [rows, countResult] = await Promise.all([
-      getRequestDatabase()
-        .select()
-        .from(organizations)
-        .where(where)
-        .orderBy(asc(organizations.created_at))
-        .limit(limit)
-        .offset(offset),
-      getRequestDatabase().select({ count: count() }).from(organizations).where(where),
-    ]);
-    const total = countResult[0]?.count ?? 0;
-    return this.paginate(rows as Organization[], total, page, limit);
+  async findAll(pagination: OrganizationListPagination, _owner_user_id?: number) {
+    const { after, limit } = pagination;
+    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+      organizations.created_at,
+      organizations.id,
+      parseListCursor(after),
+    );
+    const where = and(isNull(organizations.deleted_at), cursorCondition);
+    const rows = await getRequestDatabase()
+      .select()
+      .from(organizations)
+      .where(where)
+      .orderBy(asc(organizations.created_at), asc(organizations.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const items = (hasMore ? rows.slice(0, limit) : rows) as Organization[];
+    const lastItem = items.at(-1);
+    return {
+      items,
+      total: null,
+      limit,
+      has_more: hasMore,
+      next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
+    };
   }
 
-  async findAllForUser(user_public_id: string, page: number, limit: number) {
+  async findAllForUser(user_public_id: string, pagination: OrganizationListPagination) {
+    const { after, limit } = pagination;
     const userId = await this.resolveUserIdByPublicId(user_public_id);
     if (userId === null) {
-      return this.paginate([], 0, page, limit);
+      return {
+        items: [],
+        total: null,
+        limit,
+        has_more: false,
+        next_cursor: null,
+      };
     }
-    const offset = (page - 1) * limit;
+    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+      organizations.created_at,
+      organizations.id,
+      parseListCursor(after),
+    );
     const accessWhere = and(
       isNull(organizations.deleted_at),
+      cursorCondition,
       or(
         eq(organizations.owner_user_id, userId),
         and(
@@ -80,40 +111,32 @@ export class OrganizationRepository extends BaseRepository {
         ),
       ),
     );
-    const [rows, countResult] = await Promise.all([
-      getRequestDatabase()
-        .select()
-        .from(organizations)
-        .leftJoin(
-          memberships,
-          and(
-            eq(memberships.organization_id, organizations.id),
-            eq(memberships.user_id, userId),
-            eq(memberships.status, 'ACTIVE'),
-            isNull(memberships.deleted_at),
-          ),
-        )
-        .where(accessWhere)
-        .orderBy(asc(organizations.created_at))
-        .limit(limit)
-        .offset(offset),
-      getRequestDatabase()
-        .select({ count: count() })
-        .from(organizations)
-        .leftJoin(
-          memberships,
-          and(
-            eq(memberships.organization_id, organizations.id),
-            eq(memberships.user_id, userId),
-            eq(memberships.status, 'ACTIVE'),
-            isNull(memberships.deleted_at),
-          ),
-        )
-        .where(accessWhere),
-    ]);
-    const total = countResult[0]?.count ?? 0;
-    const organizationsOnly = rows.map((row) => row.organizations);
-    return this.paginate(organizationsOnly, total, page, limit);
+    const rows = await getRequestDatabase()
+      .select()
+      .from(organizations)
+      .leftJoin(
+        memberships,
+        and(
+          eq(memberships.organization_id, organizations.id),
+          eq(memberships.user_id, userId),
+          eq(memberships.status, 'ACTIVE'),
+          isNull(memberships.deleted_at),
+        ),
+      )
+      .where(accessWhere)
+      .orderBy(asc(organizations.created_at), asc(organizations.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const organizationsOnly = pageRows.map((row) => row.organizations);
+    const lastItem = organizationsOnly.at(-1);
+    return {
+      items: organizationsOnly,
+      total: null,
+      limit,
+      has_more: hasMore,
+      next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
+    };
   }
 
   async userCanAccessOrganization(

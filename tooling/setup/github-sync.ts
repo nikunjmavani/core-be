@@ -58,7 +58,9 @@ function parseArguments(): CliOptions {
   if (argumentsList.includes('--help') || argumentsList.includes('-h')) {
     console.log('Usage: pnpm github:sync [environment...] [--check | --dry-run] [--yes]');
     console.log('');
-    console.log('  (default)   Consistency + scaffold + branches/rulesets/environments + push values');
+    console.log(
+      '  (default)   Consistency + scaffold + branches/rulesets/environments + push values',
+    );
     console.log('  environment Optional environment name(s), e.g. production');
     console.log('  --check     Read-only consistency + remote drift (no writes)');
     console.log('  --dry-run   Preview remote and values push (no writes)');

@@ -16,8 +16,9 @@ vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
 }));
 
 async function loadPreHandlerHooks(): Promise<Array<(request: FastifyRequest) => Promise<void>>> {
-  const { stripeWebhookIngressPlugin } =
-    await import('@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-ingress.plugin.js');
+  const { stripeWebhookIngressPlugin } = await import(
+    '@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-ingress.plugin.js'
+  );
 
   const preHandlerHooks: Array<(request: FastifyRequest) => Promise<void>> = [];
   const application = {

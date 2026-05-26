@@ -1,12 +1,12 @@
 import { defineConfig } from 'vitest/config';
-import baseConfig from './vitest.base.js';
+import baseConfig from './tooling/vitest/base.js';
 import { vitestProjects } from './tooling/vitest/projects.js';
 import coverageThresholds from './tooling/ci/coverage-thresholds.json' with { type: 'json' };
 
 /**
- * Root Vitest config — composes shared settings from `vitest.base.ts` with the
- * named projects defined in `tooling/vitest/projects.ts` (parallel-safe pure
- * unit + sequential DB-bound tiers, etc.).
+ * Root Vitest config — composes shared settings from `tooling/vitest/base.ts`
+ * with the named projects defined in `tooling/vitest/projects.ts`
+ * (parallel-safe pure unit + sequential DB-bound tiers, etc.).
  *
  * Run a tier with `--project <name>`, e.g. `vitest run --project unit`.
  * Combine projects: `vitest run --project unit --project property`.
@@ -16,8 +16,8 @@ export default defineConfig({
   ...baseConfig,
   test: {
     ...baseConfig.test,
-    /** Run via `pnpm test:contract` + `vitest.contract.config.ts` — needs lexical nock/redis mocks in contract setup */
-    /** Chaos runs via `pnpm test:chaos` + `vitest.chaos.config.ts` — requires local Toxiproxy (same as CI chaos job). */
+    /** Run via `pnpm test:contract` + `tooling/vitest/contract.config.ts` — needs lexical nock/redis mocks in contract setup */
+    /** Chaos runs via `pnpm test:chaos` + `tooling/vitest/chaos.config.ts` — requires local Toxiproxy (same as CI chaos job). */
     exclude: ['src/tests/contract/**', 'src/tests/chaos/**', 'src/tests/smoke/**'],
     projects: vitestProjects,
     coverage: {

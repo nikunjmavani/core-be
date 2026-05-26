@@ -21,7 +21,7 @@ flowchart TB
   subgraph required [Required for app]
     DB[DATABASE_URL]
     Redis[REDIS_URL]
-    JWT[JWT_SECRET + RS256 PEM pair]
+    JWT[RS256 PEM pair JWT_PRIVATE_KEY JWT_PUBLIC_KEY]
     Origins[ALLOWED_ORIGINS]
     Secrets[SECRETS_ENCRYPTION_KEY]
   end
@@ -208,7 +208,23 @@ Implementation lives under `src/domains/auth/sub-domains/auth-method/oauth/` —
 
 ---
 
-## 7. Postman (optional) — upload API collection
+## 7. Monthly restore drill — Neon API
+
+**Used for:** [Monthly backup restore & RTO drill](../process/backup-drills.md) workflow ([scheduled-monthly-restore-rto.yml](../../.github/workflows/scheduled-monthly-restore-rto.yml)).
+
+These are **GitHub Environment secrets** (not API/worker runtime vars). Add them to `.env.development` / `.env.production` under the GitHub Secrets half and push with `pnpm github:sync`. The scheduled workflow uses the Neon API to create a PITR child branch from the parent branch named **`github.ref_name`** (`main` on schedule → `production` env; `dev` on manual dispatch → `development` env).
+
+| Secret | Where to get it |
+| --- | --- |
+| `MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY` | [Neon Console → Developer settings → API keys](https://console.neon.tech/app/settings/api-keys) |
+
+Project ID is **not** a separate secret — the workflow lists Neon projects via API and selects **`core-be`** (override with `RESTORE_DRILL_NEON_PROJECT_NAME` only if your Neon project name differs).
+
+Neon branch names must match git refs (`main`, `dev`). Without both secrets, the monthly workflow **fails**.
+
+---
+
+## 8. Postman (optional) — upload API collection
 
 **Used for:** `pnpm docs:upload` to push the generated collection to a Postman workspace. CI runs this on **push** to `dev` and `main` using GitHub Environment secrets (`development`, `production`).
 
@@ -234,7 +250,7 @@ ordering and grouping below mirrors `.env.example`:
 # --- under # GitHub Secrets ---
 DATABASE_URL=postgresql://...
 REDIS_URL=redis://...
-JWT_SECRET=at-least-32-characters-secret
+# JWT_SECRET=optional deprecated no-op (min 32 chars when set)
 JWT_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
 SECRETS_ENCRYPTION_KEY=<64 hex chars; node -e "console.log(require('crypto').randomBytes(32).toString('hex'))">
 RESEND_API_KEY=re_...

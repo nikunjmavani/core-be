@@ -39,29 +39,33 @@ These are the **exact check names** to require in GitHub for every PR targeting 
 
 GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `name:` from the YAML file, then job `name:`). Match **including spaces and punctuation**.
 
-| Workflow file                                                               | Workflow `name:` | Job `name:`                                  | Required check string                             |
-| --------------------------------------------------------------------------- | ---------------- | -------------------------------------------- | ------------------------------------------------- |
-| [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `Quality` | `CI / Quality` |
-| [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `Tests` | `CI / Tests` |
-| [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `API smoke` | `CI / API smoke` |
-| [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) | `CI` | `Docker` (Trivy image scan) | `CI / Docker` |
+| Workflow file | Workflow `name:` | Job `name:` | Required check string |
+| ------------- | ---------------- | ----------- | --------------------- |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Lint` | `PR CI / Lint` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Typecheck` | `PR CI / Typecheck` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Unit + global (pull_request)` | `PR CI / Unit + global (pull_request)` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Migration lint` | `PR CI / Migration lint` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Build verify` | `PR CI / Build verify` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security scan` | `PR CI / Security scan` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Contract + property` | `PR CI / Contract + property` |
 | [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR Governance` | `Checks` | `PR Governance / Checks` |
 
 ### Same checks on both branches
 
-Require **all five** CI + PR rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-branch-ci.yml`](../../../.github/workflows/pr-branch-ci.yml) runs the same CI targets on PRs into each of these branches (`on: pull_request: branches: [main, dev]`). Chaos, SBOM, and API docs run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) on push only (not required PR checks).
+Require **all eight** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks). Full DB integration and chaos suites are **local-only** (`pnpm test:integration`, `pnpm test:chaos`).
 
-### Skipped CI jobs on docs-only pull requests
+### Skipped PR CI jobs on docs-only pull requests
 
-When [pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) path filters detect **no `src-code` changes**, these jobs are **skipped** on `pull_request` (push runs are owned by [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)):
+When [pr-ci.yml](../../../.github/workflows/pr-ci.yml) path filters detect **docs-only markdown** (`docs-only-md`), all **PR CI** jobs are **skipped**. Skipped required checks do **not** block merge. The markdown lane lives in [pr-docs-lane.yml](../../../.github/workflows/pr-docs-lane.yml) and only triggers when a PR touches `*.md`.
 
-| Job `name:`                                  | Skipped when       |
-| -------------------------------------------- | ------------------ |
-| `Tests`     | Docs/markdown-only |
-| `API smoke` | Docs/markdown-only |
-| `Docker`    | Docs/markdown-only (unless `docker` paths change) |
+When the PR touches **src** but not only docs, these jobs may still skip individually:
 
-Skipped required checks do **not** block merge. `Quality` and `PR Governance` always run. The markdown lane lives in [pr-docs-lane.yml](../../../.github/workflows/pr-docs-lane.yml) and only triggers when a PR touches `*.md`, so code-only PRs never list it as `Skipped`.
+| Job `name:` | Skipped when |
+| ----------- | ------------ |
+| `Unit + global (pull_request)` | No `src-code` or `ci-config` paths |
+| `Build verify` | No `src-code`, `docker`, or `ci-config` paths |
+
+`Lint`, `Typecheck`, `Migration lint`, `Security scan`, and `Contract + property` run on every non-docs-only PR.
 
 ### Advisory PR jobs (not in rulesets)
 
@@ -69,16 +73,19 @@ Skipped required checks do **not** block merge. `Quality` and `PR Governance` al
 
 ### Post-merge-only jobs (do not add as PR required checks)
 
-| Job `name:`  | Workflow                                                                     | Why                                     |
-| ------------ | ---------------------------------------------------------------------------- | --------------------------------------- |
-| `Chaos`      | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)            | Push to `main` only — Toxiproxy chaos suite |
-| `SBOM`       | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)            | Push to `main`/`dev` — CycloneDX artifact for the branch tip |
-| `API docs`   | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)            | Push to `main`/`dev` — regenerates OpenAPI + Postman and uploads to Postman/Scalar when environment secrets exist |
-| `Commitlint` | [protected-branch-commitlint.yml](../../../.github/workflows/protected-branch-commitlint.yml) | Push to `main`, `dev` |
+| Job `name:` | Workflow | Why |
+| ----------- | -------- | --- |
+| `Docker` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Build + Trivy + GHCR push + container smoke |
+| `SBOM` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | CycloneDX artifact for the branch tip |
+| `API docs` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | OpenAPI + Postman publish |
+| `Commitlint` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Conventional commits on merged commits |
+| `Release Please` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Release PR / GitHub Release automation (after Docker green) |
+| `Release SBOM` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Re-uses `sbom` artifact and attaches it when release-please publishes |
+| `Deploy` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Railway deploy via reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) (last step) |
 
 Treat these as **post-merge gates**: failing runs still indicate problems on the branch tip after merge.
 
-[deploy-railway.yml](../../../.github/workflows/deploy-railway.yml) runs after **CI** succeeds (`workflow_run`) or via **workflow_dispatch**; it is **not** a PR status check.
+Manual emergency redeploy: [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) `workflow_dispatch` only (not a PR status check).
 
 ---
 
@@ -86,19 +93,19 @@ Treat these as **post-merge gates**: failing runs still indicate problems on the
 
 These settings match the committed JSON files in [`.github/rulesets/`](../../../.github/rulesets/). Adjust there and re-import if policy changes.
 
-| Rule                                  | `main`                                                              | `dev`                 |
-| ------------------------------------- | ------------------------------------------------------------------- | --------------------- |
-| Required approving reviews            | 1                                                                   | 1                     |
-| Require CODEOWNER review              | Yes ([CODEOWNERS](../../../.github/CODEOWNERS))                     | No                    |
-| Dismiss stale approvals on push       | Yes                                                                 | No                    |
-| Require approval on last push         | Yes                                                                 | No                    |
-| Require conversation resolution       | Yes                                                                 | Yes                   |
-| Allowed merge methods                 | Squash only                                                         | Squash + merge commit |
-| Require linear history                | Yes                                                                 | No                    |
-| Require signed commits                | Yes                                                                 | No                    |
-| Block force-push (`non_fast_forward`) | Yes                                                                 | Yes                   |
-| Block branch deletion                 | Yes                                                                 | Yes                   |
-| Required status checks                | CI quality + tests + API smoke + chaos + docker (Trivy) + PR checks | Same                  |
+| Rule | `main` | `dev` |
+| ---- | ------ | ----- |
+| Required approving reviews | 1 | 1 |
+| Require CODEOWNER review | Yes ([CODEOWNERS](../../../.github/CODEOWNERS)) | No |
+| Dismiss stale approvals on push | Yes | No |
+| Require approval on last push | Yes | No |
+| Require conversation resolution | Yes | Yes |
+| Allowed merge methods | Squash only | Squash + merge commit |
+| Require linear history | Yes | No |
+| Require signed commits | Yes | No |
+| Block force-push (`non_fast_forward`) | Yes | Yes |
+| Block branch deletion | Yes | Yes |
+| Required status checks | PR CI (7 jobs) + PR Governance | Same |
 
 **Signed commits on `main`:** Contributors must use [verified signatures](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification). Teams without signing enabled should temporarily relax `required_signatures` in `main.json` until onboarding is complete.
 
@@ -156,13 +163,13 @@ Repository rulesets on **private** repos require **GitHub Pro / Team / Enterpris
 
 The sync script surfaces this message verbatim and exits non-zero. Either upgrade the account/org plan or make the repository public to apply rulesets.
 
-**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm names match **`CI / …`** and **`PR Governance / …`**. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
+**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm names match **`PR CI / …`** and **`PR Governance / …`**. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
 
 ---
 
 ## Maintenance
 
 - **Renaming or splitting CI jobs:** Update job `name:` values in workflows **and** sync **`required_status_checks`** contexts in **every** file under [`.github/rulesets/`](../../../.github/rulesets/), plus this document.
-- **Adding a new required workflow:** Prefer extending [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) or [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) so checks stay consistent across branches.
+- **Adding a new required workflow:** Prefer extending [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) or [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) so checks stay consistent across branches.
 
-Consult [.cursor/skills/skill-index/SKILL.md](../../../.cursor/skills/skill-index/SKILL.md) after edits to `.github/rulesets/` or this file (**docs-maintainer**). Changes to [.github/workflows/pr-branch-ci.yml](../../../.github/workflows/pr-branch-ci.yml) should still follow **code-quality-guard**.
+Consult [.cursor/skills/skill-index/SKILL.md](../../../.cursor/skills/skill-index/SKILL.md) after edits to `.github/rulesets/` or this file (**docs-maintainer**). Changes to [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) should still follow **code-quality-guard**.

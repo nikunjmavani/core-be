@@ -48,6 +48,9 @@ export const memberships = tenancySchema
       uniqueIndex('idx_memberships_public_id').on(table.public_id),
       index('idx_memberships_user_org').on(table.user_id, table.organization_id),
       index('idx_memberships_org_status').on(table.organization_id, table.status),
+      index('idx_memberships_org_created_id_active')
+        .on(table.organization_id, table.created_at, table.id)
+        .where(sql`${table.deleted_at} IS NULL`),
       index('idx_memberships_user_status').on(table.user_id, table.status),
       index('idx_memberships_role').on(table.role_id),
       uniqueIndex('idx_memberships_user_org_unique')

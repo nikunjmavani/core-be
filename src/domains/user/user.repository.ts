@@ -1,11 +1,24 @@
 import { createHash } from 'node:crypto';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
-import { and, eq, isNull, like, or, count } from 'drizzle-orm';
+import { and, asc, eq, isNull, like, or, count, type SQL } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { users } from '@/domains/user/user.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { escapeLikePattern } from '@/shared/utils/validation/validation.util.js';
+import {
+  buildAscendingCreatedAtIdCursorCondition,
+  createOpaqueCursorFromRow,
+  parseListCursor,
+} from '@/shared/utils/http/pagination.util.js';
+
+export interface UserListPagination {
+  after?: string;
+  limit: number;
+  status?: string;
+  search?: string;
+  include_total?: boolean;
+}
 
 export class UserRepository {
   async findByPublicId(public_id: string) {
@@ -112,14 +125,16 @@ export class UserRepository {
 
   // ── Admin methods ──────────────────────────────────────────
 
-  async findMany(options: { page: number; limit: number; status?: string; search?: string }) {
-    const conditions = [isNull(users.deleted_at)];
-    if (options.status) {
-      conditions.push(eq(users.status, options.status));
+  async findMany(pagination: UserListPagination) {
+    const { after, limit, status, search } = pagination;
+    const includeTotal = pagination.include_total === true;
+    const filterConditions: SQL[] = [isNull(users.deleted_at)!];
+    if (status) {
+      filterConditions.push(eq(users.status, status));
     }
-    if (options.search) {
-      const pattern = `%${escapeLikePattern(options.search)}%`;
-      conditions.push(
+    if (search) {
+      const pattern = `%${escapeLikePattern(search)}%`;
+      filterConditions.push(
         or(
           like(users.email, pattern),
           like(users.first_name, pattern),
@@ -127,25 +142,43 @@ export class UserRepository {
         )!,
       );
     }
+    const countWhere = and(...filterConditions);
+    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+      users.created_at,
+      users.id,
+      parseListCursor(after),
+    );
+    const where =
+      cursorCondition !== undefined ? and(...filterConditions, cursorCondition) : countWhere;
 
-    const offset = (options.page - 1) * options.limit;
-    const [rows, totalRows] = await Promise.all([
-      getRequestDatabase()
-        .select()
-        .from(users)
-        .where(and(...conditions))
-        .limit(options.limit)
-        .offset(offset)
-        .orderBy(users.created_at),
-      getRequestDatabase()
-        .select({ count: count() })
-        .from(users)
-        .where(and(...conditions)),
-    ]);
+    // Fetch one extra row so has_more is accurate without depending on count(*).
+    const rowsPromise = getRequestDatabase()
+      .select()
+      .from(users)
+      .where(where)
+      .orderBy(asc(users.created_at), asc(users.id))
+      .limit(limit + 1);
 
+    const countPromise = includeTotal
+      ? getRequestDatabase()
+          .select({ count: count() })
+          .from(users)
+          .where(countWhere)
+          .then((rows) => rows[0]?.count ?? 0)
+      : Promise.resolve(null);
+
+    const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);
+    const hasMore = fetchedRows.length > limit;
+    const items = hasMore ? fetchedRows.slice(0, limit) : fetchedRows;
+    const lastItem = items.at(-1);
+    const nextCursor =
+      hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null;
     return {
-      items: rows,
-      total: totalRows[0]?.count ?? 0,
+      items,
+      total,
+      limit,
+      has_more: hasMore,
+      next_cursor: nextCursor,
     };
   }
 

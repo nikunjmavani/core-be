@@ -1,31 +1,31 @@
-import {
-  CircuitBreaker,
-  CircuitBreakerOpenError,
-} from '@/infrastructure/resilience/circuit-breaker.js';
+import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
+import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outbound/index.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
-const TURNSTILE_HTTP_TIMEOUT_MS = 5_000;
 
 export type TurnstileVerifyResult = {
   success: boolean;
   errorCodes?: string[];
 };
 
-const turnstileCircuit = new CircuitBreaker({ name: 'turnstile' });
-
 type TurnstileSiteVerifyResponse = {
   success?: boolean;
   'error-codes'?: string[];
 };
 
+export interface VerifyTurnstileTokenOptions {
+  token: string;
+  remoteIp?: string;
+  requestId?: string;
+}
+
 /**
  * Verifies a Cloudflare Turnstile token via siteverify API.
  */
 export async function verifyTurnstileToken(
-  token: string,
-  remoteIp?: string,
+  options: VerifyTurnstileTokenOptions,
 ): Promise<TurnstileVerifyResult> {
   const secret = getEnv().CAPTCHA_SECRET;
   if (!secret) {
@@ -34,34 +34,34 @@ export async function verifyTurnstileToken(
 
   const body = new URLSearchParams({
     secret,
-    response: token,
+    response: options.token,
   });
-  if (remoteIp) {
-    body.set('remoteip', remoteIp);
+  if (options.remoteIp) {
+    body.set('remoteip', options.remoteIp);
   }
 
   try {
-    return await turnstileCircuit.execute(async () => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), TURNSTILE_HTTP_TIMEOUT_MS);
-      try {
-        const response = await fetch(TURNSTILE_VERIFY_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: body.toString(),
-          signal: controller.signal,
-        });
-        const payload = (await response.json()) as TurnstileSiteVerifyResponse;
-        const result: TurnstileVerifyResult = { success: payload.success === true };
-        const errorCodes = payload['error-codes'];
-        if (errorCodes !== undefined) {
-          result.errorCodes = errorCodes;
-        }
-        return result;
-      } finally {
-        clearTimeout(timeout);
-      }
-    });
+    return await outboundCall(
+      buildOutboundCallOptions({
+        name: 'captcha-turnstile',
+        requestId: options.requestId,
+        operation: async (signal) => {
+          const response = await fetch(TURNSTILE_VERIFY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+            signal,
+          });
+          const payload = (await response.json()) as TurnstileSiteVerifyResponse;
+          const result: TurnstileVerifyResult = { success: payload.success === true };
+          const errorCodes = payload['error-codes'];
+          if (errorCodes !== undefined) {
+            result.errorCodes = errorCodes;
+          }
+          return result;
+        },
+      }),
+    );
   } catch (error) {
     if (error instanceof CircuitBreakerOpenError) {
       logger.warn({ error }, 'turnstile.circuit.open');

@@ -50,7 +50,7 @@ function listGithubEnvironmentConfigs(): string[] {
   const entries = readdirSync(githubEnvironmentsDirectory, { withFileTypes: true });
   const names: string[] = [];
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+    if (!(entry.isFile() && entry.name.endsWith('.json'))) continue;
     const content = readFileSync(resolve(githubEnvironmentsDirectory, entry.name), 'utf-8');
     const parsed: unknown = JSON.parse(content);
     if (typeof parsed === 'object' && parsed !== null && 'name' in parsed) {
@@ -70,9 +70,13 @@ function parseWorkflowBranchEnvironmentMap(): Map<string, string> {
   return map;
 }
 
-export function validateGithubSyncConsistency(config: GitHubSyncConfig): GitHubSyncConsistencyIssue[] {
+export function validateGithubSyncConsistency(
+  config: GitHubSyncConfig,
+): GitHubSyncConsistencyIssue[] {
   const nodeEnvironmentValues = new Set(extractNodeEnvironmentValues());
-  const configuredEnvironmentNames = new Set(config.environments.map((environment) => environment.name));
+  const configuredEnvironmentNames = new Set(
+    config.environments.map((environment) => environment.name),
+  );
   const configuredBranches = new Set(config.environments.map((environment) => environment.branch));
   const githubEnvironments = new Set(listGithubEnvironmentConfigs());
   const workflowMap = parseWorkflowBranchEnvironmentMap();
@@ -174,7 +178,9 @@ export function printGithubSyncConsistencyReport(config: GitHubSyncConfig): void
 
 export function loadGithubSyncConfig(): GitHubSyncConfig {
   if (!existsSync(githubSyncConfigPath)) {
-    throw new Error(`Missing ${githubSyncConfigPath}. Add environments before running GitHub sync.`);
+    throw new Error(
+      `Missing ${githubSyncConfigPath}. Add environments before running GitHub sync.`,
+    );
   }
 
   const raw = JSON.parse(readFileSync(githubSyncConfigPath, 'utf-8')) as unknown;
@@ -232,7 +238,9 @@ function buildEnvironmentFile(environment: string, exampleContent: string): stri
   ];
 
   const body = lines.slice(bodyStartIndex);
-  return [...environmentHeader, ...body].join('\n').replace(NODE_ENV_LINE, `NODE_ENV=${environment}`);
+  return [...environmentHeader, ...body]
+    .join('\n')
+    .replace(NODE_ENV_LINE, `NODE_ENV=${environment}`);
 }
 
 function buildGithubEnvironmentConfig(environment: string): string {

@@ -2,10 +2,22 @@ name: Reusable — Docker build and verify
 
 on:
   workflow_call:
+    inputs:
+      merge_commit_sha:
+        description: Commit SHA on the target branch after merge
+        required: true
+        type: string
+      target_branch:
+        description: Protected branch that received the merge (main or dev)
+        required: true
+        type: string
 
 permissions:
   contents: read
   packages: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   run:
@@ -41,7 +53,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.merge_commit_sha }}
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -52,7 +66,7 @@ jobs:
         uses: ./.github/actions/test-env
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Verify Dockerfile.worker sync
         run: node tooling/ci/check-dockerfile-sync.mjs
@@ -61,7 +75,7 @@ jobs:
       # API and worker images are loaded back into the local Docker daemon
       # (`load: true`) so Trivy + the smoke run below can reference them by tag.
       - name: Build API Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: api
@@ -69,26 +83,26 @@ jobs:
           tags: core-be:ci
           build-args: |
             GENERATE_MCP_DOCS=true
-            BUILD_REVISION=${{ github.sha }}
+            BUILD_REVISION=${{ inputs.merge_commit_sha }}
             IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=core-be-api
           cache-to: type=gha,mode=max,scope=core-be-api
 
       - name: Build worker Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.worker
           load: true
           tags: core-be-worker:ci
           build-args: |
-            BUILD_REVISION=${{ github.sha }}
+            BUILD_REVISION=${{ inputs.merge_commit_sha }}
             IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=core-be-worker
           cache-to: type=gha,mode=max,scope=core-be-worker
 
       - name: Scan API image with Trivy
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: core-be:ci
           format: table
@@ -100,7 +114,7 @@ jobs:
           skip-files: /app/package.json,/app/pnpm-lock.yaml
 
       - name: Scan worker image with Trivy
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: core-be-worker:ci
           format: table
@@ -117,35 +131,31 @@ jobs:
           docker run --rm core-be-worker:ci node --check dist/src/worker.js
           docker run --rm core-be-worker:ci node -e "import('argon2').then(()=>import('@sentry/profiling-node')).then(()=>console.log('native ok'))"
 
-      # Publish scanned images to GHCR for ANY protected-branch push (dev or main).
-      # deploy-railway.yml then pulls these by commit SHA tag for both environments.
+      # Publish scanned images to GHCR after a protected-branch merge (dev or main).
+      # reusable-railway-deploy.yml then pulls these by commit SHA tag for both environments.
       # Only `main` gets the floating `:latest` tag so dev never accidentally
       # becomes the default-consumed image.
       - name: Login to GitHub Container Registry
-        if: |
-          github.event_name == 'push' &&
-          contains(fromJSON('["refs/heads/main","refs/heads/dev"]'), github.ref)
-        uses: docker/login-action@v3
+        if: contains(fromJSON('["main","dev"]'), inputs.target_branch)
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
       - name: Push images to GHCR (main + dev)
-        if: |
-          github.event_name == 'push' &&
-          contains(fromJSON('["refs/heads/main","refs/heads/dev"]'), github.ref)
+        if: contains(fromJSON('["main","dev"]'), inputs.target_branch)
         run: |
           set -euo pipefail
           API_IMAGE="ghcr.io/${{ github.repository }}/core-be-api"
           WORKER_IMAGE="ghcr.io/${{ github.repository }}/core-be-worker"
-          docker tag core-be:ci "${API_IMAGE}:${{ github.sha }}"
-          docker tag core-be-worker:ci "${WORKER_IMAGE}:${{ github.sha }}"
-          docker push "${API_IMAGE}:${{ github.sha }}"
-          docker push "${WORKER_IMAGE}:${{ github.sha }}"
-          echo "Pushed ${API_IMAGE}:${{ github.sha }}"
-          echo "Pushed ${WORKER_IMAGE}:${{ github.sha }}"
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          docker tag core-be:ci "${API_IMAGE}:${{ inputs.merge_commit_sha }}"
+          docker tag core-be-worker:ci "${WORKER_IMAGE}:${{ inputs.merge_commit_sha }}"
+          docker push "${API_IMAGE}:${{ inputs.merge_commit_sha }}"
+          docker push "${WORKER_IMAGE}:${{ inputs.merge_commit_sha }}"
+          echo "Pushed ${API_IMAGE}:${{ inputs.merge_commit_sha }}"
+          echo "Pushed ${WORKER_IMAGE}:${{ inputs.merge_commit_sha }}"
+          if [ "${{ inputs.target_branch }}" = "main" ]; then
             docker tag core-be:ci "${API_IMAGE}:latest"
             docker tag core-be-worker:ci "${WORKER_IMAGE}:latest"
             docker push "${API_IMAGE}:latest"
@@ -154,7 +164,7 @@ jobs:
             echo "Pushed ${WORKER_IMAGE}:latest"
           fi
 
-      - name: Boot API container and verify /health/ready
+      - name: Boot API container and verify /health
         env:
           DATABASE_URL: postgresql://core:core@localhost:5432/core
           REDIS_URL: redis://localhost:6379
@@ -194,7 +204,7 @@ jobs:
             -e METRICS_SCRAPE_TOKEN="$METRICS_SCRAPE_TOKEN" \
             -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
             core-be:ci
-          if ! timeout 90 bash -c 'until curl -sf http://localhost:3000/health/ready; do sleep 2; done'; then
+          if ! timeout 90 bash -c 'until curl -sf http://localhost:3000/health; do sleep 2; done'; then
             docker logs core-be-health --tail 200 || true
             docker rm -f core-be-health || true
             exit 1

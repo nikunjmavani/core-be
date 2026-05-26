@@ -34,12 +34,9 @@ describe('fast-check property testing policy (#69)', () => {
     const vitestProjects = readFileSync(join(process.cwd(), 'tooling/vitest/projects.ts'), 'utf8');
     expect(vitestProjects).toContain("name: 'property'");
 
-    const qualityStatic = readFileSync(
-      join(process.cwd(), '.github/workflows/reusable-quality-static.yml'),
-      'utf8',
-    );
-    expect(qualityStatic).toContain('pnpm test:property');
-    expect(qualityStatic).toContain('FAST_CHECK_NUM_RUNS');
+    const prCi = readFileSync(join(process.cwd(), '.github/workflows/pr-ci.yml'), 'utf8');
+    expect(prCi).toContain('pnpm test:property');
+    expect(prCi).toContain('FAST_CHECK_NUM_RUNS');
   });
 
   it('uses shared propertyAssertOptions in every property suite', () => {

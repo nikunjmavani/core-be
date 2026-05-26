@@ -25,6 +25,7 @@ Write production-grade, maintainable, scalable code. Preserve simplicity; avoid 
 - Remove dead code, unused imports, `console.log`, and commented-out code.
 - Use `logger` from `@/shared/utils/infrastructure/logger.util.js` in application code.
 - Avoid unnecessary dependencies.
+- **Object parameters only** for any function/method with 2+ inputs, except in `*.repository.ts` / `*.repository.unit.test.ts` and framework-mandated callbacks (Fastify handlers, BullMQ processors, DI constructors, test/Zod callbacks). See **[object-params.mdc](object-params.mdc)**.
 
 ## Architecture (brief)
 
@@ -104,7 +105,7 @@ Before adding a dependency: check whether existing code or platform APIs solve t
 Write testable, deterministic, loosely coupled code.
 
 - Domain tests: `src/domains/<domain>/__tests__/` — see **[testing-conventions.mdc](testing-conventions.mdc)**.
-- Fix ESLint issues in touched files per **[code-smells-and-best-practices](../skills/code-smells-and-best-practices/SKILL.md)**; full `pnpm validate` is enforced by pre-commit and CI (do not duplicate on every small edit).
+- Fix Biome lint issues in touched files per **[code-smells-and-best-practices](../skills/code-smells-and-best-practices/SKILL.md)**; full `pnpm validate` is enforced by pre-commit and CI (do not duplicate on every small edit).
 - Run `pnpm test` (or targeted tests) before considering work complete.
 
 ## Final rule

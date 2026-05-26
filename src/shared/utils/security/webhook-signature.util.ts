@@ -8,6 +8,15 @@ export function signWebhookPayload(secret: string, payload: string, timestamp: n
   return createHmac('sha256', secret).update(signedPayload).digest('hex');
 }
 
+/** Builds the `X-Webhook-Signature` header value: `t=<timestamp>,v1=<signature>`. */
+export function buildWebhookSignatureHeader(
+  secret: string,
+  payload: string,
+  timestamp: number,
+): string {
+  return `t=${timestamp},v1=${signWebhookPayload(secret, payload, timestamp)}`;
+}
+
 /**
  * Constant-time verification of a hex signature from {@link signWebhookPayload}.
  */

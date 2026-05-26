@@ -4,8 +4,7 @@ import { injectUnauthenticated } from '@/tests/helpers/test-http-inject.helper.j
 import type { FastifyInstance } from 'fastify';
 
 const publicRoutes: Array<{ method: 'GET' | 'POST'; path: string }> = [
-  { method: 'GET', path: '/health/live' },
-  { method: 'GET', path: '/health/ready' },
+  { method: 'GET', path: '/health' },
   { method: 'GET', path: '/api/v1/auth/oauth/providers' },
   { method: 'POST', path: '/api/v1/auth/magic-link/send' },
 ];

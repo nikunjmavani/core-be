@@ -5,6 +5,7 @@ import {
   ValidationError,
 } from '@/shared/errors/index.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationRepository } from '../../organization/organization.repository.js';
 import type { MembershipRepository } from '../membership.repository.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -13,6 +14,7 @@ import type { MemberInvitationOutput } from './member-invitation.types.js';
 import {
   validateCreateMemberInvitation,
   validateAcceptMemberInvitation,
+  validateListMemberInvitationsQuery,
   validateResendMemberInvitation,
 } from './member-invitation.validator.js';
 import { serializeMemberInvitation } from './member-invitation.serializer.js';
@@ -22,8 +24,14 @@ import {
   MEMBER_INVITATION_EVENT,
   type MemberInvitationEmailPayload,
 } from '@/domains/tenancy/sub-domains/membership/member-invitation/events/member-invitation.events.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
 const MEMBER_INVITATION_RESOURCE = 'Member invitation';
+
+export interface MemberInvitationListOptions {
+  organization_public_id: string;
+  query: unknown;
+}
 
 export class MemberInvitationService {
   constructor(
@@ -33,14 +41,34 @@ export class MemberInvitationService {
     private readonly userService?: UserService,
   ) {}
 
-  async list(organization_public_id: string, limit = 100): Promise<MemberInvitationOutput[]> {
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const rows = await this.invitationRepository.findByOrganizationId(organization.id, limit);
-    type RowWithPublicId = (typeof rows)[number] & { membership_public_id: string };
-    return rows.map((row) =>
-      serializeMemberInvitation(row, (row as RowWithPublicId).membership_public_id),
-    );
+  async list(options: MemberInvitationListOptions): Promise<{
+    items: MemberInvitationOutput[];
+    total: number | null;
+    limit: number;
+    has_more: boolean;
+    next_cursor: string | null;
+  }> {
+    const { organization_public_id } = options;
+    const parsed = validateListMemberInvitationsQuery(options.query);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const result = await this.invitationRepository.findByOrganizationId(
+        organization.id,
+        omitUndefined({
+          after: parsed.after,
+          limit: parsed.limit,
+          include_total: parsed.include_total === 'true',
+        }),
+      );
+      type RowWithPublicId = (typeof result.items)[number] & { membership_public_id: string };
+      return {
+        ...result,
+        items: result.items.map((row) =>
+          serializeMemberInvitation(row, (row as RowWithPublicId).membership_public_id),
+        ),
+      };
+    });
   }
 
   async create(
@@ -54,76 +82,89 @@ export class MemberInvitationService {
         { field: 'email', messageKey: 'errors:disposableEmail' },
       ]);
     }
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const membership = await this.membershipRepository.findByPublicId(
-      parsed.membership_id,
-      organization.id,
-    );
-    if (!membership) throw new NotFoundError('Membership');
-    const inviterId =
-      await this.organizationRepository.resolveUserIdByPublicId(invited_by_user_public_id);
-    if (inviterId === null) throw new NotFoundError('User');
-    const token = generateInvitationToken();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
-    const row = await this.invitationRepository.create({
-      membership_id: membership.id,
-      email: parsed.email,
-      token_hash: hashInvitationToken(token),
-      invited_by_user_id: inviterId,
-      expires_at: expiresAt,
-      created_by_user_id: inviterId,
-    });
-    const output = serializeMemberInvitation(row, membership.public_id);
-
-    await eventBus.emit({
-      type: MEMBER_INVITATION_EVENT.CREATED,
-      payload: {
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const membership = await this.membershipRepository.findByPublicId(
+        parsed.membership_id,
+        organization.id,
+      );
+      if (!membership) throw new NotFoundError('Membership');
+      const inviterId =
+        await this.organizationRepository.resolveUserIdByPublicId(invited_by_user_public_id);
+      if (inviterId === null) throw new NotFoundError('User');
+      const token = generateInvitationToken();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
+      const row = await this.invitationRepository.create({
+        membership_id: membership.id,
         email: parsed.email,
-        organization_name: organization.name ?? organization.public_id,
-        inviter_name: invited_by_user_public_id,
-        token,
-        invitation_public_id: output.id,
-        expires_in_days: parsed.expires_in_days,
-      } satisfies MemberInvitationEmailPayload,
-      timestamp: new Date(),
-    });
+        token_hash: hashInvitationToken(token),
+        invited_by_user_id: inviterId,
+        expires_at: expiresAt,
+        created_by_user_id: inviterId,
+      });
+      const output = serializeMemberInvitation(row, membership.public_id);
 
-    return { invitation: output, token };
+      await eventBus.emit({
+        type: MEMBER_INVITATION_EVENT.CREATED,
+        payload: {
+          email: parsed.email,
+          organization_name: organization.name ?? organization.public_id,
+          inviter_name: invited_by_user_public_id,
+          token,
+          invitation_public_id: output.id,
+          expires_in_days: parsed.expires_in_days,
+        } satisfies MemberInvitationEmailPayload,
+        timestamp: new Date(),
+      });
+
+      return { invitation: output, token };
+    });
   }
 
   async accept(invitation_public_id: string, body: unknown): Promise<MemberInvitationOutput> {
     const parsed = validateAcceptMemberInvitation(body);
-    const row = await this.invitationRepository.findByPublicId(invitation_public_id);
-    if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const tokenHash = hashInvitationToken(parsed.token);
-    if (row.token_hash !== tokenHash)
-      throw new ValidationError('errors:validation.invalidToken', undefined, {
-        token: ['Invalid or expired'],
-      });
-    if (row.revoked_at)
-      throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
-    if (row.accepted_at)
-      throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
-    if (new Date() > row.expires_at)
-      throw new ValidationError('errors:validation.invitationExpired', undefined, {});
-    const updated = await this.invitationRepository.accept(invitation_public_id);
-    if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const membership = await this.membershipRepository.findById(row.membership_id);
-    return serializeMemberInvitation(updated, membership?.public_id ?? String(row.membership_id));
+    /**
+     * Public route: no org context up front. Resolve the owning org via the
+     * SECURITY DEFINER lookup, then wrap the read + UPDATE in
+     * `withOrganizationDatabaseContext` so RLS sees the org GUC.
+     */
+    const lookup =
+      await this.invitationRepository.lookupOrganizationByInvitationPublicId(invitation_public_id);
+    if (!lookup) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    return withOrganizationDatabaseContext(lookup.organization_public_id, async () => {
+      const row = await this.invitationRepository.findByPublicId(invitation_public_id);
+      if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const tokenHash = hashInvitationToken(parsed.token);
+      if (row.token_hash !== tokenHash)
+        throw new ValidationError('errors:validation.invalidToken', undefined, {
+          token: ['Invalid or expired'],
+        });
+      if (row.revoked_at)
+        throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
+      if (row.accepted_at)
+        throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
+      if (new Date() > row.expires_at)
+        throw new ValidationError('errors:validation.invitationExpired', undefined, {});
+      const updated = await this.invitationRepository.accept(invitation_public_id);
+      if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      return serializeMemberInvitation(updated, lookup.membership_public_id);
+    });
   }
 
   async revoke(organization_public_id: string, invitation_public_id: string): Promise<void> {
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const row = await this.invitationRepository.findByPublicId(invitation_public_id);
-    if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const membership = await this.membershipRepository.findById(row.membership_id);
-    if (!membership || membership.organization_id !== organization.id)
-      throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const updated = await this.invitationRepository.revoke(invitation_public_id);
-    if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const row = await this.invitationRepository.findByPublicId(invitation_public_id);
+      if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const membership = await this.membershipRepository.findById(row.membership_id);
+      if (!membership || membership.organization_id !== organization.id)
+        throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const updated = await this.invitationRepository.revoke(invitation_public_id);
+      if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    });
   }
 
   async resend(
@@ -132,44 +173,46 @@ export class MemberInvitationService {
     body: unknown,
   ): Promise<{ invitation: MemberInvitationOutput; token: string }> {
     const parsed = validateResendMemberInvitation(body);
-    const organization = await this.organizationRepository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    const row = await this.invitationRepository.findByPublicId(invitation_public_id);
-    if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const membership = await this.membershipRepository.findById(row.membership_id);
-    if (!membership || membership.organization_id !== organization.id)
-      throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    if (row.accepted_at)
-      throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
-    if (row.revoked_at)
-      throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
-    if (new Date() > row.expires_at)
-      throw new ValidationError('errors:validation.invitationExpired', undefined, {});
-    const token = generateInvitationToken();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
-    const updated = await this.invitationRepository.resend(
-      invitation_public_id,
-      hashInvitationToken(token),
-      expiresAt,
-    );
-    if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    const output = serializeMemberInvitation(updated, membership.public_id);
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.organizationRepository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      const row = await this.invitationRepository.findByPublicId(invitation_public_id);
+      if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const membership = await this.membershipRepository.findById(row.membership_id);
+      if (!membership || membership.organization_id !== organization.id)
+        throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      if (row.accepted_at)
+        throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
+      if (row.revoked_at)
+        throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
+      if (new Date() > row.expires_at)
+        throw new ValidationError('errors:validation.invitationExpired', undefined, {});
+      const token = generateInvitationToken();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
+      const updated = await this.invitationRepository.resend(
+        invitation_public_id,
+        hashInvitationToken(token),
+        expiresAt,
+      );
+      if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const output = serializeMemberInvitation(updated, membership.public_id);
 
-    await eventBus.emit({
-      type: MEMBER_INVITATION_EVENT.RESENT,
-      payload: {
-        email: row.email,
-        organization_name: organization.name ?? organization.public_id,
-        inviter_name: 'Team member',
-        token,
-        invitation_public_id: output.id,
-        expires_in_days: parsed.expires_in_days,
-      } satisfies MemberInvitationEmailPayload,
-      timestamp: new Date(),
+      await eventBus.emit({
+        type: MEMBER_INVITATION_EVENT.RESENT,
+        payload: {
+          email: row.email,
+          organization_name: organization.name ?? organization.public_id,
+          inviter_name: 'Team member',
+          token,
+          invitation_public_id: output.id,
+          expires_in_days: parsed.expires_in_days,
+        } satisfies MemberInvitationEmailPayload,
+        timestamp: new Date(),
+      });
+
+      return { invitation: output, token };
     });
-
-    return { invitation: output, token };
   }
 
   async listPendingInvitations(user_public_id: string): Promise<MemberInvitationOutput[]> {
@@ -180,8 +223,26 @@ export class MemberInvitationService {
     }
     const user = await this.userService.findUserRecordByPublicId(user_public_id);
     if (!user) throw new NotFoundError('User');
+    /**
+     * Cross-organization read: a single user may have invitations from many orgs and
+     * no `app.current_organization_id` matches all of them. Uses the SECURITY DEFINER
+     * lookup that runs outside RLS but exposes only minimal non-sensitive metadata.
+     */
     const rows = await this.invitationRepository.findByEmailPending(user.email, 100);
-    return rows.map((row) => serializeMemberInvitation(row.invitation, row.membership_public_id));
+    return rows.map((row) =>
+      serializeMemberInvitation(
+        {
+          public_id: row.invitation_public_id,
+          email: row.invitation_email,
+          expires_at: row.invitation_expires_at,
+          accepted_at: null,
+          revoked_at: null,
+          created_at: row.invitation_created_at,
+          membership_id: row.membership_id,
+        },
+        row.membership_public_id,
+      ),
+    );
   }
 
   async decline(invitation_public_id: string, user_public_id: string): Promise<void> {
@@ -192,16 +253,25 @@ export class MemberInvitationService {
     }
     const user = await this.userService.findUserRecordByPublicId(user_public_id);
     if (!user) throw new NotFoundError('User');
-    const row = await this.invitationRepository.findByPublicId(invitation_public_id);
-    if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-    if (row.email.toLowerCase() !== user.email.toLowerCase()) {
-      throw new ForbiddenError('errors:declineOwnInvitationOnly');
-    }
-    if (row.accepted_at)
-      throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
-    if (row.revoked_at)
-      throw new ValidationError('errors:validation.invitationAlreadyDeclined', undefined, {});
-    const updated = await this.invitationRepository.revoke(invitation_public_id);
-    if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    /**
+     * User-driven cross-org route: resolve the owning org via SECURITY DEFINER lookup,
+     * then wrap the read + UPDATE in `withOrganizationDatabaseContext`.
+     */
+    const lookup =
+      await this.invitationRepository.lookupOrganizationByInvitationPublicId(invitation_public_id);
+    if (!lookup) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    return withOrganizationDatabaseContext(lookup.organization_public_id, async () => {
+      const row = await this.invitationRepository.findByPublicId(invitation_public_id);
+      if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      if (row.email.toLowerCase() !== user.email.toLowerCase()) {
+        throw new ForbiddenError('errors:declineOwnInvitationOnly');
+      }
+      if (row.accepted_at)
+        throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
+      if (row.revoked_at)
+        throw new ValidationError('errors:validation.invitationAlreadyDeclined', undefined, {});
+      const updated = await this.invitationRepository.revoke(invitation_public_id);
+      if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+    });
   }
 }

@@ -75,22 +75,21 @@ describe('Policy: composition root is the only place that decorates domain conta
     expect(offenders).toEqual([]);
   });
 
-  it.each(DOMAIN_CONTAINER_KEYS)(
-    'decorates `%s` only from domain container modules',
-    (domainKey) => {
-      // eslint-disable-next-line security/detect-non-literal-regexp -- pattern built from typed DOMAIN_CONTAINER_KEYS constants.
-      const pattern = new RegExp(`\\.decorate\\(\\s*['"]${domainKey}['"]`);
-      const decorators: string[] = [];
-      for (const file of SOURCE_FILES) {
-        const contents = readFileSync(file, 'utf8');
-        if (pattern.test(contents)) {
-          decorators.push(relative(PROJECT_ROOT, file));
-        }
+  it.each(
+    DOMAIN_CONTAINER_KEYS,
+  )('decorates `%s` only from domain container modules', (domainKey) => {
+    // eslint-disable-next-line security/detect-non-literal-regexp -- pattern built from typed DOMAIN_CONTAINER_KEYS constants.
+    const pattern = new RegExp(`\\.decorate\\(\\s*['"]${domainKey}['"]`);
+    const decorators: string[] = [];
+    for (const file of SOURCE_FILES) {
+      const contents = readFileSync(file, 'utf8');
+      if (pattern.test(contents)) {
+        decorators.push(relative(PROJECT_ROOT, file));
       }
-      expect(decorators.length).toBeGreaterThan(0);
-      expect(decorators.every(isDomainContainerModule)).toBe(true);
-    },
-  );
+    }
+    expect(decorators.length).toBeGreaterThan(0);
+    expect(decorators.every(isDomainContainerModule)).toBe(true);
+  });
 
   it('domain-containers.plugin.ts registers every domain container', () => {
     const contents = readFileSync(join(PROJECT_ROOT, COMPOSITION_ROOT_RELATIVE_PATH), 'utf8');

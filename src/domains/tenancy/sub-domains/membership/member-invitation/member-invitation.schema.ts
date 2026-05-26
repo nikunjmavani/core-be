@@ -39,6 +39,12 @@ export const member_invitations = tenancySchema
       uniqueIndex('idx_member_invitations_public_id').on(table.public_id),
       uniqueIndex('idx_member_invitations_token').on(table.token_hash),
       index('idx_member_invitations_membership').on(table.membership_id),
+      index('idx_member_invitations_membership_created_id').on(
+        table.membership_id,
+        table.created_at,
+        table.id,
+      ),
+      index('idx_member_invitations_created_id').on(table.created_at, table.id),
       index('idx_member_invitations_email').on(table.email, table.accepted_at),
       index('idx_member_invitations_expires').on(table.expires_at),
       check('chk_member_inv_expires', sql`${table.expires_at} > ${table.created_at}`),

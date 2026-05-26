@@ -18,14 +18,10 @@ export function userDataExportOps() {
   const token = __ENV.TEST_TOKEN;
   if (!token) return;
 
-  const response = http.post(
-    `${API_PREFIX}/users/me/data-export`,
-    JSON.stringify({}),
-    {
-      ...authHeaders(token),
-      tags: { name: 'user-data-export' },
-    },
-  );
+  const response = http.post(`${API_PREFIX}/users/me/data-export`, JSON.stringify({}), {
+    ...authHeaders(token),
+    tags: { name: 'user-data-export' },
+  });
   if ([200, 201, 202, 409].includes(response.status)) {
     checkResponseTime(response, 5000, 'user-data-export');
   }

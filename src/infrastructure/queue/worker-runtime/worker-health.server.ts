@@ -57,51 +57,46 @@ function sendJson(response: http.ServerResponse, statusCode: number, body: unkno
   response.end(JSON.stringify(body));
 }
 
-async function handleLiveProbe(response: http.ServerResponse): Promise<void> {
-  if (!workerReady) {
-    sendJson(response, 503, { status: 'starting', service: 'worker' });
-    return;
-  }
+function resolveWorkerHealthStatus({
+  isReady,
+  isStalled,
+  dependencyStatus,
+}: {
+  isReady: boolean;
+  isStalled: boolean;
+  dependencyStatus: string;
+}): string {
+  if (!isReady) return 'starting';
+  if (isStalled) return 'stalled';
+  return dependencyStatus;
+}
 
-  const throughputHeartbeats = await readWorkerQueueHeartbeats(WORKER_THROUGHPUT_QUEUE_NAMES);
+async function handleHealthProbe(response: http.ServerResponse): Promise<void> {
+  const [readiness, worker_queues, throughputHeartbeats] = await Promise.all([
+    runDependencyReadinessProbes(),
+    readWorkerQueueHeartbeats(MONITORED_BULLMQ_QUEUE_NAMES),
+    readWorkerQueueHeartbeats(WORKER_THROUGHPUT_QUEUE_NAMES),
+  ]);
   const stalled = isWorkerThroughputStalled(
     throughputHeartbeats,
     env.WORKER_HEALTH_STALL_TIMEOUT_MS,
   );
-
-  if (stalled) {
-    sendJson(response, 503, { status: 'stalled', service: 'worker' });
-    return;
-  }
-
-  sendJson(response, 200, { status: 'ok', service: 'worker' });
-}
-
-async function handleWorkerProbe(response: http.ServerResponse): Promise<void> {
-  const [readiness, worker_queues] = await Promise.all([
-    runDependencyReadinessProbes(),
-    readWorkerQueueHeartbeats(MONITORED_BULLMQ_QUEUE_NAMES),
-  ]);
-  const processReady = workerReady && readiness.status === 'ok';
-  sendJson(response, processReady ? 200 : 503, {
-    ...readiness,
-    status: processReady ? 'ok' : readiness.status === 'ok' ? 'starting' : readiness.status,
-    role: 'worker',
-    workersRegistered: registeredWorkerCount,
-    worker_queues,
+  const processReady = workerReady && !stalled && readiness.status === 'ok';
+  const status = resolveWorkerHealthStatus({
+    isReady: workerReady,
+    isStalled: stalled,
+    dependencyStatus: readiness.status,
   });
-}
 
-async function handleAggregateHealth(response: http.ServerResponse): Promise<void> {
-  const readiness = await runDependencyReadinessProbes();
-  const processReady = workerReady && readiness.status === 'ok';
   sendJson(response, processReady ? 200 : 503, {
-    status: processReady ? 'ok' : 'starting',
-    live: workerReady ? 'ok' : 'starting',
+    status,
+    role: 'worker',
     database: readiness.database,
     redis: readiness.redis,
     bullmq: readiness.bullmq,
     latencyMs: readiness.latencyMs,
+    workersRegistered: registeredWorkerCount,
+    worker_queues,
   });
 }
 
@@ -130,16 +125,8 @@ async function handleHealthRequest(
     return;
   }
 
-  if (url === '/health/live') {
-    await handleLiveProbe(response);
-    return;
-  }
-  if (url === '/health/worker') {
-    await handleWorkerProbe(response);
-    return;
-  }
   if (url === '/health') {
-    await handleAggregateHealth(response);
+    await handleHealthProbe(response);
     return;
   }
   if (url === '/metrics' && isMetricsEnabled()) {

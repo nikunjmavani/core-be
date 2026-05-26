@@ -173,8 +173,9 @@ describe('Security: Input Validation', () => {
       }));
       await vi.resetModules();
       const { createTestApp: createTestAppFresh } = await import('@/tests/helpers/test-app.js');
-      const { injectUnauthenticated: injectUnauthenticatedFresh } =
-        await import('@/tests/helpers/test-http-inject.helper.js');
+      const { injectUnauthenticated: injectUnauthenticatedFresh } = await import(
+        '@/tests/helpers/test-http-inject.helper.js'
+      );
       const testAppWithMock = await createTestAppFresh();
       const response = await injectUnauthenticatedFresh(testAppWithMock.app, {
         method: 'POST',

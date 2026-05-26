@@ -6,12 +6,12 @@ Event bus (in-process) and BullMQ workers (durable) are **not the same thing**. 
 
 ## Comparison
 
-| | Event bus (in-process) | BullMQ workers (durable) |
-| --- | --- | --- |
-| **Where** | `src/core/events/event-bus.ts` | `src/infrastructure/queue/bootstrap.ts`, `pnpm dev:worker` |
-| **When** | Immediately after a successful service write | Async, retried, in a separate worker process |
-| **Runs in** | API process | Worker process |
-| **Failure mode** | Handler enqueues side effects; **must not fail the HTTP request** | Retries → DLQ |
+|                  | Event bus (in-process)                                            | BullMQ workers (durable)                                   |
+| ---------------- | ----------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Where**        | `src/core/events/event-bus.ts`                                    | `src/infrastructure/queue/bootstrap.ts`, `pnpm dev:worker` |
+| **When**         | Immediately after a successful service write                      | Async, retried, in a separate worker process               |
+| **Runs in**      | API process                                                       | Worker process                                             |
+| **Failure mode** | Handler enqueues side effects; **must not fail the HTTP request** | Retries → DLQ                                              |
 
 **Typical flow:** `service` → `eventBus.emit` → handler → `enqueueEmail()` → mail worker.
 
@@ -37,11 +37,11 @@ flowchart LR
 
 ### Registrar reference
 
-| Registrar | Example event types | Side effect |
-| --------- | ------------------- | ----------- |
-| `registerAuthMethodEventHandlers` | `AUTH_EVENT.MAGIC_LINK_REQUESTED`, password reset, email verification | Mail queue |
-| `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT` | Mail queue |
-| `registerNotifyEventHandlers` | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` | BullMQ webhook delivery |
+| Registrar                               | Example event types                                                   | Side effect             |
+| --------------------------------------- | --------------------------------------------------------------------- | ----------------------- |
+| `registerAuthMethodEventHandlers`       | `AUTH_EVENT.MAGIC_LINK_REQUESTED`, password reset, email verification | Mail queue              |
+| `registerMemberInvitationEventHandlers` | `MEMBER_INVITATION_EVENT.CREATED`, `RESENT`                           | Mail queue              |
+| `registerNotifyEventHandlers`           | `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED`                             | BullMQ webhook delivery |
 
 Billing side effects use BullMQ directly (for example [`stripe-webhook`](../../../src/domains/billing/sub-domains/stripe-webhook/)) — there is no top-level `billing/events/` aggregator.
 
@@ -60,9 +60,7 @@ Event handler failure must **not** fail the HTTP request (log and continue).
 HTTP handlers pass `getRequestIdentifier(request)` into services as `context.requestId`. Services attach it when emitting:
 
 ```typescript
-await eventBus.emit(
-  buildDomainEvent(EVENT_TYPE, payload, { requestId: context?.requestId }),
-);
+await eventBus.emit(buildDomainEvent(EVENT_TYPE, payload, { requestId: context?.requestId }));
 ```
 
 Event handlers read `event.requestId` and pass it to `enqueueEmail()`, `enqueueNotification()`, `enqueueWebhookDeliveryByAttemptId()`, etc. Job payloads store `requestId` (Zod-validated); workers log it on `mail.worker.processing` and **`email.sent`** so worker logs correlate with API `request.complete` (`requestId` field).
@@ -75,10 +73,10 @@ When a handler runs inside an HTTP request, BullMQ enqueue helpers are scheduled
 
 When **`METRICS_ENABLED=true`**, workers export BullMQ telemetry to the shared Prometheus registry:
 
-| Metric | Source |
-| ------ | ------ |
-| `bullmq_queue_{waiting,active,delayed,failed}{queue}` | `refreshBullMQQueueGauges()` — called from `refreshMetricsBeforeScrape()` before `GET /metrics` |
-| `bullmq_job_duration_seconds{queue,job_name}` | `attachBullMQJobMetrics()` on worker `completed` — wired via `attachDeadLetterAndAlerting()` in `bootstrap.ts` |
+| Metric                                                | Source                                                                                                         |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `bullmq_queue_{waiting,active,delayed,failed}{queue}` | `refreshBullMQQueueGauges()` — called from `refreshMetricsBeforeScrape()` before `GET /metrics`                |
+| `bullmq_job_duration_seconds{queue,job_name}`         | `attachBullMQJobMetrics()` on worker `completed` — wired via `attachDeadLetterAndAlerting()` in `bootstrap.ts` |
 
 Queue depth gauges scrape the monitored queue list in `src/infrastructure/observability/bullmq-metrics.ts` (`MONITORED_BULLMQ_QUEUE_NAMES`). See [observability runbook](../../deployment/runbooks/observability.md) for scrape setup and metric names.
 
@@ -107,11 +105,11 @@ Queue depth gauges scrape the monitored queue list in `src/infrastructure/observ
 
 When the same BullMQ job can be processed concurrently (retries, stalls, or multiple worker processes), processors must not double-apply side effects (duplicate email, duplicate outbound webhook HTTP, duplicate subscription sync).
 
-| Worker | Claim mechanism | Terminal skip |
-| ------ | --------------- | --------------- |
-| **Stripe webhook** | `StripeWebhookEventRepository.tryClaimEvent()` — insert ledger with `ON CONFLICT DO NOTHING` | `processed_duplicate` → no handler |
-| **Webhook delivery** | `WebhookDeliveryAttemptRepository.tryMarkSending()` — `PENDING` → `SENDING` update | `already_sent` → no HTTP; stale `SENDING` (by `sent_at` lease) reclaimed to `PENDING` on retry |
-| **Mail** | `tryClaimPendingMailOutbox()` — `pending` → `sending` update | `already_sent` → no Resend call |
+| Worker               | Claim mechanism                                                                              | Terminal skip                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Stripe webhook**   | `StripeWebhookEventRepository.tryClaimEvent()` — insert ledger with `ON CONFLICT DO NOTHING` | `processed_duplicate` → no handler                                                             |
+| **Webhook delivery** | `WebhookDeliveryAttemptRepository.tryMarkSending()` — `PENDING` → `SENDING` update           | `already_sent` → no HTTP; stale `SENDING` (by `sent_at` lease) reclaimed to `PENDING` on retry |
+| **Mail**             | `tryClaimPendingMailOutbox()` — `pending` → `sending` update                                 | `already_sent` → no Resend call                                                                |
 
 Stuck `sending` rows (worker crash after claim) are reclaimed to `pending` by the repeatable **mail-outbox-sweeper** job (`reclaimStaleSendingMailOutboxIds`) before re-enqueue.
 
@@ -123,13 +121,13 @@ Regression tests: `src/tests/integration/worker-race/*.integration.test.ts` (`pn
 
 HTTP requests set `app.current_organization_id` via tenant middleware and an org-scoped transaction. **Workers do not** — each job must use an explicit context wrapper before querying FORCE RLS tables.
 
-| Context wrapper | GUC / purpose |
-| --------------- | ------------- |
-| `withOrganizationContext` / `runTenantScopedWorkerJob` | `app.current_organization_id` — tenant mutations and reads |
-| `withGlobalRetentionCleanupDatabaseContext` / `runGlobalRetentionWorkerJob` | `app.global_retention_cleanup` — cross-tenant tombstone retention |
-| `withUserDatabaseContext` / `runUserScopedWorkerJob` | `app.current_user_id` — GDPR export |
-| `withSessionRetentionCleanupDatabaseContext` | `app.session_retention_cleanup` — session cleanup worker |
-| `withSystemTableWorkerContext` | No tenant RLS — `auth.mail_outbox`, `billing.stripe_webhook_events` only |
+| Context wrapper                                                             | GUC / purpose                                                            |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `withOrganizationContext` / `runTenantScopedWorkerJob`                      | `app.current_organization_id` — tenant mutations and reads               |
+| `withGlobalRetentionCleanupDatabaseContext` / `runGlobalRetentionWorkerJob` | `app.global_retention_cleanup` — cross-tenant tombstone retention        |
+| `withUserDatabaseContext` / `runUserScopedWorkerJob`                        | `app.current_user_id` — GDPR export                                      |
+| `withSessionRetentionCleanupDatabaseContext`                                | `app.session_retention_cleanup` — session cleanup worker                 |
+| `withSystemTableWorkerContext`                                              | No tenant RLS — `auth.mail_outbox`, `billing.stripe_webhook_events` only |
 
 `src/worker.ts` sets `CORE_BE_RUNTIME=worker`. Calling `getRequestDatabase()` without a pinned ALS session throws `WorkerDatabaseContextError`. Pass `databaseHandle` into `createWorker*Repository(databaseHandle)` for tenant-scoped work.
 
@@ -137,29 +135,55 @@ FORCE RLS table list: `src/infrastructure/database/force-rls-tables.constants.ts
 
 ---
 
+## Worker registry and queue families
+
+Every BullMQ worker is registered exactly once in [`worker-registration.registry.ts`](../../../src/infrastructure/queue/worker-runtime/worker-registration.registry.ts) — the **single source of truth** for **worker startup** (`bootstrap.ts`), **Postgres connection budgeting** (`worker-connection-budget.ts`), **scheduler filtering** (`scheduler.ts`), and **scheduler ↔ registry consistency** (`scheduler-registry-audit.ts`). A registration declares:
+
+| Field                             | Purpose                                                                                                                                                                                                                                                                                 |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queueName`                       | BullMQ queue (unique per worker)                                                                                                                                                                                                                                                        |
+| `family`                          | One of `mail`, `notify`, `webhook`, `stripe`, `retention`, `observability` — used by `WORKER_QUEUE_FAMILIES` to split processes                                                                                                                                                         |
+| `usesPostgres`                    | If `true`, the worker holds a Postgres pool checkout per concurrent job                                                                                                                                                                                                                 |
+| `scheduled`                       | `true` for cron-driven workers (entry exists in `scheduler.ts`); `false` for event-driven or orphan workers. Cross-checked at startup — mismatches log `worker.registry.scheduler_mismatch`                                                                                             |
+| `criticality`                     | `throughput` (drives user-visible latency), `maintenance` (cron / retention), or `observability` (metrics only)                                                                                                                                                                         |
+| `holdsConnectionDuringExternalIo` | `true` when the Postgres checkout is held during an outbound HTTP/S3/Resend/Stripe call (e.g. webhook delivery, S3-bound retention). Slow externals on these workers translate to pool starvation; surfaced in pool-pressure alerts as `workerPeakPostgresConcurrencyHoldingExternalIo` |
+| `resolvePostgresConcurrency()`    | Concurrency contribution to the per-process pool budget                                                                                                                                                                                                                                 |
+| `isEnabled()`                     | Optional skip (e.g. mail/Stripe disabled by env)                                                                                                                                                                                                                                        |
+| `create()`                        | Factory invoked by bootstrap                                                                                                                                                                                                                                                            |
+
+Currently **25 workers** are registered (**23** use Postgres, **2** are Redis-only observability; **18** are cron-scheduled, **5** are event-driven, **2** are orphans tagged `scheduled: false` until a cron is wired). Add a new worker by appending one entry — bootstrap, scheduler filtering, connection budgeting, and the scheduler-registry audit pick it up automatically.
+
+Operational sizing per family is documented in [resource-limits.md → Worker Postgres pool demand](../../deployment/runbooks/resource-limits.md#worker-postgres-pool-demand-per-process). Split-service deployment guidance is in [worker-scaling.md](../../deployment/runbooks/worker-scaling.md#splitting-worker-services-by-family).
+
+---
+
 ## Files and locations
 
-| Concern | Path |
-| ------- | ---- |
-| Event bus | `src/core/events/event-bus.ts` |
-| Queue connection, scheduler, DLQ, bootstrap | `src/infrastructure/queue/connection.ts`, `scheduler.ts`, `dead-letter.ts`, `bootstrap.ts` |
-| Worker options | `src/infrastructure/queue/worker-options.ts` — `getDefaultWorkerOptions()`, `getWebhookWorkerOptions()`, `getRetentionWorkerOptions()` |
-| Redis | `src/infrastructure/cache/redis.client.ts` |
-| Domain aggregator | `src/domains/<domain>/events/index.ts` → `register*EventHandlers()` |
-| Event types + handlers | `src/domains/<domain>/sub-domains/<sub-domain>/events/*` |
-| Queues + enqueue | `src/domains/<domain>/sub-domains/<sub-domain>/queues/*` |
-| Workers | `src/domains/<domain>/sub-domains/<sub-domain>/workers/*` (or domain root for flat domains) |
-| Worker entrypoint | `src/worker.ts` |
-| BullMQ Prometheus gauges/histogram | `src/infrastructure/observability/bullmq-metrics.ts`, `prometheus-metrics.ts` |
+| Concern                                                                             | Path                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Event bus                                                                           | `src/core/events/event-bus.ts`                                                                                                                        |
+| Queue connection, scheduler, DLQ, bootstrap                                         | `src/infrastructure/queue/connection.ts`, `scheduler.ts`, `dead-letter.ts`, `bootstrap.ts`                                                            |
+| Worker registry (families, Postgres demand, scheduled flag, criticality, factories) | `src/infrastructure/queue/worker-runtime/worker-registration.registry.ts`                                                                             |
+| Worker connection budget                                                            | `src/infrastructure/queue/worker-runtime/worker-connection-budget.ts`                                                                                 |
+| Scheduler ↔ registry audit                                                          | `src/infrastructure/queue/worker-runtime/scheduler-registry-audit.ts`                                                                                 |
+| Worker family parsing                                                               | `src/infrastructure/queue/worker-runtime/worker-queue-family.util.ts`                                                                                 |
+| Worker options                                                                      | `src/infrastructure/queue/worker-runtime/worker-options.ts` — `getDefaultWorkerOptions()`, `getWebhookWorkerOptions()`, `getRetentionWorkerOptions()` |
+| Redis                                                                               | `src/infrastructure/cache/redis.client.ts`                                                                                                            |
+| Domain aggregator                                                                   | `src/domains/<domain>/events/index.ts` → `register*EventHandlers()`                                                                                   |
+| Event types + handlers                                                              | `src/domains/<domain>/sub-domains/<sub-domain>/events/*`                                                                                              |
+| Queues + enqueue                                                                    | `src/domains/<domain>/sub-domains/<sub-domain>/queues/*`                                                                                              |
+| Workers                                                                             | `src/domains/<domain>/sub-domains/<sub-domain>/workers/*` (or domain root for flat domains)                                                           |
+| Worker entrypoint                                                                   | `src/worker.ts`                                                                                                                                       |
+| BullMQ Prometheus gauges/histogram                                                  | `src/infrastructure/observability/bullmq-metrics.ts`, `prometheus-metrics.ts`                                                                         |
 
 **Queue ownership:** `src/infrastructure/queue/` wires Redis, repeatable retention registration (`scheduler.ts`), dead-letter (`dead-letter.ts`), and worker startup only. **Processors** and event-driven **queue definitions + enqueue helpers** live in domain sub-domains — never in `infrastructure/queue/processors/` (that path does not exist).
 
 **Repeatable / cron jobs:** register every `upsertJobScheduler` entry in `scheduler.ts` only. Domain worker files define the `Worker` processor (same queue name as in `scheduler.ts`).
 
-| Scheduler id | Queue | Default cron (UTC) | Doc |
-| ------------ | ----- | ------------------ | --- |
-| `daily-audit-export` | `audit-export` | `15 2 * * *` (`AUDIT_EXPORT_CRON`) | [audit-export.md](../security/audit-export.md) |
-| `daily-audit-cleanup` | `audit-retention` | `0 3 * * *` | [data-lifecycle-deletion.md](../data/data-lifecycle-deletion.md) |
+| Scheduler id          | Queue             | Default cron (UTC)                 | Doc                                                              |
+| --------------------- | ----------------- | ---------------------------------- | ---------------------------------------------------------------- |
+| `daily-audit-export`  | `audit-export`    | `15 2 * * *` (`AUDIT_EXPORT_CRON`) | [audit-export.md](../security/audit-export.md)                   |
+| `daily-audit-cleanup` | `audit-retention` | `0 3 * * *`                        | [data-lifecycle-deletion.md](../data/data-lifecycle-deletion.md) |
 
 ---
 
@@ -177,7 +201,7 @@ FORCE RLS table list: `src/infrastructure/database/force-rls-tables.constants.ts
 
 **Tenancy — member invitation**
 
-```
+```text
 member-invitation.service.ts  →  eventBus.emit(tenancy.member_invitation.created|resent)
 tenancy/sub-domains/member-invitation/events/*.ts  →  enqueueEmail()
 tenancy/events/index.ts  →  registerTenancyEventHandlers()
@@ -185,7 +209,7 @@ tenancy/events/index.ts  →  registerTenancyEventHandlers()
 
 **Auth — transactional email**
 
-```
+```text
 magic-link.service.ts / auth-method.service.ts  →  eventBus.emit(auth.*.requested)
 auth/sub-domains/auth-method/events/*.ts  →  enqueueEmail()
 auth/events/index.ts  →  registerAuthEventHandlers()
@@ -193,14 +217,14 @@ auth/events/index.ts  →  registerAuthEventHandlers()
 
 **Billing — Stripe webhooks (BullMQ, not event bus)**
 
-```
+```text
 stripe-webhook.routes  →  stripe-webhook.service  →  enqueueStripeWebhookJob()
 billing/sub-domains/stripe-webhook/workers/stripe-webhook.worker.ts  →  processor
 ```
 
 **Notify — webhook delivery (event bus)**
 
-```
+```text
 emitWebhookDeliveryRequested()  →  notify/sub-domains/webhook/events/
 webhook-delivery.event-handlers.ts  →  enqueueWebhookDeliveryByAttemptId()
 ```

@@ -52,8 +52,9 @@ describe('idempotency middleware fail-closed behavior', () => {
   });
 
   it('returns 503 when Redis is unavailable during claim', async () => {
-    const { default: idempotencyPlugin } =
-      await import('@/shared/middlewares/idempotency.middleware.js');
+    const { default: idempotencyPlugin } = await import(
+      '@/shared/middlewares/idempotency.middleware.js'
+    );
 
     let claimPreHandler: ((request: FastifyRequest, reply: FastifyReply) => Promise<void>) | null =
       null;
@@ -97,8 +98,9 @@ describe('idempotency middleware fail-closed behavior', () => {
       auth: { userId: TEST_USER_PUBLIC_ID },
     } as unknown as FastifyRequest & { _idempotencyKey?: string };
 
-    const { parseIdempotencyKeyHeader } =
-      await import('@/shared/utils/idempotency/idempotency-key.util.js');
+    const { parseIdempotencyKeyHeader } = await import(
+      '@/shared/utils/idempotency/idempotency-key.util.js'
+    );
     const parsed = parseIdempotencyKeyHeader(request.headers[IDEMPOTENCY_KEY_HEADER]);
     if (parsed.kind === 'valid') {
       (request as { _idempotencyKey?: string })._idempotencyKey = parsed.value;
@@ -123,8 +125,12 @@ describe('idempotency middleware fail-closed behavior', () => {
 });
 
 async function registerIdempotencyHooks() {
-  const { default: idempotencyPlugin } =
-    await import('@/shared/middlewares/idempotency.middleware.js');
+  const idempotencyModule = await import('@/shared/middlewares/idempotency.middleware.js');
+  const idempotencyPlugin = idempotencyModule.default;
+  // `idempotencyOnResponse` is no longer registered as an onResponse hook by the plugin
+  // itself — the request lifecycle coordinator invokes it post-RLS-commit. Tests reach
+  // through the exported function directly so they keep exercising the same code path.
+  const idempotencyOnResponse = idempotencyModule.idempotencyOnResponse;
   const hooks: Record<string, unknown> = {};
   const mockApp = {
     addHook: vi.fn((hookName: string, handler: unknown) => {
@@ -149,7 +155,7 @@ async function registerIdempotencyHooks() {
       reply: FastifyReply,
       payload: unknown,
     ) => Promise<unknown>,
-    onResponse: hooks.onResponse as (request: FastifyRequest, reply: FastifyReply) => Promise<void>,
+    onResponse: idempotencyOnResponse,
   };
 }
 
@@ -647,8 +653,9 @@ describe('idempotency middleware happy paths and conflicts', () => {
   });
 
   it('onRoute skips non-write methods and appends claim handler for write routes', async () => {
-    const { default: idempotencyPlugin } =
-      await import('@/shared/middlewares/idempotency.middleware.js');
+    const { default: idempotencyPlugin } = await import(
+      '@/shared/middlewares/idempotency.middleware.js'
+    );
     const mockApp = { addHook: vi.fn() };
     await idempotencyPlugin(mockApp as never, {} as never);
 
@@ -729,5 +736,28 @@ describe('idempotency middleware happy paths and conflicts', () => {
 
     expect(mockRedisDel).toHaveBeenCalled();
     expect(mockRedisSet).not.toHaveBeenCalled();
+  });
+
+  it('onResponse with forceRelease deletes placeholder and never caches a 2xx body', async () => {
+    const { onSend, onResponse } = await registerIdempotencyHooks();
+    const request = {
+      _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+      _idempotencyClaimed: true,
+      _idempotencyScope: {
+        userId: TEST_USER_PUBLIC_ID,
+        organizationId: TEST_ORGANIZATION_PUBLIC_ID,
+      },
+    } as unknown as FastifyRequest & { _idempotencyPendingCompleted?: unknown };
+    const reply = {
+      statusCode: 201,
+      getHeader: vi.fn().mockReturnValue('application/json'),
+    } as unknown as FastifyReply;
+
+    await onSend(request, reply, { id: 'created' });
+    await onResponse(request, reply, { forceRelease: true });
+
+    expect(mockRedisDel).toHaveBeenCalled();
+    expect(mockRedisSet).not.toHaveBeenCalled();
+    expect(request._idempotencyPendingCompleted).toBeUndefined();
   });
 });

@@ -42,6 +42,7 @@ export const notifications = notifySchema
     (table) => [
       uniqueIndex('idx_notifications_public_id').on(table.public_id),
       index('idx_notifications_user_read').on(table.user_id, table.is_read, table.created_at),
+      index('idx_notifications_user_created_id').on(table.user_id, table.created_at, table.id),
       index('idx_notifications_org').on(table.organization_id, table.created_at),
       index('idx_notifications_type').on(table.type, table.created_at),
       index('idx_notifications_created').on(table.created_at),
@@ -58,6 +59,18 @@ export const notifications = notifySchema
             )
           )
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+      }),
+      // Owner access so a user can read/manage their own notifications (the service queries by
+      // user_id). Permissive → OR'd with tenant isolation; inert until app.current_user_id is set.
+      pgPolicy('notifications_owner_access', {
+        as: 'permissive',
+        for: 'all',
+        to: 'public',
+        using: sql`${table.user_id} = (
+            SELECT id FROM auth.users
+            WHERE public_id = current_setting('app.current_user_id', true)
+              AND deleted_at IS NULL
+          )`,
       }),
     ],
   )

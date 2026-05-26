@@ -1,9 +1,13 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { listLimitQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
 import type { NotificationService } from './notification.service.js';
 import { createNotificationController } from './notification.controller.js';
-import { deleteNotificationParamsDto, getNotificationParamsDto } from './notification.dto.js';
+import {
+  deleteNotificationParamsDto,
+  getNotificationParamsDto,
+  listNotificationsQueryDto,
+} from './notification.dto.js';
 
 export function notificationRoutes(service: NotificationService): FastifyPluginAsync {
   const controller = createNotificationController(service);
@@ -13,8 +17,9 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
     zodApplication.get(
       '/notifications',
       {
-        schema: { querystring: listLimitQuerySchema },
+        schema: { querystring: listNotificationsQueryDto },
         onRequest: [app.authenticate],
+        preValidation: [rejectLegacyPagePagination],
       },
       controller.listNotifications,
     );

@@ -62,18 +62,18 @@ Route handlers also validate `:id` path params with the shared public-id validat
 
 | #   | Method | Path            | Expected                                                                          |
 | --- | ------ | --------------- | --------------------------------------------------------------------------------- |
-| 1.1 | GET    | `/health/live`   | 200, `{"status":"ok"}`                                                                                    |
-| 1.2 | GET    | `/health/ready`  | 200, deps connected; optional `migration_version`, `mail_outbox_pending`, `dlq_depth`, `worker_queues` |
+| 1.1 | GET    | `/health`   | 200, `{"status":"ok"}`                                                                                    |
+| 1.2 | GET    | `/health`  | 200, deps connected; optional `migration_version`, `mail_outbox_pending`, `dlq_depth`, `worker_queues` |
 | 1.3 | GET    | `/health`        | 200 aggregate (`live: ok` + deps); deprecated — operators only                                            |
-| 1.4 | GET    | `/health/worker` | 200 API worker-dependency view; worker replica probe uses `WORKER_HEALTH_PORT`                          |
+| 1.4 | GET    | `/health` | 200 API worker-dependency view; worker replica probe uses `WORKER_HEALTH_PORT`                          |
 
 Full semantics and probe matrix: [health-checks.md](../reference/reliability/health-checks.md).
 
 ```bash
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health/live
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health/ready
 curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health/worker
+curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health
+curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health
+curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health
 ```
 
 ### 2. Auth — login and token

@@ -1,5 +1,8 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "files": {
+    "includes": ["src/**", "tooling/**"]
+  },
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -33,6 +36,17 @@
         "noUnusedVariables": "error"
       },
       "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "resend": "Import Resend only via src/infrastructure/mail/mail.service.ts or src/infrastructure/outbound/.",
+              "@aws-sdk/client-s3": "Import S3 SDK only via storage wrappers or src/infrastructure/outbound/.",
+              "@aws-sdk/s3-presigned-post": "Import S3 presigned-post only via storage wrappers or src/infrastructure/outbound/.",
+              "@aws-sdk/s3-request-presigner": "Import S3 presigner only via storage wrappers or src/infrastructure/outbound/."
+            }
+          }
+        },
         "useConst": "error",
         "useImportType": "error",
         "useCollapsedIf": "warn",
@@ -90,6 +104,9 @@
       "includes": ["src/**/__tests__/**/*.ts", "src/**/*.test.ts", "src/tests/**/*.ts"],
       "linter": {
         "rules": {
+          "suspicious": {
+            "noThenProperty": "off"
+          },
           "complexity": {
             "noExcessiveLinesPerFunction": "off",
             "noExcessiveCognitiveComplexity": {
@@ -132,6 +149,9 @@
           "suspicious": {
             "noConsole": "off"
           },
+          "nursery": {
+            "noImpliedEval": "off"
+          },
           "complexity": {
             "noExcessiveLinesPerFunction": "off",
             "noExcessiveCognitiveComplexity": {
@@ -155,6 +175,22 @@
       }
     },
     {
+      "includes": [
+        "src/infrastructure/mail/mail.service.ts",
+        "src/infrastructure/storage/storage.service.ts",
+        "src/infrastructure/storage/s3-adapter.ts",
+        "src/infrastructure/outbound/**",
+        "src/tests/contract/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["src/domains/billing/sub-domains/subscription/subscription.controller.ts"],
       "linter": {
         "rules": {
@@ -168,6 +204,10 @@
       "includes": ["tooling/**/*.ts"],
       "linter": {
         "rules": {
+          "style": {
+            "noRestrictedImports": "off",
+            "noNonNullAssertion": "warn"
+          },
           "suspicious": {
             "noConsole": "off",
             "noExplicitAny": "error"
@@ -183,9 +223,6 @@
                 "maxAllowedComplexity": 95
               }
             }
-          },
-          "style": {
-            "noNonNullAssertion": "warn"
           }
         }
       }

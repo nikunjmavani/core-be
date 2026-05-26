@@ -1,4 +1,5 @@
 import { ValidationError } from '@/shared/errors/index.js';
+import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
   createOrganizationApiKeyDto,
   updateOrganizationApiKeyDto,
@@ -27,6 +28,7 @@ export function validateUpdateOrganizationApiKey(data: unknown): UpdateOrganizat
 export function validateListOrganizationApiKeysQuery(
   data: unknown,
 ): ListOrganizationApiKeysQueryInput {
+  ensureCursorOnlyPagination(data);
   const result = listOrganizationApiKeysQueryDto.safeParse(data);
   if (!result.success) {
     throw new ValidationError(

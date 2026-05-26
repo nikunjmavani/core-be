@@ -11,9 +11,9 @@ describe('OrganizationRepository (database)', () => {
   });
 
   it('returns an empty page when no organizations exist', async () => {
-    const emptyPage = await repository.findAll(1, 20);
+    const emptyPage = await repository.findAll({ limit: 20 });
     expect(emptyPage.items).toEqual([]);
-    expect(emptyPage.total).toBe(0);
+    expect(emptyPage.total).toBeNull();
   });
 
   it('creates, queries, updates, and soft-deletes organizations', async () => {
@@ -38,7 +38,7 @@ describe('OrganizationRepository (database)', () => {
     const resolvedOwnerId = await repository.resolveUserIdByPublicId(owner.public_id);
     expect(resolvedOwnerId).toBe(owner.id);
 
-    const page = await repository.findAll(1, 20);
+    const page = await repository.findAll({ limit: 20 });
     expect(page.items.some((row) => row.public_id === created.public_id)).toBe(true);
 
     await repository.updateStripeCustomerId(created.id, 'cus_test_123');

@@ -2,10 +2,10 @@
 
 Targets for **core-be** API and worker on Railway with Neon Postgres and Upstash Redis.
 
-| Metric | Target | Notes |
-| ------ | ------ | ----- |
-| **RTO** (recovery time) | **1 hour** | Restore service availability for authenticated API traffic |
-| **RPO** (recovery point) | **15 minutes** | Maximum acceptable data loss window |
+| Metric                   | Target         | Notes                                                      |
+| ------------------------ | -------------- | ---------------------------------------------------------- |
+| **RTO** (recovery time)  | **1 hour**     | Restore service availability for authenticated API traffic |
+| **RPO** (recovery point) | **15 minutes** | Maximum acceptable data loss window                        |
 
 Neon point-in-time recovery (PITR) and Railway redeploys are the primary mechanisms. This runbook assumes backups and secrets are already provisioned per [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md).
 
@@ -15,7 +15,7 @@ Neon point-in-time recovery (PITR) and Railway redeploys are the primary mechani
 
 - Regional or provider outage affecting Neon, Upstash, or Railway
 - Accidental destructive migration or data corruption confirmed in Postgres
-- Complete loss of the production API or worker service with no healthy `/health/ready`
+- Complete loss of the production API or worker service with no healthy `/health`
 
 ---
 
@@ -72,16 +72,16 @@ flowchart TD
 1. Redeploy latest known-good image from `main` (or previous green deployment).
 2. Confirm secrets: `JWT_*`, `STRIPE_*`, `SENTRY_DSN`, `ALLOWED_ORIGINS`, `DATABASE_URL`, `REDIS_URL`, `DEPLOYMENT_TOTAL_REPLICA_COUNT`.
 3. Scale workers to normal count ([worker-scaling.md](../deployment/runbooks/worker-scaling.md)).
-4. Hit `GET /health/ready` until 200 with all dependencies available.
+4. Hit `GET /health` until 200 with all dependencies available.
 
 ### 4. Validation (before closing)
 
-| Check | Command / endpoint |
-| ----- | ------------------ |
-| Migrations | `pnpm db:migrate` |
-| Local gate (optional) | `pnpm verify:base` with restored URLs in `.env` |
-| Deployed smoke | `SMOKE_BASE_URL=… pnpm test:api-smoke` |
-| Stripe webhooks | Reconcile stuck events — [stripe-subscription-reconciliation.md](../deployment/runbooks/stripe-subscription-reconciliation.md) |
+| Check                 | Command / endpoint                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Migrations            | `pnpm db:migrate`                                                                                                              |
+| Local gate (optional) | `pnpm verify:base` with restored URLs in `.env`                                                                                |
+| Deployed smoke        | `SMOKE_BASE_URL=… pnpm test:api-smoke`                                                                                         |
+| Stripe webhooks       | Reconcile stuck events — [stripe-subscription-reconciliation.md](../deployment/runbooks/stripe-subscription-reconciliation.md) |
 
 ---
 
@@ -97,16 +97,16 @@ flowchart TD
 
 Review this runbook at the start of each calendar quarter (January, April, July, October). Confirm RTO/RPO targets, Neon/Upstash/Railway steps, and cross-links still match production. Run or schedule the [monthly restore drill](backup-drills.md) in the same quarter when possible; the workflow records restore duration and fails when elapsed time is not below **`RTO_MINUTES`** (default 60).
 
-| Quarter | Reviewer | Review date | Outcome | Notes |
-| ------- | -------- | ----------- | ------- | ----- |
-| 2026-Q2 | Production readiness verify | 2026-05-20 | Passed | Linked from [docs/index.md](../index.md); procedures aligned with restore drill and migrations reference |
+| Quarter | Reviewer                    | Review date | Outcome | Notes                                                                                                    |
+| ------- | --------------------------- | ----------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| 2026-Q2 | Production readiness verify | 2026-05-20  | Passed  | Linked from [docs/index.md](../index.md); procedures aligned with restore drill and migrations reference |
 
 ---
 
 ## Related
 
 - [docs/index.md](../index.md) — documentation index (links here)
-- [backup-drills.md](backup-drills.md) — monthly drill; RTO artifacts + `RTO_MINUTES` gate; optional `recorded_rto_minutes` input
+- [backup-drills.md](backup-drills.md) — monthly automated restore drill (`MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY`; Neon project `core-be` by name; parent branch = workflow ref)
 - [restore-drill.md](../deployment/restore-drill.md) — workflow secrets and CI artifact names
 - [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md) — deploy and secrets
 - [runbook-dev-to-production.md](../deployment/runbooks/runbook-dev-to-production.md) — production promotion

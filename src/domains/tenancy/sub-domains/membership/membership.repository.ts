@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
@@ -7,26 +7,46 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { MembershipRow } from './membership.types.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import {
+  buildAscendingCreatedAtIdCursorCondition,
+  createOpaqueCursorFromRow,
+  parseListCursor,
+} from '@/shared/utils/http/pagination.util.js';
+
+interface MembershipListPagination {
+  after?: string;
+  limit: number;
+}
 
 export class MembershipRepository extends BaseRepository {
-  async findByOrganizationId(organization_id: number, page: number, limit: number) {
-    const offset = (page - 1) * limit;
+  async findByOrganizationId(organization_id: number, pagination: MembershipListPagination) {
+    const { after, limit } = pagination;
+    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+      memberships.created_at,
+      memberships.id,
+      parseListCursor(after),
+    );
     const where = and(
       eq(memberships.organization_id, organization_id),
       isNull(memberships.deleted_at),
+      cursorCondition,
     );
-    const [rows, countResult] = await Promise.all([
-      getRequestDatabase()
-        .select()
-        .from(memberships)
-        .where(where)
-        .orderBy(asc(memberships.created_at))
-        .limit(limit)
-        .offset(offset),
-      getRequestDatabase().select({ count: count() }).from(memberships).where(where),
-    ]);
-    const total = countResult[0]?.count ?? 0;
-    return this.paginate(rows as MembershipRow[], total, page, limit);
+    const rows = await getRequestDatabase()
+      .select()
+      .from(memberships)
+      .where(where)
+      .orderBy(asc(memberships.created_at), asc(memberships.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const items = (hasMore ? rows.slice(0, limit) : rows) as MembershipRow[];
+    const lastItem = items.at(-1);
+    return {
+      items,
+      total: null,
+      limit,
+      has_more: hasMore,
+      next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
+    };
   }
 
   async findById(id: number): Promise<MembershipRow | null> {

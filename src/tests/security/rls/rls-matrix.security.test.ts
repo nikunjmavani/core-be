@@ -80,78 +80,78 @@ describe('Security: RLS matrix (all FORCE RLS tables)', () => {
     (table) => !RLS_MATRIX_SKIP_CRUD_TABLES.has(tableKey(table.schemaName, table.tableName)),
   );
 
-  describe.each(crudMatrixTables)(
-    'tenant isolation CRUD ($schemaName.$tableName)',
-    ({ schemaName, tableName }) => {
-      const key = tableKey(schemaName, tableName);
+  describe.each(crudMatrixTables)('tenant isolation CRUD ($schemaName.$tableName)', ({
+    schemaName,
+    tableName,
+  }) => {
+    const key = tableKey(schemaName, tableName);
 
-      it('should not read other tenant rows (SELECT count)', async () => {
-        const fixture = await seedRlsMatrixFixtures();
-        const rowIds = fixture.rowIdsByTable.get(key);
-        if (!rowIds) {
-          const countForA = await countRowsAsTenant(
-            schemaName,
-            tableName,
-            fixture.organizationAPublicId,
-          );
-          const countForB = await countRowsAsTenant(
-            schemaName,
-            tableName,
-            fixture.organizationBPublicId,
-          );
-          expect(countForA).toBeGreaterThanOrEqual(0);
-          expect(countForB).toBeGreaterThanOrEqual(0);
-          return;
-        }
-
-        const visibleForA = await countRowsAsTenant(
+    it('should not read other tenant rows (SELECT count)', async () => {
+      const fixture = await seedRlsMatrixFixtures();
+      const rowIds = fixture.rowIdsByTable.get(key);
+      if (!rowIds) {
+        const countForA = await countRowsAsTenant(
           schemaName,
           tableName,
           fixture.organizationAPublicId,
         );
-        expect(visibleForA).toBeGreaterThan(0);
-
-        await executeAsCoreBeAppTenant(fixture.organizationAPublicId, async (transaction) => {
-          const qualified = `"${schemaName}"."${tableName}"`;
-          const result = await transaction.execute(
-            drizzleSql.raw(
-              `SELECT count(*)::int AS count FROM ${qualified} WHERE id = ${rowIds.organizationB}`,
-            ),
-          );
-          const rows = Array.isArray(result)
-            ? result
-            : ((result as { rows?: { count: number }[] }).rows ?? []);
-          expect(Number(rows[0]?.count ?? 0)).toBe(0);
-        });
-      });
-
-      it('should not UPDATE other tenant rows', async () => {
-        const fixture = await seedRlsMatrixFixtures();
-        const rowIds = fixture.rowIdsByTable.get(key);
-        if (!rowIds) return;
-
-        const updated = await updateRowAsTenant(
+        const countForB = await countRowsAsTenant(
           schemaName,
           tableName,
-          rowIds.organizationB,
-          fixture.organizationAPublicId,
+          fixture.organizationBPublicId,
         );
-        expect(updated).toBe(0);
-      });
+        expect(countForA).toBeGreaterThanOrEqual(0);
+        expect(countForB).toBeGreaterThanOrEqual(0);
+        return;
+      }
 
-      it('should not DELETE other tenant rows', async () => {
-        const fixture = await seedRlsMatrixFixtures();
-        const rowIds = fixture.rowIdsByTable.get(key);
-        if (!rowIds) return;
+      const visibleForA = await countRowsAsTenant(
+        schemaName,
+        tableName,
+        fixture.organizationAPublicId,
+      );
+      expect(visibleForA).toBeGreaterThan(0);
 
-        const deleted = await deleteRowAsTenant(
-          schemaName,
-          tableName,
-          rowIds.organizationB,
-          fixture.organizationAPublicId,
+      await executeAsCoreBeAppTenant(fixture.organizationAPublicId, async (transaction) => {
+        const qualified = `"${schemaName}"."${tableName}"`;
+        const result = await transaction.execute(
+          drizzleSql.raw(
+            `SELECT count(*)::int AS count FROM ${qualified} WHERE id = ${rowIds.organizationB}`,
+          ),
         );
-        expect(deleted).toBe(0);
+        const rows = Array.isArray(result)
+          ? result
+          : ((result as { rows?: { count: number }[] }).rows ?? []);
+        expect(Number(rows[0]?.count ?? 0)).toBe(0);
       });
-    },
-  );
+    });
+
+    it('should not UPDATE other tenant rows', async () => {
+      const fixture = await seedRlsMatrixFixtures();
+      const rowIds = fixture.rowIdsByTable.get(key);
+      if (!rowIds) return;
+
+      const updated = await updateRowAsTenant(
+        schemaName,
+        tableName,
+        rowIds.organizationB,
+        fixture.organizationAPublicId,
+      );
+      expect(updated).toBe(0);
+    });
+
+    it('should not DELETE other tenant rows', async () => {
+      const fixture = await seedRlsMatrixFixtures();
+      const rowIds = fixture.rowIdsByTable.get(key);
+      if (!rowIds) return;
+
+      const deleted = await deleteRowAsTenant(
+        schemaName,
+        tableName,
+        rowIds.organizationB,
+        fixture.organizationAPublicId,
+      );
+      expect(deleted).toBe(0);
+    });
+  });
 });

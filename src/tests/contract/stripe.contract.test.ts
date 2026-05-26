@@ -8,16 +8,36 @@ import {
   updateStripeSubscription,
 } from '@/infrastructure/payment/stripe.client.js';
 
-import customerCreateRequestSubset from './fixtures/stripe/customer.create.request.fields.json' with { type: 'json' };
-import customerCreateFixtureResponse from './fixtures/stripe/customer.create.response.json' with { type: 'json' };
-import subscriptionCancelFixtureResponse from './fixtures/stripe/subscription.cancel.response.json' with { type: 'json' };
-import subscriptionCreateRequestSubset from './fixtures/stripe/subscription.create.request.fields.json' with { type: 'json' };
-import subscriptionCreateFixtureResponse from './fixtures/stripe/subscription.create.response.json' with { type: 'json' };
-import subscriptionRetrieveFixtureResponse from './fixtures/stripe/subscription.retrieve.response.json' with { type: 'json' };
-import subscriptionUpdateCancelFixtureResponse from './fixtures/stripe/subscription.update.cancel-at-period-end.response.json' with { type: 'json' };
-import subscriptionUpdateFixtureRequestSubset from './fixtures/stripe/subscription.update.request.fields.json' with { type: 'json' };
-import subscriptionUpdateFixtureResponse from './fixtures/stripe/subscription.update.response.json' with { type: 'json' };
-import subscriptionResumeFixtureResponse from './fixtures/stripe/subscription.update.resume.response.json' with { type: 'json' };
+import customerCreateRequestSubset from './fixtures/stripe/customer.create.request.fields.json' with {
+  type: 'json',
+};
+import customerCreateFixtureResponse from './fixtures/stripe/customer.create.response.json' with {
+  type: 'json',
+};
+import subscriptionCancelFixtureResponse from './fixtures/stripe/subscription.cancel.response.json' with {
+  type: 'json',
+};
+import subscriptionCreateRequestSubset from './fixtures/stripe/subscription.create.request.fields.json' with {
+  type: 'json',
+};
+import subscriptionCreateFixtureResponse from './fixtures/stripe/subscription.create.response.json' with {
+  type: 'json',
+};
+import subscriptionRetrieveFixtureResponse from './fixtures/stripe/subscription.retrieve.response.json' with {
+  type: 'json',
+};
+import subscriptionUpdateCancelFixtureResponse from './fixtures/stripe/subscription.update.cancel-at-period-end.response.json' with {
+  type: 'json',
+};
+import subscriptionUpdateFixtureRequestSubset from './fixtures/stripe/subscription.update.request.fields.json' with {
+  type: 'json',
+};
+import subscriptionUpdateFixtureResponse from './fixtures/stripe/subscription.update.response.json' with {
+  type: 'json',
+};
+import subscriptionResumeFixtureResponse from './fixtures/stripe/subscription.update.resume.response.json' with {
+  type: 'json',
+};
 import { assertStripeEncodedFormContainsExpectedFields } from './helpers/stripe-form.js';
 import { registerThirdPartyContractTestIsolationHooks } from './helpers/register-contract-test-hooks.js';
 import {

@@ -52,7 +52,13 @@ describe('UserService', () => {
     updateMfaEnabled: vi.fn().mockResolvedValue(userRow),
     createFromOAuth: vi.fn().mockResolvedValue(userRow),
     softDelete: vi.fn().mockResolvedValue(userRow),
-    findMany: vi.fn().mockResolvedValue({ items: [userRow], total: 1 }),
+    findMany: vi.fn().mockResolvedValue({
+      items: [userRow],
+      total: null,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    }),
     adminUpdate: vi.fn().mockResolvedValue(userRow),
     suspend: vi.fn().mockResolvedValue({ ...userRow, suspended_at: new Date() }),
     unsuspend: vi.fn().mockResolvedValue(userRow),
@@ -66,6 +72,17 @@ describe('UserService', () => {
     vi.mocked(repository.findByPublicId).mockResolvedValue(userRow as never);
     vi.mocked(repository.softDelete).mockResolvedValue(userRow as never);
     vi.mocked(repository.update).mockResolvedValue(userRow as never);
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions: vi.fn().mockResolvedValue(undefined) } as never,
+      authMethodService: { revokeAllForUser: vi.fn().mockResolvedValue(undefined) } as never,
+      uploadService: {
+        tombstoneAllByUserId: vi.fn().mockResolvedValue(0),
+        assertKeyConfirmed: vi.fn().mockResolvedValue(undefined),
+      } as never,
+      userDataExportService: {
+        deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
   });
 
   it('findByEmail returns user record', async () => {
@@ -113,6 +130,25 @@ describe('UserService', () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it('uploadAvatar rejects when the upload has not been confirmed', async () => {
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions: vi.fn() } as never,
+      authMethodService: { revokeAllForUser: vi.fn() } as never,
+      uploadService: {
+        tombstoneAllByUserId: vi.fn().mockResolvedValue(0),
+        assertKeyConfirmed: vi
+          .fn()
+          .mockRejectedValue(new ValidationError('errors:validation.uploadNotConfirmed')),
+      } as never,
+      userDataExportService: { deleteAllExportsForUser: vi.fn() } as never,
+    });
+    const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
+    await expect(service.uploadAvatar(userRow.public_id, { avatarKey })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
   it('deleteMe runs offboarding when dependencies attached', async () => {
     const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
     const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
@@ -130,8 +166,11 @@ describe('UserService', () => {
   });
 
   it('listUsers, getUser, adminUpdateUser, suspend and unsuspend', async () => {
-    const listed = await service.listUsers({ page: 1, limit: 20 });
+    const listed = await service.listUsers({ limit: 20 });
     expect(listed.items).toHaveLength(1);
+    expect(listed.has_more).toBe(false);
+    expect(listed.next_cursor).toBeNull();
+    expect(listed.total).toBeNull();
     const profile = await service.getUser(userRow.public_id);
     expect(profile.id).toBe(userRow.public_id);
     await service.adminUpdateUser(userRow.public_id, { status: 'SUSPENDED' });

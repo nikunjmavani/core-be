@@ -17,14 +17,15 @@ const REQUIRED_FILES: RequiredFile[] = [
     relativePath: '.github/workflows/reusable-openapi-postman-publish.yml',
     mustContain: [
       'pnpm docs:all',
-      'pnpm docs:validate:openapi',
+      'pnpm docs:check',
       'pnpm docs:upload',
       'pnpm docs:upload:scalar',
+      'continue-on-error: true',
       'github_environment',
       'development',
       'production',
-      "secrets.POSTMAN_API_KEY != ''",
-      "secrets.SCALAR_API_KEY != ''",
+      "env.POSTMAN_API_KEY != ''",
+      "env.SCALAR_API_KEY != ''",
     ],
   },
   {

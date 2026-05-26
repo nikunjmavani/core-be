@@ -91,8 +91,9 @@ describe('cookie-session-origin.pre-handler (empty allowlist)', () => {
     vi.doMock('@/shared/config/env.config.js', () => ({
       env: { ALLOWED_ORIGINS: '', NODE_ENV: 'development' },
     }));
-    const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } =
-      await import('@/shared/middlewares/cookie-session-origin.pre-handler.js');
+    const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(
+      '@/shared/middlewares/cookie-session-origin.pre-handler.js'
+    );
     expect(() =>
       requireSourceOrigin({
         headers: {},
@@ -110,8 +111,9 @@ describe('cookie-session-origin.pre-handler (production)', () => {
         NODE_ENV: 'production',
       },
     }));
-    const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } =
-      await import('@/shared/middlewares/cookie-session-origin.pre-handler.js');
+    const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(
+      '@/shared/middlewares/cookie-session-origin.pre-handler.js'
+    );
     try {
       requireSourceOrigin({
         headers: { referer: 'https://app.example.com/dashboard' },
@@ -131,8 +133,9 @@ describe('cookie-session-origin.pre-handler (production)', () => {
         NODE_ENV: 'production',
       },
     }));
-    const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } =
-      await import('@/shared/middlewares/cookie-session-origin.pre-handler.js');
+    const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(
+      '@/shared/middlewares/cookie-session-origin.pre-handler.js'
+    );
     try {
       requireSourceOrigin({
         headers: { [CSRF_HEADER_NAME]: 'header-token' },
@@ -152,8 +155,9 @@ describe('cookie-session-origin.pre-handler (production)', () => {
         NODE_ENV: 'production',
       },
     }));
-    const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } =
-      await import('@/shared/middlewares/cookie-session-origin.pre-handler.js');
+    const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(
+      '@/shared/middlewares/cookie-session-origin.pre-handler.js'
+    );
     const csrfToken = 'matching-csrf-token-value';
     expect(() =>
       requireSourceOrigin({

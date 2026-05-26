@@ -29,6 +29,16 @@ vi.mock('@/infrastructure/observability/metrics/metrics.js', async (importOrigin
   };
 });
 
+vi.mock('@/shared/utils/infrastructure/readiness-probes.util.js', () => ({
+  runDependencyReadinessProbes: vi.fn().mockResolvedValue({
+    status: 'ok',
+    database: 'connected',
+    redis: 'connected',
+    bullmq: 'connected',
+    latencyMs: { database: 1, redis: 1, bullmq: 1 },
+  }),
+}));
+
 function getHealth(
   url: string,
   options?: { authorization?: string },
@@ -56,7 +66,7 @@ function getHealth(
 describe('worker-health.server', () => {
   const host = env.HTTP_BIND_HOST === '0.0.0.0' ? '127.0.0.1' : env.HTTP_BIND_HOST;
   const baseUrl = `http://${host}:${env.WORKER_HEALTH_PORT}`;
-  const liveUrl = `${baseUrl}/health/live`;
+  const liveUrl = `${baseUrl}/health`;
   const metricsUrl = `${baseUrl}/metrics`;
 
   beforeAll(async () => {
@@ -69,35 +79,42 @@ describe('worker-health.server', () => {
     await stopWorkerHealthServer();
   });
 
-  it('returns 503 on /health/live before workers are marked ready', async () => {
+  it('returns 503 on /health before workers are marked ready', async () => {
     markWorkerHealthNotReady();
     const response = await getHealth(liveUrl);
     expect(response.statusCode).toBe(503);
-    expect(JSON.parse(response.body)).toMatchObject({ status: 'starting', service: 'worker' });
+    expect(JSON.parse(response.body)).toMatchObject({ status: 'starting', role: 'worker' });
   });
 
-  it('returns 200 on /health/live after workers are marked ready', async () => {
+  it('returns 200 on /health after workers are marked ready', async () => {
     markWorkerHealthReady(3);
     const response = await getHealth(liveUrl);
     expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)).toMatchObject({ status: 'ok', service: 'worker' });
+    expect(JSON.parse(response.body)).toMatchObject({
+      status: 'ok',
+      role: 'worker',
+      workersRegistered: 3,
+    });
   });
 
-  it('returns 503 on /health/live when throughput heartbeats are stale', async () => {
-    const { readWorkerQueueHeartbeats } =
-      await import('@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js');
-    vi.mocked(readWorkerQueueHeartbeats).mockResolvedValueOnce([
-      {
-        queue: 'mail',
-        last_job_at: new Date(
-          Date.now() - env.WORKER_HEALTH_STALL_TIMEOUT_MS - 1_000,
-        ).toISOString(),
-      },
-    ]);
+  it('returns 503 on /health when throughput heartbeats are stale', async () => {
+    const { readWorkerQueueHeartbeats } = await import(
+      '@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js'
+    );
+    vi.mocked(readWorkerQueueHeartbeats)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          queue: 'mail',
+          last_job_at: new Date(
+            Date.now() - env.WORKER_HEALTH_STALL_TIMEOUT_MS - 1_000,
+          ).toISOString(),
+        },
+      ]);
     markWorkerHealthReady(3);
     const response = await getHealth(liveUrl);
     expect(response.statusCode).toBe(503);
-    expect(JSON.parse(response.body)).toMatchObject({ status: 'stalled', service: 'worker' });
+    expect(JSON.parse(response.body)).toMatchObject({ status: 'stalled', role: 'worker' });
   });
 
   it('returns 401 on /metrics without bearer token when METRICS_SCRAPE_TOKEN is set', async () => {

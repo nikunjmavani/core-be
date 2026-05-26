@@ -24,25 +24,17 @@ describe('Chaos resilience: Postgres outage on readiness probing', () => {
     await chaosListeningFastifyApplicationListeningForHealthIsolation.close();
   }, 120_000);
 
-  it('returns readiness failure while Postgres is partitioned yet keeps pure liveness positive', async () => {
+  it('returns health failure while Postgres is partitioned', async () => {
     await withTemporaryListeningProxyAdministrativelyDisabledForChaosAssertion(
       CHAOS_POSTGRES_PROXY_NAME,
       async () => {
-        const readinessResponseAwaitingIsolation =
+        const healthResponseAwaitingIsolation =
           await chaosListeningFastifyApplicationListeningForHealthIsolation.inject({
             method: 'GET',
-            url: '/health/ready',
+            url: '/health',
           });
 
-        expect(readinessResponseAwaitingIsolation.statusCode).toBe(503);
-
-        const livenessObservationResponseAwaitingIsolation =
-          await chaosListeningFastifyApplicationListeningForHealthIsolation.inject({
-            method: 'GET',
-            url: '/health/live',
-          });
-
-        expect(livenessObservationResponseAwaitingIsolation.statusCode).toBe(200);
+        expect(healthResponseAwaitingIsolation.statusCode).toBe(503);
       },
     );
   });

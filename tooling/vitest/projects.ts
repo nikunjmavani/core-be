@@ -85,10 +85,7 @@ function buildE2eIncludes(): string[] {
 function buildIntegrationIncludes(): string[] {
   const filter = parseDomainFilter();
   if (!filter) {
-    return [
-      'src/tests/integration/**/*.test.ts',
-      'src/**/__tests__/integration/**/*.test.ts',
-    ];
+    return ['src/tests/integration/**/*.test.ts', 'src/**/__tests__/integration/**/*.test.ts'];
   }
   const patterns: string[] = [];
   for (const domain of filter.domains) {
@@ -246,7 +243,7 @@ export const vitestProjects = [
     },
   },
 
-  /** Toxiproxy chaos suite — own setup, runs via `vitest.chaos.config.ts`. */
+  /** Toxiproxy chaos suite — own setup, runs via `tooling/vitest/chaos.config.ts`. */
   {
     extends: true,
     test: {
@@ -262,7 +259,7 @@ export const vitestProjects = [
     },
   },
 
-  /** Outbound-HTTP contract tests — runs via `vitest.contract.config.ts`. */
+  /** Outbound-HTTP contract tests — runs via `tooling/vitest/contract.config.ts`. */
   {
     extends: true,
     test: {

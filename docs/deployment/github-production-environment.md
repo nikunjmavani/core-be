@@ -1,15 +1,15 @@
 # GitHub production environment (manual approval)
 
-How **production** deploys are gated in GitHub Actions when using [deploy-railway.yml](../../.github/workflows/deploy-railway.yml). There is **no Terraform** in this repository — environment protection rules are declared in [`.github/environments/`](../../.github/environments/) and applied in the GitHub UI.
+How **production** deploys are gated in GitHub Actions when using [reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml). There is **no Terraform** in this repository — environment protection rules are declared in [`.github/environments/`](../../.github/environments/) and applied in the GitHub UI.
 
 ---
 
 ## Environments
 
-| GitHub Environment | Branch trigger (`workflow_run` after CI) | Railway target |
-| ------------------ | ---------------------------------------- | -------------- |
-| `production` | `main` | Production API + worker services |
-| `dev` | `dev` | Development stack |
+| GitHub Environment | Branch trigger (`workflow_run` after CI) | Railway target                   |
+| ------------------ | ---------------------------------------- | -------------------------------- |
+| `production`       | `main`                                   | Production API + worker services |
+| `dev`              | `dev`                                    | Development stack                |
 
 Manual dispatch (`workflow_dispatch`) can target any of the three via the `target` input.
 
@@ -21,7 +21,7 @@ Configure in **Settings → Environments → production**:
 
 1. **Required reviewers** — at least one team member (platform or release manager) must approve before the deploy job runs.
 2. **Deployment branches** — restrict to `main` only (optional but recommended).
-3. **Environment secrets** — `DATABASE_URL`, `RAILWAY_TOKEN`, `JWT_SECRET`, etc. per [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md). Do not reuse dev secrets.
+3. **Environment secrets** — `DATABASE_URL`, `RAILWAY_TOKEN`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, etc. per [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md). Do not reuse dev secrets.
 
 The deploy workflow sets `environment: ${{ needs.resolve-environment.outputs.environment }}` on the deploy job, so GitHub enforces reviewers **only** when the resolved environment is `production` (or when you add reviewers to development).
 
@@ -46,10 +46,10 @@ Reject or cancel if schema changes need a maintenance window.
 
 Committed JSON under [`.github/environments/`](../../.github/environments/) is the source of truth for each GitHub Environment’s protection rules (required reviewers, deployment branches). Example: [production.json](../../.github/environments/production.json).
 
-| Command | Purpose |
-| ------- | ------- |
-| `pnpm validate:github-environments` | Compare committed config vs live GitHub UI (all `*.json` in `.github/environments/`) |
-| `pnpm validate:github-env` | Same drift check **plus** `.env.example` secrets and `METRICS_*` deploy sync (runs in [deploy-railway.yml](../../.github/workflows/deploy-railway.yml)) |
+| Command                             | Purpose                                                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm validate:github-environments` | Compare committed config vs live GitHub UI (all `*.json` in `.github/environments/`)                                                                    |
+| `pnpm validate:github-env`          | Same drift check **plus** `.env.example` secrets and `METRICS_*` deploy sync (runs in [reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml)) |
 
 Use `SKIP_GITHUB_ENV=1` to skip API calls locally when you only need deploy-sync or secret checks.
 

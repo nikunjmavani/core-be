@@ -1,0 +1,212 @@
+name: PR CI
+
+# Fast merge gate (~2–3 min target). All jobs run in parallel; no Postgres/Redis on PR.
+# Lint, typecheck, unit, migration safety lint, and TS/Docker build verification run here.
+# Security + contract/property tests stay on PR. Post-merge CI handles Docker publish,
+# deploy, release automation after merge (same commit SHA already passed PR CI).
+#
+# Required checks: see docs/deployment/ci-cd/branch-protection.md
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      src-code: ${{ steps.filter.outputs.src-code }}
+      docker: ${{ steps.filter.outputs.docker }}
+      ci-config: ${{ steps.filter.outputs.ci-config }}
+      docs-only-md: ${{ steps.filter.outputs.docs-only-md == 'true' && steps.filter.outputs.src-code == 'false' && steps.filter.outputs.docker == 'false' && steps.filter.outputs.ci-config == 'false' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Path filter
+        uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            src-code:
+              - 'src/**'
+              - 'migrations/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'vitest.config.ts'
+              - 'tooling/**'
+            docker:
+              - 'Dockerfile'
+              - 'Dockerfile.worker'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tooling/ci/check-dockerfile-sync.mjs'
+            ci-config:
+              - '.github/**'
+            docs-only-md:
+              - '**/*.md'
+              - 'docs/**'
+
+  lint:
+    name: Lint
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm lint
+
+  typecheck:
+    name: Typecheck
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm typecheck
+
+  unit:
+    needs: [changes]
+    if: |
+      needs.changes.outputs.docs-only-md != 'true' &&
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.ci-config == 'true')
+    uses: ./.github/workflows/reusable-vitest-unit-only.yml
+    with:
+      base-ref: ${{ github.event.pull_request.base.ref }}
+
+  migration-lint:
+    name: Migration lint
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm db:migrate:lint
+
+  build-verify:
+    name: Build verify
+    needs: [changes]
+    if: |
+      needs.changes.outputs.docs-only-md != 'true' &&
+      (
+        needs.changes.outputs.src-code == 'true' ||
+        needs.changes.outputs.docker == 'true' ||
+        needs.changes.outputs.ci-config == 'true'
+      )
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILDKIT: 1
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - run: pnpm build
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Verify Dockerfile.worker sync
+        run: node tooling/ci/check-dockerfile-sync.mjs
+
+      - name: Build API Docker image (load only)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: api
+          load: true
+          push: false
+          tags: core-be:pr-verify
+          build-args: |
+            GENERATE_MCP_DOCS=true
+            BUILD_REVISION=${{ github.sha }}
+            IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=core-be-api
+          cache-to: type=gha,mode=max,scope=core-be-api
+
+      - name: Build worker Docker image (load only)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.worker
+          load: true
+          push: false
+          tags: core-be-worker:pr-verify
+          build-args: |
+            BUILD_REVISION=${{ github.sha }}
+            IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=core-be-worker
+          cache-to: type=gha,mode=max,scope=core-be-worker
+
+  security-scan:
+    name: Security scan
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - name: Dependency audit (all deps)
+        run: pnpm deps:audit
+
+      - name: Production dependency audit
+        run: pnpm deps:audit:prod
+
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          sudo chmod +x /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Gitleaks (secret detection)
+        run: gitleaks detect --redact --verbose --no-banner --config .gitleaks.toml
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Semgrep SAST
+        run: semgrep scan --config p/default --metrics off
+
+  contract-property:
+    name: Contract + property
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - name: Outbound contract tests (nock, offline)
+        run: pnpm test:contract
+
+      - name: Property tests (bounded)
+        env:
+          FAST_CHECK_NUM_RUNS: 50
+        run: pnpm test:property

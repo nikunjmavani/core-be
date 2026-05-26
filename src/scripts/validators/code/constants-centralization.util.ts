@@ -85,7 +85,7 @@ function evaluateNumericExpression(expression: string): number | undefined {
     return undefined;
   }
   try {
-    // eslint-disable-next-line no-new-func -- evaluates only the numeric-expression allowlist above in a repository validator.
+    // biome-ignore lint/nursery/noImpliedEval: evaluates only the numeric-expression allowlist above in a repository validator.
     const result = new Function(`return (${trimmed});`)() as unknown;
     return typeof result === 'number' && Number.isFinite(result) ? result : undefined;
   } catch {

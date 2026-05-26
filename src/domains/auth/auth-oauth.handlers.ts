@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { getRequestIdentifier } from '@/shared/utils/http/request.util.js';
 import {
   getIpAddress,
@@ -47,11 +48,14 @@ export function createAuthOauthHandlers({ oauthService }: AuthOauthHandlersDepen
       const ipAddress = getIpAddress(request);
       const userAgent = getUserAgent(request) ?? undefined;
       const data = await oauthService.handleCallback(
-        request.params.provider,
-        query.code,
-        query.state,
-        ipAddress,
-        userAgent,
+        omitUndefined({
+          provider: request.params.provider,
+          code: query.code,
+          state: query.state,
+          ipAddress,
+          userAgent,
+          requestId: getRequestIdentifier(request),
+        }),
       );
 
       if ('session_public_id' in data && typeof data.session_public_id === 'string') {

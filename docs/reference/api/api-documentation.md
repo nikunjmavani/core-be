@@ -25,9 +25,10 @@ List endpoints that use cursor pagination document these **query parameters**:
 | --------- | ----------- |
 | `limit` | Page size (default 25, max 100) |
 | `after` | Opaque cursor from the previous response `meta.pagination.next` |
-| `page` | **Deprecated** offset page (see [api-versioning.md](../api/api-versioning.md)) |
 
 Responses use `meta.pagination`: `per_page`, `next` (cursor or null), `has_more`, and optional `estimated_total`. The canonical route list is `tooling/openapi/pagination-openapi.ts` (`CURSOR_PAGINATED_LIST_ROUTE_KEYS`); query DTOs are mapped in `tooling/openapi/query-schema-map.ts`.
+
+> **Note**: The legacy `page` query parameter is no longer supported. Requests that include `page` return HTTP 400 with a validation error directing callers to use cursor pagination (`limit` + `after`). See [api-versioning.md](../api/api-versioning.md#runtime-behavior-core-be) for the exact error payload.
 
 ---
 
@@ -77,6 +78,10 @@ On **push** to **`dev`** or **`main`** (after Quality passes), CI regenerates sp
 | Scalar Registry | `pnpm docs:upload:scalar` | `SCALAR_API_KEY`, `SCALAR_NAMESPACE`; optional `SCALAR_SLUG` (default `core-be`) |
 | Both | `pnpm docs:upload:hosted` | All of the above |
 
+Hosted publish steps are best-effort in post-merge CI: OpenAPI/Postman generation,
+sync checks, and artifacts stay required, while invalid or expired third-party
+tokens surface as warnings instead of failing the whole post-merge workflow.
+
 Registry URL pattern:
 
 `https://registry.scalar.com/@<namespace>/apis/<slug>/latest`
@@ -93,7 +98,7 @@ pnpm docs:validate:openapi     # Scalar CLI validation
 pnpm docs:upload:hosted        # Postman + Scalar Registry (needs secrets)
 ```
 
-**Before merge (PR):** `pnpm routes:catalog:check` and `pnpm docs:check` run in **CI / Quality** (required on PRs to `dev`, `main`). Pre-commit also regenerates `docs/routes.txt` when routes change.
+**Before merge (PR):** Run `pnpm routes:catalog:check` and `pnpm docs:check` locally when changing routes or OpenAPI; post-merge **API docs** publishes on push. Pre-commit also regenerates `docs/routes.txt` when routes change.
 
 **After merge (push):** CI ([`.github/workflows/reusable/docs-generate.yml`](../../../.github/workflows/reusable/docs-generate.yml)) runs `docs:all`, `docs:validate:openapi`, then uploads to Postman and Scalar Registry when environment secrets are set.
 

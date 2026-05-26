@@ -1,7 +1,9 @@
 import { ValidationError } from '@/shared/errors/index.js';
+import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import { ListAuditLogsQueryDto, type ListAuditLogsQuery } from './audit.dto.js';
 
 export function validateListAuditLogsQuery(query: unknown): ListAuditLogsQuery {
+  ensureCursorOnlyPagination(query);
   const result = ListAuditLogsQueryDto.safeParse(query);
   if (!result.success) {
     throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);

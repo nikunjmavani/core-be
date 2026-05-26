@@ -1,4 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
+  withOrganizationDatabaseContext: vi.fn(
+    async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
+  ),
+}));
+
 import { NotFoundError } from '@/shared/errors/index.js';
 import { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
@@ -50,7 +57,7 @@ describe('MemberRoleService', () => {
   });
 
   it('list returns roles', async () => {
-    const result = await service.list(organization.public_id, { limit: 20, offsetPage: 1 });
+    const result = await service.list(organization.public_id, { limit: 20 });
     expect(result.items).toHaveLength(1);
   });
 

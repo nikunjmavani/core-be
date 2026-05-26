@@ -15,7 +15,9 @@ export class AuditService {
   ) {}
 
   /**
-   * Persists an audit log row. Resolves the actor's internal user id from their public id.
+   * Persists an audit log row. Resolves the actor's internal user id from their
+   * public id, then writes the row inside the actor's user database context so
+   * RLS sees the correct organization scope.
    */
   async record(input: AuditLogRecordInput): Promise<void> {
     const user = await withUserDatabaseContext(input.actorUserPublicId, () =>
@@ -47,7 +49,6 @@ export class AuditService {
 
   async list(query: Record<string, unknown>) {
     const parsed = validateListAuditLogsQuery(query);
-    const page = parsed.page ?? 1;
 
     let organization_id: number | undefined;
     let actor_user_id: number | undefined;
@@ -71,18 +72,19 @@ export class AuditService {
       action: parsed.action,
       from: parsed.from,
       to: parsed.to,
-      page,
+      after: parsed.after,
       limit: parsed.limit,
+      include_total: parsed.include_total === 'true',
     });
 
-    const { items, total } = await this.repository.findWithFilters(filters);
+    const { items, total, hasMore, nextCursor } = await this.repository.findWithFilters(filters);
 
     return {
       items,
       total,
-      page,
       limit: parsed.limit,
-      total_pages: Math.ceil(total / parsed.limit) || 1,
+      has_more: hasMore,
+      next_cursor: nextCursor,
     };
   }
 }

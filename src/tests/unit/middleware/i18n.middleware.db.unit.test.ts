@@ -37,12 +37,12 @@ describe('i18n.middleware (via application stack)', () => {
   });
 
   it('skips i18n for health live route', async () => {
-    const response = await application.inject({ method: 'GET', url: '/health/live' });
+    const response = await application.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
   });
 
   it('skips i18n for health ready route', async () => {
-    const response = await application.inject({ method: 'GET', url: '/health/ready' });
+    const response = await application.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
   });
 

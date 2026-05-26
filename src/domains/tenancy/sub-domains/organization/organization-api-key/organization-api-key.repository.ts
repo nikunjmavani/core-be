@@ -1,11 +1,21 @@
-import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import {
+  buildAscendingCreatedAtIdCursorCondition,
+  createOpaqueCursorFromRow,
+  parseListCursor,
+} from '@/shared/utils/http/pagination.util.js';
 import type { OrganizationApiKeyRow } from './organization-api-key.types.js';
+
+interface OrganizationApiKeyListPagination {
+  after?: string;
+  limit: number;
+}
 
 function parseScopesColumn(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -13,21 +23,37 @@ function parseScopesColumn(value: unknown): string[] {
 }
 
 export class OrganizationApiKeyRepository extends BaseRepository {
-  async findByOrganizationId(organization_id: number, page: number, limit: number) {
-    const offset = (page - 1) * limit;
-    const where = and(eq(api_keys.organization_id, organization_id), isNull(api_keys.deleted_at));
-    const [rows, countResult] = await Promise.all([
-      getRequestDatabase()
-        .select()
-        .from(api_keys)
-        .where(where)
-        .orderBy(asc(api_keys.created_at))
-        .limit(limit)
-        .offset(offset),
-      getRequestDatabase().select({ count: count() }).from(api_keys).where(where),
-    ]);
-    const total = countResult[0]?.count ?? 0;
-    return this.paginate(rows as OrganizationApiKeyRow[], total, page, limit);
+  async findByOrganizationId(
+    organization_id: number,
+    pagination: OrganizationApiKeyListPagination,
+  ) {
+    const { after, limit } = pagination;
+    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+      api_keys.created_at,
+      api_keys.id,
+      parseListCursor(after),
+    );
+    const where = and(
+      eq(api_keys.organization_id, organization_id),
+      isNull(api_keys.deleted_at),
+      cursorCondition,
+    );
+    const rows = await getRequestDatabase()
+      .select()
+      .from(api_keys)
+      .where(where)
+      .orderBy(asc(api_keys.created_at), asc(api_keys.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const items = (hasMore ? rows.slice(0, limit) : rows) as OrganizationApiKeyRow[];
+    const lastItem = items.at(-1);
+    return {
+      items,
+      total: null,
+      limit,
+      has_more: hasMore,
+      next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
+    };
   }
 
   async findByPublicId(

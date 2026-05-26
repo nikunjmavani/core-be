@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
@@ -7,16 +7,63 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { WebhookCreateData, WebhookUpdateData } from './webhook.types.js';
 import { webhookSubscribesToEvent } from './webhook-subscription.util.js';
+import {
+  buildAscendingCreatedAtIdCursorCondition,
+  createOpaqueCursorFromRow,
+  parseListCursor,
+} from '@/shared/utils/http/pagination.util.js';
 
 export type WebhookRow = typeof webhooks.$inferSelect;
 
+export interface WebhookListPagination {
+  after?: string;
+  limit: number;
+  include_total?: boolean;
+}
+
 export class WebhookRepository {
-  async listByOrganization(organization_id: number, limit = DEFAULT_REPOSITORY_LIST_LIMIT) {
-    return getRequestDatabase()
+  async listByOrganization(organization_id: number, pagination: WebhookListPagination) {
+    const { after, limit } = pagination;
+    const includeTotal = pagination.include_total === true;
+    const filterConditions: SQL[] = [
+      eq(webhooks.organization_id, organization_id),
+      isNull(webhooks.deleted_at)!,
+    ];
+    const countWhere = and(...filterConditions);
+    const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+      webhooks.created_at,
+      webhooks.id,
+      parseListCursor(after),
+    );
+    const where =
+      cursorCondition !== undefined ? and(...filterConditions, cursorCondition) : countWhere;
+
+    const rowsPromise = getRequestDatabase()
       .select()
       .from(webhooks)
-      .where(and(eq(webhooks.organization_id, organization_id), isNull(webhooks.deleted_at)))
-      .limit(limit);
+      .where(where)
+      .orderBy(asc(webhooks.created_at), asc(webhooks.id))
+      .limit(limit + 1);
+
+    const countPromise = includeTotal
+      ? getRequestDatabase()
+          .select({ count: count() })
+          .from(webhooks)
+          .where(countWhere)
+          .then((rows) => rows[0]?.count ?? 0)
+      : Promise.resolve(null);
+
+    const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);
+    const hasMore = fetchedRows.length > limit;
+    const items = hasMore ? fetchedRows.slice(0, limit) : fetchedRows;
+    const lastItem = items.at(-1);
+    return {
+      items,
+      total,
+      limit,
+      has_more: hasMore,
+      next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
+    };
   }
 
   async listEnabledSubscribedToEvent(
@@ -24,8 +71,10 @@ export class WebhookRepository {
     event_type: string,
     limit = DEFAULT_REPOSITORY_LIST_LIMIT,
   ) {
-    const rows = await this.listByOrganization(organization_id, limit);
-    return rows.filter((row) => row.is_enabled && webhookSubscribesToEvent(row.events, event_type));
+    const { items } = await this.listByOrganization(organization_id, { limit });
+    return items.filter(
+      (row) => row.is_enabled && webhookSubscribesToEvent(row.events, event_type),
+    );
   }
 
   async findByPublicId(public_id: string, organization_id: number) {

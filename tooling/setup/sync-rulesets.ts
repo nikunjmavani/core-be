@@ -168,9 +168,7 @@ export function loadLocalRulesets(directory: string = RULESETS_DIRECTORY): Local
 export function extractTargetBranchesFromRulesets(locals: readonly LocalRuleset[]): string[] {
   const branches = new Set<string>();
   for (const local of locals) {
-    const conditions = local.payload.conditions as
-      | { ref_name?: { include?: unknown } }
-      | undefined;
+    const conditions = local.payload.conditions as { ref_name?: { include?: unknown } } | undefined;
     const include = conditions?.ref_name?.include;
     if (!Array.isArray(include)) {
       continue;
@@ -187,11 +185,7 @@ export function extractTargetBranchesFromRulesets(locals: readonly LocalRuleset[
 }
 
 function listRemoteRulesets(repository: string): RemoteRulesetSummary[] {
-  return runGhJson<RemoteRulesetSummary[]>([
-    'api',
-    `repos/${repository}/rulesets`,
-    '--paginate',
-  ]);
+  return runGhJson<RemoteRulesetSummary[]>(['api', `repos/${repository}/rulesets`, '--paginate']);
 }
 
 function createRemoteRuleset(repository: string, local: LocalRuleset): RemoteRulesetSummary {

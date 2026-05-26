@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cursorListQuerySchema } from '@/shared/utils/http/pagination.util.js';
+import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 export const createMembershipDto = z
@@ -16,7 +16,7 @@ export const updateMembershipDto = z
   })
   .strict();
 
-export const listMembershipsQueryDto = cursorListQuerySchema;
+export const listMembershipsQueryDto = cursorPaginationSchema.strict();
 
 export const transferOwnershipDto = z
   .object({

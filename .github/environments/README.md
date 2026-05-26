@@ -1,6 +1,6 @@
 # GitHub Environments (IaC)
 
-JSON files here declare protection rules for [GitHub Environments](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment) used by [deploy-railway.yml](../workflows/deploy-railway.yml).
+JSON files here declare protection rules for [GitHub Environments](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment) used by [reusable-railway-deploy.yml](../workflows/reusable-railway-deploy.yml).
 
 **Canonical mapping source:** [`.github/sync.config.json`](../sync.config.json).
 
@@ -45,7 +45,7 @@ Preview without pushing: `pnpm github:sync <environment> --dry-run`.
 1. Add `staging` to the `NODE_ENV` enum in `src/shared/config/env-schema.ts`.
 2. Add `{ "name": "staging", "branch": "staging" }` to `.github/sync.config.json`.
 3. `pnpm github:sync` — scaffolds local IaC and syncs remote shells.
-4. Edit `.env.staging` with real values; update `.github/workflows/deploy-railway.yml`.
+4. Edit `.env.staging` with real values; update `.github/workflows/reusable-railway-deploy.yml`.
 5. `pnpm github:sync staging` — push values to GitHub.
 
 See [docs/deployment/runbooks/add-new-environment.md](../../docs/deployment/runbooks/add-new-environment.md).

@@ -3,7 +3,9 @@ import { describe, expect, test } from 'vitest';
 import { createPresignedUploadUrl, headObject } from '@/infrastructure/storage/storage.service.js';
 import { env } from '@/shared/config/env.config.js';
 
-import headObjectOutboundMetadataFixture from './fixtures/s3/head-object.metadata.fixture.json' with { type: 'json' };
+import headObjectOutboundMetadataFixture from './fixtures/s3/head-object.metadata.fixture.json' with {
+  type: 'json',
+};
 import {
   normalizedPresignedQueryParameterMap,
   parsePresignedAmazonWebServicesUrl,

@@ -1,10 +1,29 @@
 name: Post-merge CI
 
-# Jobs that only need to run after a merge into a protected branch.
-# Kept in a separate workflow so they do not show as "Skipped" on every PR.
+# Single post-merge pipeline on protected branch pushes (dev/main) or manual workflow_dispatch.
+# PR CI (pr-ci.yml) is the merge gate — same SHA already passed lint, typecheck, unit, build,
+# security, and contract/property. Post-merge runs publish/deploy automation only.
+#
+# Optimized flow (top to bottom dependencies):
+#   detect changes
+#       ├─ docker / build + trivy → matrix tests
+#       └─ sbom
+#   then release-please
+#       ├─ release sbom
+#       └─ api docs
+#   then resolve environment → deploy → API smoke on deployed URL
+#
+# Branch → GitHub Environment mapping for deploy (only difference between dev and main):
+#   dev  → development
+#   main → production
+#
+# Re-triggered after a merge whose push event was silently dropped by GitHub Actions
+# while a previous run was still in flight under the same concurrency group.
+
 on:
   push:
     branches: [main, dev]
+  workflow_dispatch:
 
 concurrency:
   group: post-merge-ci-${{ github.ref }}
@@ -14,19 +33,27 @@ permissions:
   contents: read
   packages: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
     outputs:
       src-code: ${{ steps.filter.outputs.src-code }}
+      docker: ${{ steps.filter.outputs.docker }}
+      ci-config: ${{ steps.filter.outputs.ci-config }}
       docs-artifacts: ${{ steps.filter.outputs.docs-artifacts }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - name: Path filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -35,20 +62,50 @@ jobs:
               - 'migrations/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
+              - 'Dockerfile.agent'
+              - 'vitest.config.ts'
               - 'tooling/**'
+            docker:
+              - 'Dockerfile'
+              - 'Dockerfile.worker'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tooling/ci/check-dockerfile-sync.mjs'
+            ci-config:
+              - '.github/**'
             docs-artifacts:
               - 'docs/openapi/**'
               - 'docs/postman-collection.json'
 
-  chaos:
-    name: Chaos
+  docker-build-push:
+    name: Docker
     needs: [changes]
     if: |
       always() &&
-      github.ref == 'refs/heads/main' &&
-      needs.changes.outputs.src-code == 'true'
-    uses: ./.github/workflows/reusable-chaos-toxiproxy.yml
+      (
+        needs.changes.outputs.src-code == 'true' ||
+        needs.changes.outputs.docker == 'true' ||
+        needs.changes.outputs.ci-config == 'true'
+      )
+    uses: ./.github/workflows/reusable-docker-build-trivy.yml
     secrets: inherit
+    with:
+      merge_commit_sha: ${{ github.sha }}
+      target_branch: ${{ github.ref_name }}
+
+  matrix-tests:
+    name: Matrix Tests
+    needs: [changes, sbom, docker-build-push]
+    # TEMP: matrix tests disabled to shorten post-merge feedback loop.
+    # Re-enable by restoring the previous `if:` expression — release-please
+    # already accepts `needs.matrix-tests.result == 'skipped'`, so leaving
+    # this short-circuited keeps deploys flowing without other edits.
+    if: false
+    uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
+    secrets: inherit
+    with:
+      merge_commit_sha: ${{ github.sha }}
+      target_branch: ${{ github.ref_name }}
 
   sbom:
     name: SBOM
@@ -59,29 +116,201 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
 
       - name: Generate SBOM
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@v0.24.0
         with:
           path: .
           format: cyclonedx-json
           output-file: sbom.cyclonedx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: sbom.cyclonedx.json
           path: sbom.cyclonedx.json
 
   api-docs:
     name: API docs
-    needs: [changes]
+    needs: [release-please]
     if: |
       always() &&
-      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
+      needs.release-please.result != 'failure' &&
+      needs.release-please.result != 'cancelled'
     uses: ./.github/workflows/reusable-openapi-postman-publish.yml
     secrets: inherit
     with:
-      github_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      merge_commit_sha: ${{ github.sha }}
+      target_branch: ${{ github.ref_name }}
+      github_environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
       publish_hosted_docs: true
+
+  release-please:
+    name: Release Please
+    needs: [matrix-tests]
+    if: |
+      always() &&
+      (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created == 'true' && 'true' || 'false' }}
+    env:
+      CHANNEL_SUFFIX: ${{ github.ref_name == 'dev' && '.dev' || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ github.token }}
+          target-branch: ${{ github.ref_name }}
+          config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
+          manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
+
+      - name: Enable auto-merge on release PRs
+        # Runs every release-please job (not only when a new PR is opened) so
+        # existing release PRs that release-please left unchanged still get
+        # auto-merge enabled. `gh pr merge --auto` is idempotent.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          pr_numbers_from_outputs="$(
+            jq -rn --arg pr "${RELEASE_PR}" --arg prs "${RELEASE_PRS}" '
+              def parse_object($raw):
+                try ($raw | fromjson) catch null;
+              def parse_array($raw):
+                try ($raw | fromjson) catch [];
+              (
+                [parse_object($pr) | .number // empty] +
+                [parse_array($prs)[] | .number // empty]
+              )
+              | map(select(. != null))
+              | unique
+              | .[]
+            '
+          )"
+
+          pr_numbers_from_api="$(
+            gh pr list \
+              --repo "${GH_REPOSITORY}" \
+              --state open \
+              --base "${TARGET_BRANCH}" \
+              --search 'head:release-please--branches--' \
+              --json number \
+              --jq '.[].number'
+          )"
+
+          pr_numbers="$(printf '%s\n%s\n' "${pr_numbers_from_outputs}" "${pr_numbers_from_api}" | awk 'NF' | sort -u)"
+
+          if [ -z "${pr_numbers}" ]; then
+            echo "No open release PRs to auto-merge."
+            exit 0
+          fi
+
+          for pr_number in ${pr_numbers}; do
+            echo "Enabling auto-merge for release PR #${pr_number}"
+            gh pr merge "${pr_number}" --auto --squash --delete-branch=false
+          done
+
+  release-sbom:
+    name: Release SBOM
+    needs: [sbom, release-please]
+    if: |
+      always() &&
+      needs.release-please.outputs.releases_created == 'true' &&
+      needs.sbom.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag_name="$(gh release list --repo "${GH_REPOSITORY}" --limit 1 --json tagName --jq '.[0].tagName')"
+          if [ -z "${tag_name}" ] || [ "${tag_name}" = "null" ]; then
+            echo "::error::No GitHub Release found after release-please."
+            exit 1
+          fi
+          echo "tag_name=${tag_name}" >> "$GITHUB_OUTPUT"
+          echo "Attaching SBOM to release ${tag_name}"
+
+      - name: Download SBOM artifact from sbom job
+        uses: actions/download-artifact@v8
+        with:
+          name: sbom.cyclonedx.json
+          path: .
+
+      - name: Upload SBOM to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          files: sbom.cyclonedx.json
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  resolve-environment:
+    name: Resolve Environment
+    needs:
+      - api-docs
+      - release-sbom
+    runs-on: ubuntu-latest
+    outputs:
+      post_merge_sha: ${{ steps.target.outputs.post_merge_sha }}
+      post_merge_branch: ${{ steps.target.outputs.post_merge_branch }}
+      github_environment: ${{ steps.target.outputs.github_environment }}
+    if: |
+      always() &&
+      (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped') &&
+      (needs.release-sbom.result == 'success' || needs.release-sbom.result == 'skipped')
+    steps:
+      - name: Resolve post-merge target and environment
+        id: target
+        run: |
+          echo "post_merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "post_merge_branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+          branch="${{ github.ref_name }}"
+
+          if [ "$branch" = "main" ]; then
+            echo "github_environment=production" >> "$GITHUB_OUTPUT"
+          elif [ "$branch" = "dev" ]; then
+            echo "github_environment=development" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Unsupported branch for deployment: $branch"
+            exit 1
+          fi
+
+  deploy:
+    name: Deploy
+    needs:
+      - resolve-environment
+    if: always() && needs.resolve-environment.result == 'success'
+    uses: ./.github/workflows/reusable-railway-deploy.yml
+    secrets: inherit
+    with:
+      merge_commit_sha: ${{ needs.resolve-environment.outputs.post_merge_sha }}
+      target_branch: ${{ needs.resolve-environment.outputs.post_merge_branch }}

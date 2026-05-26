@@ -31,8 +31,9 @@ vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => 
 
 describe('DATABASE_RLS_SCOPED_CONTEXTS bypass for both pinning middlewares (production hardening item 2)', () => {
   it('organization-rls-transaction middleware never opens a transaction when flag is on', async () => {
-    const { default: organizationRlsMiddleware } =
-      await import('@/shared/middlewares/organization-rls-transaction.middleware.js');
+    const { default: organizationRlsMiddleware } = await import(
+      '@/shared/middlewares/organization-rls-transaction.middleware.js'
+    );
     const application = Fastify({ logger: false });
     application.addHook('onRequest', (request, _reply, done) => {
       (request as { organizationId?: string }).organizationId = 'org_public_id_chaos_bypass';
@@ -50,8 +51,9 @@ describe('DATABASE_RLS_SCOPED_CONTEXTS bypass for both pinning middlewares (prod
 
   it('request-statement-timeout middleware never opens a transaction when flag is on', async () => {
     mockTransaction.mockClear();
-    const { default: requestStatementTimeoutMiddleware } =
-      await import('@/shared/middlewares/request-statement-timeout.middleware.js');
+    const { default: requestStatementTimeoutMiddleware } = await import(
+      '@/shared/middlewares/request-statement-timeout.middleware.js'
+    );
     const application = Fastify({ logger: false });
     await application.register(requestStatementTimeoutMiddleware);
     application.get('/probe', async () => ({ ok: true }));

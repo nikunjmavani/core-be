@@ -5,9 +5,15 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import nock from 'nock';
 import { describe, expect, test, vi, afterEach } from 'vitest';
 
-import outboundResendEmailsRequestExpectedEnvelope from './fixtures/resend/emails.send.request.expected.json' with { type: 'json' };
-import outboundResendEmailsErrorEnvelope from './fixtures/resend/emails.send.error.response.json' with { type: 'json' };
-import outboundResendEmailsSuccessEnvelope from './fixtures/resend/emails.send.success.response.json' with { type: 'json' };
+import outboundResendEmailsRequestExpectedEnvelope from './fixtures/resend/emails.send.request.expected.json' with {
+  type: 'json',
+};
+import outboundResendEmailsErrorEnvelope from './fixtures/resend/emails.send.error.response.json' with {
+  type: 'json',
+};
+import outboundResendEmailsSuccessEnvelope from './fixtures/resend/emails.send.success.response.json' with {
+  type: 'json',
+};
 import { registerThirdPartyContractTestIsolationHooks } from './helpers/register-contract-test-hooks.js';
 import {
   ResendEmailsSuccessfulResponseContractSchema,

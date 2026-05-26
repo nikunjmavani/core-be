@@ -1,0 +1,82 @@
+---
+description: Use object parameters (named options bag) for functions and methods everywhere except in repository files. Reduces argument-order bugs, makes call sites self-documenting, and keeps signatures stable under change.
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+# Object parameters only (outside repositories)
+
+Every function and method we author in `src/**/*.ts` MUST accept its inputs as a **single named options object** when it has two or more parameters. This rule applies across the whole codebase except for repositories and their unit tests.
+
+## Exempt files (positional parameters allowed)
+
+- `**/*.repository.ts` — repositories are the data-access seam; their signatures stay aligned with Drizzle/SQL helpers. Positional params (`findById(id)`, `findByUserAndOrganization(userId, organizationId)`) are explicitly allowed.
+- `**/*.repository.unit.test.ts` — repository unit tests mirror repository signatures and stay positional to match.
+
+## Exempt signatures (positional parameters required by the framework)
+
+These call shapes are dictated by third-party libraries; do not force object params on them:
+
+- **Fastify route/middleware callbacks** — `(request, reply)`, `(request, reply, payload)`, `(error, request, reply)`. Plugin factories such as `(app, options) => ...` follow Fastify’s pattern.
+- **BullMQ worker processors** — `(job)`, `(job, token)`, `(job, error)` callbacks passed to `new Worker(...)` or as listeners.
+- **Class constructors used for DI** — `constructor(repository, service, ...)` in `*.container.ts` and the service/worker classes wired by it. Container plumbing stays positional.
+- **Event-bus subscribers / emitters** — `eventBus.on(eventType, handler)`, `eventBus.emit(eventType, payload)`.
+- **Node and standard callbacks** — `Array.prototype.sort/reduce/map` comparators, `setTimeout(callback, ms)`, EventEmitter `(event, listener)`, `pipe(a, b, c)`-style composition.
+- **Test framework callbacks** — `describe(name, fn)`, `it(name, fn)`, `beforeEach(fn)`, `vi.fn(impl)`, `expect(value).toEqual(expected)` and similar matcher arguments. Inline `vi.mock('mod', factory)` factories also stay positional.
+- **Zod / drizzle DSL** — `.refine((value, ctx) => ...)`, `.superRefine((value, ctx) => ...)`, `sql\`${a} = ${b}\``. Schema builders are not application code.
+
+If a wrapper of one of the above signatures is authored by us (e.g. our own `withRequestContext(handler)` helper), the wrapper itself follows the framework signature; only the wrapped business function must take an object.
+
+## Required form
+
+For two or more parameters, prefer a named input interface that lives next to the function:
+
+```ts
+// Good — services, controllers, validators, serializers, workers, queues, utilities, etc.
+export interface CreateOrganizationInput {
+  ownerUserId: number;
+  name: string;
+  plan?: string;
+}
+
+async function createOrganization(input: CreateOrganizationInput): Promise<Organization> {
+  // ...
+}
+
+await organizationService.createOrganization({ ownerUserId, name, plan: 'pro' });
+```
+
+Inline destructuring is acceptable when the shape is small, local, and not re-used:
+
+```ts
+export function buildAuditFilters({ from, to, action }: { from?: Date; to?: Date; action?: string }) {
+  // ...
+}
+```
+
+Single-parameter functions are unaffected:
+
+```ts
+export function serializeOrganization(row: OrganizationRow): OrganizationOutput { ... }
+async function findByPublicId(public_id: string): Promise<UserRow | null> { ... }
+```
+
+## What this rule explicitly forbids in non-exempt files
+
+1. Two or more positional parameters that are not part of an exempt framework signature.
+   - Bad: `async function listForUser(user_public_id: string, limit: number, includeTotal: boolean)`
+   - Good: `async function listForUser(user_public_id: string, options: NotificationListServiceOptions)` (one scalar identity + one options bag is still considered “object params” because the second argument carries every choice).
+2. Boolean positional flags. Always pass `{ enabled: true }`, never `setX(true)`.
+3. Optional positional “tail” parameters (e.g. `(public_id, query?, options?, signal?)`) — collapse them into one options object.
+
+When converting existing code, also accept the “identity + options” shape (`(public_id, options)`): a primary identity argument followed by one options object is fine because the identity stays unambiguous and the rest of the inputs travel together.
+
+## When you touch existing code
+
+- If you are editing a function that already violates this rule **and your change is non-trivial**, refactor the signature to an options object and update all call sites in the same diff.
+- Cosmetic / one-line edits do not require a full refactor; leave a follow-up TODO comment instead.
+- Do not refactor exempt files. Repositories and framework-callback files stay as-is.
+
+## Reference
+
+See `CLAUDE.md` → Naming Conventions and `engineering-principles.mdc` → Code quality.

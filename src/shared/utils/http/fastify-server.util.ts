@@ -3,8 +3,13 @@ import type { FastifyServerOptions } from 'fastify';
 import type { IncomingMessage } from 'node:http';
 import { env } from '@/shared/config/env.config.js';
 import { THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
+import { redactSensitive } from '@/shared/utils/security/sensitive-redaction.util.js';
 
-/** Shared Pino redact paths — keep in sync with logger.util.ts */
+/**
+ * Shared Pino redact paths — fast exact-path scrubbing for well-known fields. Keep in sync
+ * with logger.util.ts. Recursive, case-insensitive scrubbing of everything else (nested
+ * headers, raw_key, set-cookie, x-api-key, …) is handled by the `redactSensitive` formatter.
+ */
 export const PINO_REDACT_PATHS = [
   'authorization',
   'password',
@@ -17,6 +22,8 @@ export const PINO_REDACT_PATHS = [
   'secret_access_key',
   'req.headers.authorization',
   'req.headers.cookie',
+  'req.headers["x-api-key"]',
+  'res.headers["set-cookie"]',
   'body.password',
   'body.token',
   'body.secret',
@@ -52,6 +59,9 @@ export function buildFastifyServerOptions(): FastifyServerOptions {
       redact: {
         paths: [...PINO_REDACT_PATHS],
         censor: '[REDACTED]',
+      },
+      formatters: {
+        log: (object) => redactSensitive(object),
       },
       ...(env.NODE_ENV === 'local'
         ? {

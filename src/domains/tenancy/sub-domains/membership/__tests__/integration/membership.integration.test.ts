@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
   injectAuthenticated,
+  injectAuthenticatedOrganizationMutation,
   injectUnauthenticated,
 } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { database } from '@/infrastructure/database/connection.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import {
@@ -18,6 +21,9 @@ import {
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import { MemberInvitationRepository } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.repository.js';
+import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
+import { hashInvitationToken } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.token.js';
 import type { FastifyInstance } from 'fastify';
 
 const MEMBERSHIP_PERMISSIONS = [
@@ -52,13 +58,13 @@ describe('Membership Sub-Domain — Integration', () => {
       organizationId: organization.id,
       permissionCodes: MEMBERSHIP_PERMISSIONS,
     });
-    await createMembership({
+    const membership = await createMembership({
       userId: user.id,
       organizationId: organization.id,
       roleId: role.id,
     });
     const token = await generateTestToken({ userId: user.public_id });
-    return { organization, token };
+    return { organization, token, membership, user };
   }
 
   describe('GET /api/v1/tenancy/organizations/:id/memberships', () => {
@@ -147,6 +153,108 @@ describe('Membership Sub-Domain — Integration', () => {
         organizationPublicId: organization.public_id,
       });
       expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        meta?: { pagination?: { has_more?: boolean; next?: string | null } };
+      };
+      expect(body.meta?.pagination).toMatchObject({ has_more: false, next: null });
+    });
+
+    it('paginates invitations with after cursor and include_total', {
+      timeout: 30_000,
+    }, async () => {
+      const { organization, token, membership, user } = await createAuthorizedContext();
+      const invitationRepository = new MemberInvitationRepository();
+      const baseCreatedAt = Date.now();
+      const oneDayMs = 24 * 60 * 60 * 1_000;
+      for (let index = 0; index < 3; index += 1) {
+        const invitation = await invitationRepository.create({
+          membership_id: membership.id,
+          email: `cursor-invite-${index}-${baseCreatedAt}@test.com`,
+          token_hash: hashInvitationToken(`token-${index}-${baseCreatedAt}`),
+          invited_by_user_id: user.id,
+          expires_at: new Date(Date.now() + oneDayMs),
+          created_by_user_id: user.id,
+        });
+        await database
+          .update(member_invitations)
+          .set({ created_at: new Date(baseCreatedAt + index * 1_000) })
+          .where(eq(member_invitations.id, invitation.id));
+      }
+
+      const page1Response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/invitations`),
+        token,
+        organizationPublicId: organization.public_id,
+        query: { limit: '2', include_total: 'true' },
+      });
+      expect(page1Response.statusCode).toBe(200);
+      const page1Body = page1Response.json() as {
+        data: Array<{ id: string }>;
+        meta?: {
+          pagination?: {
+            has_more?: boolean;
+            next?: string | null;
+            estimated_total?: number;
+            per_page?: number;
+          };
+        };
+      };
+      expect(page1Body.data).toHaveLength(2);
+      expect(page1Body.meta?.pagination).toMatchObject({
+        has_more: true,
+        per_page: 2,
+        estimated_total: 3,
+      });
+      expect(page1Body.meta?.pagination?.next).toBeTypeOf('string');
+
+      const page2Response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/invitations`),
+        token,
+        organizationPublicId: organization.public_id,
+        query: { limit: '2', after: page1Body.meta!.pagination!.next! },
+      });
+      expect(page2Response.statusCode).toBe(200);
+      const page2Body = page2Response.json() as {
+        data: Array<{ id: string }>;
+        meta?: { pagination?: { has_more?: boolean; next?: string | null } };
+      };
+      const page1Ids = new Set(page1Body.data.map((row) => row.id));
+      for (const row of page2Body.data) {
+        expect(page1Ids.has(row.id)).toBe(false);
+      }
+      expect(page1Body.data.length + page2Body.data.length).toBe(3);
+      expect(page2Body.meta?.pagination).toMatchObject({ has_more: false, next: null });
+    });
+
+    it('creates invitation via POST and lists it on the first cursor page', {
+      timeout: 30_000,
+    }, async () => {
+      const { organization, token, membership } = await createAuthorizedContext();
+      const createResponse = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/invitations`),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: {
+          membership_id: membership.public_id,
+          email: `route-invite-${Date.now()}@test.com`,
+          expires_in_days: 7,
+        },
+      });
+      expect(createResponse.statusCode).toBe(201);
+
+      const listResponse = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/invitations`),
+        token,
+        organizationPublicId: organization.public_id,
+        query: { limit: '10' },
+      });
+      expect(listResponse.statusCode).toBe(200);
+      const listBody = listResponse.json() as { data: unknown[] };
+      expect(listBody.data.length).toBeGreaterThanOrEqual(1);
     });
   });
 });

@@ -26,8 +26,9 @@ describe('System Validation', () => {
     });
 
     it('migration up files should have monotonic YYYYMMDDHHMMSS prefixes', async () => {
-      const { lintMigrationTimestamps } =
-        await import('@/scripts/validators/migration/lint-migrations.js');
+      const { lintMigrationTimestamps } = await import(
+        '@/scripts/validators/migration/lint-migrations.js'
+      );
       const upFilenames = readdirSync(MIGRATIONS_DIR).filter(
         (file) => file.endsWith('.sql') && !file.endsWith('.down.sql'),
       );
@@ -93,7 +94,7 @@ describe('System Validation', () => {
 
       const content = readFileSync(jwtUtilPath, 'utf-8');
       expect(content).toContain('RS256');
-      expect(content).toContain('HS256');
+      expect(content).toContain('JWT algorithm not allowed: RS256 only');
     });
 
     it('should enforce 15-minute access token expiry', () => {
@@ -219,7 +220,7 @@ describe('System Validation', () => {
 
   describe('CI/CD Configuration', () => {
     it('should have CI workflow', () => {
-      expect(existsSync(resolve(ROOT, '.github/workflows/pr-branch-ci.yml'))).toBe(true);
+      expect(existsSync(resolve(ROOT, '.github/workflows/pr-ci.yml'))).toBe(true);
     });
 
     it('should have PR checks workflow', () => {

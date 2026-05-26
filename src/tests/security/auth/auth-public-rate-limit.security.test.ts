@@ -20,8 +20,9 @@ describe('Security: Auth public rate limit burst (429)', () => {
   async function createAuthStylePublicRouteApp() {
     vi.stubEnv('NODE_ENV', 'production');
     vi.resetModules();
-    const { STRICT_PUBLIC_RATE_LIMIT } =
-      await import('@/shared/middlewares/rate-limit-presets.constants.js');
+    const { STRICT_PUBLIC_RATE_LIMIT } = await import(
+      '@/shared/middlewares/rate-limit-presets.constants.js'
+    );
 
     const application = Fastify();
     await application.register(rateLimit, { global: false });

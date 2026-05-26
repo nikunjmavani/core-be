@@ -6,6 +6,8 @@
  *           pnpm dev + pnpm dev:worker
  *
  * Usage: pnpm test:api-smoke
+ * Env: BASE_URL (default http://localhost:3000), TEST_EMAIL, TEST_PASSWORD
+ * Deploy CD sets BASE_URL from Railway API domain; optional GitHub secrets SMOKE_DEMO_EMAIL / SMOKE_DEMO_PASSWORD
  */
 import '@/shared/config/load-env-files.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -421,13 +423,8 @@ function buildDomainProbes(): RouteProbe[] {
 
 const healthProbes: RouteProbe[] = [
   {
-    name: 'GET /health/live',
-    path: '/health/live',
-    expectedStatus: 200,
-  },
-  {
-    name: 'GET /health/ready',
-    path: '/health/ready',
+    name: 'GET /health',
+    path: '/health',
     expectedStatus: 200,
   },
 ];

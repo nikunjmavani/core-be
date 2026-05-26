@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, type SQL } from 'drizzle-orm';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database-context.js';
@@ -6,6 +6,17 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { notifications } from '@/domains/notify/sub-domains/notification/notification.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { users } from '@/domains/user/user.schema.js';
+import {
+  buildDescendingCreatedAtIdCursorCondition,
+  createOpaqueCursorFromRow,
+  parseListCursor,
+} from '@/shared/utils/http/pagination.util.js';
+
+export interface NotificationListPagination {
+  after?: string;
+  limit: number;
+  include_total?: boolean;
+}
 
 export interface CreateNotificationInput {
   user_id: number;
@@ -86,13 +97,48 @@ export class NotificationRepository {
     return rows[0] ?? null;
   }
 
-  async findByUser(user_id: number, limit: number) {
-    return this.db()
+  async findByUser(user_id: number, pagination: NotificationListPagination) {
+    const { after, limit } = pagination;
+    const includeTotal = pagination.include_total === true;
+    const filterConditions: SQL[] = [eq(notifications.user_id, user_id)];
+    const countWhere = and(...filterConditions);
+    const cursorCondition = buildDescendingCreatedAtIdCursorCondition(
+      notifications.created_at,
+      notifications.id,
+      parseListCursor(after),
+    );
+    const where =
+      cursorCondition !== undefined ? and(...filterConditions, cursorCondition) : countWhere;
+
+    // Fetch one extra row so has_more is accurate without depending on count(*).
+    const rowsPromise = this.db()
       .select()
       .from(notifications)
-      .where(eq(notifications.user_id, user_id))
-      .orderBy(desc(notifications.created_at))
-      .limit(limit);
+      .where(where)
+      .orderBy(desc(notifications.created_at), desc(notifications.id))
+      .limit(limit + 1);
+
+    const countPromise = includeTotal
+      ? this.db()
+          .select({ count: count() })
+          .from(notifications)
+          .where(countWhere)
+          .then((rows) => rows[0]?.count ?? 0)
+      : Promise.resolve(null);
+
+    const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);
+    const hasMore = fetchedRows.length > limit;
+    const items = hasMore ? fetchedRows.slice(0, limit) : fetchedRows;
+    const lastItem = items.at(-1);
+    const nextCursor =
+      hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null;
+    return {
+      items,
+      total,
+      limit,
+      has_more: hasMore,
+      next_cursor: nextCursor,
+    };
   }
 
   async findByPublicIdForUser(public_id: string, user_id: number) {

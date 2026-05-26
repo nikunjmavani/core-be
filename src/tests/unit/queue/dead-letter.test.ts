@@ -85,8 +85,9 @@ describe('dead-letter helpers', () => {
     });
 
     it('does not enqueue or alert on transient failure', async () => {
-      const { attachDeadLetterAndAlerting } =
-        await import('@/infrastructure/queue/dlq/dead-letter.js');
+      const { attachDeadLetterAndAlerting } = await import(
+        '@/infrastructure/queue/dlq/dead-letter.js'
+      );
       const fakeWorker = new EventEmitter() as unknown as Worker;
       attachDeadLetterAndAlerting(fakeWorker, 'notification');
 
@@ -108,8 +109,9 @@ describe('dead-letter helpers', () => {
     });
 
     it('enqueues dead letter and captures Sentry on final failure', async () => {
-      const { attachDeadLetterAndAlerting } =
-        await import('@/infrastructure/queue/dlq/dead-letter.js');
+      const { attachDeadLetterAndAlerting } = await import(
+        '@/infrastructure/queue/dlq/dead-letter.js'
+      );
       const fakeWorker = new EventEmitter() as unknown as Worker;
       attachDeadLetterAndAlerting(fakeWorker, 'notification');
 

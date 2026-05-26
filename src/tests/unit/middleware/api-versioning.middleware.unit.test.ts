@@ -84,7 +84,7 @@ describe('api-versioning.middleware', () => {
   it('alerts when a successful response is past its Sunset header', async () => {
     application = Fastify({ logger: false });
     await application.register(apiVersioningMiddleware);
-    application.get('/health', async (_request: FastifyRequest, reply: FastifyReply) => {
+    application.get('/deprecated-test', async (_request: FastifyRequest, reply: FastifyReply) => {
       applyDeprecatedEndpointHeaders(reply, {
         sunset: new Date('2020-01-01T00:00:00.000Z'),
         deprecation: true,
@@ -93,7 +93,7 @@ describe('api-versioning.middleware', () => {
     });
     await application.ready();
 
-    await application.inject({ method: 'GET', url: '/health' });
+    await application.inject({ method: 'GET', url: '/deprecated-test' });
 
     expect(captureMessage).toHaveBeenCalledWith(
       expect.stringContaining('API usage past sunset'),

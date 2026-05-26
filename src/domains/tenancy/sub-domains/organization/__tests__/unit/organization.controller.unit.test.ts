@@ -32,7 +32,13 @@ describe('createOrganizationController', () => {
   const organization = { public_id: organizationPublicId, name: 'Acme', slug: 'acme' };
 
   const service = {
-    list: vi.fn().mockResolvedValue({ items: [organization], page: 1, limit: 20, total: 1 }),
+    list: vi.fn().mockResolvedValue({
+      items: [organization],
+      limit: 20,
+      total: null,
+      has_more: false,
+      next_cursor: null,
+    }),
     getByPublicId: vi.fn().mockResolvedValue(organization),
     getBySlug: vi.fn().mockResolvedValue(organization),
     create: vi.fn().mockResolvedValue(organization),
@@ -45,10 +51,10 @@ describe('createOrganizationController', () => {
   const auditService = {
     list: vi.fn().mockResolvedValue({
       items: [],
-      page: 1,
       limit: 20,
-      total: 0,
-      total_pages: 0,
+      total: null,
+      has_more: false,
+      next_cursor: null,
     }),
   } as unknown as AuditService;
 
@@ -57,24 +63,28 @@ describe('createOrganizationController', () => {
   it('listOrganizations returns paginated data with has_more', async () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [organization],
-      page: 1,
       limit: 20,
-      total: 50,
+      total: null,
+      has_more: true,
+      next_cursor: 'organization_cursor_2',
     } as never);
     const response = await controller.listOrganizations(mockRequest(), mockReply());
     expect(service.list).toHaveBeenCalledWith({}, userPublicId, 'USER');
     expect(response).toMatchObject({
       data: [organization],
-      meta: { pagination: expect.objectContaining({ has_more: true, next: '2' }) },
+      meta: {
+        pagination: expect.objectContaining({ has_more: true, next: 'organization_cursor_2' }),
+      },
     });
   });
 
   it('listOrganizations returns has_more false when all items fit page', async () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [organization],
-      page: 1,
       limit: 20,
-      total: 1,
+      total: null,
+      has_more: false,
+      next_cursor: null,
     } as never);
     const response = await controller.listOrganizations(mockRequest(), mockReply());
     expect(response).toMatchObject({
@@ -140,10 +150,10 @@ describe('createOrganizationController', () => {
   it('listOrganizationAuditLogs delegates to audit service', async () => {
     vi.mocked(auditService.list).mockResolvedValueOnce({
       items: [],
-      page: 1,
       limit: 20,
-      total: 100,
-      total_pages: 5,
+      total: null,
+      has_more: true,
+      next_cursor: 'audit_cursor_2',
     } as never);
     const response = await controller.listOrganizationAuditLogs(
       mockRequest({ params: { id: organizationPublicId }, query: { limit: '20' } }),
@@ -151,7 +161,7 @@ describe('createOrganizationController', () => {
     );
     expect(auditService.list).toHaveBeenCalled();
     expect(response).toMatchObject({
-      meta: { pagination: expect.objectContaining({ has_more: true, next: '2' }) },
+      meta: { pagination: expect.objectContaining({ has_more: true, next: 'audit_cursor_2' }) },
     });
   });
 
@@ -210,10 +220,10 @@ describe('createOrganizationController', () => {
   it('listOrganizationAuditLogs returns has_more false on last page', async () => {
     vi.mocked(auditService.list).mockResolvedValueOnce({
       items: [],
-      page: 5,
       limit: 20,
-      total: 100,
-      total_pages: 5,
+      total: null,
+      has_more: false,
+      next_cursor: null,
     } as never);
     const response = await controller.listOrganizationAuditLogs(
       mockRequest({ params: { id: organizationPublicId }, query: { after: '100' } }),

@@ -20,6 +20,13 @@ export function createUploadController(uploadService: UploadService) {
       return reply.send(successResponse(result, getRequestIdentifier(request)));
     },
 
+    confirmUpload: async (request: FastifyRequest, reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const publicId = (request.params as { publicId: string }).publicId;
+      const result = await uploadService.confirmUpload(publicId, auth.userId);
+      return reply.send(successResponse(result, getRequestIdentifier(request)));
+    },
+
     deleteUpload: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
       const publicId = (request.params as { publicId: string }).publicId;

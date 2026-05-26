@@ -30,62 +30,58 @@ describe('Performance: N+1 Detection', () => {
     await cleanupDatabase();
   });
 
-  it(
-    'should list many organizations without N+1 query degradation',
-    { timeout: 30000 },
-    async () => {
-      const user = await createTestUser();
-      const token = await generateTestToken({ userId: user.public_id });
+  it('should list many organizations without N+1 query degradation', {
+    timeout: 30000,
+  }, async () => {
+    const user = await createTestUser();
+    const token = await generateTestToken({ userId: user.public_id });
 
-      const uniqueSuffix = Date.now();
-      // Create 20 organizations with guaranteed-unique slugs
-      for (let index = 0; index < 20; index++) {
-        await createTestOrganization({
-          ownerUserId: user.id,
-          name: `Perf Org ${index}`,
-          slug: `perf-org-${index}-${uniqueSuffix}-${index}`,
-        });
-      }
+    const uniqueSuffix = Date.now();
+    // Create 20 organizations with guaranteed-unique slugs
+    for (let index = 0; index < 20; index++) {
+      await createTestOrganization({
+        ownerUserId: user.id,
+        name: `Perf Org ${index}`,
+        slug: `perf-org-${index}-${uniqueSuffix}-${index}`,
+      });
+    }
 
-      const start = performance.now();
-      const response = await request
-        .get('/api/v1/tenancy/organizations')
-        .set('Authorization', `Bearer ${token}`);
-      const duration = performance.now() - start;
+    const start = performance.now();
+    const response = await request
+      .get('/api/v1/tenancy/organizations')
+      .set('Authorization', `Bearer ${token}`);
+    const duration = performance.now() - start;
 
-      expect(response.status).toBe(200);
-      // Allow up to 15 seconds for local Docker / CI databases (setup is sequential)
-      expect(duration).toBeLessThan(15000);
-    },
-  );
+    expect(response.status).toBe(200);
+    // Allow up to 15 seconds for local Docker / CI databases (setup is sequential)
+    expect(duration).toBeLessThan(15000);
+  });
 
-  it(
-    'should list many users without N+1 query degradation (admin)',
-    { timeout: 15000 },
-    async () => {
-      // Create 20 users
-      for (let i = 0; i < 20; i++) {
-        await createTestUser({ email: `user${i}@perf.test` });
-      }
+  it('should list many users without N+1 query degradation (admin)', {
+    timeout: 15000,
+  }, async () => {
+    // Create 20 users
+    for (let i = 0; i < 20; i++) {
+      await createTestUser({ email: `user${i}@perf.test` });
+    }
 
-      const adminUser = await createTestUser({ email: 'admin@perf.test' });
-      const token = await generateSuperAdminToken(adminUser.public_id);
+    const adminUser = await createTestUser({ email: 'admin@perf.test' });
+    const token = await generateSuperAdminToken(adminUser.public_id);
 
-      const start = performance.now();
-      const response = await request.get('/api/v1/users/').set('Authorization', `Bearer ${token}`);
-      const duration = performance.now() - start;
+    const start = performance.now();
+    const response = await request.get('/api/v1/users/').set('Authorization', `Bearer ${token}`);
+    const duration = performance.now() - start;
 
-      expect(response.status).toBe(200);
-      expect(duration).toBeLessThan(2000);
-    },
-  );
+    expect(response.status).toBe(200);
+    expect(duration).toBeLessThan(2000);
+  });
 
   it('should handle concurrent requests without degradation', { timeout: 15000 }, async () => {
     const CONCURRENT_REQUESTS = 50;
     const promises: Array<PromiseLike<TestRequestResponse>> = [];
 
     for (let i = 0; i < CONCURRENT_REQUESTS; i++) {
-      promises.push(request.get('/health/live'));
+      promises.push(request.get('/health'));
     }
 
     const start = performance.now();

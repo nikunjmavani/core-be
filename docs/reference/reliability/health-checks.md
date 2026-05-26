@@ -1,80 +1,25 @@
 # Health checks
 
-All health routes return **raw JSON** (no API envelope). They are excluded from i18n and rate limiting (`/health/*` allowlist).
+Health endpoints return **raw JSON** with no API response envelope. API and worker services are deployed as separate Railway services, and each service exposes its own `GET /health` endpoint.
 
-## Four-endpoint convention (API process)
+Implementation:
 
-| Route | Purpose | Orchestrator use |
-| ----- | ------- | ---------------- |
-| `GET /health/live` | Process is up (no dependency checks) | **Liveness** — Railway crash detection, k8s liveness |
-| `GET /health/ready` | Postgres, Redis, BullMQ + operational signals | **Readiness** — load balancer pool, deploy smoke |
-| `GET /health` | Aggregate: liveness + dependency connectivity | **Human debugging only** (deprecated; see below) |
-| `GET /health/worker` | API-side view of worker dependencies + queue heartbeats | **Human / post-deploy**; does not replace worker HTTP probe |
+- API: [`health.middleware.ts`](../../../src/shared/middlewares/health.middleware.ts)
+- Worker: [`worker-health.server.ts`](../../../src/infrastructure/queue/worker-runtime/worker-health.server.ts)
 
-Worker replicas run a separate HTTP server on `WORKER_HEALTH_PORT` (default **9090**) — see [Worker HTTP server](#worker-http-server-worker_health_port).
+`GET /health` is canonical and is **not deprecated**. It does not emit `Deprecation` or `Sunset` headers.
 
-Implementation: [`health.middleware.ts`](../../../src/shared/middlewares/health.middleware.ts) (API), [`worker-health.server.ts`](../../../src/infrastructure/queue/worker-runtime/worker-health.server.ts) (worker).
+## API `GET /health`
 
-**API quick curl (default port 3000):**
+The API health endpoint is readiness-style. It validates dependency connectivity and operational signals:
+
+- Postgres (`SELECT 1`)
+- Redis (`PING`)
+- BullMQ broker connectivity
+- Cached operational metrics
 
 ```bash
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health/live
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health/ready
 curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health/worker
-```
-
-**Design note:** Throughput staleness (`WORKER_HEALTH_STALL_TIMEOUT_MS`) returns **503** on the **worker** `GET /health/live` only. The API `GET /health/worker` reports dependency connectivity and Redis queue heartbeats; it does **not** 503 when workers stop processing (API `/health/ready` can stay **200** while deps are up).
-
----
-
-## `GET /health/live`
-
-Cheapest probe: confirms the Node process accepts HTTP. Never touches Postgres or Redis.
-
-```bash
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health/live
-```
-
-| HTTP | Body |
-| ---- | ---- |
-| 200 | `{ "status": "ok" }` |
-
-**Kubernetes (API):**
-
-```yaml
-livenessProbe:
-  httpGet:
-    path: /health/live
-    port: 3000
-  periodSeconds: 10
-  failureThreshold: 3
-```
-
-**Railway:** use `/health/live` for the API service liveness check.
-
-During graceful shutdown, `/health/live` stays **200** until the process exits (readiness drains first).
-
----
-
-## `GET /health/ready`
-
-Readiness: dependency connectivity (1.5s timeout per probe) plus cached operational metrics (60s TTL).
-
-**Dependencies checked:** Postgres (`SELECT 1`), Redis (`PING`), BullMQ broker (queue client ping).
-
-**Operational fields (cached):**
-
-| Field | Meaning |
-| ----- | ------- |
-| `migration_version` | Latest filename in `public.schema_migrations` |
-| `mail_outbox_pending` | Rows in `mail_outbox` with `status = pending` |
-| `dlq_depth` | Waiting + failed jobs across monitored DLQ queues |
-| `draining` | `true` while the API is shutting down |
-| `worker_queues` | Per-queue `last_job_at` from Redis (`worker:queue:<name>:last_job_at`) |
-
-```bash
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health/ready
 ```
 
 Response **200** when dependencies are healthy:
@@ -102,203 +47,85 @@ Response **200** when dependencies are healthy:
 | 503 | Any dependency unavailable (`status: "error"`) |
 | 503 | Graceful shutdown (`status: "draining"`) |
 
-While draining, `/health/ready` returns **503** with dependency fields set to `"unavailable"` and **does not** include operational metrics (`migration_version`, `mail_outbox_pending`, etc.).
+While draining, `/health` returns **503** with dependency fields set to `"unavailable"` and does not include cached operational metrics.
 
-**Kubernetes (API):**
+### API Orchestrator Probe
+
+Use `/health` for the API service health check in Railway, Docker, and Kubernetes. This is intentionally readiness-style: if Postgres, Redis, or BullMQ are unavailable, the endpoint returns 503.
 
 ```yaml
 readinessProbe:
   httpGet:
-    path: /health/ready
+    path: /health
     port: 3000
   periodSeconds: 10
   failureThreshold: 2
 ```
 
-**Railway / CI deploy smoke:** poll `GET /health/ready` until HTTP 200 (see [cicd-and-deployment.md](../../deployment/ci-cd/cicd-and-deployment.md)).
+On `SIGTERM`/`SIGINT`, the API sets a draining flag before `app.close()`. `/health` returns **503** with `status: "draining"` so load balancers stop new traffic while in-flight requests finish. Align platform grace with `SHUTDOWN_TIMEOUT_MS` (default 30s) — [resource-limits.md](../../deployment/runbooks/resource-limits.md).
 
-### Draining
+## Worker `GET /health`
 
-On `SIGTERM`/`SIGINT`, the API sets a draining flag before `app.close()`. `/health/ready` returns **503** with `status: "draining"` so load balancers stop new traffic while in-flight requests finish. `/health/live` remains **200** until exit. Align platform grace with `SHUTDOWN_TIMEOUT_MS` (default 30s) — [resource-limits.md](../../deployment/runbooks/resource-limits.md).
-
----
-
-## `GET /health`
-
-Aggregate for operators: `live: ok` plus the same dependency fields as readiness (without operational metrics). **Not** for orchestrators — use `/health/live` and `/health/ready` instead.
-
-Deprecated: responses include `Deprecation: true` and `Sunset` (aggregate sunset **2026-08-19**).
+Worker replicas expose `GET /health` on `WORKER_HEALTH_PORT` (default **9090**). This endpoint validates the worker process and queue state in addition to dependencies.
 
 ```bash
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health
-# Deprecation: true, Sunset: 2026-08-19T00:00:00.000Z
-curl -sS -D - http://localhost:3000/health | jq .
+curl -sS -w '\nHTTP %{http_code}\n' http://localhost:9090/health
 ```
 
-Response **200** when dependencies are connected:
-
-```json
-{
-  "status": "ok",
-  "live": "ok",
-  "database": "connected",
-  "redis": "connected",
-  "bullmq": "connected",
-  "latencyMs": { "database": 2, "redis": 1, "bullmq": 3 }
-}
-```
-
-| HTTP | When |
-| ---- | ---- |
-| 200 | Dependencies connected |
-| 503 | Dependency failure or draining (same rules as readiness for deps) |
-
----
-
-## `GET /health/worker` (API process)
-
-Dependency view **from the API process**: Postgres, Redis, BullMQ, and `worker_queues` heartbeats. This does **not** prove a worker replica is running or processing jobs — probe the worker HTTP server for that.
-
-Deprecated on the API (same `Deprecation` / `Sunset` as `GET /health`).
-
-```bash
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health/worker
-curl -sS -D - http://localhost:3000/health/worker | jq .
-```
-
-Response **200** when API can reach worker dependencies:
-
-```json
-{
-  "status": "ok",
-  "role": "api",
-  "note": "Validates worker dependencies from the API process. For worker replica liveness, probe WORKER_HEALTH_PORT/health/worker on the worker service.",
-  "database": "connected",
-  "redis": "connected",
-  "bullmq": "connected",
-  "latencyMs": { "database": 2, "redis": 1, "bullmq": 3 },
-  "worker_queues": [
-    { "queue": "mail", "last_job_at": "2026-05-20T12:00:00.000Z" },
-    { "queue": "webhook-delivery", "last_job_at": null }
-  ]
-}
-```
-
-| HTTP | When |
-| ---- | ---- |
-| 200 | Dependencies connected from API |
-| 503 | Any dependency unavailable |
-
-**Stall detection:** throughput staleness (`WORKER_HEALTH_STALL_TIMEOUT_MS`, default 5 minutes) is enforced on the **worker** `GET /health/live`, not on this API route. After stopping workers, expect API `/health/ready` to stay **200** while worker `/health/live` eventually returns **503** with `status: "stalled"`.
-
-Post-deploy gate: `pnpm tool:worker-readiness` calls **worker** `GET /health/worker` (see below).
-
----
-
-## Worker HTTP server (`WORKER_HEALTH_PORT`)
-
-The worker process (`pnpm dev:worker`) listens on `WORKER_HEALTH_PORT` (default **9090**, env `HOST` bind). Endpoints:
-
-| Route | Purpose |
-| ----- | ------- |
-| `GET /health/live` | Worker process up + throughput heartbeats not stalled |
-| `GET /health/worker` | Worker readiness: deps + `workersRegistered` + `worker_queues` |
-| `GET /health` | Aggregate liveness + deps for the worker process |
-| `GET /metrics` | Prometheus scrape when `METRICS_ENABLED=true` (bearer token in production) |
-
-### `GET /metrics` (Prometheus)
-
-When `METRICS_ENABLED=true`, returns Prometheus text format. API: same host as the app. Worker: `WORKER_HEALTH_PORT` (default **9090**). See [observability runbook](../../deployment/runbooks/observability.md).
-
-| Metric | Labels | Purpose |
-| ------ | ------ | ------- |
-| `event_loop_lag_ms` | — | Event-loop delay p99 (milliseconds) |
-| `pg_pool_active`, `pg_pool_idle`, `pg_pool_waiting` | — | Postgres connection counts (from `pg_stat_activity`) |
-| `http_request_duration_seconds` | `method`, `route`, `status_code` | Request latency histogram |
-| `bullmq_jobs_waiting` | `queue` | Jobs waiting per BullMQ queue |
-
-### `GET /health/live` (worker)
-
-```bash
-curl -sS -w '\nHTTP %{http_code}\n' http://127.0.0.1:9090/health/live
-```
-
-| HTTP | Body (examples) |
-| ---- | ---------------- |
-| 200 | `{ "status": "ok", "service": "worker" }` |
-| 503 | `{ "status": "starting", "service": "worker" }` — workers not registered yet |
-| 503 | `{ "status": "stalled", "service": "worker" }` — all throughput queue heartbeats older than `WORKER_HEALTH_STALL_TIMEOUT_MS` (default **300000** ms) |
-
-Throughput queues: `mail`, `webhook-delivery`, `notification`, `stripe-webhook`.
-
-**Docker worker HEALTHCHECK:** [`worker-health.ts`](../../../src/scripts/admin/worker-health.ts) probes this URL.
-
-### `GET /health/worker` (worker)
-
-```bash
-curl -sS http://127.0.0.1:9090/health/worker | jq .
-```
+Response **200** when the worker is ready and dependencies are healthy:
 
 ```json
 {
   "status": "ok",
   "role": "worker",
-  "workersRegistered": 12,
   "database": "connected",
   "redis": "connected",
   "bullmq": "connected",
-  "latencyMs": { "database": 1, "redis": 1, "bullmq": 2 },
+  "latencyMs": { "database": 2, "redis": 1, "bullmq": 3 },
+  "workersRegistered": 25,
   "worker_queues": [
-    { "queue": "mail", "last_job_at": "2026-05-20T12:05:00.000Z" }
+    { "queue": "mail", "last_job_at": "2026-05-20T12:00:00.000Z" }
   ]
 }
 ```
 
-Returns **503** when workers are not ready or a dependency is down.
+| HTTP | Status | When |
+| ---- | ------ | ---- |
+| 200 | `ok` | Worker marked ready, dependencies connected, throughput not stalled |
+| 503 | `starting` | Worker process has not called `markWorkerHealthReady()` |
+| 503 | `stalled` | Throughput queue heartbeats are older than `WORKER_HEALTH_STALL_TIMEOUT_MS` |
+| 503 | `error` | Any dependency unavailable |
 
-**Post-deploy:**
+## Metrics
+
+The worker HTTP server also exposes `GET /metrics` when metrics are enabled. In production, metrics require a valid bearer token when `METRICS_ENABLED=true` and `METRICS_SCRAPE_TOKEN` is configured.
 
 ```bash
+curl -H "Authorization: Bearer $METRICS_SCRAPE_TOKEN" http://localhost:9090/metrics
+```
+
+## Deploy Probes
+
+[`reusable-railway-deploy.yml`](../../../.github/workflows/reusable-railway-deploy.yml) deploys the API and worker from scanned GHCR images, syncs shared Railway variables to both services, then probes:
+
+- API service: `GET /health` on the API public domain
+- Worker service: `GET /health` on `WORKER_HEALTH_PORT`, plus `pnpm tool:worker-readiness` DLQ and queue heartbeat checks
+- Deployed API smoke: `pnpm test:api-smoke` against the Railway API base URL (after API + worker are healthy). Uses `SMOKE_DEMO_EMAIL` / `SMOKE_DEMO_PASSWORD` GitHub Environment secrets when set; otherwise defaults to the full-seed demo user (`demo@example.com`). Ensure the target environment database is seeded accordingly.
+
+**Fully live:** When this smoke step succeeds, CD completes and the GitHub Environment (development or production) is considered fully live for traffic. Earlier probes only confirm process and dependency connectivity; smoke validates real HTTP routes end-to-end on the deployed URL.
+
+## Local Checks
+
+```bash
+# API
+curl -sS http://localhost:3000/health | jq .
+
+# Worker
 WORKER_HEALTH_URL=http://127.0.0.1:9090 pnpm tool:worker-readiness
 ```
 
-### `GET /health` (worker)
+Related docs:
 
-```bash
-curl -sS http://127.0.0.1:9090/health | jq .
-```
-
-Aggregate for the worker process (liveness + dependency connectivity).
-
----
-
-## Probe matrix (quick reference)
-
-| Scenario | `/health/live` (API) | `/health/ready` (API) | `/health/live` (worker) |
-| -------- | -------------------- | --------------------- | ----------------------- |
-| Healthy stack | 200 | 200 | 200 |
-| API draining | 200 | 503 `draining` | — |
-| Postgres down | 200 | 503 | 503 (worker deps) |
-| Workers stopped 6+ min | 200 | 200 (deps up) | 503 `stalled` (after stall timeout) |
-| Migration behind | 200 | 200 + old `migration_version` | — |
-
----
-
-## Environment variables
-
-| Variable | Default | Used by |
-| -------- | ------- | ------- |
-| `WORKER_HEALTH_PORT` | `9090` | Worker HTTP health + metrics |
-| `WORKER_HEALTH_STALL_TIMEOUT_MS` | `300000` (5 min) | Worker `/health/live` stall detection |
-| `SHUTDOWN_TIMEOUT_MS` | `30000` | API drain window (align with LB grace) |
-
-See [`.env.example`](../../../.env.example) and [`env-schema.ts`](../../../src/shared/config/env.config.ts).
-
----
-
-## Related
-
-- Deploy gates: [cicd-and-deployment.md](../../deployment/ci-cd/cicd-and-deployment.md)
-- Observability overview: [observability.md](../../deployment/runbooks/observability.md)
-- Worker bootstrap and heartbeats: [workers-and-events.md](../runtime/workers-and-events.md)
-- Manual API checklist: [api-testing.md](../../getting-started/api-testing.md)
+- [CI/CD and deployment](../../deployment/ci-cd/cicd-and-deployment.md)
+- [Resource limits](../../deployment/runbooks/resource-limits.md)
+- [Observability](../../deployment/runbooks/observability.md)

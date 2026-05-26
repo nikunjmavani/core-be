@@ -32,7 +32,7 @@ async function resolveDemoSeedPublicIds(): Promise<{
     .from(organizations)
     .where(eq(organizations.slug, DEMO_ORGANIZATION_SLUG))
     .limit(1);
-  if (!user || !organization) {
+  if (!(user && organization)) {
     throw new Error('full-seed.integration: demo user or organization not found after seed');
   }
   return {

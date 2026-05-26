@@ -5,12 +5,7 @@ import * as schemas from '../resource-schemas.js';
 
 export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = {
   // ── Health ──
-  'GET /health/live': {
-    statusCode: 200,
-    schema: { type: 'object', properties: { status: { type: 'string' } } },
-    example: { status: 'ok' },
-  },
-  'GET /health/ready': {
+  'GET /health': {
     statusCode: 200,
     schema: {
       type: 'object',
@@ -27,6 +22,20 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
             bullmq: { type: 'integer', nullable: true },
           },
         },
+        migration_version: { type: 'string', nullable: true },
+        mail_outbox_pending: { type: 'integer' },
+        dlq_depth: { type: 'integer' },
+        draining: { type: 'boolean' },
+        worker_queues: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              queue: { type: 'string' },
+              last_job_at: { type: 'string', nullable: true },
+            },
+          },
+        },
       },
     },
     example: {
@@ -35,6 +44,11 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
       redis: 'connected',
       bullmq: 'connected',
       latencyMs: { database: 4, redis: 2, bullmq: 3 },
+      migration_version: '20260520000000',
+      mail_outbox_pending: 0,
+      dlq_depth: 0,
+      draining: false,
+      worker_queues: [],
     },
   },
 
@@ -282,7 +296,8 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
       {
         export_id: 'exp_k7x9m2pqr4w8n1v3',
         status: 'completed',
-        download_url: 'https://bucket.s3.amazonaws.com/user-data-export/usr/exp.json.gz?X-Amz-Signature=example',
+        download_url:
+          'https://bucket.s3.amazonaws.com/user-data-export/usr/exp.json.gz?X-Amz-Signature=example',
         expires_at: '2026-05-27T12:00:00.000Z',
         completed_at: '2026-05-20T12:05:00.000Z',
         failed_at: null,

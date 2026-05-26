@@ -24,6 +24,8 @@ const commonRequiredBase = {
 const productionRequiredBase = {
   ...commonRequiredBase,
   NODE_ENV: 'production',
+  // CAPTCHA fail-closes; production boot requires turnstile+secret or this explicit ack.
+  CAPTCHA_DISABLED_ACK: 'true',
   ...productionRedisTopology,
 };
 
@@ -123,6 +125,24 @@ describe('env-schema', () => {
       expect(disposableAllowed.data.BLOCK_DISPOSABLE_EMAIL).toBe(false);
       expect(disposableAllowed.data.SCHEDULER_ENABLED).toBe(false);
     }
+  });
+
+  it('parses without JWT_SECRET when RS256 keys are set', () => {
+    const environmentInput = { ...process.env };
+    delete environmentInput.JWT_SECRET;
+    const parsed = envSchema.safeParse({
+      ...environmentInput,
+      DATABASE_URL: DATABASE_URL_FIXTURE,
+      REDIS_URL: REDIS_URL_FIXTURE,
+      NODE_ENV: 'test',
+      JWT_PRIVATE_KEY: 'test-private-key',
+      JWT_PUBLIC_KEY: 'test-public-key',
+      AUDIT_RETENTION_DAYS: '30',
+      AUTH_SESSION_RETENTION_DAYS: '30',
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.JWT_SECRET).toBeUndefined();
   });
 
   it('accepts optional RS256 JWT key pair alongside JWT_SECRET', () => {
@@ -329,6 +349,47 @@ describe('env-schema', () => {
       FRONTEND_URL: 'http://localhost:3000',
     });
     expect(parsedLocalhost.success).toBe(true);
+  });
+
+  it('rejects production boot when CAPTCHA is disabled without explicit acknowledgement', () => {
+    const { CAPTCHA_DISABLED_ACK: _ack, ...withoutAck } = productionRequiredBase;
+    void _ack;
+
+    const parsed = envSchema.safeParse(withoutAck);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path[0] === 'CAPTCHA_PROVIDER')).toBe(true);
+    }
+  });
+
+  it('allows production boot with CAPTCHA disabled when explicitly acknowledged', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      CAPTCHA_PROVIDER: 'disabled',
+      CAPTCHA_DISABLED_ACK: 'true',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('allows production boot with configured turnstile CAPTCHA without acknowledgement', () => {
+    const { CAPTCHA_DISABLED_ACK: _ack, ...withoutAck } = productionRequiredBase;
+    void _ack;
+
+    const parsed = envSchema.safeParse({
+      ...withoutAck,
+      CAPTCHA_PROVIDER: 'turnstile',
+      CAPTCHA_SECRET: 'turnstile-secret',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('does not require CAPTCHA acknowledgement outside production', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      CAPTCHA_PROVIDER: 'disabled',
+    });
+    expect(parsed.success).toBe(true);
   });
 
   it('rejects FRONTEND_URL that is not a valid http(s) URL', () => {

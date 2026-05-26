@@ -2,21 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemberRoleRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role.repository.js';
 
 /**
- * Drizzle chains: `select(...).from(...).where(...)` returns a count query;
- * `select().from(...).where(...).orderBy(...).limit(...).offset(...)` returns the rows.
- * `countAwaitable` makes the `.where(...)` returned by the count chain thenable so
- * `await getRequestDatabase().select({count}).from(...).where(...)` resolves to the
- * mocked count rows.
+ * Drizzle row chain: `select().from(...).where(...).orderBy(...).limit(...)` resolves to
+ * the fetched rows. The repository no longer issues a parallel count query, so only the
+ * row chain needs to be mocked.
  */
-const countAwaitable = {
-  then: (resolve: (value: Array<{ count: number }>) => void) => resolve([{ count: 0 }]),
-};
-
-const mockCountWhere = vi.fn(() => countAwaitable);
-const mockCountFrom = vi.fn(() => ({ where: mockCountWhere }));
-
-const mockOffset = vi.fn();
-const mockLimit = vi.fn(() => ({ offset: mockOffset }));
+const mockLimit = vi.fn();
 const mockOrderBy = vi.fn(() => ({ limit: mockLimit }));
 const mockWhereRows = vi.fn(() => ({ orderBy: mockOrderBy }));
 const mockFromRows = vi.fn(() => ({ where: mockWhereRows }));
@@ -50,24 +40,19 @@ describe('MemberRoleRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReturning.mockReset();
-    mockOffset.mockReset();
-    /** Default count chain returns 0 rows. Tests override per assertion. */
-    countAwaitable.then = (resolve: (value: Array<{ count: number }>) => void) =>
-      resolve([{ count: 0 }]);
+    mockLimit.mockReset();
     mockSelect.mockImplementation(() => ({ from: mockFromRows }));
   });
 
-  it('findByOrganizationId returns empty page when no rows', async () => {
-    mockOffset.mockResolvedValue([]);
-    mockSelect
-      .mockImplementationOnce(() => ({ from: mockFromRows }))
-      .mockImplementationOnce(() => ({ from: mockCountFrom }));
+  it('findByOrganizationId returns empty list when no rows', async () => {
+    mockLimit.mockResolvedValue([]);
 
-    const result = await repository.findByOrganizationId(1, 1, 20);
+    const result = await repository.findByOrganizationId(1, { limit: 20 });
 
     expect(result.items).toEqual([]);
-    expect(result.total).toBe(0);
-    expect(result.page).toBe(1);
+    expect(result.total).toBeNull();
+    expect(result.has_more).toBe(false);
+    expect(result.next_cursor).toBeNull();
     expect(result.limit).toBe(20);
   });
 
@@ -80,18 +65,12 @@ describe('MemberRoleRepository', () => {
         id: 1,
       },
     ];
-    mockOffset.mockResolvedValue(rows);
-    countAwaitable.then = (resolve: (value: Array<{ count: number }>) => void) =>
-      resolve([{ count: 1 }]);
-    mockSelect
-      .mockImplementationOnce(() => ({ from: mockFromRows }))
-      .mockImplementationOnce(() => ({ from: mockCountFrom }));
+    mockLimit.mockResolvedValue(rows);
 
-    const result = await repository.findByOrganizationId(1, 1, 20);
+    const result = await repository.findByOrganizationId(1, { limit: 20 });
 
     expect(result.items).toHaveLength(1);
-    expect(result.total).toBe(1);
-    expect(result.total_pages).toBe(1);
+    expect(result.has_more).toBe(false);
   });
 
   it('findByPublicId returns null when role is missing', async () => {

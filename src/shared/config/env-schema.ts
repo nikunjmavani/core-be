@@ -54,7 +54,8 @@ const envSchemaBase = z.object({
     .optional(),
 
   // Auth
-  JWT_SECRET: z.string().min(32),
+  /** Deprecated: unused at runtime (RS256 only). Retained for backward-compatible deploy templates. */
+  JWT_SECRET: z.string().min(32).optional(),
   /** RS256 PEM private key. Required in every runtime; NODE_ENV is metadata only. */
   JWT_PRIVATE_KEY: z.string().min(1),
   /** RS256 PEM public key. Required in every runtime; NODE_ENV is metadata only. */
@@ -145,6 +146,18 @@ const envSchemaBase = z.object({
     .optional()
     .default('false')
     .transform((value) => value === 'true' || value === '1'),
+  /**
+   * Use presigned POST (with an S3-enforced content-length-range) instead of presigned PUT
+   * for direct client uploads. On by default; the response carries `uploadMethod` and,
+   * for POST, the policy `fields` clients must submit with the file.
+   */
+  UPLOAD_USE_PRESIGNED_POST: booleanString('true'),
+  /**
+   * Per-user cap on concurrent PENDING uploads (rows awaiting confirm). Stops a single
+   * authenticated user from exhausting storage by repeatedly requesting presigned URLs
+   * and never calling confirm. Reconciled lazily by the PENDING sweeper worker. Default 100.
+   */
+  UPLOAD_MAX_PENDING_PER_USER: z.coerce.number().int().min(1).default(100),
   S3_BUCKET: z.string().min(1).optional(),
   S3_REGION: z.string().min(1).optional(),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
@@ -159,15 +172,26 @@ const envSchemaBase = z.object({
   WORKER_CONCURRENCY_NOTIFY: z.coerce.number().int().min(1).max(20).optional(),
   WORKER_CONCURRENCY_WEBHOOK: z.coerce.number().int().min(1).max(20).optional(),
   WORKER_CONCURRENCY_STRIPE: z.coerce.number().int().min(1).max(20).optional(),
-  /** HTTP port for worker GET /health/live, /health/worker, and optional /metrics (default 9090). */
+  /** HTTP port for worker GET /health, /health, and optional /metrics (default 9090). */
   WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(9090),
-  /** Max age of throughput queue heartbeats before /health/live returns 503 (default 5 min). */
+  /** Max age of throughput queue heartbeats before /health returns 503 (default 5 min). */
   WORKER_HEALTH_STALL_TIMEOUT_MS: z.coerce
     .number()
     .int()
     .min(60_000)
     .max(3_600_000)
     .default(300_000),
+  /**
+   * Comma-separated BullMQ queue families this worker process runs: `mail`, `notify`,
+   * `webhook`, `stripe`, `retention`, `observability`, or `all` (default monolithic worker).
+   * Use split services in production so each process pool budget matches its registered workers.
+   */
+  WORKER_QUEUE_FAMILIES: z.string().min(1).default('all'),
+  /**
+   * @deprecated Superseded by per-queue demand in worker-connection-budget.ts. Kept for
+   * backward-compatible env templates; startup no longer enforces this heuristic.
+   */
+  WORKER_BACKGROUND_POOL_SLOT_RESERVE: z.coerce.number().int().min(0).max(64).default(6),
   /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. */
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).optional(),
   /** Connections reserved for admin, migrations, and monitoring (subtracted from Postgres max_connections). */
@@ -197,11 +221,22 @@ const envSchemaBase = z.object({
    * Rollout flag for scoped RLS contexts (item 2 of the production hardening plan). When true,
    * the per-HTTP-request `organization-rls-transaction` + `request-statement-timeout` pinning
    * is disabled and services are expected to wrap their unit-of-work calls in
-   * `withOrganizationDatabaseContext(...)`. When false (default), the existing request-pinned
-   * transaction model stays in place.
+   * `withOrganizationDatabaseContext(...)` or `withUserDatabaseContext(...)`. When false,
+   * the legacy request-pinned transaction model stays in place.
    *
-   * Roll out per-route or per-environment. See `docs/reference/data/migrations.md` and the
-   * RLS unpin chaos test for the migration sequencing.
+   * Prerequisites for safely enabling `true` in an environment:
+   *   1. Apply migration `20260520000004_organization_discovery_and_invitation_lookup_rls.sql`
+   *      (adds `organizations_user_discovery` + `memberships_user_self_discovery` policies and
+   *      the `tenancy.resolve_member_invitation_lookup_by_public_id` /
+   *      `tenancy.list_pending_member_invitations_for_email` SECURITY DEFINER helpers).
+   *   2. Confirm services on the deployment wrap cross-org reads in
+   *      `withUserDatabaseContext` (organization list/getByPublicId/getBySlug/create) and that
+   *      invitation accept/decline/listPending resolve the owning org via the SECURITY DEFINER
+   *      lookup before writing.
+   *
+   * Roll out per-environment by flipping the env var; the schema default remains `true` so new
+   * environments inherit the post-migration mode. See
+   * `docs/deployment/runbooks/resource-limits.md` for the full rollout sequence.
    */
   DATABASE_RLS_SCOPED_CONTEXTS: z.coerce.boolean().default(true),
   /** Per-connection idle_in_transaction_session_timeout (ms). Caps stuck transactions; 0 disables. Default: 30000. */
@@ -271,6 +306,14 @@ const envSchemaBase = z.object({
   MEMBER_ROLE_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   UPLOAD_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
+  /** Cron for the PENDING upload sweeper (auto-confirm matches, hard-delete orphans). */
+  UPLOAD_PENDING_SWEEP_CRON: z.string().min(1).optional(),
+  /**
+   * Extra grace beyond `PRESIGNED_URL_EXPIRY_SECONDS` before a PENDING upload row becomes
+   * eligible for sweeping. Prevents reconciling rows whose presigned URL has only just
+   * expired and whose client confirm call is still in flight. Default 1 hour.
+   */
+  UPLOAD_PENDING_SWEEP_GRACE_SECONDS: z.coerce.number().int().min(60).default(3600),
 
   /** Bounded SCAN cap for idempotency Redis key cardinality sampling (worker). */
   IDEMPOTENCY_CARDINALITY_SCAN_MAX: z.coerce.number().int().min(1).default(200_000),
@@ -304,6 +347,13 @@ const envSchemaBase = z.object({
    * Ignored in production.
    */
   CAPTCHA_BYPASS_HEADER: z.string().min(1).optional(),
+  /**
+   * Production safety acknowledgement. CAPTCHA fail-closes on public auth routes, so a
+   * production deploy with CAPTCHA_PROVIDER=disabled (the default) would turn login and
+   * recovery into 401s. Boot fails in that case unless this is explicitly set to true,
+   * which also switches the middleware to fail-open (skip CAPTCHA) instead of 401.
+   */
+  CAPTCHA_DISABLED_ACK: booleanString('false'),
 
   // MCP server (Model Context Protocol) at POST /api/v1/mcp — exposes APIs as tools for frontends/agents
   ENABLE_MCP_SERVER: z
@@ -329,6 +379,10 @@ const envSchemaBase = z.object({
   SECRETS_ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-f]{64}$/i, 'SECRETS_ENCRYPTION_KEY must be 64 hex characters (32 bytes)'),
+
+  // Monthly database restore drill (GitHub Actions only — not loaded by API/worker at runtime)
+  /** Neon API key for scheduled monthly PITR restore drill. GitHub Environment secret via `pnpm github:sync`. */
+  MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: z.string().min(1).optional(),
 });
 
 export const envSchema = envSchemaBase
@@ -364,6 +418,22 @@ export const envSchema = envSchemaBase
     {
       message: 'CAPTCHA_SECRET is required when CAPTCHA_PROVIDER=turnstile',
       path: ['CAPTCHA_SECRET'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      if (data.CAPTCHA_PROVIDER === 'turnstile') {
+        return true;
+      }
+      return data.CAPTCHA_DISABLED_ACK === true;
+    },
+    {
+      message:
+        'In production, configure CAPTCHA (CAPTCHA_PROVIDER=turnstile + CAPTCHA_SECRET) or set CAPTCHA_DISABLED_ACK=true to explicitly run with CAPTCHA disabled (fail-open on auth routes)',
+      path: ['CAPTCHA_PROVIDER'],
     },
   )
   .refine(
@@ -410,7 +480,7 @@ export const envSchemaKeys = Object.keys(envSchemaBase.shape) as (keyof z.infer<
  * Keys whose schema entry has no default and is not marked `.optional()`. These must
  * always be present at runtime — the app Zod-rejects on first request otherwise.
  *
- * Used by `tooling/setup/validate-github-env.ts` to assert deploy-target secrets
+ * Used by `tooling/setup-infra/validate-github-env.ts` to assert deploy-target secrets
  * against the schema instead of treating every uncommented `.env.example` line as
  * required (which would also flag optional integrations like Stripe / OAuth / S3).
  */
@@ -435,6 +505,11 @@ export const envSchemaConditionallyRequiredKeys: ReadonlyArray<{
   {
     key: 'CAPTCHA_SECRET',
     condition: 'CAPTCHA_PROVIDER=turnstile (schema default is `disabled`)',
+  },
+  {
+    key: 'CAPTCHA_DISABLED_ACK',
+    condition:
+      'NODE_ENV=production with CAPTCHA_PROVIDER=disabled (must be true to acknowledge fail-open auth routes)',
   },
 ];
 

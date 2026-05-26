@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { SignJWT, decodeProtectedHeader, jwtVerify, importPKCS8, importSPKI } from 'jose';
 import type { CryptoKey } from 'jose';
-import { TextEncoder } from 'node:util';
 import { ACCESS_TOKEN_EXPIRY_SECONDS } from '@/shared/constants/index.js';
 import { GLOBAL_ROLES } from '@/shared/constants/roles.js';
 import { getEnv } from '@/shared/config/env.config.js';
@@ -9,10 +8,10 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 
 const JWT_ISSUER = 'core-be';
 const JWT_AUDIENCE = 'core-api';
+const JWT_ALGORITHM = 'RS256' as const;
 
-let _signingKey: CryptoKey | Uint8Array | null = null;
-let _verifyKey: CryptoKey | Uint8Array | null = null;
-let _algorithm: 'RS256' | 'HS256' = 'HS256';
+let _signingKey: CryptoKey | null = null;
+let _verifyKey: CryptoKey | null = null;
 
 function normalizePem(value: string): string {
   const normalized = value.replaceAll('\\n', '\n').trim();
@@ -20,52 +19,34 @@ function normalizePem(value: string): string {
   return beginIndex > 0 ? normalized.slice(beginIndex) : normalized;
 }
 
-/**
- * Determine the signing key and algorithm.
- * - If JWT_PRIVATE_KEY is set → RS256
- * - Otherwise, falls back to JWT_SECRET → HS256
- */
-async function getSigningKey(): Promise<{
-  key: CryptoKey | Uint8Array;
-  algorithm: 'RS256' | 'HS256';
-}> {
+async function getSigningKey(): Promise<{ key: CryptoKey; algorithm: typeof JWT_ALGORITHM }> {
   if (_signingKey) {
-    return { key: _signingKey, algorithm: _algorithm };
+    return { key: _signingKey, algorithm: JWT_ALGORITHM };
   }
 
   const environment = getEnv();
-  if (environment.JWT_PRIVATE_KEY) {
-    _algorithm = 'RS256';
-    _signingKey = await importPKCS8(normalizePem(environment.JWT_PRIVATE_KEY), 'RS256');
-  } else {
-    _algorithm = 'HS256';
-    _signingKey = new TextEncoder().encode(environment.JWT_SECRET);
+  const privateKeyPem = environment.JWT_PRIVATE_KEY;
+  if (!privateKeyPem) {
+    throw new Error('JWT_PRIVATE_KEY is required: RS256 signing is mandatory');
   }
-  return { key: _signingKey, algorithm: _algorithm };
+
+  _signingKey = await importPKCS8(normalizePem(privateKeyPem), JWT_ALGORITHM);
+  return { key: _signingKey, algorithm: JWT_ALGORITHM };
 }
 
-/**
- * Determine the verification key and algorithm.
- * - If JWT_PUBLIC_KEY is set → RS256
- * - Otherwise, falls back to JWT_SECRET → HS256
- */
-async function getVerifyKey(): Promise<{
-  key: CryptoKey | Uint8Array;
-  algorithm: 'RS256' | 'HS256';
-}> {
+async function getVerifyKey(): Promise<{ key: CryptoKey; algorithm: typeof JWT_ALGORITHM }> {
   if (_verifyKey) {
-    return { key: _verifyKey, algorithm: _algorithm };
+    return { key: _verifyKey, algorithm: JWT_ALGORITHM };
   }
 
   const environment = getEnv();
-  if (environment.JWT_PUBLIC_KEY) {
-    _algorithm = 'RS256';
-    _verifyKey = await importSPKI(normalizePem(environment.JWT_PUBLIC_KEY), 'RS256');
-  } else {
-    _algorithm = 'HS256';
-    _verifyKey = new TextEncoder().encode(environment.JWT_SECRET);
+  const publicKeyPem = environment.JWT_PUBLIC_KEY;
+  if (!publicKeyPem) {
+    throw new Error('JWT_PUBLIC_KEY is required: RS256 verification is mandatory');
   }
-  return { key: _verifyKey, algorithm: _algorithm };
+
+  _verifyKey = await importSPKI(normalizePem(publicKeyPem), JWT_ALGORITHM);
+  return { key: _verifyKey, algorithm: JWT_ALGORITHM };
 }
 
 export interface TokenPayload {
@@ -74,8 +55,8 @@ export interface TokenPayload {
 }
 
 /**
- * Sign an access token. Uses RS256 in production, HS256 in development.
- * - 15-minute expiry
+ * Sign an access token with RS256.
+ * - 15-minute expiry (or shorter for global admin)
  * - No email in payload (security: avoid leaking PII)
  * - iss/aud claims set for validation
  */
@@ -85,7 +66,7 @@ export async function signAccessToken(payload: {
 }): Promise<string> {
   const userId = payload.userId;
   const role = payload.role;
-  const { key, algorithm } = await getSigningKey();
+  const { key } = await getSigningKey();
   const now = Math.floor(Date.now() / 1000);
   const environment = getEnv();
   const expirySeconds =
@@ -93,13 +74,8 @@ export async function signAccessToken(payload: {
       ? environment.GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS
       : ACCESS_TOKEN_EXPIRY_SECONDS;
 
-  const protectedHeader: { alg: typeof algorithm; kid?: string } = { alg: algorithm };
-  if (algorithm === 'RS256') {
-    protectedHeader.kid = environment.JWT_SIGNING_KID;
-  }
-
   const builder = new SignJWT(omitUndefined({ role }))
-    .setProtectedHeader(protectedHeader)
+    .setProtectedHeader({ alg: JWT_ALGORITHM, kid: environment.JWT_SIGNING_KID })
     .setSubject(userId)
     .setJti(randomUUID())
     .setIssuer(JWT_ISSUER)
@@ -112,27 +88,16 @@ export async function signAccessToken(payload: {
 
 /**
  * Verify and decode an access token.
- * Validates: algorithm, issuer, audience, expiration.
+ * Validates: algorithm (RS256 only), issuer, audience, expiration.
  */
 async function resolveVerifyKeyForToken(token: string): Promise<{
-  key: CryptoKey | Uint8Array;
-  algorithm: 'RS256' | 'HS256';
+  key: CryptoKey;
+  algorithm: typeof JWT_ALGORITHM;
 }> {
   const header = decodeProtectedHeader(token);
-  const algorithm = header.alg === 'RS256' ? 'RS256' : 'HS256';
-
-  if (algorithm === 'RS256') {
-    const environment = getEnv();
-    const publicKeyPem = environment.JWT_PUBLIC_KEY;
-    if (!publicKeyPem) {
-      throw new Error('No public key configured for JWT verification');
-    }
-    return {
-      key: await importSPKI(publicKeyPem, 'RS256'),
-      algorithm: 'RS256',
-    };
+  if (header.alg !== JWT_ALGORITHM) {
+    throw new Error('JWT algorithm not allowed: RS256 only');
   }
-
   return getVerifyKey();
 }
 
@@ -159,7 +124,6 @@ export async function verifyAccessToken(token: string): Promise<TokenPayload> {
 export function resetJwtCachesForTests(): void {
   _signingKey = null;
   _verifyKey = null;
-  _algorithm = 'HS256';
 }
 
 export { JWT_ISSUER, JWT_AUDIENCE, ACCESS_TOKEN_EXPIRY_SECONDS };

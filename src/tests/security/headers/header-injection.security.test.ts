@@ -19,7 +19,7 @@ describe('Security: Header injection', () => {
   it('should not reflect CRLF injection in custom headers into response', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health/live',
+      url: '/health',
       headers: { 'X-Custom-Test': 'value\r\nX-Injected: true' },
     });
 

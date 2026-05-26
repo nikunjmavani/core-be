@@ -150,12 +150,13 @@ Legend:
 
 ================================================================================
   DOMAIN: UPLOAD (/api/v1/uploads)
-  Routes: 3
+  Routes: 4
 ================================================================================
 
   POST  /api/v1/uploads                                        AUTH
   GET   /api/v1/uploads/:publicId                              AUTH
   DELETE/api/v1/uploads/:publicId                              AUTH
+  POST  /api/v1/uploads/:publicId/confirm                      AUTH
 
 ================================================================================
   DOMAIN: USER (/api/v1/users)
@@ -182,19 +183,18 @@ Legend:
 
 ================================================================================
   DOMAIN: HEALTH (/health)
-  Routes: 2
+  Routes: 1
 ================================================================================
 
-  GET   /health/live                                           PUBLIC
-  GET   /health/ready                                          PUBLIC
+  GET   /health                                                PUBLIC
 
 ================================================================================
   SUMMARY
 ================================================================================
 
   Total routes    : 122
-  Public          : 20
-  Authenticated   : 45
+  Public          : 19
+  Authenticated   : 46
   Role-guarded    : 7
   Perm-guarded    : 50
 

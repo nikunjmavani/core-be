@@ -358,7 +358,7 @@ Table notify.notifications {
 }
 
 Note notify.notifications {
-  'Partitioned BY RANGE (created_at)\nRLS: enabled\nPolicies: notifications_tenant_isolation\nFORCE ROW LEVEL SECURITY'
+  'Partitioned BY RANGE (created_at)\nRLS: enabled\nPolicies: notifications_tenant_isolation, notifications_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table notify.webhook_delivery_attempts {
@@ -456,7 +456,7 @@ Table tenancy.memberships {
 }
 
 Note tenancy.memberships {
-  'RLS: enabled\nPolicies: memberships_tenant_isolation\nFORCE ROW LEVEL SECURITY'
+  'RLS: enabled\nPolicies: memberships_tenant_isolation, memberships_user_self_discovery\nFORCE ROW LEVEL SECURITY'
 }
 
 Table tenancy.organization_notification_policies {
@@ -511,7 +511,7 @@ Table tenancy.organizations {
 }
 
 Note tenancy.organizations {
-  'RLS: enabled\nPolicies: organizations_tenant_isolation\nFORCE ROW LEVEL SECURITY'
+  'RLS: enabled\nPolicies: organizations_tenant_isolation, organizations_user_discovery\nFORCE ROW LEVEL SECURITY'
 }
 
 Table tenancy.permissions {
@@ -579,7 +579,7 @@ Table upload.uploads {
 }
 
 Note upload.uploads {
-  'RLS: enabled\nPolicies: uploads_tenant_isolation\nFORCE ROW LEVEL SECURITY'
+  'RLS: enabled\nPolicies: uploads_tenant_isolation, uploads_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Ref: audit.logs.actor_user_id > auth.users.id [delete: set null]

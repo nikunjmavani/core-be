@@ -1,0 +1,120 @@
+# Opens or updates a GitHub issue when PR CI fails on a Dependabot pull request.
+# All Dependabot PRs require manual review and merge (branch protection).
+
+name: Dependabot CI triage
+
+on:
+  workflow_run:
+    workflows: ['PR CI']
+    types: [completed]
+
+concurrency:
+  group: dependabot-ci-triage-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+  pull-requests: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  ci-failed-triage:
+    name: CI failed triage
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      (
+        github.event.workflow_run.actor.login == 'dependabot[bot]' ||
+        github.event.workflow_run.actor.login == 'app/dependabot'
+      ) &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update Dependabot CI failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+
+          pr_number="$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")"
+          if [ -z "$pr_number" ]; then
+            echo "No pull request linked to failed workflow run; skipping issue."
+            exit 0
+          fi
+
+          author_login="$(gh pr view "$pr_number" --json author --jq '.author.login')"
+          if [ "$author_login" != "app/dependabot" ] && [ "$author_login" != "dependabot[bot]" ]; then
+            echo "PR author is not Dependabot: $author_login"
+            exit 0
+          fi
+
+          metadata_file="$(mktemp)"
+          gh pr view "$pr_number" --json url,title,body,labels,baseRefName > "$metadata_file"
+
+          is_security="$(node - "$metadata_file" <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const metadata = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const text = `${metadata.title ?? ''}\n${metadata.body ?? ''}`.toLowerCase();
+          const labels = new Set((metadata.labels ?? []).map((label) => label.name));
+          const isSecurity =
+            labels.has('security') ||
+            text.includes('security update') ||
+            text.includes('security-updates group');
+          process.stdout.write(isSecurity ? 'true' : 'false');
+          NODE
+          )"
+
+          pr_url="$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).url)" "$metadata_file")"
+          pr_title="$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).title)" "$metadata_file")"
+          base_ref="$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).baseRefName)" "$metadata_file")"
+          marker="dependabot-ci-failed-pr:$pr_number"
+
+          existing_issue="$(
+            gh issue list \
+              --state open \
+              --search "$marker in:body" \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+
+          body_file="$(mktemp)"
+          cat > "$body_file" <<EOF
+          ## Dependabot PR blocked by CI
+
+          PR CI failed for a Dependabot pull request. Merge manually after checks pass and review.
+
+          - PR: $pr_url
+          - PR title: $pr_title
+          - Base branch: $base_ref
+          - Failed workflow run: $WORKFLOW_RUN_URL
+          - Security update: $is_security
+
+          ## Triage checklist
+
+          - [ ] Open the failed PR CI run and identify which job(s) failed.
+          - [ ] Reproduce locally (\`pnpm ci:local\` or the failing job command).
+          - [ ] Fix the breakage on the Dependabot branch, or close the PR and apply the fix manually.
+          - [ ] For security updates, prioritize per \`SECURITY.md\` severity targets.
+          - [ ] Re-run PR CI; close this issue once the PR merges or is superseded.
+
+          $marker
+          EOF
+
+          if [ "$is_security" = "true" ]; then
+            issue_title="Security Dependabot PR blocked by CI: PR #$pr_number"
+          else
+            issue_title="Dependabot PR blocked by CI: PR #$pr_number"
+          fi
+
+          if [ -n "$existing_issue" ]; then
+            gh issue comment "$existing_issue" --body-file "$body_file"
+            echo "Updated existing CI failure issue #$existing_issue"
+          else
+            gh issue create \
+              --title "$issue_title" \
+              --label dependencies \
+              --body-file "$body_file"
+          fi

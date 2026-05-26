@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, lt, type SQL } from 'drizzle-orm';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database-context.js';
@@ -8,8 +8,19 @@ import {
 } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import { WEBHOOK_DELIVERY_STUCK_SENDING_LEASE_MINUTES } from '@/domains/notify/sub-domains/webhook/webhook-delivery.constants.js';
 import { MILLISECONDS_PER_MINUTE } from '@/shared/constants/ttl.constants.js';
+import {
+  buildDescendingCreatedAtIdCursorCondition,
+  createOpaqueCursorFromRow,
+  parseListCursor,
+} from '@/shared/utils/http/pagination.util.js';
 
 export type WebhookDeliverySendingClaimResult = 'claimed' | 'in_flight' | 'already_sent';
+
+export interface WebhookDeliveryAttemptListPagination {
+  after?: string;
+  limit: number;
+  include_total?: boolean;
+}
 
 export class WebhookDeliveryAttemptRepository {
   constructor(private readonly databaseHandle?: RequestScopedPostgresDatabase) {}
@@ -18,13 +29,45 @@ export class WebhookDeliveryAttemptRepository {
     return resolveRepositoryDatabaseHandle(this.databaseHandle);
   }
 
-  async listByWebhook(webhook_id: number, limit: number) {
-    return this.db()
+  async listByWebhook(webhook_id: number, pagination: WebhookDeliveryAttemptListPagination) {
+    const { after, limit } = pagination;
+    const includeTotal = pagination.include_total === true;
+    const filterConditions: SQL[] = [eq(webhook_delivery_attempts.webhook_id, webhook_id)];
+    const countWhere = and(...filterConditions);
+    const cursorCondition = buildDescendingCreatedAtIdCursorCondition(
+      webhook_delivery_attempts.created_at,
+      webhook_delivery_attempts.id,
+      parseListCursor(after),
+    );
+    const where =
+      cursorCondition !== undefined ? and(...filterConditions, cursorCondition) : countWhere;
+
+    const rowsPromise = this.db()
       .select()
       .from(webhook_delivery_attempts)
-      .where(eq(webhook_delivery_attempts.webhook_id, webhook_id))
-      .orderBy(desc(webhook_delivery_attempts.created_at))
-      .limit(limit);
+      .where(where)
+      .orderBy(desc(webhook_delivery_attempts.created_at), desc(webhook_delivery_attempts.id))
+      .limit(limit + 1);
+
+    const countPromise = includeTotal
+      ? this.db()
+          .select({ count: count() })
+          .from(webhook_delivery_attempts)
+          .where(countWhere)
+          .then((rows) => rows[0]?.count ?? 0)
+      : Promise.resolve(null);
+
+    const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);
+    const hasMore = fetchedRows.length > limit;
+    const items = hasMore ? fetchedRows.slice(0, limit) : fetchedRows;
+    const lastItem = items.at(-1);
+    return {
+      items,
+      total,
+      limit,
+      has_more: hasMore,
+      next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
+    };
   }
 
   /** Resolve webhook public_id + organization_id to internal webhook_id for auth */

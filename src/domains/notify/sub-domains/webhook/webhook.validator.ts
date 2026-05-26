@@ -1,10 +1,35 @@
 import { ValidationError } from '@/shared/errors/index.js';
+import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
   CreateWebhookDto,
+  listWebhookDeliveryAttemptsQueryDto,
+  listWebhooksQueryDto,
   UpdateWebhookDto,
   type CreateWebhookInput,
+  type ListWebhookDeliveryAttemptsQueryInput,
+  type ListWebhooksQueryInput,
   type UpdateWebhookInput,
 } from './webhook.dto.js';
+
+export function validateListWebhooksQuery(data: unknown): ListWebhooksQueryInput {
+  ensureCursorOnlyPagination(data);
+  const result = listWebhooksQueryDto.safeParse(data);
+  if (!result.success) {
+    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+  }
+  return result.data;
+}
+
+export function validateListWebhookDeliveryAttemptsQuery(
+  data: unknown,
+): ListWebhookDeliveryAttemptsQueryInput {
+  ensureCursorOnlyPagination(data);
+  const result = listWebhookDeliveryAttemptsQueryDto.safeParse(data);
+  if (!result.success) {
+    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+  }
+  return result.data;
+}
 
 export function validateCreateWebhook(data: unknown): CreateWebhookInput {
   const result = CreateWebhookDto.safeParse(data);

@@ -51,4 +51,42 @@ describe('validateCreateUpload — MIME, size, and ownership', () => {
     expect(result.purpose).toBe('avatar');
     expect(result.for).toBe('user');
   });
+
+  it('rejects filename extension that does not match content type', () => {
+    expect(() =>
+      validateCreateUpload({
+        ...baseUserUpload,
+        contentType: 'image/png',
+        fileName: 'evil.exe',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('rejects uppercase mismatched extension (compared case-insensitively)', () => {
+    expect(() =>
+      validateCreateUpload({
+        ...baseUserUpload,
+        contentType: 'image/png',
+        fileName: 'photo.JPG',
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('accepts .jpeg alias for image/jpeg', () => {
+    const result = validateCreateUpload({
+      ...baseUserUpload,
+      contentType: 'image/jpeg',
+      fileName: 'photo.jpeg',
+    });
+    expect(result.fileName).toBe('photo.jpeg');
+  });
+
+  it('accepts filename without an extension', () => {
+    const result = validateCreateUpload({
+      ...baseUserUpload,
+      contentType: 'image/png',
+      fileName: 'screenshot',
+    });
+    expect(result.fileName).toBe('screenshot');
+  });
 });

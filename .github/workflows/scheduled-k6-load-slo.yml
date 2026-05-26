@@ -12,6 +12,9 @@ concurrency:
   group: load-tests-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   k6:
     name: k6 SLO gate and scenarios

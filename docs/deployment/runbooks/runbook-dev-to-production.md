@@ -72,44 +72,45 @@ Sync with `.env.example`: `pnpm tool:sync-env-example`
 
 ### 4.1 Local vs production (summary)
 
-| Variable                 | Local / dev                     | Production                                                                     |
-| ------------------------ | ------------------------------- | ------------------------------------------------------------------------------ |
-| `NODE_ENV`               | `local` or `development`        | `production`                                                                   |
-| `ALLOWED_ORIGINS`        | e.g. `http://localhost:3000`    | **Required.** Comma-separated allowed frontend origins                         |
-| `DATABASE_URL`           | Compose or dev DB; SSL optional | Managed Postgres with TLS (`sslmode=require` or provider default)              |
-| `REDIS_URL`              | Compose or dev Redis            | Managed Redis (queues, rate limits, idempotency, permission cache)             |
-| `JWT_SECRET`             | Min 32 chars (legacy fallback / migration guard) | **RS256:** `JWT_PUBLIC_KEY` + `JWT_PRIVATE_KEY` (PEM) — required in every runtime |
-| `SENTRY_DSN`             | Optional                        | Recommended; `SENTRY_ENVIRONMENT=production`                                   |
-| `EMAIL_FROM_ADDRESS`     | Optional                        | Verified sender domain                                                         |
-| `ENABLE_QUEUE_DASHBOARD` | `true` if needed                | `false` unless network-restricted                                              |
-| `ENABLE_MCP_SERVER`      | `true` if needed locally        | `false` unless network-restricted                                              |
-| `NODE_OPTIONS`           | Typically unset                 | `--max-old-space-size=<MiB>` — [resource-limits.md](resource-limits.md)        |
-| `DEPLOYMENT_TOTAL_REPLICA_COUNT` | Unset (local defaults to 1 API + 1 worker) | **Required.** `api_replicas + worker_replicas` on **both** API and worker services |
-| `DEPLOYMENT_API_REPLICA_COUNT` / `DEPLOYMENT_WORKER_REPLICA_COUNT` | Optional split counts | Alternative to `DEPLOYMENT_TOTAL_REPLICA_COUNT` when explicit API/worker counts are clearer |
-| `DATABASE_POOL_MAX` / `POSTGRES_RESERVED_CONNECTIONS` | Defaults (`10`) | Tune pool size and headroom — [resource-limits.md](resource-limits.md) |
-| `POSTGRES_MAX_CONNECTIONS` | Unset (queries Postgres at startup) | Set when provider `max_connections` differs from `SHOW max_connections` |
+| Variable                                                           | Local / dev                                       | Production                                                                                  |
+| ------------------------------------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                                         | `local` or `development`                          | `production`                                                                                |
+| `ALLOWED_ORIGINS`                                                  | e.g. `http://localhost:3000`                      | **Required.** Comma-separated allowed frontend origins                                      |
+| `DATABASE_URL`                                                     | Compose or dev DB; SSL optional                   | Managed Postgres with TLS (`sslmode=require` or provider default)                           |
+| `REDIS_URL`                                                        | Compose or dev Redis                              | Managed Redis (queues, rate limits, idempotency, permission cache)                          |
+| `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`                               | RS256 PEM pair (via `pnpm setup:infra`)           | **Required** in every runtime — RS256 only                                                  |
+| `JWT_SECRET`                                                       | Optional deprecated no-op (min 32 chars when set) | Optional; unused at runtime                                                                 |
+| `SENTRY_DSN`                                                       | Optional                                          | Recommended; `SENTRY_ENVIRONMENT=production`                                                |
+| `EMAIL_FROM_ADDRESS`                                               | Optional                                          | Verified sender domain                                                                      |
+| `ENABLE_QUEUE_DASHBOARD`                                           | `true` if needed                                  | `false` unless network-restricted                                                           |
+| `ENABLE_MCP_SERVER`                                                | `true` if needed locally                          | `false` unless network-restricted                                                           |
+| `NODE_OPTIONS`                                                     | Typically unset                                   | `--max-old-space-size=<MiB>` — [resource-limits.md](resource-limits.md)                     |
+| `DEPLOYMENT_TOTAL_REPLICA_COUNT`                                   | Unset (local defaults to 1 API + 1 worker)        | **Required.** `api_replicas + worker_replicas` on **both** API and worker services          |
+| `DEPLOYMENT_API_REPLICA_COUNT` / `DEPLOYMENT_WORKER_REPLICA_COUNT` | Optional split counts                             | Alternative to `DEPLOYMENT_TOTAL_REPLICA_COUNT` when explicit API/worker counts are clearer |
+| `DATABASE_POOL_MAX` / `POSTGRES_RESERVED_CONNECTIONS`              | Defaults (`10`)                                   | Tune pool size and headroom — [resource-limits.md](resource-limits.md)                      |
+| `POSTGRES_MAX_CONNECTIONS`                                         | Unset (queries Postgres at startup)               | Set when provider `max_connections` differs from `SHOW max_connections`                     |
 
 ### 4.2 Production go-live checklist
 
 Set on **both** API and worker services (Railway / K8s):
 
-| Variable / setting                   | Production requirement                                                                          |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                           | `production`                                                                                    |
-| `ALLOWED_ORIGINS`                    | Comma-separated browser origins; empty fails CORS at startup                                    |
-| `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` | RS256 key pair (required in every runtime per env schema)                                      |
-| `DATABASE_URL`                       | Managed Postgres with TLS                                                                       |
-| `REDIS_URL`                          | Managed Redis                                                                                   |
-| `STRIPE_WEBHOOK_SECRET`              | Required when Stripe billing webhooks are enabled                                               |
-| `GLOBAL_ADMIN_EMAILS`                | Comma-separated platform admin emails (JWT `super_admin` on login/refresh/OAuth/magic-link/MFA) |
-| `ENABLE_QUEUE_DASHBOARD`             | `false` unless network-restricted                                                               |
-| `ENABLE_MCP_SERVER`                  | `false` unless network-restricted                                                               |
-| `ENABLE_RESPONSE_ENCRYPTION`         | If `true`, `RESPONSE_ENCRYPTION_KEY` must be set (encryption fails closed on error)             |
-| `AUDIT_RETENTION_DAYS`               | Required in every runtime                                                                       |
-| `AUTH_SESSION_RETENTION_DAYS`             | Required in every runtime                                                                       |
-| `DEPLOYMENT_TOTAL_REPLICA_COUNT`           | **Required** — `api_replicas + worker_replicas` (same value on API and worker services)         |
-| `DEPLOYMENT_API_REPLICA_COUNT` / `DEPLOYMENT_WORKER_REPLICA_COUNT` | Alternative split counts when not using `DEPLOYMENT_TOTAL_REPLICA_COUNT` |
-| `DATABASE_POOL_MAX`                             | Optional; default `10` — size with [resource-limits.md](resource-limits.md) connection budget   |
+| Variable / setting                                                 | Production requirement                                                                          |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                                         | `production`                                                                                    |
+| `ALLOWED_ORIGINS`                                                  | Comma-separated browser origins; empty fails CORS at startup                                    |
+| `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`                               | RS256 key pair (required in every runtime per env schema)                                       |
+| `DATABASE_URL`                                                     | Managed Postgres with TLS                                                                       |
+| `REDIS_URL`                                                        | Managed Redis                                                                                   |
+| `STRIPE_WEBHOOK_SECRET`                                            | Required when Stripe billing webhooks are enabled                                               |
+| `GLOBAL_ADMIN_EMAILS`                                              | Comma-separated platform admin emails (JWT `super_admin` on login/refresh/OAuth/magic-link/MFA) |
+| `ENABLE_QUEUE_DASHBOARD`                                           | `false` unless network-restricted                                                               |
+| `ENABLE_MCP_SERVER`                                                | `false` unless network-restricted                                                               |
+| `ENABLE_RESPONSE_ENCRYPTION`                                       | If `true`, `RESPONSE_ENCRYPTION_KEY` must be set (encryption fails closed on error)             |
+| `AUDIT_RETENTION_DAYS`                                             | Required in every runtime                                                                       |
+| `AUTH_SESSION_RETENTION_DAYS`                                      | Required in every runtime                                                                       |
+| `DEPLOYMENT_TOTAL_REPLICA_COUNT`                                   | **Required** — `api_replicas + worker_replicas` (same value on API and worker services)         |
+| `DEPLOYMENT_API_REPLICA_COUNT` / `DEPLOYMENT_WORKER_REPLICA_COUNT` | Alternative split counts when not using `DEPLOYMENT_TOTAL_REPLICA_COUNT`                        |
+| `DATABASE_POOL_MAX`                                                | Optional; default `10` — size with [resource-limits.md](resource-limits.md) connection budget   |
 
 App images do **not** bundle Postgres or Redis — only `DATABASE_URL` / `REDIS_URL` point at managed services. See [docker-images.md](../docker-images.md).
 
@@ -134,7 +135,7 @@ Code is ready for **Google** and **GitHub** when env vars are set ([credentials-
 2. **Migrations (production DB):** `pnpm db:migrate` once per release — uses `DATABASE_MIGRATION_URL` if set, else `DATABASE_URL`. Run from a controlled job or shell; **no seeds** on production unless planned.
 3. **API:** `node dist/server.js` (or API Docker image; `PORT`, `HOST`, `NODE_OPTIONS`)
 4. **Worker:** `node dist/worker.js` (separate container; same `DATABASE_URL`, `REDIS_URL`, app secrets)
-5. **Health:** `GET /health/live` (liveness), `GET /health/ready` (readiness)
+5. **Health:** `GET /health` (liveness), `GET /health` (readiness)
 
 ---
 
@@ -144,12 +145,12 @@ Code is ready for **Google** and **GitHub** when env vars are set ([credentials-
 
 | Branch | Workflow                                                                                 | GitHub environment |
 | ------ | ---------------------------------------------------------------------------------------- | ------------------ |
-| `dev`  | [deploy-railway.yml](../../../.github/workflows/deploy-railway.yml) (after CI on `dev`)  | `development`      |
-| `main` | [deploy-railway.yml](../../../.github/workflows/deploy-railway.yml) (after CI on `main`) | `production`       |
+| `dev`  | [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) (after CI on `dev`)  | `development`      |
+| `main` | [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) (after CI on `main`) | `production`       |
 
-**Not automated by deploy workflows:** DB migrations, worker service, optional integration env (`RESEND_*`, `STRIPE_*`, etc.) — configure on Railway or extend workflows.
+`reusable-railway-deploy.yml` runs migrations, syncs shared Railway variables, deploys both API and worker services, and performs post-deploy health checks. Optional integration env (`RESEND_*`, `STRIPE_*`, etc.) still needs to be configured on Railway or added to the CD variable loop.
 
-Deploy **two** services: API (`Dockerfile` / `api` target) and worker (`Dockerfile.worker`). Health probe: `GET /health/ready` on API.
+Deploy **two** services: API (`Dockerfile` / `api` target) and worker (`Dockerfile.worker`). Each service exposes `GET /health`.
 
 ---
 
@@ -158,8 +159,7 @@ Deploy **two** services: API (`Dockerfile` / `api` target) and worker (`Dockerfi
 Replace the host with your production API URL:
 
 ```bash
-curl -sf https://YOUR_API/health/live
-curl -sf https://YOUR_API/health/ready
+curl -sf https://YOUR_API/health
 ```
 
 Ready response should show `"database":"connected"`, `"redis":"connected"`, `"bullmq":"connected"`.
@@ -208,7 +208,7 @@ The worker samples each `*-dlq` queue every 15 minutes (configurable via `DLQ_DE
 Run once per release candidate on the staging environment:
 
 1. **Migrate** — `DATABASE_MIGRATION_URL=... pnpm db:migrate` (or `pnpm db:migrate:dry-run` against a disposable DB restored from schema snapshot).
-2. **Deploy** API + worker; confirm `GET /health/ready` returns `ok` for database, redis, and bullmq.
+2. **Deploy** API + worker; confirm `GET /health` returns `ok` for database, redis, and bullmq.
 3. **Smoke** — `pnpm test:api-smoke` against staging base URL (or minimal billing/auth checks).
-4. **Drain** — send `SIGTERM` to API; confirm `/health/ready` returns `503` with `status: "draining"` while `/health/live` stays `200` until exit (see [resource-limits.md](resource-limits.md)).
+4. **Drain** — send `SIGTERM` to API; confirm `/health` returns `503` with `status: "draining"` while `/health` stays `200` until exit (see [resource-limits.md](resource-limits.md)).
 5. **Worker** — restart worker; confirm BullMQ schedulers register (stripe-webhook, DLQ depth, idempotency cardinality in logs).

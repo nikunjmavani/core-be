@@ -10,9 +10,9 @@ export function createAuditController(service: AuditService) {
       const result = await service.list(request.query as Record<string, unknown>);
       return paginatedResponse(AuditSerializer.many(result.items), getRequestIdentifier(request), {
         per_page: result.limit,
-        next: result.page < result.total_pages ? String(result.page + 1) : null,
-        has_more: result.page < result.total_pages,
-        estimated_total: result.total,
+        next: result.next_cursor,
+        has_more: result.has_more,
+        ...(result.total !== null ? { estimated_total: result.total } : {}),
       });
     },
   };

@@ -3,6 +3,14 @@ name: Reusable — generate API docs
 on:
   workflow_call:
     inputs:
+      merge_commit_sha:
+        description: Commit SHA on the target branch after merge
+        required: true
+        type: string
+      target_branch:
+        description: Protected branch that received the merge (main or dev)
+        required: true
+        type: string
       github_environment:
         description: GitHub Environment for Postman/Scalar secrets (development, production)
         required: true
@@ -27,6 +35,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   run:
     name: Generate + publish
@@ -46,7 +57,9 @@ jobs:
       SECRETS_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.merge_commit_sha }}
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -58,7 +71,7 @@ jobs:
         run: pnpm docs:check
 
       - name: Upload API docs artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: api-docs-${{ inputs.github_environment }}
           path: |
@@ -68,6 +81,7 @@ jobs:
 
       - name: Upload Postman Collection to workspace
         if: inputs.publish_hosted_docs && env.POSTMAN_API_KEY != ''
+        continue-on-error: true
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
           POSTMAN_WORKSPACE_ID: ${{ secrets.POSTMAN_WORKSPACE_ID }}
@@ -77,6 +91,7 @@ jobs:
 
       - name: Upload OpenAPI to Scalar Registry
         if: inputs.publish_hosted_docs && env.SCALAR_API_KEY != ''
+        continue-on-error: true
         env:
           SCALAR_API_KEY: ${{ secrets.SCALAR_API_KEY }}
           SCALAR_NAMESPACE: ${{ secrets.SCALAR_NAMESPACE }}

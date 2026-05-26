@@ -9,7 +9,7 @@ function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
     auth: { userId: generatePublicId(), role: 'USER' },
     params: {},
     body: {},
-    query: { page: 1, limit: 20 },
+    query: { limit: 20 },
     headers: {},
     id: 'request-id',
     ...overrides,
@@ -28,7 +28,13 @@ describe('createMembershipController', () => {
   const membershipPublicId = generatePublicId();
   const membership = { id: membershipPublicId };
   const service = {
-    list: vi.fn().mockResolvedValue({ items: [membership], page: 1, limit: 20, total: 25 }),
+    list: vi.fn().mockResolvedValue({
+      items: [membership],
+      limit: 20,
+      total: null,
+      has_more: true,
+      next_cursor: 'membership_cursor_2',
+    }),
     getByPublicId: vi.fn().mockResolvedValue(membership),
     create: vi.fn().mockResolvedValue(membership),
     update: vi.fn().mockResolvedValue(membership),
@@ -48,7 +54,7 @@ describe('createMembershipController', () => {
     expect(service.list).toHaveBeenCalled();
     expect(response).toMatchObject({
       meta: {
-        pagination: expect.objectContaining({ has_more: true, estimated_total: 25 }),
+        pagination: expect.objectContaining({ has_more: true, next: 'membership_cursor_2' }),
       },
     });
   });
@@ -115,9 +121,10 @@ describe('createMembershipController', () => {
   it('listMemberships returns has_more false when all items fit page', async () => {
     vi.mocked(service.list).mockResolvedValueOnce({
       items: [{ id: 'mem_public' }],
-      page: 1,
       limit: 20,
-      total: 1,
+      total: null,
+      has_more: false,
+      next_cursor: null,
     } as never);
     const response = await controller.listMemberships(
       mockRequest({ params: { id: organizationPublicId } }),

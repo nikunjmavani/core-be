@@ -1,7 +1,30 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import organizationRlsTransactionMiddleware from '@/shared/middlewares/organization-rls-transaction.middleware.js';
+import organizationRlsTransactionMiddleware, {
+  settleAndAwaitOrganizationRlsTransaction,
+  type OrganizationRlsTransactionSettlementOutcome,
+} from '@/shared/middlewares/organization-rls-transaction.middleware.js';
+import requestLifecycleMiddleware from '@/shared/middlewares/request-lifecycle.middleware.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+
+/**
+ * The request lifecycle coordinator owns settle in production wiring — register it
+ * alongside the RLS middleware in every test app so commits/rollbacks actually fire.
+ */
+async function registerLifecyclePlugins(application: FastifyInstance): Promise<void> {
+  await application.register(requestLifecycleMiddleware);
+  await application.register(organizationRlsTransactionMiddleware);
+}
+
+async function registerOrganizationRlsWithSettlementCapture(
+  application: FastifyInstance,
+  capture: { outcome?: OrganizationRlsTransactionSettlementOutcome },
+): Promise<void> {
+  await application.register(organizationRlsTransactionMiddleware);
+  application.addHook('onResponse', async (request, reply) => {
+    capture.outcome = await settleAndAwaitOrganizationRlsTransaction(request, reply);
+  });
+}
 
 const mockExecute = vi.fn().mockResolvedValue(undefined);
 const mockTransaction = vi.fn();
@@ -29,9 +52,21 @@ vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => 
   },
 }));
 
+// The lifecycle coordinator pulls in idempotency (→ redis) and the event bus. Stub them
+// out so this test stays focused on RLS commit/rollback behavior.
+vi.mock('@/shared/middlewares/idempotency.middleware.js', () => ({
+  default: async () => undefined,
+  idempotencyOnResponse: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/core/events/event-bus.js', () => ({
+  eventBus: { flushOnCommit: vi.fn(async () => undefined) },
+  enterOnCommitScope: vi.fn(),
+}));
+
 async function createOrganizationRlsApp() {
   const application = Fastify({ logger: false });
-  await application.register(organizationRlsTransactionMiddleware);
+  await registerLifecyclePlugins(application);
   application.get('/probe', async (request) => ({
     organizationId: (request as { organizationId?: string | null }).organizationId ?? null,
   }));
@@ -59,7 +94,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = '';
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -75,7 +110,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string | null }).organizationId = null;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -100,7 +135,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async (request) => ({
       organizationId: (request as { organizationId?: string }).organizationId,
     }));
@@ -120,7 +155,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -149,7 +184,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.delete('/probe', async (_request, reply) => {
       reply.code(204).send();
     });
@@ -177,7 +212,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/fail', async (_request, reply) => {
       reply.status(404).send({ error: 'not_found' });
     });
@@ -205,7 +240,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/server-error', async (_request, reply) => {
       reply.status(500).send({ error: 'internal_error' });
     });
@@ -226,7 +261,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -243,8 +278,9 @@ describe('organization-rls-transaction.middleware', () => {
   });
 
   it('ignores duplicate safeDone calls from request database storage', async () => {
-    const { organizationRequestDatabaseStorage } =
-      await import('@/infrastructure/database/contexts/request-database.context.js');
+    const { organizationRequestDatabaseStorage } = await import(
+      '@/infrastructure/database/contexts/request-database.context.js'
+    );
     const runSpy = vi
       .spyOn(organizationRequestDatabaseStorage, 'run')
       .mockImplementation((_store, callback) => {
@@ -258,7 +294,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -277,7 +313,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
@@ -302,7 +338,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/no-status', async (_request, reply) => {
       Object.defineProperty(reply, 'statusCode', {
         value: undefined,
@@ -316,6 +352,83 @@ describe('organization-rls-transaction.middleware', () => {
     const response = await scopedApplication.inject({ method: 'GET', url: '/no-status' });
     expect(response.statusCode).toBe(200);
     expect(transactionRejected).toBe(false);
+    await scopedApplication.close();
+  });
+
+  it('returns no_transaction when no organization id was set', async () => {
+    const capture: { outcome?: OrganizationRlsTransactionSettlementOutcome } = {};
+    const scopedApplication = Fastify({ logger: false });
+    await registerOrganizationRlsWithSettlementCapture(scopedApplication, capture);
+    scopedApplication.get('/probe', async () => ({ ok: true }));
+    await scopedApplication.ready();
+
+    await scopedApplication.inject({ method: 'GET', url: '/probe' });
+    expect(capture.outcome).toBe('no_transaction');
+    await scopedApplication.close();
+  });
+
+  it('returns committed after a successful org-scoped response', async () => {
+    const organizationPublicId = generatePublicId();
+    const capture: { outcome?: OrganizationRlsTransactionSettlementOutcome } = {};
+    const scopedApplication = Fastify({ logger: false });
+    scopedApplication.addHook('onRequest', (request, _reply, done) => {
+      (request as { organizationId?: string }).organizationId = organizationPublicId;
+      done();
+    });
+    await registerOrganizationRlsWithSettlementCapture(scopedApplication, capture);
+    scopedApplication.get('/probe', async () => ({ ok: true }));
+    await scopedApplication.ready();
+
+    const response = await scopedApplication.inject({ method: 'GET', url: '/probe' });
+    expect(response.statusCode).toBe(200);
+    expect(capture.outcome).toBe('committed');
+    await scopedApplication.close();
+  });
+
+  it('returns rolled_back when the HTTP response is 4xx', async () => {
+    const organizationPublicId = generatePublicId();
+    const capture: { outcome?: OrganizationRlsTransactionSettlementOutcome } = {};
+    const scopedApplication = Fastify({ logger: false });
+    scopedApplication.addHook('onRequest', (request, _reply, done) => {
+      (request as { organizationId?: string }).organizationId = organizationPublicId;
+      done();
+    });
+    await registerOrganizationRlsWithSettlementCapture(scopedApplication, capture);
+    scopedApplication.get('/fail', async (_request, reply) => {
+      reply.status(404).send({ error: 'not_found' });
+    });
+    await scopedApplication.ready();
+
+    const response = await scopedApplication.inject({ method: 'GET', url: '/fail' });
+    expect(response.statusCode).toBe(404);
+    expect(capture.outcome).toBe('rolled_back');
+    await scopedApplication.close();
+  });
+
+  it('returns settle_failed when commit was intended but the outer transaction rejects', async () => {
+    mockTransaction.mockImplementationOnce(async (callback) => {
+      try {
+        await callback({ execute: mockExecute });
+      } catch {
+        /* inner rejection from HTTP 2xx path should not happen here */
+      }
+      throw new Error('commit failed after resolve');
+    });
+
+    const organizationPublicId = generatePublicId();
+    const capture: { outcome?: OrganizationRlsTransactionSettlementOutcome } = {};
+    const scopedApplication = Fastify({ logger: false });
+    scopedApplication.addHook('onRequest', (request, _reply, done) => {
+      (request as { organizationId?: string }).organizationId = organizationPublicId;
+      done();
+    });
+    await registerOrganizationRlsWithSettlementCapture(scopedApplication, capture);
+    scopedApplication.get('/probe', async () => ({ ok: true }));
+    await scopedApplication.ready();
+
+    const response = await scopedApplication.inject({ method: 'GET', url: '/probe' });
+    expect(response.statusCode).toBe(200);
+    expect(capture.outcome).toBe('settle_failed');
     await scopedApplication.close();
   });
 
@@ -334,7 +447,7 @@ describe('organization-rls-transaction.middleware', () => {
       (request as { organizationId?: string }).organizationId = organizationPublicId;
       done();
     });
-    await scopedApplication.register(organizationRlsTransactionMiddleware);
+    await registerLifecyclePlugins(scopedApplication);
     scopedApplication.get('/probe', async () => ({ ok: true }));
     await scopedApplication.ready();
 
