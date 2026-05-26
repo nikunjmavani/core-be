@@ -92,7 +92,7 @@ jobs:
 
   matrix-tests:
     name: Matrix Tests
-    needs: [changes, docker-build-push]
+    needs: [changes, sbom, docker-build-push]
     if: |
       always() &&
       needs.docker-build-push.result == 'success' &&
@@ -134,12 +134,11 @@ jobs:
 
   api-docs:
     name: API docs
-    needs: [release-please, changes]
+    needs: [release-please]
     if: |
       always() &&
       needs.release-please.result != 'failure' &&
-      needs.release-please.result != 'cancelled' &&
-      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.docs-artifacts == 'true')
+      needs.release-please.result != 'cancelled'
     uses: ./.github/workflows/reusable-openapi-postman-publish.yml
     secrets: inherit
     with:
@@ -150,11 +149,10 @@ jobs:
 
   release-please:
     name: Release Please
-    needs: [matrix-tests, sbom]
+    needs: [matrix-tests]
     if: |
       always() &&
-      (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped') &&
-      (needs.sbom.result == 'success' || needs.sbom.result == 'skipped')
+      (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -181,7 +179,41 @@ jobs:
           config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
           manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
 
-  attach-release-sbom:
+      - name: Enable auto-merge on release PRs
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
+        run: |
+          set -euo pipefail
+          pr_numbers="$(
+            jq -rn --arg pr "${RELEASE_PR}" --arg prs "${RELEASE_PRS}" '
+              def parse_object($raw):
+                try ($raw | fromjson) catch null;
+              def parse_array($raw):
+                try ($raw | fromjson) catch [];
+              (
+                [parse_object($pr) | .number // empty] +
+                [parse_array($prs)[] | .number // empty]
+              )
+              | map(select(. != null))
+              | unique
+              | .[]
+            '
+          )"
+
+          if [ -z "${pr_numbers}" ]; then
+            echo "::warning::Release Please reported PR creation but no PR numbers were resolved."
+            exit 0
+          fi
+
+          for pr_number in ${pr_numbers}; do
+            echo "Enabling auto-merge for release PR #${pr_number}"
+            gh pr merge "${pr_number}" --auto --squash --delete-branch=false
+          done
+
+  release-sbom:
     name: Release SBOM
     needs: [sbom, release-please]
     if: |
@@ -196,9 +228,10 @@ jobs:
         id: tag
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag_name="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
+          tag_name="$(gh release list --repo "${GH_REPOSITORY}" --limit 1 --json tagName --jq '.[0].tagName')"
           if [ -z "${tag_name}" ] || [ "${tag_name}" = "null" ]; then
             echo "::error::No GitHub Release found after release-please."
             exit 1
@@ -224,10 +257,8 @@ jobs:
   resolve-environment:
     name: Resolve Environment
     needs:
-      - docker-build-push
-      - matrix-tests
       - api-docs
-      - release-please
+      - release-sbom
     runs-on: ubuntu-latest
     outputs:
       post_merge_sha: ${{ steps.target.outputs.post_merge_sha }}
@@ -235,11 +266,8 @@ jobs:
       github_environment: ${{ steps.target.outputs.github_environment }}
     if: |
       always() &&
-      needs.docker-build-push.result == 'success' &&
-      (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped') &&
       (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped') &&
-      needs.release-please.result != 'failure' &&
-      needs.release-please.result != 'cancelled'
+      (needs.release-sbom.result == 'success' || needs.release-sbom.result == 'skipped')
     steps:
       - name: Resolve post-merge target and environment
         id: target
