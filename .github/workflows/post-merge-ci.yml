@@ -180,14 +180,19 @@ jobs:
           manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
 
       - name: Enable auto-merge on release PRs
-        if: steps.release.outputs.prs_created == 'true'
+        # Runs every release-please job (not only when a new PR is opened) so
+        # existing release PRs that release-please left unchanged still get
+        # auto-merge enabled. `gh pr merge --auto` is idempotent.
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_PR: ${{ steps.release.outputs.pr }}
           RELEASE_PRS: ${{ steps.release.outputs.prs }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+          GH_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          pr_numbers="$(
+
+          pr_numbers_from_outputs="$(
             jq -rn --arg pr "${RELEASE_PR}" --arg prs "${RELEASE_PRS}" '
               def parse_object($raw):
                 try ($raw | fromjson) catch null;
@@ -203,8 +208,20 @@ jobs:
             '
           )"
 
+          pr_numbers_from_api="$(
+            gh pr list \
+              --repo "${GH_REPOSITORY}" \
+              --state open \
+              --base "${TARGET_BRANCH}" \
+              --search 'head:release-please--branches--' \
+              --json number \
+              --jq '.[].number'
+          )"
+
+          pr_numbers="$(printf '%s\n%s\n' "${pr_numbers_from_outputs}" "${pr_numbers_from_api}" | awk 'NF' | sort -u)"
+
           if [ -z "${pr_numbers}" ]; then
-            echo "::warning::Release Please reported PR creation but no PR numbers were resolved."
+            echo "No open release PRs to auto-merge."
             exit 0
           fi
 
@@ -290,7 +307,7 @@ jobs:
     name: Deploy
     needs:
       - resolve-environment
-    if: needs.resolve-environment.result == 'success'
+    if: always() && needs.resolve-environment.result == 'success'
     uses: ./.github/workflows/reusable-railway-deploy.yml
     secrets: inherit
     with:
