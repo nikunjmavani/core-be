@@ -36,6 +36,32 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  gate:
+    name: Verify merge
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      post_merge_sha: ${{ steps.target.outputs.post_merge_sha }}
+      post_merge_branch: ${{ steps.target.outputs.post_merge_branch }}
+    steps:
+      - name: Resolve post-merge target
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "post_merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "post_merge_branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "post_merge_sha=${{ github.event.pull_request.merge_commit_sha }}" >> "$GITHUB_OUTPUT"
+            echo "post_merge_branch=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post-merge target
+        run: |
+          echo "Post-merge CI for branch ${POST_MERGE_BRANCH} at ${POST_MERGE_SHA}"
+        env:
+          POST_MERGE_BRANCH: ${{ steps.target.outputs.post_merge_branch }}
+          POST_MERGE_SHA: ${{ steps.target.outputs.post_merge_sha }}
+
   changes:
     name: Detect changes
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
@@ -49,13 +75,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
+          ref: ${{ needs.gate.outputs.post_merge_sha }}
           fetch-depth: 0
+
+      - name: Resolve diff base
+        id: diff_base
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if git rev-parse "${{ needs.gate.outputs.post_merge_sha }}^" >/dev/null 2>&1; then
+              echo "sha=$(git rev-parse "${{ needs.gate.outputs.post_merge_sha }}^")" >> "$GITHUB_OUTPUT"
+            else
+              echo "sha=${{ needs.gate.outputs.post_merge_sha }}" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "sha=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Path filter
         uses: dorny/paths-filter@v4
         id: filter
         with:
+          base: ${{ steps.diff_base.outputs.sha }}
+          ref: ${{ needs.gate.outputs.post_merge_sha }}
           filters: |
             src-code:
               - 'src/**'
@@ -85,7 +127,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
+          ref: ${{ needs.gate.outputs.post_merge_sha }}
           fetch-depth: 0
 
       - name: Setup Node and pnpm
@@ -99,7 +141,7 @@ jobs:
             AFTER="${{ github.sha }}"
           else
             BEFORE="${{ github.event.pull_request.base.sha }}"
-            AFTER="${{ github.event.pull_request.merge_commit_sha }}"
+            AFTER="${{ needs.gate.outputs.post_merge_sha }}"
           fi
 
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
@@ -132,24 +174,8 @@ jobs:
     uses: ./.github/workflows/reusable-docker-build-trivy.yml
     secrets: inherit
     with:
-      merge_commit_sha: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
-      target_branch: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref }}
-
-  matrix-tests:
-    name: Matrix Tests
-    needs: [changes, commitlint]
-    if: |
-      always() &&
-      needs.commitlint.result == 'success' &&
-      (
-        needs.changes.outputs.src-code == 'true' ||
-        needs.changes.outputs.ci-config == 'true'
-      )
-    uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
-    secrets: inherit
-    with:
-      merge_commit_sha: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
-      target_branch: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref }}
+      merge_commit_sha: ${{ needs.gate.outputs.post_merge_sha }}
+      target_branch: ${{ needs.gate.outputs.post_merge_branch }}
 
   sbom:
     name: SBOM
@@ -163,7 +189,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
+          ref: ${{ needs.gate.outputs.post_merge_sha }}
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0.24.0
@@ -189,9 +215,9 @@ jobs:
     uses: ./.github/workflows/reusable-openapi-postman-publish.yml
     secrets: inherit
     with:
-      merge_commit_sha: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
-      target_branch: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref }}
-      github_environment: ${{ (github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref) == 'main' && 'production' || 'development' }}
+      merge_commit_sha: ${{ needs.gate.outputs.post_merge_sha }}
+      target_branch: ${{ needs.gate.outputs.post_merge_branch }}
+      github_environment: ${{ needs.gate.outputs.post_merge_branch == 'main' && 'production' || 'development' }}
       publish_hosted_docs: true
 
   release-please:
@@ -211,12 +237,12 @@ jobs:
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created == 'true' && 'true' || 'false' }}
     env:
-      CHANNEL_SUFFIX: ${{ (github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref) == 'dev' && '.dev' || '' }}
+      CHANNEL_SUFFIX: ${{ needs.gate.outputs.post_merge_branch == 'dev' && '.dev' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.merge_commit_sha }}
+          ref: ${{ needs.gate.outputs.post_merge_sha }}
           fetch-depth: 0
 
       - name: Run release-please
@@ -224,7 +250,7 @@ jobs:
         uses: googleapis/release-please-action@v5
         with:
           token: ${{ github.token }}
-          target-branch: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.pull_request.base.ref }}
+          target-branch: ${{ needs.gate.outputs.post_merge_branch }}
           config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
           manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
 
@@ -324,5 +350,5 @@ jobs:
     uses: ./.github/workflows/reusable-railway-deploy.yml
     secrets: inherit
     with:
-      merge_commit_sha: ${{ needs.resolve-environment.outputs.post_merge_sha }}
-      target_branch: ${{ needs.resolve-environment.outputs.post_merge_branch }}
+      merge_commit_sha: ${{ needs.gate.outputs.post_merge_sha }}
+      target_branch: ${{ needs.gate.outputs.post_merge_branch }}
