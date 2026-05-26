@@ -188,9 +188,15 @@ jobs:
             echo "::warning::No shard coverage artifacts found — skipping merged gate."
             exit 0
           fi
+          report_only_flag=""
+          if [ "${{ inputs.target_branch }}" = "dev" ]; then
+            # Dev post-merge lane reports merged shard coverage but does not block.
+            report_only_flag="--report-only"
+          fi
           node tooling/ci/merge-coverage-and-check-thresholds.mjs \
             "${inputs[@]}" \
-            --output coverage-merged/coverage-final.json
+            --output coverage-merged/coverage-final.json \
+            ${report_only_flag}
 
       - name: Upload merged coverage artifact
         if: always() && hashFiles('coverage-merged/**') != ''
