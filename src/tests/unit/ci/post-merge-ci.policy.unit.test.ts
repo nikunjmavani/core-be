@@ -15,4 +15,12 @@ describe('post-merge CI trigger policy', () => {
     expect(workflow).toContain('github.event.pull_request.merged == true');
     expect(workflow).not.toMatch(/^\s+push:\s*$/m);
   });
+
+  it('does not run full DB integration or chaos matrices in CI', () => {
+    const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
+    expect(workflow).not.toContain('reusable-vitest-postgres-redis.yml');
+    expect(workflow).not.toContain('reusable-chaos-toxiproxy.yml');
+    expect(workflow).not.toMatch(/^\s+integration-tests:/m);
+    expect(workflow).not.toMatch(/^\s+chaos:/m);
+  });
 });

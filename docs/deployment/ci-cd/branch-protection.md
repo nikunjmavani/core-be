@@ -52,7 +52,7 @@ GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `n
 
 ### Same checks on both branches
 
-Require **all eight** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge integration, Docker (Trivy + GHCR), chaos, SBOM, and API docs run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks).
+Require **all eight** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks). Full DB integration and chaos suites are **local-only** (`pnpm test:integration`, `pnpm test:chaos`).
 
 ### Skipped PR CI jobs on docs-only pull requests
 
@@ -75,9 +75,7 @@ When the PR touches **src** but not only docs, these jobs may still skip individ
 
 | Job `name:` | Workflow | Why |
 | ----------- | -------- | --- |
-| `Integration` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | DB-bound Vitest matrix after merge |
-| `Docker` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Build + Trivy + GHCR push |
-| `Chaos` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Toxiproxy chaos suite after protected-branch merge |
+| `Docker` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Build + Trivy + GHCR push + container smoke |
 | `SBOM` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | CycloneDX artifact for the branch tip |
 | `API docs` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | OpenAPI + Postman publish |
 | `Commitlint` | [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Conventional commits on protected-branch push |

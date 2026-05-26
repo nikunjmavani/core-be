@@ -1,9 +1,10 @@
 name: Post-merge CI
 
 # Single post-merge pipeline after a PR merges into dev or main (or manual workflow_dispatch).
-# PR CI already validated the same SHA; this workflow runs integration, Docker publish,
-# chaos, SBOM artifact, API docs, commitlint, release-please, optional main→dev sync,
-# Railway deploy, and release SBOM attachment — one trigger, one flow.
+# PR CI (pr-ci.yml) is the merge gate — same SHA already passed lint, typecheck, unit, build,
+# security, and contract/property. Post-merge runs publish/deploy automation only: Docker
+# (Trivy + GHCR + container smoke), SBOM, API docs, commitlint, release-please, sync, deploy.
+# Full DB integration/chaos suites are local-only (`pnpm test:integration`, `pnpm test:chaos`).
 #
 # Branch → GitHub Environment mapping for deploy (only difference between dev and main):
 #   dev  → development
@@ -246,21 +247,6 @@ jobs:
             echo "Opened sync main into dev PR (merge manually after review and PR CI)."
           fi
 
-  integration-tests:
-    name: Integration
-    needs: [gate, changes]
-    if: |
-      always() &&
-      (
-        needs.changes.outputs.src-code == 'true' ||
-        needs.changes.outputs.ci-config == 'true'
-      )
-    uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
-    secrets: inherit
-    with:
-      merge_commit_sha: ${{ env.POST_MERGE_SHA }}
-      target_branch: ${{ env.POST_MERGE_BRANCH }}
-
   docker-build-push:
     name: Docker
     needs: [gate, changes]
@@ -272,18 +258,6 @@ jobs:
         needs.changes.outputs.ci-config == 'true'
       )
     uses: ./.github/workflows/reusable-docker-build-trivy.yml
-    secrets: inherit
-    with:
-      merge_commit_sha: ${{ env.POST_MERGE_SHA }}
-      target_branch: ${{ env.POST_MERGE_BRANCH }}
-
-  chaos:
-    name: Chaos
-    needs: [gate, changes]
-    if: |
-      always() &&
-      needs.changes.outputs.src-code == 'true'
-    uses: ./.github/workflows/reusable-chaos-toxiproxy.yml
     secrets: inherit
     with:
       merge_commit_sha: ${{ env.POST_MERGE_SHA }}
@@ -336,9 +310,7 @@ jobs:
       - commitlint
       - release-please
       - sync-main-into-dev
-      - integration-tests
       - docker-build-push
-      - chaos
       - sbom
       - api-docs
     if: |
@@ -349,8 +321,6 @@ jobs:
       needs.release-please.result != 'failure' &&
       needs.release-please.result != 'cancelled' &&
       (needs.sync-main-into-dev.result == 'success' || needs.sync-main-into-dev.result == 'skipped') &&
-      (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped') &&
-      (needs.chaos.result == 'success' || needs.chaos.result == 'skipped') &&
       (needs.sbom.result == 'success' || needs.sbom.result == 'skipped') &&
       (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped')
     uses: ./.github/workflows/reusable-railway-deploy.yml

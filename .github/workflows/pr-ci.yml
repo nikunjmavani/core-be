@@ -2,8 +2,8 @@ name: PR CI
 
 # Fast merge gate (~2–3 min target). All jobs run in parallel; no Postgres/Redis on PR.
 # Lint, typecheck, unit, migration safety lint, and TS/Docker build verification run here.
-# Security + contract/property tests stay on PR; integration tests + Trivy + GHCR push
-# run in post-merge-ci.yml after merge (same commit SHA already passed PR).
+# Security + contract/property tests stay on PR. Post-merge CI handles Docker publish,
+# deploy, release automation after merge (same commit SHA already passed PR CI).
 #
 # Required checks: see docs/deployment/ci-cd/branch-protection.md
 
