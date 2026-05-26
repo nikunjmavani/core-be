@@ -1,0 +1,12 @@
+{
+  "environments": [
+    {
+      "name": "development",
+      "branch": "dev"
+    },
+    {
+      "name": "production",
+      "branch": "main"
+    }
+  ]
+}
