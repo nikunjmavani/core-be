@@ -72,9 +72,50 @@ jobs:
       - name: Validate GitHub environment secrets
         # `CONFIG` is the env name directly. validate:github-env accepts canonical names
         # (development | production) and the `dev`/`prod` aliases.
+        # GitHub's default GITHUB_TOKEN cannot list environment secrets, so deploy CI
+        # validates the secret/variable values injected into this job instead.
         env:
           CONFIG: ${{ needs.resolve-environment.outputs.environment }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
+          GITHUB_ENV_VALIDATION_SOURCE: runtime
+          # --- Secrets: credentials, keys, tokens ---
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+          SECRETS_ENCRYPTION_KEY: ${{ secrets.SECRETS_ENCRYPTION_KEY }}
+          METRICS_SCRAPE_TOKEN: ${{ secrets.METRICS_SCRAPE_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          WEBHOOK_URL_ALLOWLIST: ${{ secrets.WEBHOOK_URL_ALLOWLIST }}
+          # --- Variables: plaintext config knobs ---
+          JWT_PUBLIC_KEY: ${{ vars.JWT_PUBLIC_KEY }}
+          JWT_SIGNING_KID: ${{ vars.JWT_SIGNING_KID }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+          COOKIE_SECURE: ${{ vars.COOKIE_SECURE }}
+          DATABASE_SSL_ENABLED: ${{ vars.DATABASE_SSL_ENABLED }}
+          NODE_ENV: ${{ vars.NODE_ENV }}
+          PORT: ${{ vars.PORT }}
+          HTTP_BIND_HOST: ${{ vars.HTTP_BIND_HOST }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+          RATE_LIMIT_MAX: ${{ vars.RATE_LIMIT_MAX }}
+          RATE_LIMIT_WINDOW_MS: ${{ vars.RATE_LIMIT_WINDOW_MS }}
+          SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ vars.SENTRY_TRACES_SAMPLE_RATE }}
+          SENTRY_PROFILE_SAMPLE_RATE: ${{ vars.SENTRY_PROFILE_SAMPLE_RATE }}
+          AUDIT_RETENTION_DAYS: ${{ vars.AUDIT_RETENTION_DAYS }}
+          AUTH_SESSION_RETENTION_DAYS: ${{ vars.AUTH_SESSION_RETENTION_DAYS }}
+          NODE_OPTIONS: ${{ vars.NODE_OPTIONS }}
+          DEPLOYMENT_TOTAL_REPLICA_COUNT: ${{ vars.DEPLOYMENT_TOTAL_REPLICA_COUNT }}
+          DEPLOYMENT_API_REPLICA_COUNT: ${{ vars.DEPLOYMENT_API_REPLICA_COUNT }}
+          DEPLOYMENT_WORKER_REPLICA_COUNT: ${{ vars.DEPLOYMENT_WORKER_REPLICA_COUNT }}
+          DATABASE_POOL_MAX: ${{ vars.DATABASE_POOL_MAX }}
+          POSTGRES_RESERVED_CONNECTIONS: ${{ vars.POSTGRES_RESERVED_CONNECTIONS }}
+          POSTGRES_MAX_CONNECTIONS: ${{ vars.POSTGRES_MAX_CONNECTIONS }}
+          METRICS_ENABLED: ${{ vars.METRICS_ENABLED }}
+          CAPTCHA_PROVIDER: ${{ vars.CAPTCHA_PROVIDER }}
+          CAPTCHA_DISABLED_ACK: ${{ vars.CAPTCHA_DISABLED_ACK }}
         run: pnpm validate:github-env
 
       - name: Resolve scanned CI images from GHCR
