@@ -21,6 +21,9 @@ export async function cleanupDatabase(): Promise<void> {
         DO $$ DECLARE
           tables text;
         BEGIN
+          -- Cleanup can occasionally exceed per-statement limits in CI matrix shards.
+          -- Scope timeout override to this transaction only.
+          PERFORM set_config('statement_timeout', '0', true);
           SELECT string_agg(quote_ident(schemaname) || '.' || quote_ident(tablename), ', ')
           INTO tables
           FROM pg_tables
@@ -34,12 +37,12 @@ export async function cleanupDatabase(): Promise<void> {
       await cleanupTestRedis();
       return;
     } catch (error) {
-      const isDeadlock =
+      const isDeadlockOrTimeout =
         error &&
         typeof error === 'object' &&
         'code' in error &&
-        (error as { code: string }).code === '40P01';
-      if (isDeadlock && attempt < MAX_CLEANUP_RETRIES) {
+        ['40P01', '57014'].includes((error as { code: string }).code);
+      if (isDeadlockOrTimeout && attempt < MAX_CLEANUP_RETRIES) {
         await new Promise((resolve) => setTimeout(resolve, CLEANUP_RETRY_DELAY_MS * attempt));
         continue;
       }

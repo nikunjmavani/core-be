@@ -80,6 +80,8 @@ jobs:
     needs: resolve-environment
     runs-on: ubuntu-latest
     environment: ${{ needs.resolve-environment.outputs.environment }}
+    outputs:
+      api_base_url: ${{ steps.api_health.outputs.api_base_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -294,9 +296,23 @@ jobs:
           echo "Probing worker readiness at $WORKER_HEALTH_URL/health"
           pnpm tool:worker-readiness --url "$WORKER_HEALTH_URL"
 
-      - name: Post-deploy API smoke
+  api-smoke:
+    name: API smoke (${{ needs.resolve-environment.outputs.environment }})
+    needs: [resolve-environment, deploy]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-environment.outputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.merge_commit_sha || github.sha }}
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run post-deploy API smoke
         env:
-          BASE_URL: ${{ steps.api_health.outputs.api_base_url }}
+          BASE_URL: ${{ needs.deploy.outputs.api_base_url }}
           TEST_EMAIL: ${{ secrets.SMOKE_DEMO_EMAIL || vars.SMOKE_DEMO_EMAIL || 'demo@example.com' }}
           TEST_PASSWORD: ${{ secrets.SMOKE_DEMO_PASSWORD || 'DemoPassword123!' }}
         run: |
@@ -307,7 +323,7 @@ jobs:
       - name: Environment fully live
         env:
           ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
-          API_BASE_URL: ${{ steps.api_health.outputs.api_base_url }}
+          API_BASE_URL: ${{ needs.deploy.outputs.api_base_url }}
         run: |
           set -euo pipefail
           echo "::notice title=Fully live::${ENVIRONMENT} is fully live at ${API_BASE_URL} (migrate, health, worker readiness, and API smoke passed)."

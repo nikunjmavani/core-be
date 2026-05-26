@@ -1,6 +1,6 @@
 name: Post-merge CI
 
-# Single post-merge pipeline after a PR merges into dev or main (or manual workflow_dispatch).
+# Single post-merge pipeline on protected branch pushes (dev/main) or manual workflow_dispatch.
 # PR CI (pr-ci.yml) is the merge gate — same SHA already passed lint, typecheck, unit, build,
 # security, and contract/property. Post-merge runs publish/deploy automation only.
 #
@@ -19,13 +19,12 @@ name: Post-merge CI
 #   main → production
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches: [main, dev]
   workflow_dispatch:
 
 concurrency:
-  group: post-merge-ci-${{ github.event_name == 'workflow_dispatch' && github.ref || format('refs/heads/{0}', github.event.pull_request.base.ref) }}
+  group: post-merge-ci-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
