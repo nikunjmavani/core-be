@@ -91,6 +91,9 @@ jobs:
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
 
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
       - name: Validate GitHub environment secrets
         env:
           CONFIG: ${{ needs.resolve-environment.outputs.environment }}
@@ -162,7 +165,15 @@ jobs:
             echo "::error::RAILWAY_TOKEN in GitHub Environment '${ENVIRONMENT}' is suspiciously short (${railway_token_length} chars). Rotate the Railway project token and update the GitHub Environment secret."
             exit 1
           fi
-          echo "Railway deploy secrets present for environment '${ENVIRONMENT}'."
+          # Verify the token actually authenticates against Railway before we run
+          # database migrations or any `railway variable set` calls. Catches
+          # revoked, expired, or wrong-project tokens with an actionable error.
+          if ! whoami_output="$(railway whoami 2>&1)"; then
+            echo "::error::Railway rejected RAILWAY_TOKEN for GitHub Environment '${ENVIRONMENT}': ${whoami_output}"
+            echo "::error::Rotate the Railway project token (Railway → Project → Settings → Tokens) and update the GitHub Environment secret. See docs/deployment/setup/railway-github-cli-setup.md#rotating-an-invalid-or-expired-railway-token."
+            exit 1
+          fi
+          echo "Railway deploy secrets present and authenticated for environment '${ENVIRONMENT}'."
 
       - name: Resolve scanned CI images from GHCR
         id: ghcr_images
@@ -202,9 +213,6 @@ jobs:
           SECRETS_ENCRYPTION_KEY: ${{ secrets.SECRETS_ENCRYPTION_KEY }}
           METRICS_ENABLED: 'false'
         run: pnpm db:migrate
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
 
       - name: Set Railway service variables
         # Mirror every runtime key declared in .env.example into each Railway service.
