@@ -37,6 +37,7 @@ export function buildEnvironmentVariables(
   const redisUrl = state.redis?.databases?.[environmentName]?.redisUrl ?? '';
   const jwtState = state.jwt?.[environmentName];
   const jwtSecret = typeof jwtState === 'string' ? jwtState : (jwtState?.jwtSecret ?? '');
+  const railwayEnvironment = state.railway?.environments?.[environmentName];
 
   const allowedOrigins = pickPerEnvironmentString(
     config.app.allowedOrigins,
@@ -68,6 +69,21 @@ export function buildEnvironmentVariables(
     AUDIT_RETENTION_DAYS: DEFAULT_AUDIT_RETENTION_DAYS,
     AUTH_SESSION_RETENTION_DAYS: DEFAULT_SESSION_RETENTION_DAYS,
   };
+
+  if (config.providers.railway.enabled && secrets.railway.token) {
+    variables.RAILWAY_TOKEN = secrets.railway.token;
+    const apiServiceId = railwayEnvironment?.services.api?.serviceId;
+    const workerServiceId = railwayEnvironment?.services.worker?.serviceId;
+    if (apiServiceId) variables.RAILWAY_SERVICE_ID = apiServiceId;
+    if (workerServiceId) variables.RAILWAY_WORKER_SERVICE_ID = workerServiceId;
+  }
+
+  if (config.providers.postman.enabled && secrets.postman?.apiKey) {
+    variables.POSTMAN_API_KEY = secrets.postman.apiKey;
+    if (secrets.postman.workspaceId) {
+      variables.POSTMAN_WORKSPACE_ID = secrets.postman.workspaceId;
+    }
+  }
 
   if (frontendUrl) {
     variables.FRONTEND_URL = frontendUrl;
