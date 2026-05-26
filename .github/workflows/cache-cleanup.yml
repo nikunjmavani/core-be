@@ -6,17 +6,17 @@ name: Cleanup caches
 # which has bitten this repo before.
 #
 # Triggers:
-#   - pull_request closed (merged or not)          → drop every cache scoped
+#   - pull_request closed (merged or not)          -> drop every cache scoped
 #                                                    to the PR ref. PR caches
 #                                                    have no use once the PR
 #                                                    is closed.
-#   - workflow_run completed for our top-level CI  → for PR runs, drop all
+#   - workflow_run completed for our top-level CI  -> for PR runs, drop all
 #                                                    caches on that PR ref;
 #                                                    for dev/main runs, keep
 #                                                    only the most-recent N
 #                                                    caches per key so post-
 #                                                    merge runs stay fast.
-#   - workflow_dispatch                            → manual prune (defaults
+#   - workflow_dispatch                            -> manual prune (defaults
 #                                                    to the dispatching ref).
 
 on:
@@ -159,4 +159,4 @@ jobs:
             gh actions-cache delete "$key" --repo "$REPO" --ref "$REF" --confirm || true
             deleted=$((deleted + 1))
           done
-          echo "LRU prune complete for $REF — kept $kept, deleted $deleted."
+          echo "LRU prune complete for $REF - kept $kept, deleted $deleted."
