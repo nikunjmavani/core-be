@@ -24,6 +24,7 @@ const sql = postgres(migrationUrl, { max: 1 });
  * is caught before it can produce a partially-applied schema.
  */
 const MINIMUM_POSTGRES_SERVER_VERSION_NUM = 170000;
+const INIT_MIGRATION_FILENAME = '00000000000000_init.sql';
 
 async function assertPostgresMajorVersionAtLeast17(): Promise<void> {
   const [row] = await sql<
@@ -38,6 +39,62 @@ async function assertPostgresMajorVersionAtLeast17(): Promise<void> {
       `Refusing to run migrations against Postgres ${row?.server_version ?? 'unknown'} (server_version_num=${row?.server_version_num ?? 'unknown'}). Postgres 17+ is required project-wide. See .cursor/skills/db-migration-maintainer/SKILL.md and docker-compose.yml.`,
     );
   }
+}
+
+interface BaselineExistingInitialMigrationInput {
+  appliedSet: Set<string>;
+  sqlFiles: string[];
+}
+
+async function baselineExistingInitialMigrationIfNeeded({
+  appliedSet,
+  sqlFiles,
+}: BaselineExistingInitialMigrationInput): Promise<void> {
+  if (appliedSet.size > 0 || !sqlFiles.includes(INIT_MIGRATION_FILENAME)) {
+    return;
+  }
+
+  const [row] = await sql<
+    {
+      audit_logs_exists: boolean;
+      auth_users_exists: boolean;
+      billing_plans_exists: boolean;
+      notify_notifications_exists: boolean;
+      tenancy_organizations_exists: boolean;
+      upload_uploads_exists: boolean;
+    }[]
+  >`
+    SELECT
+      to_regclass('audit.logs') IS NOT NULL AS audit_logs_exists,
+      to_regclass('auth.users') IS NOT NULL AS auth_users_exists,
+      to_regclass('billing.plans') IS NOT NULL AS billing_plans_exists,
+      to_regclass('notify.notifications') IS NOT NULL AS notify_notifications_exists,
+      to_regclass('tenancy.organizations') IS NOT NULL AS tenancy_organizations_exists,
+      to_regclass('upload.uploads') IS NOT NULL AS upload_uploads_exists
+  `;
+
+  const hasExistingInitialSchema =
+    row?.audit_logs_exists === true &&
+    row.auth_users_exists === true &&
+    row.billing_plans_exists === true &&
+    row.notify_notifications_exists === true &&
+    row.tenancy_organizations_exists === true &&
+    row.upload_uploads_exists === true;
+
+  if (!hasExistingInitialSchema) {
+    return;
+  }
+
+  await sql`
+    INSERT INTO public.schema_migrations (filename)
+    VALUES (${INIT_MIGRATION_FILENAME})
+    ON CONFLICT (filename) DO NOTHING
+  `;
+  appliedSet.add(INIT_MIGRATION_FILENAME);
+  logger.warn(
+    { filename: INIT_MIGRATION_FILENAME },
+    'Baseline migration metadata for existing initialized database',
+  );
 }
 
 async function main() {
@@ -60,6 +117,8 @@ async function main() {
 
   const allFiles = await readdir(migrationsFolder);
   const sqlFiles = allFiles.filter((file) => file.endsWith('.sql')).sort();
+
+  await baselineExistingInitialMigrationIfNeeded({ appliedSet, sqlFiles });
 
   for (const filename of sqlFiles) {
     if (appliedSet.has(filename)) continue;
