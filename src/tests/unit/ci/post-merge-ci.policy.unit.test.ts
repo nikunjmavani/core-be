@@ -6,14 +6,12 @@ const ROOT = process.cwd();
 const POST_MERGE_WORKFLOW = join(ROOT, '.github/workflows/post-merge-ci.yml');
 
 describe('post-merge CI trigger policy', () => {
-  it('runs only after a merged PR into dev or main (plus manual dispatch)', () => {
+  it('runs only on pushes to dev/main (plus manual dispatch)', () => {
     const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
-    expect(workflow).toContain('pull_request:');
-    expect(workflow).toContain('types: [closed]');
+    expect(workflow).toContain('push:');
     expect(workflow).toContain('branches: [main, dev]');
     expect(workflow).toContain('workflow_dispatch:');
-    expect(workflow).toContain('github.event.pull_request.merged == true');
-    expect(workflow).not.toMatch(/^\s+push:\s*$/m);
+    expect(workflow).not.toContain('pull_request:');
   });
 
   it('does not run chaos matrix in post-merge CI', () => {
@@ -28,12 +26,11 @@ describe('post-merge CI trigger policy', () => {
     expect(workflow).not.toContain('Sync main into dev');
   });
 
-  it('runs matrix tests before release-please and deploys after resolve-environment', () => {
+  it('runs docker before matrix tests, then release-please, then resolve-environment/deploy', () => {
     const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
+    expect(workflow).toMatch(/matrix-tests:[\s\S]*?needs:\s*\[changes,\s*docker-build-push\]/);
     expect(workflow).toMatch(/matrix-tests:[\s\S]*?reusable-vitest-postgres-redis\.yml/);
-    expect(workflow).toMatch(
-      /release-please:[\s\S]*?needs:\s*\[docker-build-push,\s*matrix-tests,\s*sbom\]/,
-    );
+    expect(workflow).toMatch(/release-please:[\s\S]*?needs:\s*\[matrix-tests,\s*sbom\]/);
     expect(workflow).toMatch(/attach-release-sbom:[\s\S]*?needs:\s*\[sbom,\s*release-please\]/);
     expect(workflow).toMatch(/resolve-environment:[\s\S]*?- attach-release-sbom/);
     expect(workflow).toMatch(/deploy:[\s\S]*?needs:\s*[\s\S]*-\s*resolve-environment/);
