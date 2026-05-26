@@ -383,8 +383,6 @@ const envSchemaBase = z.object({
   // Monthly database restore drill (GitHub Actions only — not loaded by API/worker at runtime)
   /** Neon API key for scheduled monthly PITR restore drill. GitHub Environment secret via `pnpm github:sync`. */
   MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: z.string().min(1).optional(),
-  /** Neon project ID for monthly restore drill. GitHub Environment secret via `pnpm github:sync`. */
-  MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID: z.string().min(1).optional(),
 });
 
 export const envSchema = envSchemaBase

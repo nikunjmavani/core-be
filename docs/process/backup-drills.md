@@ -45,11 +45,10 @@ Neon branch names must match git long-lived branches (`main`, `dev`).
 Set in `.env.development` / `.env.production` under the **GitHub Secrets** half and push with `pnpm github:sync` (see [credentials-and-env.md](../integrations/credentials-and-env.md)).
 
 | Secret | Purpose |
-| ------ | ------- |
+| --- | --- |
 | `MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY` | Neon Console → Developer settings → API key |
-| `MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID` | Neon project **Settings → General → Project ID** |
 
-The workflow maps **`main` → `production`**, **`dev` → `development`** (same as CD). Without both secrets in the matching GitHub Environment, the monthly workflow **fails**.
+Neon **project ID** is resolved automatically via the Neon API using project name **`core-be`** (same lookup as `pnpm setup:infra`). The workflow maps **`main` → `production`**, **`dev` → `development`**. Without the API key in the matching GitHub Environment, the monthly workflow **fails**.
 
 ---
 

@@ -24,14 +24,15 @@ describe('restore drill automation policy', () => {
     const script = readFileSync(join(ROOT, 'tooling/ci/restore-drill-neon.sh'), 'utf8');
 
     expect(workflow).toContain('MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY');
-    expect(workflow).toContain('MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID');
+    expect(workflow).not.toContain('MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID');
     expect(workflow).toContain('RESTORE_DRILL_PARENT_BRANCH_NAME: ${{ github.ref_name }}');
     expect(workflow).toContain('environment: ${{ needs.resolve-environment.outputs.environment }}');
     expect(workflow).toContain('tooling/ci/restore-drill-neon.sh create');
     expect(workflow).toContain('tooling/ci/restore-drill-neon.sh delete');
 
     expect(script).toContain('MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY');
-    expect(script).toContain('MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID');
+    expect(script).not.toContain('MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID');
+    expect(script).toContain('RESTORE_DRILL_NEON_PROJECT_NAME');
     expect(script).toContain('RESTORE_DRILL_PARENT_BRANCH_NAME');
     expect(script).not.toContain('NEON_PARENT_BRANCH_ID');
     expect(script).not.toContain('DATABASE_URL_FOR_MONTHLY');

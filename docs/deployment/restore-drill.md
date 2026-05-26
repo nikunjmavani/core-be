@@ -19,11 +19,10 @@ Fully automated: Neon PITR child branch from parent **`github.ref_name`** → mi
 ## GitHub Environment secrets (required)
 
 | Secret | Purpose |
-| ------ | ------- |
+| --- | --- |
 | `MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY` | Neon API authentication |
-| `MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID` | Target Neon project |
 
-Provision in `.env.development` / `.env.production` (GitHub Secrets half) and sync with `pnpm github:sync`. The workflow job uses the GitHub Environment matching the git ref (`main` → `production`, `dev` → `development`).
+Provision in `.env.development` / `.env.production` (GitHub Secrets half) and sync with `pnpm github:sync`. The workflow resolves Neon project **`core-be`** by name (same as setup:infra) and uses the GitHub Environment matching the git ref (`main` → `production`, `dev` → `development`).
 
 **Parent branch:** resolved from the workflow git ref (`main` on cron schedule; `dev` when dispatched on `dev`). The Neon project must have matching branch names.
 

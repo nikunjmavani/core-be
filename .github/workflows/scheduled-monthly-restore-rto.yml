@@ -72,7 +72,6 @@ jobs:
           --health-retries=20
     env:
       MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: ${{ secrets.MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY }}
-      MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID: ${{ secrets.MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID }}
       RESTORE_DRILL_PARENT_BRANCH_NAME: ${{ github.ref_name }}
       NODE_ENV: test
       REDIS_URL: redis://localhost:6379
@@ -89,10 +88,6 @@ jobs:
           set -euo pipefail
           if [ -z "${MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY}" ]; then
             echo "::error::GitHub Environment secret MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY is required (sync via pnpm github:sync)."
-            exit 1
-          fi
-          if [ -z "${MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID}" ]; then
-            echo "::error::GitHub Environment secret MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID is required (sync via pnpm github:sync)."
             exit 1
           fi
 
@@ -175,7 +170,6 @@ jobs:
         env:
           DRILL_BRANCH_ID: ${{ steps.neon_drill.outputs.branch_id }}
           MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: ${{ secrets.MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY }}
-          MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID: ${{ secrets.MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID }}
         run: bash tooling/ci/restore-drill-neon.sh delete
 
   record-rto:
@@ -191,7 +185,7 @@ jobs:
       - name: Fail when automated restore did not complete
         if: needs.restore-integration.result != 'success'
         run: |
-          echo "::error title=Restore drill not measured::Configure MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY and MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID, ensure Neon branch names match git refs (main/dev), and verify migrate + integration smoke pass."
+          echo "::error title=Restore drill not measured::Configure MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY, ensure Neon project core-be and branch names match git refs (main/dev), and verify migrate + integration smoke pass."
           exit 1
 
       - name: Download automated RTO report

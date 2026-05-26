@@ -215,9 +215,10 @@ Implementation lives under `src/domains/auth/sub-domains/auth-method/oauth/` —
 These are **GitHub Environment secrets** (not API/worker runtime vars). Add them to `.env.development` / `.env.production` under the GitHub Secrets half and push with `pnpm github:sync`. The scheduled workflow uses the Neon API to create a PITR child branch from the parent branch named **`github.ref_name`** (`main` on schedule → `production` env; `dev` on manual dispatch → `development` env).
 
 | Secret | Where to get it |
-| ------ | --------------- |
+| --- | --- |
 | `MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY` | [Neon Console → Developer settings → API keys](https://console.neon.tech/app/settings/api-keys) |
-| `MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID` | Neon project **Settings → General → Project ID** |
+
+Project ID is **not** a separate secret — the workflow lists Neon projects via API and selects **`core-be`** (override with `RESTORE_DRILL_NEON_PROJECT_NAME` only if your Neon project name differs).
 
 Neon branch names must match git refs (`main`, `dev`). Without both secrets, the monthly workflow **fails**.
 

@@ -1,22 +1,40 @@
 #!/usr/bin/env bash
 # Neon PITR branch helpers for the monthly restore drill workflow.
-# Requires: MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY, MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID,
-#           RESTORE_DRILL_PARENT_BRANCH_NAME (GitHub ref name for the workflow run), jq, curl
+# Requires: MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY, RESTORE_DRILL_PARENT_BRANCH_NAME
+#           (GitHub ref name for the workflow run), jq, curl.
+# Neon project ID is resolved via API from project name (default: core-be — same as setup:infra).
 
 set -euo pipefail
 
 NEON_API_BASE="${NEON_API_BASE:-https://console.neon.tech/api/v2}"
+NEON_PROJECT_NAME="${RESTORE_DRILL_NEON_PROJECT_NAME:-core-be}"
 PITR_LOOKBACK_MINUTES="${PITR_LOOKBACK_MINUTES:-15}"
 BRANCH_TTL_HOURS="${BRANCH_TTL_HOURS:-2}"
 OPERATION_POLL_INTERVAL_SECONDS="${OPERATION_POLL_INTERVAL_SECONDS:-2}"
 OPERATION_POLL_TIMEOUT_SECONDS="${OPERATION_POLL_TIMEOUT_SECONDS:-300}"
+
+_CACHED_NEON_PROJECT_ID=""
 
 neon_api_key() {
   printf '%s' "${MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY:?MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY is required}"
 }
 
 neon_project_id() {
-  printf '%s' "${MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID:?MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID is required}"
+  if [ -n "$_CACHED_NEON_PROJECT_ID" ]; then
+    printf '%s' "$_CACHED_NEON_PROJECT_ID"
+    return 0
+  fi
+
+  local projects_json project_id
+  projects_json="$(neon_request GET "/projects")"
+  project_id="$(printf '%s' "$projects_json" | jq -r --arg name "$NEON_PROJECT_NAME" '.projects[]? | select(.name == $name) | .id' | head -n 1)"
+  if [ -z "$project_id" ] || [ "$project_id" = "null" ]; then
+    echo "::error::Could not resolve Neon project named ${NEON_PROJECT_NAME} (same lookup as setup:infra). Check API key access."
+    exit 1
+  fi
+
+  _CACHED_NEON_PROJECT_ID="$project_id"
+  printf '%s' "$project_id"
 }
 
 neon_request() {
