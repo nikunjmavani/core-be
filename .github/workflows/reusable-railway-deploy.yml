@@ -134,6 +134,36 @@ jobs:
           CAPTCHA_DISABLED_ACK: ${{ vars.CAPTCHA_DISABLED_ACK }}
         run: pnpm validate:github-env
 
+      - name: Validate Railway deploy secrets
+        env:
+          ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            missing+=("RAILWAY_TOKEN")
+          fi
+          if [ -z "${RAILWAY_SERVICE_ID:-}" ]; then
+            missing+=("RAILWAY_SERVICE_ID")
+          fi
+          if [ -z "${RAILWAY_WORKER_SERVICE_ID:-}" ]; then
+            missing+=("RAILWAY_WORKER_SERVICE_ID")
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required Railway deploy secrets in GitHub Environment '${ENVIRONMENT}': ${missing[*]}"
+            echo "::error::Set these in GitHub → Settings → Environments → ${ENVIRONMENT}. See docs/deployment/runbooks/runbook-dev-to-production.md and docs/deployment/setup/railway-github-cli-setup.md."
+            exit 1
+          fi
+          railway_token_length="${#RAILWAY_TOKEN}"
+          if [ "${railway_token_length}" -lt 16 ]; then
+            echo "::error::RAILWAY_TOKEN in GitHub Environment '${ENVIRONMENT}' is suspiciously short (${railway_token_length} chars). Rotate the Railway project token and update the GitHub Environment secret."
+            exit 1
+          fi
+          echo "Railway deploy secrets present for environment '${ENVIRONMENT}'."
+
       - name: Resolve scanned CI images from GHCR
         id: ghcr_images
         env:
