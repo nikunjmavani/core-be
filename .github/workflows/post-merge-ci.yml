@@ -228,9 +228,10 @@ jobs:
         id: tag
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag_name="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
+          tag_name="$(gh release list --repo "${GH_REPOSITORY}" --limit 1 --json tagName --jq '.[0].tagName')"
           if [ -z "${tag_name}" ] || [ "${tag_name}" = "null" ]; then
             echo "::error::No GitHub Release found after release-please."
             exit 1
