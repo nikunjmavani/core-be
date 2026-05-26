@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/nikunjmavani/core-be/compare/v2.1.0...v2.1.1) (2026-05-26)
+
+
+### Fixed
+
+* **ci:** repair post-merge deploy env wiring ([#56](https://github.com/nikunjmavani/core-be/issues/56)) ([eb59666](https://github.com/nikunjmavani/core-be/commit/eb596666afb9e4c0ac154e0ea3efa0cb76ee8c51))
+
 ## [2.1.0](https://github.com/nikunjmavani/core-be/compare/v2.0.0...v2.1.0) (2026-05-26)
 
 
