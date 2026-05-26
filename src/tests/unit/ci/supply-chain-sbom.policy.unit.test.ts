@@ -29,7 +29,7 @@ describe('supply chain SBOM policy (#94 p3-sbom-syft)', () => {
     expect(postMergeWorkflow).toContain('anchore/sbom-action@v0.24.0');
     expect(postMergeWorkflow).toContain('cyclonedx-json');
     expect(postMergeWorkflow).toContain('sbom.cyclonedx.json');
-    expect(postMergeWorkflow).toContain('attach-release-sbom');
+    expect(postMergeWorkflow).toContain('release-sbom');
     expect(postMergeWorkflow).toContain('softprops/action-gh-release@v3');
     expect(postMergeWorkflow).toContain('Release SBOM');
   });
