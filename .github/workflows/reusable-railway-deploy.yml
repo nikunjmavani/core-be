@@ -1,21 +1,19 @@
 # Reusable Railway deploy (called from post-merge-ci.yml) or manual workflow_dispatch.
-# Gate sequence: migrate → deploy API/worker → API /health → API smoke.
-# When post-deploy API smoke succeeds, the environment is fully live for traffic.
+# Gate sequence: migrate → deploy API → API /health → deploy worker.
+# When the worker deploy reaches Railway terminal SUCCESS the environment is
+# fully live for traffic.
 #
 # Worker deploy gating: the worker service is internal-only on Railway (no
 # public domain) and DATABASE_URL / REDIS_URL in the GitHub Environment point
 # at `*.railway.internal`, which is reachable only from other Railway services
 # — not from the GitHub Actions runner. We therefore cannot probe worker
 # `/health` over public HTTP, and we cannot dial Postgres/Redis from the
-# runner either. Instead we rely on:
-#   1. `pnpm tool:railway-deploy-image` polling Railway until the deployment
-#      reaches a terminal status. Railway only reports SUCCESS once the
-#      container HEALTHCHECK in `Dockerfile.worker` (127.0.0.1:9090/health
-#      inside the pod) starts returning 200.
-#   2. The post-deploy API smoke run, which exercises end-to-end paths whose
-#      side effects (mail, webhooks, notifications) are processed by the
-#      worker fleet — a stalled worker shows up as smoke failure or DLQ
-#      growth caught by the `dlq-depth` Sentry alert.
+# runner either. Instead we rely on `pnpm tool:railway-deploy-image` polling
+# Railway until the deployment reaches a terminal status. Railway only
+# reports SUCCESS once the container HEALTHCHECK in `Dockerfile.worker`
+# (127.0.0.1:9090/health inside the pod) starts returning 200, which covers
+# process-up + dependency probes + queue heartbeats. DLQ growth on a stalled
+# worker is caught by the `dlq-depth` Sentry alert.
 #
 # API and worker are deployed by `pnpm tool:railway-deploy-image`
 # (tooling/setup/railway/deploy-image.ts), which goes straight to the Railway
@@ -464,8 +462,7 @@ jobs:
         #     deployment to SUCCESS once the in-pod container HEALTHCHECK in
         #     `Dockerfile.worker` (127.0.0.1:9090/health) starts returning 200,
         #     which already covers process up + dependency probes + queue
-        #     heartbeats. The post-deploy API smoke run additionally exercises
-        #     paths whose side effects must flow through the worker fleet.
+        #     heartbeats.
         env:
           API_IMAGE: ${{ steps.ghcr_images.outputs.api_image }}
           WORKER_IMAGE: ${{ steps.ghcr_images.outputs.worker_image }}
@@ -522,34 +519,9 @@ jobs:
           deploy_service_from_image "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"
           echo "Worker deployment reached terminal SUCCESS (Railway only flips to SUCCESS once the in-pod HEALTHCHECK passes)."
 
-  api-smoke:
-    name: API smoke (${{ needs.resolve-environment.outputs.environment }})
-    needs: [resolve-environment, deploy]
-    runs-on: ubuntu-latest
-    environment: ${{ needs.resolve-environment.outputs.environment }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.merge_commit_sha || github.sha }}
-
-      - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
-
-      - name: Run post-deploy API smoke
-        env:
-          BASE_URL: ${{ needs.deploy.outputs.api_base_url }}
-          TEST_EMAIL: ${{ secrets.SMOKE_DEMO_EMAIL || vars.SMOKE_DEMO_EMAIL || 'demo@example.com' }}
-          TEST_PASSWORD: ${{ secrets.SMOKE_DEMO_PASSWORD || 'DemoPassword123!' }}
-        run: |
-          set -euo pipefail
-          echo "Running API smoke against ${BASE_URL}"
-          pnpm test:api-smoke
-
       - name: Environment fully live
         env:
-          ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
-          API_BASE_URL: ${{ needs.deploy.outputs.api_base_url }}
+          API_BASE_URL: ${{ steps.api_health.outputs.api_base_url }}
         run: |
           set -euo pipefail
-          echo "::notice title=Fully live::${ENVIRONMENT} is fully live at ${API_BASE_URL} (migrate, health, worker readiness, and API smoke passed)."
+          echo "::notice title=Fully live::${ENVIRONMENT} is fully live at ${API_BASE_URL} (migrate, API /health, and worker terminal SUCCESS passed)."

@@ -11,7 +11,7 @@ name: Post-merge CI
 #   then release-please
 #       ├─ release sbom
 #       └─ api docs
-#   then resolve environment → deploy → API smoke on deployed URL
+#   then resolve environment → deploy → API /health probe on deployed URL
 #
 # Branch → GitHub Environment mapping for deploy (only difference between dev and main):
 #   dev  → development
