@@ -1,5 +1,11 @@
 # Changelog
 
+> Note: Entries below `3.0.0-dev.0` were cut as stable-style `vX.Y.Z` tags
+> while the dev channel's `prerelease: true` config was a no-op (manifest
+> was seeded without a `-dev.N` suffix). From `3.0.0-dev.0` onward this
+> channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
+> `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
+
 ## [2.7.1](https://github.com/nikunjmavani/core-be/compare/v2.7.0...v2.7.1) (2026-05-27)
 
 ### Documentation
