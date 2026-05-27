@@ -329,11 +329,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Keys that must NOT be pushed to Railway: infra plumbing (Railway
-          # token + service IDs), GHCR image overrides, smoke test creds, and
-          # any GitHub Actions internal secret. Anything else in the GitHub
-          # Environment is treated as runtime config.
-          exclude_regex='^(RAILWAY_TOKEN|RAILWAY_SERVICE_ID|RAILWAY_WORKER_SERVICE_ID|GHCR_API_IMAGE|GHCR_WORKER_IMAGE|SMOKE_DEMO_EMAIL|SMOKE_DEMO_PASSWORD|GITHUB_TOKEN|ACTIONS_.*|CI)$'
+          # Keys that must NOT be pushed to Railway:
+          #   - RAILWAY_*       Railway already injects its own platform vars
+          #                     (RAILWAY_TOKEN, RAILWAY_SERVICE_ID,
+          #                      RAILWAY_GIT_COMMIT_SHA, RAILWAY_PRIVATE_DOMAIN,
+          #                      RAILWAY_PROJECT_ID, …). Mirroring any of them
+          #                     from the GitHub Environment would shadow
+          #                     Railway's runtime injection, so the entire
+          #                     prefix is excluded.
+          #   - GHCR_*          Image overrides consumed only by this workflow.
+          #   - SMOKE_*         Post-deploy smoke-test credentials, runner-only.
+          #   - GITHUB_TOKEN /
+          #     ACTIONS_* / CI  GitHub Actions internals.
+          # Anything else flows through to Railway as runtime config.
+          exclude_regex='^(RAILWAY_.*|GHCR_API_IMAGE|GHCR_WORKER_IMAGE|SMOKE_DEMO_EMAIL|SMOKE_DEMO_PASSWORD|GITHUB_TOKEN|ACTIONS_.*|CI)$'
 
           services="$RAILWAY_SERVICE_ID"
           if [ -n "${RAILWAY_WORKER_SERVICE_ID:-}" ]; then
@@ -360,24 +369,36 @@ jobs:
 
           # Build a single argv batch (one --set per runtime KEY=VALUE) so we
           # can ship every variable in a single GraphQL mutation per service.
+          # Track skipped key names so the operator can verify nothing was
+          # excluded by accident — values are never logged, only names.
           set_args=()
-          skipped=0
+          pushed_keys=()
+          skipped_keys=()
           while IFS= read -r -d '' kv; do
             [ -z "$kv" ] && continue
             key="${kv%%=*}"
             if [[ "$key" =~ $exclude_regex ]]; then
-              skipped=$((skipped + 1))
+              skipped_keys+=("$key")
               continue
             fi
             set_args+=(--set "$kv")
+            pushed_keys+=("$key")
           done < "$payload_file"
 
-          push_count=$(( ${#set_args[@]} / 2 ))
+          if [ "${#skipped_keys[@]}" -gt 0 ]; then
+            echo "Skipped ${#skipped_keys[@]} keys (Railway-managed / GHCR / smoke / GitHub Actions internals — not sent to Railway service variables):"
+            printf '  - %s\n' "${skipped_keys[@]}" | LC_ALL=C sort
+          else
+            echo "No keys matched the exclude regex; pushing all runtime variables."
+          fi
+
+          push_count=${#pushed_keys[@]}
           if [ "$push_count" -eq 0 ]; then
-            echo "::warning::No runtime variables to push to Railway (skipped ${skipped} infra/CI keys)."
+            echo "::warning::No runtime variables to push to Railway (every key matched the exclude regex)."
             exit 0
           fi
-          echo "Pushing ${push_count} runtime variables per service (skipping ${skipped} infra/CI keys)."
+          echo "Pushing ${push_count} runtime variables per service:"
+          printf '  + %s\n' "${pushed_keys[@]}" | LC_ALL=C sort
 
           # Retry the batched call to ride out transient backboard timeouts.
           # Railway accepts the same payload idempotently (set is upsert), so
@@ -387,7 +408,7 @@ jobs:
             attempt=1
             while true; do
               if railway variables --service "$service" "${set_args[@]}"; then
-                echo "Pushed ${push_count} variables to Railway service ${service} on attempt ${attempt}."
+                echo "Pushed ${push_count} variables to Railway service ${service} on attempt ${attempt} (skipped ${#skipped_keys[@]} excluded keys)."
                 break
               fi
               if [ "$attempt" -ge "$max_attempts" ]; then
