@@ -40,7 +40,10 @@ function extractNodeEnvironmentValues(): string[] {
   if (!match) {
     throw new Error(`Could not locate nodeEnvSchema enum in ${environmentSchemaPath}`);
   }
-  return [...(match[1]?.matchAll(/'([a-z][a-z0-9-]*)'/g) ?? [])].map((m) => m[1]!);
+  const enumSource = match[1] ?? '';
+  return [...enumSource.matchAll(/'([a-z][a-z0-9-]*)'/g)]
+    .map((enumMatch) => enumMatch[1])
+    .filter((value): value is string => value !== undefined);
 }
 
 function listGithubEnvironmentConfigs(): string[] {
@@ -62,7 +65,12 @@ function parseWorkflowBranchEnvironmentMap(): Map<string, string> {
   const lineRegex = /([a-z][a-z0-9-]*)\)\s*echo\s+"environment=([a-z][a-z0-9-]*)"/g;
   const map = new Map<string, string>();
   for (const match of source.matchAll(lineRegex)) {
-    map.set(match[1]!, match[2]!);
+    const branch = match[1];
+    const environment = match[2];
+    if (branch === undefined || environment === undefined) {
+      continue;
+    }
+    map.set(branch, environment);
   }
   return map;
 }
@@ -244,10 +252,13 @@ function buildBranchRuleset(branch: string): string {
           required_status_checks: [
             { context: 'PR CI / Lint' },
             { context: 'PR CI / Typecheck' },
+            { context: 'PR CI / Static sync' },
             { context: 'PR CI / Unit + global (pull_request)' },
             { context: 'PR CI / Migration lint' },
             { context: 'PR CI / Build verify' },
-            { context: 'PR CI / Security scan' },
+            { context: 'PR CI / Security audit' },
+            { context: 'PR CI / Security secrets' },
+            { context: 'PR CI / Security SAST' },
             { context: 'PR CI / Contract + property' },
             { context: 'PR Governance / Checks' },
           ],

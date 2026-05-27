@@ -82,7 +82,7 @@ Keep **zero known vulnerabilities** in dependencies and avoid **breaking changes
 ## CI
 
 - **Quality job** runs `pnpm install --frozen-lockfile` then `pnpm deps:audit` and `pnpm deps:audit:prod`. Any vulnerability fails the job.
-- **Dependabot CI triage** ([`.github/workflows/dependabot-ci-triage.yml`](../../../.github/workflows/dependabot-ci-triage.yml)) opens an issue when PR CI fails on a Dependabot PR. All dependency PRs are merged manually after review. Branch protection must require **PR CI / Security scan** so a merged dependency PR cannot skip audit.
+- **Dependabot CI triage** ([`.github/workflows/dependabot-ci-triage.yml`](../../../.github/workflows/dependabot-ci-triage.yml)) opens an issue when PR CI fails on a Dependabot PR. All dependency PRs are merged manually after review. Branch protection must require **PR CI / Security audit**, **PR CI / Security secrets**, and **PR CI / Security SAST** so a merged dependency PR cannot skip audit, secret detection, or SAST.
 - Keep `pnpm.overrides` in `package.json` when needed so that the lockfile (frozen in CI) already contains patched versions.
 
 ## Checklist (after any dependency change)

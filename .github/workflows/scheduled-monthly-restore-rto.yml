@@ -11,7 +11,7 @@ on:
 
 env:
   RTO_MINUTES: '60'
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 permissions:
   contents: read
@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Print drill steps
         run: |
@@ -75,13 +75,9 @@ jobs:
       RESTORE_DRILL_PARENT_BRANCH_NAME: ${{ github.ref_name }}
       NODE_ENV: test
       REDIS_URL: redis://localhost:6379
-      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
-      ALLOWED_ORIGINS: http://localhost:3000
-      AUDIT_RETENTION_DAYS: 90
-      AUTH_SESSION_RETENTION_DAYS: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Require restore drill secrets
         run: |
@@ -98,6 +94,10 @@ jobs:
       - name: Setup Node and pnpm
         if: env.NEON_DRILL_DATABASE_URL != ''
         uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export shared CI test env
+        if: env.NEON_DRILL_DATABASE_URL != ''
+        uses: ./.github/actions/test-env
 
       - name: Run migrations on restored branch
         env:
@@ -160,7 +160,7 @@ jobs:
 
       - name: Upload RTO report
         if: success()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: restore-drill-rto
           path: restore-drill-rto.json
@@ -190,7 +190,7 @@ jobs:
           exit 1
 
       - name: Download automated RTO report
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: restore-drill-rto
 
@@ -240,7 +240,7 @@ jobs:
 
       - name: Upload consolidated RTO report
         if: success()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: restore-drill-rto-report
           path: restore-drill-rto-report.json

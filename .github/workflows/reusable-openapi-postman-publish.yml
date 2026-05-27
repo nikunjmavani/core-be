@@ -31,38 +31,61 @@ on:
         required: false
       SCALAR_SLUG:
         required: false
+  workflow_dispatch:
+    inputs:
+      merge_commit_sha:
+        description: Commit SHA to generate docs from
+        required: false
+        type: string
+        default: ''
+      target_branch:
+        description: Branch context (main or dev)
+        required: true
+        type: choice
+        options:
+          - main
+          - dev
+      github_environment:
+        description: GitHub Environment for Postman/Scalar secrets
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+      publish_hosted_docs:
+        description: Upload Postman collection and Scalar Registry
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   run:
     name: Generate + publish
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: ${{ inputs.github_environment }}
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
       REDIS_URL: redis://localhost:6379
-      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
-      JWT_PRIVATE_KEY: test-private-key
-      JWT_PUBLIC_KEY: test-public-key
-      ALLOWED_ORIGINS: http://localhost:3000
-      AUDIT_RETENTION_DAYS: 90
-      AUTH_SESSION_RETENTION_DAYS: 30
-      METRICS_SCRAPE_TOKEN: test-metrics-token-min-32-characters
-      SECRETS_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.merge_commit_sha }}
+          ref: ${{ inputs.merge_commit_sha || github.sha }}
+          fetch-depth: 1
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export shared CI test env
+        uses: ./.github/actions/test-env
 
       - name: Regenerate API docs (OpenAPI + Postman)
         run: pnpm docs:all
@@ -71,7 +94,7 @@ jobs:
         run: pnpm docs:check
 
       - name: Upload API docs artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: api-docs-${{ inputs.github_environment }}
           path: |

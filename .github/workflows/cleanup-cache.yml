@@ -16,6 +16,8 @@ name: Cleanup caches
 #                                                    only the most-recent N
 #                                                    caches per key so post-
 #                                                    merge runs stay fast.
+#   - schedule (daily)                             -> safety-net LRU cap across
+#                                                    dev/main refs.
 #   - workflow_dispatch                            -> manual prune (defaults
 #                                                    to the dispatching ref).
 
@@ -29,6 +31,8 @@ on:
       - "Docs lane"
       - "Post-merge CI"
     types: [completed]
+  schedule:
+    - cron: '15 4 * * *'
   workflow_dispatch:
     inputs:
       ref:
@@ -45,13 +49,15 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
   KEEP_PER_BRANCH: "10"
+  KEEP_FAILED_RUNS: "3"
 
 jobs:
   cleanup:
     name: Delete caches
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Resolve cache scope
         id: scope
@@ -63,11 +69,13 @@ jobs:
           WF_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
           WF_RUN_EVENT: ${{ github.event.workflow_run.event }}
           WF_RUN_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          WF_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           set -euo pipefail
 
           ref=""
           mode="full"
+          keep_count="${KEEP_PER_BRANCH}"
 
           case "$EVENT_NAME" in
             pull_request)
@@ -76,12 +84,22 @@ jobs:
             workflow_run)
               if [ "$WF_RUN_EVENT" = "pull_request" ] && [ -n "${WF_RUN_PR_NUMBER:-}" ]; then
                 ref="refs/pull/${WF_RUN_PR_NUMBER}/merge"
+                if [ "$WF_RUN_CONCLUSION" = "failure" ]; then
+                  mode="lru"
+                  keep_count="${KEEP_FAILED_RUNS}"
+                fi
               elif [ -n "${WF_RUN_BRANCH:-}" ]; then
                 ref="refs/heads/${WF_RUN_BRANCH}"
                 if [ "$WF_RUN_BRANCH" = "dev" ] || [ "$WF_RUN_BRANCH" = "main" ]; then
                   mode="lru"
+                  if [ "$WF_RUN_CONCLUSION" = "failure" ]; then
+                    keep_count="${KEEP_FAILED_RUNS}"
+                  fi
                 fi
               fi
+              ;;
+            schedule)
+              mode="scheduled"
               ;;
             workflow_dispatch)
               if [ -n "${DISPATCH_REF:-}" ]; then
@@ -95,6 +113,12 @@ jobs:
               ;;
           esac
 
+          if [ "$mode" = "scheduled" ]; then
+            echo "mode=scheduled" >> "$GITHUB_OUTPUT"
+            echo "keep_count=${KEEP_PER_BRANCH}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           if [ -z "$ref" ]; then
             echo "Could not resolve a cache ref; nothing to do."
             echo "ref=" >> "$GITHUB_OUTPUT"
@@ -102,9 +126,10 @@ jobs:
             exit 0
           fi
 
-          echo "Cleaning caches for ref=$ref (mode=$mode)"
+          echo "Cleaning caches for ref=$ref (mode=$mode keep=$keep_count)"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "keep_count=$keep_count" >> "$GITHUB_OUTPUT"
 
       - name: Install gh actions-cache extension
         if: steps.scope.outputs.mode != 'skip'
@@ -113,13 +138,13 @@ jobs:
         run: gh extension install actions/gh-actions-cache --force
 
       - name: Delete caches
-        if: steps.scope.outputs.mode != 'skip'
+        if: steps.scope.outputs.mode != 'skip' && steps.scope.outputs.mode != 'scheduled'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           REF: ${{ steps.scope.outputs.ref }}
           MODE: ${{ steps.scope.outputs.mode }}
-          KEEP_PER_BRANCH: ${{ env.KEEP_PER_BRANCH }}
+          KEEP_PER_BRANCH: ${{ steps.scope.outputs.keep_count }}
         run: |
           set -euo pipefail
 
@@ -144,7 +169,6 @@ jobs:
             exit 0
           fi
 
-          # LRU mode: keep the most-recent KEEP_PER_BRANCH per cache key.
           declare -A seen
           deleted=0
           kept=0
@@ -161,3 +185,35 @@ jobs:
             deleted=$((deleted + 1))
           done
           echo "LRU prune complete for $REF - kept $kept, deleted $deleted."
+
+      - name: Scheduled safety-net LRU for dev and main
+        if: steps.scope.outputs.mode == 'scheduled'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          KEEP_PER_BRANCH: ${{ env.KEEP_PER_BRANCH }}
+        run: |
+          set -euo pipefail
+          for branch in dev main; do
+            ref="refs/heads/${branch}"
+            mapfile -t entries < <(
+              gh actions-cache list --repo "$REPO" --ref "$ref" --limit 100 \
+                --order desc --sort last-used \
+                | awk 'NF' || true
+            )
+            if [ "${#entries[@]}" -eq 0 ]; then
+              continue
+            fi
+            declare -A seen
+            for entry in "${entries[@]}"; do
+              key="$(printf '%s' "$entry" | awk '{print $1}')"
+              [ -n "$key" ] || continue
+              count="${seen[$key]:-0}"
+              if [ "$count" -lt "$KEEP_PER_BRANCH" ]; then
+                seen[$key]=$((count + 1))
+                continue
+              fi
+              gh actions-cache delete "$key" --repo "$REPO" --ref "$ref" --confirm || true
+            done
+            echo "Scheduled LRU prune complete for ${ref}."
+          done
