@@ -472,7 +472,7 @@ jobs:
             [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::API /health timeout"; exit 1; }
             sleep 5
           done
-          node -e "const health = require('/tmp/api-health.json'); for (const key of ['database','redis','bullmq']) if (health[key] !== 'connected') { console.error('not connected:', key); process.exit(1); }"
+          node -e "const health = require('/tmp/api-health.json'); if (health.status !== 'ok') { console.error('api health status is not ok:', health.status ?? 'unknown'); process.exit(1); }"
 
       - name: Require worker service for deploy
         run: |
