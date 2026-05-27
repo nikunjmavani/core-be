@@ -313,6 +313,11 @@ jobs:
         # KEY=VALUE pairs so multi-line values (PEM keys) survive intact.
         # Empty/null values are skipped so Railway is never blanked out by an
         # unset optional key. GitHub still masks each secret value in logs.
+        #
+        # NUL bytes survive only when streamed directly to the consumer — bash
+        # command substitution `$(...)` silently strips NULs (you'll see
+        # "warning: command substitution: ignored null byte in input"), so the
+        # jq pipeline is materialised to a temp file and replayed per service.
         run: |
           set -euo pipefail
 
@@ -328,27 +333,36 @@ jobs:
           fi
 
           # Merge vars + secrets (secrets win on the rare key-name collision)
-          # and emit "KEY=VALUE\0" so we can stream multi-line PEM values.
-          payload="$(jq -nrj \
+          # and emit "KEY=VALUE\0" pairs into a temp file. Writing to a file
+          # preserves NUL separators (a bash variable would not).
+          payload_file="$(mktemp)"
+          trap 'rm -f "$payload_file"' EXIT
+          jq -nrj \
             --argjson vars "$GH_VARS_JSON" \
             --argjson secrets "$GH_SECRETS_JSON" \
             '($vars + $secrets)
               | to_entries
               | map(select(.value != null and .value != ""))
               | .[]
-              | "\(.key)=\(.value)\u0000"')"
+              | "\(.key)=\(.value)\u0000"' \
+            > "$payload_file"
+
+          payload_byte_count="$(wc -c < "$payload_file")"
+          echo "Prepared $payload_byte_count bytes of NUL-delimited KEY=VALUE pairs."
 
           for service in $services; do
-            count=0
+            pushed=0
+            skipped=0
             while IFS= read -r -d '' kv; do
               key="${kv%%=*}"
               if [[ "$key" =~ $exclude_regex ]]; then
+                skipped=$((skipped + 1))
                 continue
               fi
               railway variable set --service "$service" "$kv"
-              count=$((count + 1))
-            done < <(printf '%s' "$payload")
-            echo "Pushed $count variables to Railway service $service."
+              pushed=$((pushed + 1))
+            done < "$payload_file"
+            echo "Pushed $pushed variables to Railway service $service (skipped $skipped infra/CI keys)."
           done
 
       - name: Deploy API to Railway
