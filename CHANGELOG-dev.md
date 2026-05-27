@@ -1,22 +1,10 @@
 # Changelog
 
-## [2.7.4](https://github.com/nikunjmavani/core-be/compare/v2.7.3...v2.7.4) (2026-05-27)
-
-### Fixed
-
-- **ci:** probe worker readiness via Redis instead of public /health ([#117](https://github.com/nikunjmavani/core-be/issues/117)) ([9bc7bb5](https://github.com/nikunjmavani/core-be/commit/9bc7bb5c55305ab75d3317a69fe01708ec52a392))
-
-## [2.7.3](https://github.com/nikunjmavani/core-be/compare/v2.7.2...v2.7.3) (2026-05-27)
-
-### Fixed
-
-- **setup:infra:** switch Railway Redis to template + stop GitHub env duplicates ([#115](https://github.com/nikunjmavani/core-be/issues/115)) ([ee57292](https://github.com/nikunjmavani/core-be/commit/ee572922ea4961e951a6917610665d66ec1b4aa8))
-
-## [2.7.2](https://github.com/nikunjmavani/core-be/compare/v2.7.1...v2.7.2) (2026-05-27)
-
-### Fixed
-
-- **redis:** use IPv6 dual-stack and drop TLS for Railway private network ([#113](https://github.com/nikunjmavani/core-be/issues/113)) ([00dd3d6](https://github.com/nikunjmavani/core-be/commit/00dd3d6a9d3fa5f3217002bc603758efcfda67fe))
+> Note: Entries below `3.0.0-dev.0` were cut as stable-style `vX.Y.Z` tags
+> while the dev channel's `prerelease: true` config was a no-op (manifest
+> was seeded without a `-dev.N` suffix). From `3.0.0-dev.0` onward this
+> channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
+> `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
 ## [2.7.1](https://github.com/nikunjmavani/core-be/compare/v2.7.0...v2.7.1) (2026-05-27)
 
