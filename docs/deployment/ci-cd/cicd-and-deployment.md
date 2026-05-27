@@ -74,7 +74,7 @@ Runs when a PR **merges** into `main` / `dev` (or manual dispatch). Does **not**
 | **API docs** | parallel | `src-code` or openapi paths | `pnpm docs:all`, Postman + Scalar publish |
 | **Release Please** | after Docker | Every merge | Opens/updates release PR; may publish GitHub Release |
 | **Release SBOM** | after SBOM + Release Please | Release Please published a release | Downloads `sbom` artifact and attaches it to the GitHub Release |
-| **Deploy** | last | Docker green + gates green | Reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) → resolve env → migrate → redeploy → `/health` → worker readiness → **`pnpm test:api-smoke`** → **fully live** |
+| **Deploy** | last | Docker green + gates green | Reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) → resolve env → migrate → **pin Railway service to fresh GHCR image + new deployment** (`pnpm tool:railway-deploy-image`) → `/health` → worker readiness → **`pnpm test:api-smoke`** → **fully live** |
 
 **Local-only (not in CI):** `pnpm test:integration`, `pnpm test:chaos` — run before pushing when touching DB/worker paths.
 
@@ -190,7 +190,7 @@ flowchart TB
 2. Release-please creates or updates the release PR on push to `main`.
 3. Merge the release PR when ready → stable GitHub Release + tag (`v2.x.y`) → `release-sbom.yml` attaches the SBOM.
 4. CI `docker-build` job on `main` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (tags `:sha` and `:latest`).
-5. Deploy workflow runs on push to `main` (validate env → log expected GHCR image refs → migrate → `railway redeploy --service ... --yes` → `/health` → worker readiness → `pnpm test:api-smoke` on the Railway API URL).
+5. Deploy workflow runs on push to `main` (validate env → log expected GHCR image refs → migrate → `pnpm tool:railway-deploy-image` pins each Railway service to the freshly scanned GHCR image and triggers `serviceInstanceDeployV2` → `/health` → worker readiness → `pnpm test:api-smoke` on the Railway API URL).
 6. Optional load check: `pnpm load:health` against the deployed base URL.
 
 **Development path (steps):** identical to production but on the `dev` branch, with a few differences:
@@ -199,7 +199,7 @@ flowchart TB
 2. Release-please creates or updates the **dev release PR** on push to `dev` (`.github/release-please/config.dev.json` + `.github/release-please/manifest.dev.json`).
 3. Merge the dev release PR when ready → **prerelease** GitHub Release + tag (`v2.x.y-dev.N`) → `release-sbom.yml` attaches the SBOM.
 4. CI `docker-build` job on `dev` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (SHA-tagged only — `:latest` is reserved for `main`).
-5. Deploy workflow runs on push to `dev` (validate env → log expected GHCR image refs by SHA → migrate → `railway redeploy --service ... --yes`) against the **development** GitHub Environment.
+5. Deploy workflow runs on push to `dev` (validate env → log expected GHCR image refs by SHA → migrate → `pnpm tool:railway-deploy-image` per service against the **development** GitHub Environment).
 
 **Hotfix:** Branch from `main` (`hotfix/*`), conventional commit, PR into `main`. Merge triggers production deploy and release-please on the same push. Branch strategy: [git-workflow.md](../../process/git-workflow.md).
 
@@ -221,26 +221,34 @@ sequenceDiagram
   participant Dev as Developer
   participant GH as GitHub Actions
   participant GHCR as GHCR
-  participant Railway as Railway
+  participant RailwayAPI as Railway GraphQL API
+  participant Railway as Railway runtime
 
   Dev->>GH: Push to main
   GH->>GH: CI docker-build (build, Trivy, push)
   GH->>GHCR: core-be-api:sha, core-be-worker:sha
   Dev->>GH: CI success triggers deploy
   GH->>GH: validate:github-env, db:migrate
-  GH->>GH: Log expected GHCR image refs (commit SHA or secrets)
-  GH->>Railway: railway variable set + redeploy --service --yes (API + worker)
+  GH->>GH: Resolve GHCR image refs (commit SHA or secrets)
+  GH->>GH: railway variable set (per-service runtime env vars)
+  GH->>RailwayAPI: pnpm tool:railway-deploy-image (API)
+  Note over GH,RailwayAPI: serviceInstanceUpdate → serviceInstanceDeployV2 → poll
+  RailwayAPI->>Railway: Apply pinned GHCR image and deploy
   Railway->>GHCR: Pull scanned image
-  Railway-->>GH: Deploy success
+  RailwayAPI-->>GH: Deployment SUCCESS
+  GH->>RailwayAPI: pnpm tool:railway-deploy-image (worker)
+  RailwayAPI-->>GH: Deployment SUCCESS
 ```
 
 Steps in each deploy workflow:
 
 1. Checkout code, install dependencies (migrations only — no app `pnpm build`).
 2. Run `pnpm validate:github-env` against the GitHub environment.
-3. **Log expected scanned CI image refs from GHCR** — default `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `core-be-worker:<commit-sha>`; optional secrets **`GHCR_API_IMAGE`** / **`GHCR_WORKER_IMAGE`** override the logged ref.
+3. **Log expected scanned CI image refs from GHCR** — default `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `core-be-worker:<commit-sha>`; optional secrets **`GHCR_API_IMAGE`** / **`GHCR_WORKER_IMAGE`** override the logged ref. These are the exact refs the next step pins onto Railway.
 4. Run `pnpm db:migrate`, install Railway CLI, sync app env vars with `railway variable set`.
-5. Redeploy API and worker with `railway redeploy --service … --yes`. Railway's current CLI redeploy command does not accept `--image`; it redeploys the existing service configuration after variables are synced.
+5. Deploy API + worker with **`pnpm tool:railway-deploy-image --service <id> --image <ghcr-ref> --label <api|worker>`** (see [tooling/setup/railway/deploy-image.ts](../../../tooling/setup/railway/deploy-image.ts)). For each service the tool calls the Railway GraphQL API to (a) **`serviceInstanceUpdate`** with `{ source: { image } }` so the service is pinned to the freshly built, Trivy-scanned image; (b) **`serviceInstanceDeployV2(serviceId, environmentId)`** to create a brand-new deployment from the updated configuration; (c) poll `deployment(id)` until terminal status and fail the step on `FAILED` / `CRASHED` / timeout.
+
+> **Why not `railway redeploy` / `railway up`?** The Railway CLI's `redeploy` re-runs the previous deployment object with its existing image tag (community discussion confirms `serviceInstanceRedeploy` ignores configuration changes made between deployments), and the CLI has no `--image` flag. `railway up` uploads the runner's source for Railway to build, bypassing the scanned GHCR image entirely. The GraphQL-based tool is the only reliable way to deploy the image CI just built — and the same path handles both the initial bootstrap (no prior deployment) and steady-state redeploys, so no fallback branch is needed.
 
 **GHCR images (CI):** On push to **`main`**, the reusable [docker-build-verify.yml](../../../.github/workflows/reusable/docker-build-verify.yml) job builds API + worker images, runs Trivy (CRITICAL/HIGH, `exit-code: 1`), then pushes to GHCR. PRs build and scan only (no push).
 
@@ -335,7 +343,7 @@ flowchart TB
   subgraph deploy_env [Deploy]
     C1["GitHub environment secrets"]
     C2["Deploy workflow"]
-    C3["railway variable set + redeploy --service"]
+    C3["railway variable set + pnpm tool:railway-deploy-image"]
     C1 --> C2 --> C3
   end
 ```
@@ -455,5 +463,6 @@ gh secret set DATABASE_URL --env development --body "postgresql://..."
 | Create project/service | `railway init` then `railway add`                 | Create environments development, production in repo Settings                    |
 | Get service ID         | `railway status --json`                           | —                                                                               |
 | Set secrets            | Use dashboard for project token                   | `gh secret set NAME --env development --body "value"` or run `pnpm setup:infra` |
+| Deploy a new image     | `pnpm tool:railway-deploy-image --service <id> --image <ghcr-ref> --label <api\|worker>` (GraphQL: `serviceInstanceUpdate` + `serviceInstanceDeployV2`) | CD calls this automatically; manual redeploys can run it locally with `RAILWAY_TOKEN` exported |
 
 No Doppler. All deploy secrets live in GitHub Environments.

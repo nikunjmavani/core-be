@@ -146,6 +146,7 @@
     "setup:infra:export-env": "tsx tooling/setup/setup.ts --export-env",
     "setup:railway-domain": "tsx tooling/setup/railway/custom-domain.ts",
     "setup:infra:railway-domain": "tsx tooling/setup/railway/custom-domain.ts",
+    "tool:railway-deploy-image": "tsx tooling/setup/railway/deploy-image.ts",
     "setup:retention-secrets": "tsx tooling/setup/push-retention-secrets.ts",
     "setup:push-retention-secrets": "tsx tooling/setup/push-retention-secrets.ts",
     "security:secrets": "gitleaks detect --source . --verbose --redact",

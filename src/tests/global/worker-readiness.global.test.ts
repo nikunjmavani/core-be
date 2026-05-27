@@ -29,26 +29,32 @@ describe('Worker readiness (global)', () => {
     expect(workflow).not.toContain('Skipping worker deploy');
   });
 
-  it('deploy workflow prefers redeploy and only falls back to railway up for an initial bootstrap', () => {
+  it('deploy workflow deploys the freshly built GHCR image via tool:railway-deploy-image', () => {
     const workflowPath = resolve(ROOT, '.github/workflows/reusable-railway-deploy.yml');
     const workflow = readFileSync(workflowPath, 'utf8');
 
-    expect(workflow).toContain('railway redeploy --service');
+    // The deploy job MUST go through the Railway GraphQL API tool, which
+    // pins the service to the freshly built GHCR image and creates a new
+    // deployment from it. The Railway CLI alternatives are forbidden here:
+    //   - `railway redeploy` re-runs the previous deployment object with
+    //     its existing image tag, so it silently serves the OLD image.
+    //   - `railway up` uploads the runner's source for Railway to build,
+    //     bypassing the scanned GHCR image entirely.
     expect(workflow).toContain('Log expected scanned CI image refs from GHCR');
-    expect(workflow).not.toContain('run: pnpm build');
+    expect(workflow).toContain('pnpm tool:railway-deploy-image');
+    expect(workflow).toContain('--service "$RAILWAY_SERVICE_ID"');
+    expect(workflow).toContain('--service "$RAILWAY_WORKER_SERVICE_ID"');
+    expect(workflow).toContain('--image "$API_IMAGE"');
+    expect(workflow).toContain('--image "$WORKER_IMAGE"');
+    expect(workflow).toContain('--label api');
+    expect(workflow).toContain('--label worker');
 
-    // `railway up` is allowed as the conditional fallback for services with no
-    // prior deployment, but it must be gated by the Railway "No deployment
-    // found for service" error so the workflow never bypasses redeploy in
-    // steady state.
-    expect(workflow).toContain('no deployment found for service');
-    expect(workflow).toContain('railway up --service');
-    expect(workflow.indexOf('no deployment found for service')).toBeLessThan(
-      workflow.indexOf('railway up --service'),
-    );
+    expect(workflow).not.toContain('railway redeploy');
+    expect(workflow).not.toContain('railway up --service');
+    expect(workflow).not.toContain('run: pnpm build');
   });
 
-  it('deploy workflow probes API and worker health after redeploy', () => {
+  it('deploy workflow probes API and worker health after deploy', () => {
     const workflowPath = resolve(ROOT, '.github/workflows/reusable-railway-deploy.yml');
     const workflow = readFileSync(workflowPath, 'utf8');
     expect(workflow).toContain('Post-deploy API health check');
