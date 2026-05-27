@@ -52,6 +52,13 @@ describe('Worker readiness (global)', () => {
     expect(workflow).not.toContain('railway redeploy');
     expect(workflow).not.toContain('railway up --service');
     expect(workflow).not.toContain('run: pnpm build');
+
+    const deployImageToolPath = resolve(ROOT, 'tooling/setup/railway/deploy-image.ts');
+    const deployImageTool = readFileSync(deployImageToolPath, 'utf8');
+    expect(deployImageTool).toContain('Project-Access-Token');
+    expect(deployImageTool).toContain('projectToken');
+    expect(deployImageTool).toContain('serviceInstanceUpdate');
+    expect(deployImageTool).toContain('serviceInstanceDeployV2');
   });
 
   it('deploy workflow probes API and worker health after deploy', () => {
