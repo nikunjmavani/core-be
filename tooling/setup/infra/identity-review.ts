@@ -29,7 +29,21 @@ import {
 } from './init-wizard.js';
 import type { SetupConfig } from '../common/types.js';
 
+/**
+ * State keys for Railway services expected in each environment after setup.
+ * `api` and `worker` are created by the Railway provider as blank shells;
+ * `redis` is provisioned by the Railway Redis provider from Railway's `redis`
+ * database template (template-managed image, password, and volume).
+ */
 export const SETUP_SERVICE_NAMES = ['api', 'worker', 'redis'];
+
+export function formatSetupServiceName(serviceName: string): string {
+  return serviceName === 'redis' ? 'redis (database template)' : serviceName;
+}
+
+export function formatSetupServiceNames(serviceNames: readonly string[]): string {
+  return serviceNames.map(formatSetupServiceName).join(', ');
+}
 
 export interface IdentityReviewOptions {
   assumeYes?: boolean;
@@ -57,7 +71,7 @@ function printIdentitySummary(config: SetupConfig): void {
   for (const environment of config.environments) {
     const defaultMark = environment.isDefault ? ' (default)' : '';
     logger.info(
-      `    Environment         : ${environment.name} (${environment.label}) — branch "${environment.branch}" — services: ${SETUP_SERVICE_NAMES.join(', ')}${defaultMark}`,
+      `    Environment         : ${environment.name} (${environment.label}) — branch "${environment.branch}" — services: ${formatSetupServiceNames(SETUP_SERVICE_NAMES)}${defaultMark}`,
     );
   }
   logger.blank();

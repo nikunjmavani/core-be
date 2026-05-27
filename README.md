@@ -301,7 +301,7 @@ flowchart TB
 - [Node.js 24+](https://nodejs.org/)
 - [pnpm](https://pnpm.io/installation)
 - **PostgreSQL** — managed service (e.g. Supabase, Neon, AWS RDS, Railway)
-- **Redis** — managed service (Railway Redis/Valkey by default, AWS ElastiCache, Redis Cloud)
+- **Redis** — managed service (Railway Redis by default — Railway's `redis` database template — or AWS ElastiCache, Redis Cloud)
 
 ## Local Setup
 

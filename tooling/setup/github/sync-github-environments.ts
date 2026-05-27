@@ -27,6 +27,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import sodium from 'libsodium-wrappers';
 
 import { runGhAuthPreflight } from './auth-preflight.js';
@@ -239,32 +240,23 @@ function classifyKey(key: string): 'secret' | 'variable' {
   return 'variable';
 }
 
-/** Flat parser — reads all KEY=VALUE pairs, ignores section headers. */
+/**
+ * Flat parser — reads all KEY=VALUE pairs into their LOGICAL runtime values
+ * via `dotenv.parse`, which strips quotes, decodes `\n`/`\"`/`\\` escapes,
+ * and reassembles multi-line single-quoted blocks (PEM keys).
+ *
+ * Pushing the raw post-`=` text (including literal quotes) is incorrect for
+ * GitHub Environment Variables — GitHub stores the value verbatim, so a
+ * cron expression written locally as `KEY="0 3 * * *"` would land in GitHub
+ * as the literal `"0 3 * * *"` with surrounding quotes and would also fail
+ * the value-diff check on the next sync.
+ */
 function parseEnvFile(filePath: string): EnvEntry[] {
-  const entries: EnvEntry[] = [];
   const content = readFileSync(filePath, 'utf-8');
-
-  for (const line of content.split('\n')) {
-    if (line.startsWith('#') || line.trim() === '') continue;
-
-    const match = line.match(/^([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);
-    if (!match) continue;
-
-    const name = match[1]!;
-    const value = match[2]!;
-
-    // Reassemble multi-line double-quoted values
-    if (value.startsWith('"') && !value.endsWith('"')) {
-      // Multi-line values are handled differently — for PEM keys etc.
-      // We read the value as-is; the escape handling is done at push time.
-    }
-
-    if (value === '') continue; // skip empty values
-
-    entries.push({ name, value });
-  }
-
-  return entries;
+  const parsed = dotenv.parse(content);
+  return Object.entries(parsed)
+    .filter(([, value]) => value !== '')
+    .map(([name, value]) => ({ name, value }));
 }
 
 function formatDuration(milliseconds: number): string {
@@ -602,11 +594,23 @@ export async function syncEnvironmentToGitHub(
     });
   }
 
-  // ── Delete stale items (on GitHub but NOT in local file) ───────────────
+  // ── Delete stale items (on GitHub but NOT in local file with same kind) ──
+  //
+  // This covers two cases in a single pass:
+  //   1. Item removed from the local .env file (true stale).
+  //   2. Item re-classified across kinds, or pushed as the wrong kind by an
+  //      older setup-infra version (e.g. ALLOWED_ORIGINS pushed as a Secret
+  //      previously, now correctly classified as a Variable). The Secret is
+  //      no longer in localSecretNames, so it gets pruned here while the
+  //      Variable is created above — no duplicate left behind.
   const staleSecrets = [...existingSecrets].filter((name) => !localSecretNames.has(name));
   const staleVariables = [...existingVariables.keys()].filter(
     (name) => !localVariableNames.has(name),
   );
+  const crossKindDuplicates = new Set<string>([
+    ...staleSecrets.filter((name) => localVariableNames.has(name)),
+    ...staleVariables.filter((name) => localSecretNames.has(name)),
+  ]);
   const deleteTotal = staleSecrets.length + staleVariables.length;
 
   let deleted = 0;
@@ -614,12 +618,18 @@ export async function syncEnvironmentToGitHub(
   if (deleteTotal > 0) {
     console.log('');
     console.log(`Pruning ${deleteTotal} stale item(s) from GitHub...`);
+    if (crossKindDuplicates.size > 0) {
+      console.log(
+        `  (${crossKindDuplicates.size} of these are cross-kind duplicates from an older setup:infra version)`,
+      );
+    }
 
     for (const name of staleSecrets) {
       try {
         await deleteSecret(token, repositoryFullName, environment, name);
         deleted += 1;
-        console.log(`  [deleted]  secret ${name}`);
+        const note = crossKindDuplicates.has(name) ? ' (now a variable)' : '';
+        console.log(`  [deleted]  secret ${name}${note}`);
       } catch (deleteError) {
         const msg = deleteError instanceof Error ? deleteError.message : String(deleteError);
         console.error(`  [error]    secret ${name}: ${msg}`);
@@ -630,7 +640,8 @@ export async function syncEnvironmentToGitHub(
       try {
         await deleteVariable(token, repositoryFullName, environment, name);
         deleted += 1;
-        console.log(`  [deleted]  variable ${name}`);
+        const note = crossKindDuplicates.has(name) ? ' (now a secret)' : '';
+        console.log(`  [deleted]  variable ${name}${note}`);
       } catch (deleteError) {
         const msg = deleteError instanceof Error ? deleteError.message : String(deleteError);
         console.error(`  [error]    variable ${name}: ${msg}`);

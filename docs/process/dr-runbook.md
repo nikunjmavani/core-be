@@ -1,6 +1,6 @@
 # Disaster recovery runbook
 
-Targets for **core-be** API and worker on Railway with Neon Postgres and Railway Redis/Valkey.
+Targets for **core-be** API and worker on Railway with Neon Postgres and Railway Redis (provisioned from Railway's `redis` database template).
 
 | Metric                   | Target         | Notes                                                      |
 | ------------------------ | -------------- | ---------------------------------------------------------- |
@@ -60,7 +60,7 @@ flowchart TD
 3. Run `pnpm db:migrate` against the restored database (idempotent; fixes schema drift).
 4. Verify row counts on critical tables (`tenancy.organizations`, `billing.subscriptions`, `auth.auth_sessions`).
 
-### 2. Redis (Railway Redis/Valkey)
+### 2. Redis (Railway Redis database)
 
 1. If Redis is unavailable, provision or restore the shared Redis instance (see [redis-topology.md](../deployment/runbooks/redis-topology.md)).
 2. Update `REDIS_URL` on API and worker services. Remove `REDIS_BULLMQ_URL` or set it to the same endpoint if it exists from an older split topology.

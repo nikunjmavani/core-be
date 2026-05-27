@@ -43,9 +43,11 @@ export const setupConfigSchema = z.object({
     }),
     railwayRedis: z.object({
       enabled: z.boolean(),
-      image: z.string().min(1),
-      region: z.string().min(1),
-      maxmemoryMb: z.number().int().min(32),
+      // Image, start command, password, and volume are managed by Railway's
+      // `redis` database template (deployed via `templateDeployV2`). The
+      // fields below are post-deploy overrides applied with
+      // `serviceInstanceUpdate`; leave them unset to inherit Railway defaults.
+      region: z.string().min(1).optional(),
       cpuLimit: z.number().positive().optional(),
       memoryLimitMb: z.number().int().positive().optional(),
     }),

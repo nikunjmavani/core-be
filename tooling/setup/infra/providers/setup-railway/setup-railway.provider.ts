@@ -196,7 +196,15 @@ async function stageAndCommitServiceAttachments(
   );
 }
 
-export const RAILWAY_SERVICE_NAMES = ['api', 'worker', 'redis'];
+/**
+ * Services this provider creates as blank shells (image is set later by the
+ * application deploy pipeline). The `redis` service is intentionally **not**
+ * listed here — it is provisioned by the Railway Redis provider via Railway's
+ * `redis` database template (`templateDeployV2`), which creates the service,
+ * volume, and `REDIS_PASSWORD` with managed defaults instead of a hand-pinned
+ * image and start command.
+ */
+export const RAILWAY_SERVICE_NAMES = ['api', 'worker'];
 
 function formatRailwayEnvironmentPlan(config: SetupConfig): string {
   return config.environments
@@ -274,11 +282,20 @@ export async function provision(
 
     const railwayProjectId = projectId;
     const projectDetails = await fetchProjectDetails(token, railwayProjectId);
+    // Railway displays environment/service names with whatever casing the
+    // user (or a template) created them with. Our canonical keys
+    // (RAILWAY_SERVICE_NAMES, environment.name from setup.config.json) are
+    // lowercase, so every name-keyed lookup in this provider normalises both
+    // sides to lowercase. Otherwise a remote service called "Api" would miss
+    // a lookup for "api" and we'd happily create a duplicate.
     const remoteEnvironmentsByName = new Map(
-      projectDetails.environments.map((environment) => [environment.name, environment]),
+      projectDetails.environments.map((environment) => [
+        environment.name.toLowerCase(),
+        environment,
+      ]),
     );
     const remoteServicesByName = new Map(
-      projectDetails.services.map((service) => [service.name, service.id]),
+      projectDetails.services.map((service) => [service.name.toLowerCase(), service.id]),
     );
     logger.info(
       `Railway topology: project "${projectName}" → ${formatRailwayEnvironmentPlan(config)}.`,
@@ -296,13 +313,17 @@ export async function provision(
 
     for (const environmentName of environments) {
       if (!railwayEnvironments[environmentName]) {
-        const remoteEnvironment = remoteEnvironmentsByName.get(environmentName);
+        const remoteEnvironment = remoteEnvironmentsByName.get(environmentName.toLowerCase());
         if (remoteEnvironment) {
           railwayEnvironments[environmentName] = {
             environmentId: remoteEnvironment.id,
+            // Normalise service-name keys to lowercase so downstream lookups
+            // (`services[serviceName]` where serviceName is a canonical
+            // RAILWAY_SERVICE_NAMES entry) hit regardless of how Railway
+            // capitalises the live service name.
             services: Object.fromEntries(
               remoteEnvironment.serviceInstances.map((service) => [
-                service.serviceName,
+                service.serviceName.toLowerCase(),
                 { serviceId: service.serviceId, environmentId: remoteEnvironment.id },
               ]),
             ),
@@ -337,10 +358,11 @@ export async function provision(
       const environmentId = railwayEnvironments[environmentName].environmentId;
 
       for (const serviceName of RAILWAY_SERVICE_NAMES) {
+        const lookupKey = serviceName.toLowerCase();
         let serviceId = railwayEnvironments[environmentName].services[serviceName]?.serviceId;
 
         if (!serviceId) {
-          const existingServiceId = remoteServicesByName.get(serviceName);
+          const existingServiceId = remoteServicesByName.get(lookupKey);
           if (existingServiceId) {
             serviceId = existingServiceId;
             logger.success(`  Service "${serviceName}" (${environmentName}) adopted: ${serviceId}`);
@@ -362,7 +384,7 @@ export async function provision(
               { input: { projectId: railwayProjectId, name: serviceName } },
             );
             serviceId = createServiceResult.serviceCreate.id;
-            remoteServicesByName.set(serviceName, serviceId);
+            remoteServicesByName.set(lookupKey, serviceId);
             logger.stopSpinner(serviceSpinner, `Service "${serviceName}" created: ${serviceId}`);
           }
 
@@ -499,11 +521,11 @@ export const setupRailwayProvider: InfraProvider = {
     instructions: [
       `Will create or adopt the Railway project "${context.config.project.name}".`,
       `Will create or adopt Railway environments: ${formatRailwayEnvironmentPlan(context.config)}.`,
-      'Will create or adopt project-level services: api, worker, redis.',
-      'Will attach api + worker + redis to every Railway environment via staged-changes.',
+      'Will create or adopt project-level services: api, worker (redis is provisioned separately via the Railway Redis template).',
+      'Will attach api + worker to every Railway environment via staged-changes.',
     ],
     alreadyDone: () => railwayAlreadyProvisioned(context.state, context.environments),
-    alreadyDoneMessage: 'project + environments + api/worker/redis attachments already in state',
+    alreadyDoneMessage: 'project + environments + api/worker attachments already in state',
     execute: async () => {
       const result = await provision(
         context.config,

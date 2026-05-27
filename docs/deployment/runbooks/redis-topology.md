@@ -58,18 +58,18 @@ A startup **warning** is logged when BullMQ is configured to use a separate Redi
 
 ### Production
 
-1. Create **one Railway Redis/Valkey service instance** for the environment.
+1. Create **one Railway Redis database service** for the environment from Railway's `redis` template (provisioned automatically by `pnpm setup:infra` via the `templateDeployV2` GraphQL mutation).
 2. Set `REDIS_URL` in GitHub Environment secrets (via `pnpm setup:infra`, or manually).
 3. Leave `REDIS_BULLMQ_URL` unset. If an older environment already has it, remove it or set it to the exact same endpoint as `REDIS_URL`.
-4. Enable persistence when the provider supports it, since queues and cache share the same instance.
+4. Enable persistence when the provider supports it, since queues and cache share the same instance. The Railway `redis` template attaches a persistent volume by default.
 
 #### Transport security
 
-`REDIS_URL` intentionally uses the unencrypted `redis://` scheme against Railway's private domain (`*.railway.internal`). Railway's private network is an IPv6 WireGuard mesh — traffic between `api`, `worker`, and `redis` services never leaves Railway's encrypted infrastructure, so application-layer TLS (`rediss://`) is not required for the current topology and is **not** enabled on the Valkey container.
+`REDIS_URL` intentionally uses the unencrypted `redis://` scheme against Railway's private domain (`*.railway.internal`). Railway's private network is an IPv6 WireGuard mesh — traffic between `api`, `worker`, and `redis` services never leaves Railway's encrypted infrastructure, so application-layer TLS (`rediss://`) is not required for the current topology and is **not** enabled on the Redis container.
 
 If Redis is ever exposed on a public TCP proxy (or moved off the Railway private mesh), enable TLS by:
 
-1. Configuring Valkey with `--tls-port`, `--tls-cert-file`, and `--tls-key-file` (and dropping `--port`).
+1. Configuring the Redis service with `--tls-port`, `--tls-cert-file`, and `--tls-key-file` (and dropping `--port`).
 2. Mounting a CA cert into API/worker containers via `REDIS_TLS_CA` and switching `tls: {}` in [`getBullMQConnectionOptions`](../../../src/infrastructure/queue/connection.ts) and [`redis.client.ts`](../../../src/infrastructure/cache/redis.client.ts) to `tls: { ca: [REDIS_TLS_CA] }`.
 3. Updating `REDIS_URL` (and `REDIS_BULLMQ_URL` if set) to `rediss://`.
 
