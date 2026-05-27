@@ -58,7 +58,7 @@ describe('Worker readiness (global)', () => {
     expect(deployImageTool).toContain('serviceInstanceDeployV2');
   });
 
-  it('deploy workflow probes API and worker health after deploy', () => {
+  it('deploy workflow probes API health and runs worker-readiness after deploy', () => {
     const workflowPath = resolve(ROOT, '.github/workflows/reusable-railway-deploy.yml');
     const workflow = readFileSync(workflowPath, 'utf8');
     expect(workflow).toContain('Deploy API and worker to Railway');
@@ -70,11 +70,24 @@ describe('Worker readiness (global)', () => {
     expect(workflow).toContain(
       'deploy_service_from_image "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"',
     );
+
+    // Worker readiness goes through pnpm tool:worker-readiness because the
+    // worker has no public Railway domain to curl /health on.
+    expect(workflow).toContain('Probe worker readiness');
+    expect(workflow).toContain('pnpm tool:worker-readiness');
+    expect(workflow).not.toContain('wait_for_service_health "$worker_base_url"');
   });
 
-  it('post-deploy worker readiness script probes /health', () => {
+  it('post-deploy worker readiness script supports redis-direct mode', () => {
     const scriptPath = resolve(ROOT, 'src/scripts/admin/worker-readiness.ts');
     const content = readFileSync(scriptPath, 'utf8');
+    // Redis-direct path (default) — verifies DLQ depth + heartbeats without
+    // requiring a public worker /health endpoint.
+    expect(content).toContain('readWorkerQueueHeartbeats');
+    expect(content).toContain('WORKER_THROUGHPUT_QUEUE_NAMES');
+    expect(content).toContain('getTotalDeadLetterJobCount');
+    expect(content).toContain('runDependencyReadinessProbes');
+    // HTTP fallback path retained for environments that do expose worker /health.
     expect(content).toContain('/health');
   });
 });

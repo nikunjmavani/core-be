@@ -109,7 +109,7 @@ curl -H "Authorization: Bearer $METRICS_SCRAPE_TOKEN" http://localhost:9090/metr
 [`reusable-railway-deploy.yml`](../../../.github/workflows/reusable-railway-deploy.yml) deploys the API and worker from scanned GHCR images, syncs shared Railway variables to both services, then probes:
 
 - API service: `GET /health` on the API public domain
-- Worker service: `GET /health` on `WORKER_HEALTH_PORT`, plus `pnpm tool:worker-readiness` DLQ and queue heartbeat checks
+- Worker service: deployment terminal SUCCESS (driven by the in-container `Dockerfile.worker` HEALTHCHECK that hits `127.0.0.1:9090/health` inside the pod), then `pnpm tool:worker-readiness` from the runner. Railway worker services are not exposed publicly, so the runner verifies DLQ depth, queue heartbeats, and dependency readiness (Postgres, Redis, BullMQ) directly from Redis + Postgres rather than curling worker `/health`.
 - Deployed API smoke: `pnpm test:api-smoke` against the Railway API base URL (after API + worker are healthy). Uses `SMOKE_DEMO_EMAIL` / `SMOKE_DEMO_PASSWORD` GitHub Environment secrets when set; otherwise defaults to the full-seed demo user (`demo@example.com`). Ensure the target environment database is seeded accordingly.
 
 **Fully live:** When this smoke step succeeds, CD completes and the GitHub Environment (development or production) is considered fully live for traffic. Earlier probes only confirm process and dependency connectivity; smoke validates real HTTP routes end-to-end on the deployed URL.
@@ -120,7 +120,10 @@ curl -H "Authorization: Bearer $METRICS_SCRAPE_TOKEN" http://localhost:9090/metr
 # API
 curl -sS http://localhost:3000/health | jq .
 
-# Worker
+# Worker (redis-direct: DLQ + heartbeats + dependency probes via Redis/Postgres)
+pnpm tool:worker-readiness
+
+# Worker (HTTP fallback against a locally exposed worker /health endpoint)
 WORKER_HEALTH_URL=http://127.0.0.1:9090 pnpm tool:worker-readiness
 ```
 
