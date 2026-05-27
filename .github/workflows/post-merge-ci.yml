@@ -106,6 +106,12 @@ jobs:
   docker-build-push:
     name: Docker
     needs: [changes]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
     if: |
       always() &&
       inputs.skip_security != true &&
