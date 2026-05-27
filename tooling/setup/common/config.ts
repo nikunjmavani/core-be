@@ -41,8 +41,13 @@ export const setupConfigSchema = z.object({
         max: z.number().min(0.25),
       }),
     }),
-    upstash: z.object({
+    railwayRedis: z.object({
       enabled: z.boolean(),
+      image: z.string().min(1),
+      region: z.string().min(1),
+      maxmemoryMb: z.number().int().min(32),
+      cpuLimit: z.number().positive().optional(),
+      memoryLimitMb: z.number().int().positive().optional(),
     }),
     aws: z.object({
       enabled: z.boolean(),

@@ -44,8 +44,8 @@ describe('redis-url.parse.util', () => {
   it('usesSeparateBullMqRedisHost is true for different hosts', () => {
     expect(
       usesSeparateBullMqRedisHost(
-        'redis://cache.example.upstash.io:6379/0',
-        'redis://bullmq.example.upstash.io:6379/0',
+        'redis://cache.example.railway.internal:6379/0',
+        'redis://bullmq.example.railway.internal:6379/0',
       ),
     ).toBe(true);
   });

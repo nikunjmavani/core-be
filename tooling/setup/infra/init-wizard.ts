@@ -112,8 +112,13 @@ export function buildConfig(
         pgVersion: 17,
         computeSize: { min: 0.25, max: 1 },
       },
-      upstash: {
+      railwayRedis: {
         enabled: true,
+        image: 'valkey/valkey:7-alpine',
+        region: 'asia-southeast1-eqsg3a',
+        maxmemoryMb: 50,
+        cpuLimit: 1,
+        memoryLimitMb: 512,
       },
       aws: {
         enabled: true,

@@ -196,7 +196,7 @@ async function stageAndCommitServiceAttachments(
   );
 }
 
-const RAILWAY_SERVICE_NAMES = ['api', 'worker'];
+export const RAILWAY_SERVICE_NAMES = ['api', 'worker', 'redis'];
 
 function formatRailwayEnvironmentPlan(config: SetupConfig): string {
   return config.environments
@@ -268,7 +268,12 @@ export async function provision(
       logger.stopSpinner(spinner, `Railway project already exists: ${projectId}`);
     }
 
-    const projectDetails = await fetchProjectDetails(token, projectId!);
+    if (!projectId) {
+      throw new Error('Railway project id missing after create/adopt step.');
+    }
+
+    const railwayProjectId = projectId;
+    const projectDetails = await fetchProjectDetails(token, railwayProjectId);
     const remoteEnvironmentsByName = new Map(
       projectDetails.environments.map((environment) => [environment.name, environment]),
     );
@@ -318,7 +323,7 @@ export async function provision(
               }
             }
           `,
-            { input: { projectId, name: environmentName } },
+            { input: { projectId: railwayProjectId, name: environmentName } },
           );
           const environmentId = createEnvironmentResult.environmentCreate.id;
           railwayEnvironments[environmentName] = { environmentId, services: {} };
@@ -354,7 +359,7 @@ export async function provision(
                 }
               }
             `,
-              { input: { projectId, name: serviceName } },
+              { input: { projectId: railwayProjectId, name: serviceName } },
             );
             serviceId = createServiceResult.serviceCreate.id;
             remoteServicesByName.set(serviceName, serviceId);
@@ -404,7 +409,12 @@ export async function provision(
       success: true,
       message: `Railway: ${Object.keys(railwayEnvironments).length} environments ready`,
       stateUpdates: {
-        railway: { version: 2, projectId: projectId!, services, environments: railwayEnvironments },
+        railway: {
+          version: 2,
+          projectId: railwayProjectId,
+          services,
+          environments: railwayEnvironments,
+        },
       },
     };
   } catch (provisionError) {
@@ -449,7 +459,7 @@ function railwayAlreadyProvisioned(state: SetupState, environments: string[]): b
   return environments.every((environmentName) => {
     const environment = railwayEnvironments[environmentName];
     if (!environment) return false;
-    return ['api', 'worker'].every((serviceName) =>
+    return RAILWAY_SERVICE_NAMES.every((serviceName) =>
       Boolean(environment.services[serviceName]?.serviceId),
     );
   });
@@ -489,11 +499,11 @@ export const setupRailwayProvider: InfraProvider = {
     instructions: [
       `Will create or adopt the Railway project "${context.config.project.name}".`,
       `Will create or adopt Railway environments: ${formatRailwayEnvironmentPlan(context.config)}.`,
-      'Will create or adopt project-level services: api, worker.',
-      'Will attach api + worker to every Railway environment via staged-changes.',
+      'Will create or adopt project-level services: api, worker, redis.',
+      'Will attach api + worker + redis to every Railway environment via staged-changes.',
     ],
     alreadyDone: () => railwayAlreadyProvisioned(context.state, context.environments),
-    alreadyDoneMessage: 'project + environments + api/worker attachments already in state',
+    alreadyDoneMessage: 'project + environments + api/worker/redis attachments already in state',
     execute: async () => {
       const result = await provision(
         context.config,

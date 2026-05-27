@@ -1,6 +1,6 @@
 # Disaster recovery runbook
 
-Targets for **core-be** API and worker on Railway with Neon Postgres and Upstash Redis.
+Targets for **core-be** API and worker on Railway with Neon Postgres and Railway Redis/Valkey.
 
 | Metric                   | Target         | Notes                                                      |
 | ------------------------ | -------------- | ---------------------------------------------------------- |
@@ -13,7 +13,7 @@ Neon point-in-time recovery (PITR) and Railway redeploys are the primary mechani
 
 ## When to invoke
 
-- Regional or provider outage affecting Neon, Upstash, or Railway
+- Regional or provider outage affecting Neon, Railway Redis, or Railway
 - Accidental destructive migration or data corruption confirmed in Postgres
 - Complete loss of the production API or worker service with no healthy `/health`
 
@@ -36,7 +36,7 @@ flowchart TD
   A[Incident detected] --> B{Postgres reachable?}
   B -->|No| C[Neon restore / failover]
   B -->|Yes| D{Redis reachable?}
-  D -->|No| E[Upstash restore or new instance]
+  D -->|No| E[Railway Redis restore or new instance]
   D -->|Yes| F{App healthy?}
   F -->|No| G[Railway redeploy + env check]
   F -->|Yes| H[App-level triage: migrations, DLQ, Stripe]
@@ -60,7 +60,7 @@ flowchart TD
 3. Run `pnpm db:migrate` against the restored database (idempotent; fixes schema drift).
 4. Verify row counts on critical tables (`tenancy.organizations`, `billing.subscriptions`, `auth.auth_sessions`).
 
-### 2. Redis (Upstash)
+### 2. Redis (Railway Redis/Valkey)
 
 1. If Redis is unavailable, provision or restore the shared Redis instance (see [redis-topology.md](../deployment/runbooks/redis-topology.md)).
 2. Update `REDIS_URL` on API and worker services. Remove `REDIS_BULLMQ_URL` or set it to the same endpoint if it exists from an older split topology.
@@ -95,7 +95,7 @@ flowchart TD
 
 ## Quarterly review log
 
-Review this runbook at the start of each calendar quarter (January, April, July, October). Confirm RTO/RPO targets, Neon/Upstash/Railway steps, and cross-links still match production. Run or schedule the [monthly restore drill](backup-drills.md) in the same quarter when possible; the workflow records restore duration and fails when elapsed time is not below **`RTO_MINUTES`** (default 60).
+Review this runbook at the start of each calendar quarter (January, April, July, October). Confirm RTO/RPO targets, Neon/Railway Redis/Railway steps, and cross-links still match production. Run or schedule the [monthly restore drill](backup-drills.md) in the same quarter when possible; the workflow records restore duration and fails when elapsed time is not below **`RTO_MINUTES`** (default 60).
 
 | Quarter | Reviewer                    | Review date | Outcome | Notes                                                                                                    |
 | ------- | --------------------------- | ----------- | ------- | -------------------------------------------------------------------------------------------------------- |

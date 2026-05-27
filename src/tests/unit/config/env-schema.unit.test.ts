@@ -5,7 +5,7 @@ const DATABASE_URL_FIXTURE = 'postgres://localhost:5432/core';
 const REDIS_URL_FIXTURE = 'redis://localhost:6379';
 
 const productionRedisTopology = {
-  REDIS_URL: 'redis://shared.example.upstash.io:6379',
+  REDIS_URL: 'redis://shared.example.railway.internal:6379',
 };
 
 const commonRequiredBase = {
@@ -257,14 +257,14 @@ describe('env-schema', () => {
 
     const sharedWithSameBullMqUrl = envSchema.safeParse({
       ...productionRequiredBase,
-      REDIS_URL: 'redis://shared.example.upstash.io:6379',
-      REDIS_BULLMQ_URL: 'redis://shared.example.upstash.io:6379',
+      REDIS_URL: 'redis://shared.example.railway.internal:6379',
+      REDIS_BULLMQ_URL: 'redis://shared.example.railway.internal:6379',
     });
     expect(sharedWithSameBullMqUrl.success).toBe(true);
 
     const separateBullMqHost = envSchema.safeParse({
       ...productionRequiredBase,
-      REDIS_BULLMQ_URL: 'redis://bullmq.example.upstash.io:6379',
+      REDIS_BULLMQ_URL: 'redis://bullmq.example.railway.internal:6379',
     });
     expect(separateBullMqHost.success).toBe(false);
   });
