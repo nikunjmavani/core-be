@@ -29,13 +29,23 @@ describe('Worker readiness (global)', () => {
     expect(workflow).not.toContain('Skipping worker deploy');
   });
 
-  it('deploy workflow uses scanned CI images only (no source build or railway up)', () => {
+  it('deploy workflow prefers redeploy and only falls back to railway up for an initial bootstrap', () => {
     const workflowPath = resolve(ROOT, '.github/workflows/reusable-railway-deploy.yml');
     const workflow = readFileSync(workflowPath, 'utf8');
+
     expect(workflow).toContain('railway redeploy --service');
-    expect(workflow).toContain('Resolve scanned CI images from GHCR');
+    expect(workflow).toContain('Log expected scanned CI image refs from GHCR');
     expect(workflow).not.toContain('run: pnpm build');
-    expect(workflow).not.toContain('railway up --service');
+
+    // `railway up` is allowed as the conditional fallback for services with no
+    // prior deployment, but it must be gated by the Railway "No deployment
+    // found for service" error so the workflow never bypasses redeploy in
+    // steady state.
+    expect(workflow).toContain('no deployment found for service');
+    expect(workflow).toContain('railway up --service');
+    expect(workflow.indexOf('no deployment found for service')).toBeLessThan(
+      workflow.indexOf('railway up --service'),
+    );
   });
 
   it('deploy workflow probes API and worker health after redeploy', () => {
