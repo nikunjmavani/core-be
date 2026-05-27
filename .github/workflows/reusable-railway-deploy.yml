@@ -488,7 +488,7 @@ jobs:
 
   api-smoke:
     name: API smoke (${{ needs.resolve-environment.outputs.environment }})
-    needs: [deploy]
+    needs: [resolve-environment, deploy]
     runs-on: ubuntu-latest
     environment: ${{ needs.resolve-environment.outputs.environment }}
     steps:
