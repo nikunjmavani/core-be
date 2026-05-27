@@ -282,11 +282,20 @@ export async function provision(
 
     const railwayProjectId = projectId;
     const projectDetails = await fetchProjectDetails(token, railwayProjectId);
+    // Railway displays environment/service names with whatever casing the
+    // user (or a template) created them with. Our canonical keys
+    // (RAILWAY_SERVICE_NAMES, environment.name from setup.config.json) are
+    // lowercase, so every name-keyed lookup in this provider normalises both
+    // sides to lowercase. Otherwise a remote service called "Api" would miss
+    // a lookup for "api" and we'd happily create a duplicate.
     const remoteEnvironmentsByName = new Map(
-      projectDetails.environments.map((environment) => [environment.name, environment]),
+      projectDetails.environments.map((environment) => [
+        environment.name.toLowerCase(),
+        environment,
+      ]),
     );
     const remoteServicesByName = new Map(
-      projectDetails.services.map((service) => [service.name, service.id]),
+      projectDetails.services.map((service) => [service.name.toLowerCase(), service.id]),
     );
     logger.info(
       `Railway topology: project "${projectName}" → ${formatRailwayEnvironmentPlan(config)}.`,
@@ -304,13 +313,17 @@ export async function provision(
 
     for (const environmentName of environments) {
       if (!railwayEnvironments[environmentName]) {
-        const remoteEnvironment = remoteEnvironmentsByName.get(environmentName);
+        const remoteEnvironment = remoteEnvironmentsByName.get(environmentName.toLowerCase());
         if (remoteEnvironment) {
           railwayEnvironments[environmentName] = {
             environmentId: remoteEnvironment.id,
+            // Normalise service-name keys to lowercase so downstream lookups
+            // (`services[serviceName]` where serviceName is a canonical
+            // RAILWAY_SERVICE_NAMES entry) hit regardless of how Railway
+            // capitalises the live service name.
             services: Object.fromEntries(
               remoteEnvironment.serviceInstances.map((service) => [
-                service.serviceName,
+                service.serviceName.toLowerCase(),
                 { serviceId: service.serviceId, environmentId: remoteEnvironment.id },
               ]),
             ),
@@ -345,10 +358,11 @@ export async function provision(
       const environmentId = railwayEnvironments[environmentName].environmentId;
 
       for (const serviceName of RAILWAY_SERVICE_NAMES) {
+        const lookupKey = serviceName.toLowerCase();
         let serviceId = railwayEnvironments[environmentName].services[serviceName]?.serviceId;
 
         if (!serviceId) {
-          const existingServiceId = remoteServicesByName.get(serviceName);
+          const existingServiceId = remoteServicesByName.get(lookupKey);
           if (existingServiceId) {
             serviceId = existingServiceId;
             logger.success(`  Service "${serviceName}" (${environmentName}) adopted: ${serviceId}`);
@@ -370,7 +384,7 @@ export async function provision(
               { input: { projectId: railwayProjectId, name: serviceName } },
             );
             serviceId = createServiceResult.serviceCreate.id;
-            remoteServicesByName.set(serviceName, serviceId);
+            remoteServicesByName.set(lookupKey, serviceId);
             logger.stopSpinner(serviceSpinner, `Service "${serviceName}" created: ${serviceId}`);
           }
 
