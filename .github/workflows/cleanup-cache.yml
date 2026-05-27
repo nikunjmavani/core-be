@@ -114,22 +114,28 @@ jobs:
           esac
 
           if [ "$mode" = "scheduled" ]; then
-            echo "mode=scheduled" >> "$GITHUB_OUTPUT"
-            echo "keep_count=${KEEP_PER_BRANCH}" >> "$GITHUB_OUTPUT"
+            {
+              echo "mode=scheduled"
+              echo "keep_count=${KEEP_PER_BRANCH}"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           if [ -z "$ref" ]; then
             echo "Could not resolve a cache ref; nothing to do."
-            echo "ref=" >> "$GITHUB_OUTPUT"
-            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            {
+              echo "ref="
+              echo "mode=skip"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           echo "Cleaning caches for ref=$ref (mode=$mode keep=$keep_count)"
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "keep_count=$keep_count" >> "$GITHUB_OUTPUT"
+          {
+            echo "ref=$ref"
+            echo "mode=$mode"
+            echo "keep_count=$keep_count"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install gh actions-cache extension
         if: steps.scope.outputs.mode != 'skip'

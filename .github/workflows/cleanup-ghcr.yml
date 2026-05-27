@@ -50,7 +50,7 @@ jobs:
           package_type="$(gh api "/users/${{ github.repository_owner }}/packages/container/${PACKAGE}" --jq '.package_type' 2>/dev/null || echo container)"
           echo "Cleaning ${PACKAGE} (${package_type}) — retaining ${RETAIN} SHA tags plus :latest/:previous/:dev/:deploy-failed-*"
 
-          mapfile -t versions < <(
+          versions="$(
             gh api "/users/${{ github.repository_owner }}/packages/container/${PACKAGE}/versions?per_page=100" \
               --paginate \
               --jq '.[] | select(.metadata.container.tags | length > 0) | {id: .id, tags: (.metadata.container.tags | join(","))}' \

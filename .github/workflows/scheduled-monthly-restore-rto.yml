@@ -119,7 +119,7 @@ jobs:
           set -euo pipefail
           restore_end_epoch=$(date +%s)
           restore_seconds=$((restore_end_epoch - RESTORE_START_EPOCH))
-          rto_minutes="${RTO_MINUTES}"
+          rto_minutes="${RTO_MINUTES:-60}"
           rto_target_seconds=$((rto_minutes * 60))
           within_rto_target=false
           if (( restore_seconds < rto_target_seconds )); then
@@ -198,7 +198,7 @@ jobs:
         id: publish
         run: |
           set -euo pipefail
-          rto_minutes="${RTO_MINUTES}"
+          rto_minutes="${RTO_MINUTES:-60}"
           rto_target_seconds=$((rto_minutes * 60))
 
           if [[ ! -f restore-drill-rto.json ]]; then
@@ -218,9 +218,11 @@ jobs:
             exit 1
           fi
 
-          echo "within_rto_target=${within_rto_target}" >> "$GITHUB_OUTPUT"
-          echo "restore_seconds=${restore_seconds}" >> "$GITHUB_OUTPUT"
-          echo "rto_minutes=${rto_minutes}" >> "$GITHUB_OUTPUT"
+          {
+            echo "within_rto_target=${within_rto_target}"
+            echo "restore_seconds=${restore_seconds}"
+            echo "rto_minutes=${rto_minutes}"
+          } >> "$GITHUB_OUTPUT"
 
           {
             echo "## Restore drill — consolidated RTO"
