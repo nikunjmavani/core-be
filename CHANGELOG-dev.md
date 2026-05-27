@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0](https://github.com/nikunjmavani/core-be/compare/v2.5.0...v2.6.0) (2026-05-27)
+
+
+### Added
+
+* **setup:** harden GitHub env sync and Railway deploy diagnostics ([#88](https://github.com/nikunjmavani/core-be/issues/88)) ([040bfa9](https://github.com/nikunjmavani/core-be/commit/040bfa9919819b3b836e1070a5e4d390da7636cb))
+
 ## [2.5.0](https://github.com/nikunjmavani/core-be/compare/v2.4.3...v2.5.0) (2026-05-27)
 
 
