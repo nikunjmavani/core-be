@@ -18,19 +18,20 @@
  *   fresh deployment from the updated configuration.
  *
  * Flow:
- *   1. Resolve serviceId → projectId via `service(id)` query.
- *   2. List the project's environments and pick the one whose name matches
- *      `--environment-name` (defaults to `process.env.ENVIRONMENT`,
- *      e.g. `development` / `production`). The reusable workflow sets that
- *      env var from the resolved GitHub Environment.
- *   3. `serviceInstanceUpdate` with `{ source: { image } }` — works whether
+ *   1. Resolve Railway project/environment context. The deploy workflow uses
+ *      Railway project tokens, so this uses the project-token auth header and
+ *      `projectToken { projectId environmentId }`; project tokens are not
+ *      allowed to call `service(id)` directly.
+ *   2. `serviceInstanceUpdate` with `{ source: { image } }` — works whether
  *      the service was previously image-sourced, repo-sourced, or brand new
  *      with no source at all (so this single path replaces both the
  *      `railway redeploy` steady state and the `railway up` bootstrap).
- *   4. `serviceInstanceDeployV2(serviceId, environmentId)` → deploymentId.
- *   5. Poll `deployment(id)` until a terminal status. Surface failures with
- *      non-zero exit so the GitHub Actions step fails loudly instead of
- *      reporting success while Railway is still building (or has crashed).
+ *   3. `serviceInstanceDeployV2(serviceId, environmentId)` → deploymentId.
+ *   4. Poll `deployment(id)` until a terminal status when the token scope
+ *      allows deployment reads. Project tokens can trigger the deploy but may
+ *      not be allowed to read deployments; in that case this tool skips the
+ *      poll and the workflow's API / worker health checks remain the deploy
+ *      gate.
  *
  * Inputs (all CLI flags):
  *   --service <id>                Railway service id (required).
@@ -39,7 +40,8 @@
  *                                 ghcr.io/owner/repo/core-be-api@sha256:...
  *                                 (required).
  *   --label <name>                Human label for log lines (default: service id).
- *   --environment-name <name>     Railway environment name to deploy into.
+ *   --environment-name <name>     Railway environment name to deploy into
+ *                                 when using account-token auth.
  *                                 Defaults to process.env.ENVIRONMENT.
  *   --environment-id <id>         Skip the name lookup and use this id directly.
  *   --timeout-seconds <n>         How long to poll for terminal status
@@ -50,8 +52,11 @@
  *                                 failures actually fail the job.
  *
  * Environment:
- *   RAILWAY_TOKEN                 Railway project token (required). Inherited
- *                                 from the GitHub Environment in CI.
+ *   RAILWAY_TOKEN                 Railway project token. Inherited from the
+ *                                 GitHub Environment in CI.
+ *   RAILWAY_API_TOKEN             Optional account/workspace token override.
+ *                                 Uses Bearer auth and enables deployment
+ *                                 status polling.
  *   ENVIRONMENT                   GitHub Environment name (development /
  *                                 production); used as the default for
  *                                 --environment-name.
@@ -75,6 +80,8 @@ const DEPLOYMENT_TERMINAL_STATUSES = new Set([
 
 const DEPLOYMENT_SUCCESS_STATUS = 'SUCCESS';
 
+type RailwayAuthMode = 'project' | 'bearer';
+
 interface RailwayDeployImageOptions {
   serviceId: string;
   image: string;
@@ -86,10 +93,15 @@ interface RailwayDeployImageOptions {
   skipWait: boolean;
 }
 
-interface RailwayService {
-  id: string;
-  name: string;
+interface RailwayGraphQLResult<T> {
+  data: T;
+  authMode: RailwayAuthMode;
+}
+
+interface RailwayDeploymentContext {
   projectId: string;
+  environmentId: string;
+  authMode: RailwayAuthMode;
 }
 
 interface RailwayEnvironment {
@@ -106,16 +118,18 @@ interface RailwayDeployment {
 
 async function railwayGraphQL<T>({
   token,
+  authMode,
   query,
   variables,
 }: {
   token: string;
+  authMode: RailwayAuthMode;
   query: string;
   variables?: Record<string, unknown>;
 }): Promise<T> {
   const response = await fetch(RAILWAY_API_URL, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: buildAuthHeaders({ token, authMode }),
     body: JSON.stringify({ query, variables }),
   });
 
@@ -142,33 +156,82 @@ async function railwayGraphQL<T>({
   return result.data;
 }
 
-async function fetchService({
+async function railwayGraphQLWithFallback<T>({
   token,
-  serviceId,
+  query,
+  variables,
+  authModes,
 }: {
   token: string;
-  serviceId: string;
-}): Promise<RailwayService> {
-  const result = await railwayGraphQL<{
-    service: { id: string; name: string; projectId: string } | null;
-  }>({
-    token,
-    query: `
-      query($serviceId: String!) {
-        service(id: $serviceId) {
-          id
-          name
-          projectId
-        }
+  query: string;
+  variables?: Record<string, unknown>;
+  authModes: RailwayAuthMode[];
+}): Promise<RailwayGraphQLResult<T>> {
+  const errors: string[] = [];
+  for (const authMode of authModes) {
+    try {
+      const data = await railwayGraphQL<T>({ token, authMode, query, variables });
+      return { data, authMode };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${authMode}: ${message}`);
+      if (!isAuthorizationError(message)) {
+        throw error;
       }
-    `,
-    variables: { serviceId },
-  });
-
-  if (!result.service) {
-    throw new Error(`Railway service ${serviceId} not found (or token lacks access).`);
+    }
   }
-  return result.service;
+  throw new Error(`Railway GraphQL authorization failed (${errors.join(' | ')}).`);
+}
+
+function buildAuthHeaders({
+  token,
+  authMode,
+}: {
+  token: string;
+  authMode: RailwayAuthMode;
+}): Record<string, string> {
+  if (authMode === 'project') {
+    return { 'Project-Access-Token': token, 'Content-Type': 'application/json' };
+  }
+  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+}
+
+function isAuthorizationError(message: string): boolean {
+  return /not authorized|unauthorized|forbidden/i.test(message);
+}
+
+async function resolveProjectTokenContext({
+  token,
+}: {
+  token: string;
+}): Promise<RailwayDeploymentContext | null> {
+  try {
+    const result = await railwayGraphQL<{
+      projectToken: { projectId: string; environmentId: string };
+    }>({
+      token,
+      authMode: 'project',
+      query: `
+        query {
+          projectToken {
+            projectId
+            environmentId
+          }
+        }
+      `,
+    });
+    return {
+      projectId: result.projectToken.projectId,
+      environmentId: result.projectToken.environmentId,
+      authMode: 'project',
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isAuthorizationError(message)) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 async function resolveEnvironmentId({
@@ -182,7 +245,7 @@ async function resolveEnvironmentId({
   environmentName: string;
   serviceLabel: string;
 }): Promise<string> {
-  const result = await railwayGraphQL<{
+  const { data: result } = await railwayGraphQLWithFallback<{
     project: { environments: { edges: Array<{ node: RailwayEnvironment }> } } | null;
   }>({
     token,
@@ -201,6 +264,7 @@ async function resolveEnvironmentId({
       }
     `,
     variables: { projectId },
+    authModes: ['bearer'],
   });
 
   if (!result.project) {
@@ -222,19 +286,80 @@ async function resolveEnvironmentId({
   return match.id;
 }
 
+async function resolveBearerContext({
+  token,
+  serviceId,
+  environmentId,
+  environmentName,
+}: {
+  token: string;
+  serviceId: string;
+  environmentId: string | null;
+  environmentName: string | null;
+}): Promise<RailwayDeploymentContext> {
+  const { data: serviceResult } = await railwayGraphQLWithFallback<{
+    service: { id: string; name: string; projectId: string } | null;
+  }>({
+    token,
+    query: `
+      query($serviceId: String!) {
+        service(id: $serviceId) {
+          id
+          name
+          projectId
+        }
+      }
+    `,
+    variables: { serviceId },
+    authModes: ['bearer'],
+  });
+
+  if (!serviceResult.service) {
+    throw new Error(`Railway service ${serviceId} not found (or token lacks access).`);
+  }
+
+  let resolvedEnvironmentId = environmentId;
+  if (!resolvedEnvironmentId) {
+    if (!environmentName) {
+      throw new Error('Either --environment-id or --environment-name is required for Bearer auth.');
+    }
+    logger.info(
+      `  Resolving Railway environment "${environmentName}" in project ${serviceResult.service.projectId}.`,
+    );
+    resolvedEnvironmentId = await resolveEnvironmentId({
+      token,
+      projectId: serviceResult.service.projectId,
+      environmentName,
+      serviceLabel: serviceResult.service.name,
+    });
+  }
+
+  logger.success(
+    `  Service: ${serviceResult.service.name} (id=${serviceResult.service.id}, projectId=${serviceResult.service.projectId})`,
+  );
+  return {
+    projectId: serviceResult.service.projectId,
+    environmentId: resolvedEnvironmentId,
+    authMode: 'bearer',
+  };
+}
+
 async function updateServiceImage({
   token,
+  authMode,
   serviceId,
   environmentId,
   image,
 }: {
   token: string;
+  authMode: RailwayAuthMode;
   serviceId: string;
   environmentId: string;
   image: string;
 }): Promise<void> {
   await railwayGraphQL<{ serviceInstanceUpdate: boolean | null }>({
     token,
+    authMode,
     query: `
       mutation($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
         serviceInstanceUpdate(
@@ -254,15 +379,18 @@ async function updateServiceImage({
 
 async function triggerDeployment({
   token,
+  authMode,
   serviceId,
   environmentId,
 }: {
   token: string;
+  authMode: RailwayAuthMode;
   serviceId: string;
   environmentId: string;
 }): Promise<string> {
   const result = await railwayGraphQL<{ serviceInstanceDeployV2: string }>({
     token,
+    authMode,
     query: `
       mutation($serviceId: String!, $environmentId: String!) {
         serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId)
@@ -279,13 +407,16 @@ async function triggerDeployment({
 
 async function fetchDeployment({
   token,
+  authMode,
   deploymentId,
 }: {
   token: string;
+  authMode: RailwayAuthMode;
   deploymentId: string;
 }): Promise<RailwayDeployment> {
   const result = await railwayGraphQL<{ deployment: RailwayDeployment | null }>({
     token,
+    authMode,
     query: `
       query($deploymentId: String!) {
         deployment(id: $deploymentId) {
@@ -307,12 +438,14 @@ async function fetchDeployment({
 
 async function waitForTerminalStatus({
   token,
+  authMode,
   deploymentId,
   label,
   timeoutSeconds,
   pollIntervalSeconds,
 }: {
   token: string;
+  authMode: RailwayAuthMode;
   deploymentId: string;
   label: string;
   timeoutSeconds: number;
@@ -326,13 +459,16 @@ async function waitForTerminalStatus({
     attempt += 1;
     let deployment: RailwayDeployment;
     try {
-      deployment = await fetchDeployment({ token, deploymentId });
+      deployment = await fetchDeployment({ token, authMode, deploymentId });
     } catch (error) {
       // Railway occasionally returns transient 5xx during deploys. Don't
       // fail the whole job on a single blip — log and keep polling until
       // the timeout. This mirrors the retry behaviour already used by the
       // workflow's variables push.
       const message = error instanceof Error ? error.message : String(error);
+      if (isAuthorizationError(message)) {
+        throw error;
+      }
       logger.warn(`  ${label}: poll attempt ${attempt} errored (${message}); retrying.`);
       await sleep(pollIntervalSeconds * 1000);
       continue;
@@ -386,11 +522,9 @@ function parseOptions(): RailwayDeployImageOptions {
 
   if (!serviceId) throw new Error('--service <id> is required.');
   if (!image) throw new Error('--image <ref> is required.');
-  if (!(environmentId || environmentNameInput)) {
-    throw new Error(
-      'Either --environment-id or --environment-name (or process.env.ENVIRONMENT) is required.',
-    );
-  }
+  // Project-token auth resolves the scoped environment through
+  // `projectToken { environmentId }`, so environment name/id is only required
+  // later if this token turns out to be an account/workspace token.
   if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
     throw new Error(`Invalid --timeout-seconds: ${values['timeout-seconds']}`);
   }
@@ -412,41 +546,43 @@ function parseOptions(): RailwayDeployImageOptions {
 
 async function main(): Promise<void> {
   const options = parseOptions();
-  const token = (process.env.RAILWAY_TOKEN ?? '').trim();
+  const token = (
+    process.env.RAILWAY_API_TOKEN ??
+    process.env.RAILWAY_GRAPHQL_TOKEN ??
+    process.env.RAILWAY_TOKEN ??
+    ''
+  ).trim();
   if (!token) {
     throw new Error(
       'RAILWAY_TOKEN is not set. Export it from the GitHub Environment before running this tool.',
     );
   }
 
-  logger.info(`Deploy ${options.label}: looking up service ${options.serviceId}.`);
-  const service = await fetchService({ token, serviceId: options.serviceId });
-  logger.success(`  Service: ${service.name} (id=${service.id}, projectId=${service.projectId})`);
-
-  let environmentId = options.environmentId;
-  if (!environmentId) {
-    if (!options.environmentName) {
-      throw new Error('Internal: environmentName is required when environmentId is unset.');
-    }
-    logger.info(
-      `  Resolving Railway environment "${options.environmentName}" in project ${service.projectId}.`,
+  logger.info(`Deploy ${options.label}: resolving Railway deployment context.`);
+  let deploymentContext = await resolveProjectTokenContext({ token });
+  if (deploymentContext) {
+    logger.success(
+      `  Project-token scope: projectId=${deploymentContext.projectId}, environmentId=${deploymentContext.environmentId}`,
     );
-    environmentId = await resolveEnvironmentId({
-      token,
-      projectId: service.projectId,
-      environmentName: options.environmentName,
-      serviceLabel: options.label,
-    });
-    logger.success(`  Environment: ${options.environmentName} (id=${environmentId})`);
   } else {
-    logger.info(`  Using provided environment id ${environmentId}.`);
+    logger.info('  Project-token context unavailable; trying Bearer auth.');
+    deploymentContext = await resolveBearerContext({
+      token,
+      serviceId: options.serviceId,
+      environmentId: options.environmentId,
+      environmentName: options.environmentName,
+    });
+    logger.success(
+      `  Bearer-token scope: projectId=${deploymentContext.projectId}, environmentId=${deploymentContext.environmentId}`,
+    );
   }
 
   logger.info(`  Pinning service source to image: ${options.image}`);
   await updateServiceImage({
     token,
+    authMode: deploymentContext.authMode,
     serviceId: options.serviceId,
-    environmentId,
+    environmentId: deploymentContext.environmentId,
     image: options.image,
   });
   logger.success('  serviceInstanceUpdate: source.image set.');
@@ -454,8 +590,9 @@ async function main(): Promise<void> {
   logger.info('  Triggering serviceInstanceDeployV2 to create a fresh deployment.');
   const deploymentId = await triggerDeployment({
     token,
+    authMode: deploymentContext.authMode,
     serviceId: options.serviceId,
-    environmentId,
+    environmentId: deploymentContext.environmentId,
   });
   logger.success(`  Deployment requested. id=${deploymentId}`);
 
@@ -469,13 +606,26 @@ async function main(): Promise<void> {
   logger.info(
     `  Waiting for deployment ${deploymentId} to reach a terminal status (timeout ${options.timeoutSeconds}s).`,
   );
-  const finalDeployment = await waitForTerminalStatus({
-    token,
-    deploymentId,
-    label: options.label,
-    timeoutSeconds: options.timeoutSeconds,
-    pollIntervalSeconds: options.pollIntervalSeconds,
-  });
+  let finalDeployment: RailwayDeployment | null = null;
+  try {
+    finalDeployment = await waitForTerminalStatus({
+      token,
+      authMode: deploymentContext.authMode,
+      deploymentId,
+      label: options.label,
+      timeoutSeconds: options.timeoutSeconds,
+      pollIntervalSeconds: options.pollIntervalSeconds,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (deploymentContext.authMode === 'project' && isAuthorizationError(message)) {
+      logger.warn(
+        `  ${options.label}: project token cannot read deployment status (${message}). Skipping GraphQL polling; workflow health checks remain the deployment gate.`,
+      );
+      return;
+    }
+    throw error;
+  }
 
   if (finalDeployment.status !== DEPLOYMENT_SUCCESS_STATUS) {
     throw new Error(
