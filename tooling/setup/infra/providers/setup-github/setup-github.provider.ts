@@ -1,6 +1,5 @@
 import { execSync, spawnSync } from 'node:child_process';
 import * as logger from '../../../common/logger.js';
-import { buildEnvironmentVariables } from '../../../envs/build-env-vars.js';
 import { runGithubInit } from '../../../github/init.js';
 import type {
   SetupConfig,
@@ -11,24 +10,11 @@ import type {
   InfraProviderContext,
 } from '../../../common/types.js';
 
-/**
- * Maps short CLI aliases (`dev`, `prod`) to canonical full GitHub Environment
- * names (`development`, `production`). Always use full names downstream — the
- * `gh secret set --env <name>` calls and the `.github/environments/*.json`
- * files are keyed by the canonical name.
- */
-const GITHUB_ENV_MAP: Record<string, string> = {
-  dev: 'development',
-  development: 'development',
-  prod: 'production',
-  production: 'production',
-};
-
 function formatGitHubEnvironmentPlan(config: SetupConfig): string {
   return config.environments
     .map(
       (environment) =>
-        `${environment.name} (${environment.label}; branch ${environment.branch}; Railway services: api, worker, redis)`,
+        `${environment.name} (${environment.label}; branch ${environment.branch}; Railway services: api, worker + redis database)`,
     )
     .join(', ');
 }
@@ -47,15 +33,8 @@ function ghCommand(command: string): string {
   }
 }
 
-function setGitHubSecret(
-  repository: string,
-  secretName: string,
-  secretValue: string,
-  environment?: string,
-): void {
-  const args = ['secret', 'set', secretName, '--repo', repository];
-  if (environment) args.push('--env', environment);
-  const result = spawnSync('gh', args, {
+function setRepositorySecret(repository: string, secretName: string, secretValue: string): void {
+  const result = spawnSync('gh', ['secret', 'set', secretName, '--repo', repository], {
     input: secretValue,
     encoding: 'utf-8',
     timeout: 15000,
@@ -66,14 +45,27 @@ function setGitHubSecret(
   }
 }
 
+/**
+ * Pushes only the repository-level RAILWAY_TOKEN secret. All env-scoped
+ * secrets and variables (DATABASE_URL, REDIS_URL, RAILWAY_SERVICE_ID,
+ * RAILWAY_WORKER_SERVICE_ID, POSTMAN_*, ALLOWED_ORIGINS, etc.) are pushed by
+ * the dedicated GitHub-sync step (`buildGitHubSyncStep` →
+ * `syncEnvironmentToGitHub`) which reads `.env.<environment>`, classifies
+ * each key as secret-vs-variable via the central `classifyKey` rules, and
+ * prunes stale items.
+ *
+ * Pushing env-scoped items here as well would create the same key under both
+ * Secrets and Variables in a GitHub Environment (e.g. ALLOWED_ORIGINS as a
+ * Secret here, then again as a Variable in the sync step).
+ */
 export async function provision(
   config: SetupConfig,
   secrets: SetupSecrets,
-  state: SetupState,
-  environments: string[],
+  _state: SetupState,
+  _environments: string[],
 ): Promise<ProviderResult> {
   const repository = config.providers.github.repository;
-  const spinner = logger.startSpinner('Setting GitHub repository and environment secrets...');
+  const spinner = logger.startSpinner('Setting GitHub repository-level secrets...');
 
   try {
     ghCommand(`gh repo view ${repository} --json name`);
@@ -81,54 +73,20 @@ export async function provision(
 
     const setSecretNames: string[] = [];
 
-    // Repository-level secrets (single value, not env-scoped).
-    // Note: Per-environment deploy-provider IDs (RAILWAY_SERVICE_ID,
-    // RAILWAY_WORKER_SERVICE_ID) and third-party publishing secrets
-    // (POSTMAN_API_KEY, POSTMAN_WORKSPACE_ID) flow through the per-environment
-    // loop below via `buildEnvironmentVariables()` so each GitHub Environment
-    // resolves them via `${{ secrets.* }}` independently.
     if (secrets.railway.token) {
       const secretSpinner = logger.startSpinner('Setting RAILWAY_TOKEN (repo)...');
-      setGitHubSecret(repository, 'RAILWAY_TOKEN', secrets.railway.token);
+      setRepositorySecret(repository, 'RAILWAY_TOKEN', secrets.railway.token);
       logger.stopSpinner(secretSpinner, 'RAILWAY_TOKEN set');
       setSecretNames.push('RAILWAY_TOKEN');
     }
 
-    // Per-environment secrets (GitHub Environments: development, production)
-    for (const environmentName of environments) {
-      const ghEnv = GITHUB_ENV_MAP[environmentName] ?? environmentName;
-      const railwayEnvironment = state.railway?.environments?.[environmentName];
-      const apiServiceId = railwayEnvironment?.services.api?.serviceId;
-      const workerServiceId = railwayEnvironment?.services.worker?.serviceId;
-      const envVars = buildEnvironmentVariables(environmentName, config, secrets, state);
-
-      logger.info(
-        `GitHub Environment "${ghEnv}" maps branch "${config.environments.find((environment) => environment.name === environmentName)?.branch ?? environmentName}" and Railway services: api${apiServiceId ? ` (${apiServiceId})` : ''}, worker${workerServiceId ? ` (${workerServiceId})` : ''}.`,
-      );
-
-      const envSecrets: Array<{ name: string; value: string }> = [];
-      for (const [key, value] of Object.entries(envVars)) {
-        if (value !== undefined && value !== '') {
-          envSecrets.push({ name: key, value });
-        }
-      }
-
-      for (const secret of envSecrets) {
-        const secretSpinner = logger.startSpinner(`Setting ${secret.name} (env: ${ghEnv})...`);
-        try {
-          setGitHubSecret(repository, secret.name, secret.value, ghEnv);
-          logger.stopSpinner(secretSpinner, `${secret.name} set`);
-          setSecretNames.push(`${secret.name}@${ghEnv}`);
-        } catch (setError) {
-          const message = setError instanceof Error ? setError.message : String(setError);
-          logger.stopSpinner(secretSpinner, `Failed to set "${secret.name}": ${message}`, 'fail');
-        }
-      }
-    }
+    logger.info(
+      'Environment-scoped secrets and variables will be pushed by the GitHub sync step (after .env.<environment> export).',
+    );
 
     return {
       success: true,
-      message: `GitHub: ${setSecretNames.length} secrets set`,
+      message: `GitHub: ${setSecretNames.length} repo-level secret(s) set`,
       stateUpdates: { github: { repository, secrets: setSecretNames } },
     };
   } catch (provisionError) {
@@ -209,7 +167,7 @@ export const setupGithubProvider: InfraProvider = {
     instructions: [
       `Will sync repository "${context.config.providers.github.repository}" branches, rulesets, and GitHub Environments.`,
       `Branch/environment plan: ${formatGitHubEnvironmentPlan(context.config)}.`,
-      'Will push environment-scoped secrets and variables per environment, including RAILWAY_SERVICE_ID, RAILWAY_WORKER_SERVICE_ID, POSTMAN_API_KEY, and POSTMAN_WORKSPACE_ID when their respective state/secrets are available.',
+      'Will push the repository-level RAILWAY_TOKEN secret only. Environment-scoped secrets and variables (RAILWAY_SERVICE_ID, RAILWAY_WORKER_SERVICE_ID, POSTMAN_*, app config) are pushed by the subsequent GitHub sync step after `.env.<environment>` is exported.',
     ],
     execute: async () => {
       await syncGithubFoundations();
@@ -234,7 +192,7 @@ export const setupGithubProvider: InfraProvider = {
       return { ok, message: ok ? 'reachable' : 'unreachable' };
     },
   }),
-  detectRemote: async ({ config, state }) => {
+  detectRemote: async ({ config, state, applyStateUpdates }) => {
     const resources: Record<string, unknown> = {};
     try {
       const repository = config.providers.github.repository;
@@ -248,7 +206,16 @@ export const setupGithubProvider: InfraProvider = {
       // repository not accessible, skip
     }
     if (Object.keys(resources).length > 0) {
-      Object.assign(state, { github: resources });
+      // Merge into existing github state — the schema requires `secrets:
+      // string[]` and overwriting with just { repository } would invalidate
+      // the file and force a "starting fresh" wipe on the next loadState.
+      const repository = resources.repository as string | undefined;
+      applyStateUpdates({
+        github: {
+          repository: repository ?? state.github?.repository ?? config.providers.github.repository,
+          secrets: state.github?.secrets ?? [],
+        },
+      });
     }
     return resources;
   },

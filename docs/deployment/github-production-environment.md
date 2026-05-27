@@ -55,7 +55,7 @@ Use `SKIP_GITHUB_ENV=1` to skip API calls locally when you only need deploy-sync
 
 **When reviewers change:** update GitHub (**Settings → Environments → production → Required reviewers**) and the matching `users` / `teams` arrays in `.github/environments/production.json` in the same change.
 
-Infrastructure (Neon, Railway Redis/Valkey, Railway) is provisioned via `pnpm setup:infra` ([setup-automation.md](setup/setup-automation.md)), not Terraform in this repo. GitHub environment rules are the **manual approval** layer for production code deploys.
+Infrastructure (Neon, Railway Redis database, Railway) is provisioned via `pnpm setup:infra` ([setup-automation.md](setup/setup-automation.md)), not Terraform in this repo. GitHub environment rules are the **manual approval** layer for production code deploys.
 
 ---
 

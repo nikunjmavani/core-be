@@ -114,9 +114,7 @@ export function buildConfig(
       },
       railwayRedis: {
         enabled: true,
-        image: 'valkey/valkey:7-alpine',
         region: 'asia-southeast1-eqsg3a',
-        maxmemoryMb: 50,
         cpuLimit: 1,
         memoryLimitMb: 512,
       },

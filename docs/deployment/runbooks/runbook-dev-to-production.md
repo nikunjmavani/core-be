@@ -193,7 +193,7 @@ The worker runs a **bounded** `SCAN` over logical keys matching `idempotency:*` 
 
 ### Redis eviction policy (pre-production checklist)
 
-Before go-live, confirm the managed Redis instance (Railway Redis/Valkey, Redis Cloud, etc.):
+Before go-live, confirm the managed Redis instance (Railway Redis database, Redis Cloud, etc.):
 
 1. **`maxmemory-policy` is `noeviction`** — not `allkeys-lru` or `volatile-lru`. Eviction can drop `idempotency:*` keys and weaken HTTP deduplication.
 2. **Memory alert** — alert when Redis memory exceeds ~80% of plan limit.
