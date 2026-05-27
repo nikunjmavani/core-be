@@ -192,7 +192,7 @@ export const setupGithubProvider: InfraProvider = {
       return { ok, message: ok ? 'reachable' : 'unreachable' };
     },
   }),
-  detectRemote: async ({ config, state }) => {
+  detectRemote: async ({ config, state, applyStateUpdates }) => {
     const resources: Record<string, unknown> = {};
     try {
       const repository = config.providers.github.repository;
@@ -206,7 +206,16 @@ export const setupGithubProvider: InfraProvider = {
       // repository not accessible, skip
     }
     if (Object.keys(resources).length > 0) {
-      Object.assign(state, { github: resources });
+      // Merge into existing github state — the schema requires `secrets:
+      // string[]` and overwriting with just { repository } would invalidate
+      // the file and force a "starting fresh" wipe on the next loadState.
+      const repository = resources.repository as string | undefined;
+      applyStateUpdates({
+        github: {
+          repository: repository ?? state.github?.repository ?? config.providers.github.repository,
+          secrets: state.github?.secrets ?? [],
+        },
+      });
     }
     return resources;
   },
