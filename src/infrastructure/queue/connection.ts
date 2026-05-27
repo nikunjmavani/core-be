@@ -1,9 +1,5 @@
 import { resolveRedisKeyPrefix } from '@/infrastructure/cache/redis-prefix.util.js';
-import {
-  isRedisTlsUrl,
-  parseRedisUrl,
-  resolveBullMqRedisUrl,
-} from '@/infrastructure/cache/redis-url.util.js';
+import { parseRedisUrl, resolveBullMqRedisUrl } from '@/infrastructure/cache/redis-url.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
 /**
@@ -20,15 +16,20 @@ export {
 /**
  * BullMQ connection options for use when creating Queue/Worker.
  * Uses REDIS_URL by default, with REDIS_BULLMQ_URL available as an explicit override.
+ *
+ * TLS is intentionally not configured: production traffic flows over Railway's
+ * private network (`redis://*.railway.internal`), which is already isolated and
+ * does not terminate `rediss://`. `family: 0` enables dual-stack DNS lookup so
+ * IPv6-only private hostnames resolve correctly.
  */
 export function getBullMQConnectionOptions(): {
   host: string;
   port: number;
   password?: string;
   db: number;
+  family: number;
   maxRetriesPerRequest: null;
   prefix: string;
-  tls?: Record<string, never>;
 } {
   const bullMqRedisUrl = resolveBullMqRedisUrl();
   const parsed = parseRedisUrl(bullMqRedisUrl);
@@ -37,8 +38,8 @@ export function getBullMQConnectionOptions(): {
     port: parsed.port,
     password: parsed.password,
     db: parsed.databaseIndex,
+    family: 0,
     maxRetriesPerRequest: null,
     prefix: resolveRedisKeyPrefix(),
-    tls: isRedisTlsUrl(bullMqRedisUrl) ? {} : undefined,
   });
 }

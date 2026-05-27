@@ -14,6 +14,11 @@ export const bullmqRedisConnection = new Redis(resolveBullMqRedisUrl(), {
   lazyConnect: true,
   enableReadyCheck: true,
   enableOfflineQueue: false,
+  /**
+   * Dual-stack DNS lookup (IPv4 + IPv6). Required for Railway private networking
+   * which exposes services over IPv6-only `.railway.internal` hostnames.
+   */
+  family: 0,
   retryStrategy(times: number) {
     const delay = Math.min(times * 200, 5_000);
     logger.warn({ attempt: times, delayMs: delay }, 'redis.bullmq.reconnecting');
