@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.7.3](https://github.com/nikunjmavani/core-be/compare/v2.7.2...v2.7.3) (2026-05-27)
+
+### Fixed
+
+- **setup:infra:** switch Railway Redis to template + stop GitHub env duplicates ([#115](https://github.com/nikunjmavani/core-be/issues/115)) ([ee57292](https://github.com/nikunjmavani/core-be/commit/ee572922ea4961e951a6917610665d66ec1b4aa8))
+
 ## [2.7.2](https://github.com/nikunjmavani/core-be/compare/v2.7.1...v2.7.2) (2026-05-27)
 
 ### Fixed
