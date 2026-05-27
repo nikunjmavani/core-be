@@ -116,7 +116,7 @@ Standalone Dockerfile with the same `build` / `runtime` pattern as the root file
 
 **Health / monitoring:** No `HEALTHCHECK` in the worker image. Use orchestrator process monitoring (e.g. Railway restarts on exit, logs/metrics).
 
-**Railway:** `reusable-railway-deploy.yml` deploys the scanned GHCR worker image to the separate worker service. Set `RAILWAY_WORKER_SERVICE_ID` in the GitHub environment so CD can sync shared variables, redeploy the image, and run `pnpm tool:worker-readiness` (Redis-direct: DLQ depth + queue heartbeats + dependency probes; the worker has no public Railway domain, so it cannot be curled directly).
+**Railway:** `reusable-railway-deploy.yml` deploys the scanned GHCR worker image to the separate worker service. Set `RAILWAY_WORKER_SERVICE_ID` in the GitHub environment so CD can sync shared variables and trigger the redeploy. Worker readiness is gated only by the Railway deployment terminal status — Railway flips the deployment to SUCCESS once the in-pod `Dockerfile.worker` HEALTHCHECK (`127.0.0.1:9090/health`) returns 200, which already covers process up + dependency probes + queue heartbeats. The runner cannot probe further: the worker has no public domain and Postgres/Redis live on `*.railway.internal`, unreachable from GitHub Actions hosts.
 
 ## Running production images locally
 

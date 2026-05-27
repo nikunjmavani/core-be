@@ -58,7 +58,7 @@ describe('Worker readiness (global)', () => {
     expect(deployImageTool).toContain('serviceInstanceDeployV2');
   });
 
-  it('deploy workflow probes API health and runs worker-readiness after deploy', () => {
+  it('deploy workflow probes API health and relies on Railway terminal status for the worker', () => {
     const workflowPath = resolve(ROOT, '.github/workflows/reusable-railway-deploy.yml');
     const workflow = readFileSync(workflowPath, 'utf8');
     expect(workflow).toContain('Deploy API and worker to Railway');
@@ -71,23 +71,30 @@ describe('Worker readiness (global)', () => {
       'deploy_service_from_image "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"',
     );
 
-    // Worker readiness goes through pnpm tool:worker-readiness because the
-    // worker has no public Railway domain to curl /health on.
-    expect(workflow).toContain('Probe worker readiness');
-    expect(workflow).toContain('pnpm tool:worker-readiness');
+    // Worker readiness must NOT be probed from the GitHub runner. Railway's
+    // private network (`*.railway.internal` Postgres + Redis) is unreachable
+    // from public GitHub Actions hosts, and the worker service has no public
+    // Railway domain. The deployment terminal SUCCESS — driven by the in-pod
+    // HEALTHCHECK in `Dockerfile.worker` — is the only reliable post-deploy
+    // worker gate, complemented by the post-deploy API smoke that exercises
+    // worker-backed paths.
+    expect(workflow).not.toContain('Probe worker readiness');
+    expect(workflow).not.toContain('Check worker readiness');
+    expect(workflow).not.toContain('pnpm tool:worker-readiness');
     expect(workflow).not.toContain('wait_for_service_health "$worker_base_url"');
   });
 
-  it('post-deploy worker readiness script supports redis-direct mode', () => {
+  it('post-deploy worker readiness script supports redis-direct mode (local ops)', () => {
+    // The script is no longer invoked from CI (Railway private network is
+    // unreachable from GitHub runners), but it remains available for local
+    // dev / on-call engineers running it from inside the Railway network or
+    // via `railway run pnpm tool:worker-readiness`.
     const scriptPath = resolve(ROOT, 'src/scripts/admin/worker-readiness.ts');
     const content = readFileSync(scriptPath, 'utf8');
-    // Redis-direct path (default) — verifies DLQ depth + heartbeats without
-    // requiring a public worker /health endpoint.
     expect(content).toContain('readWorkerQueueHeartbeats');
     expect(content).toContain('WORKER_THROUGHPUT_QUEUE_NAMES');
     expect(content).toContain('getTotalDeadLetterJobCount');
     expect(content).toContain('runDependencyReadinessProbes');
-    // HTTP fallback path retained for environments that do expose worker /health.
     expect(content).toContain('/health');
   });
 });
