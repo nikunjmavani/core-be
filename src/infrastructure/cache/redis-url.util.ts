@@ -9,6 +9,7 @@ import { env } from '@/shared/config/env.config.js';
 export type { ParsedRedisUrl } from '@/infrastructure/cache/redis-url.parse.util.js';
 export {
   deriveBullMqRedisUrlFromCacheUrl,
+  isRedisTlsUrl,
   parseRedisUrl,
   resolveRedisHostFromUrl,
   usesSeparateBullMqRedisHost,

@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.6.8](https://github.com/nikunjmavani/core-be/compare/v2.6.7...v2.6.8) (2026-05-27)
+
+### Fixed
+
+- **ci:** stabilize post-deploy health probes ([#105](https://github.com/nikunjmavani/core-be/issues/105)) ([e835b35](https://github.com/nikunjmavani/core-be/commit/e835b354f83d063d41e35d157f9d06817cb9e3bd))
+
+## [2.6.7](https://github.com/nikunjmavani/core-be/compare/v2.6.6...v2.6.7) (2026-05-27)
+
+### Fixed
+
+- **ci:** align post-deploy checks to /health contract ([#103](https://github.com/nikunjmavani/core-be/issues/103)) ([c7e7728](https://github.com/nikunjmavani/core-be/commit/c7e7728ca3c995323b82a35e753ebd1bf9fec338))
+- **queue:** preserve rediss TLS for BullMQ Redis options ([#102](https://github.com/nikunjmavani/core-be/issues/102)) ([037c8f5](https://github.com/nikunjmavani/core-be/commit/037c8f52cdaa91c1c49b46de03e221fa7839f012))
+
 ## [2.6.6](https://github.com/nikunjmavani/core-be/compare/v2.6.5...v2.6.6) (2026-05-27)
 
 ### Fixed
