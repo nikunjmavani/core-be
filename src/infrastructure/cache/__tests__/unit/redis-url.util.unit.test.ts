@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   deriveBullMqRedisUrlFromCacheUrl,
+  isRedisTlsUrl,
   parseRedisUrl,
   usesSeparateBullMqRedisEndpoint,
   usesSeparateBullMqRedisHost,
@@ -27,6 +28,11 @@ describe('redis-url.parse.util', () => {
       password: undefined,
       databaseIndex: 2,
     });
+  });
+
+  it('isRedisTlsUrl detects rediss scheme', () => {
+    expect(isRedisTlsUrl('rediss://localhost:6379/0')).toBe(true);
+    expect(isRedisTlsUrl('redis://localhost:6379/0')).toBe(false);
   });
 
   it('usesSeparateBullMqRedisHost is false for same host different logical DB', () => {

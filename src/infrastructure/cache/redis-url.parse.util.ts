@@ -9,6 +9,11 @@ export type ParsedRedisUrl = {
   databaseIndex: number;
 };
 
+/** True when the Redis URL explicitly uses TLS (`rediss://`). */
+export function isRedisTlsUrl(redisUrl: string): boolean {
+  return redisUrl.toLowerCase().startsWith('rediss://');
+}
+
 export function parseRedisUrl(redisUrl: string): ParsedRedisUrl {
   const normalizedUrl = new URL(redisUrl.replace(/^redis:\/\//, 'http://'));
   const databasePath = normalizedUrl.pathname.replace(/^\//, '');
