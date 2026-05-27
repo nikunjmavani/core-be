@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.6.5](https://github.com/nikunjmavani/core-be/compare/v2.6.4...v2.6.5) (2026-05-27)
+
+### Fixed
+
+- **ci:** deploy freshly built GHCR image via Railway GraphQL API ([#98](https://github.com/nikunjmavani/core-be/issues/98)) ([fe65954](https://github.com/nikunjmavani/core-be/commit/fe65954aee768faa040bfb08d8535fcf60fc7c59))
+
 ## [2.6.4](https://github.com/nikunjmavani/core-be/compare/v2.6.3...v2.6.4) (2026-05-27)
 
 ### Fixed
