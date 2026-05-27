@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import * as logger from '../../../common/logger.js';
 import { isSecretFilled } from '../../../common/secrets.js';
 import type {
@@ -11,24 +10,26 @@ import type {
 } from '../../../common/types.js';
 
 const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
-const REDIS_SERVICE_NAME = 'redis';
+const REDIS_TEMPLATE_CODE = 'redis';
 const REDIS_PORT = 6379;
 /**
- * Railway resolves `<service-name>.railway.internal` per-environment via its
- * internal DNS: api/worker in `production` reach the `production` redis, and
- * `development` reaches the `development` redis. Same hostname string, scoped
- * resolution. This URL is only routable inside Railway's WireGuard mesh — local
- * `pnpm dev` cannot reach it (see docs/deployment/runbooks/redis-topology.md).
+ * The Railway `redis` database template creates a service named "Redis" by
+ * default. Railway's private DNS lowercases service names, so per-environment
+ * resolution still goes through `redis.railway.internal`. api/worker in
+ * `production` reach the `production` redis, `development` reaches the
+ * `development` redis — same hostname string, scoped resolution. This URL is
+ * only routable inside Railway's WireGuard mesh — local `pnpm dev` cannot
+ * reach it (see docs/deployment/runbooks/redis-topology.md).
  */
-const REDIS_PRIVATE_HOSTNAME = `${REDIS_SERVICE_NAME}.railway.internal`;
-
-interface RailwayRedisInstance {
-  environmentName: string;
-  environmentId: string;
-  serviceId: string;
-  redisUrl: string;
-  privateEndpoint: string;
-}
+const REDIS_PRIVATE_HOSTNAME = 'redis.railway.internal';
+/** Default service name created by the `redis` template. */
+const REDIS_SERVICE_NAME_DEFAULT = 'Redis';
+/** Key under which the service is recorded in `state.railway.environments.<env>.services`. */
+const REDIS_SERVICE_STATE_KEY = 'redis';
+const WORKFLOW_POLL_INTERVAL_MS = 2_000;
+const WORKFLOW_POLL_TIMEOUT_MS = 180_000;
+const SERVICE_DISCOVERY_TIMEOUT_MS = 60_000;
+const SERVICE_DISCOVERY_INTERVAL_MS = 2_000;
 
 async function railwayGraphQL<T>(
   token: string,
@@ -60,28 +61,6 @@ async function railwayGraphQL<T>(
   return result.data as T;
 }
 
-function generateRedisPassword(): string {
-  return randomBytes(32).toString('hex');
-}
-
-function isGeneratedRedisPassword(redisPassword: string): boolean {
-  return /^[0-9a-f]{64}$/i.test(redisPassword);
-}
-
-function buildValkeyStartCommand(maxmemoryMb: number): string {
-  return [
-    'valkey-server',
-    '--bind 0.0.0.0',
-    `--port ${REDIS_PORT}`,
-    '--protected-mode yes',
-    '--requirepass "$REDIS_PASSWORD"',
-    `--maxmemory ${maxmemoryMb}mb`,
-    '--maxmemory-policy noeviction',
-    '--appendonly no',
-    '--save ""',
-  ].join(' ');
-}
-
 function buildRailwayRedisUrl(redisPassword: string): string {
   return `redis://default:${encodeURIComponent(redisPassword)}@${REDIS_PRIVATE_HOSTNAME}:${REDIS_PORT}`;
 }
@@ -90,70 +69,270 @@ function buildRailwayPrivateEndpoint(): string {
   return `${REDIS_PRIVATE_HOSTNAME}:${REDIS_PORT}`;
 }
 
-/**
- * Reads the password back from a previously-recorded REDIS_URL only when it
- * matches this provider's generated secret format. Legacy template URLs and
- * opaque provider-returned secret placeholders are rejected so reruns rotate to
- * a known plaintext value that can be embedded into REDIS_URL.
- */
-function getExistingRedisPassword(state: SetupState, environmentName: string): string | undefined {
-  const redisUrl = state.redis?.databases?.[environmentName]?.redisUrl;
-  if (!redisUrl) return undefined;
-  if (redisUrl.includes('${{')) return undefined;
-  try {
-    const url = new URL(redisUrl);
-    const password = decodeURIComponent(url.password);
-    return isGeneratedRedisPassword(password) ? password : undefined;
-  } catch {
-    return undefined;
-  }
+function hasUsableRedisState(state: SetupState, environmentName: string): boolean {
+  const database = state.redis?.databases?.[environmentName];
+  if (!(database?.redisUrl && database.databaseId)) return false;
+  if (database.redisUrl.includes('${{')) return false;
+  return database.redisUrl.includes(`@${REDIS_PRIVATE_HOSTNAME}:`);
 }
 
-function getRedisServiceState(
-  state: SetupState,
-  environmentName: string,
-): { environmentId: string; serviceId: string } | undefined {
-  const environmentState = state.railway?.environments?.[environmentName];
-  const redisServiceState = environmentState?.services[REDIS_SERVICE_NAME];
-  if (!(environmentState && redisServiceState?.serviceId)) return undefined;
+async function resolveWorkspaceId(token: string, projectId: string): Promise<string> {
+  const result = await railwayGraphQL<{ project?: { teamId?: string | null } }>(
+    token,
+    `
+    query Project($id: String!) {
+      project(id: $id) {
+        teamId
+      }
+    }
+  `,
+    { id: projectId },
+  );
+  const teamId = result.project?.teamId;
+  if (!teamId) {
+    throw new Error(
+      'Railway Redis: project teamId is missing — template deploy requires a team/workspace ID.',
+    );
+  }
+  return teamId;
+}
+
+interface RedisTemplateDescriptor {
+  templateId: string;
+  serializedConfig: unknown;
+}
+
+async function fetchRedisTemplate(token: string): Promise<RedisTemplateDescriptor> {
+  const result = await railwayGraphQL<{
+    template?: { id: string; serializedConfig: unknown } | null;
+  }>(
+    token,
+    `
+    query RedisTemplate($code: String!) {
+      template(code: $code) {
+        id
+        serializedConfig
+      }
+    }
+  `,
+    { code: REDIS_TEMPLATE_CODE },
+  );
+  if (!result.template?.id) {
+    throw new Error(
+      `Railway Redis: template "${REDIS_TEMPLATE_CODE}" not found in Railway marketplace.`,
+    );
+  }
   return {
-    environmentId: redisServiceState.environmentId ?? environmentState.environmentId,
-    serviceId: redisServiceState.serviceId,
+    templateId: result.template.id,
+    serializedConfig: result.template.serializedConfig,
   };
 }
 
-async function upsertVariables(options: {
+interface DeployTemplateOptions {
   token: string;
+  template: RedisTemplateDescriptor;
   projectId: string;
   environmentId: string;
-  serviceId: string;
-  variables: Record<string, string>;
-}): Promise<void> {
-  await railwayGraphQL<{ variableCollectionUpsert: boolean | null }>(
+  workspaceId: string;
+}
+
+async function deployRedisTemplate(options: DeployTemplateOptions): Promise<string> {
+  const result = await railwayGraphQL<{
+    templateDeployV2?: { workflowId?: string | null } | null;
+  }>(
     options.token,
     `
-    mutation VariableCollectionUpsert($input: VariableCollectionUpsertInput!) {
-      variableCollectionUpsert(input: $input)
+    mutation DeployRedisTemplate($input: TemplateDeployV2Input!) {
+      templateDeployV2(input: $input) {
+        workflowId
+      }
     }
   `,
     {
       input: {
+        templateId: options.template.templateId,
+        serializedConfig: options.template.serializedConfig,
         projectId: options.projectId,
         environmentId: options.environmentId,
-        serviceId: options.serviceId,
-        variables: options.variables,
-        replace: false,
+        workspaceId: options.workspaceId,
       },
     },
   );
+  const workflowId = result.templateDeployV2?.workflowId;
+  if (!workflowId) {
+    throw new Error('Railway Redis: templateDeployV2 did not return a workflowId.');
+  }
+  return workflowId;
 }
 
-async function configureRedisService(options: {
+type WorkflowStatus = 'NotFound' | 'Running' | 'Complete' | 'Error';
+
+async function fetchWorkflowStatus(token: string, workflowId: string): Promise<WorkflowStatus> {
+  const result = await railwayGraphQL<{
+    workflowStatus?: { status?: WorkflowStatus } | WorkflowStatus | null;
+  }>(
+    token,
+    `
+    query WorkflowStatus($workflowId: String!) {
+      workflowStatus(workflowId: $workflowId) {
+        status
+      }
+    }
+  `,
+    { workflowId },
+  );
+  const raw = result.workflowStatus;
+  if (raw === null || raw === undefined) return 'NotFound';
+  if (typeof raw === 'string') return raw;
+  return raw.status ?? 'NotFound';
+}
+
+async function waitForWorkflow(token: string, workflowId: string): Promise<void> {
+  const deadline = Date.now() + WORKFLOW_POLL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const status = await fetchWorkflowStatus(token, workflowId);
+    if (status === 'Complete') return;
+    if (status === 'Error') {
+      throw new Error(`Railway Redis: template deploy workflow ${workflowId} failed.`);
+    }
+    await delay(WORKFLOW_POLL_INTERVAL_MS);
+  }
+  throw new Error(
+    `Railway Redis: template deploy workflow ${workflowId} did not complete within ${WORKFLOW_POLL_TIMEOUT_MS / 1000}s.`,
+  );
+}
+
+interface EnvironmentService {
+  serviceId: string;
+  serviceName: string;
+}
+
+async function fetchEnvironmentServices(
+  token: string,
+  projectId: string,
+  environmentId: string,
+): Promise<EnvironmentService[]> {
+  const result = await railwayGraphQL<{
+    project?: {
+      environments?: {
+        edges?: Array<{
+          node?: {
+            id: string;
+            serviceInstances?: {
+              edges?: Array<{ node?: { serviceId: string; serviceName: string } }>;
+            };
+          };
+        }>;
+      };
+    };
+  }>(
+    token,
+    `
+    query EnvironmentServices($id: String!) {
+      project(id: $id) {
+        environments {
+          edges {
+            node {
+              id
+              serviceInstances {
+                edges {
+                  node {
+                    serviceId
+                    serviceName
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `,
+    { id: projectId },
+  );
+  const environment = (result.project?.environments?.edges ?? [])
+    .map((edge) => edge.node)
+    .find((node) => node?.id === environmentId);
+  return (environment?.serviceInstances?.edges ?? [])
+    .map((edge) => edge.node)
+    .filter((node): node is EnvironmentService => node !== undefined);
+}
+
+function isRedisServiceName(serviceName: string): boolean {
+  return serviceName.toLowerCase() === REDIS_SERVICE_NAME_DEFAULT.toLowerCase();
+}
+
+async function discoverRedisService(options: {
+  token: string;
+  projectId: string;
+  environmentId: string;
+  knownServiceIds: Set<string>;
+}): Promise<EnvironmentService> {
+  const deadline = Date.now() + SERVICE_DISCOVERY_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const services = await fetchEnvironmentServices(
+      options.token,
+      options.projectId,
+      options.environmentId,
+    );
+    const candidate = services.find(
+      (service) =>
+        isRedisServiceName(service.serviceName) && !options.knownServiceIds.has(service.serviceId),
+    );
+    if (candidate) return candidate;
+    await delay(SERVICE_DISCOVERY_INTERVAL_MS);
+  }
+  throw new Error(
+    `Railway Redis: did not discover a new redis service in environment ${options.environmentId} after template deploy.`,
+  );
+}
+
+async function fetchServiceVariables(options: {
+  token: string;
+  projectId: string;
+  environmentId: string;
+  serviceId: string;
+}): Promise<Record<string, string>> {
+  const result = await railwayGraphQL<{ variables?: Record<string, string> | null }>(
+    options.token,
+    `
+    query ServiceVariables($projectId: String!, $environmentId: String!, $serviceId: String!) {
+      variables(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId)
+    }
+  `,
+    {
+      projectId: options.projectId,
+      environmentId: options.environmentId,
+      serviceId: options.serviceId,
+    },
+  );
+  return result.variables ?? {};
+}
+
+async function readRedisPassword(options: {
+  token: string;
+  projectId: string;
+  environmentId: string;
+  serviceId: string;
+}): Promise<string> {
+  const variables = await fetchServiceVariables(options);
+  const password = variables.REDIS_PASSWORD;
+  if (!password) {
+    throw new Error(
+      `Railway Redis: REDIS_PASSWORD is missing on the template-created service ${options.serviceId}.`,
+    );
+  }
+  return password;
+}
+
+async function applyResourceOverrides(options: {
   token: string;
   serviceId: string;
   environmentId: string;
   config: SetupConfig['providers']['railwayRedis'];
 }): Promise<void> {
+  const { region } = options.config;
+  if (!region) return;
   await railwayGraphQL<{ serviceInstanceUpdate: boolean | null }>(
     options.token,
     `
@@ -169,33 +348,18 @@ async function configureRedisService(options: {
       serviceId: options.serviceId,
       environmentId: options.environmentId,
       input: {
-        source: { image: options.config.image },
-        startCommand: buildValkeyStartCommand(options.config.maxmemoryMb),
         multiRegionConfig: {
-          [options.config.region]: { numReplicas: 1 },
+          [region]: { numReplicas: 1 },
         },
       },
     },
   );
 }
 
-async function deployRedisService(options: {
-  token: string;
-  serviceId: string;
-  environmentId: string;
-}): Promise<void> {
-  await railwayGraphQL<{ serviceInstanceDeployV2: string | null }>(
-    options.token,
-    `
-    mutation ServiceInstanceDeployV2($serviceId: String!, $environmentId: String!) {
-      serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId)
-    }
-  `,
-    {
-      serviceId: options.serviceId,
-      environmentId: options.environmentId,
-    },
-  );
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }
 
 export async function provision(
@@ -214,64 +378,107 @@ export async function provision(
     };
   }
 
+  const token = secrets.railway.token;
+  const projectId = state.railway.projectId;
+
   const databases: NonNullable<SetupState['redis']>['databases'] = {
     ...(state.redis?.databases ?? {}),
   };
-  const instances: RailwayRedisInstance[] = [];
+  const railwayEnvironments: NonNullable<NonNullable<SetupState['railway']>['environments']> = {
+    ...(state.railway.environments ?? {}),
+  };
+
+  let template: RedisTemplateDescriptor | undefined;
+  let workspaceId: string | undefined;
+
+  const provisioned: string[] = [];
+  const skipped: string[] = [];
 
   for (const environmentName of environments) {
-    const serviceState = getRedisServiceState(state, environmentName);
-    if (!serviceState) {
+    const environmentState = railwayEnvironments[environmentName];
+    if (!environmentState) {
       return {
         success: false,
-        message: `Railway Redis: redis service is not attached to environment "${environmentName}". Run the Railway provider first.`,
+        message: `Railway Redis: Railway environment "${environmentName}" is missing from state. Run the Railway provider first.`,
       };
     }
 
-    const redisPassword =
-      getExistingRedisPassword(state, environmentName) ?? generateRedisPassword();
-    const spinner = logger.startSpinner(`Configuring Railway Redis (${environmentName})...`);
+    if (hasUsableRedisState(state, environmentName)) {
+      skipped.push(environmentName);
+      logger.info(
+        `Railway Redis (${environmentName}): already provisioned in state — skipping template deploy.`,
+      );
+      continue;
+    }
+
+    template ??= await fetchRedisTemplate(token);
+    workspaceId ??= await resolveWorkspaceId(token, projectId);
+
+    const spinner = logger.startSpinner(
+      `Deploying Railway Redis database template (${environmentName})...`,
+    );
 
     try {
-      await upsertVariables({
-        token: secrets.railway.token,
-        projectId: state.railway.projectId,
-        environmentId: serviceState.environmentId,
-        serviceId: serviceState.serviceId,
-        variables: {
-          REDIS_PASSWORD: redisPassword,
-        },
+      const knownServiceIds = new Set(
+        Object.values(environmentState.services)
+          .map((service) => service.serviceId)
+          .filter((serviceId): serviceId is string => Boolean(serviceId)),
+      );
+
+      const workflowId = await deployRedisTemplate({
+        token,
+        template,
+        projectId,
+        environmentId: environmentState.environmentId,
+        workspaceId,
       });
-      await configureRedisService({
-        token: secrets.railway.token,
-        serviceId: serviceState.serviceId,
-        environmentId: serviceState.environmentId,
+      await waitForWorkflow(token, workflowId);
+
+      const discovered = await discoverRedisService({
+        token,
+        projectId,
+        environmentId: environmentState.environmentId,
+        knownServiceIds,
+      });
+
+      await applyResourceOverrides({
+        token,
+        serviceId: discovered.serviceId,
+        environmentId: environmentState.environmentId,
         config: config.providers.railwayRedis,
       });
-      await deployRedisService({
-        token: secrets.railway.token,
-        serviceId: serviceState.serviceId,
-        environmentId: serviceState.environmentId,
+
+      const redisPassword = await readRedisPassword({
+        token,
+        projectId,
+        environmentId: environmentState.environmentId,
+        serviceId: discovered.serviceId,
       });
 
       const redisUrl = buildRailwayRedisUrl(redisPassword);
       const privateEndpoint = buildRailwayPrivateEndpoint();
-      instances.push({
-        environmentName,
-        environmentId: serviceState.environmentId,
-        serviceId: serviceState.serviceId,
-        redisUrl,
-        privateEndpoint,
-      });
+
+      railwayEnvironments[environmentName] = {
+        ...environmentState,
+        services: {
+          ...environmentState.services,
+          [REDIS_SERVICE_STATE_KEY]: {
+            serviceId: discovered.serviceId,
+            environmentId: environmentState.environmentId,
+          },
+        },
+      };
+
       databases[environmentName] = {
-        databaseId: `${serviceState.serviceId}:${serviceState.environmentId}`,
+        databaseId: `${discovered.serviceId}:${environmentState.environmentId}`,
         publicEndpoint: privateEndpoint,
         redisUrl,
       };
 
+      provisioned.push(environmentName);
       logger.stopSpinner(
         spinner,
-        `Railway Redis (${environmentName}) configured with ${config.providers.railwayRedis.maxmemoryMb} MB maxmemory`,
+        `Railway Redis (${environmentName}) deployed from template "${REDIS_TEMPLATE_CODE}" as service "${discovered.serviceName}".`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -280,24 +487,41 @@ export async function provision(
         success: false,
         message,
         stateUpdates: {
-          redis: {
-            subscriptionId: 0,
-            databases,
-          },
+          redis: { subscriptionId: 0, databases },
+          railway: { ...state.railway, environments: railwayEnvironments },
         },
       };
     }
   }
 
+  const messageParts: string[] = [];
+  if (provisioned.length > 0) {
+    messageParts.push(`provisioned ${provisioned.join(', ')}`);
+  }
+  if (skipped.length > 0) {
+    messageParts.push(`skipped (already present) ${skipped.join(', ')}`);
+  }
+
   return {
     success: true,
-    message: `Railway Redis: ${instances.length} service instance(s) ready`,
+    message: `Railway Redis: ${messageParts.join('; ') || 'no environments needed provisioning'}.`,
     stateUpdates: {
-      redis: {
-        subscriptionId: 0,
-        databases,
-      },
+      redis: { subscriptionId: 0, databases },
+      railway: { ...state.railway, environments: railwayEnvironments },
     },
+  };
+}
+
+function getRedisServiceState(
+  state: SetupState,
+  environmentName: string,
+): { environmentId: string; serviceId: string } | undefined {
+  const environmentState = state.railway?.environments?.[environmentName];
+  const redisServiceState = environmentState?.services[REDIS_SERVICE_STATE_KEY];
+  if (!(environmentState && redisServiceState?.serviceId)) return undefined;
+  return {
+    environmentId: redisServiceState.environmentId ?? environmentState.environmentId,
+    serviceId: redisServiceState.serviceId,
   };
 }
 
@@ -310,9 +534,7 @@ function allEnvironmentsHaveRedis(environments: string[], state: SetupState): bo
     if (database.databaseId !== `${serviceState.serviceId}:${serviceState.environmentId}`) {
       return false;
     }
-    if (database.redisUrl.includes('${{')) return false;
-    const redisPassword = getExistingRedisPassword(state, environmentName);
-    return Boolean(redisPassword && database.redisUrl.includes(`@${REDIS_PRIVATE_HOSTNAME}:`));
+    return hasUsableRedisState(state, environmentName);
   });
 }
 
@@ -328,7 +550,11 @@ export const setupRailwayRedisProvider: InfraProvider = {
   preview: ({ config }) =>
     config.providers.railwayRedis.enabled
       ? {
-          detail: `${config.providers.railwayRedis.image} in ${config.providers.railwayRedis.region}, ${config.providers.railwayRedis.maxmemoryMb} MB maxmemory`,
+          detail: `Railway "${REDIS_TEMPLATE_CODE}" database template${
+            config.providers.railwayRedis.region
+              ? `, replica region ${config.providers.railwayRedis.region}`
+              : ''
+          }`,
           url: 'https://railway.app/account/tokens',
           configKey: 'RAILWAY_TOKEN',
         }
@@ -339,7 +565,11 @@ export const setupRailwayRedisProvider: InfraProvider = {
           {
             bucket: 'resource',
             provider: 'Railway Redis',
-            detail: `${environments.length} Valkey-backed Redis service instance(s), ${config.providers.railwayRedis.maxmemoryMb} MB maxmemory, region ${config.providers.railwayRedis.region}`,
+            detail: `${environments.length} Redis database(s) from Railway template "${REDIS_TEMPLATE_CODE}"${
+              config.providers.railwayRedis.region
+                ? `, region ${config.providers.railwayRedis.region}`
+                : ''
+            }`,
           },
         ]
       : [],
@@ -348,13 +578,15 @@ export const setupRailwayRedisProvider: InfraProvider = {
     enabled: setupRailwayRedisProvider.isEnabled(context),
     enabledReason: setupRailwayRedisProvider.disabledReason(context),
     instructions: [
-      `Will configure the Railway "${REDIS_SERVICE_NAME}" service in each environment with ${context.config.providers.railwayRedis.image}.`,
-      `Will set REDIS_PASSWORD on the Redis service and write REDIS_URL with Railway private-network references for: ${context.environments.join(', ')}.`,
-      `Will set Valkey maxmemory to ${context.config.providers.railwayRedis.maxmemoryMb} MB and deploy in ${context.config.providers.railwayRedis.region}.`,
+      `Will deploy Railway's "${REDIS_TEMPLATE_CODE}" database template (templateDeployV2) into environments without a recorded Redis service: ${context.environments.join(', ')}.`,
+      'Will read REDIS_PASSWORD from the template-created service and record a concrete REDIS_URL in .setup-state.json for each environment.',
+      context.config.providers.railwayRedis.region
+        ? `Will apply replica region "${context.config.providers.railwayRedis.region}" to each Redis service via serviceInstanceUpdate.`
+        : 'Will use Railway default region for the Redis service (no region override configured).',
     ],
     alreadyDone: () => allEnvironmentsHaveRedis(context.environments, context.state),
     alreadyDoneMessage:
-      'all environments already have Railway Redis service attachments and Redis URLs in state',
+      'all environments already have Railway Redis database services and concrete Redis URLs in state',
     execute: async () => {
       const result = await provision(
         context.config,
@@ -387,11 +619,11 @@ export const setupRailwayRedisProvider: InfraProvider = {
           ? `https://railway.app/project/${state.railway.projectId}`
           : 'https://railway.app/dashboard',
         steps: [
-          'Open the Railway project and select the redis service.',
-          'Delete the redis service, or delete the whole project if setup:infra created it only for this app.',
+          'Open the Railway project and select the Redis database service (created from the "redis" template).',
+          'Delete the Redis service, or delete the whole project if setup:infra created it only for this app.',
         ],
         resources: Object.entries(databases).map(([environmentName, database]) => ({
-          label: `Redis service instance (${environmentName})`,
+          label: `Redis database (${environmentName})`,
           identifier: String(database.databaseId),
         })),
       },

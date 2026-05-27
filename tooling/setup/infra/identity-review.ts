@@ -29,7 +29,14 @@ import {
 } from './init-wizard.js';
 import type { SetupConfig } from '../common/types.js';
 
-export const SETUP_SERVICE_NAMES = ['api', 'worker', 'redis'];
+/**
+ * Display-only: services the user should expect to see in each Railway
+ * environment after setup. `api` and `worker` are created by the Railway
+ * provider as blank shells; `redis` is provisioned by the Railway Redis
+ * provider from Railway's `redis` database template (template-managed image,
+ * password, and volume).
+ */
+export const SETUP_SERVICE_NAMES = ['api', 'worker', 'redis (database template)'];
 
 export interface IdentityReviewOptions {
   assumeYes?: boolean;

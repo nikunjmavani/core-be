@@ -28,7 +28,7 @@ function formatGitHubEnvironmentPlan(config: SetupConfig): string {
   return config.environments
     .map(
       (environment) =>
-        `${environment.name} (${environment.label}; branch ${environment.branch}; Railway services: api, worker, redis)`,
+        `${environment.name} (${environment.label}; branch ${environment.branch}; Railway services: api, worker + redis database)`,
     )
     .join(', ');
 }

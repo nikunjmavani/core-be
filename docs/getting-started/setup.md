@@ -9,7 +9,7 @@ Single reference for local setup, Git workflow, and testing. **Want one document
 - **Node.js 24** (supported range is in root `package.json` → `engines.node`; **`.nvmrc`** pins major `24` for **GitHub Actions** and for **nvm** / **fnm** when you run `use` / `install` in the repo root)
 - **pnpm**
 - **PostgreSQL** — managed service (e.g. Supabase, Neon, AWS RDS, Railway) or local
-- **Redis** — managed service (Railway Redis/Valkey by default, AWS ElastiCache, Redis Cloud) or local
+- **Redis** — managed service (Railway Redis by default — Railway's `redis` database template — or AWS ElastiCache, Redis Cloud) or local
 - **Docker** (optional) — for local Postgres + Redis via `pnpm compose:up`
 
 **Switch your shell to Node 24** (pick what you use locally; the repo does not enforce one manager over another):

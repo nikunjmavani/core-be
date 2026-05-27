@@ -196,7 +196,15 @@ async function stageAndCommitServiceAttachments(
   );
 }
 
-export const RAILWAY_SERVICE_NAMES = ['api', 'worker', 'redis'];
+/**
+ * Services this provider creates as blank shells (image is set later by the
+ * application deploy pipeline). The `redis` service is intentionally **not**
+ * listed here — it is provisioned by the Railway Redis provider via Railway's
+ * `redis` database template (`templateDeployV2`), which creates the service,
+ * volume, and `REDIS_PASSWORD` with managed defaults instead of a hand-pinned
+ * image and start command.
+ */
+export const RAILWAY_SERVICE_NAMES = ['api', 'worker'];
 
 function formatRailwayEnvironmentPlan(config: SetupConfig): string {
   return config.environments
@@ -499,11 +507,11 @@ export const setupRailwayProvider: InfraProvider = {
     instructions: [
       `Will create or adopt the Railway project "${context.config.project.name}".`,
       `Will create or adopt Railway environments: ${formatRailwayEnvironmentPlan(context.config)}.`,
-      'Will create or adopt project-level services: api, worker, redis.',
-      'Will attach api + worker + redis to every Railway environment via staged-changes.',
+      'Will create or adopt project-level services: api, worker (redis is provisioned separately via the Railway Redis template).',
+      'Will attach api + worker to every Railway environment via staged-changes.',
     ],
     alreadyDone: () => railwayAlreadyProvisioned(context.state, context.environments),
-    alreadyDoneMessage: 'project + environments + api/worker/redis attachments already in state',
+    alreadyDoneMessage: 'project + environments + api/worker attachments already in state',
     execute: async () => {
       const result = await provision(
         context.config,
