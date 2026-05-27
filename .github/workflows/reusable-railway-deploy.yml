@@ -168,6 +168,58 @@ jobs:
       - name: Validate Railway deploy secrets
         run: |
           set -euo pipefail
+
+          print_key_diagnostic() {
+            local name="$1"
+            local value="${!name:-}"
+            local source="process.env"
+            local secret_present="false"
+            local variable_present="false"
+
+            secret_present="$(jq -r --arg key "$name" 'has($key)' <<< "$GH_SECRETS_JSON")"
+            variable_present="$(jq -r --arg key "$name" 'has($key)' <<< "$GH_VARS_JSON")"
+
+            if [ "$secret_present" = "true" ]; then
+              source="GitHub Environment secret"
+            elif [ "$variable_present" = "true" ]; then
+              source="GitHub Environment variable"
+            fi
+
+            if [ -z "$value" ]; then
+              echo "${name}: missing (source=${source}, secrets_json=${secret_present}, vars_json=${variable_present})"
+              return
+            fi
+
+            local length
+            local fingerprint
+            length="${#value}"
+            fingerprint="$(printf '%s' "$value" | sha256sum | cut -c1-12)"
+            echo "${name}: present (source=${source}, length=${length}, sha256_12=${fingerprint}, secrets_json=${secret_present}, vars_json=${variable_present})"
+          }
+
+          echo "::group::Railway CLI diagnostics"
+          echo "railway binary: $(command -v railway || true)"
+          echo "railway version: $(railway --version 2>&1 || true)"
+          echo "github event: ${GITHUB_EVENT_NAME:-unknown}"
+          echo "github ref: ${GITHUB_REF:-unknown}"
+          echo "github sha: ${GITHUB_SHA:-unknown}"
+          echo "resolved environment: ${ENVIRONMENT}"
+          echo "deploy commit sha: ${RAILWAY_GIT_COMMIT_SHA}"
+          echo "::endgroup::"
+
+          echo "::group::GitHub Environment payload diagnostics"
+          echo "GH_SECRETS_JSON keys:"
+          jq -r 'keys | sort | join(", ")' <<< "$GH_SECRETS_JSON"
+          echo "GH_VARS_JSON keys:"
+          jq -r 'keys | sort | join(", ")' <<< "$GH_VARS_JSON"
+          echo "::endgroup::"
+
+          echo "::group::Required Railway env diagnostics"
+          print_key_diagnostic "RAILWAY_TOKEN"
+          print_key_diagnostic "RAILWAY_SERVICE_ID"
+          print_key_diagnostic "RAILWAY_WORKER_SERVICE_ID"
+          echo "::endgroup::"
+
           missing=()
           if [ -z "${RAILWAY_TOKEN:-}" ]; then
             missing+=("RAILWAY_TOKEN")
@@ -178,10 +230,6 @@ jobs:
           if [ -z "${RAILWAY_WORKER_SERVICE_ID:-}" ]; then
             missing+=("RAILWAY_WORKER_SERVICE_ID")
           fi
-          echo "RAILWAY_TOKEN: ${RAILWAY_TOKEN}"
-          echo "RAILWAY_TOKEN length: ${#RAILWAY_TOKEN}"
-          echo "RAILWAY_SERVICE_ID: ${RAILWAY_SERVICE_ID}"
-          echo "RAILWAY_WORKER_SERVICE_ID: ${RAILWAY_WORKER_SERVICE_ID}"
 
           if [ "${#missing[@]}" -gt 0 ]; then
             echo "::error::Missing required Railway deploy secrets in GitHub Environment '${ENVIRONMENT}': ${missing[*]}"
@@ -193,15 +241,38 @@ jobs:
             echo "::error::RAILWAY_TOKEN in GitHub Environment '${ENVIRONMENT}' is suspiciously short (${railway_token_length} chars). Rotate the Railway project token and update the GitHub Environment secret."
             exit 1
           fi
-          # Verify the token actually authenticates against Railway before we run
-          # database migrations or any `railway variable set` calls. Catches
-          # revoked, expired, or wrong-project tokens with an actionable error.
-          if ! railway_status_output="$(railway status --json 2>&1)"; then
-            echo "::error::Railway rejected RAILWAY_TOKEN for GitHub Environment '${ENVIRONMENT}': ${railway_status_output}"
-            echo "::error::Rotate the Railway project token (Railway → Project → Settings → Tokens) and update the GitHub Environment secret. See docs/deployment/setup/railway-github-cli-setup.md#rotating-an-invalid-or-expired-railway-token."
-            exit 1
+
+          echo "::group::Railway authentication probe"
+          echo "Diagnostic command (non-fatal): railway status --json"
+          if railway_status_output="$(railway status --json 2>&1)"; then
+            echo "railway status --json succeeded."
+            printf '%s\n' "$railway_status_output"
+          else
+            echo "::warning::railway status --json failed. This command is only diagnostic because project tokens may require a service-scoped command."
+            printf '%s\n' "$railway_status_output"
           fi
-          echo "Railway deploy secrets present and authenticated for environment '${ENVIRONMENT}'."
+
+          for service_name in api worker; do
+            if [ "$service_name" = "api" ]; then
+              service_id="$RAILWAY_SERVICE_ID"
+            else
+              service_id="$RAILWAY_WORKER_SERVICE_ID"
+            fi
+
+            echo "Validation command (${service_name}): railway variables --service <${service_name}-service-id> --json"
+            if ! railway_variables_output="$(railway variables --service "$service_id" --json 2>&1)"; then
+              echo "::error::Railway rejected RAILWAY_TOKEN or service id for ${service_name} service in GitHub Environment '${ENVIRONMENT}'."
+              echo "::error::Command used: railway variables --service <${service_name}-service-id> --json"
+              echo "::error::Output: ${railway_variables_output}"
+              echo "::error::Check that RAILWAY_TOKEN belongs to the same Railway project as ${service_name} service id and that the service id is current."
+              exit 1
+            fi
+            variable_count="$(jq 'length' <<< "$railway_variables_output" 2>/dev/null || echo "unknown")"
+            echo "Railway ${service_name} service authenticated; variables visible: ${variable_count}."
+          done
+          echo "::endgroup::"
+
+          echo "Railway deploy secrets present and service-scoped authentication succeeded for environment '${ENVIRONMENT}'."
 
       - name: Resolve scanned CI images from GHCR
         id: ghcr_images
