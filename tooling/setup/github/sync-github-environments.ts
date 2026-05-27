@@ -35,6 +35,75 @@ const projectRoot = process.cwd();
 
 const RATE_LIMIT_BACKOFF_MS = [15_000, 30_000, 60_000, 120_000, 240_000] as const;
 
+/**
+ * Dynamic-delay tuning. Between every successful request we wait
+ * `clamp(timeToReset / remaining, MIN, MAX)` so a long batch is paced evenly
+ * across the GitHub primary-rate-limit window. This avoids the secondary
+ * abuse-detection rate limit that fires on bursts of writes to the same
+ * environment, even when the primary quota is healthy.
+ */
+const DYNAMIC_DELAY_MIN_MS = 250;
+const DYNAMIC_DELAY_MAX_MS = 5_000;
+const DYNAMIC_DELAY_DEFAULT_MS = 350;
+const DYNAMIC_DELAY_LOW_REMAINING_THRESHOLD = 50;
+
+interface RateLimitState {
+  remaining: number | null;
+  resetAtMs: number | null;
+  retryAfterMs: number | null;
+}
+
+const rateLimitState: RateLimitState = {
+  remaining: null,
+  resetAtMs: null,
+  retryAfterMs: null,
+};
+
+function parseIntegerHeader(headers: Headers, name: string): number | null {
+  const raw = headers.get(name);
+  if (raw === null || raw === '') return null;
+  const value = Number.parseInt(raw, 10);
+  return Number.isFinite(value) ? value : null;
+}
+
+function recordRateLimitHeaders(headers: Headers): void {
+  const remaining = parseIntegerHeader(headers, 'x-ratelimit-remaining');
+  const resetSeconds = parseIntegerHeader(headers, 'x-ratelimit-reset');
+  const retryAfterSeconds = parseIntegerHeader(headers, 'retry-after');
+  if (remaining !== null) rateLimitState.remaining = remaining;
+  if (resetSeconds !== null) rateLimitState.resetAtMs = resetSeconds * 1_000;
+  rateLimitState.retryAfterMs = retryAfterSeconds === null ? null : retryAfterSeconds * 1_000;
+}
+
+function computeDynamicDelayMs(): number {
+  const { remaining, resetAtMs, retryAfterMs } = rateLimitState;
+
+  if (retryAfterMs !== null && retryAfterMs > 0) {
+    return Math.min(retryAfterMs, DYNAMIC_DELAY_MAX_MS);
+  }
+
+  if (remaining === null || resetAtMs === null) {
+    return DYNAMIC_DELAY_DEFAULT_MS;
+  }
+
+  const timeToResetMs = resetAtMs - Date.now();
+  if (timeToResetMs <= 0) return DYNAMIC_DELAY_MIN_MS;
+
+  if (remaining <= 0) {
+    return Math.min(timeToResetMs, DYNAMIC_DELAY_MAX_MS);
+  }
+
+  const evenSpacingMs = Math.ceil(timeToResetMs / remaining);
+
+  // When quota is plentiful, stay near the floor; when it's tight, slow down.
+  const baseDelayMs =
+    remaining > DYNAMIC_DELAY_LOW_REMAINING_THRESHOLD
+      ? Math.max(DYNAMIC_DELAY_MIN_MS, Math.min(evenSpacingMs, DYNAMIC_DELAY_DEFAULT_MS))
+      : evenSpacingMs;
+
+  return Math.min(Math.max(baseDelayMs, DYNAMIC_DELAY_MIN_MS), DYNAMIC_DELAY_MAX_MS);
+}
+
 interface GitHubEnvironmentPublicKey {
   readonly key_id: string;
   readonly key: string;
@@ -86,6 +155,11 @@ async function requestGitHub<T>(
   pathname: string,
   options: { readonly method?: string; readonly body?: unknown } = {},
 ): Promise<T> {
+  const dynamicDelayMs = computeDynamicDelayMs();
+  if (dynamicDelayMs > 0) {
+    await sleep(dynamicDelayMs);
+  }
+
   for (let attempt = 0; ; attempt += 1) {
     const response = await fetch(buildGitHubApiUrl(pathname), {
       method: options.method ?? 'GET',
@@ -97,6 +171,8 @@ async function requestGitHub<T>(
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     });
+    recordRateLimitHeaders(response.headers);
+
     if (response.ok) {
       if (response.status === 204) return undefined as T;
       return (await response.json()) as T;
@@ -109,7 +185,9 @@ async function requestGitHub<T>(
         `${label}: HTTP ${response.status} ${responseText}`,
       );
     }
-    const waitMs = RATE_LIMIT_BACKOFF_MS[attempt];
+    const retryAfterMs = rateLimitState.retryAfterMs;
+    const waitMs =
+      retryAfterMs !== null && retryAfterMs > 0 ? retryAfterMs : RATE_LIMIT_BACKOFF_MS[attempt];
     console.warn(
       `  ! GitHub API throttled "${label}" — backing off ${formatDuration(waitMs)} ` +
         `(retry ${attempt + 1}/${RATE_LIMIT_BACKOFF_MS.length})`,
@@ -495,10 +573,13 @@ export async function syncEnvironmentToGitHub(
     const indexLabel = `${padIndex(processed, pushTotal)}/${pushTotal}`;
     const kindLabel = kind === 'secret' ? '[secret]  ' : '[variable]';
 
+    const quotaLabel =
+      rateLimitState.remaining !== null ? `, quota ${rateLimitState.remaining}` : '';
+
     console.log(
       `  ${indexLabel}  ${kindLabel} ${name}  (` +
         `${status}, took ${formatDuration(itemDuration)}, ${remaining} left, ` +
-        `ETA ${formatDuration(estimatedRemaining)})`,
+        `ETA ${formatDuration(estimatedRemaining)}${quotaLabel})`,
     );
   };
 
