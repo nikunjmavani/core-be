@@ -1,9 +1,9 @@
 # Reusable Railway deploy (called from post-merge-ci.yml) or manual workflow_dispatch.
 # Gate sequence: migrate → redeploy API/worker → /health → worker readiness → API smoke.
 # When post-deploy API smoke succeeds, the environment is fully live for traffic.
-# Production API and worker run scanned CI images from GHCR (Trivy gate in docker-build job).
-# Optional environment secrets GHCR_API_IMAGE / GHCR_WORKER_IMAGE override the commit SHA tag
-# (for example digest pinning). See docs/deployment/ci-cd/cicd-and-deployment.md
+# Production API and worker redeploy the current Railway service configuration.
+# The deploy log prints expected GHCR image refs for traceability; Railway CLI
+# `redeploy` no longer accepts an `--image` argument.
 
 name: Reusable — Railway deploy
 
@@ -243,15 +243,6 @@ jobs:
           fi
 
           echo "::group::Railway authentication probe"
-          echo "Diagnostic command (non-fatal): railway status --json"
-          if railway_status_output="$(railway status --json 2>&1)"; then
-            echo "railway status --json succeeded."
-            printf '%s\n' "$railway_status_output"
-          else
-            echo "::warning::railway status --json failed. This command is only diagnostic because project tokens may require a service-scoped command."
-            printf '%s\n' "$railway_status_output"
-          fi
-
           for service_name in api worker; do
             if [ "$service_name" = "api" ]; then
               service_id="$RAILWAY_SERVICE_ID"
@@ -274,7 +265,7 @@ jobs:
 
           echo "Railway deploy secrets present and service-scoped authentication succeeded for environment '${ENVIRONMENT}'."
 
-      - name: Resolve scanned CI images from GHCR
+      - name: Log expected scanned CI image refs from GHCR
         id: ghcr_images
         env:
           GHCR_API_IMAGE: ${{ secrets.GHCR_API_IMAGE }}
@@ -322,6 +313,11 @@ jobs:
         # KEY=VALUE pairs so multi-line values (PEM keys) survive intact.
         # Empty/null values are skipped so Railway is never blanked out by an
         # unset optional key. GitHub still masks each secret value in logs.
+        #
+        # NUL bytes survive only when streamed directly to the consumer — bash
+        # command substitution `$(...)` silently strips NULs (you'll see
+        # "warning: command substitution: ignored null byte in input"), so the
+        # jq pipeline is materialised to a temp file and replayed per service.
         run: |
           set -euo pipefail
 
@@ -337,27 +333,36 @@ jobs:
           fi
 
           # Merge vars + secrets (secrets win on the rare key-name collision)
-          # and emit "KEY=VALUE\0" so we can stream multi-line PEM values.
-          payload="$(jq -nrj \
+          # and emit "KEY=VALUE\0" pairs into a temp file. Writing to a file
+          # preserves NUL separators (a bash variable would not).
+          payload_file="$(mktemp)"
+          trap 'rm -f "$payload_file"' EXIT
+          jq -nrj \
             --argjson vars "$GH_VARS_JSON" \
             --argjson secrets "$GH_SECRETS_JSON" \
             '($vars + $secrets)
               | to_entries
               | map(select(.value != null and .value != ""))
               | .[]
-              | "\(.key)=\(.value)\u0000"')"
+              | "\(.key)=\(.value)\u0000"' \
+            > "$payload_file"
+
+          payload_byte_count="$(wc -c < "$payload_file")"
+          echo "Prepared $payload_byte_count bytes of NUL-delimited KEY=VALUE pairs."
 
           for service in $services; do
-            count=0
+            pushed=0
+            skipped=0
             while IFS= read -r -d '' kv; do
               key="${kv%%=*}"
               if [[ "$key" =~ $exclude_regex ]]; then
+                skipped=$((skipped + 1))
                 continue
               fi
               railway variable set --service "$service" "$kv"
-              count=$((count + 1))
-            done < <(printf '%s' "$payload")
-            echo "Pushed $count variables to Railway service $service."
+              pushed=$((pushed + 1))
+            done < "$payload_file"
+            echo "Pushed $pushed variables to Railway service $service (skipped $skipped infra/CI keys)."
           done
 
       - name: Deploy API to Railway
@@ -366,8 +371,9 @@ jobs:
         run: |
           set -euo pipefail
           railway variable set --service "$RAILWAY_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
-          echo "Deploying API from GHCR image: $API_IMAGE"
-          railway redeploy --service "$RAILWAY_SERVICE_ID" --image "$API_IMAGE"
+          echo "Redeploying API service. Expected GHCR image ref for this commit: $API_IMAGE"
+          echo "Command: railway redeploy --service <api-service-id> --yes"
+          railway redeploy --service "$RAILWAY_SERVICE_ID" --yes
 
       - name: Post-deploy API health check
         id: api_health
@@ -402,8 +408,9 @@ jobs:
         run: |
           set -euo pipefail
           railway variable set --service "$RAILWAY_WORKER_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
-          echo "Deploying worker from GHCR image: $WORKER_IMAGE"
-          railway redeploy --service "$RAILWAY_WORKER_SERVICE_ID" --image "$WORKER_IMAGE"
+          echo "Redeploying worker service. Expected GHCR image ref for this commit: $WORKER_IMAGE"
+          echo "Command: railway redeploy --service <worker-service-id> --yes"
+          railway redeploy --service "$RAILWAY_WORKER_SERVICE_ID" --yes
 
       - name: Post-deploy worker health check
         env:

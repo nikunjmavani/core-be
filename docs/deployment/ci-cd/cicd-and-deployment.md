@@ -190,7 +190,7 @@ flowchart TB
 2. Release-please creates or updates the release PR on push to `main`.
 3. Merge the release PR when ready → stable GitHub Release + tag (`v2.x.y`) → `release-sbom.yml` attaches the SBOM.
 4. CI `docker-build` job on `main` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (tags `:sha` and `:latest`).
-5. Deploy workflow runs on push to `main` (validate env → resolve GHCR images → migrate → `railway redeploy --image` → `/health` → worker readiness → `pnpm test:api-smoke` on the Railway API URL).
+5. Deploy workflow runs on push to `main` (validate env → log expected GHCR image refs → migrate → `railway redeploy --service ... --yes` → `/health` → worker readiness → `pnpm test:api-smoke` on the Railway API URL).
 6. Optional load check: `pnpm load:health` against the deployed base URL.
 
 **Development path (steps):** identical to production but on the `dev` branch, with a few differences:
@@ -199,7 +199,7 @@ flowchart TB
 2. Release-please creates or updates the **dev release PR** on push to `dev` (`.github/release-please/config.dev.json` + `.github/release-please/manifest.dev.json`).
 3. Merge the dev release PR when ready → **prerelease** GitHub Release + tag (`v2.x.y-dev.N`) → `release-sbom.yml` attaches the SBOM.
 4. CI `docker-build` job on `dev` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (SHA-tagged only — `:latest` is reserved for `main`).
-5. Deploy workflow runs on push to `dev` (validate env → resolve GHCR images by SHA → migrate → `railway redeploy --image`) against the **development** GitHub Environment.
+5. Deploy workflow runs on push to `dev` (validate env → log expected GHCR image refs by SHA → migrate → `railway redeploy --service ... --yes`) against the **development** GitHub Environment.
 
 **Hotfix:** Branch from `main` (`hotfix/*`), conventional commit, PR into `main`. Merge triggers production deploy and release-please on the same push. Branch strategy: [git-workflow.md](../../process/git-workflow.md).
 
@@ -228,8 +228,8 @@ sequenceDiagram
   GH->>GHCR: core-be-api:sha, core-be-worker:sha
   Dev->>GH: CI success triggers deploy
   GH->>GH: validate:github-env, db:migrate
-  GH->>GH: Resolve GHCR image refs (commit SHA or secrets)
-  GH->>Railway: railway variable set + redeploy --image (API + worker)
+  GH->>GH: Log expected GHCR image refs (commit SHA or secrets)
+  GH->>Railway: railway variable set + redeploy --service --yes (API + worker)
   Railway->>GHCR: Pull scanned image
   Railway-->>GH: Deploy success
 ```
@@ -238,9 +238,9 @@ Steps in each deploy workflow:
 
 1. Checkout code, install dependencies (migrations only — no app `pnpm build`).
 2. Run `pnpm validate:github-env` against the GitHub environment.
-3. **Resolve scanned CI images from GHCR** — default `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `core-be-worker:<commit-sha>`; optional secrets **`GHCR_API_IMAGE`** / **`GHCR_WORKER_IMAGE`** override (digest or tag).
+3. **Log expected scanned CI image refs from GHCR** — default `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `core-be-worker:<commit-sha>`; optional secrets **`GHCR_API_IMAGE`** / **`GHCR_WORKER_IMAGE`** override the logged ref.
 4. Run `pnpm db:migrate`, install Railway CLI, sync app env vars with `railway variable set`.
-5. Deploy API and worker with `railway redeploy --service … --image …` (no `railway up` / source build on Railway).
+5. Redeploy API and worker with `railway redeploy --service … --yes`. Railway's current CLI redeploy command does not accept `--image`; it redeploys the existing service configuration after variables are synced.
 
 **GHCR images (CI):** On push to **`main`**, the reusable [docker-build-verify.yml](../../../.github/workflows/reusable/docker-build-verify.yml) job builds API + worker images, runs Trivy (CRITICAL/HIGH, `exit-code: 1`), then pushes to GHCR. PRs build and scan only (no push).
 
@@ -335,7 +335,7 @@ flowchart TB
   subgraph deploy_env [Deploy]
     C1["GitHub environment secrets"]
     C2["Deploy workflow"]
-    C3["railway variable set + redeploy --image"]
+    C3["railway variable set + redeploy --service"]
     C1 --> C2 --> C3
   end
 ```

@@ -182,7 +182,7 @@ On **push to `main`** (after scan), images are pushed to GHCR:
 - `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `:latest`
 - `ghcr.io/<owner>/<repo>/core-be-worker:<commit-sha>` and `:latest`
 
-[reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml) deploys those refs with `railway redeploy --image` (optional `GHCR_API_IMAGE` / `GHCR_WORKER_IMAGE` secrets override the commit tag).
+[reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml) logs the expected GHCR refs and redeploys the configured Railway API and worker services with `railway redeploy --service ... --yes`. The current Railway CLI does not support `railway redeploy --image`.
 
 Adds roughly 3–8 minutes to PR checks. See [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md).
 

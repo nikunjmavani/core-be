@@ -120,7 +120,7 @@ Errors and API messages must use i18n keys—see **[`.cursor/skills/i18n-message
 
 ## GitHub repository setup (maintainers)
 
-**Deploy secrets (per environment: `development`, `production`):** besides `RAILWAY_SERVICE_ID` (API), set `RAILWAY_WORKER_SERVICE_ID` for the BullMQ worker service and `DATABASE_MIGRATION_URL` when migrations use an elevated DB user. CD runs `pnpm db:migrate` before `railway redeploy --image`.
+**Deploy secrets (per environment: `development`, `production`):** besides `RAILWAY_SERVICE_ID` (API), set `RAILWAY_WORKER_SERVICE_ID` for the BullMQ worker service and `DATABASE_MIGRATION_URL` when migrations use an elevated DB user. CD runs `pnpm db:migrate` before `railway redeploy --service ... --yes`.
 
 Completing this once avoids broken defaults for contributors:
 
