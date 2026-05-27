@@ -56,7 +56,7 @@ GitHub is migrating JavaScript-based actions from Node 20 to Node 24. Every work
 
 ```yaml
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 ```
 
 Project jobs install Node from [`.nvmrc`](../.nvmrc) via [actions/setup-node-pnpm](actions/setup-node-pnpm/action.yml) (`actions/setup-node@v6`, `pnpm/action-setup@v6`).

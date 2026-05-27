@@ -16,7 +16,10 @@ flowchart TD
   PRCI --> Unit[Unit tests]
   PRCI --> MigLint[Migration lint]
   PRCI --> BuildVerify[Build verify]
-  PRCI --> Sec[Security scan]
+  PRCI --> StaticSync[Static sync]
+  PRCI --> SecAudit[Security audit]
+  PRCI --> SecSecrets[Security secrets]
+  PRCI --> SecSAST[Security SAST]
   PRCI --> Contract[Contract + property]
 
   Merge[PR merge into dev or main] --> PostMerge[Post-merge CI]
@@ -39,7 +42,7 @@ flowchart TD
 
 ```
 
-- **PR CI** ([pr-ci.yml](../../../.github/workflows/pr-ci.yml)) runs on every **pull_request** to **main** and **dev**: seven parallel jobs (lint, typecheck, unit + global with `vitest --changed`, migration safety lint, TS + Docker build verify, security scan, contract + property). No Postgres/Redis and no GHCR push on PR.
+- **PR CI** ([pr-ci.yml](../../../.github/workflows/pr-ci.yml)) runs on every **pull_request** to **main** and **dev**: parallel jobs for lint, typecheck, static sync checks, unit + global with `vitest --changed`, migration safety lint, TS + Docker build verify, split security checks, and contract + property. No Postgres/Redis and no GHCR push on PR.
 - **Post-merge CI** ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)) runs when a PR **merges** into `dev` or `main`. Optimized chain: `gate → (commitlint, docker, sbom, api-docs in parallel) → release-please (after docker) → release-sbom (re-uses sbom artifact) → deploy`. It does **not** re-run PR CI jobs or full DB integration/chaos suites (those are local: `pnpm test:integration`, `pnpm test:chaos`). Manual `workflow_dispatch` remains for emergency reruns.
 - **Deploy** runs inside Post-merge CI via reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml). Only the GitHub Environment differs: `dev` → **development**, `main` → **production**. Manual `workflow_dispatch` on CD remains for emergency redeploys. **When post-deploy API smoke passes, that environment is fully live** — the deploy job is the last gate before traffic.
 - Release-please runs inside Post-merge CI on both channels (`main` stable, `dev` prerelease). When it publishes a GitHub Release in the same run, **Release SBOM** attaches CycloneDX to that release.
@@ -56,10 +59,13 @@ All jobs run **in parallel** (~2–3 min target). Caching: `actions/setup-node` 
 | --- | ---- |
 | **Lint** | `pnpm lint` (Biome) |
 | **Typecheck** | `pnpm typecheck` |
+| **Static sync** | `pnpm validate:domain:strict`, `pnpm validate:domain:coverage`, `pnpm validate:scripts-layout`, route catalog, docs sync, env example sync |
 | **Unit** | `vitest --project unit --project global --changed origin/{base}` (no DB) |
 | **Migration lint** | `pnpm db:migrate:lint` (static migration safety) |
 | **Build verify** | `pnpm build` + Docker API/worker build (`load: true`, no push, no Trivy) |
-| **Security scan** | `pnpm deps:audit`, gitleaks, semgrep |
+| **Security audit** | `pnpm deps:audit`, `pnpm deps:audit:prod`, dependency review |
+| **Security secrets** | gitleaks full-history scan |
+| **Security SAST** | semgrep |
 | **Contract + property** | `pnpm test:contract`, `pnpm test:property` |
 
 ### Post-merge lane ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml))
@@ -304,6 +310,23 @@ Optional on Railway/GitHub only if overriding app default: **`TOMBSTONE_RETENTIO
 | Item | Notes |
 | --- | --- |
 | **Integration secrets** | `pnpm setup:infra` can push `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via [build-env-vars.ts](../../../tooling/setup/build-env-vars.ts), but `reusable-railway-deploy.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
+
+### Partial re-runs and manual recovery
+
+Use **workflow_dispatch** when you need to run part of the pipeline without a full merge push.
+
+| Workflow | When to use | Key inputs |
+| --- | --- | --- |
+| [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Re-run publish/deploy/docs after a partial failure | `skip_tests`, `skip_security`, `skip_docker`, `skip_deploy`, `skip_docs` |
+| [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) | Redeploy a known GHCR image without rebuilding | `target`, `target_branch`, `image_override` (`:sha`, `:previous`, `:dev`, `:latest`), `debug` |
+| [bootstrap-railway-service.yml](../../../.github/workflows/bootstrap-railway-service.yml) | One-time or recovery Railway service setup | `environment`, `service` (`api` / `worker` / `both`), `dry_run` (default `true`) |
+| Reusable test/docker workflows | Ad-hoc validation on a branch tip | `merge_commit_sha`, `target_branch` on `reusable-vitest-postgres-redis.yml`, `reusable-docker-build-trivy.yml`, `reusable-chaos-toxiproxy.yml`, `reusable-openapi-postman-publish.yml` |
+
+**Bootstrap flow:** Run **Bootstrap Railway service** with `dry_run=true` first and review `pnpm setup:infra:status` / `pnpm setup:infra:dry-run` output. Flip `dry_run=false` to apply `pnpm setup:infra --yes` and trigger the first deploy via `pnpm tool:railway-deploy-image` (same path as steady-state CD). Re-running against an already-configured environment is idempotent.
+
+**Rollback:** Dispatch **Reusable — Railway deploy** with `image_override=ghcr.io/<owner>/<repo>/core-be-api:previous` (and the worker ref derived automatically when the override contains `core-be-api`).
+
+**Cleanup:** [cleanup-cache.yml](../../../.github/workflows/cleanup-cache.yml) prunes Actions caches (outcome-aware LRU; daily safety net on `dev`/`main`). [cleanup-ghcr.yml](../../../.github/workflows/cleanup-ghcr.yml) prunes stale GHCR manifests weekly while preserving `:latest`, `:previous`, `:dev`, and recent SHA tags.
 
 ---
 

@@ -1,4 +1,4 @@
-# PR auto-labeling config for actions/labeler@v6 (invoked by .github/workflows/pr-governance.yml).
+# PR auto-labeling config for actions/labeler v6 (invoked by .github/workflows/pr-governance.yml).
 # Maps changed-file globs to labels. Label colors and descriptions live in .github/labels.yml
 # as the manual reference for GitHub label setup.
 #

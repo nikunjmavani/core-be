@@ -46,6 +46,29 @@ on:
         description: Protected branch that received the merge (main or dev)
         required: false
         type: string
+      image_override:
+        description: Optional GHCR image ref to deploy instead of the commit SHA tag
+        required: false
+        type: string
+        default: ''
+      debug:
+        description: Emit verbose Railway/GitHub Environment diagnostics
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      api_base_url:
+        description: Deployed API base URL
+        value: ${{ jobs.deploy.outputs.api_base_url }}
+      api_image:
+        description: Deployed API image reference
+        value: ${{ jobs.deploy.outputs.api_image }}
+      worker_image:
+        description: Deployed worker image reference
+        value: ${{ jobs.deploy.outputs.worker_image }}
+      deployment_environment:
+        description: GitHub Environment name used for deploy
+        value: ${{ jobs.deploy.outputs.deployment_environment }}
   workflow_dispatch:
     inputs:
       target:
@@ -55,6 +78,28 @@ on:
         options:
           - production
           - development
+      merge_commit_sha:
+        description: Commit SHA to deploy (defaults to branch tip)
+        required: false
+        type: string
+        default: ''
+      target_branch:
+        description: Branch context (main or dev)
+        required: false
+        type: choice
+        options:
+          - main
+          - dev
+      image_override:
+        description: Optional GHCR image ref to deploy instead of the commit SHA tag
+        required: false
+        type: string
+        default: ''
+      debug:
+        description: Emit verbose Railway/GitHub Environment diagnostics
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: railway-deploy-${{ inputs.target_branch || github.ref_name }}-${{ inputs.merge_commit_sha || github.sha }}
@@ -64,12 +109,13 @@ permissions:
   contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   resolve-environment:
     name: Resolve environment
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       environment: ${{ steps.map.outputs.environment }}
     steps:
@@ -118,9 +164,16 @@ jobs:
     name: Deploy (${{ needs.resolve-environment.outputs.environment }})
     needs: resolve-environment
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: ${{ needs.resolve-environment.outputs.environment }}
+    permissions:
+      contents: read
+      packages: write
     outputs:
       api_base_url: ${{ steps.api_health.outputs.api_base_url }}
+      api_image: ${{ steps.ghcr_images.outputs.api_image }}
+      worker_image: ${{ steps.ghcr_images.outputs.worker_image }}
+      deployment_environment: ${{ needs.resolve-environment.outputs.environment }}
     # Job-level env block — every step inherits these. Steps only declare an
     # `env:` block when they need something extra (e.g. db:migrate forwards
     # DATABASE_URL alongside). Defining each value once here makes the file
@@ -135,7 +188,7 @@ jobs:
       GH_VARS_JSON: ${{ toJSON(vars) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ inputs.merge_commit_sha || github.sha }}
 
@@ -194,6 +247,7 @@ jobs:
         run: pnpm validate:github-env
 
       - name: Validate Railway deploy secrets
+        if: inputs.debug == true
         run: |
           set -euo pipefail
 
@@ -293,22 +347,41 @@ jobs:
 
           echo "Railway deploy secrets present and service-scoped authentication succeeded for environment '${ENVIRONMENT}'."
 
+      - name: Validate Railway deploy secrets (minimal)
+        if: inputs.debug != true
+        run: |
+          set -euo pipefail
+          missing=()
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then missing+=("RAILWAY_TOKEN"); fi
+          if [ -z "${RAILWAY_SERVICE_ID:-}" ]; then missing+=("RAILWAY_SERVICE_ID"); fi
+          if [ -z "${RAILWAY_WORKER_SERVICE_ID:-}" ]; then missing+=("RAILWAY_WORKER_SERVICE_ID"); fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required Railway deploy secrets in GitHub Environment '${ENVIRONMENT}': ${missing[*]}"
+            exit 1
+          fi
+
       - name: Log expected scanned CI image refs from GHCR
         id: ghcr_images
         env:
           GHCR_API_IMAGE: ${{ secrets.GHCR_API_IMAGE }}
           GHCR_WORKER_IMAGE: ${{ secrets.GHCR_WORKER_IMAGE }}
+          IMAGE_OVERRIDE: ${{ inputs.image_override }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           API_BASE="ghcr.io/${REPOSITORY}/core-be-api"
           WORKER_BASE="ghcr.io/${REPOSITORY}/core-be-worker"
-          if [ -n "${GHCR_API_IMAGE:-}" ]; then
+          if [ -n "${IMAGE_OVERRIDE:-}" ]; then
+            api_image="${IMAGE_OVERRIDE}"
+            worker_image="${IMAGE_OVERRIDE/core-be-api/core-be-worker}"
+          elif [ -n "${GHCR_API_IMAGE:-}" ]; then
             api_image="${GHCR_API_IMAGE}"
           else
             api_image="${API_BASE}:${RAILWAY_GIT_COMMIT_SHA}"
           fi
-          if [ -n "${GHCR_WORKER_IMAGE:-}" ]; then
+          if [ -n "${IMAGE_OVERRIDE:-}" ]; then
+            :
+          elif [ -n "${GHCR_WORKER_IMAGE:-}" ]; then
             worker_image="${GHCR_WORKER_IMAGE}"
           else
             worker_image="${WORKER_BASE}:${RAILWAY_GIT_COMMIT_SHA}"
@@ -519,7 +592,45 @@ jobs:
           deploy_service_from_image "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"
           echo "Worker deployment reached terminal SUCCESS (Railway only flips to SUCCESS once the in-pod HEALTHCHECK passes)."
 
+      - name: Retag production images as previous
+        if: success() && needs.resolve-environment.outputs.environment == 'production'
+        env:
+          API_IMAGE: ${{ steps.ghcr_images.outputs.api_image }}
+          WORKER_IMAGE: ${{ steps.ghcr_images.outputs.worker_image }}
+        run: |
+          set -euo pipefail
+          npm install -g @railway/cli >/dev/null 2>&1 || true
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          API_BASE="${API_IMAGE%:*}"
+          WORKER_BASE="${WORKER_IMAGE%:*}"
+          docker pull "${API_IMAGE}"
+          docker pull "${WORKER_IMAGE}"
+          docker tag "${API_IMAGE}" "${API_BASE}:previous"
+          docker tag "${WORKER_IMAGE}" "${WORKER_BASE}:previous"
+          docker push "${API_BASE}:previous"
+          docker push "${WORKER_BASE}:previous"
+          echo "Retagged ${API_BASE}:previous and ${WORKER_BASE}:previous"
+
+      - name: Retag failed deploy images for triage
+        if: failure()
+        env:
+          API_IMAGE: ${{ steps.ghcr_images.outputs.api_image }}
+          WORKER_IMAGE: ${{ steps.ghcr_images.outputs.worker_image }}
+        run: |
+          set -euo pipefail
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin || exit 0
+          API_BASE="${API_IMAGE%:*}"
+          WORKER_BASE="${WORKER_IMAGE%:*}"
+          SHA_TAG="${API_IMAGE##*:}"
+          docker pull "${API_IMAGE}" || exit 0
+          docker pull "${WORKER_IMAGE}" || exit 0
+          docker tag "${API_IMAGE}" "${API_BASE}:deploy-failed-${SHA_TAG}"
+          docker tag "${WORKER_IMAGE}" "${WORKER_BASE}:deploy-failed-${SHA_TAG}"
+          docker push "${API_BASE}:deploy-failed-${SHA_TAG}" || true
+          docker push "${WORKER_BASE}:deploy-failed-${SHA_TAG}" || true
+
       - name: Environment fully live
+        if: success()
         env:
           API_BASE_URL: ${{ steps.api_health.outputs.api_base_url }}
         run: |

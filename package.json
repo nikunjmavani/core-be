@@ -56,7 +56,7 @@
     "validate:test-api-prefix": "tsx src/scripts/validators/tests/validate-test-api-prefix.ts",
     "validate:api-docs-hub": "tsx src/scripts/validators/docs/validate-api-docs-hub.ts",
     "ci:local": "pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:constants && pnpm routes:catalog:check && pnpm docs:check && pnpm db:migrate:lint && pnpm tool:sync-env-example && pnpm build && pnpm build:check && pnpm test",
-    "ci:quality": "pnpm deps:audit && pnpm deps:audit:prod && pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:locale-keys && pnpm validate:constants && pnpm validate:test-api-prefix && pnpm validate:api-docs-hub && pnpm test:property && pnpm test:contract && pnpm routes:catalog:check && pnpm docs:check && pnpm tool:sync-env-example && pnpm db:migrate:lint",
+    "ci:quality": "pnpm deps:audit && pnpm deps:audit:prod && pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:locale-keys && pnpm validate:constants && pnpm validate:test-api-prefix && pnpm validate:api-docs-hub && pnpm test:property && pnpm test:contract && pnpm routes:catalog:check && pnpm docs:check && pnpm tool:sync-env-example && pnpm db:migrate:lint && node tooling/ci/check-action-pins.mjs",
     "compose:up": "docker compose up -d",
     "compose:down": "docker compose down",
     "compose:wait": "bash tooling/dev/wait-for-local-postgres.sh",

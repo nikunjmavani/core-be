@@ -19,12 +19,13 @@ permissions:
   contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       src-code: ${{ steps.filter.outputs.src-code }}
       docker: ${{ steps.filter.outputs.docker }}
@@ -33,10 +34,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
 
       - name: Path filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@6852f92c20ea7fd3b0c25de3b5112db3a98da050 # v3
         id: filter
         with:
           filters: |
@@ -64,8 +67,11 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs-only-md != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm lint
 
@@ -74,10 +80,51 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs-only-md != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm typecheck
+
+  static-sync:
+    name: Static sync
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - name: Validate domain structure (strict)
+        run: pnpm validate:domain:strict
+
+      - name: Validate domain integration test coverage
+        run: pnpm validate:domain:coverage
+
+      - name: Scripts layout (no root-level .ts)
+        run: pnpm validate:scripts-layout
+
+      - name: Route catalog in sync
+        run: pnpm routes:catalog:check
+
+      - uses: ./.github/actions/test-env
+
+      - name: OpenAPI specs in sync
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
+          REDIS_URL: redis://localhost:6379
+        run: pnpm docs:check
+
+      - name: Env example in sync with schema
+        run: |
+          pnpm tool:sync-env-example || (echo "::error::.env.example is out of sync with env schema or is missing the # GitHub Secrets / # GitHub Variables top-level halves. See log above. Run pnpm tool:sync-env-example (with --fix if needed)." && exit 1)
 
   unit:
     needs: [changes]
@@ -93,8 +140,11 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs-only-md != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm db:migrate:lint
 
@@ -109,22 +159,25 @@ jobs:
         needs.changes.outputs.ci-config == 'true'
       )
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       DOCKER_BUILDKIT: 1
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
 
       - uses: ./.github/actions/setup-node-pnpm
 
       - run: pnpm build
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
 
       - name: Verify Dockerfile.worker sync
         run: node tooling/ci/check-dockerfile-sync.mjs
 
       - name: Build API Docker image (load only)
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: .
           target: api
@@ -135,11 +188,11 @@ jobs:
             GENERATE_MCP_DOCS=true
             BUILD_REVISION=${{ github.sha }}
             IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=core-be-api
-          cache-to: type=gha,mode=max,scope=core-be-api
+          cache-from: type=gha,scope=core-be-api-pr
+          cache-to: type=gha,mode=max,scope=core-be-api-pr
 
       - name: Build worker Docker image (load only)
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: .
           file: Dockerfile.worker
@@ -149,18 +202,19 @@ jobs:
           build-args: |
             BUILD_REVISION=${{ github.sha }}
             IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=core-be-worker
-          cache-to: type=gha,mode=max,scope=core-be-worker
+          cache-from: type=gha,scope=core-be-worker-pr
+          cache-to: type=gha,mode=max,scope=core-be-worker-pr
 
-  security-scan:
-    name: Security scan
+  security-audit:
+    name: Security audit
     needs: [changes]
     if: needs.changes.outputs.docs-only-md != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - uses: ./.github/actions/setup-node-pnpm
 
@@ -170,20 +224,50 @@ jobs:
       - name: Production dependency audit
         run: pnpm deps:audit:prod
 
+  security-secrets:
+    name: Security secrets
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Cache gitleaks binary
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: /usr/local/bin/gitleaks
+          key: gitleaks-8.30.1-${{ runner.os }}
+
       - name: Install gitleaks
         env:
           GITLEAKS_VERSION: 8.30.1
         run: |
           set -euo pipefail
-          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | sudo tar -xz -C /usr/local/bin gitleaks
-          sudo chmod +x /usr/local/bin/gitleaks
+          if [ ! -x /usr/local/bin/gitleaks ]; then
+            curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+              | sudo tar -xz -C /usr/local/bin gitleaks
+            sudo chmod +x /usr/local/bin/gitleaks
+          fi
           gitleaks version
 
       - name: Gitleaks (secret detection)
         run: gitleaks detect --redact --verbose --no-banner --config .gitleaks.toml
 
-      - uses: actions/setup-python@v6
+  security-sast:
+    name: Security SAST
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: '3.11'
 
@@ -193,13 +277,50 @@ jobs:
       - name: Semgrep SAST
         run: semgrep scan --config p/default --metrics off
 
+  dependency-review:
+    name: Dependency review
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-3.0, AGPL-3.0
+
+  actionlint:
+    name: Actionlint
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - name: Run actionlint
+        uses: rhysd/actionlint@03d0035246f3e81f36aed592ffb4bebf33a03106 # v1.7.7
+
   contract-property:
     name: Contract + property
     needs: [changes]
     if: needs.changes.outputs.docs-only-md != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
 
       - uses: ./.github/actions/setup-node-pnpm
 

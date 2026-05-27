@@ -71,7 +71,7 @@ Extension: `biomejs.biome` (see `.vscode/extensions.json`).
 
 The hook runs sequential checks. If any fail, the commit is rejected. See **before-commit-guard** when the user reports a failed commit.
 
-Pre-commit mirrors a **subset** of [`.github/workflows/reusable/quality-static.yml`](../../../.github/workflows/reusable/quality-static.yml). CI additionally runs `deps:audit`, full-repo `pnpm validate`, `validate:domain:coverage`, always-on `db:migrate:lint`, `test:contract`, Semgrep, and full-repo Gitleaks.
+Pre-commit mirrors a **subset** of the static checks in [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml). CI additionally runs `deps:audit`, full-repo `pnpm validate`, `validate:domain:coverage`, always-on `db:migrate:lint`, `test:contract`, Semgrep, and full-repo Gitleaks.
 
 | Step | Command                                                                                   | What it catches                                                                                                                                                      |
 | ---- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

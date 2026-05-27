@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   k6:
@@ -60,7 +60,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -72,7 +72,7 @@ jobs:
           rate-limit-window-ms: '60000'
 
       - name: Setup k6
-        uses: grafana/setup-k6-action@v1
+        uses: grafana/setup-k6-action@c00053c996b4061198c9c24a00474b748abdf8b7 # v1
 
       - name: Run migrations
         run: pnpm db:migrate
@@ -175,7 +175,7 @@ jobs:
 
       - name: Upload k6 summaries and server log
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: k6-load-test-artifacts
           path: |

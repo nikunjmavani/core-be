@@ -11,20 +11,52 @@ on:
         description: Protected branch that received the merge (main or dev)
         required: true
         type: string
+    outputs:
+      api_image:
+        description: GHCR API image reference pushed for this commit
+        value: ${{ jobs.run.outputs.api_image }}
+      worker_image:
+        description: GHCR worker image reference pushed for this commit
+        value: ${{ jobs.run.outputs.worker_image }}
+  workflow_dispatch:
+    inputs:
+      merge_commit_sha:
+        description: Commit SHA to build
+        required: false
+        type: string
+        default: ''
+      target_branch:
+        description: Branch context (main or dev)
+        required: true
+        type: choice
+        options:
+          - main
+          - dev
 
 permissions:
   contents: read
-  packages: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   run:
     name: Build + Trivy
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    outputs:
+      api_image: ${{ steps.push.outputs.api_image }}
+      worker_image: ${{ steps.push.outputs.worker_image }}
     env:
       DOCKER_BUILDKIT: 1
+      MERGE_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
+      TARGET_BRANCH: ${{ inputs.target_branch || github.ref_name }}
 
     services:
       postgres:
@@ -53,9 +85,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.merge_commit_sha }}
+          ref: ${{ env.MERGE_COMMIT_SHA }}
+          fetch-depth: 1
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -66,16 +99,13 @@ jobs:
         uses: ./.github/actions/test-env
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
 
       - name: Verify Dockerfile.worker sync
         run: node tooling/ci/check-dockerfile-sync.mjs
 
-      # Build with BuildKit GHA cache so layers are reused across runs.
-      # API and worker images are loaded back into the local Docker daemon
-      # (`load: true`) so Trivy + the smoke run below can reference them by tag.
       - name: Build API Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: .
           target: api
@@ -83,26 +113,26 @@ jobs:
           tags: core-be:ci
           build-args: |
             GENERATE_MCP_DOCS=true
-            BUILD_REVISION=${{ inputs.merge_commit_sha }}
+            BUILD_REVISION=${{ env.MERGE_COMMIT_SHA }}
             IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=core-be-api
           cache-to: type=gha,mode=max,scope=core-be-api
 
       - name: Build worker Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: .
           file: Dockerfile.worker
           load: true
           tags: core-be-worker:ci
           build-args: |
-            BUILD_REVISION=${{ inputs.merge_commit_sha }}
+            BUILD_REVISION=${{ env.MERGE_COMMIT_SHA }}
             IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=core-be-worker
           cache-to: type=gha,mode=max,scope=core-be-worker
 
-      - name: Scan API image with Trivy
-        uses: aquasecurity/trivy-action@v0.36.0
+      - name: Scan API image with Trivy (table)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: core-be:ci
           format: table
@@ -113,8 +143,8 @@ jobs:
           scanners: vuln
           skip-files: /app/package.json,/app/pnpm-lock.yaml
 
-      - name: Scan worker image with Trivy
-        uses: aquasecurity/trivy-action@v0.36.0
+      - name: Scan worker image with Trivy (table)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: core-be-worker:ci
           format: table
@@ -125,37 +155,102 @@ jobs:
           scanners: vuln
           skip-files: /app/package.json,/app/pnpm-lock.yaml
 
+      - name: Scan API image with Trivy (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: core-be:ci
+          format: sarif
+          output: trivy-api.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 0
+          ignore-unfixed: true
+          version: v0.69.2
+          scanners: vuln
+          skip-files: /app/package.json,/app/pnpm-lock.yaml
+
+      - name: Scan worker image with Trivy (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: core-be-worker:ci
+          format: sarif
+          output: trivy-worker.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 0
+          ignore-unfixed: true
+          version: v0.69.2
+          scanners: vuln
+          skip-files: /app/package.json,/app/pnpm-lock.yaml
+
+      - name: Upload API Trivy SARIF
+        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3
+        with:
+          sarif_file: trivy-api.sarif
+          category: trivy-api
+
+      - name: Upload worker Trivy SARIF
+        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3
+        with:
+          sarif_file: trivy-worker.sarif
+          category: trivy-worker
+
       - name: Verify worker image
         run: |
           set -euo pipefail
           docker run --rm core-be-worker:ci node --check dist/src/worker.js
           docker run --rm core-be-worker:ci node -e "import('argon2').then(()=>import('@sentry/profiling-node')).then(()=>console.log('native ok'))"
 
-      # Publish scanned images to GHCR after a protected-branch merge (dev or main).
-      # reusable-railway-deploy.yml then pulls these by commit SHA tag for both environments.
-      # Only `main` gets the floating `:latest` tag so dev never accidentally
-      # becomes the default-consumed image.
+      - name: Generate API image SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: core-be:ci
+          format: spdx-json
+          output-file: api-image.spdx.json
+          upload-artifact: false
+
+      - name: Generate worker image SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: core-be-worker:ci
+          format: spdx-json
+          output-file: worker-image.spdx.json
+          upload-artifact: false
+
       - name: Login to GitHub Container Registry
-        if: contains(fromJSON('["main","dev"]'), inputs.target_branch)
-        uses: docker/login-action@v4
+        if: contains(fromJSON('["main","dev"]'), env.TARGET_BRANCH)
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
+      - name: Install Cosign
+        if: contains(fromJSON('["main","dev"]'), env.TARGET_BRANCH)
+        uses: sigstore/cosign-installer@2e2f661cd4be3a4b891a882064e49d0fed4b7b88 # v3.9.0
+
       - name: Push images to GHCR (main + dev)
-        if: contains(fromJSON('["main","dev"]'), inputs.target_branch)
+        id: push
+        if: contains(fromJSON('["main","dev"]'), env.TARGET_BRANCH)
         run: |
           set -euo pipefail
           API_IMAGE="ghcr.io/${{ github.repository }}/core-be-api"
           WORKER_IMAGE="ghcr.io/${{ github.repository }}/core-be-worker"
-          docker tag core-be:ci "${API_IMAGE}:${{ inputs.merge_commit_sha }}"
-          docker tag core-be-worker:ci "${WORKER_IMAGE}:${{ inputs.merge_commit_sha }}"
-          docker push "${API_IMAGE}:${{ inputs.merge_commit_sha }}"
-          docker push "${WORKER_IMAGE}:${{ inputs.merge_commit_sha }}"
-          echo "Pushed ${API_IMAGE}:${{ inputs.merge_commit_sha }}"
-          echo "Pushed ${WORKER_IMAGE}:${{ inputs.merge_commit_sha }}"
-          if [ "${{ inputs.target_branch }}" = "main" ]; then
+          docker tag core-be:ci "${API_IMAGE}:${MERGE_COMMIT_SHA}"
+          docker tag core-be-worker:ci "${WORKER_IMAGE}:${MERGE_COMMIT_SHA}"
+          docker push "${API_IMAGE}:${MERGE_COMMIT_SHA}"
+          docker push "${WORKER_IMAGE}:${MERGE_COMMIT_SHA}"
+          api_digest="$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "${API_IMAGE}:${MERGE_COMMIT_SHA}")"
+          worker_digest="$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "${WORKER_IMAGE}:${MERGE_COMMIT_SHA}")"
+          {
+            echo "api_image=${API_IMAGE}:${MERGE_COMMIT_SHA}"
+            echo "worker_image=${WORKER_IMAGE}:${MERGE_COMMIT_SHA}"
+            echo "api_image_base=${API_IMAGE}"
+            echo "worker_image_base=${WORKER_IMAGE}"
+            echo "api_digest=${api_digest}"
+            echo "worker_digest=${worker_digest}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Pushed ${API_IMAGE}:${MERGE_COMMIT_SHA}"
+          echo "Pushed ${WORKER_IMAGE}:${MERGE_COMMIT_SHA}"
+          if [ "${TARGET_BRANCH}" = "main" ]; then
             docker tag core-be:ci "${API_IMAGE}:latest"
             docker tag core-be-worker:ci "${WORKER_IMAGE}:latest"
             docker push "${API_IMAGE}:latest"
@@ -163,6 +258,64 @@ jobs:
             echo "Pushed ${API_IMAGE}:latest"
             echo "Pushed ${WORKER_IMAGE}:latest"
           fi
+          if [ "${TARGET_BRANCH}" = "dev" ]; then
+            docker tag core-be:ci "${API_IMAGE}:dev"
+            docker tag core-be-worker:ci "${WORKER_IMAGE}:dev"
+            docker push "${API_IMAGE}:dev"
+            docker push "${WORKER_IMAGE}:dev"
+            echo "Pushed ${API_IMAGE}:dev"
+            echo "Pushed ${WORKER_IMAGE}:dev"
+          fi
+
+      - name: Sign API image
+        if: contains(fromJSON('["main","dev"]'), env.TARGET_BRANCH)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${{ steps.push.outputs.api_image }}"
+
+      - name: Sign worker image
+        if: contains(fromJSON('["main","dev"]'), env.TARGET_BRANCH)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${{ steps.push.outputs.worker_image }}"
+
+      - name: Attest API build provenance
+        if: contains(fromJSON('["main","dev"]'), env.TARGET_BRANCH)
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-name: ${{ steps.push.outputs.api_image_base }}
+          subject-digest: ${{ steps.push.outputs.api_digest }}
+          push-to-registry: true
+
+      - name: Attest worker build provenance
+        if: contains(fromJSON('["main","dev"]'), env.TARGET_BRANCH)
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-name: ${{ steps.push.outputs.worker_image_base }}
+          subject-digest: ${{ steps.push.outputs.worker_digest }}
+          push-to-registry: true
+
+      - name: Attest API SBOM
+        if: contains(fromJSON('["main","dev"]'), env.TARGET_BRANCH)
+        uses: actions/attest-sbom@51e74621a501c89df81fc1391c5a8f4cfc9fab2f # v3
+        with:
+          subject-name: ${{ steps.push.outputs.api_image_base }}
+          subject-digest: ${{ steps.push.outputs.api_digest }}
+          sbom-path: api-image.spdx.json
+          push-to-registry: true
+
+      - name: Attest worker SBOM
+        if: contains(fromJSON('["main","dev"]'), env.TARGET_BRANCH)
+        uses: actions/attest-sbom@51e74621a501c89df81fc1391c5a8f4cfc9fab2f # v3
+        with:
+          subject-name: ${{ steps.push.outputs.worker_image_base }}
+          subject-digest: ${{ steps.push.outputs.worker_digest }}
+          sbom-path: worker-image.spdx.json
+          push-to-registry: true
 
       - name: Boot API container and verify /health
         env:
@@ -171,9 +324,6 @@ jobs:
           DATABASE_SSL_ENABLED: 'false'
         run: |
           set -euo pipefail
-          # JWT keys and CI test env are already in $GITHUB_ENV (exported by
-          # ./.github/actions/test-env above), so we can pass them straight
-          # through to `docker run -e VAR` without re-exporting heredocs.
           docker run --rm --network host \
             -e NODE_ENV=test \
             -e DATABASE_URL="$DATABASE_URL" \

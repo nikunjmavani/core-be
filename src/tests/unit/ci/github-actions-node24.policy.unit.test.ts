@@ -32,7 +32,11 @@ describe('GitHub Actions Node.js 24 policy', () => {
   it('sets FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 on every workflow', () => {
     for (const workflowPath of listWorkflowFiles()) {
       const contents = readFileSync(workflowPath, 'utf8');
-      expect(contents, workflowPath).toContain('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true');
+      const hasInlineFlag = contents.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true');
+      const hasRepoVariableReference = contents.includes(
+        'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24',
+      );
+      expect(hasInlineFlag || hasRepoVariableReference, workflowPath).toBe(true);
     }
   });
 
@@ -69,8 +73,9 @@ describe('GitHub Actions Node.js 24 policy', () => {
       join(ROOT, '.github/actions/setup-node-pnpm/action.yml'),
       'utf8',
     );
-    expect(setupNodePnpm).toContain('pnpm/action-setup@v6');
-    expect(setupNodePnpm).toContain('actions/setup-node@v6');
+    expect(setupNodePnpm).toMatch(/pnpm\/action-setup@[0-9a-f]{40}/);
+    expect(setupNodePnpm).toMatch(/actions\/setup-node@[0-9a-f]{40}/);
     expect(setupNodePnpm).toContain('node-version-file: .nvmrc');
+    expect(setupNodePnpm).toContain('corepack enable');
   });
 });
