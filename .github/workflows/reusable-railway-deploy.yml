@@ -318,6 +318,14 @@ jobs:
         # command substitution `$(...)` silently strips NULs (you'll see
         # "warning: command substitution: ignored null byte in input"), so the
         # jq pipeline is materialised to a temp file and replayed per service.
+        #
+        # All KEY=VALUE pairs are bundled into a single `railway variables
+        # --set ... --set ...` call per service. Batching collapses ~50 GraphQL
+        # mutations into one (so transient `backboard.railway.com` timeouts
+        # don't fail mid-stream) and any genuine flake is absorbed by an
+        # exponential-backoff retry loop. Railway de-duplicates the implicit
+        # redeploy from the variables change with our explicit `redeploy` step
+        # below, so we don't bother with `--skip-deploys`.
         run: |
           set -euo pipefail
 
@@ -350,19 +358,47 @@ jobs:
           payload_byte_count="$(wc -c < "$payload_file")"
           echo "Prepared $payload_byte_count bytes of NUL-delimited KEY=VALUE pairs."
 
+          # Build a single argv batch (one --set per runtime KEY=VALUE) so we
+          # can ship every variable in a single GraphQL mutation per service.
+          set_args=()
+          skipped=0
+          while IFS= read -r -d '' kv; do
+            [ -z "$kv" ] && continue
+            key="${kv%%=*}"
+            if [[ "$key" =~ $exclude_regex ]]; then
+              skipped=$((skipped + 1))
+              continue
+            fi
+            set_args+=(--set "$kv")
+          done < "$payload_file"
+
+          push_count=$(( ${#set_args[@]} / 2 ))
+          if [ "$push_count" -eq 0 ]; then
+            echo "::warning::No runtime variables to push to Railway (skipped ${skipped} infra/CI keys)."
+            exit 0
+          fi
+          echo "Pushing ${push_count} runtime variables per service (skipping ${skipped} infra/CI keys)."
+
+          # Retry the batched call to ride out transient backboard timeouts.
+          # Railway accepts the same payload idempotently (set is upsert), so
+          # retries are safe.
+          max_attempts=5
           for service in $services; do
-            pushed=0
-            skipped=0
-            while IFS= read -r -d '' kv; do
-              key="${kv%%=*}"
-              if [[ "$key" =~ $exclude_regex ]]; then
-                skipped=$((skipped + 1))
-                continue
+            attempt=1
+            while true; do
+              if railway variables --service "$service" "${set_args[@]}"; then
+                echo "Pushed ${push_count} variables to Railway service ${service} on attempt ${attempt}."
+                break
               fi
-              railway variable set --service "$service" "$kv"
-              pushed=$((pushed + 1))
-            done < "$payload_file"
-            echo "Pushed $pushed variables to Railway service $service (skipped $skipped infra/CI keys)."
+              if [ "$attempt" -ge "$max_attempts" ]; then
+                echo "::error::Railway variables push failed for service ${service} after ${max_attempts} attempts."
+                exit 1
+              fi
+              sleep_seconds=$(( 2 ** attempt ))
+              echo "Railway variables push for ${service} failed (attempt ${attempt}/${max_attempts}); retrying in ${sleep_seconds}s..."
+              sleep "$sleep_seconds"
+              attempt=$((attempt + 1))
+            done
           done
 
       - name: Deploy API to Railway
