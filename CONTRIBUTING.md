@@ -1,6 +1,6 @@
 # Contributing to core-be
 
-Thank you for improving this backend. This document stays short—use **[CLAUDE.md](CLAUDE.md)** for architecture and **[AGENTS.md](AGENTS.md)** for the full agent and CI checklist.
+Thank you for improving this backend. This document is intentionally short—use **[CLAUDE.md](CLAUDE.md)** for architecture and **[AGENTS.md](AGENTS.md)** for the full agent and CI checklist.
 
 ## Prerequisites
 
