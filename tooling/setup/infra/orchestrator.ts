@@ -356,6 +356,31 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
 
   logger.blank();
 
+  // Pre-flight state reconstruction: for every enabled provider that supports
+  // `detectRemote`, query the remote provider and persist any resources we
+  // already created in a previous run that are missing from local state.
+  // Without this, providers whose state was wiped (or never written) would
+  // happily create duplicate resources (e.g. a second Railway Redis service)
+  // on rerun because their `alreadyDone` / idempotency checks only consult
+  // local state.
+  logger.info('Reconstructing state from remote providers (pre-flight)...');
+  const { foundCount: reconstructedCount, updatedProviderKeys } = await reconstructStateFromRemote({
+    config,
+    secrets,
+    state,
+    environments,
+    providers: selectedProviders,
+    verbose: false,
+  });
+  if (reconstructedCount > 0) {
+    logger.success(
+      `Adopted ${reconstructedCount} existing resource(s) from remote into state: ${updatedProviderKeys.join(', ')}.`,
+    );
+  } else {
+    logger.info('No existing remote resources required adoption.');
+  }
+  logger.blank();
+
   const existingResources = await checkForExistingResources(context, selectedProviders);
   if (existingResources.length > 0) {
     logger.existingResourcesError(existingResources);
@@ -662,6 +687,76 @@ export async function runUpdate(
 
 // ─── RECONSTRUCT ────────────────────────────────────────────────────────────
 
+interface ReconstructStateOptions {
+  config: SetupConfig;
+  secrets: SetupSecrets;
+  state: SetupState;
+  environments: string[];
+  providers: readonly InfraProvider[];
+  /**
+   * When true, providers that do not implement `detectRemote` are logged
+   * (used by `runReconstruct`). When false, missing hooks are silent (used
+   * by the implicit reconstruct phase inside `runProvision`).
+   */
+  verbose?: boolean;
+}
+
+/**
+ * Walks every enabled provider that implements `detectRemote`, runs it,
+ * persists any state updates synchronously, and returns the total count of
+ * remote resources discovered. Used by both `runReconstruct` (explicit
+ * `--reconstruct` command) and `runProvision` (implicit pre-flight before
+ * the provision loop, so providers always see the freshest remote state and
+ * never create duplicates of resources that already exist remotely).
+ */
+async function reconstructStateFromRemote(
+  options: ReconstructStateOptions,
+): Promise<{ foundCount: number; updatedProviderKeys: string[] }> {
+  const { config, secrets, state, environments, providers, verbose = false } = options;
+  let foundCount = 0;
+  const updatedProviderKeys: string[] = [];
+
+  for (const provider of providers) {
+    if (
+      !provider.isEnabled({ config, secrets, state, environments, applyStateUpdates: () => {} })
+    ) {
+      continue;
+    }
+    if (!provider.detectRemote) {
+      if (verbose) {
+        logger.info(`${provider.name} — remote detection not available, skipping`);
+      }
+      continue;
+    }
+
+    const spinner = logger.startSpinner(`Querying ${provider.name}...`);
+    try {
+      const resources = await provider.detectRemote({
+        config,
+        secrets,
+        state,
+        environments,
+        applyStateUpdates: (updates: Partial<SetupState>) => {
+          Object.assign(state, updates);
+          saveState(state);
+        },
+      });
+      const count = Object.keys(resources).length;
+      if (count > 0) {
+        foundCount += count;
+        updatedProviderKeys.push(provider.key);
+      }
+      logger.stopSpinner(spinner, `${provider.name} — ${count} resource(s) found`);
+    } catch (detectError) {
+      const message = detectError instanceof Error ? detectError.message : String(detectError);
+      logger.stopSpinner(spinner, `${provider.name} — failed: ${message}`, 'fail');
+    }
+  }
+
+  saveState(state);
+  return { foundCount, updatedProviderKeys };
+}
+
 export async function runReconstruct(
   options: { providerSelection?: ProviderSelectionInput } = {},
 ): Promise<void> {
@@ -676,38 +771,15 @@ export async function runReconstruct(
   logger.info('Reconstructing state from remote providers...');
   logger.blank();
 
-  let foundCount = 0;
+  const { foundCount } = await reconstructStateFromRemote({
+    config,
+    secrets,
+    state,
+    environments,
+    providers,
+    verbose: true,
+  });
 
-  for (const provider of providers) {
-    if (
-      !provider.isEnabled({ config, secrets, state, environments, applyStateUpdates: () => {} })
-    ) {
-      continue;
-    }
-    if (!provider.detectRemote) {
-      logger.info(`${provider.name} — remote detection not available, skipping`);
-      continue;
-    }
-
-    const spinner = logger.startSpinner(`Querying ${provider.name}...`);
-    try {
-      const resources = await provider.detectRemote({
-        config,
-        secrets,
-        state,
-        environments,
-        applyStateUpdates: (updates: Partial<SetupState>) => Object.assign(state, updates),
-      });
-      const count = Object.keys(resources).length;
-      foundCount += count;
-      logger.stopSpinner(spinner, `${provider.name} — ${count} resource(s) found`);
-    } catch (detectError) {
-      const message = detectError instanceof Error ? detectError.message : String(detectError);
-      logger.stopSpinner(spinner, `${provider.name} — failed: ${message}`, 'fail');
-    }
-  }
-
-  saveState(state);
   logger.blank();
   if (foundCount > 0) {
     logger.success(`Rebuilt state with ${foundCount} resource(s) from remote.`);

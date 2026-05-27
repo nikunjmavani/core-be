@@ -324,6 +324,57 @@ async function readRedisPassword(options: {
   return password;
 }
 
+interface AdoptableRedisService {
+  serviceId: string;
+  serviceName: string;
+  redisPassword: string;
+}
+
+/**
+ * Look up an existing redis-named service in the given environment and, if one
+ * is found, read its REDIS_PASSWORD so the caller can adopt it into local
+ * state instead of provisioning a fresh template (which would create a
+ * duplicate service in the Railway project).
+ *
+ * Returns `undefined` when no redis service exists yet. Throws only on a
+ * real Railway API error — a service present but missing REDIS_PASSWORD is
+ * also returned as `undefined` so the caller can fall back to template
+ * deploy rather than block the whole run.
+ */
+async function findAdoptableRedisService(options: {
+  token: string;
+  projectId: string;
+  environmentId: string;
+}): Promise<AdoptableRedisService | undefined> {
+  const services = await fetchEnvironmentServices(
+    options.token,
+    options.projectId,
+    options.environmentId,
+  );
+  const candidates = services.filter((service) => isRedisServiceName(service.serviceName));
+  for (const candidate of candidates) {
+    try {
+      const variables = await fetchServiceVariables({
+        token: options.token,
+        projectId: options.projectId,
+        environmentId: options.environmentId,
+        serviceId: candidate.serviceId,
+      });
+      const password = variables.REDIS_PASSWORD;
+      if (password) {
+        return {
+          serviceId: candidate.serviceId,
+          serviceName: candidate.serviceName,
+          redisPassword: password,
+        };
+      }
+    } catch {
+      // candidate unreadable — try the next one
+    }
+  }
+  return undefined;
+}
+
 async function applyResourceOverrides(options: {
   token: string;
   serviceId: string;
@@ -366,6 +417,7 @@ export async function provision(
   secrets: SetupSecrets,
   state: SetupState,
   environments: string[],
+  applyStateUpdates?: (updates: Partial<SetupState>) => void,
 ): Promise<ProviderResult> {
   if (!isSecretFilled(secrets.railway.token)) {
     return { success: false, message: 'Railway Redis: RAILWAY_TOKEN must be set in .env.setup.' };
@@ -387,10 +439,38 @@ export async function provision(
     ...(state.railway.environments ?? {}),
   };
 
+  const recordEnvironmentState = (
+    environmentName: string,
+    environmentId: string,
+    existingServices: NonNullable<
+      NonNullable<SetupState['railway']>['environments']
+    >[string]['services'],
+    serviceId: string,
+    redisPassword: string,
+  ): void => {
+    railwayEnvironments[environmentName] = {
+      environmentId,
+      services: {
+        ...existingServices,
+        [REDIS_SERVICE_STATE_KEY]: { serviceId, environmentId },
+      },
+    };
+    databases[environmentName] = {
+      databaseId: `${serviceId}:${environmentId}`,
+      publicEndpoint: buildRailwayPrivateEndpoint(),
+      redisUrl: buildRailwayRedisUrl(redisPassword),
+    };
+    applyStateUpdates?.({
+      redis: { subscriptionId: 0, databases },
+      railway: { ...state.railway, environments: railwayEnvironments },
+    });
+  };
+
   let template: RedisTemplateDescriptor | undefined;
   let workspaceId: string | undefined;
 
   const provisioned: string[] = [];
+  const adopted: string[] = [];
   const skipped: string[] = [];
 
   for (const environmentName of environments) {
@@ -406,6 +486,31 @@ export async function provision(
       skipped.push(environmentName);
       logger.info(
         `Railway Redis (${environmentName}): already provisioned in state — skipping template deploy.`,
+      );
+      continue;
+    }
+
+    // Before deploying a fresh template, see if Railway already has a Redis
+    // service in this environment (state may have been wiped, or a previous
+    // run may have deployed but failed to persist state). Adopting it avoids
+    // creating a duplicate service that would never be cleaned up
+    // automatically (setup:infra never deletes resources).
+    const existingRedis = await findAdoptableRedisService({
+      token,
+      projectId,
+      environmentId: environmentState.environmentId,
+    });
+    if (existingRedis) {
+      recordEnvironmentState(
+        environmentName,
+        environmentState.environmentId,
+        environmentState.services,
+        existingRedis.serviceId,
+        existingRedis.redisPassword,
+      );
+      adopted.push(environmentName);
+      logger.success(
+        `Railway Redis (${environmentName}): adopted existing service "${existingRedis.serviceName}" (${existingRedis.serviceId}) — recorded in state, skipping template deploy.`,
       );
       continue;
     }
@@ -454,25 +559,13 @@ export async function provision(
         serviceId: discovered.serviceId,
       });
 
-      const redisUrl = buildRailwayRedisUrl(redisPassword);
-      const privateEndpoint = buildRailwayPrivateEndpoint();
-
-      railwayEnvironments[environmentName] = {
-        ...environmentState,
-        services: {
-          ...environmentState.services,
-          [REDIS_SERVICE_STATE_KEY]: {
-            serviceId: discovered.serviceId,
-            environmentId: environmentState.environmentId,
-          },
-        },
-      };
-
-      databases[environmentName] = {
-        databaseId: `${discovered.serviceId}:${environmentState.environmentId}`,
-        publicEndpoint: privateEndpoint,
-        redisUrl,
-      };
+      recordEnvironmentState(
+        environmentName,
+        environmentState.environmentId,
+        environmentState.services,
+        discovered.serviceId,
+        redisPassword,
+      );
 
       provisioned.push(environmentName);
       logger.stopSpinner(
@@ -497,8 +590,11 @@ export async function provision(
   if (provisioned.length > 0) {
     messageParts.push(`provisioned ${provisioned.join(', ')}`);
   }
+  if (adopted.length > 0) {
+    messageParts.push(`adopted existing ${adopted.join(', ')}`);
+  }
   if (skipped.length > 0) {
-    messageParts.push(`skipped (already present) ${skipped.join(', ')}`);
+    messageParts.push(`skipped (already in state) ${skipped.join(', ')}`);
   }
 
   return {
@@ -577,11 +673,11 @@ export const setupRailwayRedisProvider: InfraProvider = {
     enabled: setupRailwayRedisProvider.isEnabled(context),
     enabledReason: setupRailwayRedisProvider.disabledReason(context),
     instructions: [
-      `Will deploy Railway's "${REDIS_TEMPLATE_CODE}" database template (templateDeployV2) into environments without a recorded Redis service: ${context.environments.join(', ')}.`,
-      'Will read REDIS_PASSWORD from the template-created service and record a concrete REDIS_URL in .setup-state.json for each environment.',
+      `For each environment (${context.environments.join(', ')}): adopt the existing redis-named service if one already exists in Railway, otherwise deploy Railway's "${REDIS_TEMPLATE_CODE}" database template (templateDeployV2).`,
+      'Will read REDIS_PASSWORD from the adopted/created service and record a concrete REDIS_URL in .setup-state.json after each environment (incremental persistence so an interruption does not leave Railway services without a state entry).',
       context.config.providers.railwayRedis.region
-        ? `Will apply replica region "${context.config.providers.railwayRedis.region}" to each Redis service via serviceInstanceUpdate.`
-        : 'Will use Railway default region for the Redis service (no region override configured).',
+        ? `Will apply replica region "${context.config.providers.railwayRedis.region}" to newly-created Redis services via serviceInstanceUpdate.`
+        : 'Will use Railway default region for newly-created Redis services (no region override configured).',
     ],
     alreadyDone: () => allEnvironmentsHaveRedis(context.environments, context.state),
     alreadyDoneMessage:
@@ -592,6 +688,7 @@ export const setupRailwayRedisProvider: InfraProvider = {
         context.secrets,
         context.state,
         context.environments,
+        context.applyStateUpdates,
       );
       if (result.stateUpdates && Object.keys(result.stateUpdates).length > 0) {
         context.applyStateUpdates(result.stateUpdates);
@@ -606,6 +703,61 @@ export const setupRailwayRedisProvider: InfraProvider = {
         : 'no Redis state recorded',
     }),
   }),
+  detectRemote: async ({ secrets, state, environments, applyStateUpdates }) => {
+    const adopted: Record<string, string> = {};
+    if (!(isSecretFilled(secrets.railway.token) && state.railway?.projectId)) {
+      return adopted;
+    }
+    const token = secrets.railway.token;
+    const projectId = state.railway.projectId;
+
+    const databases: NonNullable<SetupState['redis']>['databases'] = {
+      ...(state.redis?.databases ?? {}),
+    };
+    const railwayEnvironments: NonNullable<NonNullable<SetupState['railway']>['environments']> = {
+      ...(state.railway.environments ?? {}),
+    };
+
+    for (const environmentName of environments) {
+      if (hasUsableRedisState(state, environmentName)) continue;
+      const environmentState = railwayEnvironments[environmentName];
+      if (!environmentState) continue;
+
+      try {
+        const existingRedis = await findAdoptableRedisService({
+          token,
+          projectId,
+          environmentId: environmentState.environmentId,
+        });
+        if (!existingRedis) continue;
+
+        railwayEnvironments[environmentName] = {
+          environmentId: environmentState.environmentId,
+          services: {
+            ...environmentState.services,
+            [REDIS_SERVICE_STATE_KEY]: {
+              serviceId: existingRedis.serviceId,
+              environmentId: environmentState.environmentId,
+            },
+          },
+        };
+        databases[environmentName] = {
+          databaseId: `${existingRedis.serviceId}:${environmentState.environmentId}`,
+          publicEndpoint: buildRailwayPrivateEndpoint(),
+          redisUrl: buildRailwayRedisUrl(existingRedis.redisPassword),
+        };
+
+        applyStateUpdates({
+          redis: { subscriptionId: 0, databases },
+          railway: { ...state.railway, environments: railwayEnvironments },
+        });
+        adopted[environmentName] = `${existingRedis.serviceName} (${existingRedis.serviceId})`;
+      } catch {
+        // single-environment lookup failure should not block the rest
+      }
+    }
+    return adopted;
+  },
   check: ({ state, environments }) =>
     Promise.resolve(allEnvironmentsHaveRedis(environments, state)),
   deleteInstructions: ({ state }) => {
