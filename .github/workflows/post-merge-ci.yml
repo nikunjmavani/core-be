@@ -180,6 +180,65 @@ jobs:
           config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
           manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
 
+      - name: Lint-fix CHANGELOGs on release PR branches
+        # Release-please emits CHANGELOG entries with `*` bullets and double
+        # blank lines, which fail .markdownlint.json (MD004=dash, MD012). This
+        # step normalises those files on the release PR branch so the docs
+        # lane stays green for any feature PR that later rebases on dev.
+        # Pushing to the `release-please--branches--*` ref does not retrigger
+        # post-merge-ci (only main/dev push events do), so no recursion risk.
+        if: steps.release.outputs.prs_created == 'true' || steps.release.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t branches < <(
+            jq -rn --arg pr "${RELEASE_PR}" --arg prs "${RELEASE_PRS}" '
+              def parse_object($raw):
+                try ($raw | fromjson) catch null;
+              def parse_array($raw):
+                try ($raw | fromjson) catch [];
+              (
+                [parse_object($pr) | .headBranchName // .headRefName // empty] +
+                [parse_array($prs)[] | .headBranchName // .headRefName // empty]
+              )
+              | map(select(. != null and . != ""))
+              | unique
+              | .[]
+            '
+          )
+
+          if [ "${#branches[@]}" -eq 0 ]; then
+            echo "No release PR branches to lint-fix."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for branch in "${branches[@]}"; do
+            echo "::group::Lint-fix CHANGELOG on ${branch}"
+            git fetch origin "${branch}" --depth=2
+            git checkout -B "${branch}" "origin/${branch}"
+            npx --yes markdownlint-cli2@0.15.0 \
+              --config .markdownlint.json \
+              --fix \
+              'CHANGELOG*.md' || true
+            if [ -n "$(git status --porcelain CHANGELOG*.md 2>/dev/null)" ]; then
+              git add CHANGELOG*.md
+              git commit -m "chore(docs): lint-fix CHANGELOG after release-please"
+              git push origin "${branch}"
+              echo "Pushed CHANGELOG lint-fix to ${branch}"
+            else
+              echo "${branch} CHANGELOG already lint-clean."
+            fi
+            echo "::endgroup::"
+          done
+
       - name: Enable auto-merge on release PRs
         # Runs every release-please job (not only when a new PR is opened) so
         # existing release PRs that release-please left unchanged still get
