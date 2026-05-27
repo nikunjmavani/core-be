@@ -55,7 +55,7 @@ jobs:
               --paginate \
               --jq '.[] | select(.metadata.container.tags | length > 0) | {id: .id, tags: (.metadata.container.tags | join(","))}' \
               | jq -s '.'
-          )
+          )"
 
           if [ "$(jq 'length' <<< "${versions}")" -eq 0 ]; then
             echo "No tagged versions found for ${PACKAGE}."
