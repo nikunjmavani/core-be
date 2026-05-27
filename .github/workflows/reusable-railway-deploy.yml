@@ -1,11 +1,24 @@
 # Reusable Railway deploy (called from post-merge-ci.yml) or manual workflow_dispatch.
 # Gate sequence: migrate → deploy API/worker → /health → worker readiness → API smoke.
 # When post-deploy API smoke succeeds, the environment is fully live for traffic.
-# API and worker prefer `railway redeploy` (re-runs the existing service deployment);
-# the deploy step automatically falls back to `railway up` only when the service has
-# no prior deployment yet (initial bootstrap after `pnpm setup:infra`). The deploy
-# log prints expected GHCR image refs for traceability; Railway CLI `redeploy` does
-# not accept `--image`, and `railway up` uploads the checked-out source.
+#
+# API and worker are deployed by `pnpm tool:railway-deploy-image`
+# (tooling/setup/railway/deploy-image.ts), which goes straight to the Railway
+# GraphQL API:
+#   1. serviceInstanceUpdate { source: { image: <ghcr-ref> } }
+#   2. serviceInstanceDeployV2(serviceId, environmentId)
+#   3. poll deployment(id) until terminal status (SUCCESS / FAILED / CRASHED)
+#
+# This is the only reliable way to deploy a freshly built GHCR image. The
+# Railway CLI's deploy paths are unsuitable: the in-place refresh command
+# re-runs the previous deployment object with its existing image tag (so it
+# silently serves the OLD image), and the source-upload command pushes the
+# runner's checked-out source for Railway to build (so it bypasses the
+# scanned GHCR image entirely). The CLI also has no `--image` flag. See
+# tooling/setup/railway/deploy-image.ts for the GraphQL details.
+#
+# The same code path handles both the initial bootstrap (no prior deployment)
+# and steady-state redeploys, so no fallback branch is needed.
 
 name: Reusable — Railway deploy
 
@@ -425,52 +438,21 @@ jobs:
           done
 
       - name: Deploy API to Railway
+        # Pins the API service to the GHCR image that the build job just
+        # pushed and triggers a fresh deployment from it. See the header
+        # comment for why we go directly to the GraphQL API instead of the
+        # Railway CLI's deploy paths. This step covers both the initial
+        # bootstrap (no prior deployment) and steady-state redeploys.
         env:
           API_IMAGE: ${{ steps.ghcr_images.outputs.api_image }}
         run: |
           set -euo pipefail
-
-          # Strategy:
-          #   1) `railway redeploy` re-runs the service's latest deployment with
-          #      the current variables. This is the steady-state path.
-          #   2) On a brand-new service with no prior deployment Railway returns
-          #      "No deployment found for service" and exits non-zero. Detect
-          #      that exact case and fall back to `railway up` to bootstrap the
-          #      first deployment from the checked-out source. Any other failure
-          #      is surfaced as-is so genuine errors are not swallowed.
-          deploy_railway_service() {
-            local service_label="$1"
-            local service_id="$2"
-            local output_file
-            output_file="$(mktemp)"
-
-            if railway redeploy --service "$service_id" --yes >"$output_file" 2>&1; then
-              cat "$output_file"
-              echo "${service_label} service redeployed successfully (existing deployment refreshed)."
-              rm -f "$output_file"
-              return 0
-            fi
-
-            cat "$output_file"
-
-            if grep -qiE 'no deployment found for service' "$output_file"; then
-              echo "::notice::${service_label} service has no prior deployment — falling back to 'railway up' to create the first deployment."
-              rm -f "$output_file"
-              echo "Command: railway up --service <${service_label}-service-id> --ci --message <commit-sha>"
-              railway up --service "$service_id" --ci --message "GitHub Actions initial deploy ${RAILWAY_GIT_COMMIT_SHA}"
-              echo "${service_label} service initial deployment completed via 'railway up'."
-              return 0
-            fi
-
-            echo "::error::${service_label} service deploy failed for an unexpected reason; see logs above."
-            rm -f "$output_file"
-            return 1
-          }
-
           railway variable set --service "$RAILWAY_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
-          echo "Deploying API service. Expected GHCR image ref for this commit: $API_IMAGE"
-          echo "Primary command: railway redeploy --service <api-service-id> --yes"
-          deploy_railway_service "API" "$RAILWAY_SERVICE_ID"
+          echo "Deploying API service from GHCR image: $API_IMAGE"
+          pnpm tool:railway-deploy-image \
+            --service "$RAILWAY_SERVICE_ID" \
+            --image "$API_IMAGE" \
+            --label api
 
       - name: Post-deploy API health check
         id: api_health
@@ -500,47 +482,18 @@ jobs:
           fi
 
       - name: Deploy worker to Railway
+        # Same flow as the API deploy step — pin the worker service to the
+        # freshly pushed GHCR worker image and trigger a new deployment.
         env:
           WORKER_IMAGE: ${{ steps.ghcr_images.outputs.worker_image }}
         run: |
           set -euo pipefail
-
-          # See the API deploy step above for rationale; same strategy applied
-          # to the worker service so a fresh worker bootstraps cleanly on its
-          # first run after `pnpm setup:infra`.
-          deploy_railway_service() {
-            local service_label="$1"
-            local service_id="$2"
-            local output_file
-            output_file="$(mktemp)"
-
-            if railway redeploy --service "$service_id" --yes >"$output_file" 2>&1; then
-              cat "$output_file"
-              echo "${service_label} service redeployed successfully (existing deployment refreshed)."
-              rm -f "$output_file"
-              return 0
-            fi
-
-            cat "$output_file"
-
-            if grep -qiE 'no deployment found for service' "$output_file"; then
-              echo "::notice::${service_label} service has no prior deployment — falling back to 'railway up' to create the first deployment."
-              rm -f "$output_file"
-              echo "Command: railway up --service <${service_label}-service-id> --ci --message <commit-sha>"
-              railway up --service "$service_id" --ci --message "GitHub Actions initial deploy ${RAILWAY_GIT_COMMIT_SHA}"
-              echo "${service_label} service initial deployment completed via 'railway up'."
-              return 0
-            fi
-
-            echo "::error::${service_label} service deploy failed for an unexpected reason; see logs above."
-            rm -f "$output_file"
-            return 1
-          }
-
           railway variable set --service "$RAILWAY_WORKER_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
-          echo "Deploying worker service. Expected GHCR image ref for this commit: $WORKER_IMAGE"
-          echo "Primary command: railway redeploy --service <worker-service-id> --yes"
-          deploy_railway_service "worker" "$RAILWAY_WORKER_SERVICE_ID"
+          echo "Deploying worker service from GHCR image: $WORKER_IMAGE"
+          pnpm tool:railway-deploy-image \
+            --service "$RAILWAY_WORKER_SERVICE_ID" \
+            --image "$WORKER_IMAGE" \
+            --label worker
 
       - name: Post-deploy worker health check
         env:
