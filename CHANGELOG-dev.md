@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.2](https://github.com/nikunjmavani/core-be/compare/v2.6.1...v2.6.2) (2026-05-27)
+
+
+### Fixed
+
+* **ci:** batch Railway env push, retry timeouts, exclude all RAILWAY_* ([#92](https://github.com/nikunjmavani/core-be/issues/92)) ([f27128e](https://github.com/nikunjmavani/core-be/commit/f27128e182d995767c630a9b0dfcf634fc7a0cc1))
+
 ## [2.6.1](https://github.com/nikunjmavani/core-be/compare/v2.6.0...v2.6.1) (2026-05-27)
 
 
