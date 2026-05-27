@@ -1,14 +1,21 @@
 # Reusable Railway deploy (called from post-merge-ci.yml) or manual workflow_dispatch.
-# Gate sequence: migrate → deploy API/worker → API /health → worker readiness → API smoke.
+# Gate sequence: migrate → deploy API/worker → API /health → API smoke.
 # When post-deploy API smoke succeeds, the environment is fully live for traffic.
 #
-# Worker readiness vs API health: the API service exposes a public Railway
-# domain so the workflow can curl `/health` directly. The worker service is
-# internal-only (no public domain) and never replies on a public HTTP route,
-# so we instead run `pnpm tool:worker-readiness` from the runner. That tool
-# reaches the same signals through Redis + Postgres + BullMQ — DLQ depth,
-# throughput queue heartbeats, dependency readiness — without needing a
-# publicly reachable worker /health endpoint.
+# Worker deploy gating: the worker service is internal-only on Railway (no
+# public domain) and DATABASE_URL / REDIS_URL in the GitHub Environment point
+# at `*.railway.internal`, which is reachable only from other Railway services
+# — not from the GitHub Actions runner. We therefore cannot probe worker
+# `/health` over public HTTP, and we cannot dial Postgres/Redis from the
+# runner either. Instead we rely on:
+#   1. `pnpm tool:railway-deploy-image` polling Railway until the deployment
+#      reaches a terminal status. Railway only reports SUCCESS once the
+#      container HEALTHCHECK in `Dockerfile.worker` (127.0.0.1:9090/health
+#      inside the pod) starts returning 200.
+#   2. The post-deploy API smoke run, which exercises end-to-end paths whose
+#      side effects (mail, webhooks, notifications) are processed by the
+#      worker fleet — a stalled worker shows up as smoke failure or DLQ
+#      growth caught by the `dlq-depth` Sentry alert.
 #
 # API and worker are deployed by `pnpm tool:railway-deploy-image`
 # (tooling/setup/railway/deploy-image.ts), which goes straight to the Railway
@@ -450,12 +457,15 @@ jobs:
         # API and worker share `deploy_service_from_image` so retries and
         # deployment behaviour stay identical. Health gating differs:
         #   - API: public Railway domain, so we curl `/health` from the runner.
-        #   - Worker: no public domain. The Railway deployment terminal status
-        #     (driven by the container HEALTHCHECK in Dockerfile.worker, which
-        #     hits 127.0.0.1:9090/health inside the pod) confirms the process
-        #     is up. Deeper readiness (DLQ depth, queue heartbeats, dependency
-        #     pings) is verified by `pnpm tool:worker-readiness` in the next
-        #     step using Redis + Postgres + BullMQ — no public HTTP needed.
+        #   - Worker: no public domain, and Postgres/Redis sit on the Railway
+        #     private network (`*.railway.internal`) which is unreachable from
+        #     the GitHub runner. Worker readiness is therefore gated only by
+        #     the Railway deployment terminal status — Railway flips a
+        #     deployment to SUCCESS once the in-pod container HEALTHCHECK in
+        #     `Dockerfile.worker` (127.0.0.1:9090/health) starts returning 200,
+        #     which already covers process up + dependency probes + queue
+        #     heartbeats. The post-deploy API smoke run additionally exercises
+        #     paths whose side effects must flow through the worker fleet.
         env:
           API_IMAGE: ${{ steps.ghcr_images.outputs.api_image }}
           WORKER_IMAGE: ${{ steps.ghcr_images.outputs.worker_image }}
@@ -510,24 +520,7 @@ jobs:
           wait_for_service_health "$api_base_url" "API" "/tmp/api-health.json"
 
           deploy_service_from_image "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"
-          echo "Worker deployment reached terminal SUCCESS; readiness probed via pnpm tool:worker-readiness in the next step."
-
-      - name: Probe worker readiness
-        # Worker has no public Railway domain, so we cannot curl /health from
-        # the runner. Instead read the same signals through Redis + Postgres +
-        # BullMQ: DLQ depth, throughput queue heartbeats, dependency probes.
-        # All required env vars (DATABASE_URL, REDIS_URL, REDIS_BULLMQ_URL,
-        # WORKER_HEALTH_STALL_TIMEOUT_MS, etc.) were exported to $GITHUB_ENV in
-        # the "Export GitHub Environment to runner" step above.
-        env:
-          METRICS_ENABLED: 'false'
-        run: |
-          set -euo pipefail
-          # Tolerate cold starts: the worker may not have completed a job yet,
-          # so heartbeats are absent (not stale) and DLQ depth must be zero.
-          # A non-default --max-stale-ms keeps post-deploy gating quick while
-          # still catching genuine stalls.
-          pnpm tool:worker-readiness --max-dlq 100 --max-stale-ms 600000
+          echo "Worker deployment reached terminal SUCCESS (Railway only flips to SUCCESS once the in-pod HEALTHCHECK passes)."
 
   api-smoke:
     name: API smoke (${{ needs.resolve-environment.outputs.environment }})
