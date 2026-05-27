@@ -71,11 +71,15 @@ function buildValkeyStartCommand(maxmemoryMb: number): string {
 }
 
 function buildRailwayRedisUrl(): string {
-  return `redis://default:\${{${REDIS_SERVICE_NAME}.REDIS_PASSWORD}}@\${{${REDIS_SERVICE_NAME}.RAILWAY_PRIVATE_DOMAIN}}:${REDIS_PORT}`;
+  return `redis://default:\${{${REDIS_SERVICE_NAME}.REDIS_PASSWORD}}@${buildRailwayPrivateDomainReference()}:${REDIS_PORT}`;
+}
+
+function buildRailwayPrivateDomainReference(): string {
+  return `\${{${REDIS_SERVICE_NAME}.RAILWAY_PRIVATE_DOMAIN}}`;
 }
 
 function buildRailwayPrivateEndpoint(): string {
-  return `\${{${REDIS_SERVICE_NAME}.RAILWAY_PRIVATE_DOMAIN}}:${REDIS_PORT}`;
+  return `${buildRailwayPrivateDomainReference()}:${REDIS_PORT}`;
 }
 
 function getExistingRedisPassword(state: SetupState, environmentName: string): string | undefined {
@@ -160,48 +164,6 @@ async function configureRedisService(options: {
   );
 }
 
-async function tryApplyServiceLimits(options: {
-  token: string;
-  serviceId: string;
-  environmentId: string;
-  cpuLimit: number | undefined;
-  memoryLimitMb: number | undefined;
-}): Promise<void> {
-  if (options.cpuLimit === undefined && options.memoryLimitMb === undefined) return;
-
-  try {
-    await railwayGraphQL<{ serviceInstanceLimitsUpdate: boolean | null }>(
-      options.token,
-      `
-      mutation ServiceInstanceLimitsUpdate(
-        $serviceId: String!
-        $environmentId: String!
-        $input: ServiceInstanceLimitsUpdateInput!
-      ) {
-        serviceInstanceLimitsUpdate(
-          serviceId: $serviceId
-          environmentId: $environmentId
-          input: $input
-        )
-      }
-    `,
-      {
-        serviceId: options.serviceId,
-        environmentId: options.environmentId,
-        input: {
-          cpu: options.cpuLimit,
-          memoryMB: options.memoryLimitMb,
-        },
-      },
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.warn(
-      `Railway Redis resource-limit update skipped; set CPU/RAM manually in Railway if needed. ${message}`,
-    );
-  }
-}
-
 async function deployRedisService(options: {
   token: string;
   serviceId: string;
@@ -271,13 +233,6 @@ export async function provision(
         environmentId: serviceState.environmentId,
         config: config.providers.railwayRedis,
       });
-      await tryApplyServiceLimits({
-        token: secrets.railway.token,
-        serviceId: serviceState.serviceId,
-        environmentId: serviceState.environmentId,
-        cpuLimit: config.providers.railwayRedis.cpuLimit,
-        memoryLimitMb: config.providers.railwayRedis.memoryLimitMb,
-      });
       await deployRedisService({
         token: secrets.railway.token,
         serviceId: serviceState.serviceId,
@@ -306,7 +261,16 @@ export async function provision(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.stopSpinner(spinner, `Railway Redis (${environmentName}) failed: ${message}`, 'fail');
-      return { success: false, message };
+      return {
+        success: false,
+        message,
+        stateUpdates: {
+          redis: {
+            subscriptionId: 0,
+            databases,
+          },
+        },
+      };
     }
   }
 
@@ -324,9 +288,15 @@ export async function provision(
 
 function allEnvironmentsHaveRedis(environments: string[], state: SetupState): boolean {
   if (!state.redis?.databases) return false;
-  return environments.every((environmentName) =>
-    Boolean(state.redis?.databases?.[environmentName]?.redisUrl),
-  );
+  return environments.every((environmentName) => {
+    const database = state.redis?.databases?.[environmentName];
+    const serviceState = getRedisServiceState(state, environmentName);
+    return Boolean(
+      serviceState?.serviceId &&
+        database?.redisUrl.includes(buildRailwayPrivateDomainReference()) &&
+        database.databaseId === `${serviceState.serviceId}:${serviceState.environmentId}`,
+    );
+  });
 }
 
 export const setupRailwayRedisProvider: InfraProvider = {
@@ -366,7 +336,8 @@ export const setupRailwayRedisProvider: InfraProvider = {
       `Will set Valkey maxmemory to ${context.config.providers.railwayRedis.maxmemoryMb} MB and deploy in ${context.config.providers.railwayRedis.region}.`,
     ],
     alreadyDone: () => allEnvironmentsHaveRedis(context.environments, context.state),
-    alreadyDoneMessage: 'all environments already have a Redis URL in state',
+    alreadyDoneMessage:
+      'all environments already have Railway Redis service attachments and Redis URLs in state',
     execute: async () => {
       const result = await provision(
         context.config,

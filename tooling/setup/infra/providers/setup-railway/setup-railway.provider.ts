@@ -459,7 +459,7 @@ function railwayAlreadyProvisioned(state: SetupState, environments: string[]): b
   return environments.every((environmentName) => {
     const environment = railwayEnvironments[environmentName];
     if (!environment) return false;
-    return ['api', 'worker'].every((serviceName) =>
+    return RAILWAY_SERVICE_NAMES.every((serviceName) =>
       Boolean(environment.services[serviceName]?.serviceId),
     );
   });
@@ -503,7 +503,7 @@ export const setupRailwayProvider: InfraProvider = {
       'Will attach api + worker + redis to every Railway environment via staged-changes.',
     ],
     alreadyDone: () => railwayAlreadyProvisioned(context.state, context.environments),
-    alreadyDoneMessage: 'project + environments + api/worker attachments already in state',
+    alreadyDoneMessage: 'project + environments + api/worker/redis attachments already in state',
     execute: async () => {
       const result = await provision(
         context.config,
