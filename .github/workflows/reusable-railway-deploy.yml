@@ -1,5 +1,5 @@
 # Reusable Railway deploy (called from post-merge-ci.yml) or manual workflow_dispatch.
-# Gate sequence: migrate → deploy API/worker → /health → worker readiness → API smoke.
+# Gate sequence: migrate → deploy API/worker → API /health → worker /health → API smoke.
 # When post-deploy API smoke succeeds, the environment is fully live for traffic.
 #
 # API and worker are deployed by `pnpm tool:railway-deploy-image`
@@ -496,8 +496,6 @@ jobs:
             --label worker
 
       - name: Post-deploy worker health check
-        env:
-          WORKER_HEALTH_PORT: ${{ secrets.WORKER_HEALTH_PORT || '9090' }}
         run: |
           set -euo pipefail
           worker_domain_json="$(railway domain --service "$RAILWAY_WORKER_SERVICE_ID" --json)"
@@ -508,9 +506,12 @@ jobs:
             const host = String(url).replace(/\\/$/, '');
             process.stdout.write(host.includes('://') ? host : 'https://' + host);
           ")"
-          export WORKER_HEALTH_URL="${worker_base_url%/*}:$WORKER_HEALTH_PORT"
-          echo "Probing worker readiness at $WORKER_HEALTH_URL/health"
-          pnpm tool:worker-readiness --url "$WORKER_HEALTH_URL"
+          worker_health_url="${worker_base_url}/health"
+          deadline=$(( $(date +%s) + 300 ))
+          until curl -sfS "$worker_health_url" -o /tmp/worker-health.json; do
+            [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::Worker /health timeout"; exit 1; }
+            sleep 5
+          done
 
   api-smoke:
     name: API smoke (${{ needs.resolve-environment.outputs.environment }})
