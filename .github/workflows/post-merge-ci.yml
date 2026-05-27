@@ -378,6 +378,9 @@ jobs:
       - docker-build-push
       - api-docs
       - release-sbom
+    permissions:
+      contents: read
+      packages: write
     if: |
       always() &&
       inputs.skip_deploy != true &&
