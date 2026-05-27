@@ -1,6 +1,6 @@
 ---
 name: setup-infra-maintainer
-description: Keeps setup:infra third-party providers and all dependent files in sync. Use when adding or removing any provider (Neon, Upstash, AWS, Sentry, GitHub, Railway, Postman, Stripe, Resend, OAuth, etc.).
+description: Keeps setup:infra third-party providers and all dependent files in sync. Use when adding or removing any provider (Neon, Railway Redis, AWS, Sentry, GitHub, Railway, Postman, Stripe, Resend, OAuth, etc.).
 ---
 
 # Skill: Setup Infra Maintainer (core-be)
@@ -17,7 +17,7 @@ When you **add or remove a third-party provider** in the setup:infra flow (`pnpm
 
 ## Source of truth (provider list)
 
-Current providers: **Neon**, **Upstash**, **AWS**, **Sentry**, **Resend**, **Stripe**, **OAuth (Google, GitHub)**, **Railway**, **GitHub** (repo/env secrets), **Postman**. Each appears in multiple places below; keep them in sync.
+Current providers: **Neon**, **Railway Redis**, **AWS**, **Sentry**, **Resend**, **Stripe**, **OAuth (Google, GitHub)**, **Railway**, **GitHub** (repo/env secrets), **Postman**. Each appears in multiple places below; keep them in sync.
 
 ---
 
@@ -47,7 +47,7 @@ Work through each section. Do not skip; missing any item will break init, previe
   - **`PREVIEW_PROVIDERS`** — Add an entry: `enabledCheck`, `provider` (display name), `detail`, `url`, `configKey` (e.g. `NEW_PROVIDER_API_KEY`).
   - **`displaySettingsReview`** — Add a block for the new provider (e.g. “NewProvider — 1 project” or “validate 1 key”).
   - **`checkForExistingResources`** — If the provider creates resources that should be detected (e.g. project name), add the check and push to `existing` when found.
-  - **`runProvision`** — Add a provisioning step (load provider module, call `provision`, `applyStateUpdates`, push to `completedProviders` if it creates resources). Order: follow existing order (Neon, Upstash, AWS, Sentry, JWT, Resend, Stripe, OAuth, Railway, GitHub, …).
+  - **`runProvision`** — Add a provisioning step (load provider module, call `provision`, `applyStateUpdates`, push to `completedProviders` if it creates resources). Order: follow existing order (Neon, AWS, Sentry, JWT, Resend, Stripe, OAuth, Railway, Railway Redis, GitHub, …).
   - **`runCheck`** — Add health check for the new provider (call provider’s `check` when enabled and state exists).
   - **`runStatus`** — If the provider has per-env or shared state, add a line to the shared resources summary or env rows.
   - **`runUpdate`** — Only if the provider participates in “update” (e.g. re-sync secrets); GitHub does; most others don’t.

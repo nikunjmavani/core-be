@@ -9,8 +9,6 @@ const ENV_SETUP_PATH = resolve(PROJECT_ROOT, '.env.setup');
 const TOKEN_URLS: Record<string, string> = {
   NEON_API_KEY: 'https://console.neon.tech/app/settings/api-keys',
   NEON_ORG_ID: 'https://console.neon.tech/app/settings (Organization → General → Organization ID)',
-  UPSTASH_EMAIL: 'https://console.upstash.com/account/api',
-  UPSTASH_API_KEY: 'https://console.upstash.com/account/api',
   AWS_ACCESS_KEY_ID: 'https://console.aws.amazon.com/iam/home#/users',
   AWS_SECRET_ACCESS_KEY: 'https://console.aws.amazon.com/iam/home#/users',
   SENTRY_AUTH_TOKEN: 'https://sentry.io/settings/auth-tokens/new-token/',
@@ -24,8 +22,6 @@ const TOKEN_URLS: Record<string, string> = {
 const SIMPLE_VARS: Array<[string, string]> = [
   ['NEON_API_KEY', TOKEN_URLS.NEON_API_KEY],
   ['NEON_ORG_ID', TOKEN_URLS.NEON_ORG_ID],
-  ['UPSTASH_EMAIL', TOKEN_URLS.UPSTASH_EMAIL],
-  ['UPSTASH_API_KEY', TOKEN_URLS.UPSTASH_API_KEY],
   ['AWS_ACCESS_KEY_ID', TOKEN_URLS.AWS_ACCESS_KEY_ID],
   ['AWS_SECRET_ACCESS_KEY', TOKEN_URLS.AWS_SECRET_ACCESS_KEY],
   ['SENTRY_AUTH_TOKEN', TOKEN_URLS.SENTRY_AUTH_TOKEN],
@@ -53,10 +49,6 @@ export const setupSecretsSchema = z.object({
   neon: z.object({
     apiKey: z.string(),
     orgId: z.string().optional(),
-  }),
-  upstash: z.object({
-    email: z.string(),
-    apiKey: z.string(),
   }),
   aws: z.object({
     accessKeyId: z.string(),
@@ -163,10 +155,6 @@ export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
 
   return {
     neon: { apiKey: get(source, 'NEON_API_KEY'), orgId: get(source, 'NEON_ORG_ID') || undefined },
-    upstash: {
-      email: get(source, 'UPSTASH_EMAIL'),
-      apiKey: get(source, 'UPSTASH_API_KEY'),
-    },
     aws: {
       accessKeyId: get(source, 'AWS_ACCESS_KEY_ID'),
       secretAccessKey: get(source, 'AWS_SECRET_ACCESS_KEY'),
@@ -245,7 +233,6 @@ export function hasAnyEnvSecret(environmentNames: string[]): boolean {
     typeof value === 'string' && value.trim().length > 0;
   return (
     filled(secrets.neon.apiKey) ||
-    filled(secrets.upstash.apiKey) ||
     filled(secrets.aws.accessKeyId) ||
     filled(secrets.sentry.authToken) ||
     filled(secrets.resend.apiKey) ||

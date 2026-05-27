@@ -65,22 +65,6 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
       ],
     },
     {
-      providerName: 'Upstash Redis',
-      enabledCheck: (configuration) => configuration.providers.upstash.enabled,
-      secretsCheck: (secrets) =>
-        isSecretFilled(secrets.upstash.email) && isSecretFilled(secrets.upstash.apiKey),
-      browserUrls: ['https://console.upstash.com/account/api'],
-      instructions: [
-        '1. Log in to Upstash (or sign up at upstash.com)',
-        '2. Open Account → Management API and click "Create API key"',
-        '3. Copy your account email and the new API key',
-        `4. In ${secretsPath} set: UPSTASH_EMAIL=<email>  UPSTASH_API_KEY=<key>`,
-        '5. setup will create one Redis database per environment and store its URL in state',
-        '',
-        '6. Save the file',
-      ],
-    },
-    {
       providerName: 'AWS IAM',
       enabledCheck: (configuration) => configuration.providers.aws.enabled,
       secretsCheck: (secrets) =>

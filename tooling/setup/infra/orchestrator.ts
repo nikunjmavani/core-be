@@ -416,8 +416,10 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
     }
   }
 
-  if (config.providers.upstash.enabled) {
-    summaryItems.push({ label: 'Upstash Redis', value: 'from .env.setup' });
+  if (state.redis?.databases) {
+    for (const [env, database] of Object.entries(state.redis.databases)) {
+      summaryItems.push({ label: `Railway Redis (${env})`, value: String(database.databaseId) });
+    }
   }
 
   if (state.aws?.buckets) {
@@ -571,7 +573,7 @@ export function runStatus(): void {
 
   for (const environment of config.environments) {
     const neonOk = !!state.neon?.branches?.[environment.name]?.databaseUrl;
-    const redisOk = config.providers.upstash.enabled
+    const redisOk = config.providers.railwayRedis.enabled
       ? !!state.redis?.databases?.[environment.name]?.redisUrl
       : true;
     const awsOk = !!state.aws?.buckets?.[environment.name];
@@ -581,7 +583,7 @@ export function runStatus(): void {
 
     const details: string[] = [];
     if (!neonOk) details.push('Neon');
-    if (!redisOk) details.push('Upstash');
+    if (!redisOk) details.push('Railway Redis');
     if (!awsOk) details.push('AWS');
     if (!jwtOk) details.push('JWT');
 

@@ -58,8 +58,8 @@ A startup **warning** is logged when BullMQ is configured to use a separate Redi
 
 ### Production
 
-1. Create **one Upstash Redis database** (or equivalent managed Redis) for the environment.
-2. Set `REDIS_URL` in GitHub Environment secrets (via `pnpm setup:infra` → `UPSTASH_REDIS_URL`, or manually).
+1. Create **one Railway Redis/Valkey service instance** for the environment.
+2. Set `REDIS_URL` in GitHub Environment secrets (via `pnpm setup:infra`, or manually).
 3. Leave `REDIS_BULLMQ_URL` unset. If an older environment already has it, remove it or set it to the exact same endpoint as `REDIS_URL`.
 4. Enable persistence when the provider supports it, since queues and cache share the same instance.
 
@@ -99,4 +99,4 @@ When rotating Redis credentials or failing over, update **`REDIS_URL`** on API a
 
 - [resource-limits.md](resource-limits.md) — Postgres pool budget
 - [external-service-resilience.md](../../reference/reliability/external-service-resilience.md) — circuit breakers (Redis-backed on cache Redis)
-- [setup-automation.md](../setup/setup-automation.md) — `UPSTASH_REDIS_URL` in `.env.setup`
+- [setup-automation.md](../setup/setup-automation.md) — Railway Redis provisioning through `RAILWAY_TOKEN`

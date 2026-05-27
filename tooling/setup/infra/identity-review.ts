@@ -29,7 +29,7 @@ import {
 } from './init-wizard.js';
 import type { SetupConfig } from '../common/types.js';
 
-export const SETUP_SERVICE_NAMES = ['api', 'worker'];
+export const SETUP_SERVICE_NAMES = ['api', 'worker', 'redis'];
 
 export interface IdentityReviewOptions {
   assumeYes?: boolean;
