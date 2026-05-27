@@ -76,7 +76,7 @@ function hasUsableRedisState(state: SetupState, environmentName: string): boolea
   return database.redisUrl.includes(`@${REDIS_PRIVATE_HOSTNAME}:`);
 }
 
-async function resolveWorkspaceId(token: string, projectId: string): Promise<string> {
+async function resolveWorkspaceId(token: string, projectId: string): Promise<string | undefined> {
   const result = await railwayGraphQL<{ project?: { teamId?: string | null } }>(
     token,
     `
@@ -88,13 +88,7 @@ async function resolveWorkspaceId(token: string, projectId: string): Promise<str
   `,
     { id: projectId },
   );
-  const teamId = result.project?.teamId;
-  if (!teamId) {
-    throw new Error(
-      'Railway Redis: project teamId is missing — template deploy requires a team/workspace ID.',
-    );
-  }
-  return teamId;
+  return result.project?.teamId ?? undefined;
 }
 
 interface RedisTemplateDescriptor {
@@ -133,7 +127,7 @@ interface DeployTemplateOptions {
   template: RedisTemplateDescriptor;
   projectId: string;
   environmentId: string;
-  workspaceId: string;
+  workspaceId?: string;
 }
 
 async function deployRedisTemplate(options: DeployTemplateOptions): Promise<string> {
@@ -154,7 +148,7 @@ async function deployRedisTemplate(options: DeployTemplateOptions): Promise<stri
         serializedConfig: options.template.serializedConfig,
         projectId: options.projectId,
         environmentId: options.environmentId,
-        workspaceId: options.workspaceId,
+        ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
       },
     },
   );
@@ -259,7 +253,12 @@ async function fetchEnvironmentServices(
 }
 
 function isRedisServiceName(serviceName: string): boolean {
-  return serviceName.toLowerCase() === REDIS_SERVICE_NAME_DEFAULT.toLowerCase();
+  const normalizedServiceName = serviceName.toLowerCase();
+  const normalizedDefaultName = REDIS_SERVICE_NAME_DEFAULT.toLowerCase();
+  return (
+    normalizedServiceName === normalizedDefaultName ||
+    normalizedServiceName.startsWith(`${normalizedDefaultName}-`)
+  );
 }
 
 async function discoverRedisService(options: {

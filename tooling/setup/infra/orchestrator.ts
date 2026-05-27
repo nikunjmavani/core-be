@@ -18,7 +18,12 @@ import {
   type StepDescriptor,
   type StepOutcome,
 } from '../common/interactive-step.js';
-import { reviewProjectIdentity, SETUP_SERVICE_NAMES } from './identity-review.js';
+import {
+  formatSetupServiceName,
+  formatSetupServiceNames,
+  reviewProjectIdentity,
+  SETUP_SERVICE_NAMES,
+} from './identity-review.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -120,7 +125,7 @@ function getEnvironmentBranchEntries(config: SetupConfig): logger.EnvironmentBra
     name: environment.name,
     label: environment.label,
     branch: environment.branch,
-    services: SETUP_SERVICE_NAMES,
+    services: SETUP_SERVICE_NAMES.map(formatSetupServiceName),
     isDefault: environment.isDefault,
   }));
 }
@@ -439,7 +444,7 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
     )) {
       const services = SETUP_SERVICE_NAMES.map((serviceName) => {
         const serviceId = environmentState.services[serviceName]?.serviceId ?? 'missing';
-        return `${serviceName}:${serviceId}`;
+        return `${formatSetupServiceName(serviceName)}:${serviceId}`;
       }).join(', ');
       summaryItems.push({ label: `  ${environmentName} services`, value: services });
     }
@@ -591,7 +596,7 @@ export function runStatus(): void {
       env: environment.name,
       status: allOk ? 'OK' : 'MISSING',
       detail: allOk
-        ? `branch: ${environment.branch}; services: ${SETUP_SERVICE_NAMES.join(', ')}`
+        ? `branch: ${environment.branch}; services: ${formatSetupServiceNames(SETUP_SERVICE_NAMES)}`
         : `branch: ${environment.branch}; missing: ${details.join(', ')}`,
     });
   }
