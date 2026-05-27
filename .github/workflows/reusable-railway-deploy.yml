@@ -437,82 +437,66 @@ jobs:
             done
           done
 
-      - name: Deploy API to Railway
-        # Pins the API service to the GHCR image that the build job just
-        # pushed and triggers a fresh deployment from it. See the header
-        # comment for why we go directly to the GraphQL API instead of the
-        # Railway CLI's deploy paths. This step covers both the initial
-        # bootstrap (no prior deployment) and steady-state redeploys.
+      - name: Deploy API and worker to Railway
+        id: api_health
+        # Single deploy script shared by both services so retries, deployment,
+        # and health checks stay identical across API and worker paths.
         env:
           API_IMAGE: ${{ steps.ghcr_images.outputs.api_image }}
+          WORKER_IMAGE: ${{ steps.ghcr_images.outputs.worker_image }}
         run: |
           set -euo pipefail
-          railway variable set --service "$RAILWAY_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
-          echo "Deploying API service from GHCR image: $API_IMAGE"
-          pnpm tool:railway-deploy-image \
-            --service "$RAILWAY_SERVICE_ID" \
-            --image "$API_IMAGE" \
-            --label api
+          resolve_service_base_url() {
+            local service="$1"
+            local domain_json
+            domain_json="$(railway domain --service "$service" --json)"
+            printf '%s' "$domain_json" | node -e "
+              const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+              const url = input.domain ?? input.domains?.[0];
+              if (!url) process.exit(1);
+              const host = String(url).replace(/\\/$/, '');
+              process.stdout.write(host.includes('://') ? host : 'https://' + host);
+            "
+          }
 
-      - name: Post-deploy API health check
-        id: api_health
-        run: |
-          set -euo pipefail
-          api_domain_json="$(railway domain --service "$RAILWAY_SERVICE_ID" --json)"
-          api_base_url="$(printf '%s' "$api_domain_json" | node -e "
-            const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-            const url = input.domain ?? input.domains?.[0];
-            if (!url) process.exit(1);
-            const host = String(url).replace(/\\/$/, '');
-            process.stdout.write(host.includes('://') ? host : 'https://' + host);
-          ")"
-          echo "api_base_url=${api_base_url}" >> "$GITHUB_OUTPUT"
-          deadline=$(( $(date +%s) + 300 ))
-          until curl -sfS "$api_base_url/health" -o /tmp/api-health.json; do
-            [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::API /health timeout"; exit 1; }
-            sleep 5
-          done
-          node -e "const health = require('/tmp/api-health.json'); if (health.status !== 'ok') { console.error('api health status is not ok:', health.status ?? 'unknown'); process.exit(1); }"
+          deploy_service_from_image() {
+            local service="$1"
+            local image="$2"
+            local label="$3"
+            railway variable set --service "$service" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
+            echo "Deploying ${label} service from GHCR image: ${image}"
+            pnpm tool:railway-deploy-image \
+              --service "$service" \
+              --image "$image" \
+              --label "$label"
+          }
 
-      - name: Require worker service for deploy
-        run: |
+          wait_for_service_health() {
+            local base_url="$1"
+            local label="$2"
+            local output_file="$3"
+            local health_url="${base_url}/health"
+            local deadline=$(( $(date +%s) + 300 ))
+            until curl -sfS "$health_url" -o "$output_file"; do
+              [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::${label} /health timeout"; exit 1; }
+              sleep 5
+            done
+            node -e "const health = require(process.argv[1]); if (health.status !== 'ok') { console.error('${label} health status is not ok:', health.status ?? 'unknown'); process.exit(1); }" "$output_file"
+          }
+
           if [ -z "$RAILWAY_WORKER_SERVICE_ID" ]; then
             echo "::error::RAILWAY_WORKER_SERVICE_ID must be set in this GitHub environment."
             exit 1
           fi
 
-      - name: Deploy worker to Railway
-        # Same flow as the API deploy step — pin the worker service to the
-        # freshly pushed GHCR worker image and trigger a new deployment.
-        env:
-          WORKER_IMAGE: ${{ steps.ghcr_images.outputs.worker_image }}
-        run: |
-          set -euo pipefail
-          railway variable set --service "$RAILWAY_WORKER_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
-          echo "Deploying worker service from GHCR image: $WORKER_IMAGE"
-          pnpm tool:railway-deploy-image \
-            --service "$RAILWAY_WORKER_SERVICE_ID" \
-            --image "$WORKER_IMAGE" \
-            --label worker
+          deploy_service_from_image "$RAILWAY_SERVICE_ID" "$API_IMAGE" "api"
+          api_base_url="$(resolve_service_base_url "$RAILWAY_SERVICE_ID")"
+          echo "api_base_url=${api_base_url}" >> "$GITHUB_OUTPUT"
+          wait_for_service_health "$api_base_url" "API" "/tmp/api-health.json"
 
-      - name: Post-deploy worker health check
-        run: |
-          set -euo pipefail
-          worker_domain_json="$(railway domain --service "$RAILWAY_WORKER_SERVICE_ID" --json)"
-          worker_base_url="$(printf '%s' "$worker_domain_json" | node -e "
-            const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-            const url = input.domain ?? input.domains?.[0];
-            if (!url) process.exit(1);
-            const host = String(url).replace(/\\/$/, '');
-            process.stdout.write(host.includes('://') ? host : 'https://' + host);
-          ")"
-          worker_health_url="${worker_base_url}/health"
-          deadline=$(( $(date +%s) + 300 ))
-          until curl -sfS "$worker_health_url" -o /tmp/worker-health.json; do
-            [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::Worker /health timeout"; exit 1; }
-            sleep 5
-          done
-          node -e "const health = require('/tmp/worker-health.json'); if (health.status !== 'ok') { console.error('worker health status is not ok:', health.status ?? 'unknown'); process.exit(1); }"
+          deploy_service_from_image "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"
+          worker_base_url="$(resolve_service_base_url "$RAILWAY_WORKER_SERVICE_ID")"
+          wait_for_service_health "$worker_base_url" "Worker" "/tmp/worker-health.json"
 
   api-smoke:
     name: API smoke (${{ needs.resolve-environment.outputs.environment }})

@@ -42,12 +42,9 @@ describe('Worker readiness (global)', () => {
     //     bypassing the scanned GHCR image entirely.
     expect(workflow).toContain('Log expected scanned CI image refs from GHCR');
     expect(workflow).toContain('pnpm tool:railway-deploy-image');
-    expect(workflow).toContain('--service "$RAILWAY_SERVICE_ID"');
-    expect(workflow).toContain('--service "$RAILWAY_WORKER_SERVICE_ID"');
-    expect(workflow).toContain('--image "$API_IMAGE"');
-    expect(workflow).toContain('--image "$WORKER_IMAGE"');
-    expect(workflow).toContain('--label api');
-    expect(workflow).toContain('--label worker');
+    expect(workflow).toContain('--service "$service"');
+    expect(workflow).toContain('--image "$image"');
+    expect(workflow).toContain('--label "$label"');
 
     expect(workflow).not.toContain('railway redeploy');
     expect(workflow).not.toContain('railway up --service');
@@ -64,10 +61,15 @@ describe('Worker readiness (global)', () => {
   it('deploy workflow probes API and worker health after deploy', () => {
     const workflowPath = resolve(ROOT, '.github/workflows/reusable-railway-deploy.yml');
     const workflow = readFileSync(workflowPath, 'utf8');
-    expect(workflow).toContain('Post-deploy API health check');
-    expect(workflow).toContain('$api_base_url/health');
-    expect(workflow).toContain('Post-deploy worker health check');
-    expect(workflow).toContain('pnpm tool:worker-readiness --url "$WORKER_HEALTH_URL"');
+    expect(workflow).toContain('Deploy API and worker to Railway');
+    expect(workflow).toContain('wait_for_service_health()');
+    expect(workflow).toContain('${base_url}/health');
+    expect(workflow).toContain(
+      'deploy_service_from_image "$RAILWAY_SERVICE_ID" "$API_IMAGE" "api"',
+    );
+    expect(workflow).toContain(
+      'deploy_service_from_image "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"',
+    );
   });
 
   it('post-deploy worker readiness script probes /health', () => {

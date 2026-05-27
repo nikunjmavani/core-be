@@ -69,6 +69,9 @@ import { parseArgs } from 'node:util';
 import * as logger from '../common/logger.js';
 
 const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
+const RAILWAY_GRAPHQL_TIMEOUT_MS = 20_000;
+const RAILWAY_GRAPHQL_MAX_RETRY_ATTEMPTS = 4;
+const RAILWAY_GRAPHQL_BASE_BACKOFF_MS = 1_000;
 
 const DEPLOYMENT_TERMINAL_STATUSES = new Set([
   'SUCCESS',
@@ -116,6 +119,21 @@ interface RailwayDeployment {
   url?: string | null;
 }
 
+async function sleep(milliseconds: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+function isRetryableHttpStatus(statusCode: number): boolean {
+  return statusCode === 429 || statusCode >= 500;
+}
+
+function isRetryableNetworkError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /timed out|timeout|ECONNRESET|ENOTFOUND|EAI_AGAIN|fetch failed/i.test(message);
+}
+
 async function railwayGraphQL<T>({
   token,
   authMode,
@@ -127,33 +145,66 @@ async function railwayGraphQL<T>({
   query: string;
   variables?: Record<string, unknown>;
 }): Promise<T> {
-  const response = await fetch(RAILWAY_API_URL, {
-    method: 'POST',
-    headers: buildAuthHeaders({ token, authMode }),
-    body: JSON.stringify({ query, variables }),
-  });
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Railway GraphQL HTTP ${response.status}: ${body}`);
+  for (let attempt = 1; attempt <= RAILWAY_GRAPHQL_MAX_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(RAILWAY_API_URL, {
+        method: 'POST',
+        headers: buildAuthHeaders({ token, authMode }),
+        body: JSON.stringify({ query, variables }),
+        signal: AbortSignal.timeout(RAILWAY_GRAPHQL_TIMEOUT_MS),
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        if (
+          isRetryableHttpStatus(response.status) &&
+          attempt < RAILWAY_GRAPHQL_MAX_RETRY_ATTEMPTS
+        ) {
+          const backoffMilliseconds = RAILWAY_GRAPHQL_BASE_BACKOFF_MS * 2 ** (attempt - 1);
+          logger.warn(
+            `Railway GraphQL retryable HTTP ${response.status} (${authMode}, attempt ${attempt}/${RAILWAY_GRAPHQL_MAX_RETRY_ATTEMPTS}); retrying in ${backoffMilliseconds}ms.`,
+          );
+          await sleep(backoffMilliseconds);
+          continue;
+        }
+        throw new Error(`Railway GraphQL HTTP ${response.status}: ${body}`);
+      }
+
+      const result = (await response.json()) as {
+        data?: T;
+        errors?: Array<{ message: string }>;
+      };
+
+      if (result.errors?.length) {
+        throw new Error(
+          `Railway GraphQL errors: ${result.errors.map((entry) => entry.message).join('; ')}`,
+        );
+      }
+
+      if (result.data === undefined) {
+        throw new Error('Railway GraphQL returned no data and no errors.');
+      }
+
+      return result.data;
+    } catch (error) {
+      const retryableError = isRetryableNetworkError(error);
+      if (!retryableError || attempt >= RAILWAY_GRAPHQL_MAX_RETRY_ATTEMPTS) {
+        throw error;
+      }
+
+      const backoffMilliseconds = RAILWAY_GRAPHQL_BASE_BACKOFF_MS * 2 ** (attempt - 1);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.warn(
+        `Railway GraphQL retryable network error (${authMode}, attempt ${attempt}/${RAILWAY_GRAPHQL_MAX_RETRY_ATTEMPTS}): ${errorMessage}. Retrying in ${backoffMilliseconds}ms.`,
+      );
+      lastError = error instanceof Error ? error : new Error(String(error));
+      await sleep(backoffMilliseconds);
+    }
   }
 
-  const result = (await response.json()) as {
-    data?: T;
-    errors?: Array<{ message: string }>;
-  };
-
-  if (result.errors?.length) {
-    throw new Error(
-      `Railway GraphQL errors: ${result.errors.map((entry) => entry.message).join('; ')}`,
-    );
-  }
-
-  if (result.data === undefined) {
-    throw new Error('Railway GraphQL returned no data and no errors.');
-  }
-
-  return result.data;
+  throw lastError ?? new Error('Railway GraphQL request failed after retries.');
 }
 
 async function railwayGraphQLWithFallback<T>({
@@ -489,10 +540,6 @@ async function waitForTerminalStatus({
   throw new Error(
     `Timeout: deployment ${deploymentId} for ${label} did not reach a terminal status within ${timeoutSeconds}s (last status: ${lastStatus || 'unknown'}).`,
   );
-}
-
-function sleep(milliseconds: number): Promise<void> {
-  return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
 }
 
 function parseOptions(): RailwayDeployImageOptions {
