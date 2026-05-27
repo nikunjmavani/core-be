@@ -512,6 +512,7 @@ jobs:
             [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::Worker /health timeout"; exit 1; }
             sleep 5
           done
+          node -e "const health = require('/tmp/worker-health.json'); if (health.status !== 'ok') { console.error('worker health status is not ok:', health.status ?? 'unknown'); process.exit(1); }"
 
   api-smoke:
     name: API smoke (${{ needs.resolve-environment.outputs.environment }})
