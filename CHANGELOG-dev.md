@@ -2,10 +2,9 @@
 
 ## [2.7.4](https://github.com/nikunjmavani/core-be/compare/v2.7.3...v2.7.4) (2026-05-27)
 
-
 ### Fixed
 
-* **ci:** probe worker readiness via Redis instead of public /health ([#117](https://github.com/nikunjmavani/core-be/issues/117)) ([9bc7bb5](https://github.com/nikunjmavani/core-be/commit/9bc7bb5c55305ab75d3317a69fe01708ec52a392))
+- **ci:** probe worker readiness via Redis instead of public /health ([#117](https://github.com/nikunjmavani/core-be/issues/117)) ([9bc7bb5](https://github.com/nikunjmavani/core-be/commit/9bc7bb5c55305ab75d3317a69fe01708ec52a392))
 
 ## [2.7.3](https://github.com/nikunjmavani/core-be/compare/v2.7.2...v2.7.3) (2026-05-27)
 
