@@ -46,7 +46,7 @@ CI runs the same check before image builds ([`tooling/ci/check-dockerfile-sync.m
 | `BUILD_REVISION`       | `unknown` | OCI label `org.opencontainers.image.revision` (CI passes `github.sha`)                  |
 | `IMAGE_SOURCE`         | `unknown` | OCI label `org.opencontainers.image.source` (CI passes repo URL)                        |
 
-**pnpm cache:** Both install steps use BuildKit cache mount `id=pnpm-store` on `/root/.local/share/pnpm/store`.
+**pnpm install:** Production Dockerfiles intentionally avoid BuildKit `type=cache` mounts. Railway requires cache mount IDs to be hardcoded with a service-specific `s/<service-id>-...` prefix, which is not portable for this repo's shared API/worker Dockerfiles across multiple environments. Docker layer caching still applies to the `package.json` + `pnpm-lock.yaml` install layers.
 
 ### Build commands (manual)
 

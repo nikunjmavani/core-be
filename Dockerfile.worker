@@ -26,8 +26,7 @@ ENV NODE_ENV=test \
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
 COPY package.json pnpm-lock.yaml ./
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-  pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 RUN pnpm build && pnpm build:check
@@ -49,8 +48,7 @@ COPY --from=build /app/migrations ./migrations
 COPY --from=build /app/src/shared/locales ./src/shared/locales
 COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
 
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-  pnpm install --frozen-lockfile --prod --ignore-scripts \
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
   $( [ "$INSTALL_MCP_OPTIONAL" = "true" ] || echo "--no-optional" ) \
   && rm -rf \
     /root/.cache/node/corepack \
