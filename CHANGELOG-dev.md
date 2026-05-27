@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.3](https://github.com/nikunjmavani/core-be/compare/v2.6.2...v2.6.3) (2026-05-27)
+
+
+### Fixed
+
+* **ci:** bootstrap initial Railway deployments when redeploy has no history ([#94](https://github.com/nikunjmavani/core-be/issues/94)) ([61eb364](https://github.com/nikunjmavani/core-be/commit/61eb364e9051b8454cda3ef3124a888a231bf359))
+
 ## [2.6.2](https://github.com/nikunjmavani/core-be/compare/v2.6.1...v2.6.2) (2026-05-27)
 
 
