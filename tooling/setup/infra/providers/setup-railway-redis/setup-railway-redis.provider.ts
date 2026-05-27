@@ -13,6 +13,14 @@ import type {
 const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
 const REDIS_SERVICE_NAME = 'redis';
 const REDIS_PORT = 6379;
+/**
+ * Railway resolves `<service-name>.railway.internal` per-environment via its
+ * internal DNS: api/worker in `production` reach the `production` redis, and
+ * `development` reaches the `development` redis. Same hostname string, scoped
+ * resolution. This URL is only routable inside Railway's WireGuard mesh — local
+ * `pnpm dev` cannot reach it (see docs/deployment/runbooks/redis-topology.md).
+ */
+const REDIS_PRIVATE_HOSTNAME = `${REDIS_SERVICE_NAME}.railway.internal`;
 
 interface RailwayRedisInstance {
   environmentName: string;
@@ -56,6 +64,10 @@ function generateRedisPassword(): string {
   return randomBytes(32).toString('hex');
 }
 
+function isGeneratedRedisPassword(redisPassword: string): boolean {
+  return /^[0-9a-f]{64}$/i.test(redisPassword);
+}
+
 function buildValkeyStartCommand(maxmemoryMb: number): string {
   return [
     'valkey-server',
@@ -70,25 +82,28 @@ function buildValkeyStartCommand(maxmemoryMb: number): string {
   ].join(' ');
 }
 
-function buildRailwayRedisUrl(): string {
-  return `redis://default:\${{${REDIS_SERVICE_NAME}.REDIS_PASSWORD}}@${buildRailwayPrivateDomainReference()}:${REDIS_PORT}`;
-}
-
-function buildRailwayPrivateDomainReference(): string {
-  return `\${{${REDIS_SERVICE_NAME}.RAILWAY_PRIVATE_DOMAIN}}`;
+function buildRailwayRedisUrl(redisPassword: string): string {
+  return `redis://default:${encodeURIComponent(redisPassword)}@${REDIS_PRIVATE_HOSTNAME}:${REDIS_PORT}`;
 }
 
 function buildRailwayPrivateEndpoint(): string {
-  return `${buildRailwayPrivateDomainReference()}:${REDIS_PORT}`;
+  return `${REDIS_PRIVATE_HOSTNAME}:${REDIS_PORT}`;
 }
 
+/**
+ * Reads the password back from a previously-recorded REDIS_URL only when it
+ * matches this provider's generated secret format. Legacy template URLs and
+ * opaque provider-returned secret placeholders are rejected so reruns rotate to
+ * a known plaintext value that can be embedded into REDIS_URL.
+ */
 function getExistingRedisPassword(state: SetupState, environmentName: string): string | undefined {
   const redisUrl = state.redis?.databases?.[environmentName]?.redisUrl;
   if (!redisUrl) return undefined;
+  if (redisUrl.includes('${{')) return undefined;
   try {
     const url = new URL(redisUrl);
     const password = decodeURIComponent(url.password);
-    return password || undefined;
+    return isGeneratedRedisPassword(password) ? password : undefined;
   } catch {
     return undefined;
   }
@@ -239,7 +254,7 @@ export async function provision(
         environmentId: serviceState.environmentId,
       });
 
-      const redisUrl = buildRailwayRedisUrl();
+      const redisUrl = buildRailwayRedisUrl(redisPassword);
       const privateEndpoint = buildRailwayPrivateEndpoint();
       instances.push({
         environmentName,
@@ -291,11 +306,13 @@ function allEnvironmentsHaveRedis(environments: string[], state: SetupState): bo
   return environments.every((environmentName) => {
     const database = state.redis?.databases?.[environmentName];
     const serviceState = getRedisServiceState(state, environmentName);
-    return Boolean(
-      serviceState?.serviceId &&
-        database?.redisUrl.includes(buildRailwayPrivateDomainReference()) &&
-        database.databaseId === `${serviceState.serviceId}:${serviceState.environmentId}`,
-    );
+    if (!(serviceState?.serviceId && database?.redisUrl)) return false;
+    if (database.databaseId !== `${serviceState.serviceId}:${serviceState.environmentId}`) {
+      return false;
+    }
+    if (database.redisUrl.includes('${{')) return false;
+    const redisPassword = getExistingRedisPassword(state, environmentName);
+    return Boolean(redisPassword && database.redisUrl.includes(`@${REDIS_PRIVATE_HOSTNAME}:`));
   });
 }
 
