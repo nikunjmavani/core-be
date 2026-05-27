@@ -1,5 +1,9 @@
 import { resolveRedisKeyPrefix } from '@/infrastructure/cache/redis-prefix.util.js';
-import { parseRedisUrl, resolveBullMqRedisUrl } from '@/infrastructure/cache/redis-url.util.js';
+import {
+  isRedisTlsUrl,
+  parseRedisUrl,
+  resolveBullMqRedisUrl,
+} from '@/infrastructure/cache/redis-url.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
 /**
@@ -24,8 +28,10 @@ export function getBullMQConnectionOptions(): {
   db: number;
   maxRetriesPerRequest: null;
   prefix: string;
+  tls?: Record<string, never>;
 } {
-  const parsed = parseRedisUrl(resolveBullMqRedisUrl());
+  const bullMqRedisUrl = resolveBullMqRedisUrl();
+  const parsed = parseRedisUrl(bullMqRedisUrl);
   return omitUndefined({
     host: parsed.host,
     port: parsed.port,
@@ -33,5 +39,6 @@ export function getBullMQConnectionOptions(): {
     db: parsed.databaseIndex,
     maxRetriesPerRequest: null,
     prefix: resolveRedisKeyPrefix(),
+    tls: isRedisTlsUrl(bullMqRedisUrl) ? {} : undefined,
   });
 }
