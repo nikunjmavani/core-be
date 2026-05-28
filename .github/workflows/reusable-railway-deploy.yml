@@ -424,9 +424,16 @@ jobs:
         # --set ... --set ...` call per service. Batching collapses ~50 GraphQL
         # mutations into one (so transient `backboard.railway.com` timeouts
         # don't fail mid-stream) and any genuine flake is absorbed by an
-        # exponential-backoff retry loop. Railway de-duplicates the implicit
-        # redeploy from the variables change with our explicit `redeploy` step
-        # below, so we don't bother with `--skip-deploys`.
+        # exponential-backoff retry loop. We pass `--skip-deploys` so this
+        # mutation only updates config — the single deploy per service is
+        # triggered later by `pnpm tool:railway-deploy-image`
+        # (serviceInstanceUpdate + serviceInstanceDeployV2 are issued back-to-
+        # back in the same process and reliably coalesced by Railway into one
+        # deployment whose id we poll for terminal status). Without
+        # `--skip-deploys`, every `railway variables`/`railway variable set`
+        # call would also queue its own redeploy, and Railway's best-effort
+        # coalescing window is shorter than the gap between these CLI calls,
+        # so we saw 2–3 extra deployments per service per CD run.
         run: |
           set -euo pipefail
 
@@ -508,7 +515,7 @@ jobs:
           for service in $services; do
             attempt=1
             while true; do
-              if railway variables --service "$service" "${set_args[@]}"; then
+              if railway variables --service "$service" --skip-deploys "${set_args[@]}"; then
                 echo "Pushed ${push_count} variables to Railway service ${service} on attempt ${attempt} (skipped ${#skipped_keys[@]} excluded keys)."
                 break
               fi
@@ -558,7 +565,7 @@ jobs:
             local service="$1"
             local image="$2"
             local label="$3"
-            railway variable set --service "$service" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
+            railway variable set --service "$service" --skip-deploys "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
             echo "Deploying ${label} service from GHCR image: ${image}"
             pnpm tool:railway-deploy-image \
               --service "$service" \
