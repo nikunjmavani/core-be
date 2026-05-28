@@ -10,6 +10,7 @@ import {
   type InjectHttpResult,
 } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
  * N+1 query detection tests.
@@ -51,7 +52,7 @@ describe('Performance: N+1 Detection', () => {
     const start = performance.now();
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       token,
     });
     const duration = performance.now() - start;
@@ -75,7 +76,7 @@ describe('Performance: N+1 Detection', () => {
     const start = performance.now();
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: '/api/v1/users/',
+      url: testApiPath('/users/'),
       token,
     });
     const duration = performance.now() - start;

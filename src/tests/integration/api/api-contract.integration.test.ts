@@ -8,6 +8,7 @@ import {
   injectUnauthenticated,
 } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 describe('API contract (integration)', () => {
   let app: FastifyInstance;
@@ -49,7 +50,7 @@ describe('API contract (integration)', () => {
 
     const response = await injectUnauthenticated(app, {
       method: 'POST',
-      url: '/api/v1/auth/login',
+      url: testApiPath('/auth/login'),
       payload: {},
     });
     expect([400, 422]).toContain(response.statusCode);
@@ -65,7 +66,7 @@ describe('API contract (integration)', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: '/api/v1/users/me',
+      url: testApiPath('/users/me'),
       token,
     });
 
@@ -80,7 +81,7 @@ describe('API contract (integration)', () => {
 
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/api/v1/billing/plans',
+      url: testApiPath('/billing/plans'),
     });
     expect(response.statusCode).toBe(200);
   });
@@ -95,7 +96,7 @@ describe('API contract (integration)', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: '/api/v1/billing/plans',
+      url: testApiPath('/billing/plans'),
       token,
     });
     expect(response.statusCode).toBe(200);

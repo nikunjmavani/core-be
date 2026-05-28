@@ -75,10 +75,33 @@ describe('migration prefix helpers', () => {
     expect(incrementMigrationPrefix('20260530000002')).toBe('20260530000003');
   });
 
-  it('suggestNextMigrationPrefix increments after current max', () => {
-    expect(suggestNextMigrationPrefix(['20260530000001_a.sql', '20260530000002_b.sql'])).toEqual({
+  it('suggestNextMigrationPrefix increments when now <= current max (clock skew / same second)', () => {
+    const now = new Date('2026-05-28T05:43:21.000Z');
+    // `now` formats to 20260528054321 which is LESS than the current max below,
+    // so the helper must fall back to incrementing the max.
+    expect(
+      suggestNextMigrationPrefix(['20260530000001_a.sql', '20260530000002_b.sql'], now),
+    ).toEqual({
       currentMax: '20260530000002',
       nextPrefix: '20260530000003',
+    });
+  });
+
+  it('suggestNextMigrationPrefix prefers real UTC time when greater than current max', () => {
+    const now = new Date('2026-05-30T05:43:21.000Z');
+    expect(
+      suggestNextMigrationPrefix(['20260520000001_a.sql', '20260520000002_b.sql'], now),
+    ).toEqual({
+      currentMax: '20260520000002',
+      nextPrefix: '20260530054321',
+    });
+  });
+
+  it('suggestNextMigrationPrefix uses real UTC time when no migrations exist', () => {
+    const now = new Date('2026-05-28T12:00:00.000Z');
+    expect(suggestNextMigrationPrefix([], now)).toEqual({
+      currentMax: null,
+      nextPrefix: '20260528120000',
     });
   });
 });

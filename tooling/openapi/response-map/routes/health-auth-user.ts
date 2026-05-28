@@ -1,6 +1,6 @@
 /** OpenAPI success responses — health, auth, and current user. */
 import type { ResponseDefinition } from '../building-blocks.js';
-import { wrapPaginated, wrapSuccess } from '../building-blocks.js';
+import { wrapSuccess } from '../building-blocks.js';
 import * as schemas from '../resource-schemas.js';
 
 export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = {

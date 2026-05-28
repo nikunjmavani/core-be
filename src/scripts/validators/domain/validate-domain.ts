@@ -37,7 +37,7 @@ function listDomainEntries(domainPath: string): string[] {
 }
 
 function walkEmptyTestDirectories(directoryPath: string, result: ValidationResult): void {
-  let entries;
+  let entries: import('node:fs').Dirent[];
   try {
     entries = readdirSync(directoryPath, { withFileTypes: true });
   } catch {

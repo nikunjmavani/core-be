@@ -7,8 +7,6 @@ import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method
  * Will be migrated to a dedicated mfa_methods table in Phase 2.
  */
 export class MfaRepository {
-  private readonly mfaMethodTypes = ['MFA_TOTP', 'MFA_SMS', 'MFA_EMAIL'] as const;
-
   async findTotpByUserId(userId: number) {
     const rows = await getRequestDatabase()
       .select()

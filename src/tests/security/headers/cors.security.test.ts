@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import { injectUnauthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
  * CORS configuration tests — verify cross-origin headers are set correctly.
@@ -21,7 +22,7 @@ describe('Security: CORS', () => {
   it('should include CORS headers in response', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'OPTIONS',
-      url: '/api/v1/auth/login',
+      url: testApiPath('/auth/login'),
       headers: {
         origin: 'http://localhost:3000',
         'access-control-request-method': 'POST',
@@ -34,7 +35,7 @@ describe('Security: CORS', () => {
   it('should include Access-Control-Allow-Methods header', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'OPTIONS',
-      url: '/api/v1/auth/login',
+      url: testApiPath('/auth/login'),
       headers: {
         origin: 'http://localhost:3000',
         'access-control-request-method': 'POST',

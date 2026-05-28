@@ -127,6 +127,8 @@
     "tool:test-report-email": "tsx src/scripts/ops/send-test-report-email.ts",
     "tool:send-load-test-results-email": "tsx src/scripts/ops/send-load-test-results-email.ts",
     "verify:base": "tsx src/scripts/ops/verify-base.ts",
+    "setup:local": "tsx tooling/dev/setup-local.ts",
+    "db:migrate:new": "tsx src/scripts/codegen/generate-migration.ts",
     "setup": "tsx tooling/setup/setup.ts",
     "setup:all": "tsx tooling/setup/setup.ts",
     "setup:provision": "tsx tooling/setup/setup.ts",

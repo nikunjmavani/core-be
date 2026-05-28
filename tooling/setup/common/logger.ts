@@ -105,7 +105,7 @@ export function blank(): void {
 }
 
 export function divider(): void {
-  console.log(chalk.gray('  ' + '─'.repeat(56)));
+  console.log(chalk.gray(`  ${'─'.repeat(56)}`));
 }
 
 export function startSpinner(message: string): Ora {
@@ -137,7 +137,7 @@ export function summary(title: string, items: Array<{ label: string; value: stri
 
 export function table(rows: Array<{ env: string; status: string; detail: string }>): void {
   console.log('');
-  console.log(chalk.bold('  ' + 'Environment'.padEnd(14) + 'Status'.padEnd(12) + 'Detail'));
+  console.log(chalk.bold(`  ${'Environment'.padEnd(14)}${'Status'.padEnd(12)}Detail`));
   divider();
   for (const row of rows) {
     const statusColor = row.status === 'OK' ? chalk.green : chalk.red;
@@ -253,7 +253,7 @@ export function previewPlan(
   console.log(chalk.bold.yellow('  Providers to provision (fill tokens in secrets file):'));
   console.log('');
   for (const provider of providers) {
-    console.log(chalk.green('    ' + provider.provider));
+    console.log(chalk.green(`    ${provider.provider}`));
     console.log(chalk.gray(`      → ${provider.detail}`));
     console.log(chalk.gray(`      → Get token: ${provider.url}`));
     console.log(chalk.gray(`      → In .env.setup: ${provider.configKey}=<value>`));
@@ -269,7 +269,7 @@ export function previewPlan(
     chalk.gray('  See docs/deployment/setup-token-instructions.md for GITHUB_TOKEN step-by-step.'),
   );
   console.log('');
-  console.log(chalk.bold.white('  Next step: Fill ' + secretsPath));
+  console.log(chalk.bold.white(`  Next step: Fill ${secretsPath}`));
   console.log(chalk.gray('  Then run: pnpm setup:infra (double confirm before provisioning)'));
   console.log('');
 }

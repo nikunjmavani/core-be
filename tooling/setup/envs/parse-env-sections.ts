@@ -99,10 +99,11 @@ export function parseEnvExampleSections(filePath: string): ParsedEnvExample {
       const closingLine = lines[index + 2] ?? '';
       const titleMatch = titleLine.match(TITLE_LINE);
       if (titleMatch && HALF_SEPARATOR.test(closingLine)) {
-        const newHalf = classifyHalfTitle(titleMatch[1]!);
+        const titleCapture = titleMatch[1] ?? '';
+        const newHalf = classifyHalfTitle(titleCapture);
         if (newHalf === null) {
           throw new Error(
-            `Unknown top-level section header "${titleMatch[1]}" in ${filePath}. Expected "GitHub Secrets" or "GitHub Variables".`,
+            `Unknown top-level section header "${titleCapture}" in ${filePath}. Expected "GitHub Secrets" or "GitHub Variables".`,
           );
         }
         currentHalf = newHalf;
@@ -122,7 +123,7 @@ export function parseEnvExampleSections(filePath: string): ParsedEnvExample {
             `Sub-section "${titleMatch[1]}" appears before any top-level header in ${filePath}.`,
           );
         }
-        const subSection: EnvExampleSubSection = { title: titleMatch[1]!.trim(), keys: [] };
+        const subSection: EnvExampleSubSection = { title: titleMatch[1]?.trim(), keys: [] };
         halves[currentHalf].subSections.push(subSection);
         currentSubSection = subSection;
         index += 2;
@@ -135,14 +136,15 @@ export function parseEnvExampleSections(filePath: string): ParsedEnvExample {
     const varMatch = line.match(VARIABLE_LINE);
     if (!varMatch) continue;
 
-    const name = varMatch[1]!;
-    let value = varMatch[2]!;
+    const name = varMatch[1] ?? '';
+    let value = varMatch[2] ?? '';
+    if (!name) continue;
     if (value.startsWith('"')) {
       let collected = value.slice(1);
       while (!collected.endsWith('"')) {
         index += 1;
         if (index >= lines.length) break;
-        collected += '\n' + (lines[index] ?? '');
+        collected += `\n${lines[index] ?? ''}`;
       }
       value = collected.endsWith('"') ? collected.slice(0, -1) : collected;
       // Resolve `\n` escapes inside double-quoted values so PEM keypairs round-trip

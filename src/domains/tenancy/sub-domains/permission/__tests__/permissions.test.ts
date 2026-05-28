@@ -17,6 +17,7 @@ import {
 } from '../permission-cache.service.js';
 import { TENANCY_PERMISSIONS } from '../../../tenancy.permissions.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 const ALL_PERMISSION_CODES = Object.values(TENANCY_PERMISSIONS);
 
@@ -44,7 +45,7 @@ describe('Permission System Validation', () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
     const response = await injectAuthenticated(app, {
-      url: '/api/v1/tenancy/permissions',
+      url: testApiPath('/tenancy/permissions'),
       token,
     });
     expect(response.statusCode).toBe(200);
@@ -128,7 +129,7 @@ describe('Permission System Validation', () => {
 
     // Attempt to access roles endpoint (requires ROLE_READ)
     const response = await injectAuthenticated(app, {
-      url: `/api/v1/tenancy/organizations/${organization.public_id}/roles`,
+      url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
       token,
     });
     expect(response.statusCode).toBe(403);
@@ -159,7 +160,7 @@ describe('Permission System Validation', () => {
 
     // Access roles endpoint (requires ROLE_READ) — should succeed
     const response = await injectAuthenticated(app, {
-      url: `/api/v1/tenancy/organizations/${organization.public_id}/roles`,
+      url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
       token,
     });
     expect(response.statusCode).toBe(200);

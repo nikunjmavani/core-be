@@ -341,7 +341,13 @@ async function main(): Promise<void> {
       value: name,
     })),
   );
-  const environmentEntry = state.railway.environments![environmentName];
+  const environmentEntry = state.railway.environments?.[environmentName];
+  if (!environmentEntry) {
+    logger.error(
+      `Selected environment "${environmentName}" is missing from .setup-state.json (likely a race with another setup command). Re-run pnpm setup:infra to refresh state.`,
+    );
+    process.exit(1);
+  }
   const environmentId = environmentEntry.environmentId;
   logger.success(`  Environment: ${environmentName} (${environmentId})`);
   logger.blank();

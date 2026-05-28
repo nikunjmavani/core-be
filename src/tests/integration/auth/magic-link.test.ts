@@ -2,6 +2,7 @@ import { describe, expect, it, afterAll } from 'vitest';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import { injectUnauthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 describe('Auth - Magic Link', () => {
   let app: FastifyInstance;
@@ -16,7 +17,7 @@ describe('Auth - Magic Link', () => {
 
     const response = await injectUnauthenticated(app, {
       method: 'POST',
-      url: '/api/v1/auth/magic-link/send',
+      url: testApiPath('/auth/magic-link/send'),
       payload: { email: 'nonexistent@example.com' },
     });
 
@@ -28,7 +29,7 @@ describe('Auth - Magic Link', () => {
   it('POST /api/v1/auth/magic-link/verify returns 4xx with invalid token', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'POST',
-      url: '/api/v1/auth/magic-link/verify',
+      url: testApiPath('/auth/magic-link/verify'),
       payload: { token: 'invalid-token-that-does-not-exist' },
     });
 

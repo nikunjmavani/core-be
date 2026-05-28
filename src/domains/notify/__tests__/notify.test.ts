@@ -16,6 +16,7 @@ import {
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 const NOTIFY_PERMISSIONS = {
   WEBHOOK_READ: 'webhook:read',
@@ -62,7 +63,7 @@ describe('Notify Domain — Integration', () => {
   describe('GET /api/v1/notify/notifications', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/notify/notifications',
+        url: testApiPath('/notify/notifications'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -71,7 +72,7 @@ describe('Notify Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
-        url: '/api/v1/notify/notifications',
+        url: testApiPath('/notify/notifications'),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -81,7 +82,7 @@ describe('Notify Domain — Integration', () => {
   describe('GET /api/v1/notify/notifications/:id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/notify/notifications/test-id',
+        url: testApiPath('/notify/notifications/test-id'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -91,7 +92,7 @@ describe('Notify Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'PATCH',
-        url: '/api/v1/notify/notifications/test-id/read',
+        url: testApiPath('/notify/notifications/test-id/read'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -101,7 +102,7 @@ describe('Notify Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/notify/notifications/mark-all-read',
+        url: testApiPath('/notify/notifications/mark-all-read'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -110,7 +111,7 @@ describe('Notify Domain — Integration', () => {
   describe('GET /api/v1/notify/notifications/unread-count', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/notify/notifications/unread-count',
+        url: testApiPath('/notify/notifications/unread-count'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -119,7 +120,7 @@ describe('Notify Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
-        url: '/api/v1/notify/notifications/unread-count',
+        url: testApiPath('/notify/notifications/unread-count'),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -130,7 +131,7 @@ describe('Notify Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: '/api/v1/notify/notifications/test-id',
+        url: testApiPath('/notify/notifications/test-id'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -141,7 +142,7 @@ describe('Notify Domain — Integration', () => {
   describe('GET /api/v1/notify/organizations/:id/webhooks', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/notify/organizations/some-id/webhooks',
+        url: testApiPath('/notify/organizations/some-id/webhooks'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -151,7 +152,7 @@ describe('Notify Domain — Integration', () => {
       const user = await createTestUser({ email: 'noperm@test.com' });
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
-        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks`,
+        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
         token,
       });
       expect(response.statusCode).toBe(403);
@@ -160,7 +161,7 @@ describe('Notify Domain — Integration', () => {
     it('should return webhooks with permission', async () => {
       const { organization, token } = await createAuthorizedNotifyContext();
       const response = await injectAuthenticated(app, {
-        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks`,
+        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -185,7 +186,7 @@ describe('Notify Domain — Integration', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks`,
+        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
         token,
         payload: {},
       });
@@ -199,7 +200,7 @@ describe('Notify Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/notify/organizations/some-id/webhooks/some-webhook-id/test',
+        url: testApiPath('/notify/organizations/some-id/webhooks/some-webhook-id/test'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -226,7 +227,9 @@ describe('Notify Domain — Integration', () => {
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/test`,
+        url: testApiPath(
+          `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/test`,
+        ),
         token: readToken,
       });
       expect(response.statusCode).toBe(403);
@@ -244,7 +247,9 @@ describe('Notify Domain — Integration', () => {
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/test`,
+        url: testApiPath(
+          `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/test`,
+        ),
         token,
       });
 
@@ -264,7 +269,9 @@ describe('Notify Domain — Integration', () => {
       const { organization, token } = await createAuthorizedNotifyContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: `/api/v1/notify/organizations/${organization.public_id}/webhooks/wwwwwwwwwwwwwwwwwwwww/test`,
+        url: testApiPath(
+          `/notify/organizations/${organization.public_id}/webhooks/wwwwwwwwwwwwwwwwwwwww/test`,
+        ),
         token,
       });
       expect(response.statusCode).toBe(404);
@@ -276,7 +283,7 @@ describe('Notify Domain — Integration', () => {
   describe('GET /api/v1/notify/organizations/:id/webhook-events', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/notify/organizations/some-id/webhook-events',
+        url: testApiPath('/notify/organizations/some-id/webhook-events'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -284,7 +291,7 @@ describe('Notify Domain — Integration', () => {
     it('should return webhook events with permission', async () => {
       const { organization, token } = await createAuthorizedNotifyContext();
       const response = await injectAuthenticated(app, {
-        url: `/api/v1/notify/organizations/${organization.public_id}/webhook-events`,
+        url: testApiPath(`/notify/organizations/${organization.public_id}/webhook-events`),
         token,
       });
       expect(response.statusCode).toBe(200);

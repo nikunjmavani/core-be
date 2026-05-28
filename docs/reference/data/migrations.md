@@ -18,21 +18,28 @@ See **db-migration-maintainer** skill and [data-lifecycle-deletion.md](../data/d
 
 ## Migration filename ordering
 
-Each up migration file is named `YYYYMMDDHHMMSS_snake_case.sql`. The **14-digit prefix is a lexicographic sequence key**, not necessarily the calendar day the file was written.
+Each up migration file is named `YYYYMMDDHHMMSS_snake_case.sql`. The **14-digit prefix is a real UTC wall-clock timestamp** (`YYYYMMDDHHMMSS`), not a counter. Using the actual time of day means two developers branching off the same dev tip naturally land on different prefixes and avoid the trivial merge conflict that comes from sequential `_000001 / _000002` suffixes.
 
-- Applied migrations are recorded in `public.schema_migrations` by **filename** — never rename merged files.
+- Applied migrations are recorded in `public.schema_migrations` by **filename** — never rename merged files. Renaming makes the runner treat the file as a new migration and re-apply it in environments that already had it.
 - The prefix must be **strictly greater** than every existing up migration (`pnpm db:migrate:lint` enforces monotonic order).
-- Historical mixes (for example `202502*` early schema, then `202602*`, then `202605*`) are valid; ordering is by prefix only.
-- **Do not** rely on `date -u +%Y%m%d000001` unless you confirm it sorts after the current max. Example: on 2026-05-20, `20260520000001` is **less than** max `20260530000002` and will fail CI.
+- Historical mixes (e.g. `202502*` early schema, then `202605*` with `_000001` counter suffixes) are valid; ordering is by prefix only. Leave existing files alone.
+- **Do not** rely on `date -u +%Y%m%d000001` or any other counter pattern — that re-introduces the merge-conflict problem. Use the generator below.
 
-**Suggested next prefix:**
+**Create a new migration (preferred):**
+
+```bash
+pnpm db:migrate:new add_my_table
+# → creates migrations/<YYYYMMDDHHMMSS>_add_my_table.sql with a header template
+```
+
+**Inspect the next prefix without creating a file:**
 
 ```bash
 pnpm db:migrate:next-prefix add_my_table
 # → prints current max, next prefix, and example filename
 ```
 
-Then author SQL in `migrations/<prefix>_<snake_case>.sql` and run `pnpm db:migrate:lint`.
+Both helpers share the same logic: prefer real UTC `HHMMSS`, fall back to incrementing the current max only when "now" is not strictly greater (clock skew, or two migrations created in the same second). Author SQL in the generated file and run `pnpm db:migrate:lint`.
 
 ---
 
@@ -132,6 +139,7 @@ Dropped tables from earlier schema consolidations are omitted from the cumulativ
 | Command | Purpose |
 | ------- | ------- |
 | `pnpm db:migrate:lint` | Block unsafe DDL in CI |
+| `pnpm db:migrate:new <slug>` | Create new migration file with real-time `YYYYMMDDHHMMSS` prefix |
 | `pnpm db:migrate:next-prefix` | Print next filename prefix after current max |
 | `pnpm db:migrate:dry-run` | Inspect pending SQL |
 | `pnpm tool:generate-dbdiagram` | Regenerate `docs/database/core-be.dbml` for dbdiagram.io |

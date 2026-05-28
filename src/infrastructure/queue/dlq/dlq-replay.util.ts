@@ -171,13 +171,13 @@ export async function listDeadLetterJobs(deadLetterQueueName: string): Promise<v
   try {
     const jobs = await queue.getJobs(['waiting', 'failed'], 0, 99);
     if (jobs.length === 0) {
-      // eslint-disable-next-line no-console -- CLI script output for tool:dlq-replay.
+      // biome-ignore lint/suspicious/noConsole: tabular CLI output for tool:dlq-replay (terminal user, not log aggregator).
       console.log(`${deadLetterQueueName}: (empty)`);
       return;
     }
     for (const job of jobs) {
       const data = job.data as DeadLetterJobData;
-      // eslint-disable-next-line no-console -- CLI script output for tool:dlq-replay.
+      // biome-ignore lint/suspicious/noConsole: tabular CLI output for tool:dlq-replay (terminal user, not log aggregator).
       console.log(
         [
           job.id,
@@ -188,7 +188,7 @@ export async function listDeadLetterJobs(deadLetterQueueName: string): Promise<v
         ].join('\t'),
       );
     }
-    // eslint-disable-next-line no-console -- CLI script output for tool:dlq-replay.
+    // biome-ignore lint/suspicious/noConsole: tabular CLI output for tool:dlq-replay (terminal user, not log aggregator).
     console.log(`${deadLetterQueueName}: ${jobs.length} job(s)`);
   } finally {
     await queue.close();

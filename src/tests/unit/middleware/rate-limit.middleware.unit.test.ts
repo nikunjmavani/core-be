@@ -181,10 +181,10 @@ describe('rate-limit.middleware', () => {
       expect(options.allowList({ url: '/health' })).toBe(true);
 
       // Look-alike paths must NOT be allowed (defense-in-depth: prefix match, not contains)
-      expect(options.allowList({ url: '/api/v1/healthcheck' })).toBe(false);
-      expect(options.allowList({ url: '/api/v1/health-tracker' })).toBe(false);
+      expect(options.allowList({ url: testApiPath('/healthcheck') })).toBe(false);
+      expect(options.allowList({ url: testApiPath('/health-tracker') })).toBe(false);
       expect(options.allowList({ url: '/foo/health/bar' })).toBe(false);
-      expect(options.allowList({ url: '/api/v1/auth/login' })).toBe(false);
+      expect(options.allowList({ url: testApiPath('/auth/login') })).toBe(false);
     });
   });
 });

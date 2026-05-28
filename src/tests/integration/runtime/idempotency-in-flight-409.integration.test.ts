@@ -5,6 +5,7 @@ import { buildIdempotencyCacheKey } from '@/shared/utils/idempotency/idempotency
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 describe('Integration: idempotency in-flight returns 409', () => {
   let application: FastifyInstance;
@@ -39,7 +40,7 @@ describe('Integration: idempotency in-flight returns 409', () => {
 
     const response = await application.inject({
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       headers: {
         'Idempotency-Key': idempotencyKey,
         'Content-Type': 'application/json',
@@ -67,7 +68,7 @@ describe('Integration: idempotency in-flight returns 409', () => {
 
     const response = await application.inject({
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       headers: {
         'Idempotency-Key': idempotencyKey,
         'Content-Type': 'application/json',

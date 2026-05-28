@@ -44,7 +44,7 @@ function createIamClient(secrets: SetupSecrets): IAMClient {
   });
 }
 
-function buildBucketPolicy(bucketName: string, bucketArn: string): string {
+function buildBucketPolicy(bucketArn: string): string {
   return JSON.stringify({
     Version: '2012-10-17',
     Statement: [
@@ -210,13 +210,25 @@ export async function provision(
           const getUserResponse = await iamClient.send(
             new GetUserCommand({ UserName: iamUsername }),
           );
-          userArn = getUserResponse.User!.Arn!;
+          const existingArn = getUserResponse.User?.Arn;
+          if (!existingArn) {
+            throw new Error(
+              `IAM GetUser succeeded but returned no Arn for "${iamUsername}" (AWS API contract violation).`,
+            );
+          }
+          userArn = existingArn;
           logger.stopSpinner(iamSpinner, `IAM user "${iamUsername}" already exists`);
         } catch {
           const createUserResponse = await iamClient.send(
             new CreateUserCommand({ UserName: iamUsername }),
           );
-          userArn = createUserResponse.User!.Arn!;
+          const createdArn = createUserResponse.User?.Arn;
+          if (!createdArn) {
+            throw new Error(
+              `IAM CreateUser succeeded but returned no Arn for "${iamUsername}" (AWS API contract violation).`,
+            );
+          }
+          userArn = createdArn;
           logger.stopSpinner(iamSpinner, `IAM user "${iamUsername}" created`);
         }
 
@@ -226,7 +238,7 @@ export async function provision(
           new PutUserPolicyCommand({
             UserName: iamUsername,
             PolicyName: `${bucketName}-access`,
-            PolicyDocument: buildBucketPolicy(bucketName, bucketArn),
+            PolicyDocument: buildBucketPolicy(bucketArn),
           }),
         );
 
@@ -235,11 +247,18 @@ export async function provision(
           new CreateAccessKeyCommand({ UserName: iamUsername }),
         );
 
+        const accessKey = accessKeyResponse.AccessKey;
+        if (!(accessKey?.AccessKeyId && accessKey.SecretAccessKey)) {
+          throw new Error(
+            `IAM CreateAccessKey returned an incomplete key pair for "${iamUsername}" (AWS API contract violation).`,
+          );
+        }
+
         iamUsers[environmentName] = {
           username: iamUsername,
           arn: userArn,
-          accessKeyId: accessKeyResponse.AccessKey!.AccessKeyId!,
-          secretAccessKey: accessKeyResponse.AccessKey!.SecretAccessKey!,
+          accessKeyId: accessKey.AccessKeyId,
+          secretAccessKey: accessKey.SecretAccessKey,
         };
 
         logger.success(`  Access key created for "${iamUsername}"`);

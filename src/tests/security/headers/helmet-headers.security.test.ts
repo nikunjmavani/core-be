@@ -93,7 +93,7 @@ describe('Security: Helmet Headers', () => {
       method: 'GET',
       url: '/health',
     });
-    const server = response.headers['server'];
+    const server = response.headers.server;
     // Should not reveal "fastify" or version info
     if (server) {
       expect(String(server).toLowerCase()).not.toContain('fastify');

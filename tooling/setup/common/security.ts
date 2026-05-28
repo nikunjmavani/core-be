@@ -43,12 +43,11 @@ export function scanFileForSecrets(
 ): Array<{ line: number; pattern: string }> {
   const findings: Array<{ line: number; pattern: string }> = [];
   const lines = content.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
+  for (const [zeroBasedIndex, line] of lines.entries()) {
     if (line.startsWith('#') || line.trim() === '') continue;
     const matches = scanLineForSecrets(line);
     for (const match of matches) {
-      findings.push({ line: i + 1, pattern: match });
+      findings.push({ line: zeroBasedIndex + 1, pattern: match });
     }
   }
   return findings;
@@ -101,5 +100,5 @@ export function runSecurityChecks(envSetupPath: string, envFiles: string[]): boo
 /** Redact a secret value for safe logging. */
 export function redactSecret(value: string): string {
   if (value.length <= 8) return '***';
-  return value.slice(0, 4) + '...' + value.slice(-4);
+  return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }

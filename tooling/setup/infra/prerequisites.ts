@@ -119,7 +119,7 @@ export function checkPrerequisites(config: SetupConfig): boolean {
       } else {
         const hint = prerequisite.tokenEnvKey
           ? `set ${prerequisite.tokenEnvKey} in .env.setup or run: ${prerequisite.authCheck?.split(' ').slice(0, 2).join(' ') ?? ''} login`
-          : `run: ${prerequisite.authCheck!.split(' ').slice(0, 2).join(' ')} login`;
+          : `run: ${prerequisite.authCheck?.split(' ').slice(0, 2).join(' ')} login`;
         logger.warn(`  └─ NOT authenticated — ${hint}`);
         allPassed = false;
       }

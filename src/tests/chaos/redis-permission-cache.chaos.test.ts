@@ -19,6 +19,7 @@ import {
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 describe('Chaos resilience: Redis permission-cache miss', () => {
   let chaosFastifyApplicationInstance: FastifyInstance;
@@ -71,7 +72,9 @@ describe('Chaos resilience: Redis permission-cache miss', () => {
           const membershipsHttpRouteResponseListening =
             await chaosFastifyApplicationInstance.inject({
               method: 'GET',
-              url: `/api/v1/tenancy/organizations/${organizationWaitingForIsolation.public_id}/memberships`,
+              url: testApiPath(
+                `/tenancy/organizations/${organizationWaitingForIsolation.public_id}/memberships`,
+              ),
               headers: {
                 authorization: `Bearer ${authenticationTokenWaitingForIsolation}`,
                 'x-organization-id': organizationWaitingForIsolation.public_id,

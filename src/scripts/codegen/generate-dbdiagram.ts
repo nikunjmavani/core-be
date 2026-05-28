@@ -211,8 +211,7 @@ function applyCreateTableBody(schema: string, table: string, body: string): void
   //   PRIMARY KEY ("id","created_at")
   const inlinePrimaryKeyPattern =
     /(?:constraint\s+"?[a-z_][a-z0-9_]*"?\s+)?primary\s+key\s*\(\s*([^)]+)\s*\)/gi;
-  let primaryKeyMatch: RegExpExecArray | null;
-  while ((primaryKeyMatch = inlinePrimaryKeyPattern.exec(body)) !== null) {
+  for (const primaryKeyMatch of body.matchAll(inlinePrimaryKeyPattern)) {
     if (!primaryKeyMatch[1]) continue;
     const columns = parseColumnNameList(primaryKeyMatch[1]);
     if (columns.length === 0) continue;
@@ -228,8 +227,7 @@ function applyCreateTableBody(schema: string, table: string, body: string): void
   //   UNIQUE("token_hash")
   const inlineUniquePattern =
     /(?:constraint\s+"?[a-z_][a-z0-9_]*"?\s+)?unique\s*\(\s*([^)]+)\s*\)/gi;
-  let uniqueMatch: RegExpExecArray | null;
-  while ((uniqueMatch = inlineUniquePattern.exec(body)) !== null) {
+  for (const uniqueMatch of body.matchAll(inlineUniquePattern)) {
     if (!uniqueMatch[1]) continue;
     const columns = parseColumnNameList(uniqueMatch[1]);
     if (columns.length !== 1) continue;
@@ -251,11 +249,10 @@ function extractCreateTableStatements(
   const results: Array<{ schema: string; table: string; body: string }> = [];
   const pattern =
     /create\s+table\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s*\(/gi;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(sql)) !== null) {
+  for (const match of sql.matchAll(pattern)) {
     const schema = match[1] ?? '';
     const table = match[2] ?? '';
-    const openParenthesisIndex = match.index + match[0].length;
+    const openParenthesisIndex = (match.index ?? 0) + match[0].length;
     let depth = 1;
     let index = openParenthesisIndex;
     while (index < sql.length && depth > 0) {
@@ -276,8 +273,7 @@ function processMigrationSql(sql: string): void {
 
   const dropPattern =
     /drop\s+table\s+(?:if\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?/gi;
-  let dropMatch: RegExpExecArray | null;
-  while ((dropMatch = dropPattern.exec(sql)) !== null) {
+  for (const dropMatch of sql.matchAll(dropPattern)) {
     if (dropMatch[1] && dropMatch[2]) {
       tables.delete(qualifiedTableKey(dropMatch[1], dropMatch[2]));
     }
@@ -285,8 +281,7 @@ function processMigrationSql(sql: string): void {
 
   const addColumnPattern =
     /alter\s+table\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s+add\s+(?:column\s+)?(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\s+([^;]+)/gi;
-  let addColumnMatch: RegExpExecArray | null;
-  while ((addColumnMatch = addColumnPattern.exec(sql)) !== null) {
+  for (const addColumnMatch of sql.matchAll(addColumnPattern)) {
     const parsed = parseColumnDefinitionLine(
       `${addColumnMatch[3] ?? ''} ${addColumnMatch[4] ?? ''}`,
     );
@@ -305,8 +300,7 @@ function processMigrationSql(sql: string): void {
   // ALTER TABLE schema.table ADD CONSTRAINT name PRIMARY KEY (col1, col2)
   const compositePrimaryKeyPattern =
     /alter\s+table\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s+add\s+(?:constraint\s+"?[a-z_][a-z0-9_]*"?\s+)?primary\s+key\s*\(\s*([^)]+)\s*\)/gi;
-  let compositePrimaryKeyMatch: RegExpExecArray | null;
-  while ((compositePrimaryKeyMatch = compositePrimaryKeyPattern.exec(sql)) !== null) {
+  for (const compositePrimaryKeyMatch of sql.matchAll(compositePrimaryKeyPattern)) {
     if (
       !(compositePrimaryKeyMatch[1] && compositePrimaryKeyMatch[2] && compositePrimaryKeyMatch[3])
     ) {
@@ -324,8 +318,7 @@ function processMigrationSql(sql: string): void {
   // Drizzle Kit emits this form for every relation; the inline `REFERENCES` form is rare here.
   const alterForeignKeyPattern =
     /alter\s+table\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s+add\s+(?:constraint\s+"?[a-z_][a-z0-9_]*"?\s+)?foreign\s+key\s*\(\s*"?([a-z_][a-z0-9_]*)"?\s*\)\s+references\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s*\(\s*"?([a-z_][a-z0-9_]*)"?\s*\)([^;]*);/gi;
-  let alterForeignKeyMatch: RegExpExecArray | null;
-  while ((alterForeignKeyMatch = alterForeignKeyPattern.exec(sql)) !== null) {
+  for (const alterForeignKeyMatch of sql.matchAll(alterForeignKeyPattern)) {
     const sourceSchema = alterForeignKeyMatch[1];
     const sourceTable = alterForeignKeyMatch[2];
     const sourceColumn = alterForeignKeyMatch[3];
@@ -360,24 +353,21 @@ function processMigrationSql(sql: string): void {
 
   const partitionPattern =
     /create\s+table\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?[\s\S]*?\)\s+partition\s+by\s+range\s*\(\s*"?([a-z_][a-z0-9_]*)"?\s*\)/gi;
-  let partitionMatch: RegExpExecArray | null;
-  while ((partitionMatch = partitionPattern.exec(sql)) !== null) {
+  for (const partitionMatch of sql.matchAll(partitionPattern)) {
     if (!(partitionMatch[1] && partitionMatch[2] && partitionMatch[3])) continue;
     getOrCreateTable(partitionMatch[1], partitionMatch[2]).partitionedBy = partitionMatch[3];
   }
 
   const enableRlsPattern =
     /alter\s+table\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s+enable\s+row\s+level\s+security/gi;
-  let enableRlsMatch: RegExpExecArray | null;
-  while ((enableRlsMatch = enableRlsPattern.exec(sql)) !== null) {
+  for (const enableRlsMatch of sql.matchAll(enableRlsPattern)) {
     if (!(enableRlsMatch[1] && enableRlsMatch[2])) continue;
     getOrCreateTable(enableRlsMatch[1], enableRlsMatch[2]).rowLevelSecurityEnabled = true;
   }
 
   const forceRlsPattern =
     /alter\s+table\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?\s+force\s+row\s+level\s+security/gi;
-  let forceRlsMatch: RegExpExecArray | null;
-  while ((forceRlsMatch = forceRlsPattern.exec(sql)) !== null) {
+  for (const forceRlsMatch of sql.matchAll(forceRlsPattern)) {
     if (!(forceRlsMatch[1] && forceRlsMatch[2])) continue;
     const tableDefinition = getOrCreateTable(forceRlsMatch[1], forceRlsMatch[2]);
     tableDefinition.rowLevelSecurityEnabled = true;
@@ -388,8 +378,7 @@ function processMigrationSql(sql: string): void {
 
   const policyPattern =
     /create\s+policy\s+"?([a-z_][a-z0-9_]*)"?\s+on\s+"?([a-z_][a-z0-9_]*)"?\."?([a-z_][a-z0-9_]*)"?/gi;
-  let policyMatch: RegExpExecArray | null;
-  while ((policyMatch = policyPattern.exec(sql)) !== null) {
+  for (const policyMatch of sql.matchAll(policyPattern)) {
     if (!(policyMatch[1] && policyMatch[2] && policyMatch[3])) continue;
     const tableDefinition = getOrCreateTable(policyMatch[2], policyMatch[3]);
     if (!tableDefinition.rowLevelSecurityPolicies.includes(policyMatch[1])) {

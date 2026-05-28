@@ -152,5 +152,5 @@ export function getEnvironmentNames(config: z.infer<typeof setupConfigSchema>): 
  * previously chosen values as defaults and don't have to re-enter them.
  */
 export function saveConfig(config: z.infer<typeof setupConfigSchema>): void {
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
 }

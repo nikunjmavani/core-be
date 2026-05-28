@@ -103,18 +103,25 @@ export async function provision(
         `/projects/${sentryConfig.organization}/${projectSlug}/keys/`,
       );
 
-      if (keys.length === 0) {
+      const firstKey = keys[0];
+      if (!firstKey) {
         throw new Error('No client keys found for Sentry project');
       }
 
-      dsn = keys[0]!.dsn.public;
+      dsn = firstKey.dsn.public;
       logger.success(`Sentry DSN retrieved`);
+    }
+
+    if (!(projectSlug && dsn)) {
+      throw new Error(
+        'Sentry projectSlug or DSN is unset after create/adopt + key resolution (unreachable).',
+      );
     }
 
     return {
       success: true,
       message: `Sentry: project "${projectSlug}" ready`,
-      stateUpdates: { sentry: { projectSlug: projectSlug!, dsn: dsn! } },
+      stateUpdates: { sentry: { projectSlug, dsn } },
     };
   } catch (provisionError) {
     const message =
