@@ -130,5 +130,5 @@ Deliberate business, UX, and security trade-offs encoded as constants. Full rati
 - **i18n**: [i18next 26](https://www.i18next.com) with file-system backend (English + Spanish today)
 - **MCP**: [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/sdk) (optional dependency, gated by `ENABLE_MCP_SERVER`)
 - **Testing**: [Vitest 4](https://vitest.dev), [fast-check](https://fast-check.dev) (property-based), [nock](https://github.com/nock/nock) (contract), [Toxiproxy](https://github.com/Shopify/toxiproxy) (chaos), [k6](https://k6.io) (load), [Stryker](https://stryker-mutator.io) (mutation)
-- **Tooling**: [Biome](https://biomejs.dev) (lint + format), [pnpm 10](https://pnpm.io), [tsx](https://tsx.is) for dev runs, [Husky](https://typicode.github.io/husky/) for pre-commit
+- **Tooling**: [Biome](https://biomejs.dev) (lint + format), [pnpm 11](https://pnpm.io), [tsx](https://tsx.is) for dev runs, [Husky](https://typicode.github.io/husky/) for pre-commit
 - **Hosting**: [Railway](https://railway.app); CI on GitHub Actions

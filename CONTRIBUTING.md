@@ -40,7 +40,7 @@ Committed files at the project root (not directories) group as follows:
 
 | Category           | Examples                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------- |
-| Package / Node     | `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, `.nvmrc`, `.node-version`, `.npmrc`             |
+| Package / Node     | `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.json`, `.nvmrc`, `.node-version` |
 | Quality            | `biome.json`, `.biomeignore`, `.editorconfig`, `tooling/vitest/`                                   |
 | Data               | `drizzle.config.ts`, `migrations/`                                                                 |
 | Containers         | `Dockerfile`, `Dockerfile.worker`, `Dockerfile.agent`, `docker-bake.hcl`, `docker-compose.yml`     |

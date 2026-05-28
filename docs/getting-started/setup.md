@@ -193,7 +193,7 @@ See [README.md](../../README.md) for the full **Available Scripts** table, [cicd
 
 ## 6. Dependency upgrades (maintainers)
 
-- Run **`pnpm deps:audit`** regularly; address findings with safe dependency updates or, when required, `pnpm.overrides` in root `package.json` (see the dependency-security skill in `.cursor/skills/`).
+- Run **`pnpm deps:audit`** regularly; address findings with safe dependency updates or, when required, `overrides` in root `pnpm-workspace.yaml` (see the dependency-security skill in `.cursor/skills/`).
 - Run **`pnpm outdated`** locally or rely on weekly **Dependabot** PRs (see [`.github/dependabot.yml`](../../.github/dependabot.yml)). Dependabot uses conventional-commit-style titles (`chore(deps): …`) so PR title checks stay green.
 - **Manual merge:** every Dependabot PR needs human review and merge per branch protection (`main` requires CODEOWNER review; `dev` requires one approval). When **PR CI fails** on a Dependabot PR, [`.github/workflows/dependabot-ci-triage.yml`](../../.github/workflows/dependabot-ci-triage.yml) opens or updates a triage issue. After a push to `main`, **Post-merge CI** opens a main→dev sync PR for manual merge.
 - **Required checks:** branch protection must include PR CI (including **`PR CI / Security audit`**, **`PR CI / Security secrets`**, and **`PR CI / Security SAST`**) so dependency PRs cannot merge with known vulnerabilities.
