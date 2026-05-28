@@ -4,6 +4,10 @@ import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.u
 import { serializeWebhookEventList } from './webhook-event.serializer.js';
 import type { WebhookEventService } from './webhook-event.service.js';
 
+/**
+ * Build the Fastify handler map for `GET /organizations/:id/webhook-events` — returns the
+ * static catalog of dispatchable webhook event types.
+ */
 export function createWebhookEventController(service: WebhookEventService) {
   return {
     listWebhookEvents: async (

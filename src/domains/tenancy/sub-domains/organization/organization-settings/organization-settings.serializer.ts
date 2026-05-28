@@ -1,5 +1,11 @@
 import type { OrganizationSettingsOutput } from './organization-settings.types.js';
 
+/**
+ * Maps an `organization_settings` row to the public
+ * {@link OrganizationSettingsOutput}. Coerces unknown locales to `'en'`,
+ * defaults `security_policy` to an empty object, and serialises timestamps
+ * as ISO 8601 strings.
+ */
 export function serializeOrganizationSettings(
   organization_public_id: string,
   row: {

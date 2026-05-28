@@ -21,6 +21,12 @@ import type { WorkerContainers } from '@/worker-containers.js';
 
 export { closeDeadLetterQueues } from '@/infrastructure/queue/dlq/dead-letter.js';
 
+/**
+ * Lifecycle handle returned by every worker factory (and the scheduler) so the
+ * shutdown sequence can drain them uniformly. `worker` and `queueName` are present
+ * for BullMQ workers and consumed by {@link attachDeadLetterAndAlerting}; they are
+ * absent for the scheduler-only handle which has no `failed` event source.
+ */
 export interface WorkerHandle {
   close: () => Promise<void>;
   /** Set for BullMQ worker processors; omitted for the scheduler-only handle. */
@@ -66,6 +72,15 @@ function pushWorkerWithDeadLetterHook(
   }
 }
 
+/**
+ * Boots every BullMQ worker selected by `WORKER_QUEUE_FAMILIES` for the current
+ * process: starts RSS monitoring, audits the registry against the scheduler cron
+ * list, registers repeatable jobs for queues that have a worker locally, then
+ * instantiates each worker (skipping `mail` / `stripe-webhook` when their secrets
+ * are missing) and attaches the DLQ + Sentry `failed` listener via
+ * {@link attachDeadLetterAndAlerting}. Returned handles are drained in reverse
+ * order during shutdown.
+ */
 export async function registerDomainWorkers(
   workerContainers: WorkerContainers,
 ): Promise<WorkerHandle[]> {

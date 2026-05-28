@@ -14,6 +14,19 @@ import { UPLOAD_TOMBSTONE_RETENTION_QUEUE_NAME } from './upload-tombstone-retent
 /**
  * Hard-delete uploads tombstoned longer than TOMBSTONE_RETENTION_DAYS.
  * Removes S3 objects before deleting rows.
+ *
+ * @remarks
+ * - **Algorithm:** wraps each job in
+ *   {@link withGlobalRetentionCleanupDatabaseContext} (so RLS allows
+ *   cross-tenant deletes) and delegates to {@link runUploadTombstoneRetentionJob}.
+ * - **Failure modes:** processor errors are bubbled to BullMQ for retry;
+ *   stalled jobs are surfaced via a `stalled` log warning. DLQ + Sentry hook
+ *   is attached by the queue bootstrap.
+ * - **Side effects:** none beyond what the processor performs (DB hard-deletes
+ *   + best-effort S3 object deletes).
+ * - **Notes:** concurrency capped at {@link RETENTION_WORKER_CONCURRENCY};
+ *   stall/lock tuning from {@link getRetentionWorkerOptions} accommodates
+ *   long purge runs.
  */
 export function createUploadTombstoneRetentionWorker(): WorkerHandle {
   const worker = new Worker(

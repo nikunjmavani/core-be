@@ -9,6 +9,27 @@ import {
 } from './organization-notification-policy.validator.js';
 import { serializeOrganizationNotificationPolicy } from './organization-notification-policy.serializer.js';
 
+/**
+ * Tenancy service for organization-scoped notification-delivery policies
+ * (CRUD over `(notification_type, channel)` pairs).
+ *
+ * @remarks
+ * - **Algorithm:** every operation is wrapped in
+ *   `withOrganizationDatabaseContext` so RLS (`app.current_organization_id`)
+ *   matches the resource. Create defers to the repository's upsert which
+ *   resurrects soft-deleted rows on `(organization_id, notification_type,
+ *   channel)` conflicts. Update copies only defined fields and converts
+ *   `muted_until` ISO strings to `Date`.
+ * - **Failure modes:** `NotFoundError('Organization')` when the parent
+ *   tenant is missing or invisible under RLS;
+ *   `NotFoundError('Organization notification policy')` for unknown ids;
+ *   `ValidationError` from the DTO validators.
+ * - **Side effects:** persistent writes to
+ *   `tenancy.organization_notification_policies`; no event emission and no
+ *   external I/O.
+ * - **Notes:** soft-delete only — tombstone hard-delete is performed by the
+ *   organization-notification-policy retention worker.
+ */
 export class OrganizationNotificationPolicyService {
   constructor(
     private readonly organizationRepository: OrganizationRepository,

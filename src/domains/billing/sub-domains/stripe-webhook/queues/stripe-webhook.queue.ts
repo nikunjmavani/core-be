@@ -8,8 +8,10 @@ import {
   type StripeWebhookJobDataValidated,
 } from './stripe-webhook.job.schema.js';
 
+/** BullMQ queue name for asynchronous Stripe webhook event processing. */
 export const STRIPE_WEBHOOK_QUEUE_NAME = 'stripe-webhook';
 
+/** Public alias for the validated job payload shape on the `stripe-webhook` queue. */
 export type StripeWebhookJobData = StripeWebhookJobDataValidated;
 
 let stripeWebhookQueue: Queue<StripeWebhookJobData> | null = null;
@@ -28,10 +30,18 @@ function getStripeWebhookQueue(): Queue<StripeWebhookJobData> {
   return stripeWebhookQueue;
 }
 
+/**
+ * Convenience wrapper that enqueues a verified Stripe event by id; the worker
+ * re-fetches the full event from Stripe so only the id is persisted in Redis.
+ */
 export async function enqueueStripeWebhook(event: Stripe.Event, requestId?: string): Promise<void> {
   await enqueueStripeWebhookByEventId(event.id, requestId);
 }
 
+/**
+ * Enqueues a `stripe-webhook` job keyed by `stripe-event-${stripeEventId}` so
+ * BullMQ deduplicates concurrent deliveries of the same Stripe event id.
+ */
 export async function enqueueStripeWebhookByEventId(
   stripeEventId: string,
   requestId?: string,
@@ -50,6 +60,7 @@ export async function enqueueStripeWebhookByEventId(
   });
 }
 
+/** Closes and disposes the singleton queue connection during graceful shutdown. */
 export async function closeStripeWebhookQueue(): Promise<void> {
   if (stripeWebhookQueue) {
     await stripeWebhookQueue.close();

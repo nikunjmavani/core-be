@@ -324,6 +324,11 @@ async function idempotencyOnSend(
   return payload;
 }
 
+/**
+ * Options for {@link idempotencyOnResponse}. The request-lifecycle coordinator sets
+ * `forceRelease` when a 2xx response was produced but the underlying RLS/business
+ * transaction ultimately rolled back, so the cached entry must not be written.
+ */
 export type IdempotencyOnResponseOptions = {
   /**
    * When true, always delete the in-flight placeholder and never persist a completed cache

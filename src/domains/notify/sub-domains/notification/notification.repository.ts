@@ -12,12 +12,14 @@ import {
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
 
+/** Keyset-pagination input for {@link NotificationRepository.findByUser}. */
 export interface NotificationListPagination {
   after?: string;
   limit: number;
   include_total?: boolean;
 }
 
+/** Insert payload for a new notification row (consumed by {@link NotificationRepository.create}). */
 export interface CreateNotificationInput {
   user_id: number;
   organization_id?: number;
@@ -29,6 +31,12 @@ export interface CreateNotificationInput {
   action_label?: string;
 }
 
+/**
+ * Drizzle-backed data access for `notify.notifications`. Owns the SQL for the user inbox
+ * (keyset list, mark-read, unread count) and the worker dispatch projection used to build
+ * email/in-app payloads. Resolves its database handle via the shared request/worker context
+ * helper so the same class works under HTTP RLS and worker organization scopes.
+ */
 export class NotificationRepository {
   constructor(private readonly databaseHandle?: RequestScopedPostgresDatabase) {}
 

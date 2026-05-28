@@ -12,8 +12,13 @@ import { redactOutboundHeaders } from '@/infrastructure/outbound/outbound-redact
 
 const REQUEST_ID_HEADER = 'X-Request-Id';
 
+/** Fetch-compatible callable; defaults to `globalThis.fetch` and is overridden in tests. */
 export type OutboundFetchImplementation = (url: string, init?: RequestInit) => Promise<Response>;
 
+/**
+ * Resolved options accepted by {@link outboundFetch}. Use {@link buildOutboundFetchOptions}
+ * to construct one from a partial {@link OutboundFetchOptionsInput} value.
+ */
 export interface OutboundFetchOptions {
   name: OutboundIntegrationName;
   url: string;
@@ -24,6 +29,11 @@ export interface OutboundFetchOptions {
   classifyResponseError?: (response: Response, body: string) => Error | undefined;
 }
 
+/**
+ * Loose form of {@link OutboundFetchOptions} that permits explicit `undefined` on each
+ * optional field so callers can spread partial values without violating
+ * `exactOptionalPropertyTypes`.
+ */
 export type OutboundFetchOptionsInput = {
   name: OutboundIntegrationName;
   url: string;
@@ -34,6 +44,7 @@ export type OutboundFetchOptionsInput = {
   classifyResponseError?: ((response: Response, body: string) => Error | undefined) | undefined;
 };
 
+/** Strips `undefined` keys from {@link OutboundFetchOptionsInput} to produce {@link OutboundFetchOptions}. */
 export function buildOutboundFetchOptions(
   options: OutboundFetchOptionsInput,
 ): OutboundFetchOptions {
@@ -122,6 +133,11 @@ export async function outboundFetch(options: OutboundFetchOptions): Promise<Resp
   });
 }
 
+/**
+ * Builds a redacted log/breadcrumb payload for an outbound HTTP attempt — header values
+ * pass through {@link redactOutboundHeaders} so Authorization and API key tokens never
+ * land in logs.
+ */
 export function buildOutboundFetchLogContext(options: {
   url: string;
   init?: RequestInit;

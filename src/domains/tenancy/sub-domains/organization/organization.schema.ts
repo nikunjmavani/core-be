@@ -12,6 +12,14 @@ import {
 import { tenancySchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 
+/**
+ * Drizzle table for `tenancy.organizations` — the per-tenant root entity.
+ * Holds slug-based identity, ownership, lifecycle status, optional Stripe
+ * customer linkage, and soft-delete via `deleted_at`. The `pgPolicy`
+ * `organizations_tenant_isolation` enforces RLS by matching `public_id` to
+ * `app.current_organization_id`, with a global retention-cleanup escape
+ * hatch for tombstone workers.
+ */
 export const organizations = tenancySchema
   .table(
     'organizations',

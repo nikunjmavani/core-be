@@ -7,10 +7,12 @@ export const DEFAULT_SHUTDOWN_TIMEOUT_MS = FIFTEEN_SECONDS_MS;
 /** Watchdog fires after internal timeout + buffer so in-flight drains can finish. */
 export const SHUTDOWN_WATCHDOG_BUFFER_MS = FIVE_SECONDS_MS;
 
+/** Per-component drain budget (env override or {@link DEFAULT_SHUTDOWN_TIMEOUT_MS}). */
 export function getShutdownTimeoutMs(): number {
   return env.SHUTDOWN_TIMEOUT_MS ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
 }
 
+/** Watchdog deadline = drain budget + {@link SHUTDOWN_WATCHDOG_BUFFER_MS}; force-exit fires past this. */
 export function getShutdownWatchdogMs(): number {
   return getShutdownTimeoutMs() + SHUTDOWN_WATCHDOG_BUFFER_MS;
 }

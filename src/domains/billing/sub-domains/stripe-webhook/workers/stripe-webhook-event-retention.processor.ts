@@ -5,6 +5,23 @@ import { stripe_webhook_events } from '@/domains/billing/sub-domains/stripe-webh
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env } from '@/shared/config/env.config.js';
 
+/**
+ * Deletes terminal Stripe webhook ledger rows beyond the configured retention
+ * window, returning per-run counters for observability.
+ *
+ * @remarks
+ * - **Algorithm:** Computes a cutoff = `now - STRIPE_WEBHOOK_EVENT_RETENTION_DAYS`
+ *   and uses {@link deleteInBatchesByCondition} to chunk-delete rows whose
+ *   `processing_status` is `processed` or `skipped_duplicate` and whose
+ *   `updated_at` is older than the cutoff. `failed` and in-flight `processing`
+ *   rows are intentionally retained for replay and ops investigation.
+ * - **Failure modes:** Batch helper short-circuits on database errors and
+ *   surfaces `blockedCount` for rows it could not delete this run.
+ * - **Side effects:** Hard-deletes from `billing.stripe_webhook_events`; emits
+ *   structured `stripe-webhook-event-retention.*` log events.
+ * - **Notes:** Runs under the worker-supplied {@link WorkerDatabaseHandle}
+ *   bound to the system-table retention context; never opens its own pool.
+ */
 export async function runStripeWebhookEventRetentionJob(
   databaseHandle: WorkerDatabaseHandle,
 ): Promise<{

@@ -26,6 +26,13 @@ export interface MemberInvitationOrganizationLookupRow {
   membership_id: number;
 }
 
+/**
+ * Result row returned by the SECURITY DEFINER function
+ * `tenancy.list_pending_member_invitations_for_email`, used by the
+ * cross-organization "list my pending invitations" endpoint. Carries only the
+ * non-sensitive metadata required to render the invitation list — secret token
+ * hashes and inviter ids are intentionally omitted.
+ */
 export interface PendingMemberInvitationLookupRow {
   invitation_public_id: string;
   organization_public_id: string;
@@ -37,12 +44,24 @@ export interface PendingMemberInvitationLookupRow {
   invitation_created_at: Date;
 }
 
+/**
+ * Cursor-pagination options for {@link MemberInvitationRepository.findByOrganizationId}.
+ * Setting `include_total` to `true` opts in to a parallel `COUNT(*)` query for
+ * pagination summaries.
+ */
 export interface MemberInvitationListPagination {
   after?: string;
   limit: number;
   include_total?: boolean;
 }
 
+/**
+ * Drizzle data access for `tenancy.member_invitations`. Org-scoped reads
+ * (listing, find-by-public-id, accept/revoke/resend updates) run under the
+ * caller's RLS context; cross-org lookups by email or by invitation public id
+ * use SECURITY DEFINER SQL functions so the public accept/decline flows can
+ * resolve the owning organization without an org GUC set up front.
+ */
 export class MemberInvitationRepository {
   async findByOrganizationId(organization_id: number, pagination: MemberInvitationListPagination) {
     const { after, limit } = pagination;

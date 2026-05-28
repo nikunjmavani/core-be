@@ -3,6 +3,12 @@ import type {
   OrganizationNotificationPolicyOutput,
 } from './organization-notification-policy.types.js';
 
+/**
+ * Maps an {@link OrganizationNotificationPolicyRow} to the public
+ * {@link OrganizationNotificationPolicyOutput}, swapping the internal
+ * organization id for the org's public id and serialising timestamps as
+ * ISO 8601 strings.
+ */
 export function serializeOrganizationNotificationPolicy(
   row: OrganizationNotificationPolicyRow,
   organization_public_id: string,

@@ -37,12 +37,39 @@ function signPayload(secret: string, payload: string, timestamp: number): string
   return createHmac('sha256', secret).update(signedPayload).digest('hex');
 }
 
+/**
+ * Type of the outbound fetch implementation used by the webhook delivery worker — kept as a
+ * separate alias so unit tests can swap in a mock without `as unknown as typeof fetch`.
+ *
+ * @remarks
+ * - **Algorithm:** identical signature to the global `fetch`.
+ * - **Failure modes:** errors propagate from the underlying implementation.
+ * - **Side effects:** none on its own.
+ * - **Notes:** the worker substitutes a DNS-pinned, allowlisted `fetch` for production calls
+ *   and accepts the raw global `fetch` only as the test default.
+ */
 export type WebhookDeliveryFetch = typeof fetch;
 
 const defaultWebhookDeliveryFetch = globalThis.fetch;
 
 /**
  * Delivers a single webhook attempt (testable with an injected fetch implementation).
+ *
+ * @remarks
+ * - **Algorithm:** open `withOrganizationContext(organizationPublicId)` → resolve the delivery
+ *   attempt + webhook secret → atomically transition `PENDING → SENDING` (or reclaim a stale
+ *   `SENDING` lease, or no-op when `already_sent` / `in_flight`) → HMAC-SHA256 sign
+ *   `<timestamp>.<payload>` → POST through the per-URL circuit breaker / DNS-pinned fetch →
+ *   record `SENT` (2xx) or `FAILED` with truncated response body.
+ * - **Failure modes:** rethrows any error after writing a `FAILED` outcome with `next_retry_at`
+ *   for the next exponential backoff slot (10s × 2^attemptsMade for the first 4 retries; null
+ *   on the final attempt so BullMQ promotes the job to the DLQ via `dead-letter.ts`).
+ *   `attempt_not_found` short-circuits without writing a failure record.
+ * - **Side effects:** outbound HTTPS POST; updates to `webhook_delivery_attempts`; structured
+ *   logs at every transition.
+ * - **Notes:** the dependency-injection seam (`fetchImplementation`,
+ *   `deliveryAttemptRepository`) is exclusively for unit tests; production paths must use the
+ *   pinned fetch and the worker-scoped repository factories.
  */
 export async function processWebhookDeliveryAttempt(
   deliveryAttemptId: number,
@@ -218,6 +245,21 @@ async function processWebhookDeliveryAttemptInContext(
 
 /**
  * Creates a BullMQ worker that delivers outbound webhooks with HMAC signing.
+ *
+ * @remarks
+ * - **Algorithm:** registers a tenant-scoped BullMQ worker on
+ *   {@link WEBHOOK_DELIVERY_QUEUE_NAME} that parses the job payload through
+ *   {@link webhookDeliveryJobDataSchema}, opens the organization database scope, and delegates
+ *   to {@link processWebhookDeliveryAttempt} for the actual HMAC-signed POST.
+ * - **Failure modes:** delivery failures (timeout, non-2xx, network error) are persisted on
+ *   the attempt row and rethrown so BullMQ retries up to 5 times using the custom backoff
+ *   {@link webhookDeliveryBackoffWithJitter} (~10s × 2^attempt with up to 30% jitter); the
+ *   final failure routes the job to the per-queue DLQ via the bootstrap dead-letter wiring.
+ * - **Side effects:** subscribes a `Worker` to Redis with webhook-tuned options; performs
+ *   outbound HTTPS calls via a pinned fetch wrapped in a per-URL circuit breaker; writes the
+ *   audit trail to `notify.webhook_delivery_attempts`.
+ * - **Notes:** concurrency comes from `getWorkerConcurrencyWebhook()`; the returned handle is
+ *   wired into bootstrap for graceful shutdown and lock release.
  */
 export function createWebhookDeliveryWorker(): WorkerHandle {
   const workerHandle = createTenantScopedBullMQWorker<WebhookDeliveryJobData>(

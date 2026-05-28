@@ -10,6 +10,20 @@ import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+/**
+ * Constructs the BullMQ worker that consumes the `partition-maintenance` queue.
+ *
+ * @remarks
+ * - **Algorithm:** binds a single processor that calls {@link runPartitionMaintenanceJob};
+ *   uses `RETENTION_WORKER_CONCURRENCY` (= 1) so DDL never overlaps with itself.
+ * - **Failure modes:** processor failures retry under the shared retention worker options;
+ *   final failures flow through DLQ + Sentry via `attachDeadLetterAndAlerting`.
+ * - **Side effects:** opens a BullMQ Redis connection; emits a `partition-maintenance.stalled`
+ *   warning on the BullMQ `stalled` event.
+ * - **Notes:** registered as `family: 'retention'`, `scheduled: false` in the worker
+ *   registry — no cron is wired in `scheduler.ts` yet, so jobs are enqueued ad-hoc by
+ *   operators or follow-up tooling.
+ */
 export function createPartitionMaintenanceWorker(): WorkerHandle {
   const worker = new Worker(
     PARTITION_MAINTENANCE_QUEUE_NAME,

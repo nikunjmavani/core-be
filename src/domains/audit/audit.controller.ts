@@ -4,6 +4,10 @@ import { getRequestIdentifier } from '@/shared/utils/http/request.util.js';
 import type { AuditService } from './audit.service.js';
 import { AuditSerializer } from './audit.serializer.js';
 
+/**
+ * HTTP handlers for the admin audit-log routes. Thin layer that delegates to
+ * {@link AuditService.list} and applies cursor-pagination response shaping.
+ */
 export function createAuditController(service: AuditService) {
   return {
     listLogs: async (request: FastifyRequest, _reply: FastifyReply) => {

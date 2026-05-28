@@ -3,6 +3,11 @@ import { bigserial, varchar, timestamp, bigint, index, check } from 'drizzle-orm
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 
+/**
+ * `auth.user_data_exports` — one row per GDPR export request. Tracks job status, the S3 artifact key,
+ * and the artifact `expires_at` timestamp used by the retention worker to purge the bucket alongside
+ * S3 lifecycle rules. Cascades on user delete so offboarding cannot leave orphan exports.
+ */
 export const user_data_exports = authSchema.table(
   'user_data_exports',
   {

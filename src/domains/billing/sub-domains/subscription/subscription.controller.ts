@@ -5,6 +5,12 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import type { SubscriptionService } from './subscription.service.js';
 import { SubscriptionSerializer } from './subscription.serializer.js';
 
+/**
+ * Builds organization-scoped subscription handlers (list / get / create /
+ * update / change-plan / cancel / resume). Each handler validates the
+ * organization `id` path param and the `Idempotency-Key` header on create
+ * before delegating to {@link SubscriptionService}.
+ */
 export function createSubscriptionController(service: SubscriptionService) {
   return {
     listSubscriptions: async (

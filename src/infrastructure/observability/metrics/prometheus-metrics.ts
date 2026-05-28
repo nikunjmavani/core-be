@@ -179,6 +179,11 @@ export function ensurePrometheusMetricsRegistered(registry: Registry): void {
   registeredMetricsRegistry = registry;
 }
 
+/**
+ * Records one HTTP request into `http_requests_total` (counter) and
+ * `http_request_duration_seconds` (histogram) keyed by method/route/status.
+ * No-op when metrics are disabled or registration has not yet happened.
+ */
 export function recordHttpRequest(
   method: string,
   route: string,
@@ -198,6 +203,11 @@ export function recordHttpRequest(
   httpRequestDurationSeconds.observe(labels, durationSeconds);
 }
 
+/**
+ * Updates the `bullmq_queue_{waiting,active,delayed,failed}` gauges (plus the
+ * legacy `bullmq_jobs_waiting` alias) for a single queue from a freshly read
+ * `getJobCounts` payload. Called by {@link refreshBullMQQueueGauges}.
+ */
 export function setBullMQQueueCounts(
   queueName: string,
   counts: { waiting: number; active: number; delayed: number; failed: number },
@@ -214,6 +224,11 @@ export function setBullMQQueueCounts(
   bullmqQueueFailed.set(label, counts.failed);
 }
 
+/**
+ * Observes one BullMQ job's processing duration on the
+ * `bullmq_job_duration_seconds` histogram, labelled by queue + job name. Wired
+ * to worker `completed` events via `attachBullMQJobMetrics`.
+ */
 export function recordBullMQJobDuration(
   queueName: string,
   jobName: string,
@@ -229,6 +244,11 @@ export function recordBullMQJobDuration(
   histogram.observe({ queue: queueName, job_name: jobName }, durationSeconds);
 }
 
+/**
+ * Sets the static pool-configuration gauges: `postgres_pool_max_connections`
+ * and `postgres_pool_metrics_available` (1 when `pg_stat_activity` sampling
+ * succeeded, 0 when only the configured ceiling is known).
+ */
 export function setPostgresPoolConfigMetrics(options: {
   maxConnections: number;
   liveMetricsAvailable: boolean;
@@ -239,6 +259,11 @@ export function setPostgresPoolConfigMetrics(options: {
   postgresPoolMetricsAvailable.set(options.liveMetricsAvailable ? 1 : 0);
 }
 
+/**
+ * Sets the `db_pool_connections{state=...}` gauge plus the legacy
+ * `pg_pool_{active,idle,waiting}` aliases from a fresh `pg_stat_activity` sample.
+ * Missing states default to 0 so dashboards see a stable schema.
+ */
 export function setPostgresPoolConnectionCounts(
   samples: ReadonlyArray<{ state: 'active' | 'idle' | 'waiting'; count: number }>,
 ): void {
@@ -261,6 +286,11 @@ export function setPostgresPoolConnectionCounts(
   pgPoolWaiting?.set(countsByState.waiting);
 }
 
+/**
+ * Updates the `event_loop_lag_ms` gauge from the perf-hooks p99 sample.
+ * Lazily registers metrics so the event-loop refresh path can run before the
+ * scrape endpoint has been hit.
+ */
 export function setEventLoopLagMilliseconds(lagMilliseconds: number): void {
   if (!isMetricsEnabled()) return;
   ensurePrometheusMetricsRegistered(getMetricsRegistry());
@@ -268,6 +298,11 @@ export function setEventLoopLagMilliseconds(lagMilliseconds: number): void {
   eventLoopLagMilliseconds.set(lagMilliseconds);
 }
 
+/**
+ * Sets the `stripe_webhook_events_failed` gauge — fed by the Stripe ledger
+ * reclaim worker so dashboards alert when failed rows linger more than 10
+ * minutes (Sentry rule, see help text on the metric).
+ */
 export function setStripeWebhookEventsFailedCount(count: number): void {
   if (!isMetricsEnabled()) return;
   if (!stripeWebhookEventsFailed) return;

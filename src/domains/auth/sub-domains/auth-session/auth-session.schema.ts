@@ -15,6 +15,7 @@ import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/** Drizzle table for `auth.sessions` — one row per browser/device session backing JWT refresh; carries a unique `token_hash` and is RLS-gated by user public id, session public id, token hash, or the retention-cleanup escape hatch. */
 export const sessions = authSchema
   .table(
     'sessions',

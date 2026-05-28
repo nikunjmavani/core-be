@@ -7,8 +7,34 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const DEFAULT_POOL_MAX_CONNECTIONS = 10;
 
+/**
+ * Pool-pressure severity returned by {@link evaluatePoolExhaustionAndAlert}.
+ *
+ * @remarks
+ * - **Algorithm:** `critical` and `warn` thresholds come from
+ *   `DATABASE_POOL_{ACTIVE,CLUSTER}_{WARN,CRITICAL}_RATIO`; the overall level is
+ *   the max of the active-checkout signal and the cluster `pg_stat_activity` signal.
+ * - **Failure modes:** none — it's a pure label.
+ * - **Side effects:** none.
+ * - **Notes:** Sentry alerts fire only after `DATABASE_POOL_ALERT_CONSECUTIVE_POLLS`
+ *   consecutive samples at the same level to avoid one-off spikes.
+ */
 export type PoolPressureLevel = 'ok' | 'warn' | 'critical';
 
+/**
+ * One-shot snapshot returned by {@link evaluatePoolExhaustionAndAlert} — overall
+ * level plus the raw signals (in-process org-RLS checkouts and cluster active
+ * connection counts) the decision was based on.
+ *
+ * @remarks
+ * - **Algorithm:** populated after the active + cluster evaluations and after
+ *   any consecutive-poll alerts have been emitted.
+ * - **Failure modes:** sample is still returned even when one signal is
+ *   unavailable (`allowedApplicationConnections === 0` short-circuits cluster
+ *   evaluation to `ok`).
+ * - **Side effects:** none from the type itself.
+ * - **Notes:** consumed by the metrics polling loop for gauge updates.
+ */
 export type PoolPressureSample = {
   readonly level: PoolPressureLevel;
   readonly activeOrganizationRlsCheckouts: number;
@@ -26,6 +52,17 @@ function resolvePoolMaxConnections(): number {
   return env.DATABASE_POOL_MAX ?? DEFAULT_POOL_MAX_CONNECTIONS;
 }
 
+/**
+ * Test-only helper that clears the module-level consecutive-poll counters so a
+ * fresh Vitest case can assert alert behaviour from a clean baseline.
+ *
+ * @remarks
+ * - **Algorithm:** zeroes the four `consecutive*Polls` variables.
+ * - **Failure modes:** none — pure assignment.
+ * - **Side effects:** mutates module state; only call from test setup/teardown.
+ * - **Notes:** invoked by `resetPostgresPoolMonitoringForTests` in
+ *   {@link "@/infrastructure/observability/metrics/db-pool-metrics"}.
+ */
 export function resetPoolExhaustionAlertStateForTests(): void {
   consecutiveActiveWarnPolls = 0;
   consecutiveActiveCriticalPolls = 0;
@@ -199,8 +236,21 @@ function resolveOverallPressureLevel(parameters: {
 }
 
 /**
- * Evaluates in-process org RLS checkout pressure and optional cluster-wide pg_stat_activity counts.
- * Emits Sentry messages after consecutive over-threshold polls (see DATABASE_POOL_ALERT_CONSECUTIVE_POLLS).
+ * Evaluates Postgres pool pressure from two independent signals and emits Sentry
+ * + structured-log alerts when a level holds for N consecutive samples.
+ *
+ * @remarks
+ * - **Algorithm:** computes `warn`/`critical` thresholds from
+ *   `poolMaxConnections × DATABASE_POOL_ACTIVE_*_RATIO` (in-process org RLS
+ *   checkouts) and `allowedApplicationConnections × DATABASE_POOL_CLUSTER_*_RATIO`
+ *   (cluster `pg_stat_activity`). Counters bump while over-threshold and reset
+ *   to zero on `ok` or after an alert fires.
+ * - **Failure modes:** never throws — missing cluster info short-circuits to
+ *   `ok`; alert emission is fire-and-forget.
+ * - **Side effects:** Sentry `captureMessage` and `logger.warn` / `logger.error`
+ *   with worker pool-demand context attached when `isWorkerRuntime()`.
+ * - **Notes:** call once per polling interval from `refreshPostgresPoolMetrics`;
+ *   the returned {@link PoolPressureSample} is used for gauge updates and tests.
  */
 export function evaluatePoolExhaustionAndAlert(parameters: {
   clusterActiveConnections: number;

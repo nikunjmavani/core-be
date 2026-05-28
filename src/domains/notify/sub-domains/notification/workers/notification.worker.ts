@@ -25,6 +25,26 @@ type NotificationDispatchData = {
   email?: string;
 };
 
+/**
+ * Hydrate a persisted notification and fan it out across its configured delivery channels
+ * (in-app, email). Exported as a pure function so unit tests can drive it with an injected
+ * repository instead of spinning up Redis/Postgres.
+ *
+ * @remarks
+ * - **Algorithm:** load the notification row under the correct database context (organization
+ *   scope when `organizationPublicId` is set, global retention scope otherwise), then iterate
+ *   `data.channels ?? ['in_app']`; for each channel, look up the recipient and send. The email
+ *   channel renders the shared transactional template and persists/dispatches via the mail
+ *   outbox under `withSystemTableWorkerContext`.
+ * - **Failure modes:** missing notification row → throws `notification.not_found:<id>`; absent
+ *   mail configuration or recipient logs `notification.worker.channel_skipped` and continues;
+ *   outbox write/dispatch errors propagate so BullMQ can retry.
+ * - **Side effects:** Postgres reads against `notify.notifications`; mail outbox insert and
+ *   BullMQ enqueue on the email channel; structured logs throughout.
+ * - **Notes:** when an explicit `notificationRepository` is supplied (tests / worker-scoped
+ *   factories) this function skips the database-context wrapper because the caller already
+ *   established RLS scope.
+ */
 export async function processNotificationDispatchJob(
   notificationId: number,
   organizationPublicId: string | null | undefined,
@@ -122,6 +142,19 @@ async function processTenantScopedNotificationJob(
 /**
  * Creates a BullMQ worker that processes notification dispatch jobs.
  * Routes notifications to configured channels (email, in-app).
+ *
+ * @remarks
+ * - **Algorithm:** for each job, branch on `organizationPublicId`: tenant-scoped jobs run inside
+ *   `runTenantScopedWorkerJob` (`withOrganizationContext`) so RLS pins reads to the org;
+ *   global / system notifications (no org id) run inside `runGlobalRetentionWorkerJob`. Both
+ *   paths build a worker-scoped {@link NotificationRepository} from the database handle and
+ *   delegate to {@link processNotificationDispatchJob} for per-channel fan-out.
+ * - **Failure modes:** BullMQ retries on thrown errors using the queue's exponential backoff
+ *   (3 attempts); stalls and completions are logged via the worker listeners.
+ * - **Side effects:** subscribes a `Worker` to {@link NOTIFICATION_QUEUE_NAME}; reads notification
+ *   rows; writes to the mail outbox and enqueues mail jobs for the email channel.
+ * - **Notes:** concurrency comes from `getWorkerConcurrencyNotify()`; default worker options
+ *   provide stall + lock tuning. The returned handle wires graceful shutdown into bootstrap.
  */
 export function createNotificationWorker(): WorkerHandle {
   const worker = new Worker<NotificationJobData>(

@@ -12,6 +12,7 @@ import type { AuthContainer } from '../auth.container.js';
 
 type AuthWebauthnHandlersDependencies = Pick<AuthContainer, 'webauthnService'>;
 
+/** Builds the WebAuthn Fastify handlers: `webauthnRegisterOptions` / `webauthnRegisterVerify` for credential enrollment and `webauthnAuthenticateOptions` / `webauthnAuthenticateVerify` for passkey login (sets the session cookie on success). */
 export function createAuthWebauthnHandlers({ webauthnService }: AuthWebauthnHandlersDependencies) {
   return {
     webauthnRegisterOptions: async (request: FastifyRequest, _reply: FastifyReply) => {

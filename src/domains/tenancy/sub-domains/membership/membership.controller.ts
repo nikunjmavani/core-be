@@ -4,6 +4,12 @@ import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.u
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MembershipService } from './membership.service.js';
 
+/**
+ * Builds the HTTP handler map for the organization membership routes under
+ * `/organizations/:id/memberships` plus the self-service `leave` and
+ * `transfer-ownership` actions that take an organization id as the only
+ * path param.
+ */
 export function createMembershipController(service: MembershipService) {
   return {
     listMemberships: async (request: FastifyRequest, _reply: FastifyReply) => {

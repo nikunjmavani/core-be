@@ -14,11 +14,21 @@ import { createMemberInvitationController } from './member-invitation/member-inv
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
 import { TENANCY_PERMISSIONS } from '../../tenancy.permissions.js';
 
+/** Services required to wire the membership and member-invitation routes. */
 export interface MembershipRoutesDeps {
   membershipService: MembershipService;
   memberInvitationService: MemberInvitationService;
 }
 
+/**
+ * Fastify plugin that registers organization membership routes (list, get,
+ * create, update, delete, plus self-service leave / transfer-ownership) and
+ * the member-invitation routes (org-scoped create/list/cancel/resend plus the
+ * cross-org `/invitations/...` user-facing pending/accept/decline endpoints).
+ * Permission-gated routes are protected with
+ * `requireOrganizationPermission(MEMBERSHIP_*|INVITATION_MANAGE, 'id')`; public
+ * accept has only a strict rate limit.
+ */
 export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync {
   const membershipController = createMembershipController(deps.membershipService);
   const invitationController = createMemberInvitationController(deps.memberInvitationService);

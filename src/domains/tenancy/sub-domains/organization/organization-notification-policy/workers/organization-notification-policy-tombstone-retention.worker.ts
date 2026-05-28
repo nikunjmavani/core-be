@@ -14,6 +14,17 @@ import { ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME } from 
 /**
  * Hard-delete organization notification policy tombstones older than TOMBSTONE_RETENTION_DAYS.
  * Repeatable schedule is registered in `src/infrastructure/queue/scheduler.ts`.
+ *
+ * @remarks
+ * - **Algorithm:** subscribes to {@link ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME}
+ *   and runs {@link runOrganizationNotificationPolicyTombstoneRetentionJob}
+ *   inside the global retention-cleanup DB context per delivered job.
+ * - **Failure modes:** stalled jobs are logged and retried per BullMQ stall
+ *   policy; final-failure DLQ + Sentry are wired by `infrastructure/queue`.
+ * - **Side effects:** permanent deletes from
+ *   `tenancy.organization_notification_policies`.
+ * - **Notes:** instantiated by the worker bootstrap; never wired directly
+ *   in `bootstrap.ts`.
  */
 export function createOrganizationNotificationPolicyTombstoneRetentionWorker(): WorkerHandle {
   const worker = new Worker(

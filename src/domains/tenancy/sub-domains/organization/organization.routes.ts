@@ -34,6 +34,11 @@ import {
   updateOrganizationNotificationPolicyDto,
 } from './organization-notification-policy/organization-notification-policy.dto.js';
 
+/**
+ * Service collaborators required by the organization routes plugin. Includes
+ * the four organization-scoped services plus the optional audit service used
+ * by the `/organizations/:id/audit-logs` endpoint.
+ */
 export interface OrganizationRoutesDeps {
   organizationService: OrganizationService;
   organizationSettingsService: OrganizationSettingsService;
@@ -42,6 +47,13 @@ export interface OrganizationRoutesDeps {
   auditService?: AuditService;
 }
 
+/**
+ * Returns the Fastify plugin that mounts every organization endpoint —
+ * organization CRUD, logo upload/delete, audit-log listing, settings,
+ * API keys (CRUD + rotate), and notification policies. Each route is wired
+ * with auth, the right `requireOrganizationPermission` preHandler, and Zod
+ * schemas (which the OpenAPI generator consumes for tags and summaries).
+ */
 export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginAsync {
   const organizationController = createOrganizationController(
     deps.organizationService,

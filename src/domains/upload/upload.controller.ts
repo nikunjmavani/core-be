@@ -4,6 +4,12 @@ import { successResponse } from '@/shared/utils/http/response.util.js';
 import type { UploadService } from './upload.service.js';
 import { validateCreateUpload } from './upload.validator.js';
 
+/**
+ * HTTP handlers for the upload routes: request a presigned URL, fetch metadata,
+ * confirm completion, and soft-delete an upload. All handlers are owner-scoped
+ * via the authenticated user public id; ownership and permission checks live
+ * inside {@link UploadService}.
+ */
 export function createUploadController(uploadService: UploadService) {
   return {
     createUpload: async (request: FastifyRequest, reply: FastifyReply) => {

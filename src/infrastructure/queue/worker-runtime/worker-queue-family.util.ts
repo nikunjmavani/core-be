@@ -49,6 +49,7 @@ export function parseWorkerQueueFamilies(rawValue: string | undefined): WorkerQu
   return selected;
 }
 
+/** Resolves the queue families this worker process should run by parsing `env.WORKER_QUEUE_FAMILIES`. */
 export function getSelectedWorkerQueueFamilies(): WorkerQueueFamily[] {
   return parseWorkerQueueFamilies(env.WORKER_QUEUE_FAMILIES);
 }

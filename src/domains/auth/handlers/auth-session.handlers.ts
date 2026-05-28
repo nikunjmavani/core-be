@@ -11,6 +11,7 @@ import type { AuthContainer } from '../auth.container.js';
 
 type AuthSessionHandlersDependencies = Pick<AuthContainer, 'authService' | 'authSessionService'>;
 
+/** Builds the session-management Fastify handlers: `logout`, `refreshToken` (cookie + origin allowlist), `listSessions`, `revokeSession`, and `revokeAllSessions`. */
 export function createAuthSessionHandlers({
   authService,
   authSessionService,

@@ -12,6 +12,7 @@ import type { AuthSessionService } from '../../auth-session/auth-session.service
 import type { OAuthProfile, OAuthProvider } from './oauth.types.js';
 import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
+/** Final stage of an OAuth callback: finds-or-creates the user, idempotently links the OAuth provider via {@link AuthMethodService.linkOAuthProviderIfMissing}, then mints an access token + persisted session. Rejects disposable emails for first-time signups. */
 export async function completeOAuthUserSession(parameters: {
   userService: UserService;
   authMethodService: AuthMethodService;

@@ -17,6 +17,11 @@ export function isPaddleEnvelope(
   );
 }
 
+/**
+ * Wraps successful JSON payloads in the Paddle-style `{ data, meta: { request_id } }`
+ * envelope used by the public API. Skipped for error responses (≥400), non-JSON content
+ * types, already-wrapped payloads, and routes that opt out via `raw_response` route config.
+ */
 export function formatResponsePayload(
   payload: unknown,
   context: {

@@ -2,6 +2,10 @@ import { eventBus } from '@/core/events/event-bus.js';
 import { createPendingWebhookDeliveryAttempt } from '@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js';
 import { NOTIFY_EVENT, type WebhookDeliveryRequestedPayload } from './notify.events.js';
 
+/**
+ * Caller input for {@link emitWebhookDeliveryRequested} — identifies the webhook target,
+ * the canonical event type, and the JSON body that will be HMAC-signed and POSTed.
+ */
 export interface RequestWebhookDeliveryInput {
   webhookId: number;
   eventType: string;

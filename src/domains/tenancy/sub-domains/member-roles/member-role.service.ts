@@ -12,6 +12,28 @@ import { serializeMemberRole } from './member-role.serializer.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { CursorPaginationInput } from '@/shared/utils/http/pagination.util.js';
 
+/**
+ * Application service for the per-organization role catalog: list, get,
+ * create, update, and soft-delete custom roles.
+ *
+ * @remarks
+ * - **Algorithm:** every public method runs inside
+ *   {@link withOrganizationDatabaseContext} and resolves the caller's
+ *   organization through {@link OrganizationService.requireOrganizationMembershipByPublicId}
+ *   before touching the role repository, so RLS and membership checks happen
+ *   before any data access.
+ * - **Failure modes:** `NotFoundError('Role' | 'Organization')` when lookups
+ *   miss or rows are soft-deleted; `ValidationError` (i18n) for bad input or
+ *   illegal pagination. The repository's unique index on `(organization_id,
+ *   name)` raises duplicate-key errors for collisions on create/update.
+ * - **Side effects:** writes through `MemberRoleRepository` (insert / update /
+ *   soft-delete with `deleted_at`). The companion
+ *   {@link MemberRolePermissionService} owns the role's permission set; this
+ *   service does not touch `role_permissions`.
+ * - **Notes:** `requireRoleRecord*` and `resolveRolePublicId*` helpers are
+ *   shared with other tenancy services (membership, invitations) to keep role
+ *   identity resolution in one place.
+ */
 export class MemberRoleService {
   constructor(
     private readonly organizationService: OrganizationService,

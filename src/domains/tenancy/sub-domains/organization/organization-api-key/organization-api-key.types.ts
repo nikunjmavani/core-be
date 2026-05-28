@@ -1,3 +1,4 @@
+/** Internal Drizzle row for `tenancy.api_keys` (includes the secret `key_hash` and audit columns). */
 export interface OrganizationApiKeyRow {
   id: number;
   public_id: string;
@@ -16,6 +17,7 @@ export interface OrganizationApiKeyRow {
   updated_by_user_id: number | null;
 }
 
+/** Public API-key shape returned by the API — never exposes the hash, scopes, or audit fields. */
 export interface OrganizationApiKeyOutput {
   id: string;
   organization_id: string;
@@ -28,11 +30,13 @@ export interface OrganizationApiKeyOutput {
   updated_at: string;
 }
 
+/** Result of `OrganizationApiKeyService.create` / `rotate` — pairs the public output with the one-time raw secret. */
 export interface CreateOrganizationApiKeyResult {
   api_key: OrganizationApiKeyOutput;
   raw_key: string;
 }
 
+/** Successful authentication match returned by `OrganizationApiKeyService.authenticate` (carries the org and granted scopes). */
 export interface OrganizationApiKeyAuthMatch {
   public_id: string;
   organization_public_id: string;

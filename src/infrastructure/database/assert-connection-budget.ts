@@ -8,6 +8,7 @@ const DEFAULT_POOL_MAX_CONNECTIONS = 10;
 const LOCAL_DEFAULT_API_PROCESS_COUNT = 1;
 const LOCAL_DEFAULT_WORKER_PROCESS_COUNT = 1;
 
+/** Options for {@link assertPostgresConnectionBudget}. */
 export type AssertConnectionBudgetOptions = {
   /** When true, validates per-queue Postgres demand for the selected WORKER_QUEUE_FAMILIES. */
   readonly assertWorkerConcurrency?: boolean;
@@ -29,6 +30,10 @@ function resolvePoolMaxConnections(): number {
   return env.DATABASE_POOL_MAX ?? DEFAULT_POOL_MAX_CONNECTIONS;
 }
 
+/**
+ * Returns the cluster `max_connections` setting — honours `POSTGRES_MAX_CONNECTIONS` when set,
+ * otherwise queries `pg_settings` for the live value. Used to size the deployment connection budget.
+ */
 export async function resolvePostgresMaxConnections(): Promise<number> {
   if (env.POSTGRES_MAX_CONNECTIONS !== undefined) {
     return env.POSTGRES_MAX_CONNECTIONS;

@@ -239,6 +239,11 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
 
 let defaultAdapter: S3ObjectStorageAdapter | null = null;
 
+/**
+ * Returns the process-wide {@link S3ObjectStorageAdapter} singleton (instantiated on
+ * first call). DI containers should depend on {@link ObjectStoragePort} and accept this
+ * factory as the production binding; tests can supply a fake port instead.
+ */
 export function getDefaultS3ObjectStorageAdapter(): S3ObjectStorageAdapter {
   if (!defaultAdapter) {
     defaultAdapter = new S3ObjectStorageAdapter();

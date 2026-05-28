@@ -40,6 +40,11 @@ function getOrCreateQueueClient(queueName: string): Queue {
   return queue;
 }
 
+/**
+ * Refreshes `bullmq_queue_{waiting,active,delayed,failed}` gauges for every
+ * queue in {@link MONITORED_BULLMQ_QUEUE_NAMES}. No-op when metrics are
+ * disabled; per-queue Redis errors are logged at warn and do not abort the pass.
+ */
 export async function refreshBullMQQueueGauges(): Promise<void> {
   if (!isMetricsEnabled()) {
     return;
@@ -63,6 +68,10 @@ export async function refreshBullMQQueueGauges(): Promise<void> {
   );
 }
 
+/**
+ * Closes every pooled `Queue` client created by {@link refreshBullMQQueueGauges}
+ * so the metrics scraper releases its Redis sockets cleanly on shutdown.
+ */
 export async function closeBullMQMetricsQueues(): Promise<void> {
   const queues = [...queueClientsByName.values()];
   queueClientsByName.clear();

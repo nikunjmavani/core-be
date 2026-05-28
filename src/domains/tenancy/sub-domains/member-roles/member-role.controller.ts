@@ -9,6 +9,12 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import type { MemberRoleService } from './member-role.service.js';
 
+/**
+ * Builds the HTTP handler map for the organization role CRUD endpoints under
+ * `/organizations/:id/roles`. Mutating handlers also record a scoped audit
+ * event via {@link recordScopedAuditEvent} so role lifecycle changes appear in
+ * the audit log.
+ */
 export function createMemberRoleController(service: MemberRoleService) {
   return {
     listRoles: async (request: FastifyRequest, _reply: FastifyReply) => {

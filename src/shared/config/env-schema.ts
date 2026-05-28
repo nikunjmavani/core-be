@@ -399,6 +399,13 @@ const envSchemaBase = z.object({
   POSTMAN_WORKSPACE_ID: z.string().min(1).optional(),
 });
 
+/**
+ * Process environment Zod schema. Refines `envSchemaBase` with cross-field invariants
+ * (idempotency threshold ordering, METRICS_ENABLED → token, CAPTCHA configuration,
+ * production CAPTCHA acknowledgement, Redis topology, and FRONTEND_URL protocol) so
+ * the API/worker boot fails fast on misconfiguration instead of surfacing partial
+ * failures at runtime.
+ */
 export const envSchema = envSchemaBase
   .refine(
     (data) =>

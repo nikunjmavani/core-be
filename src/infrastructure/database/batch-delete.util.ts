@@ -6,6 +6,10 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const DEFAULT_BATCH_SIZE = 5_000;
 
+/**
+ * Outcome of {@link deleteInBatchesByCondition}: rows actually removed plus rows
+ * skipped because a foreign-key constraint blocked their per-row fallback delete.
+ */
 export interface BatchDeleteResult {
   deletedCount: number;
   blockedCount: number;

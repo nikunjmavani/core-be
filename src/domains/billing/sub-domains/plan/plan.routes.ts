@@ -4,6 +4,10 @@ import type { PlanService } from './plan.service.js';
 import { createPlanController } from './plan.controller.js';
 import { getPlanParamsDto } from './plan.dto.js';
 
+/**
+ * Fastify plugin factory that registers the public plan catalog endpoints
+ * (`GET /plans`, `GET /plans/:id`) backed by {@link PlanService}.
+ */
 export function planRoutes(service: PlanService): FastifyPluginAsync {
   const controller = createPlanController(service);
 

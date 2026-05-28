@@ -15,6 +15,17 @@ import { WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME } from './webhook-tombstone-rete
  * Hard-delete notification webhooks tombstoned longer than TOMBSTONE_RETENTION_DAYS.
  * Cascade removes webhook_delivery_attempts (FK ON DELETE CASCADE).
  * Repeatable schedule is registered in `src/infrastructure/queue/scheduler.ts`.
+ *
+ * @remarks
+ * - **Algorithm:** wraps {@link runWebhookTombstoneRetentionJob} in
+ *   `withGlobalRetentionCleanupDatabaseContext` so the BullMQ processor sees tombstones across
+ *   tenants.
+ * - **Failure modes:** stalled jobs are logged via the `stalled` listener; processor errors
+ *   propagate through BullMQ retries and the queue DLQ.
+ * - **Side effects:** registers a `Worker` against Redis using retention-tuned options
+ *   (`RETENTION_WORKER_CONCURRENCY`, `getRetentionWorkerOptions`).
+ * - **Notes:** the repeatable schedule lives in `infrastructure/queue/scheduler.ts`; this
+ *   factory just returns the worker handle for graceful shutdown.
  */
 export function createWebhookTombstoneRetentionWorker(): WorkerHandle {
   const worker = new Worker(

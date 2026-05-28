@@ -6,11 +6,18 @@ import type { MemberRolePermissionService } from './member-role-permission/membe
 import { createMemberRoleController } from './member-role.controller.js';
 import { createMemberRolePermissionController } from './member-role-permission/member-role-permission.controller.js';
 
+/** Services required to wire the member-role and role-permission routes. */
 export interface MemberRoleRoutesDeps {
   memberRoleService: MemberRoleService;
   memberRolePermissionService: MemberRolePermissionService;
 }
 
+/**
+ * Fastify plugin that registers the organization role CRUD routes plus the
+ * nested `:roleId/permissions` listing and replacement endpoints. Every route
+ * requires authentication and a `ROLE_READ` or `ROLE_MANAGE` organization
+ * permission resolved against the `:id` path param.
+ */
 export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync {
   const roleController = createMemberRoleController(deps.memberRoleService);
   const permissionController = createMemberRolePermissionController(

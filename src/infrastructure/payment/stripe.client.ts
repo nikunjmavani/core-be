@@ -61,6 +61,11 @@ export function isStripeWebhookIngressConfigured(): boolean {
 
 // ── Customer helpers ──────────────────────────────────────────
 
+/**
+ * Creates a Stripe customer via `customers.create`. Wrapped in {@link outboundCall} for
+ * the shared circuit breaker, timeout, and error classification; `Stripe.errors.StripeError`
+ * is rethrown unwrapped so domain code can branch on Stripe-specific codes.
+ */
 export async function createStripeCustomer(options: {
   email: string;
   name: string;
@@ -87,6 +92,11 @@ export async function createStripeCustomer(options: {
   );
 }
 
+/**
+ * Retrieves a Stripe customer by id. Returns `null` for both deleted customers and
+ * `resource_missing` lookups so callers do not need to special-case 404s; other Stripe
+ * errors propagate unwrapped.
+ */
 export async function getStripeCustomer(
   customerId: string,
   requestId?: string,
@@ -117,6 +127,10 @@ export async function getStripeCustomer(
   }
 }
 
+/**
+ * Fetches a fully-formed Stripe event by id — used by the webhook reclaim worker to
+ * re-process events whose payloads are missing from the local ledger.
+ */
 export async function retrieveStripeEvent(
   stripeEventId: string,
   requestId?: string,
@@ -137,6 +151,11 @@ export async function retrieveStripeEvent(
 
 // ── Subscription helpers ──────────────────────────────────────
 
+/**
+ * Creates a Stripe subscription in `default_incomplete` payment behaviour so the
+ * platform can confirm the first PaymentIntent client-side before activation. Passes a
+ * Stripe-native idempotency key when provided to make retries safe across HTTP attempts.
+ */
 export async function createStripeSubscription(options: {
   customerId: string;
   priceId: string;
@@ -168,6 +187,11 @@ export async function createStripeSubscription(options: {
   );
 }
 
+/**
+ * Cancels a Stripe subscription. By default schedules cancellation at the end of the
+ * current billing period (`cancel_at_period_end: true`); pass `false` to cancel
+ * immediately and stop further proration.
+ */
 export async function cancelStripeSubscription(
   subscriptionId: string,
   cancelAtPeriodEnd = true,
@@ -192,6 +216,10 @@ export async function cancelStripeSubscription(
   );
 }
 
+/**
+ * Reverses a pending period-end cancellation by clearing `cancel_at_period_end`. No-op
+ * on Stripe's side if the subscription was never scheduled to cancel.
+ */
 export async function resumeStripeSubscription(
   subscriptionId: string,
   requestId?: string,
@@ -212,6 +240,11 @@ export async function resumeStripeSubscription(
   );
 }
 
+/**
+ * Updates a Stripe subscription's price and/or metadata. When `priceId` is set the
+ * current subscription item is retrieved first so the swap targets the existing line
+ * item (avoids creating a second item alongside the original).
+ */
 export async function updateStripeSubscription(
   subscriptionId: string,
   options: {
@@ -250,6 +283,11 @@ export async function updateStripeSubscription(
 
 // ── Webhook verification ──────────────────────────────────────
 
+/**
+ * Verifies the `Stripe-Signature` header against the raw body using `STRIPE_WEBHOOK_SECRET`
+ * and returns the parsed `Stripe.Event`. Throws when the secret is missing or the
+ * signature does not match — callers must use the raw (un-parsed) request body.
+ */
 export function constructStripeWebhookEvent(
   body: string | Buffer,
   signature: string,

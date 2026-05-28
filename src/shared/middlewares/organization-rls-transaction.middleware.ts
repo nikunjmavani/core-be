@@ -13,6 +13,16 @@ import {
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+/**
+ * Result of awaiting the per-request RLS transaction:
+ * - `committed` — outer `database.transaction()` resolved on a 2xx response.
+ * - `rolled_back` — handler signalled a 4xx/5xx so the transaction was aborted intentionally.
+ * - `no_transaction` — request had no `X-Organization-Id` (no outer transaction was opened).
+ * - `settle_failed` — outer transaction promise rejected unexpectedly (logged for triage).
+ *
+ * The request-lifecycle coordinator uses this to decide whether idempotency cache writes
+ * and mail-outbox flushes should run.
+ */
 export type OrganizationRlsTransactionSettlementOutcome =
   | 'committed'
   | 'rolled_back'

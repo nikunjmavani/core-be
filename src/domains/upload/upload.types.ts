@@ -1,5 +1,6 @@
 import type { UploadPurpose, UploadTarget } from './upload.constants.js';
 
+/** Validated payload accepted by {@link UploadService.createUpload}; mirrors {@link createUploadDto}. */
 export interface CreateUploadInput {
   purpose: UploadPurpose;
   for: UploadTarget;
@@ -9,6 +10,7 @@ export interface CreateUploadInput {
   fileSize: number;
 }
 
+/** Response body returned by `POST /api/v1/uploads` — presigned URL plus key/expiry metadata. */
 export interface UploadCreateOutput {
   publicId: string;
   uploadUrl: string;
@@ -23,6 +25,7 @@ export interface UploadCreateOutput {
   fields?: Record<string, string>;
 }
 
+/** Response body for the upload metadata endpoints (`GET`, `POST /confirm`). */
 export interface UploadDetailOutput {
   publicId: string;
   fileName: string;

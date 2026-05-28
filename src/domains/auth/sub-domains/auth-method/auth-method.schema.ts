@@ -12,6 +12,7 @@ import {
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 
+/** Drizzle table for `auth.auth_methods` — one row per linked credential (PASSWORD, MAGIC_LINK, OAUTH, MFA_TOTP, MFA_SMS, MFA_EMAIL); soft-deleted via `revoked_at`. */
 export const auth_methods = authSchema.table(
   'auth_methods',
   {

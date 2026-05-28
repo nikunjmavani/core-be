@@ -32,6 +32,11 @@ function buildAuditFilterConditions(filters: AuditLogFilters): SQL[] {
   return conditions;
 }
 
+/**
+ * Data-access layer for `audit.logs`. Append-only writes via {@link AuditRepository.insert};
+ * reads expose cursor-paginated filtering on organization, actor, resource, action, and
+ * time window, with an optional `count(*)` opt-in for callers that need an exact total.
+ */
 export class AuditRepository {
   async insert(entry: NewAuditLog): Promise<void> {
     await getRequestDatabase().insert(logs).values(entry);

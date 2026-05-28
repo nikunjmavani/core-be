@@ -12,9 +12,23 @@ import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
- * Purges terminal Stripe webhook ledger rows older than STRIPE_WEBHOOK_EVENT_RETENTION_DAYS.
- * Failed / in-flight rows are retained for replay and ops.
- * Repeatable schedule is registered in `src/infrastructure/queue/scheduler.ts`.
+ * Purges terminal Stripe webhook ledger rows older than
+ * `STRIPE_WEBHOOK_EVENT_RETENTION_DAYS`. Failed and in-flight rows are retained
+ * for replay and ops investigation.
+ *
+ * @remarks
+ * - **Algorithm:** BullMQ {@link Worker} bound to the retention queue. Each job
+ *   runs {@link runStripeWebhookEventRetentionJob} inside
+ *   {@link withSystemTableWorkerContext} so the delete uses the system-table
+ *   retention RLS context (no organization GUC required).
+ * - **Failure modes:** Stalled jobs are logged; processor errors propagate to
+ *   BullMQ's retry/backoff for the retention queue family.
+ * - **Side effects:** Hard-deletes rows from `billing.stripe_webhook_events`;
+ *   keeps a Redis worker connection open until the returned
+ *   {@link WorkerHandle} is closed.
+ * - **Notes:** Repeatable cadence (typically daily) is registered in
+ *   `src/infrastructure/queue/scheduler.ts`; concurrency tuning comes from
+ *   `RETENTION_WORKER_CONCURRENCY`.
  */
 export function createStripeWebhookEventRetentionWorker(): WorkerHandle {
   const worker = new Worker(

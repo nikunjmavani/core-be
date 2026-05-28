@@ -23,6 +23,11 @@ import { MemberRolePermissionService } from './sub-domains/member-roles/member-r
 import { PermissionService } from './sub-domains/permission/permission.service.js';
 import { AuthorizationService } from './sub-domains/permission/authorization.service.js';
 
+/**
+ * Composition-root bag of tenancy-domain services exposed to routes and
+ * other domain containers. Built by {@link createTenancyContainer} and
+ * decorated onto Fastify as `app.tenancyDomain` by {@link registerTenancyContainer}.
+ */
 export type TenancyContainer = {
   organizationService: OrganizationService;
   organizationSettingsService: OrganizationSettingsService;
@@ -36,6 +41,17 @@ export type TenancyContainer = {
   authorizationService: AuthorizationService;
 };
 
+/**
+ * Wires every tenancy repository and service together (organizations, settings,
+ * notification policies, API keys, memberships, member invitations, member
+ * roles, role permissions, permissions, and the Redis-cached
+ * `AuthorizationService`). Cross-domain dependencies — `UserService`, the S3
+ * `ObjectStoragePort`, and the optional `UserSettingsService` — are passed in
+ * by the parent composition root so this domain stays free of `application`
+ * coupling. Membership construction depends on organization, role, role-
+ * permission, and settings services, which is why instances are created top-
+ * down before the membership service.
+ */
 export function createTenancyContainer(
   userService: UserService,
   _objectStorage: ObjectStoragePort,
@@ -101,6 +117,12 @@ export function createTenancyContainer(
   };
 }
 
+/**
+ * Decorates the Fastify instance with `tenancyDomain` by calling
+ * {@link createTenancyContainer} with the default S3 object-storage adapter and
+ * already-decorated `userDomain` services. Must be invoked after the user
+ * domain container is registered.
+ */
 export function registerTenancyContainer(application: FastifyInstance): void {
   const objectStorage = getDefaultS3ObjectStorageAdapter();
   application.decorate(

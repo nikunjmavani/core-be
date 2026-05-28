@@ -34,6 +34,11 @@ async function onWebhookDeliveryRequestedEvent(event: DomainEvent): Promise<void
 
 let webhookDeliveryEventHandlersRegistered = false;
 
+/**
+ * Idempotent registrar that subscribes the in-process listener for
+ * {@link NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED} so emitting that event (after persisting a
+ * pending attempt) results in a BullMQ delivery job once the surrounding transaction commits.
+ */
 export function registerWebhookDeliveryEventHandlers(): void {
   if (webhookDeliveryEventHandlersRegistered) return;
   webhookDeliveryEventHandlersRegistered = true;

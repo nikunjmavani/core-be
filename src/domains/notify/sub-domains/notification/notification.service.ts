@@ -6,6 +6,15 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 import type { NotificationRepository } from './notification.repository.js';
 import type { UserService } from '@/domains/user/user.service.js';
 
+/**
+ * Options forwarded from controllers/event handlers into {@link NotificationService.listForUser}.
+ *
+ * @remarks
+ * - **Algorithm:** consumed verbatim by the repository keyset-pagination layer.
+ * - **Failure modes:** invalid `after` cursors raise inside the repository.
+ * - **Side effects:** none (read-only).
+ * - **Notes:** `include_total` is opt-in because the inbox stays keyset-only by default.
+ */
 export interface NotificationListServiceOptions {
   after?: string;
   limit?: number;
@@ -14,6 +23,18 @@ export interface NotificationListServiceOptions {
 
 /**
  * Persists in-app notifications and enqueues delivery for the owning user.
+ *
+ * @remarks
+ * - **Algorithm:** every method resolves the user public id to an internal id via
+ *   {@link UserService}, then runs the repository call inside `withUserDatabaseContext` so
+ *   Postgres RLS sees the correct `app.current_user_id`. `dispatchNotification` looks up the
+ *   organization public id and re-enqueues a notification job for the BullMQ worker.
+ * - **Failure modes:** `UnauthorizedError` for unknown user public ids; repository errors
+ *   propagate; `enqueueNotification` failures bubble to the caller.
+ * - **Side effects:** Postgres reads/writes against `notify.notifications` (mark-read,
+ *   mark-all-read, delete) plus optional BullMQ enqueue from `dispatchNotification`.
+ * - **Notes:** the legacy numeric `limit` shape on `listForUser` is kept for backward
+ *   compatibility; new callers should pass {@link NotificationListServiceOptions}.
  */
 export class NotificationService {
   constructor(

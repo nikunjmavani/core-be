@@ -20,6 +20,12 @@ export async function recordWorkerQueueJobCompleted(queueName: string): Promise<
   );
 }
 
+/**
+ * Read-side view of a Redis worker-queue heartbeat key. `last_job_at` is the ISO-8601
+ * timestamp of the most recent successful job completion, or `null` when no job has
+ * completed inside `WORKER_QUEUE_HEARTBEAT_TTL_SECONDS` (24h) — used by readiness probes
+ * and {@link isWorkerThroughputStalled}.
+ */
 export type WorkerQueueHeartbeat = {
   queue: string;
   last_job_at: string | null;
@@ -73,6 +79,11 @@ export async function readWorkerQueueHeartbeats(
   }));
 }
 
+/**
+ * Subscribes to the BullMQ `completed` event on `worker` and best-effort writes a Redis
+ * heartbeat via {@link recordWorkerQueueJobCompleted}. Heartbeat write failures are
+ * intentionally swallowed so a transient Redis blip cannot poison job completion.
+ */
 export function attachWorkerQueueHeartbeat(
   worker: { on(event: 'completed', listener: () => void): void },
   queueName: string,

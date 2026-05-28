@@ -1,10 +1,15 @@
 import { baseTemplate } from './base.template.js';
 
+/** Template variables for {@link magicLinkTemplate} — signed sign-in URL and its TTL in minutes. */
 export interface MagicLinkTemplateData {
   magicLinkUrl: string;
   expiresInMinutes: number;
 }
 
+/**
+ * Renders the passwordless magic-link HTML email (wrapped in `baseTemplate`).
+ * Emitted from `auth-method.magic-link` event handlers when a sign-in is requested.
+ */
 export function magicLinkTemplate(data: MagicLinkTemplateData): string {
   return baseTemplate({
     title: 'Sign in to your account',

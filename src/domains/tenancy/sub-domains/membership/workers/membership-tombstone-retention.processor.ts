@@ -5,6 +5,24 @@ import { memberships } from '@/domains/tenancy/sub-domains/membership/membership
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env } from '@/shared/config/env.config.js';
 
+/**
+ * Hard-deletes `tenancy.memberships` rows whose `deleted_at` is older than
+ * `env.TOMBSTONE_RETENTION_DAYS`, freeing the soft-deleted records that have
+ * passed the retention window.
+ *
+ * @remarks
+ * - **Algorithm:** computes a cutoff `now - retentionDays`, then calls
+ *   {@link deleteInBatchesByCondition} on `tenancy.memberships` matching
+ *   `deleted_at IS NOT NULL AND deleted_at < cutoff`.
+ * - **Failure modes:** rows still referenced by other tables surface as the
+ *   `blockedCount` return; any other database error bubbles up so BullMQ can
+ *   retry.
+ * - **Side effects:** issues DELETE batches against `tenancy.memberships`;
+ *   child `tenancy.member_invitations` rows cascade automatically via
+ *   `ON DELETE CASCADE`.
+ * - **Notes:** must run under the global retention cleanup context which
+ *   sets `app.global_retention_cleanup = 'true'` so RLS is bypassed.
+ */
 export async function runMembershipTombstoneRetentionJob(
   databaseHandle: WorkerDatabaseHandle,
 ): Promise<{

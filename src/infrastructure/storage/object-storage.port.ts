@@ -1,3 +1,8 @@
+/**
+ * Subset of S3 `HeadObject` metadata that the upload domain trusts after a successful
+ * `verifyUploadedObject` check. Either field may be `undefined` when the object exists
+ * but the field is not surfaced (rare, e.g. some S3-compatible providers).
+ */
 export interface UploadedObjectMetadata {
   contentType: string | undefined;
   contentLength: number | undefined;

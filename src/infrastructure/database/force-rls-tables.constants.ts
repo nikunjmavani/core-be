@@ -1,3 +1,4 @@
+/** Qualified Postgres table reference (`<schemaName>.<tableName>`) used for FORCE-RLS lookups. */
 export type ForceRlsTableRef = {
   schemaName: string;
   tableName: string;
@@ -26,10 +27,16 @@ const FORCE_RLS_TABLE_KEYS = new Set(
   EXPECTED_FORCE_RLS_TABLES.map((table) => `${table.schemaName}.${table.tableName}`),
 );
 
+/** Canonical `<schema>.<table>` lookup key for the FORCE-RLS set in {@link EXPECTED_FORCE_RLS_TABLES}. */
 export function forceRlsTableKey(schemaName: string, tableName: string): string {
   return `${schemaName}.${tableName}`;
 }
 
+/**
+ * Returns true when the given schema/table has `FORCE ROW LEVEL SECURITY` enabled.
+ * Worker context wrappers consult this before letting a job touch a tenant-scoped
+ * or retention-protected table.
+ */
 export function isForceRlsTable(schemaName: string, tableName: string): boolean {
   return FORCE_RLS_TABLE_KEYS.has(forceRlsTableKey(schemaName, tableName));
 }

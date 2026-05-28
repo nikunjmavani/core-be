@@ -14,14 +14,27 @@ import {
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
 
+/**
+ * Outcome of {@link WebhookDeliveryAttemptRepository.tryMarkSending}. `claimed` means the
+ * worker now owns the attempt; `in_flight` means another worker still holds a fresh lease;
+ * `already_sent` means a previous attempt succeeded and the worker should no-op.
+ */
 export type WebhookDeliverySendingClaimResult = 'claimed' | 'in_flight' | 'already_sent';
 
+/** Keyset pagination input for listing delivery attempts in the dashboard. */
 export interface WebhookDeliveryAttemptListPagination {
   after?: string;
   limit: number;
   include_total?: boolean;
 }
 
+/**
+ * Drizzle-backed access to `notify.webhook_delivery_attempts` — the immutable audit trail of
+ * outbound webhook deliveries. Owns the SQL for the dashboard list, the at-most-one-in-flight
+ * `PENDING → SENDING` transition with stale-lease reclaim, the terminal outcome write, and
+ * inserts for both real and test deliveries. Resolves its database handle via the shared
+ * request/worker context helper so it works under HTTP RLS and worker organization scopes.
+ */
 export class WebhookDeliveryAttemptRepository {
   constructor(private readonly databaseHandle?: RequestScopedPostgresDatabase) {}
 

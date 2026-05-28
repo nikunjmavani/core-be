@@ -5,6 +5,11 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import { validatePolicyIdParam } from './organization-notification-policy.validator.js';
 import type { OrganizationNotificationPolicyService } from './organization-notification-policy.service.js';
 
+/**
+ * Builds the Fastify handler map for `/organizations/:id/notification-policies`
+ * routes — list, get, create, update, delete. Validates the numeric
+ * `policyId` path param via {@link validatePolicyIdParam}.
+ */
 export function createOrganizationNotificationPolicyController(
   service: OrganizationNotificationPolicyService,
 ) {

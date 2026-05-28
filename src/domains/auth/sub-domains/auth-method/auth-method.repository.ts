@@ -3,6 +3,7 @@ import { getRequestDatabase } from '@/infrastructure/database/contexts/request-d
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 
+/** Drizzle repository for the {@link auth_methods} table; reads and writes use the request-scoped database handle so Postgres RLS enforces organization isolation. Soft-deletes via `revoked_at` rather than physical deletion. */
 export class AuthMethodRepository {
   async listByUserId(userId: number) {
     return getRequestDatabase()

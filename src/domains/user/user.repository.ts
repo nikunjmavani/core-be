@@ -12,6 +12,7 @@ import {
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
 
+/** Pagination + filter inputs for {@link UserRepository.findMany} (admin user listing). */
 export interface UserListPagination {
   after?: string;
   limit: number;
@@ -20,6 +21,21 @@ export interface UserListPagination {
   include_total?: boolean;
 }
 
+/**
+ * Drizzle data-access for `auth.users`.
+ *
+ * @remarks
+ * - **Algorithm:** all queries scope by `isNull(deleted_at)` so soft-deleted rows are invisible to
+ *   the application; admin list uses keyset pagination on `(created_at, id)` with `limit + 1` to
+ *   detect `has_more`. Optional `count(*)` only when callers opt in via `include_total`.
+ * - **Failure modes:** lookups return `null` when missing; updates return `null` when the row was
+ *   concurrently soft-deleted. Public-id generation uses
+ *   `runInsertWithPublicIdentifierRetry` so unique-violation collisions retry transparently.
+ * - **Side effects:** writes `auth.users` only; cross-domain side effects (sessions, uploads,
+ *   exports) live in {@link UserService.softDeleteUserWithOffboarding}.
+ * - **Notes:** OAuth signup hashes email lowercased to populate `email_hash` for case-insensitive
+ *   lookups; case search is `LIKE %term%` over email + name with backslash-escaped patterns.
+ */
 export class UserRepository {
   async findByPublicId(public_id: string) {
     const rows = await getRequestDatabase()

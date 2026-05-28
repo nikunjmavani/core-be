@@ -9,6 +9,27 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { SubscriptionCreateData, SubscriptionUpdateData } from './subscription.types.js';
 
+/**
+ * Drizzle access to the append-only `billing.subscriptions` ledger.
+ *
+ * @remarks
+ * - **Algorithm:** Each organization is constrained to a single subscription row
+ *   (unique on `organization_id`). Stripe-driven writes
+ *   ({@link syncFromStripeProviderSubscription},
+ *   {@link markCanceledByProviderSubscriptionId}) gate the update on
+ *   `last_stripe_event_created_at` being `NULL` or older than the incoming
+ *   event timestamp so out-of-order webhooks are dropped — the local row is
+ *   the immutable record of the latest authoritative state.
+ * - **Failure modes:** Insert collisions on `public_id` are retried by
+ *   {@link runInsertWithPublicIdentifierRetry}; updates that miss the
+ *   timestamp guard return `null` to the caller so the worker can log a stale
+ *   event instead of writing.
+ * - **Side effects:** Writes the `subscriptions` table only; all queries run
+ *   under either an organization RLS context (HTTP) or a worker-supplied
+ *   handle from {@link createWorkerSubscriptionRepository}.
+ * - **Notes:** Tenant isolation is enforced by both the WHERE clauses and the
+ *   `subscriptions_tenant_isolation` RLS policy on the table.
+ */
 export class SubscriptionRepository {
   constructor(private readonly databaseHandle?: RequestScopedPostgresDatabase) {}
 

@@ -8,12 +8,21 @@ import { SubscriptionService } from './sub-domains/subscription/subscription.ser
 import { StripeWebhookService } from './sub-domains/stripe-webhook/stripe-webhook.service.js';
 import { StripeWebhookEventRepository } from './sub-domains/stripe-webhook/stripe-webhook-event.repository.js';
 
+/**
+ * Services exposed by the billing domain composition root for routes and the
+ * Fastify decoration `app.billingDomain`.
+ */
 export type BillingContainer = {
   planService: PlanService;
   subscriptionService: SubscriptionService;
   stripeWebhookService: StripeWebhookService;
 };
 
+/**
+ * Wires plan / subscription / stripe-webhook repositories and services together,
+ * injecting the tenancy {@link OrganizationService} required for cross-domain
+ * organization lookups during checkout and webhook processing.
+ */
 export function createBillingContainer(organizationService: OrganizationService): BillingContainer {
   const planRepository = new PlanRepository();
   const subscriptionRepository = new SubscriptionRepository();
@@ -39,6 +48,10 @@ export function createBillingContainer(organizationService: OrganizationService)
   };
 }
 
+/**
+ * Decorates the Fastify instance with `billingDomain` so route plugins can
+ * resolve billing services without rebuilding the container per request.
+ */
 export function registerBillingContainer(application: FastifyInstance): void {
   application.decorate(
     'billingDomain',

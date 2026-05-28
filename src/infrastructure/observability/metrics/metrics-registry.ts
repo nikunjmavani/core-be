@@ -3,6 +3,7 @@ import { getEnv } from '@/shared/config/env.config.js';
 
 let metricsRegistry: Registry | null = null;
 
+/** True when `METRICS_ENABLED=true`. All metric registration/recording short-circuits to no-op when false. */
 export function isMetricsEnabled(): boolean {
   return getEnv().METRICS_ENABLED === true;
 }

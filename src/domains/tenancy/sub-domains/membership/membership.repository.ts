@@ -18,6 +18,13 @@ interface MembershipListPagination {
   limit: number;
 }
 
+/**
+ * Drizzle data access for `tenancy.memberships`. Active rows are filtered via
+ * `deleted_at IS NULL` (soft-delete semantics) and a partial unique index
+ * keeps the `(user_id, organization_id)` pair unique among active rows.
+ * Listing uses a `(created_at, id)` keyset cursor; `update` flips
+ * `joined_at` to `now()` when the status transitions to `ACTIVE`.
+ */
 export class MembershipRepository extends BaseRepository {
   async findByOrganizationId(organization_id: number, pagination: MembershipListPagination) {
     const { after, limit } = pagination;

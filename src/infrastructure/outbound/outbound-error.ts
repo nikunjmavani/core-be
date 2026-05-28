@@ -4,6 +4,11 @@ import { isTransientNetworkError } from '@/infrastructure/resilience/retry-with-
 import { AppError } from '@/shared/errors/app.error.js';
 import type { OutboundIntegrationName } from '@/infrastructure/outbound/outbound-defaults.js';
 
+/**
+ * Coarse classification of why an outbound call failed. Drives retry decisions
+ * ({@link isOutboundRetryable}), log severity in {@link outboundCall}, and Sentry
+ * breadcrumb labelling.
+ */
 export type OutboundCategory =
   | 'timeout'
   | 'network'
@@ -13,6 +18,11 @@ export type OutboundCategory =
   | 'aborted'
   | 'unknown';
 
+/**
+ * Typed wrapper for any failure that escaped an outbound integration. Always surfaces as
+ * a 503 `SERVICE_UNAVAILABLE` to clients with the integration name baked into the i18n
+ * payload; the original error is preserved on `cause` for debugging and breadcrumbs.
+ */
 export class ExternalServiceError extends AppError {
   readonly integration: OutboundIntegrationName;
   readonly category: OutboundCategory;
@@ -56,6 +66,11 @@ export class ExternalServiceError extends AppError {
   }
 }
 
+/**
+ * True when an outbound failure is safe to retry: circuit-open, transient network
+ * errors, timeouts/aborts, and 5xx upstream responses. 4xx responses are treated as
+ * caller errors and not retried automatically.
+ */
 export function isOutboundRetryable(error: unknown): boolean {
   if (error instanceof CircuitBreakerOpenError) {
     return true;
@@ -72,6 +87,12 @@ export function isOutboundRetryable(error: unknown): boolean {
   return isTransientNetworkError(error);
 }
 
+/**
+ * Normalizes any thrown value into an {@link ExternalServiceError} with an inferred
+ * {@link OutboundCategory}. Recognizes already-classified errors, circuit-open errors,
+ * `AbortError`/`TimeoutError`, `HTTP NNN` substrings in error messages, and transient
+ * network signatures; everything else lands in `unknown`.
+ */
 export function classifyOutboundError(
   error: unknown,
   integration: OutboundIntegrationName,
@@ -145,6 +166,11 @@ export function classifyOutboundError(
   });
 }
 
+/**
+ * Adds a warning-level Sentry breadcrumb tagged `outbound.<integration>.<category>` so
+ * subsequent error reports include the upstream failure context (integration, request id,
+ * attempt, duration, status) without needing a separate event.
+ */
 export function recordOutboundFailureBreadcrumb(options: {
   integration: OutboundIntegrationName;
   category: OutboundCategory;

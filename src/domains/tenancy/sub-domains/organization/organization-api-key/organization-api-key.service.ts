@@ -32,6 +32,28 @@ function getKeyPrefix(key: string): string {
   return key.slice(0, ORGANIZATION_API_KEY_PREFIX_DISPLAY_LENGTH);
 }
 
+/**
+ * Lifecycle service for organization-scoped API keys (CRUD, rotate, and
+ * authenticate-by-prefix).
+ *
+ * @remarks
+ * - **Algorithm:** create generates `ak_<hex>` of
+ *   `ORGANIZATION_API_KEY_RAW_SECRET_BYTE_LENGTH` random bytes, derives a
+ *   SHA-256 hash and a fixed-length prefix; only the hash + prefix are
+ *   persisted. Authentication looks up active candidates by prefix, then
+ *   defers the equality check to the caller-supplied `hashCompare`
+ *   (constant-time), filters expired keys, and touches `last_used_at` on a
+ *   match. Rotation soft-deletes the existing key and creates a new one
+ *   with the same name and scopes; a fresh raw secret is returned.
+ * - **Failure modes:** `NotFoundError` for missing organization or API key;
+ *   validation errors propagate from the DTO validators.
+ * - **Side effects:** persistent row writes (`create`, `update`,
+ *   `softDelete`, `touchLastUsedAt`); mutations are wrapped in
+ *   `withOrganizationDatabaseContext` to satisfy RLS.
+ * - **Notes:** raw secret is returned to the caller exactly once (creation
+ *   and rotation responses); revocation = soft-delete or status flip to
+ *   `REVOKED`; key prefix is non-secret and used purely as a lookup index.
+ */
 export class OrganizationApiKeyService {
   constructor(
     private readonly organizationRepository: OrganizationRepository,

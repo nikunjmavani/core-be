@@ -6,12 +6,17 @@ import { getRequestDatabase } from '@/infrastructure/database/contexts/request-d
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { plans } from './plan.schema.js';
 
+/** Free / Starter / Pro pricing baseline used by `pnpm db:seed`. */
 export const DEFAULT_PLANS = [
   { name: 'Free', price_monthly: '0.00', price_yearly: '0.00' },
   { name: 'Starter', price_monthly: '29.00', price_yearly: '290.00' },
   { name: 'Pro', price_monthly: '99.00', price_yearly: '990.00' },
 ];
 
+/**
+ * Idempotently inserts the {@link DEFAULT_PLANS} catalog (or a caller-supplied
+ * list), skipping rows whose `name` already exists via `ON CONFLICT DO NOTHING`.
+ */
 export async function seedPlans(
   items: Array<{
     name: string;

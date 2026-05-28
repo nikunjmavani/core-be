@@ -14,10 +14,21 @@ function parseSslMode(databaseUrl: string): string | null {
   }
 }
 
+/**
+ * Heuristic for Neon's PgBouncer-fronted connection string — when true we disable
+ * postgres.js prepared statements because PgBouncer in transaction-pooling mode
+ * does not preserve server-side prepared statement state across checkouts.
+ */
 export function isNeonPoolerConnection(databaseUrl: string): boolean {
   return /-pooler\./i.test(databaseUrl) || /[?&]pgbouncer=true/i.test(databaseUrl);
 }
 
+/**
+ * Builds the postgres.js client options from `DATABASE_URL` + env: SSL mode parsed from
+ * the URL (and tightened by `DATABASE_SSL_REJECT_UNAUTHORIZED`), per-connection
+ * `statement_timeout` / `idle_in_transaction_session_timeout`, pool sizing, and a
+ * Neon-pooler-aware `prepare: false` toggle.
+ */
 export function buildPostgresOptions(databaseUrl: string) {
   const sslMode = parseSslMode(databaseUrl);
   const strictVerification =
@@ -67,8 +78,17 @@ export function buildPostgresOptions(databaseUrl: string) {
  */
 export const sql = postgres(env.DATABASE_URL, buildPostgresOptions(env.DATABASE_URL));
 
+/**
+ * Process-wide Drizzle handle bound to the {@link sql} postgres.js pool — the
+ * default database accessor for repositories and ad-hoc queries when no
+ * request/worker context has pinned a transaction-scoped handle in ALS.
+ */
 export const database = drizzle(sql);
 
+/**
+ * Drains the postgres.js pool and waits up to `SHUTDOWN_TIMEOUT_MS` (30s default)
+ * for in-flight queries before terminating. Called from the shutdown middleware.
+ */
 export async function closeDatabase(): Promise<void> {
   const timeout = env.SHUTDOWN_TIMEOUT_MS ?? THIRTY_SECONDS_MS;
   await sql.end({ timeout });

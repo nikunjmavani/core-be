@@ -6,8 +6,17 @@ import { memberships } from '@/domains/tenancy/sub-domains/membership/membership
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { organization_settings } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.schema.js';
 
+/** BCP 47 locale tag persisted in `organization_settings.default_locale` (constrained to translated locales). */
 export type OrganizationDefaultLocale = 'en' | 'es';
 
+/**
+ * Drizzle data-access for `tenancy.organization_settings`. The `upsert`
+ * primary path is keyed on `organization_id` (1:1 with the org row); two
+ * helpers (`findDefaultLocaleByOrganizationPublicId`,
+ * `userHasOrganizationRequiringMfa`) intentionally use the unscoped
+ * `database` connection so login-time / middleware queries can run before
+ * tenant context is established.
+ */
 export class OrganizationSettingsRepository {
   /**
    * Login-time / middleware locale (no tenant HTTP context): resolve org default BCP 47 tag.

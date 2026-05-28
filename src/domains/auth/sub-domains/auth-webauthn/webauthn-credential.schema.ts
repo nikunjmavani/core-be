@@ -13,6 +13,7 @@ import {
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 
+/** Drizzle table for `auth.webauthn_credentials` — registered passkeys (credential id, public key, signature counter, transports); revocation is soft via `revoked_at` and the unique index is partial on `revoked_at IS NULL`. */
 export const webauthn_credentials = authSchema.table(
   'webauthn_credentials',
   {

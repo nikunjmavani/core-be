@@ -17,13 +17,42 @@ import type { AuthSessionService } from './sub-domains/auth-session/auth-session
 import type { MfaService } from './sub-domains/auth-mfa/mfa.service.js';
 import { validateLogin } from './auth.validator.js';
 
+/**
+ * Discriminated result of {@link AuthService.login}: either a fresh access token + session
+ * public id, or an `mfa_required` envelope carrying a short-lived session token used by
+ * the MFA login verify step.
+ *
+ * @remarks
+ * - **Algorithm:** the password branch returns `{ access_token, session_public_id }`;
+ *   when MFA is required by user opt-in or organization policy, the password is consumed
+ *   without issuing a JWT and a Redis-backed MFA session token is returned instead.
+ * - **Failure modes:** consumers should disambiguate via the `mfa_required` field before
+ *   reading either union arm.
+ * - **Side effects:** none — purely the result shape.
+ * - **Notes:** the session is created server-side; clients use the session cookie for refresh.
+ */
 export type LoginResult =
   | { access_token: string; session_public_id: string }
   | { mfa_required: true; mfa_session_token: string };
 
 /**
- * Verifies credentials, issues access tokens, and tracks failed login attempts
- * with an organization-aware lockout window.
+ * Password-login orchestrator for the auth domain.
+ *
+ * @remarks
+ * - **Algorithm:** lookup user by email, verify password (argon2 with optional rehash),
+ *   enforce account-lockout window, then either issue a JWT + persisted session or
+ *   return an `mfa_required` token when MFA is enabled on the user or required by org
+ *   policy via {@link OrganizationSettingsService.userHasOrganizationRequiringMfa}.
+ * - **Failure modes:** disposable-email check throws `ValidationError`; bad password,
+ *   missing user, locked account, expired session, inactive user all throw
+ *   `UnauthorizedError` with i18n keys (`errors:invalidEmailOrPassword`,
+ *   `errors:accountLocked`, `errors:invalidOrExpiredSession`, `errors:accountNotActive`).
+ * - **Side effects:** increments / clears `users.failed_login_count` and sets
+ *   `account_locked_until` after {@link MAX_FAILED_LOGIN_ATTEMPTS} failures; rehashes the
+ *   stored password when argon2 parameters drift; creates and rotates rows in
+ *   `auth.sessions` via {@link AuthSessionService}.
+ * - **Notes:** access tokens are signed RS256 with a SHA-256 hash persisted on the
+ *   session row (refresh uses the session, not the JWT, as the source of truth).
  */
 export class AuthService {
   constructor(

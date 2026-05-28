@@ -152,6 +152,7 @@ function registerAuthMethodEmailEventHandlers(): void {
   eventBus.on(AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED, onEmailVerificationEmailEvent);
 }
 
+/** Subscribes the auth-method side-effect handlers to the in-process event bus (magic link, password reset, and email-verification emails). Idempotent: subsequent calls are no-ops. */
 export function registerAuthMethodEventHandlers(): void {
   if (authEventHandlersRegistered) return;
   authEventHandlersRegistered = true;

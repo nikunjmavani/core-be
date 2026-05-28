@@ -26,6 +26,13 @@ function loadOpenApiSpecContent(openApiSpecPath: string): string {
   return readFileSync(absolutePath, 'utf-8');
 }
 
+/**
+ * Mounts the Scalar API Reference UI at `GET /reference` when `ENABLE_API_REFERENCE=true`.
+ * The OpenAPI document is read lazily on each request from `OPENAPI_SPEC_PATH`
+ * (default `docs/openapi/openapi.json`). When `ENABLE_MCP_SERVER` is also on, an HTML
+ * comment pointing at the MCP endpoint is appended to the rendered page for discoverability.
+ * No-op when the flag is off.
+ */
 export async function registerScalarApiReference(application: FastifyInstance): Promise<void> {
   const environment = getEnv();
   if (!environment.ENABLE_API_REFERENCE) {

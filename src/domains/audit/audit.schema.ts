@@ -14,6 +14,11 @@ import { auditSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * Drizzle definition for `audit.logs` — the append-only ledger of actor/resource
+ * actions. RLS tenant-isolation policy scopes rows to the current organization
+ * (or to retention-cleanup workers that set `app.global_retention_cleanup`).
+ */
 export const logs = auditSchema
   .table(
     'logs',
@@ -67,4 +72,5 @@ export const logs = auditSchema
   )
   .enableRLS();
 
+/** Drizzle-inferred insert row shape for {@link logs}. */
 export type AuditLogInsert = typeof logs.$inferInsert;

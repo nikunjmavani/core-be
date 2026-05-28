@@ -3,6 +3,11 @@ import { bigint, varchar, boolean, timestamp, jsonb, check } from 'drizzle-orm/p
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 
+/**
+ * `auth.user_settings` — a singleton row per user (PK = `user_id`) holding personalization toggles
+ * and locale preferences. Cascades on user delete so offboarding sweeps the row automatically;
+ * absence of a row is interpreted as the platform default in the serializer.
+ */
 export const user_settings = authSchema.table(
   'user_settings',
   {

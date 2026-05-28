@@ -4,6 +4,11 @@ import { successResponse } from '@/shared/utils/http/response.util.js';
 import type { UserDataExportService } from './user-data-export.service.js';
 import { validateExportIdParam } from './user-data-export.validator.js';
 
+/**
+ * Build the GDPR export HTTP handler map (request/status). `requestExport` returns 202 because the
+ * actual export runs asynchronously in a BullMQ worker; clients poll `getExportStatus` for the
+ * presigned download URL once status flips to `completed`.
+ */
 export function createUserDataExportController(userDataExportService: UserDataExportService) {
   return {
     /**

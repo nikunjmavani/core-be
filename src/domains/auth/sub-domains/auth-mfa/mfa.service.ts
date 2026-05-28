@@ -25,6 +25,28 @@ import { consumeMfaRecoveryCode } from './mfa-recovery-code.repository.js';
 const TOTP_ISSUER = 'core-be';
 const ERROR_KEY_MFA_USER_NOT_FOUND = 'errors:mfaUserNotFound';
 
+/**
+ * TOTP-based MFA and recovery-code orchestrator for the auth domain.
+ *
+ * @remarks
+ * - **Algorithm:** enrollment generates an otplib secret, encrypts it via
+ *   {@link encryptFieldSecret}, and persists it as an `MFA_TOTP` row in
+ *   {@link auth_methods}. Login uses a Redis-backed MFA session
+ *   ({@link createMfaSession} / {@link verifyMfaSession}); the verify step accepts
+ *   either a TOTP code or a single-use recovery code consumed atomically by
+ *   {@link consumeMfaRecoveryCode}.
+ * - **Failure modes:** unknown user / wrong code / expired MFA session all throw
+ *   `UnauthorizedError` with i18n keys (`errors:mfaInvalidOrExpiredCode`,
+ *   `errors:mfaInvalidOrExpiredSession`, `errors:mfaUserNotFound`,
+ *   `errors:mfaInvalidOrExpiredRecoveryCode`).
+ * - **Side effects:** writes to {@link auth_methods}, {@link mfa_recovery_codes},
+ *   and `auth.sessions`; flips `users.is_mfa_enabled` on enroll and on the last
+ *   method removal; refreshes `auth_methods.last_used_at` on every successful
+ *   verification.
+ * - **Notes:** secrets are encrypted at rest using the field-secret KMS path;
+ *   recovery codes are stored only as SHA-256 hashes and consumed exactly once
+ *   via an atomic `UPDATE … WHERE used_at IS NULL`.
+ */
 export class MfaService {
   constructor(
     private readonly userService: UserService,

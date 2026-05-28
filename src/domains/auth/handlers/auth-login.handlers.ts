@@ -10,6 +10,7 @@ import type { AuthContainer } from '../auth.container.js';
 
 type AuthLoginHandlersDependencies = Pick<AuthContainer, 'authService'>;
 
+/** Builds the `POST /api/v1/auth/login` handler — verifies credentials via {@link AuthService.login}, sets the session cookie, records the `auth.login` audit event, and returns either an access token or an `mfa_required` envelope. */
 export function createAuthLoginHandlers({ authService }: AuthLoginHandlersDependencies) {
   return {
     login: async (request: FastifyRequest, reply: FastifyReply) => {

@@ -9,6 +9,10 @@ import {
   listNotificationsQueryDto,
 } from './notification.dto.js';
 
+/**
+ * Returns a Fastify plugin that registers the `/notifications` HTTP routes (list, unread count,
+ * get, mark read, mark-all-read, delete) bound to the supplied {@link NotificationService}.
+ */
 export function notificationRoutes(service: NotificationService): FastifyPluginAsync {
   const controller = createNotificationController(service);
 

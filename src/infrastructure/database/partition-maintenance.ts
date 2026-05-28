@@ -83,6 +83,12 @@ export async function dropEmptyExpiredPartitions(): Promise<{ dropped: number }>
   return { dropped };
 }
 
+/**
+ * Runs the monthly partition lifecycle in one pass: ensures current + next-month
+ * child partitions exist for `audit.logs` and `notify.notifications`, then drops
+ * empty children that fell entirely before the per-table retention cutoff.
+ * Driven by the partition-maintenance repeatable BullMQ job.
+ */
 export async function runPartitionMaintenance(): Promise<{ ensured: number; dropped: number }> {
   const { ensured } = await ensureMonthlyPartitions();
   const { dropped } = await dropEmptyExpiredPartitions();

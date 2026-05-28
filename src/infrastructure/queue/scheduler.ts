@@ -26,6 +26,12 @@ import { AUDIT_EXPORT_QUEUE_NAME } from '@/domains/audit/workers/audit-export.co
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env } from '@/shared/config/env.config.js';
 
+/**
+ * One row in the canonical scheduler registry: maps a BullMQ queue to its stable
+ * `schedulerId` (used by BullMQ for upsert deduplication), the cron-driven job name, and
+ * the cron pattern. The optional `timezone` is forwarded to BullMQ as `tz` and is sourced
+ * from `SCHEDULER_TIMEZONE` so all scheduled runs agree on a wall clock.
+ */
 export interface ScheduledJob {
   queueName: string;
   schedulerId: string;
@@ -35,6 +41,11 @@ export interface ScheduledJob {
   timezone?: string;
 }
 
+/**
+ * Lifecycle handle returned by {@link registerScheduledJobs}. `close()` closes every
+ * BullMQ producer that was opened to register the cron schedules (best-effort, never
+ * throws), so the scheduler-only handle can be drained alongside worker handles.
+ */
 export interface SchedulerHandle {
   close: () => Promise<void>;
 }
@@ -203,6 +214,11 @@ export function getScheduledJobs(): ScheduledJob[] {
   ];
 }
 
+/**
+ * Options for {@link registerScheduledJobs}. Used by split worker services to avoid
+ * registering cron schedules for queues whose worker is not running in this process —
+ * otherwise BullMQ would enqueue jobs nobody picks up.
+ */
 export type RegisterScheduledJobsOptions = {
   /**
    * When set, only registers cron schedulers for queues that have an active worker in this

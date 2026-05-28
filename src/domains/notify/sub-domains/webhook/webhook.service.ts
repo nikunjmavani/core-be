@@ -24,6 +24,15 @@ const WEBHOOK_TEST_RESPONSE_BODY_MAX_LENGTH = 500;
 /** Maximum response body length persisted to the delivery-attempt record (bounds storage growth). */
 const WEBHOOK_TEST_RESPONSE_BODY_STORED_MAX_LENGTH = 2_000;
 
+/**
+ * Options forwarded from controllers into {@link WebhookService.list}.
+ *
+ * @remarks
+ * - **Algorithm:** consumed by the repository keyset-pagination layer.
+ * - **Failure modes:** invalid `after` cursors raise inside the repository.
+ * - **Side effects:** none (read-only).
+ * - **Notes:** organization scoping is enforced via `withOrganizationDatabaseContext`.
+ */
 export interface WebhookListOptions {
   organization_public_id: string;
   after?: string;
@@ -31,10 +40,43 @@ export interface WebhookListOptions {
   include_total?: boolean;
 }
 
+/**
+ * Options for {@link WebhookService.listDeliveryAttempts} — extends {@link WebhookListOptions}
+ * with the public id of the webhook whose delivery attempts to return.
+ *
+ * @remarks
+ * - **Algorithm:** the service resolves `(webhook_public_id, organization_id)` to an internal
+ *   webhook id before paging, so callers cannot list attempts across organizations.
+ * - **Failure modes:** unknown webhook → `NotFoundError`.
+ * - **Side effects:** none (read-only).
+ * - **Notes:** delivery attempts are immutable; this is purely an audit list.
+ */
 export interface WebhookDeliveryAttemptListOptions extends WebhookListOptions {
   webhook_public_id: string;
 }
 
+/**
+ * Application-layer service for webhook configuration and outbound delivery.
+ *
+ * @remarks
+ * - **Algorithm:** every read/write runs inside `withOrganizationDatabaseContext` so Postgres
+ *   RLS pins access to the requesting organization. Mutations validate the URL via the SSRF /
+ *   allowlist guard, encrypt the secret (`encryptFieldSecret`), and serialise responses through
+ *   {@link WebhookSerializer} so secrets never leak. `requestWebhookDelivery` persists a
+ *   `PENDING` attempt and emits `NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED` for the worker to
+ *   pick up post-commit. `dispatchOrganizationWebhooks` fans out one event to every enabled
+ *   webhook subscribed to that event type. `testWebhook` performs a live signed POST in two
+ *   phases — DB lookup, then network call, then audit-trail insert — pinning DNS to a single
+ *   SSRF-validated address before sending and capping the persisted body to 2 KB.
+ * - **Failure modes:** `NotFoundError` for missing webhook/organization; `ValidationError` from
+ *   the URL/Zod validators; outbound HTTP errors are recorded on the attempt and surfaced to
+ *   the caller for the test endpoint.
+ * - **Side effects:** Postgres reads/writes against `notify.webhooks` and
+ *   `notify.webhook_delivery_attempts`; in-process event-bus emit; outbound HTTPS calls for
+ *   the test endpoint.
+ * - **Notes:** never log decrypted secrets; never bypass the URL validator on update; the
+ *   serializer strip-list is the last defence and must stay in sync with new secret fields.
+ */
 export class WebhookService {
   constructor(
     private readonly organizationService: OrganizationService,
