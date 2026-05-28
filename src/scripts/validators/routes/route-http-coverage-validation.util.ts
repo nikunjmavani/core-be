@@ -16,6 +16,7 @@ export const CATALOG_DOMAIN_TO_FOLDER: Record<string, string> = {
 /** Domains with no mutating-route body-validation matrix requirement. */
 export const DOMAINS_EXEMPT_FROM_VALIDATION_STATUS = new Set(['health', 'mcp']);
 
+/** HTTP methods treated as mutating; only these require 400/422 validation coverage in domain tests. */
 export const MUTATING_HTTP_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**
@@ -42,18 +43,22 @@ export const SUBDOMAIN_HTTP_INTEGRATION_WITHOUT_ROUTES: ReadonlyArray<{
   { domain: 'notify', resource: 'webhook-event' },
 ];
 
+/** One method/path pair allowed to be missing from coverage (e.g. legacy routes scheduled for removal). */
 export type RouteHttpCoverageAllowlistEntry = { method: string; path: string };
 
+/** Discovered sub-domain folder containing a `*.routes.ts` file. */
 export type SubdomainRouteFolder = {
   domain: string;
   resource: string;
   folder: string;
 };
 
+/** Maps a routes-catalog domain slug to its `src/domains/<folder>/` directory name. */
 export function resolveDomainFolder(catalogDomain: string): string {
   return CATALOG_DOMAIN_TO_FOLDER[catalogDomain] ?? catalogDomain;
 }
 
+/** Returns true when `actualPath` matches `pattern`, treating `:param` segments in the pattern as wildcards. */
 export function pathMatchesPattern(actualPath: string, pattern: string): boolean {
   const patternParts = pattern.split('/').filter((part) => part.length > 0);
   const actualParts = actualPath.split('/').filter((part) => part.length > 0);
@@ -68,6 +73,7 @@ export function pathMatchesPattern(actualPath: string, pattern: string): boolean
   return true;
 }
 
+/** Returns true when (`method`, `path`) is in the coverage allowlist (exact match or wildcard pattern match). */
 export function isAllowlisted(
   method: string,
   path: string,
@@ -79,6 +85,7 @@ export function isAllowlisted(
   );
 }
 
+/** Recursively reads every HTTP test file under `directory` (`*.integration.test.ts`, `*.e2e.test.ts`, `*.security.test.ts`) into `sources`. */
 export function collectHttpTestSources(directory: string, sources: string[]): void {
   if (!existsSync(directory)) return;
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -93,6 +100,7 @@ export function collectHttpTestSources(directory: string, sources: string[]): vo
   }
 }
 
+/** Reads every HTTP test file under a single domain and concatenates them as one searchable string. */
 export function collectDomainHttpSources(catalogDomain: string): string {
   const folder = resolveDomainFolder(catalogDomain);
   const sources: string[] = [];
@@ -100,11 +108,13 @@ export function collectDomainHttpSources(catalogDomain: string): string {
   return sources.join('\n');
 }
 
+/** Returns true when the domain's HTTP tests reference a 403 status or `assertRouteSmokeForbidden` helper. */
 export function domainHasForbiddenStatusCoverage(catalogDomain: string): boolean {
   const combined = collectDomainHttpSources(catalogDomain);
   return combined.includes('403') || combined.includes('assertRouteSmokeForbidden');
 }
 
+/** Returns true when the domain's HTTP tests reference a 400/422 status or `ValidationError`. */
 export function domainHasValidationStatusCoverage(catalogDomain: string): boolean {
   const combined = collectDomainHttpSources(catalogDomain);
   return (
@@ -112,14 +122,17 @@ export function domainHasValidationStatusCoverage(catalogDomain: string): boolea
   );
 }
 
+/** Routes guarded by org-permission or global-role authorization must exercise the 403 path in domain tests. */
 export function requiresForbiddenStatusCoverage(route: RouteEntry): boolean {
   return route.access === 'org-permission' || route.access === 'global-role';
 }
 
+/** Mutating routes (POST/PUT/PATCH/DELETE) must exercise body validation (400/422) in domain tests. */
 export function requiresValidationStatusCoverage(route: RouteEntry): boolean {
   return MUTATING_HTTP_METHODS.has(route.method);
 }
 
+/** Returns true when the literal route path appears (in any quoting) inside the combined HTTP test sources. */
 export function routeLiteralFoundInTests(combined: string, pathLiteral: string): boolean {
   return (
     combined.includes(`'${pathLiteral}'`) ||
@@ -129,6 +142,11 @@ export function routeLiteralFoundInTests(combined: string, pathLiteral: string):
   );
 }
 
+/**
+ * For mutating methods, returns true when a `method: 'METHOD'` literal appears
+ * within ±400 characters of a `pathLiteral` occurrence — a heuristic that the
+ * tests actually exercise that method against the path.
+ */
 export function mutatingMethodReferencedForPath(
   combined: string,
   method: string,
@@ -148,6 +166,7 @@ export function mutatingMethodReferencedForPath(
   return window.includes(methodNeedle) || window.includes(methodNeedleDouble);
 }
 
+/** Extracts every domain that route-smoke helpers cover (`loadRoutesForDomain('foo')`) from the combined sources. */
 export function extractDomainRouteSmokeCoverage(combinedSources: string): Set<string> {
   const coveredDomains = new Set<string>();
   const domainSmokePattern = /loadRoutesForDomain\(\s*['"]([\w-]+)['"]\s*\)/g;
@@ -160,6 +179,7 @@ export function extractDomainRouteSmokeCoverage(combinedSources: string): Set<st
   return coveredDomains;
 }
 
+/** Walks `domainsDir` and returns every sub-domain folder that contains a `*.routes.ts` file. */
 export function discoverSubdomainFoldersWithRoutes(domainsDir: string): SubdomainRouteFolder[] {
   const folders: SubdomainRouteFolder[] = [];
   if (!existsSync(domainsDir)) return folders;
@@ -181,12 +201,18 @@ export function discoverSubdomainFoldersWithRoutes(domainsDir: string): Subdomai
   return folders;
 }
 
+/** Returns true when a sub-domain folder has at least one `__tests__/integration/*.integration.test.ts` file. */
 export function subdomainFolderHasHttpIntegrationTest(subdomainFolder: string): boolean {
   const integrationDir = join(subdomainFolder, '__tests__', 'integration');
   if (!existsSync(integrationDir)) return false;
   return readdirSync(integrationDir).some((fileName) => fileName.endsWith('.integration.test.ts'));
 }
 
+/**
+ * Combined check: every sub-domain that owns a routes file (or that
+ * {@link SUBDOMAIN_HTTP_INTEGRATION_WITHOUT_ROUTES} declares as routed by a
+ * parent file) must have at least one HTTP integration test.
+ */
 export function findMissingSubdomainIntegrationTests(domainsDir: string): string[] {
   const missing: string[] = [];
 
@@ -209,6 +235,7 @@ export function findMissingSubdomainIntegrationTests(domainsDir: string): string
   return missing;
 }
 
+/** Aggregated result of {@link evaluateRouteHttpCoverage}; each array is empty when the rule passes. */
 export type RouteHttpCoverageValidationResult = {
   missingSubdomainIntegration: string[];
   missingRouteLiterals: string[];
@@ -217,6 +244,13 @@ export type RouteHttpCoverageValidationResult = {
   missingValidationByDomain: string[];
 };
 
+/**
+ * Cross-references the live route catalog against domain HTTP test sources
+ * and returns every coverage gap: missing path literals, missing
+ * method-on-path references, missing 403 status assertions for guarded
+ * routes, missing 400/422 validation assertions for mutating routes, and
+ * sub-domain folders missing an integration test entirely.
+ */
 export function evaluateRouteHttpCoverage(
   registry: RouteEntry[],
   combinedHttpSources: string,

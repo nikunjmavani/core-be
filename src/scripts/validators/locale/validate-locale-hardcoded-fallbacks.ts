@@ -34,6 +34,7 @@ const RAW_SUBCLASS_MESSAGE_KEY_PATTERN =
 /** NotFoundError first argument is a resource label for errors:notFound interpolation, not a messageKey. */
 const NOT_FOUND_RESOURCE_PATTERN = /^[A-Za-z][A-Za-z0-9 /_-]{0,80}$/;
 
+/** One file × line where the hardcoded-fallback validator detected a missing or redundant translation. */
 export type HardcodedFallbackViolation = {
   file: string;
   line: number;
@@ -61,6 +62,13 @@ function collectTypeScriptFiles(directory: string, collected: string[] = []): st
   return collected;
 }
 
+/**
+ * Scans every `src/**\/*.ts` file (excluding tests) for `throw` sites that
+ * either use a raw English string in place of a translation key or pair a
+ * translation key with a redundant English fallback. Used by the
+ * locale-hardcoded-fallback CLI to enforce that user-facing copy lives only
+ * in `src/shared/locales/`.
+ */
 export function findHardcodedFallbackViolations(): HardcodedFallbackViolation[] {
   const violations: HardcodedFallbackViolation[] = [];
   const files = collectTypeScriptFiles(SRC_ROOT);

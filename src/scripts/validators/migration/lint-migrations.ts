@@ -14,6 +14,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/** Identifiers of every rule {@link lintMigrationFileContent} can report; used for header-comment allow-lists. */
 export const migrationSafetyRuleIds = [
   'add_column_not_null_without_default',
   'add_check_without_not_valid',
@@ -29,6 +30,7 @@ export const migrationSafetyRuleIds = [
   'set_not_null_on_existing_column',
 ] as const;
 
+/** String-literal union of every migration safety rule id. */
 export type MigrationSafetyRuleId = (typeof migrationSafetyRuleIds)[number];
 
 const migrationSafetyRuleIdSet = new Set<string>(migrationSafetyRuleIds);
@@ -136,6 +138,11 @@ function skipDollarQuotedString(source: string, dollarIndex: number): number {
   return closingFoundAt + closingDelimiter.length;
 }
 
+/**
+ * Splits a SQL file into top-level statements, preserving the start offset of
+ * each so violation messages can report accurate line numbers. Handles
+ * dollar-quoted strings, line/block comments, and single-quoted literals.
+ */
 export function splitSqlStatements(source: string): { text: string; startOffset: number }[] {
   const statements: { text: string; startOffset: number }[] = [];
   let segmentStart = 0;
@@ -505,6 +512,12 @@ function findRowSecurityGucViolations(filename: string, fileContent: string): Vi
   return violations;
 }
 
+/**
+ * Runs the full migration safety rule set against a single SQL file's text and
+ * returns every violation. Header-level `-- migration-safety: allow <ruleId>`
+ * comments suppress matching rules. Used by `pnpm db:migrate:lint` and unit
+ * tests.
+ */
 export function lintMigrationFileContent(
   filename: string,
   fileContent: string,
@@ -716,6 +729,7 @@ export function lintMigrationFileContent(
   return { violations, headerErrors, usedAllowRules };
 }
 
+/** A single failure from {@link lintMigrationRollbackPairing}. */
 export type RollbackViolation = {
   filename: string;
   ruleId: 'missing_required_down_migration' | 'orphan_down_migration';
@@ -725,6 +739,11 @@ export type RollbackViolation = {
 const migrationRollbackHeaderPattern =
   /--\s*migration-rollback:\s*requires\s+down\s+reason="([^"]*)"/i;
 
+/**
+ * Parses the optional `-- migration-rollback: requires down reason="..."`
+ * header from the first five lines of a migration file. The header marks an
+ * up-migration as requiring a paired `.down.sql` companion.
+ */
 export function parseMigrationRollbackHeader(fileContent: string): {
   requiresDown: boolean;
   headerErrors: string[];
@@ -748,6 +767,7 @@ function isDownMigrationFilename(filename: string): boolean {
   return filename.endsWith('.down.sql');
 }
 
+/** Identifiers of every rule {@link lintMigrationTimestamps} can report. */
 export const migrationTimestampRuleIds = [
   'migration_filename_format',
   'migration_timestamp_not_monotonic',
@@ -755,8 +775,10 @@ export const migrationTimestampRuleIds = [
   'migration_timestamp_gap',
 ] as const;
 
+/** String-literal union of every migration timestamp rule id. */
 export type MigrationTimestampRuleId = (typeof migrationTimestampRuleIds)[number];
 
+/** A single failure from {@link lintMigrationTimestamps}; `severity` controls whether CI fails or just warns. */
 export type TimestampViolation = {
   filename: string;
   ruleId: MigrationTimestampRuleId;
@@ -907,6 +929,12 @@ export function lintMigrationTimestamps(upMigrationFilenames: string[]): Timesta
   return violations;
 }
 
+/**
+ * Cross-checks up- and down-migration filenames: every up-migration with a
+ * `migration-rollback: requires down` header must have a paired
+ * `<prefix>_<name>.down.sql` companion, and orphan `.down.sql` files (no
+ * matching up) are reported.
+ */
 export function lintMigrationRollbackPairing(
   _migrationsFolder: string,
   upMigrationFilenames: string[],
@@ -947,6 +975,12 @@ export function lintMigrationRollbackPairing(
   return violations;
 }
 
+/**
+ * Reads every `.sql` file in `migrationsFolder` and runs the full safety,
+ * timestamp, and rollback-pairing rule sets. Returns aggregated violations
+ * keyed by category so the CLI / CI can render a single report and exit
+ * non-zero on any error-severity finding.
+ */
 export async function lintMigrationsDirectory(migrationsFolder: string): Promise<{
   allViolations: Violation[];
   rollbackViolations: RollbackViolation[];
