@@ -1,3 +1,4 @@
+/** Returns true when `error` carries Fastify's request-timeout error code (`FST_ERR_REQ_TIMEOUT`). */
 export function isFastifyRequestTimeoutError(error: unknown): boolean {
   return (
     typeof error === 'object' &&
@@ -7,6 +8,10 @@ export function isFastifyRequestTimeoutError(error: unknown): boolean {
   );
 }
 
+/**
+ * Returns true when `error` represents a PostgreSQL statement timeout / query
+ * cancellation, by SQLSTATE `57014` or the standard cancellation message.
+ */
 export function isPostgresStatementTimeoutError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) {
     return false;

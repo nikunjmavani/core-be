@@ -3,6 +3,7 @@ import type { AuditLogRecordInput } from '@/domains/audit/audit.types.js';
 import { recordAuditEvent } from '@/shared/utils/infrastructure/audit-record.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 
+/** Extracts `ip_address` and `user_agent` from the Fastify request for audit log fields; either may be `null`. */
 export function getAuditRequestNetworkContext(request: FastifyRequest): {
   ip_address: string | null;
   user_agent: string | null;

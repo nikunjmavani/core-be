@@ -11,6 +11,7 @@ import { isApplicationDraining } from '@/shared/utils/infrastructure/application
 
 const OPERATIONAL_METRICS_CACHE_TTL_MILLISECONDS = MILLISECONDS_PER_MINUTE;
 
+/** Operational health snapshot returned by {@link getCachedHealthOperationalMetrics} and surfaced on `/health`. */
 export type HealthOperationalMetrics = {
   migration_version: string | null;
   mail_outbox_pending: number;

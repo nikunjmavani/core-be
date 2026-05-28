@@ -40,6 +40,11 @@ export function encryptFieldSecret(plaintext: string): string {
   return `${VERSION_PREFIX}${payload.toString('base64')}`;
 }
 
+/**
+ * Reverse of {@link encryptFieldSecret}. Returns the input unchanged when it
+ * lacks the `v1:` prefix so legacy plaintext rows continue to work during
+ * migrations from plaintext to encrypted columns.
+ */
 export function decryptFieldSecret(stored: string): string {
   if (!isEncryptedFieldSecret(stored)) {
     return stored;

@@ -1,6 +1,7 @@
 import { lookup } from 'node:dns/promises';
 import { ValidationError } from '@/shared/errors/index.js';
 
+/** A single DNS-resolved IP for a webhook hostname; `family` is `4` (IPv4) or `6` (IPv6). */
 export type WebhookResolvedAddress = { address: string; family: number };
 
 /** Private and link-local IP ranges that must not be targeted by webhooks (SSRF protection). */

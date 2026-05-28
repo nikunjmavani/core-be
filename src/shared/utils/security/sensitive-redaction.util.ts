@@ -44,6 +44,7 @@ interface RedactionContext {
   readonly depth: number;
 }
 
+/** Returns true when `key` (case-insensitive) contains any fragment in {@link SENSITIVE_KEY_FRAGMENTS} (e.g. `Authorization`, `X-Api-Key`, `set-cookie`). */
 export function isSensitiveKey(key: string): boolean {
   const normalizedKey = key.toLowerCase();
   return SENSITIVE_KEY_FRAGMENTS.some((fragment) => normalizedKey.includes(fragment));
@@ -189,6 +190,13 @@ function redactValue<T>(input: T, context: RedactionContext): T {
   return output as T;
 }
 
+/**
+ * Returns a deep copy of `input` with values for sensitive keys (and
+ * URL/query-string-shaped strings containing sensitive parameters) replaced
+ * by `[REDACTED]`. Walks up to {@link MAX_REDACTION_DEPTH} levels and tracks
+ * cyclic references via WeakMap. Used by the Pino logger and Sentry
+ * `beforeSend` so headers, body, breadcrumbs, and extras are scrubbed.
+ */
 export function redactSensitive<T>(input: T): T {
   if (input === null || input === undefined) {
     return input;
