@@ -144,7 +144,7 @@ When any of the above conventions change, update these files so they remain accu
 - `.cursor/skills/code-quality-guard/SKILL.md` (ESLint, pre-commit, CI security pipeline)
 - Any other `.cursor/skills/*/SKILL.md` that references paths or layer names
 - **Docs**: When docs are reorganized or renamed, run **docs-maintainer** to update `docs/README.md` and cross-links (see `.cursor/skills/docs-maintainer/SKILL.md`).
-- **Load-test docs**: `docs/reference/testing/load-testing.md` and `src/tests/load/k6/README.md` must stay in sync when k6 scenarios (`src/tests/load/k6/scenarios/*.js`), load-test scripts (`src/scripts/dev/load-test-credentials.ts`, `src/scripts/dev/admin-token.ts`), or npm scripts (`load:health`, `load:auth`, `tool:load-test-credentials`, `tool:admin-token`; legacy `scripts:*`) change.
+- **Load-test docs**: `docs/reference/testing/load-testing.md` and `src/tests/load/k6/README.md` must stay in sync when k6 scenarios (`src/tests/load/k6/scenarios/*.js`), load-test scripts (`src/scripts/admin/load-test-credentials.ts`, `src/scripts/admin/admin-token.ts`), or npm scripts (`load:health`, `load:auth`, `tool:load-test-credentials`, `tool:admin-token`; legacy `scripts:*`) change.
 
 ## Checklist (run every time)
 
