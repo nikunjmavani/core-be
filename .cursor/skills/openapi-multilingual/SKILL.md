@@ -11,7 +11,7 @@ Keep **multilingual OpenAPI documentation** in sync with the API. The generator 
 
 ## When to Use
 
-- **After route changes** — run **openapi-route-sync** first for `routeMetadataMap`; use this skill for locale file parity and generation.
+- **After route changes** — run **openapi-route-sync** first to add `schema: { summary, description, tags }` on the Fastify registration; use this skill for locale file parity and generation.
 - **Adding or changing OpenAPI documentation** for a new locale (e.g. add `src/shared/locales/fr/openapi.json`)
 - **Adding or editing** strings in `src/shared/locales/*/openapi.json` (info, tags, components, responses)
 - **Adding a new tag** used in route metadata — add the tag key and description to all `src/shared/locales/*/openapi.json` files so translated specs stay complete
@@ -31,7 +31,7 @@ Keep **multilingual OpenAPI documentation** in sync with the API. The generator 
    - `OPENAPI_LOCALE=es pnpm docs:generate` — uses Spanish; writes `docs/openapi/openapi.es.json`
    - `pnpm docs:generate:multilang` — runs the generator for each locale (en, es) in sequence
 
-3. **Operation summaries and descriptions**: Route-level summary and description come from `src/scripts/codegen/openapi-enricher.ts` (`routeMetadataMap`). Those are currently English-only. To support per-locale operation text later, you could add a `routes` object in each `src/shared/locales/{locale}/openapi.json` mapping route key (e.g. `"GET /health"`) to `{ "summary": "...", "description": "..." }` and have the generator prefer locale routes when present.
+3. **Operation summaries and descriptions**: Route-level summary, description, and tags come from the Fastify `schema` block on the route registration in `*.routes.ts` (read by `tooling/openapi/extractors/route-schema-metadata.ts`). Those are currently English-only. To support per-locale operation text later, you could add a `routes` object in each `src/shared/locales/{locale}/openapi.json` mapping route key (e.g. `"GET /health"`) to `{ "summary": "...", "description": "..." }` and have the generator prefer locale routes when present.
 
 ## How to Run (checklist)
 
@@ -64,7 +64,7 @@ Keep **multilingual OpenAPI documentation** in sync with the API. The generator 
 ## Dependencies
 
 - **i18n-message-guard**: Not required for OpenAPI locale files; OpenAPI uses its own namespace (`openapi.json` per locale). If you later add shared keys between API errors and OpenAPI, keep both in sync.
-- **route-catalog**: When you add routes, `openapi-enricher.ts` may need new metadata; tag names used there should exist in `src/shared/locales/*/openapi.json` under `tags`.
+- **route-catalog**: When you add routes, the new `schema: { summary, description, tags }` block on each Fastify registration must use tag names that already exist in `src/shared/locales/*/openapi.json` under `tags`.
 
 ## Maintaining This Skill
 

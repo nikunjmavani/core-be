@@ -25,13 +25,25 @@ export function webhookRoutes(
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_READ, 'id')],
+        schema: {
+          summary: 'List webhook events',
+          description:
+            'Returns a list of recent webhook events for the organization. Requires WEBHOOK_READ permission.',
+          tags: ['Webhook'],
+        },
       },
       webhookEventController.listWebhookEvents,
     );
     app.get<{ Params: { id: string } }>(
       '/organizations/:id/webhooks',
       {
-        schema: { querystring: listWebhooksQueryDto },
+        schema: {
+          summary: 'List webhooks',
+          description:
+            'Returns all configured webhooks for the organization. Requires WEBHOOK_READ permission.',
+          tags: ['Webhook'],
+          querystring: listWebhooksQueryDto,
+        },
         onRequest: [app.authenticate],
         preValidation: [rejectLegacyPagePagination],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_READ, 'id')],
@@ -43,6 +55,11 @@ export function webhookRoutes(
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_READ, 'id')],
+        schema: {
+          summary: 'Get webhook',
+          description: 'Returns a single webhook configuration. Requires WEBHOOK_READ permission.',
+          tags: ['Webhook'],
+        },
       },
       webhookController.getWebhook,
     );
@@ -52,6 +69,12 @@ export function webhookRoutes(
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE, 'id')],
         ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        schema: {
+          summary: 'Create webhook',
+          description:
+            'Creates a new webhook endpoint. Specify the URL and events to subscribe to. Requires WEBHOOK_MANAGE permission.',
+          tags: ['Webhook'],
+        },
       },
       webhookController.createWebhook,
     );
@@ -61,6 +84,12 @@ export function webhookRoutes(
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE, 'id')],
         ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        schema: {
+          summary: 'Update webhook',
+          description:
+            'Updates a webhook URL, events, or enabled status. Requires WEBHOOK_MANAGE permission.',
+          tags: ['Webhook'],
+        },
       },
       webhookController.updateWebhook,
     );
@@ -70,13 +99,25 @@ export function webhookRoutes(
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE, 'id')],
         ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+        schema: {
+          summary: 'Delete webhook',
+          description:
+            'Permanently deletes a webhook endpoint. Requires WEBHOOK_MANAGE permission.',
+          tags: ['Webhook'],
+        },
       },
       webhookController.deleteWebhook,
     );
     app.get<{ Params: { id: string; webhookId: string } }>(
       '/organizations/:id/webhooks/:webhookId/delivery-attempts',
       {
-        schema: { querystring: listWebhookDeliveryAttemptsQueryDto },
+        schema: {
+          summary: 'List webhook delivery attempts',
+          description:
+            'Returns the delivery attempt history for a webhook, including status codes and response times. Requires WEBHOOK_READ permission.',
+          tags: ['Webhook'],
+          querystring: listWebhookDeliveryAttemptsQueryDto,
+        },
         onRequest: [app.authenticate],
         preValidation: [rejectLegacyPagePagination],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_READ, 'id')],
@@ -89,6 +130,12 @@ export function webhookRoutes(
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE, 'id')],
         ...STRICT_AUTHED_RATE_LIMIT,
+        schema: {
+          summary: 'Send test webhook',
+          description:
+            'Sends a test event to the webhook URL to verify connectivity. Requires WEBHOOK_MANAGE permission.',
+          tags: ['Webhook'],
+        },
       },
       webhookController.testWebhook,
     );

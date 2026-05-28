@@ -1,0 +1,321 @@
+`src/`
+
+# System policy constants
+
+Every value here is a deliberate business, UX, or security trade-off. Each entry records what the value is, why it was picked, what changes if you move it, and when it was last reviewed. **Changing one requires updating this file in the same commit and re-running PR review.**
+
+The canonical exports live under [src/shared/constants/](src/shared/constants/) (`ttl.constants.ts`, `limits.constants.ts`, `security.constants.ts`, `pagination.constants.ts`, `billing.constants.ts`). When a new policy constant is added there, the `tsdoc-export-guard` skill cross-pings `system-narrative-maintainer` to add a row here.
+
+## MAGIC_LINK_EXPIRES_IN_MINUTES
+
+- **Value**: 15 minutes
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Balances security (limited replay window) and UX (a user must have time to switch from the signup form → email client → click the link).
+- **Consequences of change**:
+  - Decreasing → tighter replay window; users on slow devices or pulling email through corporate spam filtering may miss the window and have to retry.
+  - Increasing → larger token replay window; review with security if pushing past 30 minutes.
+- **Last reviewed**: 2026-05-28
+
+## PASSWORD_RESET_EXPIRES_IN_MINUTES
+
+- **Value**: 60 minutes
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Password resets are deliberately less time-pressured than magic-link sign-ins — users may be locked out of their inbox temporarily, may need to switch devices, and the recovery flow is a 1× operation rather than a sign-in primitive.
+- **Consequences of change**:
+  - Decreasing → support tickets from users who couldn't reach a working device in time.
+  - Increasing → larger reset-token replay window; pair with stricter throttle if pushing past 24 hours.
+- **Last reviewed**: 2026-05-28
+
+## EMAIL_VERIFICATION_EXPIRES_IN_HOURS
+
+- **Value**: 24 hours
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Email verification is a 1× lifecycle step; the user may take a day or more to come back to it.
+- **Consequences of change**:
+  - Decreasing → users who don't verify the same day must re-trigger the verification email.
+  - Increasing → larger replay window; not recommended past 7 days because the verification token grants access to a sensitive lifecycle action.
+- **Last reviewed**: 2026-05-28
+
+## ACCESS_TOKEN_EXPIRY_SECONDS
+
+- **Value**: 900 seconds (15 minutes)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Short JWT access-token lifetime is the primary mitigation for stolen tokens. Refresh happens via the session cookie (Origin-checked, see [`docs/reference/security/csrf-and-session-cookies.md`](docs/reference/security/csrf-and-session-cookies.md)). 15 minutes is the industry-standard balance of revocation latency vs network chatter.
+- **Consequences of change**:
+  - Decreasing → more refresh requests under load; each one hits Postgres + Redis.
+  - Increasing → longer window where a leaked token remains usable; requires reviewing the session-revocation propagation strategy.
+- **Last reviewed**: 2026-05-28
+
+## SESSION_TOKEN_CACHE_TTL_SECONDS
+
+- **Value**: 60 seconds
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Positive cache for valid session-token lookups in Redis. 60 s is the upper bound on how long a revoked session may keep working — the auth middleware always re-validates against Postgres after the cache expires.
+- **Consequences of change**:
+  - Decreasing → higher Postgres load on every authenticated request.
+  - Increasing → longer window where a revoked session keeps working; review with security.
+- **Last reviewed**: 2026-05-28
+
+## IDEMPOTENCY_RESPONSE_CACHE_TTL_SECONDS
+
+- **Value**: 86 400 seconds (24 hours)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Stripe and most enterprise webhook senders allow up to 24 h replays of the same `Idempotency-Key`. We mirror that window so retries from any client get the original response back, not a new one.
+- **Consequences of change**:
+  - Decreasing → callers may get a fresh execution on long retries; review compatibility with Stripe.
+  - Increasing → larger Redis footprint; bounded by `IDEMPOTENCY_CACHED_BODY_BYTES`.
+- **Last reviewed**: 2026-05-28
+
+## IDEMPOTENCY_PLACEHOLDER_TTL_SECONDS
+
+- **Value**: 60 seconds
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: TTL of the in-flight SETNX placeholder claimed by the first concurrent caller. 60 s is enough to cover the slowest legitimate request (Stripe API call + Postgres write) while bounding the wait for a second caller if the first crashes mid-flight.
+- **Consequences of change**:
+  - Decreasing → second concurrent caller may run a duplicate execution earlier on a crash.
+  - Increasing → second caller waits longer on a crash.
+- **Last reviewed**: 2026-05-28
+
+## IDEMPOTENCY_CACHED_BODY_BYTES
+
+- **Value**: 102 400 bytes (100 KiB)
+- **Source**: [src/shared/constants/limits.constants.ts](src/shared/constants/limits.constants.ts)
+- **Rationale**: Cap on the response body cached against an `Idempotency-Key`. Above this, the cached response is replaced with a `409` so we never blow up Redis with multi-MB payloads.
+- **Consequences of change**:
+  - Decreasing → more endpoints fall over the cap and lose idempotency replay.
+  - Increasing → larger Redis footprint per stored entry.
+- **Last reviewed**: 2026-05-28
+
+## MFA_SESSION_TTL_SECONDS
+
+- **Value**: 300 seconds (5 minutes)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: MFA challenge ticket lifetime in Redis between successful primary-credential verification and the second-factor submission. 5 minutes is enough to switch to an authenticator app or hardware key without forcing a fresh login.
+- **Consequences of change**:
+  - Decreasing → users with slow context-switching fail MFA more often.
+  - Increasing → larger replay window for a half-completed login; review with security.
+- **Last reviewed**: 2026-05-28
+
+## WEBAUTHN_CHALLENGE_TTL_SECONDS
+
+- **Value**: 300 seconds (5 minutes; alias of `MFA_SESSION_TTL_SECONDS`)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: WebAuthn ceremony challenge lifetime in Redis. Same trade-offs as MFA challenges — kept identical so authenticator and platform flows feel uniform.
+- **Consequences of change**: See `MFA_SESSION_TTL_SECONDS`.
+- **Last reviewed**: 2026-05-28
+
+## OAUTH_STATE_TTL_SECONDS
+
+- **Value**: 600 seconds (10 minutes)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Lifetime of the OAuth `state` parameter in Redis between redirect to the provider and the callback. 10 minutes covers slow OAuth provider response while bounding the CSRF replay window.
+- **Consequences of change**:
+  - Decreasing → users may fail the callback if the provider stalls.
+  - Increasing → wider CSRF replay window; review with security.
+- **Last reviewed**: 2026-05-28
+
+## PERMISSION_CACHE_DEFAULT_TTL_SECONDS
+
+- **Value**: 300 seconds (5 minutes)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Authoritative TTL on the per-`(user, organization)` permission set in Redis. Permission writes invalidate the cache, but we keep a short TTL as a safety net for cross-process invalidation gaps.
+- **Consequences of change**:
+  - Decreasing → higher Postgres load on permission resolution.
+  - Increasing → revoked permissions may keep working longer if invalidation is missed.
+- **Last reviewed**: 2026-05-28
+
+## PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS
+
+- **Value**: 15 seconds
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: SETNX lock TTL while a single process recomputes the permission set, preventing thundering-herd recomputes on cache-miss across many processes.
+- **Consequences of change**:
+  - Decreasing → herd risk returns if recomputation outgrows the window.
+  - Increasing → latency on legitimate retries when the leader process crashes mid-recompute.
+- **Last reviewed**: 2026-05-28
+
+## MAX_FAILED_LOGIN_ATTEMPTS
+
+- **Value**: 10 attempts
+- **Source**: [src/shared/constants/security.constants.ts](src/shared/constants/security.constants.ts)
+- **Rationale**: Threshold before an account enters lockout. High enough to avoid locking real users out from typo'd passwords, low enough to bound credential-stuffing attempts.
+- **Consequences of change**:
+  - Decreasing → more support tickets from typo lockouts.
+  - Increasing → wider window for online password guessing.
+- **Last reviewed**: 2026-05-28
+
+## ACCOUNT_LOCKOUT_MINUTES
+
+- **Value**: 30 minutes
+- **Source**: [src/shared/constants/security.constants.ts](src/shared/constants/security.constants.ts)
+- **Rationale**: Lockout duration after `MAX_FAILED_LOGIN_ATTEMPTS` exceeded. Long enough to deter password-guess attacks, short enough that legitimate users can retry within a single support call.
+- **Consequences of change**:
+  - Decreasing → less deterrent against credential-stuffing.
+  - Increasing → more support pressure on legitimate-user lockouts.
+- **Last reviewed**: 2026-05-28
+
+## STUCK_SENDING_LEASE_MINUTES
+
+- **Value**: 15 minutes
+- **Source**: [src/shared/constants/billing.constants.ts](src/shared/constants/billing.constants.ts)
+- **Rationale**: Mail outbox + Stripe webhook event reclaim lease. Rows stuck in `sending` / `processing` for longer than this are presumed orphaned (worker crashed or pod evicted) and may be reclaimed for retry. 15 minutes is the upper bound on a legitimate Stripe API call + Resend send.
+- **Consequences of change**:
+  - Decreasing → reclaim races with slow legitimate sends; may produce duplicate emails or duplicate Stripe processing.
+  - Increasing → orphaned rows take longer to recover after a worker crash.
+- **Last reviewed**: 2026-05-28
+
+## STRIPE_WEBHOOK_STUCK_PROCESSING_LEASE_MINUTES
+
+- **Value**: 15 minutes (alias of `STUCK_SENDING_LEASE_MINUTES`)
+- **Source**: [src/shared/constants/billing.constants.ts](src/shared/constants/billing.constants.ts)
+- **Rationale**: Same trade-offs as `STUCK_SENDING_LEASE_MINUTES`; kept aliased so the two lease windows always move together.
+- **Consequences of change**: See `STUCK_SENDING_LEASE_MINUTES`.
+- **Last reviewed**: 2026-05-28
+
+## PAGINATION
+
+- **Value**: `{ DEFAULT_LIMIT: 25, MAX_LIMIT: 100 }`
+- **Source**: [src/shared/constants/pagination.constants.ts](src/shared/constants/pagination.constants.ts)
+- **Rationale**: Cursor-only pagination defaults applied to every list endpoint. 25 is large enough for typical UI tables and small enough for sub-100 ms p95; 100 caps DOS exposure on bulk listing.
+- **Consequences of change**:
+  - Decreasing → more pagination round trips for batch consumers.
+  - Increasing past 100 → review query plans for every list endpoint; some indexes assume LIMIT ≤ 100.
+- **Last reviewed**: 2026-05-28
+
+## DEFAULT_REPOSITORY_LIST_LIMIT
+
+- **Value**: 500 rows
+- **Source**: [src/shared/constants/limits.constants.ts](src/shared/constants/limits.constants.ts)
+- **Rationale**: Hard cap for unscoped repository list helpers (used in workers, scripts, internal tooling). Prevents accidental OOM from `findAll()` patterns.
+- **Consequences of change**:
+  - Decreasing → some workers may need explicit pagination they currently skip.
+  - Increasing → wider blast radius for accidental fetch-all queries.
+- **Last reviewed**: 2026-05-28
+
+## GDPR_EXPORT_MAX_ROWS_PER_TABLE
+
+- **Value**: 1 000 rows per table
+- **Source**: [src/shared/constants/limits.constants.ts](src/shared/constants/limits.constants.ts)
+- **Rationale**: Per-table row cap inside a GDPR data export bundle. Keeps export bundles bounded and ensures the download URL TTL window covers the largest legitimate export.
+- **Consequences of change**:
+  - Decreasing → users with large histories may receive truncated exports; review with legal.
+  - Increasing → larger S3 objects, longer worker time-to-complete, larger Redis cardinality.
+- **Last reviewed**: 2026-05-28
+
+## ORGANIZATION_API_KEY_RAW_SECRET_BYTE_LENGTH
+
+- **Value**: 32 bytes (256 bits)
+- **Source**: [src/shared/constants/limits.constants.ts](src/shared/constants/limits.constants.ts)
+- **Rationale**: Raw secret length for organization API keys. 256-bit randomness, the standard for API tokens; only the prefix is stored in plaintext.
+- **Consequences of change**:
+  - Decreasing → reduced collision-resistance margin; never go below 16.
+  - Increasing → cosmetic only; client SDKs may need to widen any fixed-length parsers.
+- **Last reviewed**: 2026-05-28
+
+## ORGANIZATION_API_KEY_PREFIX_DISPLAY_LENGTH
+
+- **Value**: 8 characters
+- **Source**: [src/shared/constants/limits.constants.ts](src/shared/constants/limits.constants.ts)
+- **Rationale**: Prefix length stored in plaintext for human disambiguation in dashboards/logs. Long enough to identify a key visually, short enough that it leaks no usable secret entropy.
+- **Consequences of change**:
+  - Decreasing → harder to disambiguate keys in audit logs.
+  - Increasing → leaks more bits of the raw secret to anyone with read access to the prefix.
+- **Last reviewed**: 2026-05-28
+
+## USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS
+
+- **Value**: 86 400 seconds (24 hours)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: GDPR export download URL lifetime. The legal cap is 24 hours; we run at the cap so users have one full day to retrieve their data without needing to re-trigger the worker.
+- **Consequences of change**:
+  - Decreasing → more users have to re-export; worker load increases.
+  - Increasing past 24 h → not allowed by S3 SigV4 anyway and would breach our published privacy posture.
+- **Last reviewed**: 2026-05-28
+
+## PRESIGNED_URL_EXPIRY_SECONDS
+
+- **Value**: 900 seconds (15 minutes; alias of `ACCESS_TOKEN_EXPIRY_SECONDS`)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Default lifetime for S3 presigned upload/download URLs. Aligned with access-token TTL so a single auth burst (sign in → upload) succeeds end-to-end without refreshing.
+- **Consequences of change**:
+  - Decreasing → users on slow uploads may retry repeatedly.
+  - Increasing → larger window where a leaked URL keeps working; review with security.
+- **Last reviewed**: 2026-05-28
+
+## CATALOG_CACHE_MAX_AGE_SECONDS / CATALOG_CACHE_STALE_WHILE_REVALIDATE_SECONDS
+
+- **Value**: 300 s `max-age`, 60 s `stale-while-revalidate`
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Public-catalog (plan list, etc.) HTTP cache headers. Max-age aligned with `PERMISSION_CACHE_DEFAULT_TTL_SECONDS` so policy changes propagate at the same rate; SWR aligned with `SESSION_TOKEN_CACHE_TTL_SECONDS` for snappy follow-up requests.
+- **Consequences of change**: Affects CDN behavior; coordinate with whoever owns the edge config.
+- **Last reviewed**: 2026-05-28
+
+## HEALTH_READINESS_PROBE_TIMEOUT_MS
+
+- **Value**: 1 500 ms per dependency
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Per-dependency budget inside `GET /health`. The `/health` endpoint must return within Railway's readiness-probe window; with three probes (Postgres, Redis, BullMQ) running in parallel the worst-case is 1.5 s.
+- **Consequences of change**:
+  - Decreasing → flapping readiness on slow days; instances cycle.
+  - Increasing → readiness probe may exceed Railway's deadline and the platform yanks traffic.
+- **Last reviewed**: 2026-05-28
+
+## CORS_PREFLIGHT_MAX_AGE_SECONDS
+
+- **Value**: 86 400 seconds (24 hours)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Browser CORS preflight cache. 24 h reduces preflight chatter for SPAs without making CORS-policy changes propagate dangerously slowly (we don't tighten origins frequently).
+- **Consequences of change**: When tightening `ALLOWED_ORIGINS`, expect up to 24 h of legacy clients still sending requests under the old policy.
+- **Last reviewed**: 2026-05-28
+
+## BULLMQ_DEFAULT_LOCK_DURATION_MS / BULLMQ_STALLED_INTERVAL_MS
+
+- **Value**: 30 000 ms (30 s) each
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Worker lock duration and stalled-job check interval. 30 s is BullMQ's recommended floor that avoids spurious re-runs on legitimately slow jobs while still recovering quickly from a worker crash.
+- **Consequences of change**:
+  - Decreasing → spurious re-runs on slow jobs (duplicate emails, duplicate Stripe processing).
+  - Increasing → slower recovery from a crashed worker; jobs sit unclaimed longer.
+- **Last reviewed**: 2026-05-28
+
+## BULLMQ_WEBHOOK_LOCK_DURATION_MS
+
+- **Value**: 60 000 ms (60 s)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Webhook delivery worker lock. Doubled vs default because the slowest legitimate downstream webhook receiver is allowed up to 60 s before we treat the attempt as failed.
+- **Consequences of change**: See `BULLMQ_DEFAULT_LOCK_DURATION_MS`.
+- **Last reviewed**: 2026-05-28
+
+## BULLMQ_RETENTION_LOCK_DURATION_MS
+
+- **Value**: 120 000 ms (2 minutes)
+- **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
+- **Rationale**: Retention worker lock. Retention sweeps may scan large partitions; 2 minutes covers the longest legitimate sweep without triggering spurious re-runs.
+- **Consequences of change**: See `BULLMQ_DEFAULT_LOCK_DURATION_MS`.
+- **Last reviewed**: 2026-05-28
+
+## DEFAULT_BATCH_DELETE_ROW_COUNT
+
+- **Value**: 5 000 rows per batch
+- **Source**: [src/shared/constants/limits.constants.ts](src/shared/constants/limits.constants.ts)
+- **Rationale**: Batch size for retention and tombstone-purge helpers. Large enough to amortize per-statement overhead, small enough that one batch fits in `BULLMQ_RETENTION_LOCK_DURATION_MS`.
+- **Consequences of change**: Tune in lockstep with `BULLMQ_RETENTION_LOCK_DURATION_MS`.
+- **Last reviewed**: 2026-05-28
+
+## GLOBAL_ROLES
+
+- **Value**: `{ SUPER_ADMIN: 'super_admin', ADMIN: 'admin', USER: 'user' }`
+- **Source**: [src/shared/constants/roles.constants.ts](src/shared/constants/roles.constants.ts)
+- **Rationale**: Three-tier global role hierarchy independent of organization-scoped permissions. `super_admin` is reserved for ops; `admin` is the default escalation role for support; `user` is everyone else.
+- **Consequences of change**:
+  - Adding a role → audit every JWT issuance path and `requireRole` call site.
+  - Removing a role → audit every Postgres row + JWT in flight; never remove without a multi-deploy migration window.
+- **Last reviewed**: 2026-05-28
+
+## SLUG_REGEX / UUID_REGEX
+
+- **Value**: `^[a-z0-9]+(?:-[a-z0-9]+)*$` / standard 36-char UUID
+- **Source**: [src/shared/constants/index.ts](src/shared/constants/index.ts)
+- **Rationale**: Bounded patterns used for input validation. The slug regex disallows leading/trailing hyphens and consecutive hyphens — required by URL-segment hygiene and by Postgres index assumptions on slugged columns.
+- **Consequences of change**: Loosening either invalidates URL constraints baked into routes and migrations.
+- **Last reviewed**: 2026-05-28

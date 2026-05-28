@@ -14,7 +14,15 @@ export function permissionRoutes(deps: PermissionRoutesDeps): FastifyPluginAsync
     const zodApplication = app.withTypeProvider<ZodTypeProvider>();
     zodApplication.get(
       '/permissions',
-      { onRequest: [app.authenticate] },
+      {
+        onRequest: [app.authenticate],
+        schema: {
+          summary: 'List all permissions',
+          description:
+            'Returns the complete list of available permissions that can be assigned to roles.',
+          tags: ['Permission'],
+        },
+      },
       permissionController.listPermissions,
     );
   };

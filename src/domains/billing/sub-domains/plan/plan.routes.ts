@@ -9,10 +9,29 @@ export function planRoutes(service: PlanService): FastifyPluginAsync {
 
   return async (app) => {
     const zodApplication = app.withTypeProvider<ZodTypeProvider>();
-    zodApplication.get('/plans', { schema: {} }, controller.listPlans);
+    zodApplication.get(
+      '/plans',
+      {
+        schema: {
+          summary: 'List available plans',
+          description:
+            'Returns all active subscription plans with pricing and feature details. Requires authentication.',
+          tags: ['Billing', 'Plan'],
+        },
+      },
+      controller.listPlans,
+    );
     zodApplication.get<{ Params: { id: string } }>(
       '/plans/:id',
-      { schema: { params: getPlanParamsDto } },
+      {
+        schema: {
+          summary: 'Get plan details',
+          description:
+            'Returns a single plan with full pricing and feature information. Requires authentication.',
+          tags: ['Billing', 'Plan'],
+          params: getPlanParamsDto,
+        },
+      },
       controller.getPlan,
     );
   };

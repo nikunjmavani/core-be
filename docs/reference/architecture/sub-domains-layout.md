@@ -21,8 +21,24 @@ Co-locate under `events/__tests__/` on the resource that owns the handlers (see 
 
 Every route file uses Zod DTOs from co-located `*.dto.ts`. Controllers stay thin.
 
+## Route schema rule
+
+Every Fastify route registration must include a `schema: { summary, description, tags }` block — this is the single source of truth for OpenAPI generation. Owned by **[route-schema-doc-guard](../../../.cursor/skills/route-schema-doc-guard/SKILL.md)**.
+
+## In-source docs (mandatory per sub-domain)
+
+Every sub-domain (top-level or nested) must have:
+
+| Layer | Source of truth | Owner skill |
+| --- | --- | --- |
+| `<sub-domain>/OVERVIEW.md` | Hand-written narrative — Purpose, Key invariants, Lifecycle, Events, Failure modes, Policy constants | overview-doc-maintainer |
+| TSDoc summaries on every public export; `@remarks` on `*.service.ts` / `*.worker.ts` / `*.processor.ts` / `*.policy.ts` | TSDoc on the export itself | tsdoc-export-guard |
+| Inline Fastify `schema.summary` / `schema.description` for every route (drives OpenAPI) | Zod schema in `*.routes.ts` | route-schema-doc-guard |
+
+The first line of `OVERVIEW.md` must be the bare backticked relative path (e.g. ``` `src/domains/tenancy/sub-domains/organization/` ```). See [documentation-system.md](./documentation-system.md) for the full system.
+
 ## Upload content types
 
 Validators use `getAllowedContentTypesForPurpose()` so `UPLOAD_ALLOW_SVG` controls whether SVG is allowed on image purposes. Organization logos reject SVG at attach time for security.
 
-For the full domain map, see [CLAUDE.md](../../../CLAUDE.md) and [domains-and-public-api-design.md](./domains-and-public-api-design.md).
+For the full domain map, see [CLAUDE.md](../../../CLAUDE.md) and [domains-and-public-api-design.md](./domains-and-public-api-design.md). For cross-cutting patterns (RLS context, idempotency, transactional outbox), see [`src/PATTERNS.md`](../../../src/PATTERNS.md).

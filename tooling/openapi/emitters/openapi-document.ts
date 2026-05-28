@@ -4,13 +4,13 @@ import {
   CURSOR_PAGINATED_LIST_ROUTE_KEYS,
   CURSOR_PAGINATION_DESCRIPTION_SUFFIX,
 } from '@tooling/openapi/pagination-openapi.js';
-import { routeMetadataMap } from '@tooling/openapi/route-metadata/index.js';
 import {
   getPathParameterDescription,
   getPathParameterExample,
 } from '@tooling/openapi/enrichers/path-parameters.js';
 import type { OpenApiLocaleStrings } from '@tooling/openapi/extractors/locale-loader.js';
 import { collectRoutes } from '@tooling/openapi/extractors/route-extractor.js';
+import { collectRouteSchemaMetadata } from '@tooling/openapi/extractors/route-schema-metadata.js';
 import {
   generateOperationId,
   getQueryParameters,
@@ -44,6 +44,7 @@ export type OpenApiDocument = {
 
 export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenApiDocument {
   const routes = collectRoutes();
+  const schemaMetadataByRouteKey = collectRouteSchemaMetadata();
   const tagSet = new Set<string>();
   const paths: Record<string, Record<string, object>> = {};
   const responseStrings = localeStrings.responses ?? {};
@@ -54,7 +55,14 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
 
     const operation = method.toLowerCase();
     const routeKey = `${method} ${openapiPath}`;
-    const metadata = routeMetadataMap[routeKey];
+    const schemaMetadata = schemaMetadataByRouteKey.get(routeKey);
+    const metadata = schemaMetadata
+      ? {
+          summary: schemaMetadata.summary ?? undefined,
+          description: schemaMetadata.description ?? undefined,
+          tags: schemaMetadata.tags ?? undefined,
+        }
+      : undefined;
 
     const pathParameters: object[] = [];
     const parameterRegex = /\{([^}]+)\}/g;

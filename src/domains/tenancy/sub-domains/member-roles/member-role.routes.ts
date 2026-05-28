@@ -24,6 +24,12 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_READ, 'id')],
+        schema: {
+          summary: 'List roles',
+          description:
+            'Returns all roles defined in the organization. Requires ROLE_READ permission.',
+          tags: ['Role'],
+        },
       },
       roleController.listRoles,
     );
@@ -32,6 +38,11 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_READ, 'id')],
+        schema: {
+          summary: 'Get role',
+          description: 'Returns a single role with its details. Requires ROLE_READ permission.',
+          tags: ['Role'],
+        },
       },
       roleController.getRole,
     );
@@ -40,6 +51,12 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE, 'id')],
+        schema: {
+          summary: 'Create role',
+          description:
+            'Creates a new custom role in the organization. Requires ROLE_MANAGE permission.',
+          tags: ['Role'],
+        },
       },
       roleController.createRole,
     );
@@ -48,6 +65,12 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE, 'id')],
+        schema: {
+          summary: 'Update role',
+          description:
+            'Updates a role name or description. System roles cannot be modified. Requires ROLE_MANAGE permission.',
+          tags: ['Role'],
+        },
       },
       roleController.updateRole,
     );
@@ -56,6 +79,12 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE, 'id')],
+        schema: {
+          summary: 'Delete role',
+          description:
+            'Deletes a custom role. System roles cannot be deleted. Members with this role must be reassigned first. Requires ROLE_MANAGE permission.',
+          tags: ['Role'],
+        },
       },
       roleController.deleteRole,
     );
@@ -66,6 +95,11 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_READ, 'id')],
+        schema: {
+          summary: 'List role permissions',
+          description: 'Returns all permissions assigned to a role. Requires ROLE_READ permission.',
+          tags: ['Role', 'Permission'],
+        },
       },
       permissionController.listRolePermissions,
     );
@@ -74,6 +108,12 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE, 'id')],
+        schema: {
+          summary: 'Replace role permissions',
+          description:
+            'Replaces all permissions for a role with the provided set. Requires ROLE_MANAGE permission.',
+          tags: ['Role', 'Permission'],
+        },
       },
       permissionController.putRolePermissions,
     );

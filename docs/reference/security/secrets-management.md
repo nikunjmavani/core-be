@@ -18,15 +18,15 @@ openssl rand -hex 32
 1. Generate a new key (`NEW_KEY`).
 2. During a maintenance window, run:
 
-```bash
-SECRETS_ENCRYPTION_KEY="$NEW_KEY" \
-ROTATE_FROM_SECRETS_KEY="$OLD_KEY" \
-pnpm tool:rotate-field-secrets --dry-run
+   ```bash
+   SECRETS_ENCRYPTION_KEY="$NEW_KEY" \
+   ROTATE_FROM_SECRETS_KEY="$OLD_KEY" \
+   pnpm tool:rotate-field-secrets --dry-run
 
-SECRETS_ENCRYPTION_KEY="$NEW_KEY" \
-ROTATE_FROM_SECRETS_KEY="$OLD_KEY" \
-pnpm tool:rotate-field-secrets
-```
+   SECRETS_ENCRYPTION_KEY="$NEW_KEY" \
+   ROTATE_FROM_SECRETS_KEY="$OLD_KEY" \
+   pnpm tool:rotate-field-secrets
+   ```
 
 3. Update the deployment secret (`SECRETS_ENCRYPTION_KEY`) and restart API + worker processes.
 

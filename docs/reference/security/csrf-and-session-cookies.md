@@ -112,3 +112,5 @@ Document the new mechanism here and in release notes when that happens.
 - Cookie plugin: [`src/shared/middlewares/cookie.middleware.ts`](../../../src/shared/middlewares/cookie.middleware.ts)
 - CORS: [`src/shared/middlewares/cors.middleware.ts`](../../../src/shared/middlewares/cors.middleware.ts)
 - Refresh route: [`src/domains/auth/auth.routes.ts`](../../../src/domains/auth/auth.routes.ts)
+- [`src/domains/auth/sub-domains/auth-session/OVERVIEW.md`](../../../src/domains/auth/sub-domains/auth-session/OVERVIEW.md) — session lifecycle invariants, JWT-per-session rule, retention
+- [`src/POLICIES.md`](../../../src/POLICIES.md) — `JWT_*`, `SESSION_*` policy constants

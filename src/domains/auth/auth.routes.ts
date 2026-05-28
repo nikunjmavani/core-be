@@ -39,60 +39,134 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
   zodApplication.post('/login', {
     ...STRICT_PUBLIC_RATE_LIMIT,
     preHandler: [captchaPreHandler],
-    schema: { body: LoginDto },
+    schema: {
+      summary: 'Login with email and password',
+      description:
+        'Authenticates a user with email and password credentials. Returns access and refresh tokens on success. If MFA is enabled, returns a challenge requiring a second factor.',
+      tags: ['Auth'],
+      body: LoginDto,
+    },
     handler: controller.login,
   });
-  zodApplication.post('/logout', { ...STRICT_PUBLIC_RATE_LIMIT, schema: {} }, controller.logout);
+  zodApplication.post(
+    '/logout',
+    {
+      ...STRICT_PUBLIC_RATE_LIMIT,
+      schema: {
+        summary: 'Logout current session',
+        description:
+          'Invalidates the current session and refresh token. Requires a valid bearer token.',
+        tags: ['Auth'],
+      },
+    },
+    controller.logout,
+  );
   zodApplication.post('/magic-link/send', {
     ...STRICT_PUBLIC_RATE_LIMIT,
     preHandler: [captchaPreHandler],
-    schema: { body: MagicLinkSendDto },
+    schema: {
+      summary: 'Send magic link email',
+      description:
+        'Sends a passwordless login link to the provided email address. The link expires after a short period.',
+      tags: ['Auth', 'Magic Link'],
+      body: MagicLinkSendDto,
+    },
     handler: controller.sendMagicLink,
   });
   zodApplication.post('/magic-link/verify', {
     ...STRICT_PUBLIC_RATE_LIMIT,
-    schema: { body: MagicLinkVerifyDto },
+    schema: {
+      summary: 'Verify magic link token',
+      description:
+        'Validates the magic link token and returns access and refresh tokens on success.',
+      tags: ['Auth', 'Magic Link'],
+      body: MagicLinkVerifyDto,
+    },
     handler: controller.verifyMagicLink,
   });
   zodApplication.get(
     '/oauth/providers',
-    { ...STRICT_PUBLIC_RATE_LIMIT, schema: {} },
+    {
+      ...STRICT_PUBLIC_RATE_LIMIT,
+      schema: {
+        summary: 'List available OAuth providers',
+        description:
+          'Returns a list of configured OAuth providers (e.g. Google, GitHub) available for login.',
+        tags: ['Auth', 'OAuth'],
+      },
+    },
     controller.listOauthProviders,
   );
   zodApplication.get('/oauth/:provider', {
     ...STRICT_PUBLIC_RATE_LIMIT,
     preHandler: [captchaPreHandler],
-    schema: { params: oauthProviderParamsDto },
+    schema: {
+      summary: 'Initiate OAuth flow',
+      description:
+        'Redirects the user to the OAuth provider authorization page to begin the login flow.',
+      tags: ['Auth', 'OAuth'],
+      params: oauthProviderParamsDto,
+    },
     handler: controller.oauthRedirect,
   });
   zodApplication.get('/oauth/:provider/callback', {
     ...STRICT_PUBLIC_RATE_LIMIT,
-    schema: { params: oauthProviderParamsDto, querystring: OauthCallbackQueryDto },
+    schema: {
+      summary: 'OAuth callback',
+      description:
+        'Handles the OAuth provider callback after user authorization. Exchanges the code for tokens and creates or links the user account.',
+      tags: ['Auth', 'OAuth'],
+      params: oauthProviderParamsDto,
+      querystring: OauthCallbackQueryDto,
+    },
     handler: controller.oauthCallback,
   });
   zodApplication.post('/password/forgot', {
     ...STRICT_PUBLIC_RATE_LIMIT,
     preHandler: [captchaPreHandler],
-    schema: { body: ForgotPasswordDto },
+    schema: {
+      summary: 'Request password reset',
+      description:
+        'Sends a password reset email to the user. Returns 200 even if the email is not registered (to prevent enumeration).',
+      tags: ['Auth', 'Password'],
+      body: ForgotPasswordDto,
+    },
     handler: controller.forgotPassword,
   });
   zodApplication.post('/password/reset', {
     ...STRICT_PUBLIC_RATE_LIMIT,
     preHandler: [captchaPreHandler],
-    schema: { body: ResetPasswordDto },
+    schema: {
+      summary: 'Reset password with token',
+      description: 'Resets the user password using a valid reset token received via email.',
+      tags: ['Auth', 'Password'],
+      body: ResetPasswordDto,
+    },
     handler: controller.resetPassword,
   });
   zodApplication.post('/email/verify', {
     ...STRICT_PUBLIC_RATE_LIMIT,
     preHandler: [captchaPreHandler],
-    schema: { body: VerifyEmailDto },
+    schema: {
+      summary: 'Verify email address',
+      description:
+        "Confirms the user's email address using a verification token sent during registration.",
+      tags: ['Auth', 'Email Verification'],
+      body: VerifyEmailDto,
+    },
     handler: controller.verifyEmail,
   });
   zodApplication.post(
     '/mfa/challenge',
     {
       ...STRICT_PUBLIC_RATE_LIMIT,
-      schema: { body: MfaChallengeDto },
+      schema: {
+        summary: 'Issue MFA challenge',
+        description:
+          'Issues a new MFA challenge for a user during the login flow. The user must respond with a valid TOTP code.',
+        tags: ['Auth', 'MFA'],
+        body: MfaChallengeDto,
+      },
     },
     controller.challengeMfa,
   );
@@ -106,7 +180,19 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     schema: { body: webauthnAuthenticateVerifyDto },
     handler: controller.webauthnAuthenticateVerify,
   });
-  zodApplication.post('/refresh', { ...REFRESH_RATE_LIMIT, schema: {} }, controller.refreshToken);
+  zodApplication.post(
+    '/refresh',
+    {
+      ...REFRESH_RATE_LIMIT,
+      schema: {
+        summary: 'Refresh access token',
+        description:
+          'Exchanges a valid session cookie for a new short-lived access token. The session_id httpOnly cookie is sent automatically by the browser. When ALLOWED_ORIGINS is set, requests that include an Origin header must match that allowlist (403 otherwise); requests without Origin are allowed for non-browser clients.',
+        tags: ['Auth', 'Token'],
+      },
+    },
+    controller.refreshToken,
+  );
 
   // Authenticated
   zodApplication.post(
@@ -114,7 +200,13 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       ...STRICT_AUTHED_RATE_LIMIT,
-      schema: { body: ChangePasswordDto },
+      schema: {
+        summary: 'Change current password',
+        description:
+          "Changes the authenticated user's password. Requires the current password for verification.",
+        tags: ['Auth', 'Password'],
+        body: ChangePasswordDto,
+      },
     },
     controller.changePassword,
   );
@@ -123,7 +215,11 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       ...STRICT_AUTHED_RATE_LIMIT,
-      schema: {},
+      schema: {
+        summary: 'Resend email verification',
+        description: 'Resends the email verification link to the currently authenticated user.',
+        tags: ['Auth', 'Email Verification'],
+      },
     },
     controller.resendEmailVerification,
   );
@@ -132,7 +228,13 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       ...STRICT_AUTHED_RATE_LIMIT,
-      schema: { body: MfaEnrollDto },
+      schema: {
+        summary: 'Enroll in MFA',
+        description:
+          'Begins multi-factor authentication enrollment. Returns a TOTP secret and QR code URI for authenticator app setup.',
+        tags: ['Auth', 'MFA'],
+        body: MfaEnrollDto,
+      },
     },
     controller.enrollMfa,
   );
@@ -156,20 +258,41 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
   );
   zodApplication.get(
     '/mfa',
-    { onRequest: [app.authenticate], schema: {} },
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        summary: 'List enrolled MFA methods',
+        description: 'Returns all MFA methods enrolled by the authenticated user.',
+        tags: ['Auth', 'MFA'],
+      },
+    },
     controller.listMfaMethods,
   );
   zodApplication.delete<{ Params: { mfaMethodId: string } }>(
     '/mfa/:mfaMethodId',
     {
       onRequest: [app.authenticate],
-      schema: { params: mfaMethodIdParamsDto },
+      schema: {
+        summary: 'Remove MFA method',
+        description:
+          'Deletes an enrolled MFA method. Cannot remove the last MFA method if MFA is required by organization policy.',
+        tags: ['Auth', 'MFA'],
+        params: mfaMethodIdParamsDto,
+      },
     },
     controller.deleteMfa,
   );
   zodApplication.delete(
     '/me/sessions',
-    { onRequest: [app.authenticate], schema: {} },
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        summary: 'Revoke all sessions',
+        description:
+          'Revokes all active sessions for the authenticated user except the current one.',
+        tags: ['Auth', 'Session'],
+      },
+    },
     controller.revokeAllSessions,
   );
   zodApplication.post(
@@ -177,38 +300,81 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       ...STRICT_AUTHED_RATE_LIMIT,
-      schema: { body: MfaVerifyDto },
+      schema: {
+        summary: 'Verify MFA code',
+        description:
+          'Validates a TOTP code to complete MFA verification during login or enrollment confirmation.',
+        tags: ['Auth', 'MFA'],
+        body: MfaVerifyDto,
+      },
     },
     controller.verifyMfa,
   );
   zodApplication.get(
     '/me/auth-methods',
-    { onRequest: [app.authenticate], schema: {} },
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        summary: 'List my auth methods',
+        description:
+          'Returns all authentication methods (password, OAuth, magic link) linked to the authenticated user.',
+        tags: ['Auth', 'Auth Method'],
+      },
+    },
     controller.listAuthMethods,
   );
   zodApplication.post(
     '/me/auth-methods',
-    { onRequest: [app.authenticate], schema: { body: CreateAuthMethodDto } },
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        summary: 'Add auth method',
+        description:
+          "Links a new authentication method (e.g. OAuth provider) to the authenticated user's account.",
+        tags: ['Auth', 'Auth Method'],
+        body: CreateAuthMethodDto,
+      },
+    },
     controller.createAuthMethod,
   );
   zodApplication.delete<{ Params: { id: string } }>(
     '/me/auth-methods/:id',
     {
       onRequest: [app.authenticate],
-      schema: { params: authMethodIdParamsDto },
+      schema: {
+        summary: 'Remove auth method',
+        description:
+          "Removes an authentication method from the user's account. Cannot remove the last auth method.",
+        tags: ['Auth', 'Auth Method'],
+        params: authMethodIdParamsDto,
+      },
     },
     controller.deleteAuthMethod,
   );
   zodApplication.get(
     '/me/sessions',
-    { onRequest: [app.authenticate], schema: {} },
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        summary: 'List my active sessions',
+        description:
+          'Returns all active sessions for the authenticated user, including device and location info.',
+        tags: ['Auth', 'Session'],
+      },
+    },
     controller.listSessions,
   );
   zodApplication.delete<{ Params: { id: string } }>(
     '/me/sessions/:id',
     {
       onRequest: [app.authenticate],
-      schema: { params: sessionIdParamsDto },
+      schema: {
+        summary: 'Revoke a specific session',
+        description:
+          'Revokes a specific session by its ID. Cannot revoke the current session (use logout instead).',
+        tags: ['Auth', 'Session'],
+        params: sessionIdParamsDto,
+      },
     },
     controller.revokeSession,
   );

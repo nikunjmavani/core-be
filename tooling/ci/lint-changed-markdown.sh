@@ -27,7 +27,17 @@ if ! git rev-parse --verify --quiet "${target}" >/dev/null; then
   fi
 fi
 
-changed_files="$(git diff --name-only --diff-filter=ACMRT "${target}"..HEAD -- '*.md')"
+changed_files_raw="$(git diff --name-only --diff-filter=ACMRT "${target}"..HEAD -- '*.md')"
+
+# Strip files matching the canonical ignore list in `.markdownlint-cli2.jsonc`
+# (CHANGELOGs, PR template, .claude worktrees). We can't rely on cli2's auto-
+# ignore here because we pass explicit file paths; mirror the patterns instead.
+# Keep this list in sync with the `ignores` field of `.markdownlint-cli2.jsonc`.
+changed_files="$(printf '%s\n' "${changed_files_raw}" \
+  | grep -v -E '^CHANGELOG(-dev)?\.md$' \
+  | grep -v -E '^\.github/PULL_REQUEST_TEMPLATE\.md$' \
+  | grep -v -E '^\.claude/' \
+  || true)"
 
 if [ -z "${changed_files}" ]; then
   echo "No changed markdown files vs ${target}."

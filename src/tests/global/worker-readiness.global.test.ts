@@ -8,7 +8,9 @@ describe('Worker readiness (global)', () => {
   it('registers GET /health on the API process', () => {
     const healthMiddlewarePath = resolve(ROOT, 'src/shared/middlewares/health.middleware.ts');
     const content = readFileSync(healthMiddlewarePath, 'utf8');
-    expect(content).toContain("application.get('/health'");
+    // Tolerate Biome line-wrapping when the route options object grows
+    // large enough to force multi-line formatting (e.g. with a `schema:` block).
+    expect(content).toMatch(/application\.get\(\s*['"]\/health['"]/);
   });
 
   it('worker HTTP server serves GET /health with queue heartbeats', () => {

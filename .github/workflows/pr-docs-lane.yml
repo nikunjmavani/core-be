@@ -9,7 +9,7 @@ on:
     paths:
       - '**/*.md'
       - '.markdownlint.json'
-      - '.markdownlintignore'
+      - '.markdownlint-cli2.jsonc'
 
 concurrency:
   group: pr-docs-lane-${{ github.event.pull_request.number }}
@@ -39,7 +39,7 @@ jobs:
           files="$(git diff --name-only --diff-filter=ACMRT \
             "${{ github.event.pull_request.base.sha }}" \
             "${{ github.event.pull_request.head.sha }}" \
-            -- '*.md')"
+            -- '*.md' || true)"
           if [ -z "${files}" ]; then
             echo "has-files=false" >> "$GITHUB_OUTPUT"
             exit 0

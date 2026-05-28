@@ -29,31 +29,43 @@ async function getOperationalMetricsForReadiness() {
  * Deploy probes: API and worker services each expose their own `/health` endpoint.
  */
 const healthMiddleware: FastifyPluginAsync = async (application) => {
-  application.get('/health', { config: { raw_response: true } }, async (_request, reply) => {
-    if (isApplicationDraining()) {
-      reply.status(503);
-      return {
-        status: 'draining' as const,
-        database: 'unavailable' as const,
-        redis: 'unavailable' as const,
-        bullmq: 'unavailable' as const,
-        latencyMs: {
-          database: null,
-          redis: null,
-          bullmq: null,
-        },
-      };
-    }
+  application.get(
+    '/health',
+    {
+      config: { raw_response: true },
+      schema: {
+        summary: 'Health check',
+        description:
+          'Returns 200 when the service is ready: Postgres, Redis, and BullMQ respond within timeouts. Returns 503 with per-dependency unavailable flags if any probe fails.',
+        tags: ['Health'],
+      },
+    },
+    async (_request, reply) => {
+      if (isApplicationDraining()) {
+        reply.status(503);
+        return {
+          status: 'draining' as const,
+          database: 'unavailable' as const,
+          redis: 'unavailable' as const,
+          bullmq: 'unavailable' as const,
+          latencyMs: {
+            database: null,
+            redis: null,
+            bullmq: null,
+          },
+        };
+      }
 
-    const [readiness, operational] = await Promise.all([
-      runDependencyReadinessProbes(),
-      getOperationalMetricsForReadiness(),
-    ]);
-    if (readiness.status !== 'ok') {
-      reply.status(503);
-    }
-    return { ...readiness, ...operational };
-  });
+      const [readiness, operational] = await Promise.all([
+        runDependencyReadinessProbes(),
+        getOperationalMetricsForReadiness(),
+      ]);
+      if (readiness.status !== 'ok') {
+        reply.status(503);
+      }
+      return { ...readiness, ...operational };
+    },
+  );
 };
 
 export default healthMiddleware;

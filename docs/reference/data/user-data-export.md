@@ -27,3 +27,9 @@ Async export of personal data to S3 with time-limited presigned download URLs.
 Export jobs exit without retry when the user is soft-deleted or the export row was removed during offboarding (`UserDataExportCancelledError`).
 
 See [data-classification.md](../security/data-classification.md) and [data-lifecycle-deletion.md](../data/data-lifecycle-deletion.md).
+
+## Related
+
+- [`src/domains/user/sub-domains/user-data-export/OVERVIEW.md`](../../../src/domains/user/sub-domains/user-data-export/OVERVIEW.md) — sub-domain invariants, documented dependency-rule exception, failure modes
+- [`src/POLICIES.md`](../../../src/POLICIES.md) — `USER_DATA_EXPORT_*` policy constants and rationale
+- [`src/FLOWS.md`](../../../src/FLOWS.md) § GDPR export — end-to-end flow diagram

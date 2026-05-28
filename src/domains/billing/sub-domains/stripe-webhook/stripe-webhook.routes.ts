@@ -26,7 +26,7 @@ import { stripeWebhookIngressPlugin } from './stripe-webhook-ingress.plugin.js';
  *
  * When the alias is removed, also clean up the legacy path in downstream references
  * that still point at it: the controller JSDoc, `stripe-webhook.dto.ts` comment,
- * OpenAPI route metadata (`tooling/openapi/route-metadata/billing-notify.ts`),
+ * the duplicate route schema literal below (alias `app.register({ prefix: '/stripe' })`),
  * integration tests, k6 load scenarios, and Sentry transaction-name sampling.
  */
 export function stripeWebhookRoutes(): FastifyPluginAsync {
@@ -35,13 +35,37 @@ export function stripeWebhookRoutes(): FastifyPluginAsync {
   return async (app) => {
     const zodApplication = app.withTypeProvider<ZodTypeProvider>();
     await stripeWebhookIngressPlugin(app, {});
-    zodApplication.post('/webhook', WEBHOOK_RATE_LIMIT, controller.handleWebhook);
+    zodApplication.post(
+      '/webhook',
+      {
+        ...WEBHOOK_RATE_LIMIT,
+        schema: {
+          summary: 'Stripe webhook receiver',
+          description:
+            'Public endpoint for Stripe billing events. Verifies the `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET` and enqueues durable processing. Raw JSON body is required for signature verification.',
+          tags: ['Billing', 'Stripe Webhook'],
+        },
+      },
+      controller.handleWebhook,
+    );
 
     await app.register(
       async (stripeRoutes) => {
         const stripeZodApplication = stripeRoutes.withTypeProvider<ZodTypeProvider>();
         await stripeRoutes.register(stripeWebhookIngressPlugin);
-        stripeZodApplication.post('/webhook', WEBHOOK_RATE_LIMIT, controller.handleWebhook);
+        stripeZodApplication.post(
+          '/webhook',
+          {
+            ...WEBHOOK_RATE_LIMIT,
+            schema: {
+              summary: 'Stripe webhook receiver',
+              description:
+                'Public endpoint for Stripe billing events. Verifies the `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET` and enqueues durable processing. Raw JSON body is required for signature verification.',
+              tags: ['Billing', 'Stripe Webhook'],
+            },
+          },
+          controller.handleWebhook,
+        );
       },
       { prefix: '/stripe' },
     );

@@ -19,12 +19,14 @@ When a BullMQ job exhausts retries, the worker copies a snapshot to **`<source-q
 
 | Command | Purpose |
 | ------- | ------- |
-| `pnpm tool:dlq-replay -- --list` | List jobs in all known DLQs (`mail`, `webhook-delivery`, `notification`, `stripe-webhook`) |
+| `pnpm tool:dlq-replay -- --list` | List jobs in all **work** DLQs (`mail`, `webhook-delivery`, `notification`, `stripe-webhook`) |
 | `pnpm tool:dlq-replay -- --list mail-dlq` | List jobs in one DLQ |
 | `pnpm tool:dlq-replay -- --replay mail-dlq --job-id <id> --actor-user-public-id <usr> [--dry-run]` | Re-enqueue one job (writes `queue.dlq.replayed` audit row) and remove it from the DLQ |
 | `pnpm tool:dlq-replay -- --replay-all webhook-delivery-dlq --actor-user-public-id <usr> --limit 10 [--dry-run]` | Replay up to N jobs |
 
 Always run `--dry-run` first in production.
+
+The full list of source queues (work + retention/cleanup + observability) is in [bull-board.md](../reference/runtime/bull-board.md#queues-shown). Tombstone-retention DLQs (`*-tombstone-retention-dlq`) are operationally rare; if they fill, escalate to engineering — there is no application-level replay path because retention deletions are idempotent and the next cron tick will retry the same row range.
 
 ## Per-queue replay guidance
 

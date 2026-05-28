@@ -32,6 +32,14 @@ if [ -n "$STAGED_OPENAPI" ]; then
   pnpm docs:check
 fi
 
+# 4d. TSDoc coverage gate.
+#     Walks src/**/*.ts, fails if any public export is missing a TSDoc summary
+#     (or @remarks for service-like / policy-like files) beyond the locked
+#     budget in tooling/tsdoc-coverage/budget.json. PRs may LOWER counts and
+#     refresh the budget; they may not raise it. There is no auto-generated
+#     DOCS.md aggregator — TSDoc is canonical, OVERVIEW.md is hand-written.
+pnpm tsdoc:check
+
 # 5. Migration safety lint (only when migrations/*.sql is staged)
 STAGED_MIGRATION_SQL=$(git diff --cached --name-only | grep -E '^migrations/.*\.sql$' || true)
 if [ -n "$STAGED_MIGRATION_SQL" ]; then

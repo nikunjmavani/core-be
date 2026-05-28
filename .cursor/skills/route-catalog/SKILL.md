@@ -159,6 +159,8 @@ Legend:
 
 After updating `docs/routes.txt`:
 
-1. **openapi-route-sync** — add/update `routeMetadataMap` in `src/scripts/codegen/openapi-enricher.ts` and locale tags; run `pnpm docs:generate:multilang`.
-2. **seed-maintainer** — align seeds when routes were added or removed.
-3. **test-generator** — domain e2e tests for new/changed routes.
+1. **route-schema-doc-guard** — add/update `schema: { summary, description, tags }` on the Fastify route registration. (The legacy **openapi-route-sync** skill is preserved for compatibility but the canonical authoring is route-schema-doc-guard.)
+2. **openapi-multilingual** — add tag translations to all locales when a new tag is introduced; run `pnpm docs:generate:multilang`.
+3. **seed-maintainer** — align seeds when routes were added or removed.
+4. **test-generator** — domain e2e tests for new/changed routes.
+5. **`pnpm tsdoc:check`** — confirm coverage budget not regressed by any new exports added with the routes.
