@@ -138,7 +138,20 @@ If the token authenticates but a later step still fails with permission errors, 
 
 ---
 
+## Custom domain (SSL)
+
+After deploy, Railway exposes the service on a generated `*.up.railway.app` hostname. To map a domain you own (e.g. `api.example.com`) and let Railway issue + renew a Let's Encrypt cert, run:
+
+```bash
+pnpm setup:domain --all-environments --domain-template "api.{env}.example.com"
+```
+
+The command attaches the custom domain, prints the DNS records to add at your DNS provider, and polls until DNS verifies and the certificate issues. See **[../runbooks/railway-custom-domain.md](../runbooks/railway-custom-domain.md)** for full flag reference, troubleshooting, and the env-var follow-ups (`ALLOWED_ORIGINS`, `FRONTEND_URL`, OAuth redirect URIs).
+
+---
+
 ## See Also
 
 - [setup-automation.md](setup-automation.md) — Automated provisioning (recommended)
 - [cicd-and-deployment.md](../ci-cd/cicd-and-deployment.md) — Full CI/CD reference
+- [../runbooks/railway-custom-domain.md](../runbooks/railway-custom-domain.md) — Attach a custom domain (SSL) via `pnpm setup:domain`

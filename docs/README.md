@@ -99,6 +99,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [deployment/runbooks/observability.md](deployment/runbooks/observability.md)                                 | Sentry, logs, health; Prometheus re-enable checklist.                                             |
 | [deployment/runbooks/jwt-key-rotation.md](deployment/runbooks/jwt-key-rotation.md)                           | JWT PEM rotation (ops today; `kid` multi-key deferred).                                           |
 | [deployment/runbooks/upload-storage.md](deployment/runbooks/upload-storage.md)                               | Direct-to-S3 upload hardening: validation, presigned POST, PENDING sweeper, lifecycle policy.     |
+| [deployment/runbooks/railway-custom-domain.md](deployment/runbooks/railway-custom-domain.md)                 | `pnpm setup:domain` — attach a custom domain (SSL) to a Railway service; both envs in one run.    |
 
 ---
 
