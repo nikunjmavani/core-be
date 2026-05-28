@@ -8,7 +8,7 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 import type { MagicLinkSendResult } from '@/domains/auth/auth.types.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionRepository } from '../auth-session/auth-session.repository.js';
-import type { VerificationTokenRepository } from './verification-token.repository.js';
+import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import { validateMagicLinkSend, validateMagicLinkVerify } from '../../auth.validator.js';
 import {

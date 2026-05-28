@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MagicLinkService } from '@/domains/auth/sub-domains/auth-method/magic-link.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionRepository } from '@/domains/auth/sub-domains/auth-session/auth-session.repository.js';
-import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token.repository.js';
+import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
 
 vi.mock('@/core/events/event-bus.js', () => ({
   eventBus: { emit: vi.fn().mockResolvedValue(undefined) },

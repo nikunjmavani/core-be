@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import { AuthMethodRepository } from './sub-domains/auth-method/auth-method.repository.js';
-import { VerificationTokenRepository } from './sub-domains/auth-method/verification-token.repository.js';
+import { VerificationTokenRepository } from './sub-domains/auth-method/verification-token/verification-token.repository.js';
 import { AuthSessionRepository } from './sub-domains/auth-session/auth-session.repository.js';
 import { AuthService } from './auth.service.js';
 import { AuthMethodService } from './sub-domains/auth-method/auth-method.service.js';

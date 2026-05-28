@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
-import { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token.repository.js';
+import { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
 
 describe('VerificationTokenRepository — atomic consume (replay protection)', () => {
   const repository = new VerificationTokenRepository();
