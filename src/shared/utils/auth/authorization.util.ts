@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
-import type { GlobalRole } from '@/shared/constants/roles.js';
+import type { GlobalRole } from '@/shared/constants/roles.constants.js';
 import { ForbiddenError, UnauthorizedError } from '@/shared/errors/index.js';
 
 /** Per-request memo: one Redis/DB resolve per (user, organization) per HTTP request. */

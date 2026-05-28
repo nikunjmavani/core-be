@@ -1,5 +1,5 @@
 import { env } from '@/shared/config/env.config.js';
-import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.js';
+import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.constants.js';
 
 function parseGlobalAdminEmails(): Set<string> {
   const raw = env.GLOBAL_ADMIN_EMAILS;

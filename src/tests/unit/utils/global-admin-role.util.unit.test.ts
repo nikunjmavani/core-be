@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GLOBAL_ROLES } from '@/shared/constants/roles.js';
+import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 
 const mockEnv = vi.hoisted(() => ({
   GLOBAL_ADMIN_EMAILS: undefined as string | undefined,

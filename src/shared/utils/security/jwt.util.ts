@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { SignJWT, decodeProtectedHeader, jwtVerify, importPKCS8, importSPKI } from 'jose';
 import type { CryptoKey } from 'jose';
 import { ACCESS_TOKEN_EXPIRY_SECONDS } from '@/shared/constants/index.js';
-import { GLOBAL_ROLES } from '@/shared/constants/roles.js';
+import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
