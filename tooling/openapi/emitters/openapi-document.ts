@@ -4,7 +4,7 @@ import {
   CURSOR_PAGINATED_LIST_ROUTE_KEYS,
   CURSOR_PAGINATION_DESCRIPTION_SUFFIX,
 } from '@tooling/openapi/pagination-openapi.js';
-import { routeMetadataMap } from '@tooling/openapi/route-metadata.js';
+import { routeMetadataMap } from '@tooling/openapi/route-metadata/index.js';
 import {
   getPathParameterDescription,
   getPathParameterExample,
