@@ -131,7 +131,7 @@ HTTP requests set `app.current_organization_id` via tenant middleware and an org
 
 `src/worker.ts` sets `CORE_BE_RUNTIME=worker`. Calling `getRequestDatabase()` without a pinned ALS session throws `WorkerDatabaseContextError`. Pass `databaseHandle` into `createWorker*Repository(databaseHandle)` for tenant-scoped work.
 
-FORCE RLS table list: `src/infrastructure/database/force-rls-tables.constants.ts`. Security regression: `src/tests/security/worker-rls-context.security.test.ts`.
+FORCE RLS table list: `src/infrastructure/database/force-rls-tables.constants.ts`. Security regression: `src/tests/security/rls/worker-rls-context.security.test.ts`.
 
 ---
 

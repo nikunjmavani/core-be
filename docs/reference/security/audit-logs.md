@@ -61,5 +61,5 @@ Daily NDJSON export to S3 is documented in [audit-export.md](./audit-export.md).
 
 ## Tests
 
-- `src/tests/security/mutation-audit.security.test.ts` — login, logout, org settings.
-- `src/tests/security/queue-dashboard-audit.security.test.ts` — Bull Board mutations.
+- `src/tests/security/infrastructure/mutation-audit.security.test.ts` — login, logout, org settings.
+- `src/tests/security/infrastructure/queue-dashboard-audit.security.test.ts` — Bull Board mutations.
