@@ -269,11 +269,11 @@ see the dedicated runbook: **[add-new-environment.md](./add-new-environment.md)*
 - **Operator templates (gitignored):** `.env.development`, `.env.production`
 - **Loader:** `src/shared/config/load-env-files.ts`
 - **GitHub sync config:** `.github/sync.config.json`
-- **GitHub push:** `tooling/setup/github-sync.ts` (`pnpm github:sync`)
-- **Section parser shared by both:** `tooling/setup/parse-env-example-sections.ts`
+- **GitHub push:** `tooling/setup/github/sync.ts` (`pnpm github:sync`)
+- **Section parser shared by both:** `tooling/setup/envs/parse-env-sections.ts`
 - **Validator: schema ↔ template:** `src/scripts/validators/env/sync-env-example.ts` (`pnpm tool:sync-env-example`)
-- **Consistency (in github:sync):** `tooling/setup/github-sync-config.ts` (`validateGithubSyncConsistency`; run via `pnpm github:sync --check`)
-- **Validator: GitHub deploy-required keys:** `tooling/setup/validate-github-env.ts` (`pnpm validate:github-env`)
+- **Consistency (in github:sync):** `tooling/setup/github/sync-config.ts` (`validateGithubSyncConsistency`; run via `pnpm github:sync --check`)
+- **Validator: GitHub deploy-required keys:** `tooling/setup/github/validate.ts` (`pnpm validate:github-env`)
 - **Skill (use this when editing the schema):** `.cursor/skills/env-schema-add/SKILL.md`
 - **Where to obtain credentials:** [credentials-and-env.md](../../integrations/credentials-and-env.md)
 - **Hosted-environment plumbing:** [add-new-environment.md](./add-new-environment.md)
