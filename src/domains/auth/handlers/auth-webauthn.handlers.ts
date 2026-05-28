@@ -6,9 +6,9 @@ import {
   getUserAgent,
   readRequestOrigin,
   setSessionCookie,
-} from './auth.http.util.js';
-import { AuthSerializer } from './auth.serializer.js';
-import type { AuthContainer } from './auth.container.js';
+} from '../auth.http.util.js';
+import { AuthSerializer } from '../auth.serializer.js';
+import type { AuthContainer } from '../auth.container.js';
 
 type AuthWebauthnHandlersDependencies = Pick<AuthContainer, 'webauthnService'>;
 

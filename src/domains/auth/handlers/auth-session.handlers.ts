@@ -5,9 +5,9 @@ import { UnauthorizedError } from '@/shared/errors/index.js';
 import { requireAllowedSourceOriginForCookieSessionRoute } from '@/shared/middlewares/cookie-session-origin.pre-handler.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
-import { clearSessionCookie, SESSION_COOKIE_NAME, setCsrfCookie } from './auth.http.util.js';
-import { AuthSerializer } from './auth.serializer.js';
-import type { AuthContainer } from './auth.container.js';
+import { clearSessionCookie, SESSION_COOKIE_NAME, setCsrfCookie } from '../auth.http.util.js';
+import { AuthSerializer } from '../auth.serializer.js';
+import type { AuthContainer } from '../auth.container.js';
 
 type AuthSessionHandlersDependencies = Pick<AuthContainer, 'authService' | 'authSessionService'>;
 

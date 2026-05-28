@@ -2,10 +2,10 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
-import { resolveAuthMessageKeyResponse } from './auth.http.util.js';
-import { validateAuthMethodIdParam } from './auth.validator.js';
-import { AuthSerializer } from './auth.serializer.js';
-import type { AuthContainer } from './auth.container.js';
+import { resolveAuthMessageKeyResponse } from '../auth.http.util.js';
+import { validateAuthMethodIdParam } from '../auth.validator.js';
+import { AuthSerializer } from '../auth.serializer.js';
+import type { AuthContainer } from '../auth.container.js';
 
 type AuthAuthMethodHandlersDependencies = Pick<AuthContainer, 'authMethodService'>;
 
