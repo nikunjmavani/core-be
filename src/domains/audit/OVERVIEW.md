@@ -24,7 +24,7 @@ What it does not own: deciding **when** to emit an audit event — that's the re
 
 ## Sub-domains
 
-`audit` is a flat domain — no `sub-domains/` folder. The single resource lives at the domain root (`audit.service.ts`, `audit.repository.ts`, `audit.routes.ts`, etc.). See [src/domains/audit/DOCS.md](src/domains/audit/DOCS.md) for the full export catalog.
+`audit` is a flat domain — no `sub-domains/` folder. The single resource lives at the domain root (`audit.service.ts`, `audit.repository.ts`, `audit.routes.ts`, etc.). Per-symbol docs are in TSDoc on each export (use IDE hover or `pnpm tsdoc:check --report`).
 
 ## Patterns used
 

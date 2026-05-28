@@ -1,6 +1,6 @@
 # Documentation system (core-be)
 
-How agents and contributors keep **skills**, **CLAUDE.md**, **hand-written docs in `docs/`**, and **in-source layered docs in `src/`** aligned. Skills orchestrate; docs own the narrative; the in-source layered system anchors documentation to the code it describes.
+How agents and contributors keep **skills**, **CLAUDE.md**, **hand-written docs in `docs/`**, and **in-source documentation** aligned. Skills orchestrate; docs own the narrative; TSDoc and `OVERVIEW.md` anchor documentation to the code it describes.
 
 ---
 
@@ -12,12 +12,11 @@ flowchart TB
     code[Edit src/]
     docs[Edit docs/]
   end
-  subgraph layered [Layered docs system - lives in src/]
+  subgraph layered [In-source docs - lives in src/]
     sysNarr[src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md]
     overview[src/<folder>/OVERVIEW.md]
-    docsmd[Auto-generated DOCS.md]
-    tsdoc[TSDoc on every export]
-    schema[Fastify schema block]
+    tsdoc[TSDoc on every public export]
+    schema[Fastify route schema]
   end
   subgraph handDocs [Hand-written docs - lives in docs/]
     index[docs/README.md]
@@ -25,30 +24,30 @@ flowchart TB
   end
   code --> layered
   docs --> handDocs
-  layered --> ratchet[pnpm features:check:strict]
-  handDocs --> linkCheck[pnpm docs:lint]
+  layered --> tsdocGate[pnpm tsdoc:check]
+  schema --> openapi[docs:check / OpenAPI]
+  handDocs --> linkCheck[pnpm docs:lint, docs:links:check]
 ```
 
 | System | What it covers | Lives in | Owner skills | Hard gate |
 | --- | --- | --- | --- | --- |
-| **Layered in-source docs** | Code-anchored documentation: every directory under `src/`, every public export, every Fastify route | `src/**/*.md` (and TSDoc inside `*.ts`) | feature-doc-maintainer, system-narrative-maintainer, overview-doc-maintainer, route-schema-doc-guard, tsdoc-export-guard | `pnpm features:check:strict` (monotonic ratchet) |
+| **In-source docs** | Code-anchored: every public export's TSDoc, every Fastify route schema, every folder's hand-written `OVERVIEW.md`, system narrative files | TSDoc inside `*.ts`; `**/OVERVIEW.md`; `src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md` | tsdoc-export-guard, route-schema-doc-guard, overview-doc-maintainer, system-narrative-maintainer | `pnpm tsdoc:check`, `pnpm docs:check` (OpenAPI drift) |
 | **Hand-written docs** | Narrative guides — setup, runbooks, deployment, integrations, architecture overviews | `docs/**/*.md` | docs-maintainer | `pnpm docs:lint`, `pnpm docs:links:check` |
 
 The two systems are independent and never overwrite each other.
 
 ---
 
-## Layered in-source docs (the new system)
+## In-source docs — four layers, no auto-generated aggregator
 
-Five layers, each with its own template and its own owner skill:
+There is intentionally **no auto-generated `DOCS.md`** layer. The previous `tooling/feature-docs/` system was retired in favour of a smaller surface where each artifact has a single source of truth:
 
-| Layer | File(s) | Template | Skill |
+| Layer | File(s) | Source of truth | Skill |
 | --- | --- | --- | --- |
-| **System narratives** (cross-cutting) | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | F / G / H / I | system-narrative-maintainer |
-| **Per-folder overviews** | `src/<folder>/OVERVIEW.md` | A.1 (domain), A.2 (sub-domain), A.3 (infra/shared/scripts), A.4 (test suite) | overview-doc-maintainer |
-| **Per-folder index** (auto-generated) | `src/<folder>/DOCS.md`, `src/DOCS.md` | (locked template) | feature-doc-maintainer |
-| **Symbol-level TSDoc** | every `export <kind> <name>` declaration in `*.ts` | TSDoc summary; `@remarks` block on services / workers / processors / policy files | tsdoc-export-guard |
-| **Fastify route schema** | `schema: { summary, description, tags }` on every route registration | (Zod / Fastify schema literal) | route-schema-doc-guard |
+| **System narratives** (cross-cutting) | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | Hand-written | system-narrative-maintainer |
+| **Per-folder overviews** (hand-written narrative) | `src/<folder>/OVERVIEW.md` (~47 files at meaningful boundaries — domains, sub-domains, infra subsystems, test suites) | Hand-written | overview-doc-maintainer |
+| **Symbol-level TSDoc** (per-export documentation) | every `export <kind> <name>` declaration in `*.ts`; IDE hover, TypeDoc, and `tsdoc:check` all read this | Hand-written, in-source | tsdoc-export-guard |
+| **Fastify route schema** (route documentation) | `schema: { summary, description, tags }` on every route registration → drives `docs/openapi/openapi.json` → Postman + API hub | Inline Zod schema | route-schema-doc-guard |
 
 ### File-header rule (per-folder OVERVIEW.md)
 
@@ -63,7 +62,9 @@ Line 1 must be the bare backticked relative path:
 ...
 ```
 
-### TSDoc rule (every export)
+Required sections vary by template (domain, sub-domain, infra/shared/scripts, test suite); see the **overview-doc-maintainer** skill for the full template details.
+
+### TSDoc rule (every public export)
 
 ```ts
 /**
@@ -82,7 +83,7 @@ Line 1 must be the bare backticked relative path:
 export class FooService { ... }
 ```
 
-`@remarks` is required on **service-like** files (`*.service.ts`, `*.worker.ts`, `*.processor.ts`) and **policy-like** files (`*.constants.ts` under `src/shared/constants/`). It is optional elsewhere.
+A summary is required on every public export. `@remarks` is required on **service-like** files (`*.service.ts`, `*.worker.ts`, `*.processor.ts`) and **policy-like** files (`*.policy.ts`). It is optional elsewhere.
 
 ### Fastify route schema rule
 
@@ -103,37 +104,28 @@ app.get(
 );
 ```
 
-The `schema` block is the **single source of truth** for OpenAPI generation; there is no parallel `routeMetadataMap` side-table.
+The `schema` block is the **single source of truth** for OpenAPI generation. There is no parallel `routeMetadataMap` side-table and no per-directory route catalog file — Postman and the API documentation hub consume the OpenAPI export directly.
 
 ---
 
-## The hard gate (monotonic ratchet)
+## TSDoc coverage gate
 
-`pnpm features:check:strict` compares the current count of placeholder tokens against a locked baseline at [`tooling/feature-docs/missing-tokens.baseline.json`](../../../tooling/feature-docs/missing-tokens.baseline.json):
+`pnpm tsdoc:check` walks `src/**/*.ts`, identifies public exports, and reports two classes of missing documentation:
 
 | Token | What it flags | Fix by |
 | --- | --- | --- |
-| `MISSING_DESCRIPTION` | An exported symbol has no TSDoc summary | tsdoc-export-guard |
+| `MISSING_DESCRIPTION` | A public export has no TSDoc summary | tsdoc-export-guard |
 | `MISSING_REMARKS` | A service-like / policy-like export has no `@remarks` block | tsdoc-export-guard |
-| `MISSING_OVERVIEW_SECTION` | A folder's `OVERVIEW.md` is missing a required section | overview-doc-maintainer |
-| `MISSING_SYSTEM_FILE` | One of the four `src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md` is missing or malformed | system-narrative-maintainer |
 
-Counts may **decrease** (refresh baseline via `pnpm features:refresh-baseline`); they may **not increase**. The gate runs in pre-commit (step 4d), `ci:local`, and `ci:quality`.
+The gate is **budget-driven**, not absolute. Counts are compared to [`tooling/tsdoc-coverage/budget.json`](../../../tooling/tsdoc-coverage/budget.json) and may **decrease** but never **increase**. PRs that lower counts run `pnpm tsdoc:check --refresh-budget` and commit the new lower budget. The eventual target is `MISSING_DESCRIPTION = 0` and `MISSING_REMARKS = 0`; the budget exists only because we are starting from a partially-documented codebase.
 
----
+The gate runs in pre-commit (step 4d), `ci:local`, and `ci:quality`.
 
-## Auto-trigger rule
-
-[`.cursor/rules/feature-doc-maintainer-sync.mdc`](../../../.cursor/rules/feature-doc-maintainer-sync.mdc) routes file changes to the right authoring skill, then to **feature-doc-maintainer** for the index refresh.
-
-| What changed | Authoring skill | Always also run |
-| --- | --- | --- |
-| Add / rename / remove an exported symbol | tsdoc-export-guard | feature-doc-maintainer |
-| Add / change a Fastify route | route-schema-doc-guard | route-catalog, feature-doc-maintainer |
-| Add a policy constant under `src/shared/constants/` | tsdoc-export-guard + system-narrative-maintainer | feature-doc-maintainer |
-| Author / edit per-folder `OVERVIEW.md` | overview-doc-maintainer | feature-doc-maintainer |
-| Edit `src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md` | system-narrative-maintainer | feature-doc-maintainer |
-| New domain folder under `src/domains/` | overview-doc-maintainer + system-narrative-maintainer | feature-doc-maintainer |
+```bash
+pnpm tsdoc:check                    # enforce budget
+pnpm tsdoc:check --report           # also list every (file, symbol) pair
+pnpm tsdoc:check --refresh-budget   # lock in current (lower) counts
+```
 
 ---
 
@@ -186,7 +178,7 @@ flowchart LR
 | Env / credentials | [integrations/credentials-and-env.md](../../integrations/credentials-and-env.md) | env-schema-add | User-facing env documentation |
 | Doc index / links | [docs/README.md](../../README.md) | docs-maintainer | New/renamed/moved hand-written doc |
 | New requirements | [requirement-intake.md](../../getting-started/requirement-intake.md) | skill-index | New requirement types or skill order |
-| **Layered docs system (this page)** | [documentation-system.md](./documentation-system.md) | docs-maintainer, system-narrative-maintainer | Ownership map, layered-docs workflow, ratchet behaviour |
+| **Documentation system (this page)** | [documentation-system.md](./documentation-system.md) | docs-maintainer, system-narrative-maintainer | Ownership map, in-source layers, gates |
 
 **CLAUDE.md** holds non-negotiables and command cheat sheets only; link to the rows above for detail.
 
@@ -196,8 +188,8 @@ flowchart LR
 
 Full skill triggers live in [skill-index](../../../.cursor/skills/skill-index/SKILL.md).
 
-| Code change | Layered-docs skill | Hand-written doc to update (if convention/behaviour changed) |
-| ----------- | ------------------ | --------------------------------------------------------------- |
+| Code change | In-source skill | Hand-written doc to update (if convention/behaviour changed) |
+| ----------- | --------------- | --------------------------------------------------------------- |
 | New / changed `*.routes.ts` | route-schema-doc-guard | domains-and-public-api-design.md, api-versioning.md |
 | New `events/`, `queues/`, `workers/` | tsdoc-export-guard, overview-doc-maintainer | workers-and-events.md |
 | New / changed `*.schema.ts`, migrations (retention/soft-delete) | tsdoc-export-guard | data-lifecycle-deletion.md |
@@ -239,7 +231,7 @@ description: ...
 - Cross-links to skills that should run before/after.
 ```
 
-The five **layered-docs skills** (feature-doc-maintainer, system-narrative-maintainer, overview-doc-maintainer, route-schema-doc-guard, tsdoc-export-guard) follow this same shape and additionally embed their own templates (A.1 / A.2 / A.3 / A.4 / F / G / H / I).
+The four **in-source documentation skills** (system-narrative-maintainer, overview-doc-maintainer, route-schema-doc-guard, tsdoc-export-guard) follow this same shape.
 
 **Gate skills** (before-commit-guard, ci-investigator, pr-babysit, lint-warnings-handler) stay command-centric; they do not need a full ownership block.
 
@@ -254,34 +246,49 @@ The five **layered-docs skills** (feature-doc-maintainer, system-narrative-maint
 
 If only behavior changed, prefer **content-sync** only. Update CLAUDE only when a non-negotiable invariant changed.
 
-**Scope boundary:** docs-maintainer covers only `docs/**/*.md`. In-source layered docs under `src/` are owned by the layered-docs skills above (routed by [`.cursor/rules/feature-doc-maintainer-sync.mdc`](../../../.cursor/rules/feature-doc-maintainer-sync.mdc)).
+**Scope boundary:** docs-maintainer covers only `docs/**/*.md`. In-source docs under `src/` (TSDoc + `OVERVIEW.md` + system narrative files) are owned by the in-source skills above.
 
 ---
 
-## Link validation
+## Link and lint validation
 
-Two independent gates:
+Three independent gates:
 
 | Gate | Command | Scope |
 | --- | --- | --- |
 | Hand-written link drift | `pnpm docs:links:check` | `docs/**`, skills, rules, key repo markdown |
-| Markdown formatting | `pnpm docs:lint` | All `.md` except auto-generated `DOCS.md` |
-| Layered-docs ratchet | `pnpm features:check:strict` | Auto-generated `DOCS.md`, missing-token counts |
+| Markdown formatting | `pnpm docs:lint` | All `.md` (per `.markdownlint-cli2.jsonc`) |
+| TSDoc coverage | `pnpm tsdoc:check` | Every public export under `src/**/*.ts` |
+| OpenAPI drift | `pnpm docs:check` | Generated `docs/openapi/openapi.json` |
 
-Both run in `ci:quality` and `ci:local`; pre-commit runs the same.
+All run in `ci:quality` and `ci:local`; pre-commit runs the same.
 
 ```bash
-pnpm docs:links:check          # hand-written link drift
-pnpm docs:lint                 # markdown formatting
-pnpm features:check:strict     # layered-docs ratchet
+pnpm docs:links:check     # hand-written link drift
+pnpm docs:lint            # markdown formatting
+pnpm tsdoc:check          # TSDoc coverage budget
+pnpm docs:check           # OpenAPI / Postman drift
 ```
+
+---
+
+## Why the auto-generated DOCS.md aggregator was retired
+
+A previous iteration of this system included an auto-generated `DOCS.md` per directory (~124 files), built by `tooling/feature-docs/`. It was deliberately removed because:
+
+1. **TSDoc was already the source of truth.** `DOCS.md` was just a re-render — IDE hover, TypeDoc, and AI agents reading the source all read the TSDoc directly.
+2. **Routes had triple coverage.** `schema.description` → OpenAPI → Postman / API hub; the route tables in `DOCS.md` were a fourth re-render of the same content.
+3. **The generator was ~1500 lines of code** that had to stay healthy forever, plus a baseline file, plus a markdown-lint gate for its own output.
+4. **`OVERVIEW.md` already covered the only thing TSDoc could not** — design decisions, failure modes, tuning knobs, external dependencies — and survived intact.
+
+If a browsable HTML API site is ever required, [TypeDoc](https://typedoc.org/) can render one from TSDoc on demand without committing intermediate artifacts.
 
 ---
 
 ## Related
 
-- [AGENTS.md](../../../AGENTS.md) — PR gate, parallel agents, layered docs callout
-- [CLAUDE.md](../../../CLAUDE.md) — architecture invariants, layered-docs subsection
+- [AGENTS.md](../../../AGENTS.md) — PR gate, parallel agents, in-source docs callout
+- [CLAUDE.md](../../../CLAUDE.md) — architecture invariants, in-source docs subsection
 - [CONTRIBUTING.md](../../../CONTRIBUTING.md) — human contributor workflow
 - [`src/OVERVIEW.md`](../../../src/OVERVIEW.md) — top of the system narrative tree
-- [`.cursor/rules/feature-doc-maintainer-sync.mdc`](../../../.cursor/rules/feature-doc-maintainer-sync.mdc) — auto-trigger map
+- [`tooling/tsdoc-coverage/README.md`](../../../tooling/tsdoc-coverage/README.md) — gate internals

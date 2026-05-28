@@ -32,13 +32,13 @@ if [ -n "$STAGED_OPENAPI" ]; then
   pnpm docs:check
 fi
 
-# 4d. Layered feature-docs gate (DOCS.md, OVERVIEW.md, system narratives, TSDoc).
-#     Regenerates per-folder DOCS.md, then runs the strict baseline ratchet:
-#     fails if any missing-token count exceeds the locked baseline OR if
-#     committed DOCS.md drifted from sources.
-pnpm features:generate
-git add 'src/**/DOCS.md' 'src/DOCS.md' 2>/dev/null || true
-pnpm features:check:strict
+# 4d. TSDoc coverage gate.
+#     Walks src/**/*.ts, fails if any public export is missing a TSDoc summary
+#     (or @remarks for service-like / policy-like files) beyond the locked
+#     budget in tooling/tsdoc-coverage/budget.json. PRs may LOWER counts and
+#     refresh the budget; they may not raise it. There is no auto-generated
+#     DOCS.md aggregator — TSDoc is canonical, OVERVIEW.md is hand-written.
+pnpm tsdoc:check
 
 # 5. Migration safety lint (only when migrations/*.sql is staged)
 STAGED_MIGRATION_SQL=$(git diff --cached --name-only | grep -E '^migrations/.*\.sql$' || true)

@@ -5,7 +5,7 @@ description: Ensures every Fastify route registration in src/**/*.routes.ts (plu
 
 # Route schema doc guard
 
-Owns the **`schema`** block on every Fastify route registration. The block is the single source of truth for the OpenAPI document, the route catalog descriptions, and the per-folder `DOCS.md` route table.
+Owns the **`schema`** block on every Fastify route registration. The block is the single source of truth for the OpenAPI document and the route catalog descriptions.
 
 ## When to run
 
@@ -82,12 +82,12 @@ If you find yourself adding HTTP routes outside `*.routes.ts` and outside those 
 3. Add `schema: { summary, description, tags }` with content from the contract rules above.
 4. Run `pnpm docs:generate` (or `pnpm docs:generate:multilang` if the platform supports multiple locales). Confirm the new `summary` / `description` appear in `docs/openapi/openapi.json`.
 5. Run `pnpm routes:catalog` to refresh `docs/routes.txt`.
-6. Run `pnpm features:generate` to refresh per-folder `DOCS.md` route tables.
-7. Run `pnpm features:check:strict` to confirm no regression.
+6. Run `pnpm docs:generate` to refresh `docs/openapi/openapi.json` (the single source of truth for downstream consumers).
+7. Run `pnpm tsdoc:check` to confirm no TSDoc regression on any new exports added alongside the route.
 
 ## Anti-patterns
 
-- ❌ Adding a route without a `schema` block — fails OpenAPI build and produces a `MISSING_DESCRIPTION` token in `DOCS.md`.
+- ❌ Adding a route without a `schema` block — fails OpenAPI build; downstream consumers (Postman, API hub) lose the route description.
 - ❌ Putting the description in a leading comment instead of the schema — the extractor only reads the schema property.
 - ❌ Using a tag that's not in the locale's tag list — the multilingual generator will fail to translate it.
 - ❌ Re-creating the deprecated `routeMetadataMap` side table — the schema lives on the route, not in a sibling file.
@@ -96,7 +96,7 @@ If you find yourself adding HTTP routes outside `*.routes.ts` and outside those 
 
 - After updating the schema → invoke **route-catalog** (refresh `docs/routes.txt`).
 - After adding a tag → invoke **openapi-multilingual** (add tag translations).
-- Always invoke **feature-doc-maintainer** at the end.
+- After authoring → run `pnpm tsdoc:check` and `pnpm docs:check` to confirm no regressions.
 
 ## Related references
 

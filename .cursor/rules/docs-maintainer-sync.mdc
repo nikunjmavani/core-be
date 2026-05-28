@@ -15,4 +15,4 @@ When you add, rename, or move any markdown file under `docs/`:
 
 Generated artifacts (`routes.txt`, `openapi*.json`, `postman-collection.json`) are not hand-edited; the skill covers hand-written docs only.
 
-**Scope boundary:** this rule and the **docs-maintainer** skill cover only `docs/**/*.md`. In-source documentation under `src/` (system narratives `src/OVERVIEW.md` / `src/PATTERNS.md` / `src/FLOWS.md` / `src/POLICIES.md`, per-folder `OVERVIEW.md`, auto-generated `DOCS.md`, and TSDoc on exports) is owned by the **system-narrative-maintainer**, **overview-doc-maintainer**, **feature-doc-maintainer**, and **tsdoc-export-guard** skills, routed by `.cursor/rules/feature-doc-maintainer-sync.mdc`.
+**Scope boundary:** this rule and the **docs-maintainer** skill cover only `docs/**/*.md`. In-source documentation under `src/` (system narratives `src/OVERVIEW.md` / `src/PATTERNS.md` / `src/FLOWS.md` / `src/POLICIES.md`, per-folder `OVERVIEW.md`, and TSDoc on exports) is owned by the **system-narrative-maintainer**, **overview-doc-maintainer**, and **tsdoc-export-guard** skills.

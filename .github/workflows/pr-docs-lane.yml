@@ -9,7 +9,7 @@ on:
     paths:
       - '**/*.md'
       - '.markdownlint.json'
-      - '.markdownlintignore'
+      - '.markdownlint-cli2.jsonc'
 
 concurrency:
   group: pr-docs-lane-${{ github.event.pull_request.number }}
@@ -36,14 +36,10 @@ jobs:
         id: changed-markdown
         run: |
           set -euo pipefail
-          # Auto-generated DOCS.md files are owned by `pnpm features:generate`
-          # (gated by `pnpm features:check:strict`, not markdown lint). Exclude
-          # them so the lint lane focuses on hand-authored docs.
           files="$(git diff --name-only --diff-filter=ACMRT \
             "${{ github.event.pull_request.base.sha }}" \
             "${{ github.event.pull_request.head.sha }}" \
-            -- '*.md' \
-            | grep -v -E '(^|/)DOCS\.md$' || true)"
+            -- '*.md' || true)"
           if [ -z "${files}" ]; then
             echo "has-files=false" >> "$GITHUB_OUTPUT"
             exit 0

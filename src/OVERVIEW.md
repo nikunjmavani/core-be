@@ -10,7 +10,7 @@ The codebase is organized by **domain** (bounded context) rather than by layer. 
 
 This document is the **system entry point**. New contributors should read it first, then descend into the domain `OVERVIEW.md` files for the area they're working in. Cross-cutting rules live in [src/PATTERNS.md](src/PATTERNS.md), end-to-end user journeys in [src/FLOWS.md](src/FLOWS.md), and the deliberate business/security trade-offs encoded as constants in [src/POLICIES.md](src/POLICIES.md).
 
-The auto-generated [src/DOCS.md](src/DOCS.md) catalogs every documented folder, route, and exported symbol with its TSDoc summary.
+Per-symbol documentation lives directly in TSDoc on each export — IDE hover, [TypeDoc](https://typedoc.org/) (when needed), and `pnpm tsdoc:check` all read it from the source. Routes are documented inline in their Zod `schema.summary` / `schema.description`, which drive [docs/openapi/openapi.json](../docs/openapi/openapi.json).
 
 ## Architecture at a glance
 
@@ -78,7 +78,7 @@ Bounded contexts live under [src/domains/](src/domains/). Each domain owns its r
 | [upload](src/domains/upload/) | `/api/v1/uploads` | S3-presigned upload + download flow. Two-phase: presign → confirm. |
 | [user](src/domains/user/) | `/api/v1/users` | User profile, settings, notification preferences, and GDPR data export. |
 
-The auto-generated [src/DOCS.md](src/DOCS.md) lists every documented sub-domain, route, and exported symbol.
+Each domain folder above has its own hand-written `OVERVIEW.md` describing its purpose, design decisions, and operational concerns; per-symbol docs live in TSDoc on each export.
 
 ## Patterns
 

@@ -163,4 +163,4 @@ After updating `docs/routes.txt`:
 2. **openapi-multilingual** — add tag translations to all locales when a new tag is introduced; run `pnpm docs:generate:multilang`.
 3. **seed-maintainer** — align seeds when routes were added or removed.
 4. **test-generator** — domain e2e tests for new/changed routes.
-5. **feature-doc-maintainer** — refresh per-folder `DOCS.md` and run the strict ratchet.
+5. **`pnpm tsdoc:check`** — confirm coverage budget not regressed by any new exports added with the routes.

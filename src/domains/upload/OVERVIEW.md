@@ -23,7 +23,7 @@ What it does not own: anti-virus / malware scanning (handled outside the platfor
 
 ## Sub-domains
 
-`upload` is a flat domain — no `sub-domains/` folder. The single resource lives at the domain root. See [src/domains/upload/DOCS.md](src/domains/upload/DOCS.md) for the full export catalog.
+`upload` is a flat domain — no `sub-domains/` folder. The single resource lives at the domain root. Per-symbol docs are in TSDoc on each export (use IDE hover or `pnpm tsdoc:check --report`).
 
 ## Patterns used
 

@@ -5,6 +5,24 @@ import { logs } from '@/domains/audit/audit.schema.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env } from '@/shared/config/env.config.js';
 
+/**
+ * Deletes audit log rows older than `AUDIT_RETENTION_DAYS` in tenant-agnostic
+ * batches.
+ *
+ * @remarks
+ * Compliance retention enforcement. Uses
+ * {@link deleteInBatchesByCondition} so the job:
+ *
+ * - Holds short transactions (one batch at a time) to avoid bloating WAL and
+ *   blocking writes on the hot `logs` table.
+ * - Returns a `blockedCount` for any batch the lock acquisition skipped, so
+ *   monitoring can alert if retention is unable to make progress (e.g. heavy
+ *   ingestion, long-running queries).
+ * - Uses the global retention DB role (no tenant context) — the cutoff is a
+ *   straight `created_at < cutoffDate` so RLS would only get in the way.
+ *
+ * Idempotent: rerunning before the next event horizon is a no-op.
+ */
 export async function runAuditRetentionJob(databaseHandle: WorkerDatabaseHandle): Promise<{
   deletedCount: number;
   blockedCount: number;

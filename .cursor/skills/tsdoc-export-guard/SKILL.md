@@ -1,24 +1,24 @@
 ---
 name: tsdoc-export-guard
-description: Ensures every public TypeScript export under src/ has a TSDoc summary, and every public export in service/worker/processor/policy files has an additional @remarks block (Algorithm / Failure modes / Side effects / Notes). Use when adding or renaming exported symbols, when MISSING_DESCRIPTION or MISSING_REMARKS tokens regress, or when authoring a policy constant.
+description: Ensures every public TypeScript export under src/ has a TSDoc summary, and every public export in service/worker/processor/policy files has an additional @remarks block (Algorithm / Failure modes / Side effects / Notes). Use when adding or renaming exported symbols, when MISSING_DESCRIPTION or MISSING_REMARKS counts regress against `pnpm tsdoc:check`, or when authoring a policy constant.
 ---
 
 # TSDoc export guard
 
-Owns symbol-level documentation: the TSDoc comment that sits immediately above every public `export <kind> <name>` declaration. The generator pairs the comment with the declaration and surfaces missing pieces as `MISSING_DESCRIPTION` / `MISSING_REMARKS` tokens.
+Owns symbol-level documentation: the TSDoc comment that sits immediately above every public `export <kind> <name>` declaration. TSDoc is the canonical per-symbol documentation in this codebase — IDE hover, [TypeDoc](https://typedoc.org/), and the `pnpm tsdoc:check` coverage gate all read directly from it.
 
 ## When to run
 
 Run this skill when:
 
 - You add or rename an exported symbol under `src/`.
-- The strict feature-doc check reports a `MISSING_DESCRIPTION` regression.
-- The strict feature-doc check reports a `MISSING_REMARKS` regression on a service-like or policy-like file.
+- `pnpm tsdoc:check` reports a `MISSING_DESCRIPTION` regression.
+- `pnpm tsdoc:check` reports a `MISSING_REMARKS` regression on a service-like or policy-like file.
 - You add a new policy constant under `src/shared/constants/`.
 
 ## What "service-like" and "policy-like" mean
 
-The validator at [`tooling/feature-docs/file-classifier.ts`](../../../tooling/feature-docs/file-classifier.ts) decides which files require `@remarks` blocks:
+The classifier inside [`tooling/tsdoc-coverage/check-coverage.ts`](../../../tooling/tsdoc-coverage/check-coverage.ts) decides which files require `@remarks` blocks:
 
 - **Service-like**: matches `\.(service|worker|processor)\.ts$`. Every public export needs `summary` **plus** `@remarks`.
 - **Policy-like**: matches `\.policy\.ts$`. Every public export needs `summary` **plus** `@remarks`.
@@ -133,32 +133,31 @@ Use:
 Avoid:
 
 - `@param` / `@returns` — the type signature carries the contract; descriptive prose belongs in `@remarks` Algorithm.
-- `@throws` — capture failure modes in `@remarks` instead so they appear in the rendered `DOCS.md` business-logic panel.
+- `@throws` — capture failure modes in `@remarks` instead so they appear inline with the symbol's behaviour contract.
 
 ## Workflow
 
-1. Identify every public `export` declaration in the touched file. The strict feature-doc check tells you which ones are missing.
+1. Identify every public `export` declaration in the touched file. Run `pnpm tsdoc:check --report` and grep for the file path to see which ones are missing.
 2. For each declaration:
    - If service-like / policy-like / policy-constant → write `summary` + `@remarks` per the structure above.
    - Otherwise → write a `summary` only.
-3. For nested exports (methods inside an exported class), TSDoc the methods you want documented in addition to the class. The generator currently pairs only with `export <kind> <name>` declarations, so nested method docs are render-time best-effort. Author them anyway — they appear in IDE hover.
-4. Run `pnpm features:generate` to refresh.
-5. If the run reduces missing-token counts, also run `pnpm features:refresh-baseline` to lock the lower baseline.
+3. For nested exports (methods inside an exported class), TSDoc the methods in addition to the class. The coverage gate pairs only with top-level `export <kind> <name>` declarations, but method-level TSDoc still appears in IDE hover and TypeDoc — write it anyway.
+4. Run `pnpm tsdoc:check` to confirm no regression vs the locked budget.
+5. If counts dropped, run `pnpm tsdoc:check --refresh-budget` and commit the new lower [`tooling/tsdoc-coverage/budget.json`](../../../tooling/tsdoc-coverage/budget.json).
 
 ## Anti-patterns
 
 - ❌ TSDoc that just restates the symbol name ("`getUser` — gets a user"). Add the contract: what the input shape is, what the output guarantees, what the failure modes are.
 - ❌ `@remarks` with empty sub-sections. If there's no Side effects, write "Side effects: none." Don't omit the heading.
-- ❌ Auto-generated TODO placeholders. The validator flags `null` summaries; a placeholder summary like `// TODO` is technically non-null but reviewers will reject it.
-- ❌ Disabling the strict gate (`--no-verify` on commit, skipping CI step) instead of authoring the doc.
+- ❌ Auto-generated TODO placeholders. The gate flags missing summaries; a placeholder summary like `// TODO` is technically present but reviewers will reject it.
+- ❌ Disabling the gate (`--no-verify` on commit, skipping CI step) instead of authoring the doc.
 
 ## Cross-skill triggers
 
 - New policy constant → also invoke **system-narrative-maintainer** (add the row to `src/POLICIES.md`).
-- After authoring → always invoke **feature-doc-maintainer** to refresh the index.
 
 ## Related references
 
-- TSDoc extractor: [`tooling/feature-docs/tsdoc-extractor.ts`](../../../tooling/feature-docs/tsdoc-extractor.ts)
-- File classifier: [`tooling/feature-docs/file-classifier.ts`](../../../tooling/feature-docs/file-classifier.ts) (`SERVICE_LIKE_FILE_PATTERN`, `POLICY_LIKE_FILE_PATTERN`)
+- Coverage gate: [`tooling/tsdoc-coverage/check-coverage.ts`](../../../tooling/tsdoc-coverage/check-coverage.ts)
+- Coverage README: [`tooling/tsdoc-coverage/README.md`](../../../tooling/tsdoc-coverage/README.md)
 - Worked examples: every `*.service.ts` under `src/domains/audit/`, `src/domains/auth/sub-domains/auth-method/`.

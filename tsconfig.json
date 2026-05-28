@@ -26,9 +26,9 @@
     "paths": {
       "@/*": ["./src/*"],
       "@tooling/openapi/*": ["./tooling/openapi/*"],
-      "@tooling/feature-docs/*": ["./tooling/feature-docs/*"]
+      "@tooling/tsdoc-coverage/*": ["./tooling/tsdoc-coverage/*"]
     }
   },
-  "include": ["src/**/*.ts", "tooling/openapi/**/*.ts", "tooling/feature-docs/**/*.ts"],
+  "include": ["src/**/*.ts", "tooling/openapi/**/*.ts", "tooling/tsdoc-coverage/**/*.ts"],
   "exclude": ["node_modules", "dist", "migrations"]
 }

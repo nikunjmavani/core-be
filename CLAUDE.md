@@ -287,27 +287,26 @@ This repo uses **Context7 MCP** for up-to-date, version-specific documentation. 
 
 When **code or architecture changes**, consult **`.cursor/skills/skill-index/SKILL.md` first** — it maps what changed to which skill(s) to run (no duplicate invocations).
 
-**Enforcement:** Agent skills generate/fix artifacts once → pre-commit (`lint-staged`, `typecheck`, `validate:domain`, `features:check:strict`) → CI (`pnpm validate`, `routes:catalog:check`, `features:check:strict`, env-example sync).
+**Enforcement:** Agent skills generate/fix artifacts once → pre-commit (`lint-staged`, `typecheck`, `validate:domain`, `tsdoc:check`) → CI (`pnpm validate`, `routes:catalog:check`, `tsdoc:check`, env-example sync).
 
 **Human docs** (when layout changes): `CLAUDE.md`, `README.md`, `.cursor/rules/`, skills — via **structure-maintainer**. Hand-written `docs/**/*.md` — via **docs-maintainer**.
 
 All skills live under `.cursor/skills/`; the skill-index trigger map and auto-trigger rules table are the canonical list.
 
-### Layered documentation system
+### In-source documentation system
 
-Every directory under `src/` participates in the layered documentation system. The system has five skills working in concert:
+Every directory under `src/` participates in the in-source documentation system. There are four layers, each with a single source of truth — there is intentionally no auto-generated `DOCS.md` aggregator.
 
 | Layer | File | Owner skill |
 | --- | --- | --- |
 | System narratives | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | **system-narrative-maintainer** |
-| Per-folder overviews | `src/<folder>/OVERVIEW.md` (Templates A.1 / A.2 / A.3 / A.4) | **overview-doc-maintainer** |
-| Auto-generated index | `src/<folder>/DOCS.md` and `src/DOCS.md` | **feature-doc-maintainer** (regenerator) |
-| TSDoc on exports | every `*.ts` file's `export <kind> <name>` declaration | **tsdoc-export-guard** |
-| Route schema | `schema: { summary, description, tags }` on Fastify route registrations | **route-schema-doc-guard** |
+| Per-folder overviews (hand-written) | `src/<folder>/OVERVIEW.md` at meaningful boundaries | **overview-doc-maintainer** |
+| TSDoc on exports (canonical) | every `*.ts` file's `export <kind> <name>` declaration | **tsdoc-export-guard** |
+| Route schema (drives OpenAPI) | `schema: { summary, description, tags }` on Fastify route registrations | **route-schema-doc-guard** |
 
-The hard gate is `pnpm features:check:strict` — a **monotonic ratchet** at `tooling/feature-docs/missing-tokens.baseline.json`. Counts of `MISSING_DESCRIPTION`, `MISSING_REMARKS`, `MISSING_OVERVIEW_SECTION`, `MISSING_SYSTEM_FILE` may decrease but may not increase. Runs on pre-commit (step 4d) and CI (`ci:local`, `ci:quality`).
+The hard gate is `pnpm tsdoc:check` — a **budget-driven ratchet** at [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json). Counts of `MISSING_DESCRIPTION` and `MISSING_REMARKS` may decrease but may not increase; the eventual target is 0/0. Runs on pre-commit (step 4d) and CI (`ci:local`, `ci:quality`).
 
-When work touches `src/`, the auto-trigger rule [`.cursor/rules/feature-doc-maintainer-sync.mdc`](.cursor/rules/feature-doc-maintainer-sync.mdc) routes the change to the right authoring skill, then to **feature-doc-maintainer** for the index refresh.
+See [docs/reference/architecture/documentation-system.md](docs/reference/architecture/documentation-system.md) for the full system, including why the auto-generated DOCS.md aggregator was retired.
 
 ## Testing
 

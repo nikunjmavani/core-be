@@ -5,7 +5,7 @@ description: Keeps OpenAPI route metadata in sync when routes change. Use after 
 
 # OpenAPI Route Sync (core-be)
 
-> **Note**: this skill is preserved for OpenAPI tag-locale workflows. For authoring the `schema: { summary, description, tags }` block on a Fastify route registration, **use [route-schema-doc-guard](../route-schema-doc-guard/SKILL.md)** — it covers the same ground with the layered-docs cross-pings (route-catalog, openapi-multilingual, feature-doc-maintainer).
+> **Note**: this skill is preserved for OpenAPI tag-locale workflows. For authoring the `schema: { summary, description, tags }` block on a Fastify route registration, **use [route-schema-doc-guard](../route-schema-doc-guard/SKILL.md)** — it covers the same ground with the in-source docs cross-pings (route-catalog, openapi-multilingual, tsdoc-export-guard).
 
 ## Purpose
 

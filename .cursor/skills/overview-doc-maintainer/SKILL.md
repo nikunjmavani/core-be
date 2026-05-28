@@ -1,6 +1,6 @@
 ---
 name: overview-doc-maintainer
-description: Authors and maintains per-folder OVERVIEW.md files following one of four templates (A.1 domain, A.2 sub-domain, A.3 infrastructure/shared module, A.4 test suite). Use when adding a new domain, sub-domain, infrastructure module, or test suite folder, or when the validator reports a MISSING_OVERVIEW_SECTION token.
+description: Authors and maintains per-folder OVERVIEW.md files following one of four templates (A.1 domain, A.2 sub-domain, A.3 infrastructure/shared module, A.4 test suite). Use when adding a new domain, sub-domain, infrastructure module, or test suite folder, or when an existing OVERVIEW.md is stale.
 ---
 
 # Overview doc maintainer
@@ -19,8 +19,8 @@ Owns the hand-authored **`OVERVIEW.md`** at every documentable folder under `src
 Run this skill when:
 
 - A new folder appears under `src/domains/`, `src/infrastructure/`, `src/shared/`, or `src/tests/<suite>/` and needs an `OVERVIEW.md`.
-- The strict feature-doc check reports `MISSING_OVERVIEW_SECTION` in any `DOCS.md`.
 - A domain's invariants change (new RLS contract, new lifecycle state, new cross-domain consumer) and the existing `OVERVIEW.md` is now stale.
+- A reviewer flags an `OVERVIEW.md` as missing required sections.
 
 ## File header
 
@@ -33,13 +33,13 @@ Every `OVERVIEW.md` starts with the **bare backticked relative path** as line 1,
 ...
 ```
 
-The validator at [`tooling/feature-docs/overview-reader.ts`](../../../tooling/feature-docs/overview-reader.ts) extracts this line and reports a missing-or-malformed first line as a soft warning today (will become a hard fail when the renderer enforces it).
+The first line is read by humans and AI agents as a self-locating breadcrumb when the file is opened directly (e.g. shown in chat or pasted into review). Keep it consistent across all `OVERVIEW.md` files.
 
 ## Templates
 
 ### A.1 — Domain (`src/domains/<domain>/OVERVIEW.md`)
 
-Required H2 sections (validated):
+Required H2 sections:
 
 - `## Purpose`
 - `## Key invariants`
@@ -60,7 +60,7 @@ Cross-links: every entry under `## Patterns used` should link to a section in `s
 
 ### A.2 — Sub-domain (`src/domains/<domain>/sub-domains/<sub>/OVERVIEW.md` and nested children)
 
-Required H2 sections (validated):
+Required H2 sections:
 
 - `## Purpose`
 - `## Key invariants`
@@ -77,7 +77,7 @@ Recommended additional H2 sections:
 
 ### A.3 — Infrastructure or shared module (`src/infrastructure/<module>/OVERVIEW.md`)
 
-Required H2 sections (validated):
+Required H2 sections:
 
 - `## Purpose`
 - `## Design decisions`
@@ -93,7 +93,7 @@ Recommended additional H2 sections:
 
 ### A.4 — Test suite (`src/tests/<suite>/OVERVIEW.md`)
 
-Required H2 section (validated):
+Required H2 section:
 
 - `## Purpose`
 
@@ -111,24 +111,22 @@ Recommended additional H2 sections:
 2. Read the source files in the folder to understand purpose, invariants, lifecycle.
 3. Cross-reference relevant entries in `src/PATTERNS.md` and `src/FLOWS.md`.
 4. Author the file with the required H2 sections plus relevant recommended sections.
-5. Run `pnpm features:generate` and confirm the matching `DOCS.md` Overview section quotes the first paragraph of `## Purpose` correctly.
-6. Run `pnpm features:check:strict` and confirm no `MISSING_OVERVIEW_SECTION` regression.
+5. Confirm all required H2 sections are present for the chosen template.
+6. Run `pnpm docs:lint` to catch markdown formatting issues.
 
 ## Anti-patterns
 
 - ❌ Mentioning an invariant in `## Key invariants` without enforcing it somewhere (RLS policy, validator, test). Every invariant should be traceable to code.
 - ❌ Drawing a Mermaid diagram with actor names that don't match the implementation classes. Use the actual class / function names.
 - ❌ Putting a runbook link to a doc that doesn't exist yet. Either create the doc (via **docs-maintainer**) or omit the link.
-- ❌ Authoring `OVERVIEW.md` for a `factories/` or `helpers/` directory — those are skipped by the validator. The folder must contain real source files.
+- ❌ Authoring `OVERVIEW.md` for a `factories/` or `helpers/` directory — those don't carry their own narrative. The folder must contain real source files.
 
 ## Cross-skill triggers
 
-- After authoring → always invoke **feature-doc-maintainer** to refresh the index.
 - Mentioning a pattern not in `src/PATTERNS.md` → invoke **system-narrative-maintainer** to add the pattern entry.
 - Mentioning a flow not in `src/FLOWS.md` → invoke **system-narrative-maintainer** to add the flow entry.
 
 ## Related references
 
-- Variant detection: [`tooling/feature-docs/folder-discovery.ts`](../../../tooling/feature-docs/folder-discovery.ts) (`pickOverviewVariant`)
-- Required-section list per variant: [`tooling/feature-docs/overview-reader.ts`](../../../tooling/feature-docs/overview-reader.ts) (`REQUIRED_SECTIONS_BY_VARIANT`)
 - Worked examples already in the repo: every `OVERVIEW.md` under `src/`.
+- Architecture overview: [`docs/reference/architecture/documentation-system.md`](../../../docs/reference/architecture/documentation-system.md)

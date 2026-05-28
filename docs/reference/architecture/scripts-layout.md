@@ -13,7 +13,7 @@ Build-time and operational scripts live under `src/scripts/`, grouped by concern
 | `seed/` | Database seed orchestration (minimal / full / demo sync) | `minimal.ts`, `full.ts` |
 | `tooling/` | One-off codemods and repo maintenance | `codemod-test-suffixes.ts` |
 
-**Companion tooling outside `src/scripts/`:** `tooling/feature-docs/` hosts the helpers used by `generate-feature-docs.ts` (file classifier, schema locator, missing-tokens baseline). See [documentation-system.md](./documentation-system.md) for the layered docs ratchet.
+**Companion tooling outside `src/scripts/`:** `tooling/tsdoc-coverage/` hosts the TSDoc coverage gate (`pnpm tsdoc:check`). See [documentation-system.md](./documentation-system.md) for the in-source documentation system.
 
 ## When to add a script
 
@@ -27,12 +27,11 @@ Build-time and operational scripts live under `src/scripts/`, grouped by concern
 | Command | Script |
 | ------- | ------ |
 | `pnpm validate:scripts-layout` | Asserts zero `src/scripts/*.ts` root files |
-| `pnpm ci:quality` | Includes scripts layout check + layered-docs ratchet (`features:check:strict`) |
+| `pnpm ci:quality` | Includes scripts layout check + TSDoc coverage gate (`tsdoc:check`) |
 | `pnpm tool:project-structure-tree` | `codegen/generate-project-structure-tree.ts` |
 | `pnpm verify:base` | `ops/verify-base.ts` |
-| `pnpm features:generate` | `codegen/generate-feature-docs.ts` (regenerates `src/**/DOCS.md` and `src/DOCS.md`) |
-| `pnpm features:check` | `codegen/generate-feature-docs.ts --check` (drift only) |
-| `pnpm features:check:strict` | `codegen/generate-feature-docs.ts --check --strict` (drift + ratchet against [`tooling/feature-docs/missing-tokens.baseline.json`](../../../tooling/feature-docs/missing-tokens.baseline.json)) |
-| `pnpm features:refresh-baseline` | Rewrites the baseline once missing-token counts have decreased |
+| `pnpm tsdoc:check` | `tooling/tsdoc-coverage/check-coverage.ts` (budget-driven ratchet against [`tooling/tsdoc-coverage/budget.json`](../../../tooling/tsdoc-coverage/budget.json)) |
+| `pnpm tsdoc:check:report` | Same gate, plus a `<file>\t<symbol>\t<needs>` line for every missing pair |
+| `pnpm tsdoc:check:refresh-budget` | Rewrites the budget once missing counts have decreased |
 
 See also [project-structure-guide.md](./project-structure-guide.md) and `CLAUDE.md` § Commands.

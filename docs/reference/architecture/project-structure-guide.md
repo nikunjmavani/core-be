@@ -54,14 +54,15 @@ The full `src/` file tree is **not** duplicated here (it drifts from code quickl
 | `verification-token.repository.ts` / `verification-token.schema.ts` | Verification token entity under auth-method                                           |
 | `webhook-delivery-attempt.repository.ts`                            | Webhook delivery attempt entity under webhook                                         |
 
-**Layered documentation files (every folder under `src/`)**
+**In-source documentation files**
 
-| File             | Authored or generated                                | Owner skill |
+| File             | Where it lives                                        | Owner skill |
 | ---------------- | ----------------------------------------------------- | --------------------------------------- |
-| `OVERVIEW.md`    | **Hand-authored** — Purpose, invariants, lifecycle    | overview-doc-maintainer (Templates A.1 / A.2 / A.3 / A.4) |
-| `DOCS.md`        | **Auto-generated** by `pnpm features:generate`        | feature-doc-maintainer (locked template) |
+| `OVERVIEW.md`    | At meaningful boundaries (domains, sub-domains, infra subsystems, test suites). Hand-written: Purpose, design decisions, failure modes, tuning | overview-doc-maintainer |
+| TSDoc            | Inline on every public export in `*.ts` (canonical, gated by `pnpm tsdoc:check`) | tsdoc-export-guard |
+| Route schema     | Inline `schema.summary` / `schema.description` / `schema.tags` on every Fastify route (drives OpenAPI) | route-schema-doc-guard |
 
-System-level narratives sit at the `src/` root only: `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` (owner: system-narrative-maintainer).
+System-level narratives sit at the `src/` root only: `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` (owner: system-narrative-maintainer). There is no auto-generated `DOCS.md` aggregator.
 
 ---
 

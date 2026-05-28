@@ -25,17 +25,17 @@ Every route file uses Zod DTOs from co-located `*.dto.ts`. Controllers stay thin
 
 Every Fastify route registration must include a `schema: { summary, description, tags }` block — this is the single source of truth for OpenAPI generation. Owned by **[route-schema-doc-guard](../../../.cursor/skills/route-schema-doc-guard/SKILL.md)**.
 
-## Layered docs (mandatory per sub-domain)
+## In-source docs (mandatory per sub-domain)
 
 Every sub-domain (top-level or nested) must have:
 
-| File | Owner skill | Template |
+| Layer | Source of truth | Owner skill |
 | --- | --- | --- |
-| `<sub-domain>/OVERVIEW.md` | overview-doc-maintainer | A.2 (sub-domain) — Purpose, Key invariants, Lifecycle, Events, Failure modes, Policy constants |
-| `<sub-domain>/DOCS.md` | feature-doc-maintainer (auto-generated) | (locked template) |
-| TSDoc summaries on every public export; `@remarks` on `*.service.ts` / `*.worker.ts` / `*.processor.ts` | tsdoc-export-guard | TSDoc structured block |
+| `<sub-domain>/OVERVIEW.md` | Hand-written narrative — Purpose, Key invariants, Lifecycle, Events, Failure modes, Policy constants | overview-doc-maintainer |
+| TSDoc summaries on every public export; `@remarks` on `*.service.ts` / `*.worker.ts` / `*.processor.ts` / `*.policy.ts` | TSDoc on the export itself | tsdoc-export-guard |
+| Inline Fastify `schema.summary` / `schema.description` for every route (drives OpenAPI) | Zod schema in `*.routes.ts` | route-schema-doc-guard |
 
-The first line of `OVERVIEW.md` must be the bare backticked relative path (e.g. ``` `src/domains/tenancy/sub-domains/organization/` ```). See [documentation-system.md](./documentation-system.md) for the full layered system.
+The first line of `OVERVIEW.md` must be the bare backticked relative path (e.g. ``` `src/domains/tenancy/sub-domains/organization/` ```). See [documentation-system.md](./documentation-system.md) for the full system.
 
 ## Upload content types
 

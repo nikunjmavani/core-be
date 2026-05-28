@@ -28,11 +28,9 @@
     "validate:scripts-layout": "tsx src/scripts/validators/code/validate-scripts-layout.ts && tsx src/scripts/validators/code/validate-mcp-optional-dependency.ts",
     "validate:mcp-optional-dependency": "tsx src/scripts/validators/code/validate-mcp-optional-dependency.ts",
     "docs:check": "tsx src/scripts/codegen/check-api-docs-sync.ts",
-    "docs:lint": "markdownlint-cli2 --config .markdownlint.json \"**/*.md\" \"!**/DOCS.md\" \"!**/node_modules/**\" \"!.claude/**\"",
-    "docs:lint:fix": "markdownlint-cli2 --config .markdownlint.json --fix \"**/*.md\" \"!**/DOCS.md\" \"!**/node_modules/**\" \"!.claude/**\"",
+    "docs:lint": "markdownlint-cli2",
+    "docs:lint:fix": "markdownlint-cli2 --fix",
     "docs:lint:changed": "bash tooling/ci/lint-changed-markdown.sh",
-    "docs:lint:changelog": "markdownlint-cli2 --config .markdownlint.json \"CHANGELOG*.md\"",
-    "docs:lint:changelog:fix": "markdownlint-cli2 --config .markdownlint.json --fix \"CHANGELOG*.md\"",
     "docs:links:check": "tsx src/scripts/validators/docs/check-docs-links.ts",
     "validate:github-env": "tsx tooling/setup/github/validate.ts",
     "validate:github-environments": "tsx tooling/setup/github/environments.ts --check",
@@ -55,8 +53,8 @@
     "validate:constants": "tsx src/scripts/validators/code/validate-constants-centralization.ts",
     "validate:test-api-prefix": "tsx src/scripts/validators/tests/validate-test-api-prefix.ts",
     "validate:api-docs-hub": "tsx src/scripts/validators/docs/validate-api-docs-hub.ts",
-    "ci:local": "pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:constants && pnpm routes:catalog:check && pnpm docs:check && pnpm features:check:strict && pnpm db:migrate:lint && pnpm tool:sync-env-example && pnpm build && pnpm build:check && pnpm test",
-    "ci:quality": "pnpm deps:audit && pnpm deps:audit:prod && pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:locale-keys && pnpm validate:constants && pnpm validate:test-api-prefix && pnpm validate:api-docs-hub && pnpm test:property && pnpm test:contract && pnpm routes:catalog:check && pnpm docs:check && pnpm features:check:strict && pnpm tool:sync-env-example && pnpm db:migrate:lint && node tooling/ci/check-action-pins.mjs",
+    "ci:local": "pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:constants && pnpm routes:catalog:check && pnpm docs:check && pnpm tsdoc:check && pnpm db:migrate:lint && pnpm tool:sync-env-example && pnpm build && pnpm build:check && pnpm test",
+    "ci:quality": "pnpm deps:audit && pnpm deps:audit:prod && pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:locale-keys && pnpm validate:constants && pnpm validate:test-api-prefix && pnpm validate:api-docs-hub && pnpm test:property && pnpm test:contract && pnpm routes:catalog:check && pnpm docs:check && pnpm tsdoc:check && pnpm tool:sync-env-example && pnpm db:migrate:lint && node tooling/ci/check-action-pins.mjs",
     "compose:up": "docker compose up -d",
     "compose:down": "docker compose down",
     "compose:wait": "bash tooling/dev/wait-for-local-postgres.sh",
@@ -118,10 +116,9 @@
     "docs:upload:hosted": "pnpm docs:upload && pnpm docs:upload:scalar",
     "routes:catalog": "tsx src/scripts/codegen/generate-route-catalog.ts",
     "routes:catalog:check": "tsx src/scripts/codegen/generate-route-catalog.ts --check",
-    "features:generate": "tsx src/scripts/codegen/generate-feature-docs.ts",
-    "features:check": "tsx src/scripts/codegen/generate-feature-docs.ts --check",
-    "features:check:strict": "tsx src/scripts/codegen/generate-feature-docs.ts --check --strict",
-    "features:refresh-baseline": "tsx src/scripts/codegen/generate-feature-docs.ts --refresh-baseline",
+    "tsdoc:check": "tsx tooling/tsdoc-coverage/check-coverage.ts",
+    "tsdoc:check:report": "tsx tooling/tsdoc-coverage/check-coverage.ts --report",
+    "tsdoc:check:refresh-budget": "tsx tooling/tsdoc-coverage/check-coverage.ts --refresh-budget",
     "tool:sync-env-example": "tsx src/scripts/validators/env/sync-env-example.ts",
     "tool:load-test-credentials": "tsx src/scripts/admin/load-test-credentials.ts",
     "tool:admin-token": "tsx src/scripts/admin/admin-token.ts",
@@ -174,20 +171,6 @@
     "load:bench": "pnpm test:bench",
     "commitlint": "commitlint",
     "prepare": "husky"
-  },
-  "lint-staged": {
-    "src/**/*.ts": [
-      "biome check --write --no-errors-on-unmatched"
-    ],
-    "tooling/**/*.{ts,mjs}": [
-      "biome check --write --no-errors-on-unmatched"
-    ],
-    "*.{json,yaml,yml}": [
-      "biome format --write --no-errors-on-unmatched"
-    ],
-    "*.md": [
-      "bash tooling/ci/lint-staged-markdown.sh"
-    ]
   },
   "packageManager": "pnpm@10.28.2",
   "dependencies": {

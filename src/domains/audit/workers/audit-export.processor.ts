@@ -34,14 +34,58 @@ function exportPrefix(): string {
   return env.AUDIT_EXPORT_S3_PREFIX.replace(/\/$/, '');
 }
 
+/**
+ * Builds the S3 object key for one gzipped NDJSON part file inside an audit
+ * export.
+ *
+ * @remarks
+ * Layout is `<prefix>/organization_id=<id>/dt=<YYYY-MM-DD>/part-<uuid>.jsonl.gz`,
+ * which gives Hive/Athena partition pruning by `organization_id` and `dt` and
+ * makes per-tenant retention deletes cheap. The trailing `partId` is a UUID so
+ * a re-run after a partial failure cannot collide with the previous attempt.
+ */
 export function buildExportKey(organizationId: number, dateLabel: string, partId: string): string {
   return `${exportPrefix()}/organization_id=${organizationId}/dt=${dateLabel}/part-${partId}.jsonl.gz`;
 }
 
+/**
+ * Builds the S3 object key for the per-tenant per-day export manifest.
+ *
+ * @remarks
+ * The manifest is the idempotency key for this job: the processor checks the
+ * manifest's existence before exporting (`headObject(manifestKey)`) and writes
+ * it last, after all data parts have been uploaded successfully. A retry that
+ * sees the manifest skips the tenant entirely.
+ */
 export function buildManifestKey(organizationId: number, dateLabel: string): string {
   return `${exportPrefix()}/organization_id=${organizationId}/dt=${dateLabel}/${AUDIT_EXPORT_MANIFEST_FILENAME}`;
 }
 
+/**
+ * Exports the previous UTC day's audit log entries to S3 for every tenant that
+ * produced events.
+ *
+ * @remarks
+ * Pull-based daily job:
+ *
+ * 1. Computes the previous UTC day (`[D-1, D)`) — bounded by UTC midnights so
+ *    the same job can run from any time zone without missing or double-counting
+ *    rows.
+ * 2. Discovers active tenants via `selectDistinct(organization_id)` over the
+ *    window. This avoids holding a giant cursor over the full `logs` table.
+ * 3. For each tenant, checks whether the manifest already exists; if so the
+ *    tenant is treated as already exported (idempotent on retry).
+ * 4. Streams rows in `AUDIT_EXPORT_BATCH_SIZE` chunks ordered by `id` (stable,
+ *    monotonic), writes one gzipped NDJSON part, then writes the manifest.
+ *    The manifest is the LAST write so a crash mid-export leaves no manifest
+ *    and the next run re-tries cleanly.
+ * 5. Records sha256 of the gzipped body in S3 object metadata + manifest, so
+ *    consumers can verify integrity without re-downloading the part.
+ *
+ * Honors `AUDIT_EXPORT_ENABLED` and `S3_BUCKET`; either being unset short-
+ * circuits the whole job. Tenants with zero rows in the window are skipped
+ * (no empty parts, no manifest).
+ */
 export async function runAuditExportJob(databaseHandle: WorkerDatabaseHandle): Promise<{
   exportedOrganizations: number;
   skipped: number;

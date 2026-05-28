@@ -26,7 +26,7 @@ Run this skill when:
 
 ## Templates
 
-Each file follows a fixed shape. Do not add or remove top-level H2 sections without updating [`tooling/feature-docs/overview-reader.ts`](../../../tooling/feature-docs/overview-reader.ts) — the validator enforces them.
+Each file follows a fixed shape. Keep section names consistent across changes — the four narratives are read together by anyone onboarding to the codebase.
 
 ### Template F — `src/OVERVIEW.md`
 
@@ -90,7 +90,7 @@ First line: `` `src/` ``.
 2. Append a row to the Domains table in `src/OVERVIEW.md`.
 3. If the domain introduces a new cross-cutting pattern, add it under `src/PATTERNS.md` (see below).
 4. If the domain participates in a new end-to-end flow, add it under `src/FLOWS.md`.
-5. Run `pnpm features:generate` and confirm `src/DOCS.md` lists the four narratives without `MISSING_SYSTEM_FILE` tokens.
+5. Run `pnpm tsdoc:check` to confirm coverage budget is not regressed by any new exports referenced from the narrative.
 
 ### Add a new pattern
 
@@ -107,7 +107,7 @@ First line: `` `src/` ``.
 
 1. Add the constant to the appropriate file under `src/shared/constants/` with a TSDoc `@remarks` block (rationale + consequences + last reviewed). The **tsdoc-export-guard** skill enforces that.
 2. Add the matching H2 block under `src/POLICIES.md` following Template I.
-3. Run `pnpm features:generate` to confirm.
+3. Run `pnpm tsdoc:check` to confirm the new export carries the required `@remarks`.
 
 ## Anti-patterns
 
@@ -120,10 +120,8 @@ First line: `` `src/` ``.
 
 - Adding a new policy constant → also invoke **tsdoc-export-guard** (the constant export needs `@remarks` describing rationale + consequences + last reviewed).
 - Adding a new domain → also invoke **overview-doc-maintainer** (the new domain folder needs an `OVERVIEW.md`).
-- After authoring → always invoke **feature-doc-maintainer** to refresh the index.
 
 ## Related references
 
-- Validator: [`tooling/feature-docs/overview-reader.ts`](../../../tooling/feature-docs/overview-reader.ts) (required H2 list per variant)
-- System files reader: [`tooling/feature-docs/system-files-reader.ts`](../../../tooling/feature-docs/system-files-reader.ts)
-- Index renderer: [`tooling/feature-docs/index-renderer.ts`](../../../tooling/feature-docs/index-renderer.ts)
+- TSDoc coverage gate: [`tooling/tsdoc-coverage/`](../../../tooling/tsdoc-coverage/)
+- Architecture doc: [`docs/reference/architecture/documentation-system.md`](../../../docs/reference/architecture/documentation-system.md)
