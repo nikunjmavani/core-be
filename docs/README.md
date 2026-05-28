@@ -50,7 +50,7 @@ flowchart TB
 | [getting-started/setup.md](getting-started/setup.md)                                         | Local setup, testing, links to deployment and credentials.                                                  |
 | [getting-started/api-testing.md](getting-started/api-testing.md)                             | Manual API checklist and smoke after `pnpm db:seed:full`.                                                   |
 | [getting-started/requirement-intake.md](getting-started/requirement-intake.md)               | Format for new requirements; which skills and rules to run.                                                 |
-| [../CONTRIBUTING.md](../CONTRIBUTING.md)                                                     | Contributor quick start; links to **AGENTS.md** for the full PR checklist.                                  |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md)                                                     | Contributor quick start; **AGENTS.md** (author gate), **pr-review.md** (reviewers).                         |
 | [deployment/runbooks/environment-variables.md](deployment/runbooks/environment-variables.md) | Env variable workflow (`.github/sync.config.json` → `pnpm github:sync` → edit values → `pnpm github:sync`). |
 | [integrations/credentials-and-env.md](integrations/credentials-and-env.md)                   | Per-provider credential acquisition (S3, Resend, OAuth, Stripe, Sentry, etc.).                              |
 
@@ -61,6 +61,7 @@ flowchart TB
 | Doc                                                  | Description                                                                              |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | [process/git-workflow.md](process/git-workflow.md)   | Branch naming, PR flow, conventional commits.                                            |
+| [process/pr-review.md](process/pr-review.md)         | Human + agent PR review checklist, severity legend, doc-sync map.                        |
 | [process/dr-runbook.md](process/dr-runbook.md)       | Disaster recovery — RTO 1h, RPO 15m, failover, quarterly review.                         |
 | [process/backup-drills.md](process/backup-drills.md) | Monthly restore drill — required automated RTO gate + optional manual evidence workflow. |
 | [process/dlq-runbook.md](process/dlq-runbook.md)     | Dead-letter queue inspection and replay.                                                 |

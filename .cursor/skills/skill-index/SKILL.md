@@ -257,9 +257,17 @@ The following `.cursor/rules/*.mdc` files auto-invoke skills based on file globs
 
 **cursor-global-skills** = reference only (Cursor built-in skills; not for domain work).
 
+## Related process docs
+
+| Doc | When to use |
+| --- | ----------- |
+| [requirement-intake.md](../../docs/getting-started/requirement-intake.md) | New feature/API work — defaults + one-shot Plan before coding |
+| [pr-review.md](../../docs/process/pr-review.md) | Reviewing or babysitting a PR (human + agent rubric) |
+| [branch-protection.md](../../docs/deployment/ci-cd/branch-protection.md) | Exact required CI check names for merge |
+
 ## New requirement workflow
 
-When the user gives a **new requirement**, read **`docs/getting-started/requirement-intake.md`**, identify the requirement type, then run the **Skills to run** in order for that type. The rule **new-requirement-intake.mdc** triggers when the intake doc is referenced.
+When the user gives a **new requirement**, read **`docs/getting-started/requirement-intake.md`**, identify the requirement type, post a **Plan** once for **go**, then run the **Skills to run** in order for that type. The rule **new-requirement-intake.mdc** triggers when the intake doc is referenced.
 
 ## Maintaining this index
 

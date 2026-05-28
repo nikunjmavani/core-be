@@ -15,8 +15,29 @@ flowchart LR
   E --> F[Lint]
 ```
 
-1. **You (the user)** describe the requirement using the **Details to provide** for the matching type below.
-2. **The AI** consults **`.cursor/skills/skill-index/SKILL.md`** first, invokes the **Skills to run** in order, applies the **Rules** that match the changed files, and fixes lint issues in touched files (**code-smells-and-best-practices**) before finishing.
+1. **You (the user)** describe the requirement using the **Details to provide** for the matching type below (omit fields covered by **Default assumptions**).
+2. **The AI** applies defaults, proposes a **Plan** once (see [Plan confirmation](#plan-confirmation-ai-workflow)), then runs skills after you reply **go**.
+3. **The AI** consults **`.cursor/skills/skill-index/SKILL.md`** first, invokes the **Skills to run** in order, applies the **Rules** that match the changed files, and fixes lint issues in touched files (**code-smells-and-best-practices**) before finishing.
+
+---
+
+## Default assumptions (when you don't specify)
+
+The AI fills these unless your message says otherwise. List overrides in your first message (e.g. "public list endpoint", "no soft-delete").
+
+| Area | Default |
+| ---- | ------- |
+| **Access** | `authenticated` (use `public` only for auth flows, webhooks, health, or explicit public API) |
+| **Pagination** | Cursor-based (`PAGINATION.DEFAULT_LIMIT`) on list routes |
+| **Soft-delete** | ON for tenant-owned resources; OFF for system tables, audit, immutable billing ledgers |
+| **Tenancy** | Scoped by `X-Organization-Id` / organization context unless marked global |
+| **Tests** | Sub-domain unit tests + bundled domain e2e in `src/domains/<domain>/__tests__/<domain>.test.ts` |
+| **i18n** | All user-facing strings use translation keys (`errors.*`, `success.*`) |
+| **Logging** | `logger` from `@/shared/utils/infrastructure/logger.util.js`; no `console.log` |
+| **Object params** | Single options object for 2+ inputs (repository methods keep positional params) |
+| **Validation** | Zod DTO in `*.dto.ts` + function validator with `.safeParse()` in `*.validator.ts` |
+| **API version** | `/api/v1` prefix for public HTTP routes |
+| **Target branch** | Feature work merges to `dev` unless you say hotfix/production |
 
 ---
 
@@ -33,6 +54,8 @@ flowchart LR
 - **Access**: `public` | `authenticated` | `org-permission:<code>` | `global-role:admin` (or list which routes need which)
 - **Database**: Do you need new tables? If yes: table name(s), columns (name, type, constraints) in brief.
 - **Dependencies**: Any cross-domain calls? (e.g. "create membership when invitation is accepted")
+
+**Defaults:** Sub-domain folder name is domain-prefixed; REST shape (`GET` list, `GET :id`, `POST`, `PATCH :id`, `DELETE :id`) unless you specify custom routes; tenant tables include `id`, `public_id`, `organization_id` (when tenant-owned), `created_at`, `updated_at`, `deleted_at` when soft-delete applies; one bundled e2e suite at `__tests__/<domain>.test.ts`.
 
 **Skills to run (in order):**
 
@@ -60,6 +83,8 @@ flowchart LR
 - **Domain + sub-domain** (e.g. `tenancy` / `organization`): **\*\***\_**\*\***
 - **New routes**: for each — HTTP method, path (e.g. `GET /organizations/:id/settings`), request body/query shape (brief), response shape (brief), access (`public` | `authenticated` | `org-permission:...` | `global-role:...`)
 
+**Defaults:** Extend existing sub-domain layers only (no new domain scaffold); list routes use cursor pagination; access `authenticated` unless you name a permission code.
+
 **Skills to run (in order):**
 
 1. **domain-generator** (for layout reference) or implement in existing controller/service/validator/serializer
@@ -85,6 +110,8 @@ flowchart LR
 - **Worker behavior**: what the worker does (e.g. "HTTP POST to endpoint, retry 3x, update delivery_attempt")
 - **Who enqueues**: which service/handler emits the event or calls `enqueue*`
 
+**Defaults:** Processor lives under domain `workers/`; job payload includes `organizationPublicId` for tenant-scoped work; DLQ + retries per existing queue patterns; event-bus handlers must not fail the HTTP request.
+
 **Skills to run (in order):**
 
 1. **workers-events** — `.cursor/skills/workers-events/SKILL.md`
@@ -109,6 +136,8 @@ flowchart LR
 - **Indexes**: which columns, unique or not
 - **Migration**: "add new migration file" or "change existing table X"
 
+**Defaults:** New migration file (forward-only in PR); `text` columns not `varchar(n)`; indexes for FKs and common filters; `IF NOT EXISTS` / safe DDL per **db-migration-maintainer**.
+
 **Skills to run (in order):**
 
 1. **schema-generator** — `.cursor/skills/schema-generator/SKILL.md`
@@ -131,6 +160,8 @@ flowchart LR
 - **Script**: `pnpm db:seed` (minimal) or `pnpm db:seed:full` (full demo)
 - **Idempotency**: can the seed run multiple times? (prefer yes)
 
+**Defaults:** Idempotent seeds; minimal script for reference data, full script for demo fixtures; align with [routes.txt](../routes.txt) exposed APIs.
+
 **Skills to run (in order):**
 
 1. **seed-maintainer** — `.cursor/skills/seed-maintainer/SKILL.md`
@@ -149,6 +180,8 @@ flowchart LR
 - **Target domain/sub-domain** in core-be: **\*\***\_**\*\***
 - **Routes to expose** (method, path, body, response)
 - **Env/secrets**: list any Supabase-specific env vars and their core-be equivalent (e.g. `SUPABASE_URL` → `DATABASE_URL`)
+
+**Defaults:** Target domain follows canonical layout; map Deno handlers to Fastify routes + services; use **env-schema-add** for any new env vars.
 
 **Skills to run (in order):**
 
@@ -169,7 +202,9 @@ flowchart LR
 **Details to provide:**
 
 - **What changes**: e.g. "add rule X", "run Semgrep in CI", "change audit level"
-- **Files**: `biome.json`, `.husky/pre-commit`, `.github/workflows/ci.yml`, `.gitleaks.toml`, `.semgrepignore`, etc.
+- **Files**: `biome.json`, `.husky/pre-commit`, `.github/workflows/pr-ci.yml`, `.github/workflows/post-merge-ci.yml`, `.gitleaks.toml`, `.semgrepignore`, etc.
+
+**Defaults:** PR merge gate stays **pr-ci.yml** + **pr-governance.yml**; post-merge deploy/release stays **post-merge-ci.yml**; do not weaken required checks in rulesets.
 
 **Skills to run (in order):**
 
@@ -187,6 +222,8 @@ flowchart LR
 
 - **What**: e.g. "add rate limit for login", "enable RLS for table X", "circuit breaker for new client"
 - **Where**: middleware, `connection.ts`, `env.config.ts`, etc.
+
+**Defaults:** Follow existing middleware registration in `src/shared/middlewares/`; document operational impact in the matching runbook under `docs/deployment/runbooks/` or `docs/reference/security/`.
 
 **Skills to run (in order):**
 
@@ -206,6 +243,8 @@ flowchart LR
 - **Current path(s)**: **\*\***\_**\*\***
 - **New path(s)**: **\*\***\_**\*\***
 - **Reason**: e.g. "align with domain naming", "split sub-domain"
+
+**Defaults:** Mechanical rename with import path updates; sync **structure-maintainer** artifacts (CLAUDE.md, skills, rules) when layout docs change.
 
 **Skills to run (in order):**
 
@@ -227,6 +266,8 @@ flowchart LR
 - **Failing check name(s)** (if known)
 - **Scope**: fix only this PR vs also merge latest base branch
 
+**Defaults:** Apply [pr-review.md](../process/pr-review.md) rubric; merge/rebase base branch when behind; never weaken CI to go green.
+
 **Skills to run (in order):**
 
 1. **ci-investigator** (if diagnosing one check) — `.cursor/skills/ci-investigator/SKILL.md`
@@ -244,6 +285,8 @@ flowchart LR
 - **Preferred split** (optional): by domain, migration-first, etc.
 - **Whether stacking** is acceptable
 
+**Defaults:** Smallest reviewable slices (schema → API → workers); each slice should pass `pnpm ci:quality` or full gate as appropriate.
+
 **Skills to run:**
 
 1. **split-to-prs** — `.cursor/skills/split-to-prs/SKILL.md`
@@ -259,6 +302,8 @@ flowchart LR
 - **Scope**: which domains/files (e.g. "billing and tenancy", "only auth controller").
 - **Acceptance**: how to verify (e.g. "GET /api/v1/billing/plans returns 200", "lint and tests pass").
 
+**Defaults:** Infer requirement type from scope; apply global defaults above; run **skill-index** triggers for every file category touched.
+
 **Skills to run:**
 
 - **Always:** Consult **skill-index** first, then run any skill whose trigger matches your changes.
@@ -268,6 +313,44 @@ flowchart LR
 
 **Rules that will apply:**  
 All `.cursor/rules/*.mdc` whose globs match the files you change (see skill index "Auto-trigger rules" table).
+
+---
+
+## Plan confirmation (AI workflow)
+
+After you send a requirement, the AI proposes **one** plan before editing code. You should not get repeated clarification questions unless something is destructive.
+
+```mermaid
+flowchart LR
+  Intake[Intake details] --> Defaults[Apply smart defaults]
+  Defaults --> Plan[AI proposes Plan]
+  Plan --> Confirm{User: go / tweak / stop}
+  Confirm -- go --> Execute[Run skills + edit]
+  Confirm -- tweak --> Plan
+  Confirm -- stop --> End[Stop]
+```
+
+### Plan contents (AI posts once)
+
+1. **Requirement type** (1–12) and one-line goal.
+2. **Fields** — what you provided vs what defaults apply.
+3. **Skills** — ordered list from the matching section above.
+4. **Files** — create/modify paths (domains, migrations, docs, workflows).
+5. **Verification** — commands (e.g. `pnpm test`, `pnpm routes:catalog:check`, targeted domain test).
+
+### Your reply
+
+| Reply | Meaning |
+| ----- | ------- |
+| **go** | Proceed; no more questions unless a blocker below appears |
+| **tweak …** | Adjust plan; AI revises plan once more if needed, then executes on next **go** |
+| **stop** | Do not implement |
+
+### When the AI may ask again (after **go**)
+
+- Irreversible data loss or production-only secret handling.
+- Breaking API contract without you acknowledging **Major** release.
+- Ambiguous ownership between two domains with no default.
 
 ---
 
@@ -334,4 +417,4 @@ All `.cursor/rules/*.mdc` whose globs match the files you change (see skill inde
 
 ---
 
-**Summary:** For any new requirement, give the **details** from the matching section above. The AI will consult the **skill-index** and run the **skills** in order, and the **rules** will auto-invoke based on the files changed. This keeps behavior consistent and ensures docs, routes, tests, and lint stay in sync.
+**Summary:** For any new requirement, give the **details** from the matching section above (defaults fill the rest). The AI posts a **Plan** once; after **go**, it consults **skill-index**, runs **skills** in order, and **rules** auto-invoke on changed files. Before opening a PR, use [pr-review.md](../process/pr-review.md) and [`.github/PULL_REQUEST_TEMPLATE.md`](../../.github/PULL_REQUEST_TEMPLATE.md).
