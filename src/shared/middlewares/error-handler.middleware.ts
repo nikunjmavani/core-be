@@ -94,7 +94,132 @@ function mapFastifyValidationField(
   return validationContext ?? 'body';
 }
 
-// eslint-disable-next-line max-lines-per-function -- Fastify error-handler dispatcher across timeout/AppError/Zod/Fastify cases.
+interface ErrorResponseBody {
+  error: ReturnType<typeof buildErrorPayload>;
+  meta: { request_id: string };
+}
+
+function buildTimeoutResponse(
+  request: FastifyRequest,
+  requestId: string,
+  options: {
+    translationKey: string;
+    fallbackMessage: string;
+    code: 'request_timeout' | 'gateway_timeout';
+  },
+): ErrorResponseBody {
+  const detail = translateDetail(request, options.translationKey, {}, options.fallbackMessage);
+  return {
+    error: buildErrorPayload('request_error', options.code, detail),
+    meta: { request_id: requestId },
+  };
+}
+
+function handleAppErrorResponse(
+  error: AppError,
+  request: FastifyRequest,
+  requestId: string,
+): ErrorResponseBody {
+  if (error.statusCode >= 500) {
+    captureException(
+      error,
+      omitUndefined({
+        requestId,
+        userId: request.auth?.userId,
+        organizationId: request.organizationId ?? undefined,
+      }),
+    );
+  }
+  const code = ERROR_CODE_TO_SNAKE[error.code];
+  const isValidation = error instanceof ValidationError;
+  const detail =
+    error.statusCode >= 500
+      ? translateDetail(request, 'errors:internal', {}, EXTERNAL_ERROR_MESSAGE)
+      : translateDetail(request, error.messageKey, error.messageParams, error.message);
+  const errors =
+    isValidation && error.errors
+      ? error.errors.map((item) => ({
+          field: item.field,
+          message:
+            item.messageKey && request.t
+              ? request.t(item.messageKey, item.messageParams ?? {})
+              : (item.message ?? item.messageKey ?? 'Invalid'),
+        }))
+      : undefined;
+  return {
+    error: buildErrorPayload(
+      isValidation ? 'validation_error' : 'request_error',
+      code,
+      detail,
+      errors,
+    ),
+    meta: { request_id: requestId },
+  };
+}
+
+function handleZodErrorResponse(
+  error: ZodError,
+  request: FastifyRequest,
+  requestId: string,
+): ErrorResponseBody {
+  const detail = translateDetail(
+    request,
+    'errors:invalidFields',
+    {},
+    'Invalid values for fields in request',
+  );
+  const errors = Object.entries(error.flatten().fieldErrors).map(([field, message]) => ({
+    field,
+    message: Array.isArray(message) ? message.join(', ') : String(message ?? 'Invalid'),
+  }));
+  return {
+    error: buildErrorPayload('validation_error', 'invalid_field', detail, errors),
+    meta: { request_id: requestId },
+  };
+}
+
+function handleFastifyValidationErrorResponse(
+  error: FastifyValidationError,
+  request: FastifyRequest,
+  requestId: string,
+): ErrorResponseBody {
+  const detail = translateDetail(
+    request,
+    'errors:invalidFields',
+    {},
+    'Invalid values for fields in request',
+  );
+  const errors = error.validation.map((issue) => ({
+    field: mapFastifyValidationField(issue, error.validationContext),
+    message: issue.message ?? 'Invalid',
+  }));
+  return {
+    error: buildErrorPayload('validation_error', 'invalid_field', detail, errors),
+    meta: { request_id: requestId },
+  };
+}
+
+function handleUnhandledErrorResponse(
+  error: unknown,
+  request: FastifyRequest,
+  requestId: string,
+): ErrorResponseBody {
+  captureException(
+    error,
+    omitUndefined({
+      requestId,
+      userId: request.auth?.userId,
+      organizationId: request.organizationId ?? undefined,
+    }),
+  );
+  logger.error({ error, requestId }, 'Unhandled error');
+  const internalDetail = translateDetail(request, 'errors:internal', {}, EXTERNAL_ERROR_MESSAGE);
+  return {
+    error: buildErrorPayload('request_error', 'internal_error', internalDetail),
+    meta: { request_id: requestId },
+  };
+}
+
 const errorHandlerMiddlewarePlugin: FastifyPluginAsync = async (app) => {
   app.setNotFoundHandler(async (request, reply) => {
     const requestId = getRequestId(request as { id?: string });
@@ -106,131 +231,46 @@ const errorHandlerMiddlewarePlugin: FastifyPluginAsync = async (app) => {
     };
   });
 
-  // eslint-disable-next-line max-lines-per-function -- Fastify error-handler dispatcher across timeout/AppError/Zod/Fastify cases.
   app.setErrorHandler(async (error, request, reply) => {
     const currentRequestId = getRequestId(request as { id?: string });
 
     if (isFastifyRequestTimeoutError(error)) {
       logger.warn({ requestId: currentRequestId }, 'request.timeout');
       reply.status(408);
-      const detail = translateDetail(
-        request,
-        'errors:requestTimeout',
-        {},
-        'The request took too long to complete',
-      );
-      return {
-        error: buildErrorPayload('request_error', 'request_timeout', detail),
-        meta: { request_id: currentRequestId },
-      };
+      return buildTimeoutResponse(request, currentRequestId, {
+        translationKey: 'errors:requestTimeout',
+        fallbackMessage: 'The request took too long to complete',
+        code: 'request_timeout',
+      });
     }
 
     if (isPostgresStatementTimeoutError(error)) {
       logger.warn({ requestId: currentRequestId }, 'database.statement_timeout');
       reply.status(504);
-      const detail = translateDetail(
-        request,
-        'errors:databaseTimeout',
-        {},
-        'The database operation timed out',
-      );
-      return {
-        error: buildErrorPayload('request_error', 'gateway_timeout', detail),
-        meta: { request_id: currentRequestId },
-      };
+      return buildTimeoutResponse(request, currentRequestId, {
+        translationKey: 'errors:databaseTimeout',
+        fallbackMessage: 'The database operation timed out',
+        code: 'gateway_timeout',
+      });
     }
 
     if (error instanceof AppError) {
-      if (error.statusCode >= 500) {
-        captureException(
-          error,
-          omitUndefined({
-            requestId: currentRequestId,
-            userId: request.auth?.userId,
-            organizationId: request.organizationId ?? undefined,
-          }),
-        );
-      }
       reply.status(error.statusCode);
-      const code = ERROR_CODE_TO_SNAKE[error.code];
-      const isValidation = error instanceof ValidationError;
-      const detail =
-        error.statusCode >= 500
-          ? translateDetail(request, 'errors:internal', {}, EXTERNAL_ERROR_MESSAGE)
-          : translateDetail(request, error.messageKey, error.messageParams, error.message);
-      const errors =
-        isValidation && error.errors
-          ? error.errors.map((item) => ({
-              field: item.field,
-              message:
-                item.messageKey && request.t
-                  ? request.t(item.messageKey, item.messageParams ?? {})
-                  : (item.message ?? item.messageKey ?? 'Invalid'),
-            }))
-          : undefined;
-      return {
-        error: buildErrorPayload(
-          isValidation ? 'validation_error' : 'request_error',
-          code,
-          detail,
-          errors,
-        ),
-        meta: { request_id: currentRequestId },
-      };
+      return handleAppErrorResponse(error, request, currentRequestId);
     }
 
     if (error instanceof ZodError) {
       reply.status(400);
-      const detail = translateDetail(
-        request,
-        'errors:invalidFields',
-        {},
-        'Invalid values for fields in request',
-      );
-      const errors = Object.entries(error.flatten().fieldErrors).map(([field, message]) => ({
-        field,
-        message: Array.isArray(message) ? message.join(', ') : String(message ?? 'Invalid'),
-      }));
-      return {
-        error: buildErrorPayload('validation_error', 'invalid_field', detail, errors),
-        meta: { request_id: currentRequestId },
-      };
+      return handleZodErrorResponse(error, request, currentRequestId);
     }
 
     if (isFastifyValidationError(error)) {
       reply.status(error.statusCode ?? 400);
-      const detail = translateDetail(
-        request,
-        'errors:invalidFields',
-        {},
-        'Invalid values for fields in request',
-      );
-      const errors = error.validation.map((issue) => ({
-        field: mapFastifyValidationField(issue, error.validationContext),
-        message: issue.message ?? 'Invalid',
-      }));
-      return {
-        error: buildErrorPayload('validation_error', 'invalid_field', detail, errors),
-        meta: { request_id: currentRequestId },
-      };
+      return handleFastifyValidationErrorResponse(error, request, currentRequestId);
     }
 
-    captureException(
-      error,
-      omitUndefined({
-        requestId: currentRequestId,
-        userId: request.auth?.userId,
-        organizationId: request.organizationId ?? undefined,
-      }),
-    );
-
-    logger.error({ error, requestId: currentRequestId }, 'Unhandled error');
     reply.status(500);
-    const internalDetail = translateDetail(request, 'errors:internal', {}, EXTERNAL_ERROR_MESSAGE);
-    return {
-      error: buildErrorPayload('request_error', 'internal_error', internalDetail),
-      meta: { request_id: currentRequestId },
-    };
+    return handleUnhandledErrorResponse(error, request, currentRequestId);
   });
 };
 
