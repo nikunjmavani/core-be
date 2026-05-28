@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import { injectUnauthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
  * Input validation tests — verify endpoints reject malformed inputs.
@@ -23,7 +24,7 @@ describe('Security: Input Validation', () => {
     it('should reject missing email field', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: { password: 'test' },
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -32,7 +33,7 @@ describe('Security: Input Validation', () => {
     it('should reject missing password field', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: { email: 'test@test.com' },
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -41,7 +42,7 @@ describe('Security: Input Validation', () => {
     it('should reject empty body', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -50,7 +51,7 @@ describe('Security: Input Validation', () => {
     it('should reject SQL injection in email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: "' OR 1=1 --",
           password: 'test',
@@ -62,7 +63,7 @@ describe('Security: Input Validation', () => {
     it('should reject XSS in email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: '<script>alert("xss")</script>',
           password: 'test',
@@ -76,7 +77,7 @@ describe('Security: Input Validation', () => {
     it('should reject missing email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/send',
+        url: testApiPath('/auth/magic-link/send'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -85,7 +86,7 @@ describe('Security: Input Validation', () => {
     it('should reject invalid email format', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/send',
+        url: testApiPath('/auth/magic-link/send'),
         payload: { email: 'not-an-email' },
       });
       // 429 when strict auth rate limit is hit by earlier tests in the same file
@@ -95,7 +96,7 @@ describe('Security: Input Validation', () => {
     it('should reject Gmail address with plus in local part', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/send',
+        url: testApiPath('/auth/magic-link/send'),
         payload: { email: 'user+label@gmail.com' },
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -106,7 +107,7 @@ describe('Security: Input Validation', () => {
     it('should reject empty body', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/reset',
+        url: testApiPath('/auth/password/reset'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -117,7 +118,7 @@ describe('Security: Input Validation', () => {
     it('should handle excessively long name', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: 'a'.repeat(500) + '@test.com',
           password: 'a'.repeat(500),
@@ -131,7 +132,7 @@ describe('Security: Input Validation', () => {
     it('should reject non-JSON content type on JSON endpoints', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         headers: { 'content-type': 'text/plain' },
         payload: 'email=test@test.com&password=test',
       });
@@ -143,7 +144,7 @@ describe('Security: Input Validation', () => {
     it('should accept email with leading and trailing spaces (trimmed)', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: '  valid-format@example.com  ',
           password: 'somepassword',
@@ -155,7 +156,7 @@ describe('Security: Input Validation', () => {
     it('should reject password that is only whitespace', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: 'user@example.com',
           password: '   \t  ',
@@ -179,7 +180,7 @@ describe('Security: Input Validation', () => {
       const testAppWithMock = await createTestAppFresh();
       const response = await injectUnauthenticatedFresh(testAppWithMock.app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/send',
+        url: testApiPath('/auth/magic-link/send'),
         payload: { email: 'test@yopmail.com' },
       });
       await testAppWithMock.app.close();
@@ -201,7 +202,7 @@ describe('Security: Input Validation', () => {
     it('when switch is off (e.g. tests), disposable email is allowed', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/send',
+        url: testApiPath('/auth/magic-link/send'),
         payload: { email: 'test@yopmail.com' },
       });
       expect(response.statusCode).toBe(200);
@@ -210,7 +211,7 @@ describe('Security: Input Validation', () => {
     it('when switch is off, password forgot accepts disposable email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/forgot',
+        url: testApiPath('/auth/password/forgot'),
         payload: { email: 'user@mailinator.com' },
       });
       expect(response.statusCode).toBe(200);

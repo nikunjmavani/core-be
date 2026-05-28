@@ -7,6 +7,7 @@ import {
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 describe('Billing - Plans', () => {
   let app: FastifyInstance;
@@ -26,7 +27,7 @@ describe('Billing - Plans', () => {
   it('GET /api/v1/billing/plans returns 200 without authentication', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/api/v1/billing/plans',
+      url: testApiPath('/billing/plans'),
     });
 
     expect(response.statusCode).toBe(200);
@@ -35,7 +36,7 @@ describe('Billing - Plans', () => {
   it('GET /api/v1/billing/plans returns 200 with empty list when authenticated', async () => {
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: '/api/v1/billing/plans',
+      url: testApiPath('/billing/plans'),
       token,
     });
 
@@ -47,7 +48,7 @@ describe('Billing - Plans', () => {
   it('GET /api/v1/billing/plans/:id returns 404 for nonexistent plan when authenticated', async () => {
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: '/api/v1/billing/plans/nonexistent-id',
+      url: testApiPath('/billing/plans/nonexistent-id'),
       token,
     });
 

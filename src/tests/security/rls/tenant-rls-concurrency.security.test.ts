@@ -12,6 +12,7 @@ import {
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
  * Concurrent requests with different X-Organization-Id headers must not leak tenant context.
@@ -60,7 +61,7 @@ describe('Security: Tenant RLS concurrency', () => {
       responses.push(
         await injectAuthenticated(app, {
           method: 'GET',
-          url: `/api/v1/tenancy/organizations/${tenant.organization.public_id}`,
+          url: testApiPath(`/tenancy/organizations/${tenant.organization.public_id}`),
           token: tenant.token,
           organizationPublicId: tenant.organization.public_id,
         }),

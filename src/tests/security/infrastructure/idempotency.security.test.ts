@@ -12,6 +12,7 @@ import {
   injectUnauthenticated,
 } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 function uniqueSlug(prefix: string): string {
   return `${prefix}-${randomUUID().slice(0, 8)}`;
@@ -47,7 +48,7 @@ describe('Security: Idempotency', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       token,
       headers: { 'idempotency-key': uniqueKey('idem-accept') },
       payload: { name: 'Idempotent Org', slug: uniqueSlug('idempotent-org') },
@@ -63,7 +64,7 @@ describe('Security: Idempotency', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       token,
       payload: { name: 'No Key Org', slug: uniqueSlug('no-key-org') },
     });
@@ -77,7 +78,7 @@ describe('Security: Idempotency', () => {
 
     const longKeyResponse = await injectAuthenticated(app, {
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       token,
       headers: { 'idempotency-key': 'a'.repeat(500) },
       payload: { name: 'Bad Key Org', slug: uniqueSlug('bad-key-org') },
@@ -90,7 +91,7 @@ describe('Security: Idempotency', () => {
 
     const spaceKeyResponse = await injectAuthenticated(app, {
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       token,
       headers: { 'idempotency-key': 'bad key' },
       payload: { name: 'Bad Key Org 2', slug: uniqueSlug('bad-key-org-2') },
@@ -112,7 +113,7 @@ describe('Security: Idempotency', () => {
 
     const response = await injectUnauthenticated(app, {
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       headers: { 'idempotency-key': key },
       payload: { name: 'Unauth Org', slug: uniqueSlug('unauth-org') },
     });
@@ -128,7 +129,7 @@ describe('Security: Idempotency', () => {
     const slug = uniqueSlug('delete-idempotent-org');
     const createRes = await injectAuthenticated(app, {
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       token,
       payload: { name: 'Delete Idempotent Org', slug },
     });
@@ -137,7 +138,7 @@ describe('Security: Idempotency', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'DELETE',
-      url: `/api/v1/tenancy/organizations/${organizationId}`,
+      url: testApiPath(`/tenancy/organizations/${organizationId}`),
       token,
       headers: { 'idempotency-key': uniqueKey('delete-idem') },
     });
@@ -152,7 +153,7 @@ describe('Security: Idempotency', () => {
 
     const first = await injectAuthenticated(app, {
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       token,
       headers: { 'idempotency-key': key },
       payload: { name: 'Replay Org', slug: uniqueSlug('replay-org') },
@@ -166,7 +167,7 @@ describe('Security: Idempotency', () => {
 
     const second = await injectAuthenticated(app, {
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       token,
       headers: { 'idempotency-key': key },
       payload: { name: 'Replay Org Again', slug: uniqueSlug('replay-org-again') },
@@ -189,7 +190,7 @@ describe('Security: Idempotency', () => {
     const [responseOne, responseTwo] = await Promise.all([
       injectRoute(app, {
         method: 'POST',
-        url: '/api/v1/tenancy/organizations',
+        url: testApiPath('/tenancy/organizations'),
         headers: {
           authorization: `Bearer ${token}`,
           'idempotency-key': key,
@@ -198,7 +199,7 @@ describe('Security: Idempotency', () => {
       }),
       injectRoute(app, {
         method: 'POST',
-        url: '/api/v1/tenancy/organizations',
+        url: testApiPath('/tenancy/organizations'),
         headers: {
           authorization: `Bearer ${token}`,
           'idempotency-key': key,

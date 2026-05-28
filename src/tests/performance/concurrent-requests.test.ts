@@ -8,6 +8,7 @@ import {
   injectUnauthenticated,
 } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
  * Concurrent request tests — verify server stability under parallel load.
@@ -57,7 +58,7 @@ describe('Performance: Concurrent Requests', () => {
         Array.from({ length: batchSize }, () =>
           injectAuthenticated(app, {
             method: 'GET',
-            url: '/api/v1/users/me',
+            url: testApiPath('/users/me'),
             token,
           }),
         ),
@@ -80,14 +81,14 @@ describe('Performance: Concurrent Requests', () => {
       const reads = Array.from({ length: batchSize }, () =>
         injectAuthenticated(app, {
           method: 'GET',
-          url: '/api/v1/users/me',
+          url: testApiPath('/users/me'),
           token,
         }),
       );
       const writes = Array.from({ length: batchSize }, () =>
         injectAuthenticated(app, {
           method: 'POST',
-          url: '/api/v1/tenancy/organizations',
+          url: testApiPath('/tenancy/organizations'),
           token,
           payload: {
             name: `ConcOrg-${batch}-${Math.random()}`,
