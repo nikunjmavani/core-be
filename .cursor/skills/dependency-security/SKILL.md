@@ -51,7 +51,7 @@ Keep **zero known vulnerabilities** in dependencies and avoid **breaking changes
 
    Often does not resolve transitive vulns; proceed to overrides if needed.
 
-2. **Use `pnpm.overrides` for transitive vulnerabilities**
+2. **Use `overrides` in `pnpm-workspace.yaml` for transitive vulnerabilities**
    - When a **transitive** dependency (e.g. pulled in by `drizzle-kit` or `openapi-to-postmanv2`) has a known vulnerability, add or update an override in `package.json` to force a patched version:
 
    ```json
@@ -83,7 +83,7 @@ Keep **zero known vulnerabilities** in dependencies and avoid **breaking changes
 
 - **Quality job** runs `pnpm install --frozen-lockfile` then `pnpm deps:audit` and `pnpm deps:audit:prod`. Any vulnerability fails the job.
 - **Dependabot CI triage** ([`.github/workflows/dependabot-ci-triage.yml`](../../../.github/workflows/dependabot-ci-triage.yml)) opens an issue when PR CI fails on a Dependabot PR. All dependency PRs are merged manually after review. Branch protection must require **PR CI / Security audit**, **PR CI / Security secrets**, and **PR CI / Security SAST** so a merged dependency PR cannot skip audit, secret detection, or SAST.
-- Keep `pnpm.overrides` in `package.json` when needed so that the lockfile (frozen in CI) already contains patched versions.
+- Keep `overrides` in `pnpm-workspace.yaml` when needed so that the lockfile (frozen in CI) already contains patched versions.
 
 ## Checklist (after any dependency change)
 

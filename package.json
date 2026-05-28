@@ -6,7 +6,8 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24",
+    "pnpm": ">=11.1.1"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -172,7 +173,7 @@
     "commitlint": "commitlint",
     "prepare": "husky"
   },
-  "packageManager": "pnpm@10.28.2",
+  "packageManager": "pnpm@11.1.1+sha512.d1fdf5f73c617b64fa1a56a81c3c8dfe0e966e33a6010aa256b517ae77be21d93e05affc0de1a83b0e4f29d569f68b446ae8f068cd7247c0bb3df0fb4d7bdf9a",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",
     "@aws-sdk/s3-presigned-post": "^3.1053.0",
@@ -252,54 +253,5 @@
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@sentry-internal/node-cpu-profiler",
-      "argon2",
-      "esbuild",
-      "msgpackr-extract"
-    ],
-    "packageExtensions": {
-      "openapi-to-postmanv2": {
-        "dependencies": {
-          "lodash": "4.17.24",
-          "js-yaml": "^4.1.1"
-        }
-      },
-      "postman-collection": {
-        "dependencies": {
-          "lodash": "4.17.24"
-        }
-      },
-      "@esbuild-kit/core-utils": {
-        "dependencies": {
-          "esbuild": "^0.25.0"
-        }
-      }
-    },
-    "overrides": {
-      "ioredis": "5.10.1",
-      "esbuild": ">=0.25.0",
-      "@esbuild-kit/core-utils>esbuild": ">=0.25.0",
-      "lodash": ">=4.17.24",
-      "js-yaml": ">=4.1.1",
-      "fast-xml-parser": ">=5.7.0",
-      "hono": ">=4.12.18",
-      "markdown-it": ">=14.1.1",
-      "minimatch": "10.2.5",
-      "micromatch>picomatch": "4.0.4",
-      "rollup": ">=4.59.0",
-      "vite": ">=7.3.2",
-      "fastify": ">=5.8.5",
-      "@fastify/static": ">=9.1.1",
-      "drizzle-orm": ">=0.45.2",
-      "i18next-fs-backend": ">=2.6.4",
-      "i18next-http-middleware": ">=3.9.3",
-      "qs": ">=6.15.2",
-      "tmp": ">=0.2.6",
-      "uuid": ">=11.1.1",
-      "yaml@1.10.2": "1.10.3"
-    }
   }
 }

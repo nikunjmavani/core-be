@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 ARG NODE_VERSION=24.13.0
-ARG PNPM_VERSION=10.28.2
+ARG PNPM_VERSION=11.1.1
 ARG GENERATE_MCP_DOCS=true
 ARG INSTALL_MCP_OPTIONAL=false
 ARG BUILD_REVISION=unknown
@@ -26,7 +26,7 @@ ENV NODE_ENV=test \
 
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
@@ -50,7 +50,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/src/infrastructure/resilience/lua ./dist/src/infrastructure/resilience/lua
 COPY --from=build /app/migrations ./migrations
 COPY --from=build /app/src/shared/locales ./src/shared/locales
-COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
+COPY --from=build /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
   $( [ "$INSTALL_MCP_OPTIONAL" = "true" ] || echo "--no-optional" ) \

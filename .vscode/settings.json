@@ -64,7 +64,7 @@
   "explorer.fileNesting.expand": false,
   "explorer.fileNesting.patterns": {
     "tsconfig.json": "tsconfig.*.json",
-    "package.json": "pnpm-lock.yaml, .npmrc, .nvmrc, .node-version, .editorconfig, biome.json, .biomeignore",
+    "package.json": "pnpm-lock.yaml, pnpm-workspace.yaml, .nvmrc, .node-version, .editorconfig, biome.json, .biomeignore",
     ".env": ".env.*"
   },
   "envSwitcher.glob.target": ".env",

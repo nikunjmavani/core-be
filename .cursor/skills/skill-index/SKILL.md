@@ -121,7 +121,7 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### Dependency security
 
-- **Trigger**: changes to `package.json` (dependencies, devDependencies, pnpm.overrides) or `pnpm-lock.yaml`
+- **Trigger**: changes to `package.json` (dependencies, devDependencies), `pnpm-workspace.yaml` (overrides, packageExtensions), or `pnpm-lock.yaml`
 - **Action**: read and follow `dependency-security` — keep zero vulnerabilities, prefer safe updates, run audit + validate + test
 
 ### Code quality when implementing (`src/`)

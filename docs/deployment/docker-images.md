@@ -40,7 +40,7 @@ CI runs the same check before image builds ([`tooling/ci/check-dockerfile-sync.m
 | Arg                 | Default   | Use                                                                                     |
 | ------------------- | --------- | --------------------------------------------------------------------------------------- |
 | `NODE_VERSION`      | `24.13.0` | Pinned Node.js patch (`.nvmrc`, `.node-version`, CI)                                    |
-| `PNPM_VERSION`      | `10.28.2` | Matches `package.json` `packageManager`                                                 |
+| `PNPM_VERSION`      | `11.1.1` | Matches `package.json` `packageManager`                                                 |
 | `GENERATE_MCP_DOCS`    | `true`    | When `true`, runs `pnpm routes:catalog` + `pnpm docs:generate:multilang` in build stage |
 | `INSTALL_MCP_OPTIONAL` | `false`   | When `true`, runtime `pnpm install --prod` includes optional `@modelcontextprotocol/sdk`; default omits it (`--no-optional`) |
 | `BUILD_REVISION`       | `unknown` | OCI label `org.opencontainers.image.revision` (CI passes `github.sha`)                  |
