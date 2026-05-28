@@ -36,7 +36,7 @@ vi.mock('@/shared/utils/security/webhook-url.util.js', () => ({
  * `database.transaction()` setting `app.current_organization_id`). Run the callback
  * directly so the test exercises worker logic without needing a Postgres connection.
  */
-vi.mock('@/infrastructure/database/contexts/tenant-context.js', () => ({
+vi.mock('@/infrastructure/database/contexts/tenant-database.context.js', () => ({
   withOrganizationContext: vi.fn(
     (_organizationPublicId: string, callback: (databaseHandle: unknown) => Promise<unknown>) =>
       callback({}),

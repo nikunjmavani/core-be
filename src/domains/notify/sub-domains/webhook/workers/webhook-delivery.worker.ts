@@ -27,7 +27,7 @@ import {
   createTenantScopedBullMQWorker,
   type WorkerDatabaseHandle,
 } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 
 /**
  * Sign a webhook payload with HMAC-SHA256 (Stripe-style signature).

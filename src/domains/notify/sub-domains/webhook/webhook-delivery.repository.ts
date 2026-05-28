@@ -4,7 +4,7 @@ import {
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
-import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database-context.js';
+import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import {
   webhook_delivery_attempts,
   webhooks,

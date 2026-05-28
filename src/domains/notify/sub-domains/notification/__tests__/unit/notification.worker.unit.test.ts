@@ -11,7 +11,7 @@ vi.mock('@/infrastructure/mail/queues/mail.queue.js', () => ({
   dispatchOutboxEmail: (...parameters: unknown[]) => dispatchOutboxEmailMock(...parameters),
 }));
 
-vi.mock('@/infrastructure/database/contexts/worker-database-context.js', () => ({
+vi.mock('@/infrastructure/database/contexts/worker-database.context.js', () => ({
   withSystemTableWorkerContext: (callback: () => Promise<unknown>) => callback(),
 }));
 

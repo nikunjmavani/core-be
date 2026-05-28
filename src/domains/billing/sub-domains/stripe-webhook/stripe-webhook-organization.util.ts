@@ -1,7 +1,7 @@
 import type Stripe from 'stripe';
 import { sql } from '@/infrastructure/database/connection.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const SUBSCRIPTION_STRIPE_EVENT_TYPES = new Set([

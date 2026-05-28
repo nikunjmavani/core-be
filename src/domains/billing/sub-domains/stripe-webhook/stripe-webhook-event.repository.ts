@@ -3,7 +3,7 @@ import { getRequestDatabase } from '@/infrastructure/database/contexts/request-d
 import {
   assertWorkerDatabaseContext,
   isWorkerRuntime,
-} from '@/infrastructure/database/contexts/worker-database-context.js';
+} from '@/infrastructure/database/contexts/worker-database.context.js';
 import {
   MILLISECONDS_PER_MINUTE,
   STRIPE_WEBHOOK_STUCK_PROCESSING_LEASE_MINUTES,

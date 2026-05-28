@@ -8,7 +8,7 @@ import {
 import {
   runWithWorkerDatabaseContext,
   workerDatabaseContextForOrganization,
-} from '@/infrastructure/database/contexts/worker-database-context.js';
+} from '@/infrastructure/database/contexts/worker-database.context.js';
 
 /**
  * Runs a callback inside a transaction with RLS organization context set via SET LOCAL.

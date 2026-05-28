@@ -2,8 +2,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { sql as drizzleSql } from 'drizzle-orm';
 import { database } from '@/infrastructure/database/connection.js';
 import type { PostgresDatabaseHandle } from '@/infrastructure/database/database-handle.types.js';
-import { isWorkerRuntime } from '@/infrastructure/database/contexts/worker-database-context.js';
-import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database-context.error.js';
+import { isWorkerRuntime } from '@/infrastructure/database/contexts/worker-database.context.js';
+import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database.context.error.js';
 
 export type RequestScopedPostgresDatabase = PostgresDatabaseHandle;
 

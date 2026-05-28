@@ -8,7 +8,7 @@ import {
 import {
   runWithWorkerDatabaseContext,
   workerDatabaseContextForUser,
-} from '@/infrastructure/database/contexts/worker-database-context.js';
+} from '@/infrastructure/database/contexts/worker-database.context.js';
 
 /**
  * Sets `app.current_user_id` (auth.users public_id) for user-scoped RLS policies.
