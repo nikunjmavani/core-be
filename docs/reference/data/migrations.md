@@ -89,7 +89,7 @@ Postgres transaction rollback for multi-write helpers is covered in CI by:
 pnpm test:integration:transaction-rollback
 ```
 
-(`src/tests/integration/transaction-rollback.integration.test.ts` — asserts `withTransaction` rolls back on error and commits on success.) This is **not** SQL migration rollback.
+(`src/tests/integration/database/transaction-rollback.integration.test.ts` — asserts `withTransaction` rolls back on error and commits on success.) This is **not** SQL migration rollback.
 
 ---
 
