@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token.repository.js';
+import { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
 
 const mockReturning = vi.fn().mockResolvedValue([]);
 const mockLimit = vi.fn().mockResolvedValue([]);

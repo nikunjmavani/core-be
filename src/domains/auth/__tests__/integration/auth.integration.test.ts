@@ -13,7 +13,7 @@ import { createTestUser, createTestUserWithPassword } from '@/tests/factories/us
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { users } from '@/domains/user/user.schema.js';
-import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token.schema.js';
+import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.schema.js';
 import type { FastifyInstance } from 'fastify';
 
 const AUTH_LOGIN_PATH = '/auth/login';

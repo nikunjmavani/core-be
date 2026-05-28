@@ -77,7 +77,7 @@ The full `src/` file tree is **not** duplicated here (it drifts from code quickl
 
 **Standard flow (all domains, including auth and user with multiple sub-domain services):**
 
-```
+```text
 HTTP Request
     │
     ▼
@@ -236,7 +236,7 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 
 | Domain  | Schema files                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| auth    | auth-method/auth-method.schema.ts, auth-method/verification-token.schema.ts, auth-session/auth-session.schema.ts, auth-mfa/mfa-method.schema.ts, auth-mfa/mfa-recovery-code.schema.ts, auth-webauthn/webauthn-credential.schema.ts                                                                                                                                                                                                         |
+| auth    | auth-method/auth-method.schema.ts, auth-method/verification-token/verification-token.schema.ts, auth-session/auth-session.schema.ts, auth-mfa/mfa-method.schema.ts, auth-mfa/mfa-recovery-code.schema.ts, auth-webauthn/webauthn-credential.schema.ts                                                                                                                                                                                                         |
 | user    | user.schema.ts, user-settings/user-settings.schema.ts, user-notification-preferences/user-notification-preferences.schema.ts                                                                                                                                                                                                                                                                                                              |
 | tenancy | organization/organization.schema.ts, organization-settings/organization-settings.schema.ts, organization-notification-policy/organization-notification-policy.schema.ts, organization-api-key/organization-api-key.schema.ts, membership/membership.schema.ts, member-invitation/member-invitation.schema.ts, member-role/member-role.schema.ts, member-role-permission/member-role-permission.schema.ts, permission/permission.schema.ts |
 | billing | plan/plan.schema.ts, subscription/subscription.schema.ts, stripe-webhook/stripe-webhook.schema.ts                                                                                                                                                                                                                                                                                                    |

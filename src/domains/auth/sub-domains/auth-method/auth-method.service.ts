@@ -12,7 +12,7 @@ import {
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
-import type { VerificationTokenRepository } from './verification-token.repository.js';
+import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
 import {
   validateCreateAuthMethod,
   validateForgotPassword,

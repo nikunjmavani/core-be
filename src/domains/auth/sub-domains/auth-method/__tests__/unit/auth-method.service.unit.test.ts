@@ -3,7 +3,7 @@ import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/erro
 import { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodRepository } from '@/domains/auth/sub-domains/auth-method/auth-method.repository.js';
-import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token.repository.js';
+import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
 import type * as EventBusModule from '@/core/events/event-bus.js';
 
 vi.mock('@/core/events/event-bus.js', async (importOriginal) => {

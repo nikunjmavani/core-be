@@ -10,7 +10,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser, createTestUserWithPassword } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import { database } from '@/infrastructure/database/connection.js';
-import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token.schema.js';
+import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.schema.js';
 import type { FastifyInstance } from 'fastify';
 
 /**
