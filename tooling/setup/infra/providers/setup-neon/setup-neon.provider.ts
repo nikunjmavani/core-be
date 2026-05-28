@@ -73,7 +73,7 @@ async function neonRequest<T>(
   const response = await fetch(url.toString(), {
     method,
     headers: neonHeaders(apiKey),
-    body: body ? JSON.stringify(body) : undefined,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
 
   if (!response.ok) {
@@ -108,13 +108,13 @@ async function resolveNeonOrgId(
       'No Neon organization found. Create one at https://console.neon.tech/app/settings or use an organization API key.',
     );
   }
-  const match =
-    preferredOrganizationName &&
-    organizations.find(
-      (org) =>
-        org.name?.toLowerCase() === preferredOrganizationName.toLowerCase() ||
-        org.id === preferredOrganizationName,
-    );
+  const match = preferredOrganizationName
+    ? organizations.find(
+        (org) =>
+          org.name?.toLowerCase() === preferredOrganizationName.toLowerCase() ||
+          org.id === preferredOrganizationName,
+      )
+    : undefined;
   const organization = match ?? organizations[0];
   const orgId = organization?.id;
   if (!orgId) {
@@ -241,8 +241,8 @@ interface NeonBranchEntry {
   branchId: string;
   endpointId: string;
   databaseUrl: string;
-  databaseMigrationUrl?: string;
-  serviceRoleName?: string;
+  databaseMigrationUrl?: string | undefined;
+  serviceRoleName?: string | undefined;
 }
 
 interface GetConnectionUriOptions {

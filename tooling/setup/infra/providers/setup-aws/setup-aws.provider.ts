@@ -5,6 +5,7 @@ import {
   PutBucketCorsCommand,
   PutBucketLifecycleConfigurationCommand,
   HeadBucketCommand,
+  type BucketLocationConstraint,
 } from '@aws-sdk/client-s3';
 import {
   IAMClient,
@@ -147,7 +148,11 @@ export async function provision(
             new CreateBucketCommand({
               Bucket: bucketName,
               ...(awsConfig.region !== 'us-east-1'
-                ? { CreateBucketConfiguration: { LocationConstraint: awsConfig.region } }
+                ? {
+                    CreateBucketConfiguration: {
+                      LocationConstraint: awsConfig.region as BucketLocationConstraint,
+                    },
+                  }
                 : {}),
             }),
           );

@@ -28,7 +28,7 @@ async function sentryRequest<T>(
   const response = await fetch(`${SENTRY_API_BASE}${path}`, {
     method,
     headers: sentryHeaders(authToken),
-    body: body ? JSON.stringify(body) : undefined,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
 
   if (!response.ok) {

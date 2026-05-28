@@ -6,7 +6,7 @@ import type { SetupConfig, SetupSecrets } from './types.js';
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../..');
 const ENV_SETUP_PATH = resolve(PROJECT_ROOT, '.env.setup');
 
-const TOKEN_URLS: Record<string, string> = {
+const TOKEN_URLS = {
   NEON_API_KEY: 'https://console.neon.tech/app/settings/api-keys',
   NEON_ORG_ID: 'https://console.neon.tech/app/settings (Organization → General → Organization ID)',
   AWS_ACCESS_KEY_ID: 'https://console.aws.amazon.com/iam/home#/users',
@@ -17,7 +17,7 @@ const TOKEN_URLS: Record<string, string> = {
   RAILWAY_TOKEN: 'https://railway.app/account/tokens',
   POSTMAN_API_KEY: 'https://go.postman.co/settings/me/api-keys',
   POSTMAN_WORKSPACE_ID: 'https://go.postman.co/workspaces',
-};
+} as const satisfies Record<string, string>;
 
 const SIMPLE_VARS: Array<[string, string]> = [
   ['NEON_API_KEY', TOKEN_URLS.NEON_API_KEY],
@@ -67,7 +67,7 @@ export const setupSecretsSchema = z.object({
       github: z.record(z.string(), oauthEnvironmentSchema).optional().default({}),
     })
     .optional()
-    .default({}),
+    .default({ google: {}, github: {} }),
   railway: z.object({
     token: z.string(),
   }),
@@ -112,7 +112,11 @@ function getEnvSource(): Record<string, string> {
       // ignore read errors
     }
   }
-  return { ...fromFile, ...process.env };
+  const merged: Record<string, string> = { ...fromFile };
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === 'string') merged[key] = value;
+  }
+  return merged;
 }
 
 function get(source: Record<string, string>, key: string): string {

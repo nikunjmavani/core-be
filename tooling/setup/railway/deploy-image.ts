@@ -221,7 +221,12 @@ async function railwayGraphQLWithFallback<T>({
   const errors: string[] = [];
   for (const authMode of authModes) {
     try {
-      const data = await railwayGraphQL<T>({ token, authMode, query, variables });
+      const data = await railwayGraphQL<T>({
+        token,
+        authMode,
+        query,
+        ...(variables !== undefined ? { variables } : {}),
+      });
       return { data, authMode };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

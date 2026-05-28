@@ -12,7 +12,15 @@ interface JwtEnvironmentState {
   jwtPrivateKey: string;
   jwtPublicKey: string;
   jwtSigningKid: string;
-  secretsEncryptionKey?: string;
+  secretsEncryptionKey?: string | undefined;
+}
+
+interface PartialJwtEnvironmentState {
+  jwtSecret: string;
+  jwtPrivateKey?: string | undefined;
+  jwtPublicKey?: string | undefined;
+  jwtSigningKid?: string | undefined;
+  secretsEncryptionKey?: string | undefined;
 }
 
 function generateRsaKeypair(): { privateKey: string; publicKey: string } {
@@ -24,7 +32,7 @@ function generateRsaKeypair(): { privateKey: string; publicKey: string } {
 }
 
 function ensureJwtEntry(
-  existing: JwtEnvironmentState | string | undefined,
+  existing: PartialJwtEnvironmentState | string | undefined,
   environmentName: string,
 ): { entry: JwtEnvironmentState; created: boolean; upgraded: boolean } {
   if (typeof existing === 'object' && existing.jwtPrivateKey && existing.jwtPublicKey) {
