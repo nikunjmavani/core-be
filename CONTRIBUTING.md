@@ -107,7 +107,9 @@ Details: **[CLAUDE.md](CLAUDE.md)** (Testing section).
 
 ## Before you open a pull request
 
-Run the gate described in **[AGENTS.md](AGENTS.md)** (`pnpm ci:local`, or `pnpm ci:quality` for static checks only). Adjust when your change touches migrations or environment schema only.
+**Authors:** run the gate described in **[AGENTS.md](AGENTS.md)** (`pnpm ci:local`, or `pnpm ci:quality` for static checks only). Adjust when your change touches migrations or environment schema only. Fill in [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) (Summary, Test plan, Reviewer notes).
+
+**Reviewers:** use **[docs/process/pr-review.md](docs/process/pr-review.md)** — shared human and agent checklist (architecture, security, migrations, routes, tests, doc-sync map). Required CI check names: **[docs/deployment/ci-cd/branch-protection.md](docs/deployment/ci-cd/branch-protection.md)**.
 
 ## User-facing strings
 
