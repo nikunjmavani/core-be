@@ -174,10 +174,10 @@ A rename is a delete + add, atomic in the same PR:
 - **Schema:** `src/shared/config/env-schema.ts`
 - **Template:** `.env.example` (committed; two-half + sub-section structure)
 - **GitHub sync config:** `.github/sync.config.json`
-- **GitHub sync:** `tooling/setup/github-sync.ts`
-- **Environment value sync helper:** `tooling/setup/sync-environment-to-github.ts`
-- **Section parser shared by both:** `tooling/setup/parse-env-example-sections.ts`
+- **GitHub sync:** `tooling/setup/github/sync.ts`
+- **Environment value sync helper:** `tooling/setup/envs/sync-github.ts`
+- **Section parser shared by both:** `tooling/setup/envs/parse-env-sections.ts`
 - **Schema ↔ template validator:** `src/scripts/validators/env/sync-env-example.ts` (`pnpm tool:sync-env-example`)
-- **Cross-dimension consistency (in github:sync):** `tooling/setup/github-sync-config.ts` — run `pnpm github:sync --check` before pushing
+- **Cross-dimension consistency (in github:sync):** `tooling/setup/github/sync-config.ts` — run `pnpm github:sync --check` before pushing
 - **Add hosted environment:** edit `.github/sync.config.json` and run `pnpm github:sync` (no env:add script)
-- **Deploy-required keys assertion:** `tooling/setup/validate-github-env.ts` (`pnpm validate:github-env`)
+- **Deploy-required keys assertion:** `tooling/setup/github/validate.ts` (`pnpm validate:github-env`)
