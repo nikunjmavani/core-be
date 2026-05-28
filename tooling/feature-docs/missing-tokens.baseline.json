@@ -1,0 +1,10 @@
+{
+  "_comment": "Locked baseline of missing-token counts at the time the layered docs gate was wired (Phase 3.2). The hard gate (`pnpm features:check --strict`) fails when any token's count exceeds the baseline. PRs may reduce counts (and refresh this file via `pnpm features:check --refresh-baseline`); they may not increase them.",
+  "_recordedAt": "2026-05-28",
+  "tokens": {
+    "<!-- MISSING_DESCRIPTION -->": 982,
+    "<!-- MISSING_REMARKS -->": 128,
+    "<!-- MISSING_OVERVIEW_SECTION -->": 0,
+    "<!-- MISSING_SYSTEM_FILE -->": 0
+  }
+}

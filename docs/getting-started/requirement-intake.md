@@ -38,6 +38,7 @@ The AI fills these unless your message says otherwise. List overrides in your fi
 | **Validation** | Zod DTO in `*.dto.ts` + function validator with `.safeParse()` in `*.validator.ts` |
 | **API version** | `/api/v1` prefix for public HTTP routes |
 | **Target branch** | Feature work merges to `dev` unless you say hotfix/production |
+| **Layered docs** | TSDoc on every public export, `@remarks` on services / workers / processors / policy files, `OVERVIEW.md` for new folders, `schema: { summary, description, tags }` on every Fastify route, `pnpm features:check:strict` must pass |
 
 ---
 
@@ -65,14 +66,18 @@ The AI fills these unless your message says otherwise. List overrides in your fi
 4. **db-migration-maintainer** (if new tables) — `.cursor/skills/db-migration-maintainer/SKILL.md`
 5. **workers-events** (if events/queues/workers) — `.cursor/skills/workers-events/SKILL.md`
 6. **route-catalog** — `.cursor/skills/route-catalog/SKILL.md`
-7. **openapi-route-sync** — `.cursor/skills/openapi-route-sync/SKILL.md`
+7. **route-schema-doc-guard** — `.cursor/skills/route-schema-doc-guard/SKILL.md`
 8. **test-generator** — `.cursor/skills/test-generator/SKILL.md`
 9. **seed-maintainer** (if seed data needed) — `.cursor/skills/seed-maintainer/SKILL.md`
-10. **structure-maintainer** — `.cursor/skills/structure-maintainer/SKILL.md`
-11. **code-smells-and-best-practices** — zero new lint issues in touched files
+10. **tsdoc-export-guard** — TSDoc on every public export added — `.cursor/skills/tsdoc-export-guard/SKILL.md`
+11. **overview-doc-maintainer** — `OVERVIEW.md` for the new domain (Template A.1) and the new sub-domain (Template A.2) — `.cursor/skills/overview-doc-maintainer/SKILL.md`
+12. **system-narrative-maintainer** (only when adding a new domain) — update Domains table in `src/OVERVIEW.md`; add patterns/flows entries if introduced — `.cursor/skills/system-narrative-maintainer/SKILL.md`
+13. **structure-maintainer** — `.cursor/skills/structure-maintainer/SKILL.md`
+14. **feature-doc-maintainer** — refresh per-folder `DOCS.md` and run `pnpm features:check:strict` — `.cursor/skills/feature-doc-maintainer/SKILL.md`
+15. **code-smells-and-best-practices** — zero new lint issues in touched files
 
 **Rules that will apply:**  
-`core-be-src-architecture.mdc`, `domain-generator-sync.mdc`, `sql-design-guard-sync.mdc`, `no-placeholder-files.mdc`, `code-smells-and-best-practices-sync.mdc`, `testing-conventions.mdc`
+`core-be-src-architecture.mdc`, `domain-generator-sync.mdc`, `sql-design-guard-sync.mdc`, `no-placeholder-files.mdc`, `code-smells-and-best-practices-sync.mdc`, `testing-conventions.mdc`, `feature-doc-maintainer-sync.mdc`
 
 ---
 
@@ -89,13 +94,15 @@ The AI fills these unless your message says otherwise. List overrides in your fi
 
 1. **domain-generator** (for layout reference) or implement in existing controller/service/validator/serializer
 2. **route-catalog** — `.cursor/skills/route-catalog/SKILL.md`
-3. **openapi-route-sync** — `.cursor/skills/openapi-route-sync/SKILL.md`
+3. **route-schema-doc-guard** — `.cursor/skills/route-schema-doc-guard/SKILL.md`
 4. **test-generator** (add tests for new routes)
 5. **seed-maintainer** (if new routes need seed data)
-6. **code-smells-and-best-practices**
+6. **tsdoc-export-guard** — TSDoc on any new public exports introduced by the route work
+7. **feature-doc-maintainer** — refresh per-folder `DOCS.md` and run `pnpm features:check:strict`
+8. **code-smells-and-best-practices**
 
 **Rules that will apply:**  
-`core-be-src-architecture.mdc`, `domain-generator-sync.mdc`, `code-smells-and-best-practices-sync.mdc`, `testing-conventions.mdc`
+`core-be-src-architecture.mdc`, `domain-generator-sync.mdc`, `code-smells-and-best-practices-sync.mdc`, `testing-conventions.mdc`, `feature-doc-maintainer-sync.mdc`
 
 ---
 
@@ -115,13 +122,17 @@ The AI fills these unless your message says otherwise. List overrides in your fi
 **Skills to run (in order):**
 
 1. **workers-events** — `.cursor/skills/workers-events/SKILL.md`
-2. **route-catalog** (if any new HTTP route triggers the job)
+2. **route-catalog** + **route-schema-doc-guard** (if any new HTTP route triggers the job)
 3. **test-generator** (if new routes or worker tests)
-4. **structure-maintainer** (if new dirs)
-5. **code-smells-and-best-practices**
+4. **tsdoc-export-guard** — TSDoc summary + `@remarks` on every new export in `*.worker.ts` / `*.processor.ts` / queue / event files
+5. **overview-doc-maintainer** (if a new domain/sub-domain folder is introduced)
+6. **system-narrative-maintainer** (if the worker introduces a new pattern or end-to-end flow)
+7. **structure-maintainer** (if new dirs)
+8. **feature-doc-maintainer** — refresh per-folder `DOCS.md` and run `pnpm features:check:strict`
+9. **code-smells-and-best-practices**
 
 **Rules that will apply:**  
-`core-be-src-architecture.mdc`, `workers-events-sync.mdc`, `code-smells-and-best-practices-sync.mdc`
+`core-be-src-architecture.mdc`, `workers-events-sync.mdc`, `code-smells-and-best-practices-sync.mdc`, `feature-doc-maintainer-sync.mdc`
 
 ---
 
@@ -358,7 +369,7 @@ flowchart LR
 
 | Skill                          | Path                                                     | When to invoke                                            |
 | ------------------------------ | -------------------------------------------------------- | --------------------------------------------------------- |
-| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (32 project skills) |
+| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (37 project skills) |
 | domain-generator               | `.cursor/skills/domain-generator/SKILL.md`               | New domain/sub-domain scaffold                            |
 | route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                  | Any change to `*.routes.ts`                               |
 | openapi-route-sync             | `.cursor/skills/openapi-route-sync/SKILL.md`             | After route-catalog — OpenAPI metadata                    |
@@ -390,6 +401,11 @@ flowchart LR
 | contract-test-maintainer       | `.cursor/skills/contract-test-maintainer/SKILL.md`       | Stripe/Resend/S3 nock contracts                           |
 | chaos-test-maintainer          | `.cursor/skills/chaos-test-maintainer/SKILL.md`          | Toxiproxy chaos tests                                     |
 | cursor-global-skills           | `.cursor/skills/cursor-global-skills/SKILL.md`           | Reference: Cursor built-in skills                         |
+| **feature-doc-maintainer**     | `.cursor/skills/feature-doc-maintainer/SKILL.md`         | Auto-generated `DOCS.md` index + `pnpm features:check:strict` ratchet |
+| **system-narrative-maintainer**| `.cursor/skills/system-narrative-maintainer/SKILL.md`    | Hand-authored `src/OVERVIEW.md` / `src/PATTERNS.md` / `src/FLOWS.md` / `src/POLICIES.md` |
+| **overview-doc-maintainer**    | `.cursor/skills/overview-doc-maintainer/SKILL.md`        | Per-folder `OVERVIEW.md` (Templates A.1 / A.2 / A.3 / A.4) |
+| **route-schema-doc-guard**     | `.cursor/skills/route-schema-doc-guard/SKILL.md`         | Fastify route `schema: { summary, description, tags }`    |
+| **tsdoc-export-guard**         | `.cursor/skills/tsdoc-export-guard/SKILL.md`             | TSDoc on every public export + `@remarks` on services / workers / processors / policy files |
 
 ---
 
@@ -414,6 +430,7 @@ flowchart LR
 | openapi-multilingual-sync.mdc           | `src/shared/locales/*/openapi.json`, OpenAPI generator scripts                                       | openapi-multilingual                                           |
 | contract-test-maintainer-sync.mdc       | `src/tests/contract/**`, payment/mail/storage infra                                                  | contract-test-maintainer                                       |
 | chaos-test-maintainer-sync.mdc          | `src/tests/chaos/**`, chaos Vitest config, `docker-compose.yml`                                      | chaos-test-maintainer                                          |
+| feature-doc-maintainer-sync.mdc         | `src/**/*.ts`, `src/**/OVERVIEW.md`, `src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md`, `tooling/feature-docs/**` | tsdoc-export-guard / route-schema-doc-guard / overview-doc-maintainer / system-narrative-maintainer / feature-doc-maintainer |
 
 ---
 

@@ -6,12 +6,14 @@ Build-time and operational scripts live under `src/scripts/`, grouped by concern
 
 | Folder | Purpose | Examples |
 | ------ | ------- | -------- |
-| `codegen/` | OpenAPI, Postman, route catalog, project tree, docs drift checks | `generate-openapi.ts`, `check-api-docs-sync.ts` |
+| `codegen/` | OpenAPI, Postman, route catalog, project tree, docs drift checks, layered-docs generator | `generate-openapi.ts`, `generate-feature-docs.ts`, `generate-route-catalog.ts`, `generate-migration.ts`, `check-api-docs-sync.ts` |
 | `validators/` | CI gates, env example sync, migration lint, doc link checks | `validate-domain.ts`, `sync-env-example.ts`, `lint-migrations.ts` |
-| `admin/` | Operator tools, secrets, DLQ replay, worker probes | `admin-token.ts`, `dlq-replay.ts`, `worker-health.ts` |
+| `admin/` | Operator tools, secrets, DLQ replay, worker probes | `admin-token.ts`, `dlq-replay.ts`, `worker-readiness.ts` |
 | `ops/` | Smoke tests, verify gate, contract fixture recording, soak tests | `verify-base.ts`, `api-smoke-test.ts` |
 | `seed/` | Database seed orchestration (minimal / full / demo sync) | `minimal.ts`, `full.ts` |
 | `tooling/` | One-off codemods and repo maintenance | `codemod-test-suffixes.ts` |
+
+**Companion tooling outside `src/scripts/`:** `tooling/feature-docs/` hosts the helpers used by `generate-feature-docs.ts` (file classifier, schema locator, missing-tokens baseline). See [documentation-system.md](./documentation-system.md) for the layered docs ratchet.
 
 ## When to add a script
 
@@ -25,8 +27,12 @@ Build-time and operational scripts live under `src/scripts/`, grouped by concern
 | Command | Script |
 | ------- | ------ |
 | `pnpm validate:scripts-layout` | Asserts zero `src/scripts/*.ts` root files |
-| `pnpm ci:quality` | Includes scripts layout check |
+| `pnpm ci:quality` | Includes scripts layout check + layered-docs ratchet (`features:check:strict`) |
 | `pnpm tool:project-structure-tree` | `codegen/generate-project-structure-tree.ts` |
 | `pnpm verify:base` | `ops/verify-base.ts` |
+| `pnpm features:generate` | `codegen/generate-feature-docs.ts` (regenerates `src/**/DOCS.md` and `src/DOCS.md`) |
+| `pnpm features:check` | `codegen/generate-feature-docs.ts --check` (drift only) |
+| `pnpm features:check:strict` | `codegen/generate-feature-docs.ts --check --strict` (drift + ratchet against [`tooling/feature-docs/missing-tokens.baseline.json`](../../../tooling/feature-docs/missing-tokens.baseline.json)) |
+| `pnpm features:refresh-baseline` | Rewrites the baseline once missing-token counts have decreased |
 
 See also [project-structure-guide.md](./project-structure-guide.md) and `CLAUDE.md` § Commands.

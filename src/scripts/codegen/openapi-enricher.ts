@@ -1,8 +1,11 @@
 /**
- * @deprecated Import from `@tooling/openapi/route-metadata` and `@tooling/openapi/enrichers`.
- * Kept for openapi-route-sync skill paths referencing `src/scripts/codegen/openapi-enricher.ts`.
+ * @deprecated Import from `@tooling/openapi/enrichers`.
+ * Kept for skill paths referencing `src/scripts/codegen/openapi-enricher.ts`.
+ *
+ * Route-level descriptions live on Zod schemas in `*.routes.ts` (read by
+ * `@tooling/openapi/extractors/route-schema-metadata.ts`); the legacy
+ * `routeMetadataMap` was removed once every route was migrated.
  */
-export { routeMetadataMap, type RouteMetadata } from '@tooling/openapi/route-metadata/index.js';
 export {
   enrichSchema,
   generateFieldDescription,

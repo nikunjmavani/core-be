@@ -5,7 +5,7 @@ description: Scaffolds and extends domains in core-be using the domain → sub-d
 
 # Domain generator (core-be)
 
-## How would you like to set up domains?
+## How would you like to set up domains
 
 Before scaffolding, confirm:
 
@@ -26,7 +26,7 @@ Before scaffolding, confirm:
 
 ## Canonical layout (domain → sub-domains → optional nested)
 
-```
+```text
 src/domains/<domain>/
   <domain>.routes.ts
   <domain>.container.ts
@@ -142,6 +142,12 @@ export function <domain>Routes(deps: <Domain>RoutesDeps): FastifyPluginAsync {
    - Event handlers: `events/__tests__/` — call leaf `register*EventHandlers()` only.
 6. **Wire DI** via `<domain>.container.ts`.
 7. **Wire routes** in `<domain>.routes.ts` or sub-domain `*.routes.ts`; mount in `src/routes.ts`.
+8. **Author layered docs** (required, gated by `pnpm features:check:strict`):
+   - **TSDoc** on every public export — invoke **tsdoc-export-guard**.
+   - **`schema: { summary, description, tags }`** on every Fastify route — invoke **route-schema-doc-guard**.
+   - **`OVERVIEW.md`** at the new domain folder (Template A.1) and at the new sub-domain folder (Template A.2) — invoke **overview-doc-maintainer**.
+   - For a **new domain**, also update `src/OVERVIEW.md` Domains table — invoke **system-narrative-maintainer**.
+9. **Refresh the index** — invoke **feature-doc-maintainer** to regenerate per-folder `DOCS.md` and run the strict ratchet.
 
 ## Dependency boundaries
 

@@ -5,11 +5,11 @@ description: Master index of all project skills with trigger conditions. Use thi
 
 # Skill Index (core-be)
 
-Master directory of all **32 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
+Master directory of all **37 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
 
 For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global-skills**.
 
-## Project skills (32)
+## Project skills (37)
 
 | Skill                          | Path                                                                      |
 | ------------------------------ | ------------------------------------------------------------------------- |
@@ -17,6 +17,7 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | test-generator                 | `.cursor/skills/test-generator/SKILL.md`                                  |
 | route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                                   |
 | openapi-route-sync             | `.cursor/skills/openapi-route-sync/SKILL.md`                              |
+| route-schema-doc-guard         | `.cursor/skills/route-schema-doc-guard/SKILL.md`                          |
 | seed-maintainer                | `.cursor/skills/seed-maintainer/SKILL.md`                                 |
 | domain-generator               | `.cursor/skills/domain-generator/SKILL.md`                                |
 | schema-generator               | `.cursor/skills/schema-generator/SKILL.md`                                |
@@ -38,6 +39,10 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | ide-productivity-guard         | `.cursor/skills/ide-productivity-guard/SKILL.md`                          |
 | docs-maintainer                | `.cursor/skills/docs-maintainer/SKILL.md`                                 |
 | docs-audit                     | `.cursor/skills/docs-audit/SKILL.md`                                      |
+| feature-doc-maintainer         | `.cursor/skills/feature-doc-maintainer/SKILL.md`                          |
+| system-narrative-maintainer    | `.cursor/skills/system-narrative-maintainer/SKILL.md`                     |
+| overview-doc-maintainer        | `.cursor/skills/overview-doc-maintainer/SKILL.md`                         |
+| tsdoc-export-guard             | `.cursor/skills/tsdoc-export-guard/SKILL.md`                              |
 | setup-infra-maintainer         | `.cursor/skills/setup-infra-maintainer/SKILL.md`                          |
 | pr-babysit                     | `.cursor/skills/pr-babysit/SKILL.md`                                      |
 | split-to-prs                   | `.cursor/skills/split-to-prs/SKILL.md`                                    |
@@ -83,6 +88,12 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | Changed chaos tests, Toxiproxy provision, or chaos Docker profile                                                                                                                                               | **chaos-test-maintainer**                                                                                          | `.cursor/skills/chaos-test-maintainer/SKILL.md`                   |
 | Added/changed `migrations/*.sql` only (no schema file in same change)                                                                                                                                           | **db-migration-maintainer**                                                                                        | `.cursor/skills/db-migration-maintainer/SKILL.md`                 |
 | Changed domain `*.seed.ts` or `src/scripts/seed/**`                                                                                                                                                             | **seed-maintainer**                                                                                                | `.cursor/skills/seed-maintainer/SKILL.md`                         |
+| Added/renamed/removed an exported symbol under `src/`                                                                                                                                                           | **tsdoc-export-guard** + **feature-doc-maintainer**                                                                | tsdoc-export-guard, feature-doc-maintainer                        |
+| Added a Fastify route in `src/**/*.routes.ts` (or the two grandfathered non-routes files)                                                                                                                       | **route-schema-doc-guard** + **route-catalog** + **feature-doc-maintainer**                                        | route-schema-doc-guard, route-catalog, feature-doc-maintainer     |
+| Added a new policy constant under `src/shared/constants/`                                                                                                                                                       | **tsdoc-export-guard** + **system-narrative-maintainer** + **feature-doc-maintainer**                              | tsdoc-export-guard, system-narrative-maintainer                   |
+| Authored or edited a folder `OVERVIEW.md` under `src/domains/`, `src/infrastructure/`, `src/shared/`, or `src/tests/`                                                                                            | **overview-doc-maintainer** + **feature-doc-maintainer**                                                            | overview-doc-maintainer, feature-doc-maintainer                   |
+| Edited `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, or `src/POLICIES.md`                                                                                                                                | **system-narrative-maintainer** + **feature-doc-maintainer**                                                       | system-narrative-maintainer, feature-doc-maintainer               |
+| `pnpm features:check:strict` reports drift or a `MISSING_*` regression                                                                                                                                          | **feature-doc-maintainer** (dispatches to the right authoring skill)                                                | feature-doc-maintainer                                            |
 
 ## Trigger detection rules
 
@@ -191,6 +202,17 @@ After completing any task, scan the changes and invoke matching skills:
 - **Action**: read and follow `setup-infra-maintainer` — run the full checklist so config schema, init defaults, secrets/env-secrets, orchestrator (preview, provision, check, status, rollback), guide, prerequisites, provider module, state, build-env-vars, and `docs/deployment/setup/setup-token-instructions.md` all stay in sync. Then run `pnpm typecheck` and `pnpm setup:infra:preview` to verify.
 - **Follow-up**: if `docs/deployment/setup/setup-token-instructions.md` or other deployment docs were updated, invoke **docs-maintainer** to keep the docs index and cross-links correct.
 
+### Layered feature docs (DOCS.md, OVERVIEW.md, system narratives, TSDoc)
+
+- **Trigger**: any TypeScript change under `src/` (added / renamed / removed exports, new files, new routes), any change to a hand-written `OVERVIEW.md` or one of the four system narratives (`src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md`), or a `pnpm features:check:strict` failure.
+- **Action**: route the change to the right authoring skill via the `feature-doc-maintainer-sync.mdc` rule:
+  - Symbol added/renamed → **tsdoc-export-guard** (write summary; add `@remarks` on service / worker / processor / policy exports)
+  - Route added → **route-schema-doc-guard** (`schema: { summary, description, tags }`)
+  - Folder needs a doc → **overview-doc-maintainer** (Templates A.1 / A.2 / A.3 / A.4)
+  - Cross-cutting pattern, flow, or policy needs a row → **system-narrative-maintainer**
+  - Then always invoke **feature-doc-maintainer** to refresh the per-folder `DOCS.md` index and run `pnpm features:check:strict`.
+- **Hard gate**: `pnpm features:check:strict` is a ratchet — counts of `MISSING_DESCRIPTION`, `MISSING_REMARKS`, `MISSING_OVERVIEW_SECTION`, `MISSING_SYSTEM_FILE` may decrease but may not increase. After a deliberate batch reduction, refresh the lower baseline with `pnpm features:refresh-baseline`.
+
 ## Multi-skill scenarios
 
 Some changes trigger multiple skills. Run them in this order:
@@ -199,12 +221,16 @@ Some changes trigger multiple skills. Run them in this order:
 2. **schema-generator** + **sql-design-guard** (if new tables)
 3. **db-migration-maintainer** (SQL in `migrations/`)
 4. **workers-events** (wire events/queues if needed)
-5. **route-catalog** + **openapi-route-sync** (routes + OpenAPI metadata)
+5. **route-catalog** + **route-schema-doc-guard** + **openapi-route-sync** (routes + OpenAPI metadata)
 6. **seed-maintainer** (when routes/APIs changed)
-7. **test-generator** (unit + domain e2e per pyramid)
-8. **code-quality-guard** (if lint/CI config changed)
-9. **structure-maintainer** (sync docs and rules last)
-10. **docs-maintainer** (when docs added/renamed/moved)
+7. **tsdoc-export-guard** (TSDoc on every public export added)
+8. **overview-doc-maintainer** (per new folder; A.1 / A.2 / A.3 / A.4)
+9. **system-narrative-maintainer** (Domains / Patterns / Flows / Policies updates)
+10. **test-generator** (unit + domain e2e per pyramid)
+11. **code-quality-guard** (if lint/CI config changed)
+12. **structure-maintainer** (sync docs and rules last)
+13. **docs-maintainer** (when hand-written `docs/` content changed)
+14. **feature-doc-maintainer** (always last — refresh per-folder DOCS.md and run the ratchet)
 
 ## Always-applied rules
 
@@ -250,6 +276,7 @@ The following `.cursor/rules/*.mdc` files auto-invoke skills based on file globs
 | `contract-test-maintainer-sync.mdc`       | `src/tests/contract/**`, payment/mail/storage infra, `tooling/vitest/contract.config.ts`                                                                                            | contract-test-maintainer                                                   |
 | `chaos-test-maintainer-sync.mdc`          | `src/tests/chaos/**`, `tooling/vitest/chaos.config.ts`, chaos provision, `docker-compose.yml`                                                                                       | chaos-test-maintainer                                                      |
 | `setup-infra-maintainer-sync.mdc`         | `tooling/setup/**/*.ts`, `tooling/setup.config.json`, `docs/deployment/setup/setup-token-instructions.md`                                                                           | setup-infra-maintainer                                                     |
+| `feature-doc-maintainer-sync.mdc`         | `src/**/*.ts`, `src/**/*.routes.ts`, `src/**/OVERVIEW.md`, `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md`                                                  | feature-doc-maintainer (dispatcher) → tsdoc-export-guard / route-schema-doc-guard / overview-doc-maintainer / system-narrative-maintainer |
 
 **supabase-porting** = manual only (Supabase Edge Functions → core-be).
 
@@ -261,9 +288,9 @@ The following `.cursor/rules/*.mdc` files auto-invoke skills based on file globs
 
 | Doc | When to use |
 | --- | ----------- |
-| [requirement-intake.md](../../docs/getting-started/requirement-intake.md) | New feature/API work — defaults + one-shot Plan before coding |
-| [pr-review.md](../../docs/process/pr-review.md) | Reviewing or babysitting a PR (human + agent rubric) |
-| [branch-protection.md](../../docs/deployment/ci-cd/branch-protection.md) | Exact required CI check names for merge |
+| [requirement-intake.md](../../../docs/getting-started/requirement-intake.md) | New feature/API work — defaults + one-shot Plan before coding |
+| [pr-review.md](../../../docs/process/pr-review.md) | Reviewing or babysitting a PR (human + agent rubric) |
+| [branch-protection.md](../../../docs/deployment/ci-cd/branch-protection.md) | Exact required CI check names for merge |
 
 ## New requirement workflow
 

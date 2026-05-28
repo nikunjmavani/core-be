@@ -13,6 +13,12 @@ export const auditRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       preHandler: [requireRole(GLOBAL_ROLES.SUPER_ADMIN, GLOBAL_ROLES.ADMIN)],
+      schema: {
+        summary: 'List audit logs (admin)',
+        description:
+          'Returns audit log entries with cursor pagination (`after`, `limit`). Requires SUPER_ADMIN or ADMIN role.',
+        tags: ['Admin', 'Audit Log'],
+      },
     },
     controller.listLogs,
   );

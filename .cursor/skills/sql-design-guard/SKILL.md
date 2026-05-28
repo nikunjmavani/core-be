@@ -319,12 +319,12 @@ For domains requiring audit trails, follow the pattern in `src/domains/audit/aud
 2. **Always index FK columns** (see section D.1)
 3. **Choose ON DELETE deliberately**:
 
-| Relationship                          | ON DELETE action            | Example                         |
-| ------------------------------------- | --------------------------- | ------------------------------- |
-| Parent owns children (cascade delete) | `CASCADE`                   | `webhook_delivery_attempts` → `webhooks` |
-| Child references critical parent      | `RESTRICT`                  | `subscriptions` → `plans`                |
-| Optional reference                    | `SET NULL`                  | `logs.actor_user_id` → `users`  |
-| Soft-delete parent                    | `NO ACTION` (handle in app) | `memberships` → `organizations` |
+   | Relationship                          | ON DELETE action            | Example                         |
+   | ------------------------------------- | --------------------------- | ------------------------------- |
+   | Parent owns children (cascade delete) | `CASCADE`                   | `webhook_delivery_attempts` → `webhooks` |
+   | Child references critical parent      | `RESTRICT`                  | `subscriptions` → `plans`                |
+   | Optional reference                    | `SET NULL`                  | `logs.actor_user_id` → `users`  |
+   | Soft-delete parent                    | `NO ACTION` (handle in app) | `memberships` → `organizations` |
 
 4. **In Drizzle schemas**, express FK references using `.references()`:
 
@@ -391,7 +391,7 @@ When the skill runs, produce a **review block** at the end of your response with
 
 Format:
 
-````
+````markdown
 ## SQL Design Guard Review
 
 ### Naming

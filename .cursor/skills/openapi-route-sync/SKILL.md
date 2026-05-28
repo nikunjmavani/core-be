@@ -1,13 +1,15 @@
 ---
 name: openapi-route-sync
-description: Keeps OpenAPI route metadata in sync when routes change. Use after adding, removing, or updating *.routes.ts — with route-catalog. Updates openapi-enricher routeMetadataMap and locale tags when needed.
+description: Keeps OpenAPI route metadata in sync when routes change. Use after adding, removing, or updating *.routes.ts — with route-catalog. Operation summary/description/tags live on the Fastify route schema (Zod) directly; locale tag dictionaries live in src/shared/locales/{en,es}/openapi.json. Note — for fresh authoring of route schemas, prefer the newer route-schema-doc-guard skill.
 ---
 
 # OpenAPI Route Sync (core-be)
 
+> **Note**: this skill is preserved for OpenAPI tag-locale workflows. For authoring the `schema: { summary, description, tags }` block on a Fastify route registration, **use [route-schema-doc-guard](../route-schema-doc-guard/SKILL.md)** — it covers the same ground with the layered-docs cross-pings (route-catalog, openapi-multilingual, feature-doc-maintainer).
+
 ## Purpose
 
-**route-catalog** updates `docs/routes.txt`. This skill keeps **OpenAPI documentation** aligned: operation summaries, tags, and locale copy for the docs generator.
+**route-catalog** updates `docs/routes.txt`. This skill keeps **OpenAPI documentation** aligned: per-operation summary/description/tags on the route schema, plus locale copy for tag names.
 
 ## When to use
 
@@ -19,43 +21,61 @@ Run **after route-catalog** whenever `*.routes.ts` changes:
 
 Also invoke **openapi-multilingual** when adding new tags or response keys in locale files.
 
-## Files to update
+## Where operation metadata lives
 
-| File                                 | What to add                                                                                       |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `src/scripts/codegen/openapi-enricher.ts`    | Entry in `routeMetadataMap`: key `"METHOD /full/openapi/path"` → `{ summary, description, tags }` |
-| `src/shared/locales/en/openapi.json` | New **tags** entries for any new tag name used                                                    |
-| `src/shared/locales/es/openapi.json` | Same tag keys as English (translated descriptions)                                                |
-
-Route key format matches Fastify/OpenAPI paths (e.g. `'GET /api/v1/tenancy/organizations/:id'`).
+| Layer                          | Location                                                                                                                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Per-route summary/description/tags** | `schema: { summary, description, tags }` on the Fastify route registration in `*.routes.ts` (Zod type provider). Read by `tooling/openapi/extractors/route-schema-metadata.ts`. |
+| **Tag display names**          | `src/shared/locales/{en,es}/openapi.json` → `tags` object (e.g. `"Auth": { "name": "Auth", "description": "..." }`).                                                    |
+| **Supplemental routes**        | `/health`, `/api/v1/mcp` carry their schema literal directly on the registration in `src/shared/middlewares/health.middleware.ts` and `src/infrastructure/mcp/mcp-server.ts`. |
 
 ## Steps
 
-1. **Build the route key** — method + full path as registered (include `/api/v1/...` prefix from `src/routes.ts`).
-2. **Add `routeMetadataMap` entry** with clear summary, one-sentence description, and existing or new tag (match domain: `Auth`, `Tenancy`, `Billing`, etc.).
-3. **New tag?** Add the tag name and description to **all** `src/shared/locales/*/openapi.json` `tags` objects.
-4. **Generate specs**:
+1. **Add `schema` block on the route registration**:
+
+   ```ts
+   zodApplication.post(
+     '/path',
+     {
+       onRequest: [app.authenticate],
+       preHandler: [requireOrganizationPermission(...)],
+       schema: {
+         summary: 'Short verb-first phrase',
+         description: 'One-sentence description of what the endpoint does and any key constraints.',
+         tags: ['Domain', 'Resource'],
+         body: SomeDto,
+       },
+     },
+     controller.handler,
+   );
+   ```
+
+2. **New tag?** Add the tag name + description to **all** `src/shared/locales/*/openapi.json` `tags` objects.
+3. **Generate specs**:
+
    ```bash
    pnpm docs:generate:multilang
    ```
-5. Optional: `pnpm docs:postman` if Postman collection must be refreshed for the team.
+
+4. Optional: `pnpm docs:postman` if Postman collection must be refreshed for the team.
 
 ## Relation to other skills
 
-| Skill                         | Role                                           |
-| ----------------------------- | ---------------------------------------------- |
-| **route-catalog**             | `docs/routes.txt`                              |
-| **openapi-route-sync** (this) | `openapi-enricher.ts` + locale tags            |
-| **openapi-multilingual**      | Full locale parity, new locales, response keys |
+| Skill                         | Role                                              |
+| ----------------------------- | ------------------------------------------------- |
+| **route-catalog**             | `docs/routes.txt`                                 |
+| **openapi-route-sync** (this) | Schema-level summary/description + locale tags   |
+| **openapi-multilingual**      | Full locale parity, new locales, response keys   |
 
 ## Checklist
 
-- [ ] Every new public/authenticated route has a `routeMetadataMap` entry
-- [ ] Removed routes deleted from `routeMetadataMap`
+- [ ] Every new public/authenticated route has `schema: { summary, description, tags }` on its Fastify registration
+- [ ] Removed routes leave no orphaned schema literals
 - [ ] New tags present in `en` and `es` `openapi.json`
 - [ ] `pnpm docs:generate:multilang` run (or noted for CI)
 
 ## Anti-patterns
 
-- Relying on generic fallback summaries for user-facing API docs
+- Adding metadata in any side-table (the legacy `tooling/openapi/route-metadata/*.ts` was deleted — don't reintroduce a parallel source of truth)
+- Relying on generic fallback summaries for user-facing API docs (`POST /api/v1/...` is a smell)
 - Updating only `docs/openapi/*.json` by hand (generated artifacts)

@@ -25,9 +25,10 @@
     "rootDir": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@tooling/openapi/*": ["./tooling/openapi/*"]
+      "@tooling/openapi/*": ["./tooling/openapi/*"],
+      "@tooling/feature-docs/*": ["./tooling/feature-docs/*"]
     }
   },
-  "include": ["src/**/*.ts", "tooling/openapi/**/*.ts"],
+  "include": ["src/**/*.ts", "tooling/openapi/**/*.ts", "tooling/feature-docs/**/*.ts"],
   "exclude": ["node_modules", "dist", "migrations"]
 }

@@ -71,3 +71,6 @@ HTTP signature verification runs in [`stripe-webhook-ingress.plugin.ts`](../../.
 - [billing-database-schema.md](../data/billing-database-schema.md) — billing PK / FK / RLS
 - [redis-topology.md](../../deployment/runbooks/redis-topology.md)
 - [resource-limits.md](../../deployment/runbooks/resource-limits.md)
+- [`src/infrastructure/resilience/OVERVIEW.md`](../../../src/infrastructure/resilience/OVERVIEW.md) — circuit breaker module overview, design decisions, tuning parameters
+- [`src/infrastructure/payment/OVERVIEW.md`](../../../src/infrastructure/payment/OVERVIEW.md) — Stripe client wrapper invariants
+- [`src/POLICIES.md`](../../../src/POLICIES.md) — circuit breaker thresholds and reset timeouts

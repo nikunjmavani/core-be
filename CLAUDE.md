@@ -287,11 +287,27 @@ This repo uses **Context7 MCP** for up-to-date, version-specific documentation. 
 
 When **code or architecture changes**, consult **`.cursor/skills/skill-index/SKILL.md` first** — it maps what changed to which skill(s) to run (no duplicate invocations).
 
-**Enforcement:** Agent skills generate/fix artifacts once → pre-commit (`lint-staged`, `typecheck`, `validate:domain`) → CI (`pnpm validate`, `routes:catalog:check`, env-example sync).
+**Enforcement:** Agent skills generate/fix artifacts once → pre-commit (`lint-staged`, `typecheck`, `validate:domain`, `features:check:strict`) → CI (`pnpm validate`, `routes:catalog:check`, `features:check:strict`, env-example sync).
 
 **Human docs** (when layout changes): `CLAUDE.md`, `README.md`, `.cursor/rules/`, skills — via **structure-maintainer**. Hand-written `docs/**/*.md` — via **docs-maintainer**.
 
 All skills live under `.cursor/skills/`; the skill-index trigger map and auto-trigger rules table are the canonical list.
+
+### Layered documentation system
+
+Every directory under `src/` participates in the layered documentation system. The system has five skills working in concert:
+
+| Layer | File | Owner skill |
+| --- | --- | --- |
+| System narratives | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | **system-narrative-maintainer** |
+| Per-folder overviews | `src/<folder>/OVERVIEW.md` (Templates A.1 / A.2 / A.3 / A.4) | **overview-doc-maintainer** |
+| Auto-generated index | `src/<folder>/DOCS.md` and `src/DOCS.md` | **feature-doc-maintainer** (regenerator) |
+| TSDoc on exports | every `*.ts` file's `export <kind> <name>` declaration | **tsdoc-export-guard** |
+| Route schema | `schema: { summary, description, tags }` on Fastify route registrations | **route-schema-doc-guard** |
+
+The hard gate is `pnpm features:check:strict` — a **monotonic ratchet** at `tooling/feature-docs/missing-tokens.baseline.json`. Counts of `MISSING_DESCRIPTION`, `MISSING_REMARKS`, `MISSING_OVERVIEW_SECTION`, `MISSING_SYSTEM_FILE` may decrease but may not increase. Runs on pre-commit (step 4d) and CI (`ci:local`, `ci:quality`).
+
+When work touches `src/`, the auto-trigger rule [`.cursor/rules/feature-doc-maintainer-sync.mdc`](.cursor/rules/feature-doc-maintainer-sync.mdc) routes the change to the right authoring skill, then to **feature-doc-maintainer** for the index refresh.
 
 ## Testing
 

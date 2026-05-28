@@ -12,3 +12,9 @@ High-level classification of sensitive fields for retention, export, and access 
 | **System ingress**          | `billing.stripe_webhook_events` (event ids only)              | No tenant RLS; no full Stripe payload stored       |
 
 When adding columns that hold email, phone, government ids, or payment instrument details, update this table and confirm export/retention behavior.
+
+## Related
+
+- [`src/PATTERNS.md`](../../../src/PATTERNS.md) § Tenant Isolation, § Soft Delete — how PII is partitioned and how soft-delete preserves history
+- [`src/POLICIES.md`](../../../src/POLICIES.md) — retention windows, GDPR export caps, session lifetimes
+- [`src/domains/user/sub-domains/user-data-export/OVERVIEW.md`](../../../src/domains/user/sub-domains/user-data-export/OVERVIEW.md) — GDPR export pipeline invariants

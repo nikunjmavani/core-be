@@ -76,3 +76,5 @@ export const <table_name> = <domain>Schema.table(
 - **sql-design-guard** — design-quality review after scaffolding
 - **db-migration-maintainer** — SQL in `migrations/`
 - **seed-maintainer** — demo/reference data when routes need it
+- **tsdoc-export-guard** — TSDoc summary on every exported `pgTable`, type, and inferred row type in the new schema file
+- **feature-doc-maintainer** — refresh per-folder `DOCS.md` after adding the schema file

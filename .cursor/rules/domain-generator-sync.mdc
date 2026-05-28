@@ -21,7 +21,7 @@ Read and follow `.cursor/skills/domain-generator/SKILL.md`:
 After all route additions/removals/changes in `*.routes.ts` files:
 
 1. Read `.cursor/skills/route-catalog/SKILL.md` and run `pnpm routes:catalog` once
-2. Read `.cursor/skills/openapi-route-sync/SKILL.md` — update `routeMetadataMap` and locale tags; `pnpm docs:generate:multilang`
+2. Read `.cursor/skills/openapi-route-sync/SKILL.md` — add `schema: { summary, description, tags }` on each Fastify route registration and update locale tags; `pnpm docs:generate:multilang`
 3. CI enforces route drift via `pnpm routes:catalog:check` — do not regenerate twice
 
 If routes affect seed data, also run **seed-maintainer** per skill-index.

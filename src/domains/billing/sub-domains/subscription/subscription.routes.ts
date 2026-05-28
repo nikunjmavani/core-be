@@ -16,6 +16,12 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ, 'id')],
+        schema: {
+          summary: 'List subscriptions',
+          description:
+            'Returns all subscriptions for the organization. Requires SUBSCRIPTION_READ permission.',
+          tags: ['Billing', 'Subscription'],
+        },
       },
       controller.listSubscriptions,
     );
@@ -24,6 +30,12 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ, 'id')],
+        schema: {
+          summary: 'Get subscription',
+          description:
+            'Returns a single subscription with its current status. Requires SUBSCRIPTION_READ permission.',
+          tags: ['Billing', 'Subscription'],
+        },
       },
       controller.getSubscription,
     );
@@ -31,7 +43,13 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       '/organizations/:id/subscriptions',
       {
         config: { idempotencyRequired: true },
-        schema: { body: CreateSubscriptionDto },
+        schema: {
+          summary: 'Create subscription',
+          description:
+            'Creates a new subscription for the organization. Only one active subscription is allowed. Requires SUBSCRIPTION_MANAGE permission. Send an `Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
+          tags: ['Billing', 'Subscription'],
+          body: CreateSubscriptionDto,
+        },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
       },
@@ -40,7 +58,13 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
     zodApplication.patch<{ Params: { id: string; subscriptionId: string } }>(
       '/organizations/:id/subscriptions/:subscriptionId',
       {
-        schema: { body: UpdateSubscriptionDto },
+        schema: {
+          summary: 'Update subscription',
+          description:
+            'Updates subscription settings (e.g. cancel at period end). Requires SUBSCRIPTION_MANAGE permission.',
+          tags: ['Billing', 'Subscription'],
+          body: UpdateSubscriptionDto,
+        },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
       },
@@ -49,7 +73,13 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
     zodApplication.post<{ Params: { id: string; subscriptionId: string } }>(
       '/organizations/:id/subscriptions/:subscriptionId/change-plan',
       {
-        schema: { body: ChangePlanDto },
+        schema: {
+          summary: 'Change subscription plan',
+          description:
+            'Upgrades or downgrades the subscription to a different plan. Proration is applied automatically. Requires SUBSCRIPTION_MANAGE permission.',
+          tags: ['Billing', 'Subscription'],
+          body: ChangePlanDto,
+        },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
       },
@@ -60,6 +90,12 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
+        schema: {
+          summary: 'Cancel subscription',
+          description:
+            'Cancels the subscription. By default, access continues until the end of the current billing period. Requires SUBSCRIPTION_MANAGE permission.',
+          tags: ['Billing', 'Subscription'],
+        },
       },
       controller.cancelSubscription,
     );
@@ -68,6 +104,12 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
+        schema: {
+          summary: 'Resume cancelled subscription',
+          description:
+            'Resumes a subscription that was previously cancelled but has not yet expired. Requires SUBSCRIPTION_MANAGE permission.',
+          tags: ['Billing', 'Subscription'],
+        },
       },
       controller.resumeSubscription,
     );

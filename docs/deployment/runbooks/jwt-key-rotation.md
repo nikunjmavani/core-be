@@ -39,3 +39,5 @@ Verification always uses `JWT_PUBLIC_KEY`. There is no multi-key overlap; rotati
 
 - [credentials-and-env.md](../../integrations/credentials-and-env.md) — `JWT_*` variables
 - [runbook-dev-to-production.md](runbook-dev-to-production.md) — production go-live checklist
+- [`src/domains/auth/sub-domains/auth-session/OVERVIEW.md`](../../../src/domains/auth/sub-domains/auth-session/OVERVIEW.md) — JWT-per-session invariant, bounded revocation propagation
+- [`src/POLICIES.md`](../../../src/POLICIES.md) — `JWT_ACCESS_TOKEN_TTL_MINUTES`, signing kid policy

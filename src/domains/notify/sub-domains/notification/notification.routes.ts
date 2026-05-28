@@ -17,7 +17,12 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
     zodApplication.get(
       '/notifications',
       {
-        schema: { querystring: listNotificationsQueryDto },
+        schema: {
+          summary: 'List my notifications',
+          description: 'Returns a paginated list of notifications for the authenticated user.',
+          tags: ['Notification'],
+          querystring: listNotificationsQueryDto,
+        },
         onRequest: [app.authenticate],
         preValidation: [rejectLegacyPagePagination],
       },
@@ -25,14 +30,26 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
     );
     zodApplication.get(
       '/notifications/unread-count',
-      { onRequest: [app.authenticate], schema: {} },
+      {
+        onRequest: [app.authenticate],
+        schema: {
+          summary: 'Get unread notification count',
+          description: 'Returns the count of unread notifications for the authenticated user.',
+          tags: ['Notification'],
+        },
+      },
       controller.getUnreadCount,
     );
     zodApplication.get<{ Params: { id: string } }>(
       '/notifications/:id',
       {
         onRequest: [app.authenticate],
-        schema: { params: getNotificationParamsDto },
+        schema: {
+          summary: 'Get notification',
+          description: 'Returns a single notification by ID.',
+          tags: ['Notification'],
+          params: getNotificationParamsDto,
+        },
       },
       controller.getNotification,
     );
@@ -40,20 +57,37 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
       '/notifications/:id/read',
       {
         onRequest: [app.authenticate],
-        schema: { params: getNotificationParamsDto },
+        schema: {
+          summary: 'Mark notification as read',
+          description: 'Marks a single notification as read.',
+          tags: ['Notification'],
+          params: getNotificationParamsDto,
+        },
       },
       controller.markNotificationRead,
     );
     zodApplication.post(
       '/notifications/mark-all-read',
-      { onRequest: [app.authenticate], schema: {} },
+      {
+        onRequest: [app.authenticate],
+        schema: {
+          summary: 'Mark all notifications as read',
+          description: 'Marks all unread notifications as read for the authenticated user.',
+          tags: ['Notification'],
+        },
+      },
       controller.markAllRead,
     );
     zodApplication.delete<{ Params: { notificationId: string } }>(
       '/notifications/:notificationId',
       {
         onRequest: [app.authenticate],
-        schema: { params: deleteNotificationParamsDto },
+        schema: {
+          summary: 'Delete notification',
+          description: 'Permanently deletes a notification.',
+          tags: ['Notification'],
+          params: deleteNotificationParamsDto,
+        },
       },
       controller.deleteNotification,
     );

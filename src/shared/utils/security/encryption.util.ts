@@ -15,7 +15,7 @@ export interface EncryptedPayload {
  * produce different ciphertexts.
  *
  * Client-side decryption (crypto-js, browser):
- * ```
+ * ```js
  * const key = CryptoJS.enc.Hex.parse(keyHex);
  * const iv  = CryptoJS.enc.Base64.parse(response.iv);
  * const decrypted = CryptoJS.AES.decrypt(response.payload, key, {

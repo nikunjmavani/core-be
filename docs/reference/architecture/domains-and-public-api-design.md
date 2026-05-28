@@ -95,6 +95,27 @@ Nested sub-domains use the same layer files and optional `events/`, `queues/`, `
 
 **Wiring:** Multi-sub-domain domains use `<domain>.container.ts` to export services. Routes pass the container (or individual services) to controllers. There is no orchestrator layer — controllers call sub-domain services directly.
 
+**Route schema (mandatory for OpenAPI):** Every Fastify route registration must include a `schema: { summary, description, tags }` block. This is the **single source of truth** for OpenAPI generation — there is no parallel `routeMetadataMap` side-table. Owned by **[route-schema-doc-guard](../../../.cursor/skills/route-schema-doc-guard/SKILL.md)**.
+
+```ts
+app.get(
+  '/api/v1/tenancy/organizations/:organizationId',
+  {
+    schema: {
+      summary: 'Get organization',
+      description: 'Returns the organization identified by `organizationId` if the caller is a member.',
+      tags: ['Tenancy / Organization'],
+      params: GetOrganizationParamsDto,
+      response: { 200: OrganizationResponseDto },
+    },
+    preHandler: [requireOrganizationPermission('organization:read')],
+  },
+  controller.get,
+);
+```
+
+**Layered docs:** Every sub-domain folder must additionally have an `OVERVIEW.md` (Template A.2) and TSDoc on every public export. See [documentation-system.md](./documentation-system.md).
+
 ### 1.5 Tests (layout)
 
 | Layer                     | Location                                                                            | Example                                                                          |

@@ -27,10 +27,15 @@ if ! git rev-parse --verify --quiet "${target}" >/dev/null; then
   fi
 fi
 
-changed_files="$(git diff --name-only --diff-filter=ACMRT "${target}"..HEAD -- '*.md')"
+changed_files_raw="$(git diff --name-only --diff-filter=ACMRT "${target}"..HEAD -- '*.md')"
+
+# Auto-generated DOCS.md files are owned by `pnpm features:generate`
+# (regenerated from sources, not hand-edited). Exclude them — they're already
+# gated by `pnpm features:check:strict`, not by markdown lint.
+changed_files="$(printf '%s\n' "${changed_files_raw}" | grep -v -E '(^|/)DOCS\.md$' || true)"
 
 if [ -z "${changed_files}" ]; then
-  echo "No changed markdown files vs ${target}."
+  echo "No changed markdown files vs ${target} (after excluding auto-generated DOCS.md)."
   exit 0
 fi
 

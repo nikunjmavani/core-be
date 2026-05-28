@@ -30,6 +30,12 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_READ, 'id')],
+        schema: {
+          summary: 'List memberships',
+          description:
+            'Returns all memberships in the organization with their roles. Requires MEMBERSHIP_READ permission.',
+          tags: ['Membership'],
+        },
       },
       membershipController.listMemberships,
     );
@@ -38,6 +44,12 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_READ, 'id')],
+        schema: {
+          summary: 'Get membership',
+          description:
+            'Returns a single membership including user details and role. Requires MEMBERSHIP_READ permission.',
+          tags: ['Membership'],
+        },
       },
       membershipController.getMembership,
     );
@@ -46,6 +58,12 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_READ, 'id')],
+        schema: {
+          summary: 'Get membership permissions',
+          description:
+            'Returns all effective permissions for a membership (from role). Requires MEMBERSHIP_READ permission.',
+          tags: ['Membership'],
+        },
       },
       membershipController.getMembershipPermissions,
     );
@@ -54,6 +72,12 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE, 'id')],
+        schema: {
+          summary: 'Create membership',
+          description:
+            'Adds a user as a member of the organization with a specific role. Requires MEMBERSHIP_MANAGE permission.',
+          tags: ['Membership'],
+        },
       },
       membershipController.createMembership,
     );
@@ -62,6 +86,12 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE, 'id')],
+        schema: {
+          summary: 'Update membership',
+          description:
+            'Updates a membership status (e.g. suspend or activate). Requires MEMBERSHIP_MANAGE permission.',
+          tags: ['Membership'],
+        },
       },
       membershipController.updateMembership,
     );
@@ -70,17 +100,39 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE, 'id')],
+        schema: {
+          summary: 'Remove membership',
+          description:
+            'Removes a member from the organization. Requires MEMBERSHIP_MANAGE permission.',
+          tags: ['Membership'],
+        },
       },
       membershipController.deleteMembership,
     );
     app.post<{ Params: { id: string } }>(
       '/organizations/:id/leave',
-      { onRequest: [app.authenticate] },
+      {
+        onRequest: [app.authenticate],
+        schema: {
+          summary: 'Leave organization',
+          description:
+            'Allows the authenticated user to leave the organization. Owners cannot leave without transferring ownership first.',
+          tags: ['Membership'],
+        },
+      },
       membershipController.leaveOrganization,
     );
     app.post<{ Params: { id: string } }>(
       '/organizations/:id/transfer-ownership',
-      { onRequest: [app.authenticate] },
+      {
+        onRequest: [app.authenticate],
+        schema: {
+          summary: 'Transfer organization ownership',
+          description:
+            'Transfers ownership of the organization to another member. Only the current owner can perform this action.',
+          tags: ['Membership'],
+        },
+      },
       membershipController.transferOwnership,
     );
 
@@ -89,7 +141,13 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     zodApplication.get(
       '/organizations/:id/invitations',
       {
-        schema: { querystring: listMemberInvitationsQueryDto },
+        schema: {
+          summary: 'List invitations',
+          description:
+            'Returns all pending invitations for the organization. Requires INVITATION_MANAGE permission.',
+          tags: ['Membership', 'Invitation'],
+          querystring: listMemberInvitationsQueryDto,
+        },
         onRequest: [app.authenticate],
         preValidation: [rejectLegacyPagePagination],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE, 'id')],
@@ -102,12 +160,26 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE, 'id')],
         ...MODERATE_AUTHED_RATE_LIMIT,
+        schema: {
+          summary: 'Create invitation',
+          description:
+            'Sends an invitation email to join the organization. Requires INVITATION_MANAGE permission.',
+          tags: ['Membership', 'Invitation'],
+        },
       },
       invitationController.createMemberInvitation,
     );
     app.post<{ Params: { invitationId: string } }>(
       '/invitations/:invitationId/accept',
-      STRICT_PUBLIC_RATE_LIMIT,
+      {
+        ...STRICT_PUBLIC_RATE_LIMIT,
+        schema: {
+          summary: 'Accept invitation',
+          description:
+            'Accepts a pending invitation using the invitation token. Creates a membership for the user.',
+          tags: ['Membership', 'Invitation'],
+        },
+      },
       invitationController.acceptMemberInvitation,
     );
     app.delete<{ Params: { id: string; invitationId: string } }>(
@@ -115,6 +187,11 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE, 'id')],
+        schema: {
+          summary: 'Cancel invitation',
+          description: 'Cancels a pending invitation. Requires INVITATION_MANAGE permission.',
+          tags: ['Membership', 'Invitation'],
+        },
       },
       invitationController.revokeMemberInvitation,
     );
@@ -124,17 +201,38 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE, 'id')],
         ...STRICT_AUTHED_RATE_LIMIT,
+        schema: {
+          summary: 'Resend invitation',
+          description:
+            'Resends the invitation email with a new expiry. Requires INVITATION_MANAGE permission.',
+          tags: ['Membership', 'Invitation'],
+        },
       },
       invitationController.resendInvitation,
     );
     app.get(
       '/invitations/pending',
-      { onRequest: [app.authenticate] },
+      {
+        onRequest: [app.authenticate],
+        schema: {
+          summary: 'List my pending invitations',
+          description:
+            'Returns all pending invitations for the authenticated user across all organizations.',
+          tags: ['Membership', 'Invitation'],
+        },
+      },
       invitationController.listPendingInvitations,
     );
     app.post<{ Params: { invitationId: string } }>(
       '/invitations/:invitationId/decline',
-      { onRequest: [app.authenticate] },
+      {
+        onRequest: [app.authenticate],
+        schema: {
+          summary: 'Decline invitation',
+          description: 'Declines a pending invitation. The invitation is marked as declined.',
+          tags: ['Membership', 'Invitation'],
+        },
+      },
       invitationController.declineInvitation,
     );
   };

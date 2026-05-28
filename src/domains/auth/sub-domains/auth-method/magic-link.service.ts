@@ -18,6 +18,38 @@ import {
 
 const MAGIC_LINK_EXPIRES_IN_MINUTES = 15;
 
+/**
+ * Issues and verifies one-shot magic-link tokens used by the signup and
+ * password-less login flows.
+ *
+ * @remarks
+ * Algorithm:
+ * - {@link MagicLinkService.send} validates the email, blocks disposable
+ *   domains, looks up the user. If the user does not exist the response is
+ *   a silent success (anti-enumeration). Otherwise it generates a 32-byte
+ *   random token, persists `sha256(token)` with a 15-min expiry, and emits
+ *   `AUTH_EVENT.MAGIC_LINK_REQUESTED` with the raw token in the payload.
+ * - {@link MagicLinkService.verify} hashes the incoming token, atomically
+ *   consumes the verification row (`UPDATE ... RETURNING` so two concurrent
+ *   verifies cannot both produce a session), looks up the user, signs a
+ *   short-lived JWT, and inserts a session row with `sha256(jwt)` as
+ *   `token_hash`.
+ *
+ * Failure modes:
+ * - Disposable email → 400 `errors:disposableEmail` from `send`.
+ * - Unknown email → silent success from `send` (no row, no event, no email).
+ * - Token expired or already consumed → 401 `errors:invalidOrExpiredMagicLink`
+ *   from `verify`.
+ * - User soft-deleted between issue and verify → 401 `errors:userNotFound`.
+ *
+ * Side effects:
+ * - `send` emits a domain event whose handler enqueues an outbound email via
+ *   the mail outbox (`transactional-outbox` pattern).
+ * - `verify` writes a single `auth_sessions` row.
+ *
+ * Notes: raw tokens never flow back to HTTP callers — the only egress is
+ * through the email handler. Tests capture them via the event bus helper.
+ */
 export class MagicLinkService {
   constructor(
     private readonly userService: UserService,

@@ -28,8 +28,8 @@
     "validate:scripts-layout": "tsx src/scripts/validators/code/validate-scripts-layout.ts && tsx src/scripts/validators/code/validate-mcp-optional-dependency.ts",
     "validate:mcp-optional-dependency": "tsx src/scripts/validators/code/validate-mcp-optional-dependency.ts",
     "docs:check": "tsx src/scripts/codegen/check-api-docs-sync.ts",
-    "docs:lint": "markdownlint-cli2 --config .markdownlint.json \"**/*.md\"",
-    "docs:lint:fix": "markdownlint-cli2 --config .markdownlint.json --fix \"**/*.md\"",
+    "docs:lint": "markdownlint-cli2 --config .markdownlint.json \"**/*.md\" \"!**/DOCS.md\" \"!**/node_modules/**\" \"!.claude/**\"",
+    "docs:lint:fix": "markdownlint-cli2 --config .markdownlint.json --fix \"**/*.md\" \"!**/DOCS.md\" \"!**/node_modules/**\" \"!.claude/**\"",
     "docs:lint:changed": "bash tooling/ci/lint-changed-markdown.sh",
     "docs:lint:changelog": "markdownlint-cli2 --config .markdownlint.json \"CHANGELOG*.md\"",
     "docs:lint:changelog:fix": "markdownlint-cli2 --config .markdownlint.json --fix \"CHANGELOG*.md\"",
@@ -55,8 +55,8 @@
     "validate:constants": "tsx src/scripts/validators/code/validate-constants-centralization.ts",
     "validate:test-api-prefix": "tsx src/scripts/validators/tests/validate-test-api-prefix.ts",
     "validate:api-docs-hub": "tsx src/scripts/validators/docs/validate-api-docs-hub.ts",
-    "ci:local": "pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:constants && pnpm routes:catalog:check && pnpm docs:check && pnpm db:migrate:lint && pnpm tool:sync-env-example && pnpm build && pnpm build:check && pnpm test",
-    "ci:quality": "pnpm deps:audit && pnpm deps:audit:prod && pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:locale-keys && pnpm validate:constants && pnpm validate:test-api-prefix && pnpm validate:api-docs-hub && pnpm test:property && pnpm test:contract && pnpm routes:catalog:check && pnpm docs:check && pnpm tool:sync-env-example && pnpm db:migrate:lint && node tooling/ci/check-action-pins.mjs",
+    "ci:local": "pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:constants && pnpm routes:catalog:check && pnpm docs:check && pnpm features:check:strict && pnpm db:migrate:lint && pnpm tool:sync-env-example && pnpm build && pnpm build:check && pnpm test",
+    "ci:quality": "pnpm deps:audit && pnpm deps:audit:prod && pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:locale-keys && pnpm validate:constants && pnpm validate:test-api-prefix && pnpm validate:api-docs-hub && pnpm test:property && pnpm test:contract && pnpm routes:catalog:check && pnpm docs:check && pnpm features:check:strict && pnpm tool:sync-env-example && pnpm db:migrate:lint && node tooling/ci/check-action-pins.mjs",
     "compose:up": "docker compose up -d",
     "compose:down": "docker compose down",
     "compose:wait": "bash tooling/dev/wait-for-local-postgres.sh",
@@ -118,6 +118,10 @@
     "docs:upload:hosted": "pnpm docs:upload && pnpm docs:upload:scalar",
     "routes:catalog": "tsx src/scripts/codegen/generate-route-catalog.ts",
     "routes:catalog:check": "tsx src/scripts/codegen/generate-route-catalog.ts --check",
+    "features:generate": "tsx src/scripts/codegen/generate-feature-docs.ts",
+    "features:check": "tsx src/scripts/codegen/generate-feature-docs.ts --check",
+    "features:check:strict": "tsx src/scripts/codegen/generate-feature-docs.ts --check --strict",
+    "features:refresh-baseline": "tsx src/scripts/codegen/generate-feature-docs.ts --refresh-baseline",
     "tool:sync-env-example": "tsx src/scripts/validators/env/sync-env-example.ts",
     "tool:load-test-credentials": "tsx src/scripts/admin/load-test-credentials.ts",
     "tool:admin-token": "tsx src/scripts/admin/admin-token.ts",
@@ -182,7 +186,7 @@
       "biome format --write --no-errors-on-unmatched"
     ],
     "*.md": [
-      "markdownlint-cli2 --config .markdownlint.json --fix"
+      "bash tooling/ci/lint-staged-markdown.sh"
     ]
   },
   "packageManager": "pnpm@10.28.2",
@@ -240,6 +244,7 @@
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
     "@faker-js/faker": "^10.4.0",
+    "@microsoft/tsdoc": "^0.16.0",
     "@scalar/fastify-api-reference": "^1.57.5",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",

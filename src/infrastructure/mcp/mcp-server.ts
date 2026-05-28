@@ -302,15 +302,37 @@ export async function registerMcpRouteHandlers(
     await transport.handleRequest(nodeRequest, nodeResponse, parsedBody);
   }
 
-  app.get('/api/v1/mcp', async (request, reply) => {
-    reply.hijack();
-    await handleMcpRequest(request.raw, reply.raw, undefined);
-  });
+  app.get(
+    '/api/v1/mcp',
+    {
+      schema: {
+        summary: 'MCP streamable HTTP (GET)',
+        description:
+          'Model Context Protocol endpoint when `ENABLE_MCP_SERVER=true`. Exposes resources `core-be://openapi` and `core-be://routes`, plus the `call_api` tool for in-process API invocation. Requires JWT with global `admin` or `super_admin` role. See docs/integrations/cursor-backend-mcp.md.',
+        tags: ['MCP'],
+      },
+    },
+    async (request, reply) => {
+      reply.hijack();
+      await handleMcpRequest(request.raw, reply.raw, undefined);
+    },
+  );
 
-  app.post('/api/v1/mcp', async (request, reply) => {
-    reply.hijack();
-    await handleMcpRequest(request.raw, reply.raw, request.body as unknown);
-  });
+  app.post(
+    '/api/v1/mcp',
+    {
+      schema: {
+        summary: 'MCP streamable HTTP (POST)',
+        description:
+          'Primary MCP transport for Cursor and other MCP clients. Same auth and capabilities as GET. Request and response bodies follow the MCP streamable HTTP specification.',
+        tags: ['MCP'],
+      },
+    },
+    async (request, reply) => {
+      reply.hijack();
+      await handleMcpRequest(request.raw, reply.raw, request.body as unknown);
+    },
+  );
 
   // Alias without /api/v1 so clients using base URL with path /mcp do not get 404
   app.get('/mcp', async (request, reply) => {

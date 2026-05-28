@@ -13,13 +13,28 @@ export const uploadRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       ...MODERATE_AUTHED_RATE_LIMIT,
-      schema: { body: createUploadDto },
+      schema: {
+        summary: 'Request pre-signed upload URL',
+        description:
+          'Returns a pre-signed S3 URL for direct file upload. Specify the file purpose, content type, and size.',
+        tags: ['Upload'],
+        body: createUploadDto,
+      },
     },
     controller.createUpload,
   );
   zodApplication.get(
     '/:publicId',
-    { onRequest: [app.authenticate], ...MODERATE_AUTHED_RATE_LIMIT },
+    {
+      onRequest: [app.authenticate],
+      ...MODERATE_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Get upload metadata',
+        description:
+          'Returns metadata for a previously requested upload owned by the authenticated user.',
+        tags: ['Upload'],
+      },
+    },
     controller.getUpload,
   );
   zodApplication.post(
@@ -29,7 +44,16 @@ export const uploadRoutesPlugin: FastifyPluginAsync = async (app) => {
   );
   zodApplication.delete(
     '/:publicId',
-    { onRequest: [app.authenticate], ...MODERATE_AUTHED_RATE_LIMIT },
+    {
+      onRequest: [app.authenticate],
+      ...MODERATE_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Delete upload',
+        description:
+          'Soft-deletes the upload record and removes the object from storage when possible.',
+        tags: ['Upload'],
+      },
+    },
     controller.deleteUpload,
   );
 };

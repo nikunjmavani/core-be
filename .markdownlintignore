@@ -9,3 +9,5 @@ docs/postman-collection.json
 docs/routes.txt
 .github/PULL_REQUEST_TEMPLATE.md
 reports/
+.claude/
+**/DOCS.md

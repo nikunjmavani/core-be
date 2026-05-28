@@ -190,6 +190,17 @@ Every BullMQ worker is registered exactly once in [`worker-registration.registry
 
 ---
 
+## Sync after changes (layered docs)
+
+When a worker, processor, queue, event type, or handler is added or renamed:
+
+1. **TSDoc on every public export** in the new `*.worker.ts`, `*.processor.ts`, queue file, or event-handlers file. Workers / processors are **service-like** and require both `summary` and `@remarks` (Algorithm / Failure modes / Side effects / Notes). Invoke **tsdoc-export-guard**.
+2. **OVERVIEW.md** for the new domain / sub-domain folder if not present (Template A.2 with a `## Lifecycle` Mermaid showing the worker's job state machine). Invoke **overview-doc-maintainer**.
+3. **System narrative** updates if the worker introduces a cross-cutting pattern (e.g. a new transactional-outbox surface) or participates in a new end-to-end flow. Invoke **system-narrative-maintainer**.
+4. **Index refresh** — invoke **feature-doc-maintainer** to regenerate per-folder `DOCS.md` and run `pnpm features:check:strict`.
+
+The strict ratchet at pre-commit and CI ensures none of the four `MISSING_*` token counts grow when a worker is added.
+
 ## Don'ts
 
 - Don't call integrations directly from services (emit events instead).

@@ -7,6 +7,30 @@ import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
+/**
+ * Owns the canonical write + read paths for the audit log.
+ *
+ * @remarks
+ * Algorithm:
+ * 1. {@link AuditService.record} resolves the actor's internal user id from
+ *    their public id inside `withUserDatabaseContext` so RLS sees the actor's
+ *    organization scope, then inserts the audit row in the same context.
+ * 2. {@link AuditService.list} validates query input via Zod, resolves
+ *    organization / actor public ids to internal ids, and delegates to
+ *    {@link AuditRepository.findWithFilters} for cursor-paginated reads.
+ *
+ * Failure modes:
+ * - Unknown actor public id → logged at `warn`; no row written; caller is
+ *   unaffected (writes are best-effort by contract).
+ * - DB write failure inside the context → bubbles to the caller; callers
+ *   should go through `recordAuditEvent` so the failure is caught and logged.
+ *
+ * Side effects: one INSERT into `audit_logs.audit_log`. No events emitted —
+ * audit is a write target, not an emitter.
+ *
+ * Notes: callers must never assume immediate-read-your-write through a
+ * different organization context, because the row is RLS-scoped to the actor.
+ */
 export class AuditService {
   constructor(
     private readonly repository: AuditRepository,
@@ -15,9 +39,20 @@ export class AuditService {
   ) {}
 
   /**
-   * Persists an audit log row. Resolves the actor's internal user id from their
-   * public id, then writes the row inside the actor's user database context so
-   * RLS sees the correct organization scope.
+   * Persists an audit log row inside the actor's user database context.
+   *
+   * @remarks
+   * Algorithm:
+   * 1. Resolve `input.actorUserPublicId` → internal user id inside
+   *    `withUserDatabaseContext`. Returning `null` means the actor was deleted
+   *    between event emission and audit recording; row is skipped.
+   * 2. INSERT the row inside the same context so RLS attributes it correctly.
+   *
+   * Failure modes: unknown actor → silent skip (logged at warn). DB error →
+   * thrown; callers should wrap with `recordAuditEvent` for best-effort
+   * semantics.
+   *
+   * Side effects: one INSERT; no event emitted.
    */
   async record(input: AuditLogRecordInput): Promise<void> {
     const user = await withUserDatabaseContext(input.actorUserPublicId, () =>
@@ -47,6 +82,28 @@ export class AuditService {
     );
   }
 
+  /**
+   * Lists audit log rows matching the supplied query (cursor paginated).
+   *
+   * @remarks
+   * Algorithm:
+   * 1. `validateListAuditLogsQuery` runs Zod validation and throws
+   *    `ValidationError` on bad input.
+   * 2. Translate optional public ids (`organization_id`, `actor_user_id`) to
+   *    internal ids; missing rows produce `undefined` filter so the query
+   *    yields no matches rather than 404.
+   * 3. Repository runs the cursor-paginated query, optionally including the
+   *    `total` count when `include_total === 'true'` (expensive on large
+   *    histories — caller must opt in).
+   *
+   * Failure modes: invalid query → `ValidationError` → 400. Unknown public id
+   * → silently filters to empty result.
+   *
+   * Side effects: read-only.
+   *
+   * Notes: caller must already have global admin role (enforced at the route
+   * level via `requireRole('admin')`).
+   */
   async list(query: Record<string, unknown>) {
     const parsed = validateListAuditLogsQuery(query);
 

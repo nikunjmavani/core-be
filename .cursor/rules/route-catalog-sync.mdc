@@ -9,7 +9,7 @@ alwaysApply: false
 When any `*.routes.ts` file is created or modified:
 
 1. Read `.cursor/skills/route-catalog/SKILL.md` and run `pnpm routes:catalog` once.
-2. Read `.cursor/skills/openapi-route-sync/SKILL.md` — update `routeMetadataMap` and locale tags; run `pnpm docs:generate:multilang` when operation text changed.
+2. Read `.cursor/skills/openapi-route-sync/SKILL.md` — add or update `schema: { summary, description, tags }` on each Fastify route registration plus locale tags; run `pnpm docs:generate:multilang` when operation text changed.
 3. If routes affect seeds, run **seed-maintainer** per skill-index.
 
 CI enforces drift via `pnpm routes:catalog:check`.

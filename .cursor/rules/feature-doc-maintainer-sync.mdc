@@ -1,0 +1,45 @@
+---
+description: Auto-trigger map for the layered feature-docs system. Routes any TypeScript change under src/ to the right authoring skill, then to feature-doc-maintainer for the index refresh.
+globs: src/**/*.ts,src/**/*.routes.ts,src/**/OVERVIEW.md,src/OVERVIEW.md,src/PATTERNS.md,src/FLOWS.md,src/POLICIES.md
+alwaysApply: false
+---
+
+## Feature-doc maintainer sync
+
+The layered documentation system has five skills. This rule maps file globs to the **right authoring skill** so an agent never fixes the wrong artefact.
+
+| What changed | Authoring skill | Always also run |
+| --- | --- | --- |
+| Add / rename / remove an exported symbol in `src/**/*.ts` (any file) | **tsdoc-export-guard** | **feature-doc-maintainer** |
+| Add / rename / remove a Fastify route in `src/**/*.routes.ts` (or the two grandfathered non-routes files) | **route-schema-doc-guard** | **route-catalog**, **feature-doc-maintainer** |
+| Add a new policy constant under `src/shared/constants/` | **tsdoc-export-guard** + **system-narrative-maintainer** | **feature-doc-maintainer** |
+| Author or edit `src/<area>/OVERVIEW.md` for a domain / sub-domain / infra module / test suite | **overview-doc-maintainer** | **feature-doc-maintainer** |
+| Edit `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, or `src/POLICIES.md` | **system-narrative-maintainer** | **feature-doc-maintainer** |
+| Add a new domain folder under `src/domains/<domain>/` | **overview-doc-maintainer** + **system-narrative-maintainer** (Domains table) | **feature-doc-maintainer** |
+| Refactor moves a file across folders | **tsdoc-export-guard** (verify exports still pair) | **feature-doc-maintainer** |
+| `pnpm features:check:strict` reports drift only | none — just regenerate | **feature-doc-maintainer** |
+| `pnpm features:check:strict` reports `MISSING_DESCRIPTION` regression | **tsdoc-export-guard** | **feature-doc-maintainer** |
+| `pnpm features:check:strict` reports `MISSING_REMARKS` regression | **tsdoc-export-guard** | **feature-doc-maintainer** |
+| `pnpm features:check:strict` reports `MISSING_OVERVIEW_SECTION` regression | **overview-doc-maintainer** | **feature-doc-maintainer** |
+| `pnpm features:check:strict` reports `MISSING_SYSTEM_FILE` regression | **system-narrative-maintainer** | **feature-doc-maintainer** |
+
+## Cross-pings
+
+- **New domain folder** under `src/domains/`: cross-ping **system-narrative-maintainer** to add the row to the Domains table in `src/OVERVIEW.md` and (if a new pattern is introduced) to `src/PATTERNS.md`.
+- **New cross-cutting pattern** mentioned in any `OVERVIEW.md`: must already exist as an H2 in `src/PATTERNS.md`. If not, cross-ping **system-narrative-maintainer** to add it.
+- **New end-to-end flow** mentioned in any `OVERVIEW.md`: must already exist in `src/FLOWS.md`. If not, cross-ping **system-narrative-maintainer**.
+
+## Order of operations
+
+For multi-skill changes (e.g. new domain + new sub-domain + new policy constant):
+
+1. **Code edits first** (the source files): types, schema, service, repository, routes, etc. Standard domain-generator skills handle the scaffold.
+2. **Authoring skills next**, in this order:
+   1. **tsdoc-export-guard** (per file)
+   2. **route-schema-doc-guard** (per route file)
+   3. **overview-doc-maintainer** (per folder)
+   4. **system-narrative-maintainer** (system files: domains table, patterns, flows, policies)
+3. **feature-doc-maintainer** last to refresh the index.
+4. If `pnpm features:check:strict` reports any regression, loop back to step 2 for the matching authoring skill.
+
+CI enforces the contract via `pnpm features:check:strict` in `ci:local` and `ci:quality`. Pre-commit runs the same gate.
