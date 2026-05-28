@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD025 MD022 MD032 MD036 MD051 MD024 MD041 MD040 MD031 MD007 MD012 MD009 MD026 MD013 MD046 MD038 -->
+
 # Production audit — core-be (2026-05-18)
 
 > **Method:** Principal-engineer review of the full in-scope stack (Node 24, Fastify, Drizzle, Postgres RLS, Redis, BullMQ, Vitest, Docker, Railway CI). Evidence is file-anchored; technologies outside the repo scope (K8s-primary, GraphQL, Prometheus-as-required) are excluded per audit charter.
@@ -154,7 +156,7 @@ Architecture
 Project convention places multi-write atomicity in services via `withTransaction`. The original audit flagged a now-removed local payment-instrument repository as the lone usage; that sub-domain has since been removed (Stripe owns payment instruments). The rule still applies to any surviving multi-write service.
 
 #### Evidence
-[`src/infrastructure/database/transaction.ts`](../../src/infrastructure/database/transaction.ts); [`transaction-rollback.integration.test.ts`](../../src/tests/integration/transaction-rollback.integration.test.ts) exercises rollback. Re-check `withTransaction` usage under `src/domains/` when adding multi-write flows.
+[`src/infrastructure/database/transaction.ts`](../../src/infrastructure/database/transaction.ts); [`transaction-rollback.integration.test.ts`](../../src/tests/integration/database/transaction-rollback.integration.test.ts) exercises rollback. Re-check `withTransaction` usage under `src/domains/` when adding multi-write flows.
 
 #### Production Risk
 Future multi-write service methods may commit partial state.
@@ -574,7 +576,7 @@ Small
 ### Satisfied strengths
 
 - Multi-stage Dockerfile, `USER node`, API `HEALTHCHECK` ([`Dockerfile`](../../Dockerfile)).
-- CI: quality-static, test-with-db, api-smoke, chaos, docker-build + Trivy ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)).
+- CI: quality-static, test-with-db, api-smoke, chaos, docker-build + Trivy ([`.github/workflows/pr-ci.yml`](../../.github/workflows/pr-ci.yml)).
 - Gitleaks, Semgrep, `pnpm audit` in quality pipeline.
 - `docker-compose.yml` for Postgres 16 + Redis 7.
 
