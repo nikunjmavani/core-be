@@ -4,9 +4,9 @@ import { getRequestIdentifier } from '@/shared/utils/http/request.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
-import { getIpAddress, getUserAgent, setSessionCookie } from './auth.http.util.js';
-import { AuthSerializer } from './auth.serializer.js';
-import type { AuthContainer } from './auth.container.js';
+import { getIpAddress, getUserAgent, setSessionCookie } from '../auth.http.util.js';
+import { AuthSerializer } from '../auth.serializer.js';
+import type { AuthContainer } from '../auth.container.js';
 
 type AuthLoginHandlersDependencies = Pick<AuthContainer, 'authService'>;
 
