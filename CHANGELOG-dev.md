@@ -6,6 +6,18 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.1.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.1.4-dev.0...v3.1.5-dev.0) (2026-05-28)
+
+
+### Fixed
+
+* **setup-infra:** Neon branch/role separation + pnpm 11 upgrade ([#150](https://github.com/nikunjmavani/core-be/issues/150)) ([2fe3515](https://github.com/nikunjmavani/core-be/commit/2fe35157bf2ee417128e6de418de0a3b15ec0308))
+
+
+### Documentation
+
+* refresh project readme ([#151](https://github.com/nikunjmavani/core-be/issues/151)) ([6a221d3](https://github.com/nikunjmavani/core-be/commit/6a221d3dd69996e176cb20208d3cc746c5fb79f5))
+
 ## [3.1.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.1.3-dev.0...v3.1.4-dev.0) (2026-05-28)
 
 
