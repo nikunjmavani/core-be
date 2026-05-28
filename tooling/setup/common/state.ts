@@ -8,6 +8,7 @@ const neonBranchStateSchema = z.object({
   endpointId: z.string(),
   databaseUrl: z.string(),
   databaseMigrationUrl: z.string().optional(),
+  serviceRoleName: z.string().optional(),
 });
 
 const redisDatabaseStateSchema = z.object({
