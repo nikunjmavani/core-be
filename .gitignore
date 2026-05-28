@@ -8,9 +8,12 @@ node_modules/
 # Build
 dist/
 
-# Environment: only `.env.example` is committed.
+# Environment: only `.env.example` and `.env.setup.example` are committed.
 # `.env.<environment>` files are gitignored copies created by `pnpm github:sync` and pushed
 # to GitHub Environments via `pnpm github:sync <environment>`.
+# `.env.local` (gitignored) is a machine-specific override that wins over `.env.<NODE_ENV>`
+# for local dev only (e.g. point DATABASE_URL/REDIS_URL at the local Docker Compose stack);
+# use `.env.example` as the schema reference for variable names.
 .env*
 !.env.example
 !.env.setup.example

@@ -68,13 +68,19 @@ Set at least: **DATABASE_URL**, **REDIS_URL**, **JWT_PRIVATE_KEY** /
 `JWT_SECRET` is optional and unused at runtime (deprecated deploy-template no-op). The runtime loader
 (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV}` — defaults
 to `.env.development` when `NODE_ENV` is unset, with a safety-net fallback
-to `.env.development` for `NODE_ENV=test`.
+to `.env.development` for `NODE_ENV=test`. After that, **`.env.local`** is
+applied as an `override=true` overlay (non-production only) so a developer can
+point `DATABASE_URL` / `REDIS_URL` at their local Docker Compose stack without
+editing `.env.development` (which `pnpm github:sync` keeps aligned with the
+hosted environment).
 
-| File               | Status         | Purpose                                                                             |
-| ------------------ | -------------- | ----------------------------------------------------------------------------------- |
-| `.env.example`     | committed      | Single template; every schema key lives here under the right half + sub-section.    |
-| `.env.development` | **gitignored** | Local + dev-environment values; source of truth for `pnpm github:sync development`. |
-| `.env.production`  | **gitignored** | Production values; source of truth for `pnpm github:sync production`.               |
+| File                 | Status         | Purpose                                                                             |
+| -------------------- | -------------- | ----------------------------------------------------------------------------------- |
+| `.env.example`       | committed      | Single template; every schema key lives here under the right half + sub-section.    |
+| `.env.local.example` | committed      | Template for the optional local override; copy to `.env.local` for local Docker.    |
+| `.env.development`   | **gitignored** | Local + dev-environment values; source of truth for `pnpm github:sync development`. |
+| `.env.production`    | **gitignored** | Production values; source of truth for `pnpm github:sync production`.               |
+| `.env.local`         | **gitignored** | Machine-specific override; wins over `.env.<NODE_ENV>` for local dev only.          |
 
 ### 1.3 Database and Redis
 
