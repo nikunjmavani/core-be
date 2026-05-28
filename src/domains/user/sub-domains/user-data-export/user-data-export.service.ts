@@ -41,8 +41,26 @@ function computeArtifactExpiresAt(): Date {
 }
 
 /**
- * Aggregates all user data across domains for GDPR data export.
- * Cross-domain reads are intentional; organization context is not required for self-export.
+ * Orchestrates the GDPR "right to data portability" export pipeline end-to-end.
+ *
+ * @remarks
+ * - **Algorithm:** request → persist a `pending` row → enqueue BullMQ job on commit; worker calls
+ *   {@link UserDataExportService.markProcessing}, then {@link UserDataExportService.buildExportPayload}
+ *   to aggregate cross-domain rows (users, memberships+orgs, sessions, notifications, audit logs)
+ *   under {@link GDPR_EXPORT_MAX_ROWS_PER_TABLE}, gzips the JSON, uploads to S3, and flips status to
+ *   `completed`. On status reads, a presigned download URL is minted only when COMPLETED and
+ *   `expires_at` is in the future.
+ * - **Failure modes:** missing user → {@link NotFoundError}; missing S3 bucket config →
+ *   {@link ConfigurationError}; concurrent user soft-delete or row removal → throws
+ *   {@link UserDataExportCancelledError} so the worker exits without retry; unexpected errors are
+ *   recorded via {@link UserDataExportService.failExportJob}.
+ * - **Side effects:** writes `auth.user_data_exports`, uploads/deletes objects in the GDPR S3
+ *   prefix, enqueues `user-data-export` BullMQ jobs, and emits info-level audit logs. Used by
+ *   `UserService` offboarding to purge every export row + S3 object on account deletion.
+ * - **Notes:** documented cross-domain schema-read exception — this service reads `users`,
+ *   `sessions`, `memberships`, `organizations`, `notifications`, and `logs` directly via the worker
+ *   database handle (forbidden elsewhere; see CLAUDE.md "Dependency Rules"). Self-service only — no
+ *   organization context required.
  */
 export class UserDataExportService {
   constructor(

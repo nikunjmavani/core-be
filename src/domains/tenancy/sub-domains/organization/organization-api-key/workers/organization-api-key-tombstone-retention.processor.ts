@@ -5,6 +5,22 @@ import { api_keys } from '@/domains/tenancy/sub-domains/organization/organizatio
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env } from '@/shared/config/env.config.js';
 
+/**
+ * Hard-deletes `tenancy.api_keys` rows whose `deleted_at` is older than
+ * `env.TOMBSTONE_RETENTION_DAYS`.
+ *
+ * @remarks
+ * - **Algorithm:** computes the cutoff date and chunks the delete via
+ *   `deleteInBatchesByCondition`, returning counts of deleted and FK-blocked
+ *   rows.
+ * - **Failure modes:** Postgres errors propagate to BullMQ's retry / DLQ
+ *   pipeline; FK conflicts surface as `blockedCount > 0`.
+ * - **Side effects:** permanent removal of revoked / soft-deleted API keys;
+ *   structured `info` logs at start and completion.
+ * - **Notes:** runs under the global retention-cleanup DB context that
+ *   short-circuits the `api_keys_tenant_isolation` RLS policy via
+ *   `app.global_retention_cleanup = 'true'`.
+ */
 export async function runOrganizationApiKeyTombstoneRetentionJob(
   databaseHandle: WorkerDatabaseHandle,
 ): Promise<{

@@ -7,6 +7,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { AuthSessionCreateData } from './auth-session.types.js';
 
+/** Drizzle repository for the {@link sessions} table; uses {@link generatePublicId} + {@link runInsertWithPublicIdentifierRetry} for collision-safe inserts and operates under request-scoped RLS contexts so users only see their own sessions. */
 export class AuthSessionRepository {
   async listByUserId(userId: number, limit = DEFAULT_REPOSITORY_LIST_LIMIT) {
     return getRequestDatabase()

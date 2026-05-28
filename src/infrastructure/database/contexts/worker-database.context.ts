@@ -8,6 +8,11 @@ import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/co
 import { runWithPinnedDatabaseHandle } from '@/infrastructure/database/contexts/request-database.context.js';
 import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database.context.error.js';
 
+/**
+ * Discriminator for the kind of pinned database context a BullMQ worker job is
+ * running under. Drives which FORCE-RLS tables the job may touch via
+ * {@link assertWorkerForceRlsTableAccess}.
+ */
 export type WorkerDatabaseContextKind =
   | 'organization'
   | 'global_retention_cleanup'
@@ -15,12 +20,22 @@ export type WorkerDatabaseContextKind =
   | 'session_retention_cleanup'
   | 'system_table';
 
+/**
+ * ALS payload describing the pinned database context for a worker job: the
+ * {@link WorkerDatabaseContextKind} plus the optional organization/user identifier
+ * the job is scoped to.
+ */
 export interface WorkerDatabaseContext {
   readonly kind: WorkerDatabaseContextKind;
   readonly organizationPublicId?: string;
   readonly userPublicId?: string;
 }
 
+/**
+ * AsyncLocalStorage that carries the active {@link WorkerDatabaseContext} for the
+ * current worker job. Exported so worker context wrappers and assertions share a
+ * single storage instance.
+ */
 export const workerDatabaseContextStorage = new AsyncLocalStorage<WorkerDatabaseContext>();
 
 const FORCE_RLS_ALLOWED_KINDS: ReadonlySet<WorkerDatabaseContextKind> = new Set([
@@ -30,14 +45,29 @@ const FORCE_RLS_ALLOWED_KINDS: ReadonlySet<WorkerDatabaseContextKind> = new Set(
   'session_retention_cleanup',
 ]);
 
+/**
+ * True when the current process is the BullMQ worker entrypoint (`pnpm dev:worker`,
+ * which sets `CORE_BE_RUNTIME=worker`). Used to gate worker-only RLS assertions
+ * while keeping the same code paths reusable from the API process and tests.
+ */
 export function isWorkerRuntime(): boolean {
   return process.env.CORE_BE_RUNTIME === 'worker';
 }
 
+/**
+ * Reads the pinned {@link WorkerDatabaseContext} for the current job, or `undefined`
+ * if no context wrapper is active (e.g. in HTTP request paths or unpinned tests).
+ */
 export function getWorkerDatabaseContext(): WorkerDatabaseContext | undefined {
   return workerDatabaseContextStorage.getStore();
 }
 
+/**
+ * Runs `callback` with the given {@link WorkerDatabaseContext} pinned in ALS. Worker
+ * context wrappers (`withOrganizationContext`, `withSystemTableWorkerContext`, etc.)
+ * build on top of this primitive — application code should call the wrappers
+ * directly rather than this raw helper.
+ */
 export function runWithWorkerDatabaseContext<T>(
   context: WorkerDatabaseContext,
   callback: () => Promise<T>,
@@ -115,12 +145,22 @@ export async function withSystemTableWorkerContext<T>(
   );
 }
 
+/**
+ * Builds an `organization`-kind {@link WorkerDatabaseContext} tagged with the tenant
+ * public id — passed to {@link runWithWorkerDatabaseContext} by tenant-scoped
+ * worker wrappers so RLS-bound jobs carry the org identity through ALS.
+ */
 export function workerDatabaseContextForOrganization(
   organizationPublicId: string,
 ): WorkerDatabaseContext {
   return { kind: 'organization', organizationPublicId };
 }
 
+/**
+ * Builds a `user`-kind {@link WorkerDatabaseContext} for user-scoped retention/export
+ * jobs (e.g. GDPR data export, user-tombstone retention). Pairs with
+ * `withUserDatabaseContext` to pin ALS for the duration of the job.
+ */
 export function workerDatabaseContextForUser(userPublicId: string): WorkerDatabaseContext {
   return { kind: 'user', userPublicId };
 }

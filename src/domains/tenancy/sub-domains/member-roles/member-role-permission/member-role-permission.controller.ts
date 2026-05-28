@@ -5,6 +5,12 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import type { MemberRolePermissionService } from './member-role-permission.service.js';
 import { serializeMemberRolePermission } from './member-role-permission.serializer.js';
 
+/**
+ * Builds the HTTP handler map for role-to-permission assignment endpoints
+ * (`GET /organizations/:id/roles/:roleId/permissions` and the matching `PUT`).
+ * Resolves the organization and role public ids from path params and forwards
+ * to {@link MemberRolePermissionService}.
+ */
 export function createMemberRolePermissionController(service: MemberRolePermissionService) {
   return {
     listRolePermissions: async (request: FastifyRequest, _reply: FastifyReply) => {

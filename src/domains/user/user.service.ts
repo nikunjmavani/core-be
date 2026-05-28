@@ -21,6 +21,19 @@ import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user
 
 const ALLOWED_AVATAR_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 
+/**
+ * Cross-domain services injected lazily into {@link UserService} so account deletion can fan out
+ * its side effects.
+ *
+ * @remarks
+ * - **Algorithm:** wired post-construction by `wireOffboardingServices` so the user container can
+ *   be built before the auth, upload, and data-export containers exist (breaks circular DI).
+ * - **Failure modes:** if any dependency is missing at deletion time, the service falls back to a
+ *   plain soft-delete and emits no fan-out (see {@link UserService} `softDeleteUserWithOffboarding`).
+ * - **Side effects:** none directly — the hosted services are responsible for queue / DB / S3 effects.
+ * - **Notes:** intentionally typed as a record rather than an interface so the optional wiring path
+ *   stays explicit at the call site.
+ */
 export type UserOffboardingDependencies = {
   authSessionService: AuthSessionService;
   authMethodService: AuthMethodService;
@@ -28,6 +41,28 @@ export type UserOffboardingDependencies = {
   userDataExportService: UserDataExportService;
 };
 
+/**
+ * Owns the canonical `users` row and the self-service / admin flows that read or mutate it.
+ *
+ * @remarks
+ * - **Algorithm:** profile reads/writes go through {@link UserRepository}; admin list builds
+ *   keyset pagination over `(created_at, id)`; avatar upload validates the S3 key against the
+ *   user's owned namespace, calls `headObject` for content-type sanity, and asserts the upload
+ *   row is `confirmed` inside the user-database context. Account deletion runs
+ *   `softDeleteUserWithOffboarding`: revoke all auth sessions, revoke all auth methods, then
+ *   inside `withTransaction` tombstone uploads + purge data-export rows + soft-delete the user.
+ * - **Failure modes:** missing user → {@link NotFoundError}; avatar key outside owner namespace
+ *   or content type not in `ALLOWED_AVATAR_CONTENT_TYPES` → {@link ValidationError}; missing
+ *   wired dependencies → fall back to plain soft-delete and warn-log; S3 delete failures during
+ *   offboarding are warn-logged but do not abort the transaction.
+ * - **Side effects:** writes `auth.users`; deletes S3 avatar objects; revokes sessions /
+ *   credentials via auth services; tombstones uploads; purges data-export rows + S3 objects.
+ *   No domain events emitted (offboarding is synchronous; export completion uses direct mail).
+ * - **Notes:** password / MFA / email-verification updates run inside `withUserDatabaseContext`
+ *   so RLS policies on user-scoped child tables continue to work; `wireOffboardingServices` is
+ *   the only seam for cross-domain dependencies — keep them off the constructor to avoid
+ *   circular DI between user, auth, upload, and user-data-export.
+ */
 export class UserService {
   private offboardingUploadService: UploadService | null = null;
   private offboardingUserDataExportService: UserDataExportService | null = null;

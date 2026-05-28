@@ -52,6 +52,14 @@ function resolveIncomingRequestIdentifier(incomingMessage: IncomingMessage): str
   return randomUUID();
 }
 
+/**
+ * Builds the canonical {@link FastifyServerOptions} used by both the HTTP server and the
+ * worker health server: Pino logger with {@link PINO_REDACT_PATHS} plus recursive
+ * `redactSensitive` formatter, `pino-pretty` only in local, `trustProxy` resolved from
+ * env (required behind Railway/LB), correlation id propagation from `x-request-id`
+ * with UUID fallback, and the platform body-limit, request-timeout, and connection-timeout
+ * defaults.
+ */
 export function buildFastifyServerOptions(): FastifyServerOptions {
   return {
     logger: {

@@ -15,6 +15,14 @@ import { uploadSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * Drizzle definition for `upload.uploads`. Stores upload metadata + lifecycle
+ * status (`PENDING` → `UPLOADED` or `FAILED`) referenced by S3 object keys.
+ * Two permissive RLS policies are layered: tenant-isolation by
+ * `app.current_organization_id` for org-scoped rows, and an owner-access
+ * policy via `app.current_user_id` for user-scoped (NULL-org) uploads such
+ * as avatars.
+ */
 export const uploads = uploadSchema
   .table(
     'uploads',

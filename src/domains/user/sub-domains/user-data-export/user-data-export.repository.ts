@@ -5,6 +5,7 @@ import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/
 import { user_data_exports } from '@/domains/user/sub-domains/user-data-export/user-data-export.schema.js';
 import type { UserDataExportStatus } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
 
+/** Row payload accepted by {@link UserDataExportRepository.create} when enqueuing a new export. */
 export type UserDataExportInsert = {
   public_id: string;
   user_id: number;
@@ -13,6 +14,19 @@ export type UserDataExportInsert = {
   expires_at: Date;
 };
 
+/**
+ * Drizzle data-access for `auth.user_data_exports`.
+ *
+ * @remarks
+ * - **Algorithm:** thin CRUD on a single table; reads/writes always scope by `(public_id, user_id)`
+ *   so callers cannot cross users by guessing a public id.
+ * - **Failure modes:** lookups return `null` when missing; `updateStatus` returns `null` when the
+ *   row was deleted concurrently (offboarding) — callers should treat that as a cancelled job.
+ * - **Side effects:** writes to `auth.user_data_exports` only; S3 / queue side effects live in the
+ *   service.
+ * - **Notes:** dual-mode handle — request-scoped DB (HTTP) or worker-scoped handle (resolved via
+ *   {@link createWorkerUserDataExportRepository}); never call directly from a worker without a handle.
+ */
 export class UserDataExportRepository {
   constructor(private readonly databaseHandle?: RequestScopedPostgresDatabase) {}
 

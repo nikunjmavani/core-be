@@ -1,5 +1,6 @@
 import { AppError } from './app.error.js';
 
+/** 410 Gone — resource intentionally retired (e.g. revoked invite, deleted endpoint). */
 export class GoneError extends AppError {
   constructor(
     messageKey = 'errors:gone',
@@ -10,6 +11,11 @@ export class GoneError extends AppError {
   }
 }
 
+/**
+ * 404 Not Found — first argument doubles as the `{resource}` interpolation
+ * for `errors:notFound` (e.g. `new NotFoundError('Organization')` →
+ * "Organization not found").
+ */
 export class NotFoundError extends AppError {
   constructor(
     resourceOrMessageKey: string,
@@ -26,6 +32,7 @@ export class NotFoundError extends AppError {
   }
 }
 
+/** 401 Unauthorized — caller is not authenticated (missing or invalid credentials). */
 export class UnauthorizedError extends AppError {
   constructor(
     messageKey = 'errors:unauthorized',
@@ -36,6 +43,7 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+/** 403 Forbidden — caller is authenticated but lacks the required permission/role. */
 export class ForbiddenError extends AppError {
   constructor(
     messageKey = 'errors:forbidden',
@@ -46,6 +54,7 @@ export class ForbiddenError extends AppError {
   }
 }
 
+/** 409 Conflict — request conflicts with current state (e.g. duplicate slug, version mismatch). */
 export class ConflictError extends AppError {
   constructor(
     messageKey = 'errors:conflict',
@@ -56,6 +65,7 @@ export class ConflictError extends AppError {
   }
 }
 
+/** 501 Not Implemented — feature flag is off or the endpoint is intentionally unimplemented. */
 export class NotImplementedError extends AppError {
   constructor(
     messageKey = 'errors:notImplemented',
@@ -66,6 +76,7 @@ export class NotImplementedError extends AppError {
   }
 }
 
+/** 429 Too Many Requests — rate limit exceeded; pair with `Retry-After` header where useful. */
 export class RateLimitedError extends AppError {
   constructor(
     messageKey = 'errors:rateLimited',
@@ -76,6 +87,7 @@ export class RateLimitedError extends AppError {
   }
 }
 
+/** 413 Payload Too Large — request body exceeds the route or upload size limit. */
 export class PayloadTooLargeError extends AppError {
   constructor(
     messageKey = 'errors:payloadTooLarge',
@@ -86,6 +98,7 @@ export class PayloadTooLargeError extends AppError {
   }
 }
 
+/** 422 Unprocessable Entity — request is well-formed but semantically invalid (business rule violation). */
 export class UnprocessableEntityError extends AppError {
   constructor(
     messageKey = 'errors:unprocessableEntity',
@@ -96,6 +109,7 @@ export class UnprocessableEntityError extends AppError {
   }
 }
 
+/** 503 Service Unavailable — dependency outage / circuit-breaker open / temporary maintenance. */
 export class ServiceUnavailableError extends AppError {
   constructor(
     messageKey = 'errors:serviceUnavailable',

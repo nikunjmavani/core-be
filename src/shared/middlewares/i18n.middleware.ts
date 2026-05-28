@@ -22,6 +22,11 @@ const REQUIRED_NAMESPACES = ['common', 'errors', 'success', 'mail'] as const;
 
 const I18N_IGNORE_ROUTES = ['/health', '/api/v1/mcp'];
 
+/**
+ * Resolves the effective locale for a request: prefers the first 2-letter
+ * `Accept-Language` segment, falls back to the organization default locale,
+ * then to `'en'`. Only `'en'` and `'es'` are recognized today.
+ */
 export function resolveRequestLanguageFromHeader(
   acceptLanguageHeader: string | string[] | undefined,
   organizationDefaultLocale?: 'en' | 'es' | null,
@@ -52,6 +57,11 @@ function applyResolvedLanguage(
       i18next.t(key, { lng: requestWithTranslation.language ?? 'en', ...opts }));
 }
 
+/**
+ * Decorates the Fastify `request` with `language` and `t()` helpers using the
+ * locale resolved from `Accept-Language` and the organization default locale.
+ * Called from i18n middleware hooks; safe to invoke twice (re-applies language).
+ */
 export function attachRequestI18nHelpers(
   request: FastifyRequest,
   req: I18nRequest,
@@ -64,6 +74,11 @@ export function attachRequestI18nHelpers(
   applyResolvedLanguage(request, req, language);
 }
 
+/**
+ * Asserts that `src/shared/locales/en/{common,errors,success,mail}.json` exist
+ * on disk before i18next initializes. In production deployments these files
+ * must be copied into the image.
+ */
 export function verifyLocalesAvailable(): void {
   if (!existsSync(LOCALES_DIR)) {
     throw new Error(

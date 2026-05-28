@@ -15,6 +15,7 @@ import type { AuthContainer } from '../auth.container.js';
 
 type AuthOauthHandlersDependencies = Pick<AuthContainer, 'oauthService'>;
 
+/** Builds the OAuth Fastify handlers: `listOauthProviders`, `oauthRedirect` (provider authorize URL), and `oauthCallback` (state consumption + session minting). Each translates `NotImplementedError` to a typed 501 via {@link sendOauthProviderNotImplementedResponse}. */
 export function createAuthOauthHandlers({ oauthService }: AuthOauthHandlersDependencies) {
   return {
     oauthRedirect: async (

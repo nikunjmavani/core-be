@@ -6,6 +6,12 @@ import type { SubscriptionService } from './subscription.service.js';
 import { createSubscriptionController } from './subscription.controller.js';
 import { ChangePlanDto, CreateSubscriptionDto, UpdateSubscriptionDto } from './subscription.dto.js';
 
+/**
+ * Fastify plugin factory that mounts the organization-scoped subscription
+ * endpoints (CRUD + change-plan / cancel / resume). All routes require auth
+ * and a {@link BILLING_PERMISSIONS} permission; create additionally enforces
+ * the `Idempotency-Key` header (`idempotencyRequired: true`).
+ */
 export function subscriptionRoutes(service: SubscriptionService): FastifyPluginAsync {
   const controller = createSubscriptionController(service);
 

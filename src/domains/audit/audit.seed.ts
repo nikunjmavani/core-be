@@ -4,6 +4,7 @@
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { logs } from '@/domains/audit/audit.schema.js';
 
+/** Per-row payload accepted by {@link seedAuditLogs}; mirrors the insert shape with optional metadata. */
 export interface SeedAuditLogPayload {
   organization_id: number;
   actor_user_id: number;
@@ -14,6 +15,10 @@ export interface SeedAuditLogPayload {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Inserts demo audit-log rows for the seed scripts. Severity defaults to
+ * `INFO` and metadata to `{}`. Returns inserted rows in order.
+ */
 export async function seedAuditLogs(items: SeedAuditLogPayload[]) {
   const inserted = [];
   for (const item of items) {

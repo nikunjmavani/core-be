@@ -1,3 +1,7 @@
+/**
+ * Result of {@link BaseRepository.cursorPaginate} — the trimmed page plus the
+ * opaque `next_cursor` callers echo back to fetch the next slice.
+ */
 export interface CursorPaginatedResult<T> {
   items: T[];
   has_more: boolean;

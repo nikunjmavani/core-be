@@ -7,6 +7,11 @@ import {
   type CircuitBreaker,
 } from '@/infrastructure/resilience/circuit-breaker.js';
 
+/**
+ * Closed set of external integrations that {@link outboundCall} understands. Adding a
+ * new value here requires a matching entry in `OUTBOUND_DEFAULT_FACTORIES` (timeout +
+ * optional circuit) so timeouts and breaker wiring stay consistent across call sites.
+ */
 export type OutboundIntegrationName =
   | 'stripe'
   | 's3'
@@ -17,6 +22,7 @@ export type OutboundIntegrationName =
   | 'oauth-github'
   | 'captcha-turnstile';
 
+/** Per-integration defaults (HTTP timeout + circuit breaker) applied when call sites omit overrides. */
 export interface OutboundIntegrationDefaults {
   timeoutMs: number;
   circuit?: CircuitBreaker;
@@ -62,6 +68,11 @@ const OUTBOUND_DEFAULT_FACTORIES: Record<OutboundIntegrationName, OutboundDefaul
   }),
 };
 
+/**
+ * Returns timeout + circuit-breaker defaults for the given integration. Evaluated lazily
+ * via factory functions so changes to env-derived values (e.g. `STRIPE_HTTP_TIMEOUT_MS`)
+ * after boot are still picked up if process env is mutated under tests.
+ */
 export function resolveOutboundDefaults(
   name: OutboundIntegrationName,
 ): OutboundIntegrationDefaults {

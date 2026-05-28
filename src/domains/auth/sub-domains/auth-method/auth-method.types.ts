@@ -1,3 +1,4 @@
+/** Input shape accepted by {@link AuthMethodRepository.create} when inserting a new row into `auth.auth_methods`. */
 export interface AuthMethodCreateData {
   user_id: number;
   method_type: string;

@@ -7,6 +7,12 @@ function stripWebhookSecrets<T extends Record<string, unknown>>(webhook: T): T {
   ) as T;
 }
 
+/**
+ * Response serializer for webhook rows that strips every secret-bearing field
+ * (`encrypted_secret`, `secret`, `secret_hash`, `signing_secret`) before reaching the client —
+ * acts as a regression guard so a future row-shape change cannot accidentally leak signing
+ * material in API responses.
+ */
 export const WebhookSerializer = {
   one<T>(webhook: T): T {
     if (webhook === null || typeof webhook !== 'object') {

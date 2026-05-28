@@ -24,6 +24,28 @@ import {
 const PASSWORD_RESET_EXPIRES_IN_MINUTES = 60;
 const EMAIL_VERIFICATION_EXPIRES_IN_HOURS = 24;
 
+/**
+ * Owns the lifecycle of {@link auth_methods} rows and the password/email
+ * verification flows that share the unified verification-token table.
+ *
+ * @remarks
+ * - **Algorithm:** authenticated callers manage their linked auth methods
+ *   (PASSWORD / OAUTH / MAGIC_LINK / MFA_TOTP) via `list` / `create` / `delete`.
+ *   Password reset and email verification mint a random 32-byte token, persist
+ *   its SHA-256 hash with a TTL ({@link PASSWORD_RESET_EXPIRES_IN_MINUTES} or
+ *   {@link EMAIL_VERIFICATION_EXPIRES_IN_HOURS}), and atomically consume it via
+ *   {@link VerificationTokenRepository.consumeIfValid} to guard against replay.
+ * - **Failure modes:** disposable-email submissions throw `ValidationError`;
+ *   unknown users surface `NotFoundError`; bad/expired tokens or wrong current
+ *   password throw `UnauthorizedError` with i18n keys.
+ * - **Side effects:** invalidates outstanding tokens before issuing new ones;
+ *   emits `AUTH_EVENT.PASSWORD_RESET_REQUESTED` and `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED`
+ *   (mail enqueue happens in the auth-method event handlers); rehashes user
+ *   passwords via {@link UserService.updatePassword}.
+ * - **Notes:** the forgot-password flow always returns the same success message
+ *   even when the email is unknown, to prevent account enumeration. OAuth
+ *   linkage is idempotent via {@link AuthMethodService.linkOAuthProviderIfMissing}.
+ */
 export class AuthMethodService {
   constructor(
     private readonly userService: UserService,

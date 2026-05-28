@@ -7,6 +7,7 @@ import { createAuthAuthMethodHandlers } from './handlers/auth-auth-method.handle
 import { createAuthMfaHandlers } from './handlers/auth-mfa.handlers.js';
 import { createAuthWebauthnHandlers } from './handlers/auth-webauthn.handlers.js';
 
+/** Composes the auth domain's Fastify route handler map from per-flow handler factories (login, session, magic-link, OAuth, auth-method, MFA, WebAuthn). */
 export function createAuthController(container: AuthContainer) {
   return {
     ...createAuthLoginHandlers(container),

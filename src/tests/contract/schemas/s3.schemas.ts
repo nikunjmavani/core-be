@@ -1,11 +1,17 @@
 import { z } from 'zod';
 
+/** Parses an S3 presigned URL into a {@link URL} for query-parameter inspection in contract tests. */
 export function parsePresignedAmazonWebServicesUrl(parameters: {
   presignedAbsoluteUrlString: string;
 }): URL {
   return new URL(parameters.presignedAbsoluteUrlString);
 }
 
+/**
+ * Builds a case-sensitive map of query parameters from a presigned S3 URL,
+ * tolerating both modern percent-encoding and the legacy `+` space encoding
+ * still emitted by some AWS SDK paths.
+ */
 export function normalizedPresignedQueryParameterMap(parameters: {
   amazonWebServicesSignedUrlObject: URL;
 }): Map<string, string> {
@@ -26,6 +32,7 @@ export function normalizedPresignedQueryParameterMap(parameters: {
   return queryParameterLookup;
 }
 
+/** Zod contract for the response headers our storage adapter parses out of an S3 `HEAD object` call. */
 export const HeadObjectSuccessfulResponseHeadersContractSchema = z.object({
   contentType: z.string(),
   contentLength: z.string(),

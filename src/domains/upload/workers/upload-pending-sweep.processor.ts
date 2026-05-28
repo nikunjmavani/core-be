@@ -11,6 +11,18 @@ import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { UPLOAD_PENDING_SWEEP_BATCH_SIZE } from './upload-pending-sweep.constants.js';
 
+/**
+ * Outcome counters for one {@link runUploadPendingSweepJob} run.
+ *
+ * @remarks
+ * - **scannedCount:** stale PENDING rows considered in this batch.
+ * - **autoConfirmedCount:** rows whose S3 object existed with a matching
+ *   length/content-type and were transitioned to `UPLOADED`.
+ * - **failedCount:** rows whose S3 object existed but with metadata mismatch;
+ *   transitioned to `FAILED` so they can never be attached.
+ * - **deletedCount:** orphan rows whose S3 object was missing; hard-deleted
+ *   after a best-effort S3 delete.
+ */
 export type UploadPendingSweepResult = {
   scannedCount: number;
   autoConfirmedCount: number;
@@ -27,6 +39,22 @@ export type UploadPendingSweepResult = {
  * - Object missing                    → hard-delete the orphan row (idempotent S3 delete first).
  *
  * Runs under withGlobalRetentionCleanupDatabaseContext so RLS does not block cross-tenant rows.
+ *
+ * @remarks
+ * - **Algorithm:** cutoff = now − (`PRESIGNED_URL_EXPIRY_SECONDS` +
+ *   `UPLOAD_PENDING_SWEEP_GRACE_SECONDS`). Selects up to
+ *   {@link UPLOAD_PENDING_SWEEP_BATCH_SIZE} oldest PENDING rows older than
+ *   the cutoff, HEADs each S3 object, and applies the verdict (auto-confirm,
+ *   fail, or orphan-delete) in a single pass.
+ * - **Failure modes:** transient S3 errors during HEAD or DELETE are logged
+ *   at `warn` and the row is left for the next sweep (no row is hard-deleted
+ *   unless the object was confirmed missing). Repository errors bubble to
+ *   BullMQ for retry.
+ * - **Side effects:** updates `upload.uploads` status, deletes orphan rows,
+ *   and may delete leftover S3 objects. No events emitted.
+ * - **Notes:** batch-scoped — large backlogs drain over multiple repeats.
+ *   Caller (worker) supplies the database handle from the global-retention
+ *   context so RLS does not filter cross-tenant rows.
  */
 export async function runUploadPendingSweepJob(
   databaseHandle: WorkerDatabaseHandle,

@@ -5,6 +5,23 @@ import { UserDataExportCancelledError } from '@/domains/user/sub-domains/user-da
 import { runUserScopedWorkerJob } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+/**
+ * Execute one `user-data-export` job inside `withUserDatabaseContext` so RLS attributes the cross-
+ * domain reads to the requesting user.
+ *
+ * @remarks
+ * - **Algorithm:** check cancellation → mark `processing` → re-check cancellation → build the
+ *   GDPR payload, gzip, upload to S3 → flip status to `completed`. Each cancellation check covers
+ *   the user being soft-deleted or the export row being purged by offboarding.
+ * - **Failure modes:** {@link UserDataExportCancelledError} short-circuits to a no-op (no retry,
+ *   no failure status). All other errors are logged, mark the row `failed` with `error_code`
+ *   `export_failed`, and re-throw so BullMQ applies the queue's retry/backoff and DLQ policy.
+ * - **Side effects:** writes `auth.user_data_exports` status, uploads a gzip JSON object to the
+ *   GDPR S3 prefix, and emits structured logs for observability.
+ * - **Notes:** runs inside the user-scoped DB context; cross-domain selects in
+ *   {@link UserDataExportService.buildExportPayload} are the documented exception to the
+ *   no-cross-domain-schema-read rule.
+ */
 export async function runUserDataExportJob(
   jobData: UserDataExportJobData,
   userDataExportService: UserDataExportService,

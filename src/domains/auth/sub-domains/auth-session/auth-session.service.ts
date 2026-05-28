@@ -18,6 +18,25 @@ function hashAccessToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
 }
 
+/**
+ * Owns the lifecycle of `auth.sessions` rows used for bearer-token refresh,
+ * device listing, and revocation.
+ *
+ * @remarks
+ * - **Algorithm:** each access token is paired with a session row whose
+ *   `token_hash` (SHA-256 of the JWT) is the join key. On refresh the row stays
+ *   put while the hash is rotated (see {@link rotateSessionTokenHash}); on
+ *   logout the row is revoked. All reads/writes run under user- or
+ *   session-scoped database contexts so Postgres RLS lets them through.
+ * - **Failure modes:** missing user / missing session surface `NotFoundError`;
+ *   `revokeSessionByAccessToken` and `verifyActiveAccessToken` throw
+ *   `UnauthorizedError` with `errors:invalidOrRevokedToken` / `errors:invalidOrExpiredSession`.
+ * - **Side effects:** writes to `auth.sessions`; invalidates the Redis token
+ *   cache via {@link invalidateCachedSessionToken} on every revoke / rotate so
+ *   downstream bearer checks see the change immediately.
+ * - **Notes:** {@link verifyActiveAccessToken} is hot-pathed by the auth
+ *   middleware and uses a 60-second Redis cache to amortise DB round-trips.
+ */
 export class AuthSessionService {
   constructor(
     private readonly userService: UserService,

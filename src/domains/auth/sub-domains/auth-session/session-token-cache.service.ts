@@ -10,6 +10,16 @@ function buildSessionTokenCacheKey(tokenHash: string): string {
 
 /**
  * Returns true when the token hash was recently validated against an active session.
+ *
+ * @remarks
+ * - **Algorithm:** Redis `GET session:tok:<hash>`; presence of the sentinel `'1'` means the
+ *   bearer was confirmed active within {@link SESSION_TOKEN_CACHE_TTL_SECONDS}.
+ * - **Failure modes:** Redis failures are logged and swallowed — the function returns
+ *   `false` so the caller falls back to the database (fail-open on availability,
+ *   fail-closed on staleness because the DB is the source of truth).
+ * - **Side effects:** read-only Redis lookup.
+ * - **Notes:** consumed by {@link AuthSessionService.verifyActiveAccessToken} to skip the
+ *   `sessions` query on hot bearer-auth paths.
  */
 export async function getCachedSessionTokenValid(tokenHash: string): Promise<boolean> {
   try {
@@ -21,6 +31,18 @@ export async function getCachedSessionTokenValid(tokenHash: string): Promise<boo
   }
 }
 
+/**
+ * Marks a token hash as a recently validated active session in Redis.
+ *
+ * @remarks
+ * - **Algorithm:** `SETEX session:tok:<hash> 1 <ttl>` with TTL =
+ *   {@link SESSION_TOKEN_CACHE_TTL_SECONDS}.
+ * - **Failure modes:** Redis errors are logged and swallowed; the caller's request
+ *   succeeds even when caching is unavailable.
+ * - **Side effects:** writes a single short-lived Redis entry.
+ * - **Notes:** the cache is invalidated on every revoke or rotate via
+ *   {@link invalidateCachedSessionToken} to bound staleness to that TTL.
+ */
 export async function setCachedSessionTokenValid(tokenHash: string): Promise<void> {
   try {
     await redisConnection.set(
@@ -34,6 +56,17 @@ export async function setCachedSessionTokenValid(tokenHash: string): Promise<voi
   }
 }
 
+/**
+ * Drops the cached "valid bearer" sentinel for a token hash so subsequent calls re-check Postgres.
+ *
+ * @remarks
+ * - **Algorithm:** Redis `DEL session:tok:<hash>`.
+ * - **Failure modes:** Redis errors are logged and swallowed — staleness is bounded by
+ *   the original `SETEX` TTL even if the delete is lost.
+ * - **Side effects:** removes a Redis key.
+ * - **Notes:** must be called on session revoke (single + bulk) and on every token-hash
+ *   rotation so newly-rotated JWTs don't read a stale cache entry.
+ */
 export async function invalidateCachedSessionToken(tokenHash: string): Promise<void> {
   try {
     await redisConnection.del(buildSessionTokenCacheKey(tokenHash));

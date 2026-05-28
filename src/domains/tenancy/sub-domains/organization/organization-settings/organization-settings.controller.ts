@@ -4,6 +4,11 @@ import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.u
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationSettingsService } from './organization-settings.service.js';
 
+/**
+ * Builds the Fastify handler map for `/organizations/:id/settings` —
+ * exposes a `getSettings` reader and a `updateSettings` writer that
+ * upserts the row through {@link OrganizationSettingsService}.
+ */
 export function createOrganizationSettingsController(service: OrganizationSettingsService) {
   return {
     getSettings: async (request: FastifyRequest, _reply: FastifyReply) => {

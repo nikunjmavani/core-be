@@ -70,6 +70,11 @@ function createListDeliveryAttemptsHandler(service: WebhookService) {
   };
 }
 
+/**
+ * Build the Fastify handler map for `/organizations/:id/webhooks` — coordinates organization
+ * scoping, validation, {@link WebhookService} calls, and {@link WebhookSerializer} output (which
+ * also strips encrypted-secret fields from responses).
+ */
 export function createWebhookController(service: WebhookService) {
   return {
     listWebhooks: createListWebhooksHandler(service),

@@ -4,6 +4,12 @@ import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.u
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationApiKeyService } from './organization-api-key.service.js';
 
+/**
+ * Builds the Fastify handler map for `/organizations/:id/api-keys` routes —
+ * list, get, create (returns the raw key once), update, delete, and rotate.
+ * Wraps service calls with `requireAuth`, public-id validation, and the
+ * standard response shapers.
+ */
 export function createOrganizationApiKeyController(service: OrganizationApiKeyService) {
   return {
     listApiKeys: async (request: FastifyRequest, _reply: FastifyReply) => {

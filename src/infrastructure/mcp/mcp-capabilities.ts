@@ -4,9 +4,16 @@
  */
 import { z } from 'zod';
 
+/** MCP resource URI for the generated OpenAPI 3.0 spec (`docs/openapi/openapi.json`). */
 export const MCP_OPENAPI_RESOURCE_URI = 'core-be://openapi';
+/** MCP resource URI for the human-readable route catalog (`docs/routes.txt`). */
 export const MCP_ROUTES_RESOURCE_URI = 'core-be://routes';
 
+/**
+ * Zod input schema for the `call_api` MCP tool. Forwards HTTP method, path (must start
+ * with `/api/v1/`), JSON body, and optional auth headers — clients use this to invoke
+ * any backend endpoint through the MCP transport.
+ */
 export const callApiInputSchema = z.object({
   method: z.enum(['GET', 'POST', 'PATCH', 'PUT', 'DELETE']).describe('HTTP method'),
   path: z.string().describe('API path (must start with /api/v1/)'),
@@ -17,6 +24,7 @@ export const callApiInputSchema = z.object({
     .describe('Optional headers (e.g. Authorization, X-Organization-Id)'),
 });
 
+/** Static descriptor for an MCP resource — used to register resources on the server and to render the OpenAPI page. */
 export type McpResourceDefinition = {
   name: string;
   uri: string;
@@ -25,6 +33,7 @@ export type McpResourceDefinition = {
   mimeType: string;
 };
 
+/** Static descriptor for an MCP tool, including the Zod schema validating tool input arguments. */
 export type McpToolDefinition = {
   name: string;
   title: string;
@@ -32,6 +41,7 @@ export type McpToolDefinition = {
   inputSchema: z.ZodTypeAny;
 };
 
+/** Canonical resource catalog exposed via MCP (OpenAPI spec + route catalog). */
 export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
   {
     name: 'core-be-openapi',
@@ -51,6 +61,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
   },
 ] as const;
 
+/** Canonical tool catalog exposed via MCP (currently just the `call_api` proxy). */
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
     name: 'call_api',

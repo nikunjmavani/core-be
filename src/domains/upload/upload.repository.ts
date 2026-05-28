@@ -6,6 +6,7 @@ import { uploads } from '@/domains/upload/upload.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 
+/** Drizzle-inferred select row shape for the `upload.uploads` table. */
 export type UploadRow = typeof uploads.$inferSelect;
 
 /** Subset returned to the PENDING sweeper; avoids hauling unused metadata columns. */
@@ -14,6 +15,7 @@ export type PendingUploadSweepRow = Pick<
   'id' | 'public_id' | 'user_id' | 'file_key' | 'mime_type' | 'file_size' | 'created_at'
 >;
 
+/** Insert payload for {@link UploadRepository.create}; status defaults to `PENDING` when omitted. */
 export interface UploadCreateData {
   user_id: number;
   organization_id?: number | null;
@@ -27,6 +29,12 @@ export interface UploadCreateData {
   created_by_user_id?: number;
 }
 
+/**
+ * Data-access layer for `upload.uploads`. Owner-scoped reads/writes go through
+ * the request database handle (RLS enforces user/organization isolation);
+ * inserts retry on public-id collisions and lifecycle transitions are limited
+ * to soft-delete + status updates so the row history stays auditable.
+ */
 export class UploadRepository {
   async create(data: UploadCreateData): Promise<UploadRow> {
     return runInsertWithPublicIdentifierRetry(async () => {

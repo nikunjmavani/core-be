@@ -15,6 +15,12 @@ import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 
+/**
+ * Drizzle table for `billing.subscriptions` — one row per organization with the
+ * current billing state (status, period, Stripe identifiers, last-event
+ * watermark). RLS policy `subscriptions_tenant_isolation` restricts access to
+ * the organization GUC unless the global retention cleanup flag is set.
+ */
 export const subscriptions = billingSchema
   .table(
     'subscriptions',

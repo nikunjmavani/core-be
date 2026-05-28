@@ -8,6 +8,7 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { mailJobDataSchema, type MailJobDataValidated } from './mail.job.schema.js';
 
+/** BullMQ queue name for outbox-driven mail send jobs (`mail/send-email`). */
 export const MAIL_QUEUE_NAME = 'mail';
 
 /** BullMQ attempts — extra headroom for Resend circuit-open deferred retries. */

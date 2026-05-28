@@ -28,6 +28,40 @@ import type { UploadRepository, UploadRow } from './upload.repository.js';
 import { serializeUploadCreate, serializeUploadDetail } from './upload.serializer.js';
 import { validateUploadPublicIdParam } from './upload.validator.js';
 
+/**
+ * Owns the upload lifecycle behind the public upload routes and the
+ * cross-domain offboarding hooks.
+ *
+ * @remarks
+ * - **Algorithm:** {@link UploadService.createUpload} validates the per-user
+ *   PENDING quota, resolves owner/organization context, computes the S3 key
+ *   from {@link UPLOAD_PURPOSE_CONFIG} + a canonical extension, requests a
+ *   presigned URL (PUT or POST per `UPLOAD_USE_PRESIGNED_POST`) from the
+ *   storage adapter, and inserts the row inside {@link withUserDatabaseContext}
+ *   so the owner-access RLS policy authorizes the write.
+ *   {@link UploadService.confirmUpload} HEADs the object, compares
+ *   content-type/length against the declared values, and transitions
+ *   `PENDING` → `UPLOADED` (idempotent for already-confirmed rows) or
+ *   `FAILED` on mismatch. {@link UploadService.deleteUpload} performs a
+ *   best-effort S3 delete then soft-deletes the row.
+ * - **Failure modes:** quota exceeded → `ValidationError`; missing org
+ *   permission → `ForbiddenError`; unknown public id or owner mismatch →
+ *   `NotFoundError`; S3 verification failure → row moved to `FAILED` and a
+ *   `ValidationError` raised so the caller does not attach an unverified
+ *   object; missing `S3_BUCKET` → `ConfigurationError`.
+ * - **Side effects:** issues presigned S3 URLs, HEADs/DELETEs S3 objects,
+ *   inserts/updates `upload.uploads`, and emits no in-process events.
+ *   Storage access is abstracted behind {@link ObjectStoragePort} so tests
+ *   can substitute an in-memory adapter.
+ * - **Notes:** offboarding hooks
+ *   ({@link UploadService.tombstoneAllByUserId} /
+ *   {@link UploadService.tombstoneAllByOrganizationId}) only soft-delete rows;
+ *   user offboarding additionally attempts per-object S3 deletes, while
+ *   organization tombstones defer object removal to the retention worker.
+ *   `assertKeyConfirmed` is the gate cross-domain consumers (avatar/logo
+ *   attach) call before linking an upload — it never authorizes ownership,
+ *   which the caller enforces by key prefix.
+ */
 export class UploadService {
   constructor(
     private readonly repository: UploadRepository,

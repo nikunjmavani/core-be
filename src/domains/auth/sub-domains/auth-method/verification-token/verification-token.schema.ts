@@ -3,6 +3,7 @@ import { bigint, bigserial, varchar, timestamp, index, pgPolicy } from 'drizzle-
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 
+/** Drizzle table for `auth.verification_tokens` — unified store for magic-link / password-reset / email-verification / email-change tokens; `token_hash` is unique and indexed for replay-safe lookups, RLS-enabled. */
 export const verification_tokens = authSchema
   .table(
     'verification_tokens',

@@ -5,6 +5,13 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import type { OrganizationService } from './organization.service.js';
 import type { AuditService } from '@/domains/audit/audit.service.js';
 
+/**
+ * Builds the Fastify handler map for `/organizations` routes (CRUD, logo
+ * upload/delete, slug lookup, audit-log listing). Wraps service calls with
+ * `requireAuth`, public-id validation, and `successResponse` /
+ * `paginatedResponse` shaping. The optional {@link AuditService} is required
+ * only by `listOrganizationAuditLogs`.
+ */
 export function createOrganizationController(
   service: OrganizationService,
   auditService?: AuditService,

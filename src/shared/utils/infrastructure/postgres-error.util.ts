@@ -5,6 +5,7 @@
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 const POSTGRES_FOREIGN_KEY_VIOLATION = '23503';
 
+/** Returns true when `error` is a Postgres `unique_violation` (SQLSTATE 23505). */
 export function isPostgresUniqueViolation(error: unknown): boolean {
   return (
     typeof error === 'object' &&
@@ -14,6 +15,7 @@ export function isPostgresUniqueViolation(error: unknown): boolean {
   );
 }
 
+/** Returns true when `error` is a Postgres `foreign_key_violation` (SQLSTATE 23503). */
 export function isPostgresForeignKeyViolation(error: unknown): boolean {
   return (
     typeof error === 'object' &&

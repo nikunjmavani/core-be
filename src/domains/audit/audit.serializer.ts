@@ -8,6 +8,11 @@ function sanitizeMetadata(metadata: unknown): unknown {
   );
 }
 
+/**
+ * Response serializer for audit log rows. Strips any `*_id` keys from the
+ * `metadata` JSON before exposing rows over the admin API, so internal
+ * surrogate identifiers never leak through arbitrary event payloads.
+ */
 export const AuditSerializer = {
   many<T extends { metadata?: unknown }>(items: T[]): T[] {
     return items.map((item) => ({

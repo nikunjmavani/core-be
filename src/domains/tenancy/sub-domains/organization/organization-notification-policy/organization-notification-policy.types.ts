@@ -1,3 +1,4 @@
+/** Internal Drizzle row for `tenancy.organization_notification_policies` (includes soft-delete). */
 export interface OrganizationNotificationPolicyRow {
   id: number;
   public_id: string;
@@ -12,6 +13,7 @@ export interface OrganizationNotificationPolicyRow {
   updated_at: Date;
 }
 
+/** Public notification-policy shape returned by the API — produced by {@link serializeOrganizationNotificationPolicy}. */
 export interface OrganizationNotificationPolicyOutput {
   id: number;
   organization_id: string;

@@ -6,6 +6,7 @@ import {
   type WebhookDeliveryJobDataValidated,
 } from './webhook-delivery.job.schema.js';
 
+/** BullMQ queue name for outbound webhook delivery (HMAC-signed POSTs to customer URLs). */
 export const WEBHOOK_DELIVERY_QUEUE_NAME = 'webhook-delivery';
 
 /** Delivery attempt id and org scope are stored in Redis; payload and secrets live in Postgres. */
@@ -47,6 +48,7 @@ export async function enqueueWebhookDeliveryByAttemptId(
   });
 }
 
+/** Close the lazily-initialised webhook-delivery queue (graceful-shutdown hook for tests/runtime). */
 export async function closeWebhookDeliveryQueue(): Promise<void> {
   if (webhookDeliveryQueue) {
     await webhookDeliveryQueue.close();

@@ -22,6 +22,12 @@ function parseScopesColumn(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === 'string');
 }
 
+/**
+ * Drizzle data-access for `tenancy.api_keys`. Stores hashed keys (never raw
+ * secrets), normalises the `scopes` jsonb column to `string[]`, supports
+ * cursor-paginated org-scoped listings, soft-delete, prefix lookup for
+ * authentication, and `last_used_at` touches.
+ */
 export class OrganizationApiKeyRepository extends BaseRepository {
   async findByOrganizationId(
     organization_id: number,

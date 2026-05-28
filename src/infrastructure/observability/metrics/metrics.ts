@@ -39,6 +39,11 @@ export async function refreshMetricsBeforeScrape(): Promise<void> {
   await Promise.all([refreshPostgresPoolMetrics(), refreshBullMQQueueGauges()]);
 }
 
+/**
+ * Renders the Prometheus exposition payload served by `GET /metrics`. Lazily
+ * registers custom metrics + DB pool / event-loop pollers on first call so the
+ * scrape endpoint also bootstraps the polling stack.
+ */
 export async function renderMetrics(): Promise<string> {
   ensureMetricsStackInitialized();
   return getMetricsRegistry().metrics();

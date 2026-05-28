@@ -14,6 +14,18 @@ import { ORGANIZATION_TOMBSTONE_RETENTION_QUEUE_NAME } from './organization-tomb
 /**
  * Hard-delete organizations tombstoned longer than TOMBSTONE_RETENTION_DAYS.
  * Child rows with ON DELETE CASCADE are removed with the organization.
+ *
+ * @remarks
+ * - **Algorithm:** subscribes to {@link ORGANIZATION_TOMBSTONE_RETENTION_QUEUE_NAME}
+ *   and runs {@link runOrganizationTombstoneRetentionJob} inside the global
+ *   retention-cleanup DB context per delivered job.
+ * - **Failure modes:** stalled jobs are logged and retried per BullMQ stall
+ *   policy; final-failure DLQ + Sentry are wired by `infrastructure/queue`.
+ * - **Side effects:** permanent organization deletions; cascades through
+ *   memberships, settings, API keys, notification policies, and audit refs.
+ * - **Notes:** repeatable schedule is registered in
+ *   `src/infrastructure/queue/scheduler.ts`; instantiated by the worker
+ *   bootstrap, never wired in `bootstrap.ts` directly.
  */
 export function createOrganizationTombstoneRetentionWorker(): WorkerHandle {
   const worker = new Worker(

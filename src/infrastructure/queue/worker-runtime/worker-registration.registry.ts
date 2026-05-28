@@ -73,6 +73,13 @@ import type { WorkerContainers } from '@/worker-containers.js';
  */
 export type WorkerCriticality = 'throughput' | 'maintenance' | 'observability';
 
+/**
+ * Single row in the worker registry — declarative metadata plus a `create` factory used
+ * by {@link registerDomainWorkers} to instantiate the BullMQ worker. Drives pool
+ * budgeting, family-based split worker selection, `auditSchedulerRegistryConsistency`
+ * drift detection, and `isEnabled` gating for workers that depend on optional secrets
+ * (Resend, Stripe).
+ */
 export type WorkerQueueRegistrationDefinition = {
   readonly queueName: string;
   readonly family: WorkerQueueFamily;
@@ -329,10 +336,16 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
   },
 ];
 
+/** Returns the full registry (every queue family) — used by the scheduler audit and pool-budget calculations. */
 export function getWorkerQueueRegistrationDefinitions(): readonly WorkerQueueRegistrationDefinition[] {
   return WORKER_QUEUE_REGISTRATION_DEFINITIONS;
 }
 
+/**
+ * Filters the registry down to definitions whose `family` is in the selected set — used
+ * by split worker services so `pnpm dev:worker` only starts the queues the local process
+ * is responsible for.
+ */
 export function getWorkerRegistrationsForFamilies(
   families: readonly WorkerQueueFamily[],
 ): WorkerQueueRegistrationDefinition[] {

@@ -8,8 +8,10 @@ import {
 } from '@/shared/utils/security/webhook-url.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
+/** A fetch-compatible function returned by {@link createPinnedWebhookFetch}. */
 export type PinnedWebhookFetch = typeof globalThis.fetch;
 
+/** The pinned target produced by {@link resolveAndPinWebhookUrl}: parsed URL, IP, and resolved port. */
 export type PinnedWebhookResolution = {
   parsed: URL;
   pinnedAddress: string;

@@ -12,8 +12,18 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 
 /**
- * Purges expired GDPR export rows and their S3 objects (defense-in-depth alongside bucket lifecycle).
- * Repeatable schedule is registered in `src/infrastructure/queue/scheduler.ts`.
+ * Construct the BullMQ {@link Worker} that runs {@link runUserDataExportRetentionJob} on the
+ * repeatable schedule registered in `src/infrastructure/queue/scheduler.ts`.
+ *
+ * @remarks
+ * - **Algorithm:** every scheduled tick wraps the processor in
+ *   `withGlobalRetentionCleanupDatabaseContext`, which strips per-tenant RLS so the cleanup runs
+ *   against the global retention session.
+ * - **Failure modes:** unexpected errors propagate to BullMQ retries / DLQ; `stalled` events are
+ *   logged for observability.
+ * - **Side effects:** Redis (queue lease), Postgres (row deletes), S3 (object deletes), logger.
+ * - **Notes:** retention concurrency from `RETENTION_WORKER_CONCURRENCY`; defense-in-depth with
+ *   the S3 bucket lifecycle so a misconfigured bucket cannot retain export bundles indefinitely.
  */
 export function createUserDataExportRetentionWorker(): WorkerHandle {
   const worker = new Worker(

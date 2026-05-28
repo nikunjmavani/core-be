@@ -49,6 +49,7 @@ async function getVerifyKey(): Promise<{ key: CryptoKey; algorithm: typeof JWT_A
   return { key: _verifyKey, algorithm: JWT_ALGORITHM };
 }
 
+/** Decoded access-token claims relevant to the application (subject + optional global role). */
 export interface TokenPayload {
   userId: string;
   role?: string;
@@ -101,6 +102,11 @@ async function resolveVerifyKeyForToken(token: string): Promise<{
   return getVerifyKey();
 }
 
+/**
+ * Verifies an access token's signature, algorithm (RS256 only), issuer,
+ * audience, and expiration; returns the decoded {@link TokenPayload}. Throws
+ * for any failure path so callers can surface a 401.
+ */
 export async function verifyAccessToken(token: string): Promise<TokenPayload> {
   const { key, algorithm } = await resolveVerifyKeyForToken(token);
   const { payload } = await jwtVerify(token, key, {

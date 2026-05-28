@@ -17,7 +17,20 @@ import { getWorkerConcurrencyMail } from '@/shared/config/worker-concurrency.uti
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 
 /**
- * Creates a BullMQ worker that processes email send jobs.
+ * Creates the BullMQ worker that drains the mail queue by delegating each job to
+ * {@link processMailOutboxJob}.
+ *
+ * @remarks
+ * - **Algorithm:** parses + validates the job payload with `mailJobDataSchema`,
+ *   then invokes the processor with BullMQ attempt metadata so terminal-attempt
+ *   semantics are correct; concurrency is set from `WORKER_CONCURRENCY_MAIL`.
+ * - **Failure modes:** schema-validation failures bubble to BullMQ (retried per
+ *   the queue's default attempts); transient Resend errors are retried via the
+ *   custom `mailBackoffStrategy`; final failures land in the per-source DLQ.
+ * - **Side effects:** see processor — talks to Postgres (`auth.mail_outbox`)
+ *   and Resend HTTP; logs `mail.worker.{stalled,completed}`.
+ * - **Notes:** returned `WorkerHandle` exposes `close()` so the worker bootstrap
+ *   can stop it cleanly on shutdown.
  */
 export function createMailWorker(): WorkerHandle {
   const worker = new Worker<MailJobData>(

@@ -3,6 +3,7 @@ import { bigint, bigserial, timestamp, varchar, index, uniqueIndex } from 'drizz
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 
+/** Drizzle table for `auth.mfa_recovery_codes` — one-time recovery codes hashed at rest; partial index `idx_mfa_recovery_codes_user_unused` keeps lookups cheap for the unused set. */
 export const mfa_recovery_codes = authSchema.table(
   'mfa_recovery_codes',
   {

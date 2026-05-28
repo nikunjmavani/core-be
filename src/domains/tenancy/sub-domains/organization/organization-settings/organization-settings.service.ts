@@ -10,6 +10,27 @@ import type {
 import { validateUpdateOrganizationSettings } from './organization-settings.validator.js';
 import { serializeOrganizationSettings } from './organization-settings.serializer.js';
 
+/**
+ * Read/write service for the per-organization settings row plus two
+ * unscoped helpers used during authentication.
+ *
+ * @remarks
+ * - **Algorithm:** `get` and `update` run inside
+ *   `withOrganizationDatabaseContext` (RLS) and lazily upsert the row when
+ *   missing; `update` strips undefined fields with `omitUndefined` so PATCH
+ *   semantics preserve unchanged columns.
+ *   `resolveDefaultLocaleForOrganization` falls back to `'en'` when nothing
+ *   is configured. `userHasOrganizationRequiringMfa` is delegated to the
+ *   repository's unscoped query (no tenant context yet at login time).
+ * - **Failure modes:** `NotFoundError('Organization')` when the parent
+ *   organization is missing or invisible under RLS; validation errors
+ *   propagate from {@link validateUpdateOrganizationSettings}.
+ * - **Side effects:** `upsert` writes to `tenancy.organization_settings`;
+ *   no events are emitted and no external I/O is performed.
+ * - **Notes:** the locale and MFA helpers intentionally bypass tenant RLS
+ *   because they run during login flow before the tenant cookie/header is
+ *   resolved.
+ */
 export class OrganizationSettingsService {
   constructor(
     private readonly organizationRepository: OrganizationRepository,

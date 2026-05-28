@@ -21,10 +21,50 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { UploadService } from '@/domains/upload/upload.service.js';
 
+/**
+ * Optional collaborators wired into {@link OrganizationService} after the
+ * upload domain has booted, used to tombstone tenant uploads and confirm S3
+ * keys during logo attachment.
+ *
+ * @remarks
+ * - **Algorithm:** populated lazily by `wireOffboardingUploadService` so the
+ *   tenancy container can be constructed before the upload container exists.
+ * - **Failure modes:** until wired, `uploadLogo` and `delete` either throw
+ *   (logo confirmation requires the upload service) or silently skip the
+ *   upload-tombstone step.
+ * - **Side effects:** none on construction; downstream calls invoke
+ *   `UploadService.tombstoneAllByOrganizationId` and `assertKeyConfirmed`.
+ * - **Notes:** the public {@link OrganizationService.offboardingUploadService}
+ *   reference exists for composition-root assertions only.
+ */
 export type OrganizationOffboardingDependencies = {
   uploadService: UploadService;
 };
 
+/**
+ * Authoritative tenancy service for the organization aggregate — list / get /
+ * create / update / soft-delete plus logo lifecycle.
+ *
+ * @remarks
+ * - **Algorithm:** every mutation runs inside `withOrganizationDatabaseContext`
+ *   (sets `app.current_organization_id` for RLS) and reads use
+ *   `withUserDatabaseContext` to satisfy the `organizations_user_discovery`
+ *   policy. Slug uniqueness is enforced explicitly; access checks short-
+ *   circuit for global admins and otherwise require ownership or an active
+ *   membership via {@link OrganizationRepository.userCanAccessOrganization}.
+ * - **Failure modes:** `NotFoundError` for missing organizations, members,
+ *   logos, or callers; `ConflictError('errors:organizationSlugExists')` on
+ *   slug collision; `ValidationError` for bad logo keys, missing S3 objects,
+ *   or disallowed `image/svg+xml` content.
+ * - **Side effects:** S3 deletes and head-object calls via the injected
+ *   {@link ObjectStoragePort}; tombstones uploads and clears the logo URL on
+ *   organization deletion (cross-domain wiring through
+ *   {@link OrganizationOffboardingDependencies}); does not emit domain events
+ *   or write audit logs directly.
+ * - **Notes:** soft-delete only — the row remains until the tombstone
+ *   retention worker hard-deletes it; offboarding S3/upload-service work runs
+ *   outside the DB context to avoid holding a transaction across HTTP.
+ */
 export class OrganizationService {
   private offboardingDependencies: OrganizationOffboardingDependencies | null = null;
   /** Public reference for composition-root assertions; populated at boot via wireOffboardingUploadService. */

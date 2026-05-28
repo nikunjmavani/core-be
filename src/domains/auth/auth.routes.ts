@@ -31,6 +31,7 @@ import {
   webauthnRegisterVerifyDto,
 } from './sub-domains/auth-webauthn/webauthn.dto.js';
 
+/** Fastify plugin that registers all `/api/v1/auth/*` routes — login, logout, refresh, magic link, OAuth, password, email verification, MFA, WebAuthn, sessions, and auth-method management. */
 export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
   const controller = createAuthController(app.authDomain);
   const zodApplication = app.withTypeProvider<ZodTypeProvider>();

@@ -5,6 +5,26 @@ import type { MemberRoleRepository } from '../member-role.repository.js';
 import type { MemberRolePermissionRepository } from './member-role-permission.repository.js';
 import { validatePutMemberRolePermissions } from './member-role-permission.validator.js';
 
+/**
+ * Manages the set of permission codes assigned to a member role within an
+ * organization.
+ *
+ * @remarks
+ * - **Algorithm:** every public method runs under {@link withOrganizationDatabaseContext}
+ *   so Postgres RLS sees `app.current_organization_id`; the org and role are
+ *   resolved by public id, then the repository is invoked.
+ * - **Failure modes:** `NotFoundError` when the organization or role does not
+ *   exist (or has been soft-deleted); Zod `ValidationError` from
+ *   {@link validatePutMemberRolePermissions} for malformed input.
+ * - **Side effects:** {@link put} replaces the role's entire permission set
+ *   (DELETE then INSERT) in a single repository call; permission cache
+ *   invalidation for affected memberships is the responsibility of higher
+ *   layers when roles are reassigned.
+ * - **Notes:** `listPermissionCodesForRole` is the read path consumed by
+ *   {@link MembershipService.getPermissions}; it returns only `permission_code`
+ *   strings and does not enforce org context (callers must already be inside
+ *   one).
+ */
 export class MemberRolePermissionService {
   constructor(
     private readonly organizationRepository: OrganizationRepository,

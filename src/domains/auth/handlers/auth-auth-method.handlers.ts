@@ -9,6 +9,7 @@ import type { AuthContainer } from '../auth.container.js';
 
 type AuthAuthMethodHandlersDependencies = Pick<AuthContainer, 'authMethodService'>;
 
+/** Builds the auth-method management Fastify handlers (`listAuthMethods`, `createAuthMethod`, `deleteAuthMethod`, plus the password and email-verification flows) and emits the `auth.auth_method.*` audit events. */
 export function createAuthAuthMethodHandlers({
   authMethodService,
 }: AuthAuthMethodHandlersDependencies) {

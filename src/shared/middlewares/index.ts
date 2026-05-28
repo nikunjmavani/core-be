@@ -22,6 +22,12 @@ import httpMetricsPlugin from '@/infrastructure/observability/metrics/http-metri
 import metricsMiddleware from './metrics.middleware.js';
 import shutdownMiddleware from './shutdown.middleware.js';
 
+/**
+ * Ordered Fastify plugin list registered by {@link registerMiddleware}. Order
+ * is significant: `requestLifecycleMiddleware` MUST be first to own the
+ * `onResponse` orchestration, and `tenantMiddleware` runs before
+ * `rateLimitMiddleware` so org-scoped limits see the resolved organization.
+ */
 export const middlewarePlugins = [
   // MUST be first: registers the only `onResponse` hook that orchestrates
   // RLS-settle → idempotency-cache → outbox-flush in the correct order
@@ -55,6 +61,7 @@ export const middlewarePlugins = [
   shutdownMiddleware,
 ] as const;
 
+/** Sequentially registers {@link middlewarePlugins} on the Fastify app; order matters. */
 export async function registerMiddleware(application: FastifyInstance): Promise<void> {
   for (const plugin of middlewarePlugins) {
     await application.register(plugin);

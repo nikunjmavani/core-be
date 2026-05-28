@@ -11,6 +11,11 @@ import {
 } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * Worker-side projection joining `webhook_delivery_attempts` with its parent webhook — carries
+ * everything {@link processWebhookDeliveryAttempt} needs to build the signed HTTP request
+ * (URL, encrypted signing secret, event metadata, payload, attempt counter).
+ */
 export interface WebhookDeliveryAttemptWithWebhook {
   deliveryAttemptId: number;
   webhookId: number;
@@ -27,6 +32,10 @@ function resolveDatabase(
   return resolveRepositoryDatabaseHandle(databaseHandle);
 }
 
+/**
+ * Resolve a webhook's owning organization public id by joining `notify.webhooks` to
+ * `tenancy.organizations`. Used when an event handler has only the internal `webhook_id`.
+ */
 export async function findOrganizationPublicIdByWebhookId(
   webhook_id: number,
   databaseHandle?: RequestScopedPostgresDatabase,
@@ -40,6 +49,11 @@ export async function findOrganizationPublicIdByWebhookId(
   return rows[0]?.organizationPublicId ?? null;
 }
 
+/**
+ * Resolve the organization public id for a given delivery attempt by joining attempts →
+ * webhooks → organizations. Used by the event handler to scope the BullMQ enqueue to the
+ * correct tenant before the worker reads under RLS.
+ */
 export async function findOrganizationPublicIdByDeliveryAttemptId(
   delivery_attempt_id: number,
   databaseHandle?: RequestScopedPostgresDatabase,
@@ -54,6 +68,11 @@ export async function findOrganizationPublicIdByDeliveryAttemptId(
   return rows[0]?.organizationPublicId ?? null;
 }
 
+/**
+ * Worker-side fetch that returns the full {@link WebhookDeliveryAttemptWithWebhook} projection
+ * for a given attempt within an organization scope, or `null` if the attempt does not belong
+ * to that organization.
+ */
 export async function findWebhookDeliveryAttemptWithWebhook(
   deliveryAttemptId: number,
   organization_public_id: string,
@@ -94,6 +113,10 @@ export async function findWebhookDeliveryAttemptWithWebhook(
   };
 }
 
+/**
+ * Insert the canonical `PENDING` delivery-attempt row that {@link emitWebhookDeliveryRequested}
+ * publishes through the event bus. Returns the internal id used as the BullMQ payload.
+ */
 export async function createPendingWebhookDeliveryAttempt(input: {
   webhookId: number;
   eventType: string;

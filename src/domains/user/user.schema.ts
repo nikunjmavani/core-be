@@ -11,6 +11,12 @@ import {
 } from 'drizzle-orm/pg-core';
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 
+/**
+ * `auth.users` — canonical platform identity table. Soft-deleted via `deleted_at` so audit and
+ * billing FKs stay intact; the unique-by-email partial index excludes deleted rows so an address
+ * can be reused after offboarding. Trigram indexes power admin search by email and display name;
+ * lockout fields drive failed-login throttling.
+ */
 export const users = authSchema.table(
   'users',
   {

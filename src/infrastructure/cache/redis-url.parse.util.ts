@@ -2,6 +2,7 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 
 const DEFAULT_REDIS_PORT = 6379;
 
+/** Normalized fields of a Redis connection URL — produced by {@link parseRedisUrl}. */
 export type ParsedRedisUrl = {
   host: string;
   port: number;
@@ -14,6 +15,12 @@ export function isRedisTlsUrl(redisUrl: string): boolean {
   return redisUrl.toLowerCase().startsWith('rediss://');
 }
 
+/**
+ * Parses a `redis://` or `rediss://` URL into host/port/password/database fields.
+ * Uses `new URL()` after a scheme rewrite so percent-encoded passwords decode correctly,
+ * defaults the database index to 0 when the path is empty, and throws on a non-finite or
+ * negative database segment.
+ */
 export function parseRedisUrl(redisUrl: string): ParsedRedisUrl {
   const normalizedUrl = new URL(redisUrl.replace(/^redis:\/\//, 'http://'));
   const databasePath = normalizedUrl.pathname.replace(/^\//, '');

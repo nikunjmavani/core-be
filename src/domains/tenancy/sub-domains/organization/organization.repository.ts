@@ -19,6 +19,14 @@ interface OrganizationListPagination {
   limit: number;
 }
 
+/**
+ * Drizzle data-access for the `tenancy.organizations` table. Honours
+ * soft-delete (`deleted_at IS NULL`) on every read; supports cursor-based
+ * listings (global and per-user via memberships join), slug + Stripe customer
+ * lookups, owner transfer, and soft-delete. Insert paths use
+ * {@link runInsertWithPublicIdentifierRetry} to recover from rare public-id
+ * collisions.
+ */
 export class OrganizationRepository extends BaseRepository {
   async resolveUserIdByPublicId(public_id: string): Promise<number | null> {
     const rows = await getRequestDatabase()

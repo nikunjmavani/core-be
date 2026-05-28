@@ -4,6 +4,12 @@ import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.u
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MemberInvitationService } from './member-invitation.service.js';
 
+/**
+ * Builds the HTTP handler map for organization-scoped invitation routes
+ * (list/create/cancel/resend under `/organizations/:id/invitations`) and the
+ * cross-org user-facing routes (`/invitations/pending`,
+ * `/invitations/:invitationId/accept`, `/invitations/:invitationId/decline`).
+ */
 export function createMemberInvitationController(service: MemberInvitationService) {
   return {
     listMemberInvitations: async (request: FastifyRequest, _reply: FastifyReply) => {

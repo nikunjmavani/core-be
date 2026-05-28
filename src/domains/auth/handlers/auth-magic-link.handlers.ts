@@ -8,6 +8,7 @@ import type { AuthContainer } from '../auth.container.js';
 
 type AuthMagicLinkHandlersDependencies = Pick<AuthContainer, 'magicLinkService'>;
 
+/** Builds the magic-link Fastify handlers: `sendMagicLink` (enqueues the `AUTH_EVENT.MAGIC_LINK_REQUESTED` email) and `verifyMagicLink` (consumes the token, mints a session, sets the cookie). */
 export function createAuthMagicLinkHandlers({
   magicLinkService,
 }: AuthMagicLinkHandlersDependencies) {

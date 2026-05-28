@@ -4,10 +4,12 @@ import { database } from '@/infrastructure/database/connection.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { mfa_recovery_codes } from './mfa-recovery-code.schema.js';
 
+/** SHA-256 hash of a recovery code; only the hash is ever persisted in {@link mfa_recovery_codes}. */
 export function hashMfaRecoveryCode(plainCode: string): string {
   return createHash('sha256').update(plainCode).digest('hex');
 }
 
+/** Atomically consumes a recovery code for `userId`: sets `used_at` only when the row is still unused; returns `true` on success and `false` on unknown / already-consumed codes. Enforces the single-use invariant via the UPDATE filter. */
 export async function consumeMfaRecoveryCode(userId: number, plainCode: string): Promise<boolean> {
   const codeHash = hashMfaRecoveryCode(plainCode);
   const rows = await database

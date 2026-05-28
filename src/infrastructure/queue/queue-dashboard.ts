@@ -54,6 +54,12 @@ const DASHBOARD_PREFIX = '/admin/queues';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+/**
+ * Structured representation of a write-side Bull Board API call (pause, resume, retry,
+ * clean, …) destined for `audit.logs`. Produced by `parseQueueDashboardMutation` and
+ * consumed by the dashboard's `onResponse` hook so every SUPER_ADMIN action against the
+ * queue dashboard leaves a tamper-evident trail.
+ */
 export interface QueueDashboardMutationAudit {
   action: string;
   queueName?: string;
@@ -190,6 +196,11 @@ export function parseQueueDashboardMutation(
   return { action: 'queue.unknown' };
 }
 
+/**
+ * DI surface for {@link registerQueueDashboard}. The `auditService` is invoked from the
+ * dashboard's `onResponse` hook to persist {@link QueueDashboardMutationAudit} entries
+ * whenever a mutating Bull Board call returns a 2xx response.
+ */
 export interface RegisterQueueDashboardDeps {
   auditService: AuditService;
 }

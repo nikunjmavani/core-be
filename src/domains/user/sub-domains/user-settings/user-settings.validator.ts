@@ -3,6 +3,10 @@ import { UpdateUserSettingsDto, type UpdateUserSettingsInput } from './user-sett
 
 const ERROR_KEY_INVALID_INPUT = 'errors:invalidInput';
 
+/**
+ * Validate the `PATCH /api/v1/users/me/settings` body against {@link UpdateUserSettingsDto}.
+ * Throws {@link ValidationError} (`errors:invalidInput`) with flattened field errors on failure.
+ */
 export function validateUpdateUserSettings(body: unknown): UpdateUserSettingsInput {
   const result = UpdateUserSettingsDto.safeParse(body);
   if (!result.success) {

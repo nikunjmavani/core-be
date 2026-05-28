@@ -41,6 +41,19 @@ function buildRecomputeLockKey(userId: string, organizationId: string): string {
 /**
  * Get cached permission codes for a user in an organization.
  * Returns null if not cached.
+ *
+ * @remarks
+ * - **Algorithm:** reads the org cache version (defaulting to 0 if unset),
+ *   then `GET`s the versioned key built by {@link buildKey} and `JSON.parse`s
+ *   the value.
+ * - **Failure modes:** Redis errors are caught, logged
+ *   (`permission-cache.get.failed`), and surface as `null` so the caller
+ *   falls back to a fresh database resolution.
+ * - **Side effects:** none — read-only Redis lookups; never blocks the
+ *   request path.
+ * - **Notes:** versioned keys are why
+ *   {@link invalidateOrganizationPermissions} can purge an entire org with a
+ *   single `INCR` instead of a SCAN.
  */
 export async function getCachedPermissions(
   userId: string,
@@ -59,6 +72,19 @@ export async function getCachedPermissions(
 
 /**
  * Cache permission codes for a user in an organization.
+ *
+ * @remarks
+ * - **Algorithm:** reads the current org cache version and writes the JSON
+ *   array under the versioned key with a TTL of
+ *   `ttlSeconds + jitter (0..60s)` so a stampede of expirations is smeared
+ *   across a minute.
+ * - **Failure modes:** Redis errors are caught and logged
+ *   (`permission-cache.set.failed`); the call resolves successfully so a
+ *   cache write failure never blocks the request.
+ * - **Side effects:** single Redis `SET ... EX` under `perm:<version>:...`.
+ * - **Notes:** the default TTL is
+ *   {@link PERMISSION_CACHE_DEFAULT_TTL_SECONDS} (5 minutes); callers
+ *   typically rely on the default.
  */
 export async function setCachedPermissions(
   userId: string,
@@ -84,6 +110,23 @@ export async function setCachedPermissions(
 /**
  * Runs a cache-miss recompute under a short Redis lock. Waiters poll for the cached value
  * so only one request per (user, organization) hits the database during a stampede.
+ *
+ * @remarks
+ * - **Algorithm:** `SET key 1 EX <ttl> NX` to claim the lock; on success
+ *   runs `recompute()`, then calls {@link setCachedPermissions} and returns.
+ *   Waiters poll up to `STAMPEDE_POLL_ATTEMPTS` × `STAMPEDE_POLL_MS` (≈2s)
+ *   for the cache to populate; if still empty, they fall through to a fresh
+ *   recompute as a safety net.
+ * - **Failure modes:** Redis `SET` failure is logged
+ *   (`permission-cache.lock.acquire.failed`) and the caller falls back to a
+ *   direct `recompute()` without locking — the database carries the load.
+ *   `recompute()` errors propagate to the caller.
+ * - **Side effects:** Redis SET/DEL on `perm:lock:<user>:<org>`; one
+ *   Postgres-hitting `recompute()` per stampede on the happy path; cache
+ *   write through {@link setCachedPermissions}.
+ * - **Notes:** the lock TTL is
+ *   {@link PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS}; the lock is
+ *   released in a `finally` block so an uncaught exception never strands it.
  */
 export async function withPermissionCacheRecomputeLock(
   userId: string,
@@ -140,6 +183,17 @@ export async function withPermissionCacheRecomputeLock(
 /**
  * Invalidate cached permissions for a specific user in an organization.
  * Call this when roles/permissions change.
+ *
+ * @remarks
+ * - **Algorithm:** issues a single Redis `DEL` for both the versioned cache
+ *   entry and the recompute lock for `(user, organization)`.
+ * - **Failure modes:** Redis errors are caught and logged
+ *   (`permission-cache.invalidate.failed`); the function still resolves so
+ *   callers (membership create/update) never block on cache invalidation.
+ * - **Side effects:** Redis `DEL` of two keys.
+ * - **Notes:** for org-wide changes (e.g. role-permission set replaced),
+ *   prefer {@link invalidateOrganizationPermissions}, which bumps the org
+ *   version with a single `INCR` and orphans every per-user key at once.
  */
 export async function invalidatePermissions(userId: string, organizationId: string): Promise<void> {
   try {
@@ -158,6 +212,20 @@ export async function invalidatePermissions(userId: string, organizationId: stri
  *
  * No SCAN: existing keys are simply orphaned and expire via TTL, while new reads/writes
  * see the bumped version and operate on a fresh namespace.
+ *
+ * @remarks
+ * - **Algorithm:** atomically bumps `perm:org:<org>:v` via Redis `INCR`. All
+ *   subsequent reads/writes go through {@link buildKey} with the new version,
+ *   so every previously cached entry for the org is instantly unreachable.
+ * - **Failure modes:** Redis errors are caught and logged
+ *   (`permission-cache.invalidate-organization.failed`); the function still
+ *   resolves so callers (role/permission edits) never block on cache
+ *   invalidation.
+ * - **Side effects:** single Redis `INCR`; orphans existing keys which expire
+ *   naturally via their TTL — keeps invalidation O(1).
+ * - **Notes:** use this whenever a change can affect many users in the org
+ *   (e.g. a role's permission set is replaced); per-user changes can use the
+ *   narrower {@link invalidatePermissions}.
  */
 export async function invalidateOrganizationPermissions(organizationId: string): Promise<void> {
   try {

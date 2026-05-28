@@ -16,6 +16,7 @@ function getGoogleRedirectUri(): string {
   );
 }
 
+/** Builds the Google authorize URL (`https://accounts.google.com/o/oauth2/v2/auth?...`) with the configured client id, callback URI, OIDC scopes, CSRF `state`, and offline + consent prompts. Throws `NotImplementedError` when `OAUTH_GOOGLE_CLIENT_ID` is unset. */
 export function buildGoogleOAuthRedirectUrl(state: string): string {
   const clientId = env.OAUTH_GOOGLE_CLIENT_ID;
   if (!clientId) {
@@ -35,11 +36,13 @@ export function buildGoogleOAuthRedirectUrl(state: string): string {
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }
 
+/** Input for {@link exchangeGoogleOAuthCode}: the authorization `code` returned by Google plus an optional request id used for outbound observability. */
 export interface ExchangeGoogleOAuthCodeOptions {
   code: string;
   requestId?: string;
 }
 
+/** Trades the Google authorization code for an access token, fetches the OIDC userinfo response, and returns a normalised {@link OAuthProfile}. Translates outbound failures to `UnauthorizedError` with provider-specific i18n keys. */
 export async function exchangeGoogleOAuthCode(
   options: ExchangeGoogleOAuthCodeOptions,
 ): Promise<OAuthProfile> {

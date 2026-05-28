@@ -17,6 +17,7 @@ function getGitHubRedirectUri(): string {
   );
 }
 
+/** Builds the GitHub authorize URL (`https://github.com/login/oauth/authorize?...`) with the configured client id, callback URI, scopes (`read:user user:email`), and CSRF `state`. Throws `NotImplementedError` when `OAUTH_GITHUB_CLIENT_ID` is unset. */
 export function buildGitHubOAuthRedirectUrl(state: string): string {
   const clientId = env.OAUTH_GITHUB_CLIENT_ID;
   if (!clientId) {
@@ -33,11 +34,13 @@ export function buildGitHubOAuthRedirectUrl(state: string): string {
   return `${GITHUB_AUTH_URL}?${params.toString()}`;
 }
 
+/** Input for {@link exchangeGitHubOAuthCode}: the authorization `code` returned by GitHub plus an optional request id used for outbound observability. */
 export interface ExchangeGitHubOAuthCodeOptions {
   code: string;
   requestId?: string;
 }
 
+/** Trades the GitHub authorization code for an access token, then fetches the user profile (and primary verified email if absent) and returns a normalised {@link OAuthProfile}. Translates outbound failures to `UnauthorizedError` with provider-specific i18n keys. */
 export async function exchangeGitHubOAuthCode(
   options: ExchangeGitHubOAuthCodeOptions,
 ): Promise<OAuthProfile> {

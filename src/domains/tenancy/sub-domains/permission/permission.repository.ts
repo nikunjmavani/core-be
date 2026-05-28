@@ -10,6 +10,15 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
+/**
+ * Drizzle data access for the global `tenancy.permissions` catalog and for
+ * resolving a user's effective permission codes inside an organization via a
+ * five-table join (`role_permissions → roles → memberships → users +
+ * organizations`). The catalog table has no RLS policy so {@link findAll} is
+ * intentionally global; the per-user lookup accepts an optional
+ * `databaseHandle` so callers running outside the request context (the
+ * permission cache recompute path) can pass their own handle.
+ */
 export class PermissionRepository {
   async findAll(limit = DEFAULT_REPOSITORY_LIST_LIMIT) {
     const rows = await getRequestDatabase()

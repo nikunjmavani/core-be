@@ -6,6 +6,7 @@ import {
   type NotificationJobDataValidated,
 } from './notification.job.schema.js';
 
+/** BullMQ queue name for asynchronous notification dispatch (in-app + email fan-out). */
 export const NOTIFICATION_QUEUE_NAME = 'notification';
 
 /** Only ids are stored in Redis; content is loaded in the worker from Postgres with org scoping. */
@@ -44,6 +45,7 @@ export async function enqueueNotification(
   await queue.add('dispatch-notification', jobData);
 }
 
+/** Close the lazily-initialised notification queue (graceful-shutdown hook for tests/runtime). */
 export async function closeNotificationQueue(): Promise<void> {
   if (notificationQueue) {
     await notificationQueue.close();

@@ -4,6 +4,10 @@ import { GLOBAL_ROLES } from '@/shared/constants/index.js';
 import { requireRole } from '@/shared/utils/auth/authorization.util.js';
 import { createAuditController } from './audit.controller.js';
 
+/**
+ * Fastify plugin mounting the admin audit routes under the audit prefix.
+ * Currently registers `GET /logs`, gated to SUPER_ADMIN / ADMIN global roles.
+ */
 export const auditRoutesPlugin: FastifyPluginAsync = async (app) => {
   const controller = createAuditController(app.auditDomain.auditService);
   const zodApplication = app.withTypeProvider<ZodTypeProvider>();

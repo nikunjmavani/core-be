@@ -21,10 +21,54 @@ import {
 import { serializeMembership } from './membership.serializer.js';
 import { invalidatePermissions } from '../permission/permission-cache.service.js';
 
+/**
+ * HTTP response shape for `GET
+ * /organizations/:id/memberships/:membershipId/permissions` — the resolved
+ * permission codes for the membership's current role.
+ *
+ * @remarks
+ * - **Algorithm:** computed by joining `memberships -> roles ->
+ *   role_permissions` for the requested membership and projecting only the
+ *   `permission_code` column.
+ * - **Failure modes:** carries no state of its own; producers raise
+ *   `NotFoundError('Membership')` when the membership cannot be resolved.
+ * - **Side effects:** none — this is a plain DTO.
+ * - **Notes:** identifies the membership by public id; codes are flat strings
+ *   matching the entries in `tenancy.permissions`.
+ */
 export interface MembershipPermissionsOutput {
   permissions: string[];
 }
 
+/**
+ * Application service for organization memberships: list/get/create/update/
+ * delete, plus self-service `leaveOrganization` and `transferOwnership`.
+ *
+ * @remarks
+ * - **Algorithm:** every public method runs inside
+ *   {@link withOrganizationDatabaseContext} and resolves the caller's
+ *   organization through
+ *   {@link OrganizationService.requireOrganizationMembershipByPublicId}
+ *   before touching the membership repository. `transferOwnership` is
+ *   delegated to {@link OrganizationService.transferOrganizationOwnership} so
+ *   the `owner_user_id` flip and the membership update happen atomically.
+ *   When a brand-new member is created, the service also pushes the
+ *   organization's default locale onto the new user via
+ *   {@link UserSettingsService.update} if the user is still on factory-default
+ *   locale settings.
+ * - **Failure modes:** `NotFoundError('Membership' | 'Organization' | 'Role' |
+ *   'User')` for missing rows; `ForbiddenError('errors:ownerCannotLeave')`
+ *   when the org owner tries to leave;
+ *   `ForbiddenError('errors:onlyOwnerCanTransfer')` for non-owner ownership
+ *   transfers; `ValidationError` from Zod-backed validators.
+ * - **Side effects:** writes through `MembershipRepository` (insert / update /
+ *   soft-delete with `deleted_at`); calls {@link invalidatePermissions} after
+ *   creating a membership so the Redis permission cache is purged for that
+ *   user; updates {@link UserSettingsService} for locale defaults.
+ * - **Notes:** `getPermissions` reads through
+ *   {@link MemberRolePermissionService.listPermissionCodesForRole} so role
+ *   permissions remain a single source of truth.
+ */
 export class MembershipService {
   constructor(
     private readonly organizationService: OrganizationService,

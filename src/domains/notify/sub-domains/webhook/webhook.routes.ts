@@ -12,6 +12,11 @@ import { createWebhookController } from './webhook.controller.js';
 import { createWebhookEventController } from './webhook-event/webhook-event.controller.js';
 import { listWebhookDeliveryAttemptsQueryDto, listWebhooksQueryDto } from './webhook.dto.js';
 
+/**
+ * Returns a Fastify plugin that registers the organization-scoped webhook HTTP routes (catalog,
+ * list, get, create, update, delete, delivery attempts, test) plus their permission preHandlers
+ * (`webhook:read` / `webhook:manage`) and rate-limit presets.
+ */
 export function webhookRoutes(
   webhookService: WebhookService,
   webhookEventService: WebhookEventService,

@@ -3,6 +3,13 @@ import { resolveRedisKeyPrefix } from '@/infrastructure/cache/redis-prefix.util.
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+/**
+ * Process-wide ioredis client used by cache, idempotency, rate limits, permission cache,
+ * circuit breaker state, and any non-BullMQ Redis access. `lazyConnect` + `enableOfflineQueue: false`
+ * fail commands fast during partitions instead of buffering them; call {@link connectRedis}
+ * once at boot before serving traffic. BullMQ uses its own connection helper (see
+ * `bullmq-redis.client.ts` and `getBullMQConnectionOptions`).
+ */
 export const redisConnection = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: null,
   lazyConnect: true,
@@ -66,6 +73,11 @@ export async function connectRedis(): Promise<void> {
   });
 }
 
+/**
+ * Closes the shared Redis client during graceful shutdown. Races a 5s timeout so a
+ * misbehaving Redis cannot stall process exit; the timeout is logged and treated as
+ * resolved.
+ */
 export async function closeRedis(): Promise<void> {
   const timeout = new Promise<void>((resolve) => {
     setTimeout(() => {

@@ -47,6 +47,11 @@ function getWebhookOutboundCircuit(webhookUrl: string): CircuitBreaker {
   return circuit;
 }
 
+/**
+ * Send a webhook request through a per-URL Opossum circuit breaker (50% error threshold over a
+ * volume of 5 calls, 60s reset). Reuses the same breaker for repeat calls to the same URL so
+ * a flaky customer endpoint trips its own breaker without affecting others.
+ */
 export async function fetchWebhookWithCircuitBreaker(
   webhookUrl: string,
   init: RequestInit,

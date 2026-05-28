@@ -8,6 +8,10 @@ export interface HostedUploadCredentialCheck {
   missingVariables: string[];
 }
 
+/**
+ * Returns whether the calling upload script should skip (env vars missing) and
+ * which variables were unset, so the caller can log a useful warning.
+ */
 export function checkHostedUploadCredentials(
   requiredVariableNames: readonly string[],
 ): HostedUploadCredentialCheck {
@@ -21,6 +25,7 @@ export function checkHostedUploadCredentials(
   };
 }
 
+/** Emits a single-line warning naming the target and the missing env vars; used by hosted upload scripts when credentials are absent. */
 export function logHostedUploadSkipped(targetName: string, missingVariables: string[]): void {
   console.warn(
     `Skipping ${targetName} upload: missing ${missingVariables.join(', ')}. Set env vars to publish.`,

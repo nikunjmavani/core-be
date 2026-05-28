@@ -32,16 +32,59 @@ import {
   validateWebauthnRegisterVerify,
 } from './webauthn.validator.js';
 
+/**
+ * Result envelope returned by {@link WebauthnService.generateRegistrationOptions}.
+ *
+ * @remarks
+ * - **Algorithm:** wraps the raw `@simplewebauthn/server` registration options
+ *   plus the opaque `challenge_token` that the client must echo back at verify time.
+ * - **Failure modes:** purely a shape; consumers should treat `options` as opaque.
+ * - **Side effects:** none.
+ * - **Notes:** the `challenge_token` indexes a Redis-stored challenge with a short TTL.
+ */
 export type WebauthnRegisterOptionsResult = {
   options: Awaited<ReturnType<typeof generateRegistrationOptions>>;
   challenge_token: string;
 };
 
+/**
+ * Result envelope returned by {@link WebauthnService.generateAuthenticationOptions}.
+ *
+ * @remarks
+ * - **Algorithm:** wraps the raw `@simplewebauthn/server` authentication options plus
+ *   the opaque `challenge_token` paired with the user's pending challenge in Redis.
+ * - **Failure modes:** purely a shape; consumers should treat `options` as opaque.
+ * - **Side effects:** none.
+ * - **Notes:** the `challenge_token` is consumed once at verify time and bound to the
+ *   originating user via {@link consumeWebauthnChallenge}.
+ */
 export type WebauthnAuthenticateOptionsResult = {
   options: Awaited<ReturnType<typeof generateAuthenticationOptions>>;
   challenge_token: string;
 };
 
+/**
+ * Passkey (WebAuthn) enrollment and login orchestrator.
+ *
+ * @remarks
+ * - **Algorithm:** uses `@simplewebauthn/server` to produce registration and
+ *   authentication options, persists the challenge in Redis via
+ *   {@link createWebauthnChallenge}, and on verify consumes the challenge via
+ *   {@link consumeWebauthnChallenge}. Registration stores the new credential in
+ *   {@link webauthn_credentials}; authentication validates the assertion, bumps
+ *   the stored signature counter via {@link WebauthnCredentialRepository.updateCounter},
+ *   and mints a JWT + session.
+ * - **Failure modes:** unknown user, missing credentials, mismatched challenge
+ *   user, replayed/forged assertions, or counter regression all surface as
+ *   `UnauthorizedError` or `ValidationError` with WebAuthn-specific i18n keys
+ *   (`errors:webauthnInvalidChallenge`, `errors:webauthnNoCredentials`,
+ *   `errors:webauthnAuthenticationFailed`, …).
+ * - **Side effects:** writes to {@link webauthn_credentials} (`createCredential`,
+ *   `updateCounter`), to `auth.sessions` via {@link AuthSessionService.createSessionForUser},
+ *   and to Redis (`webauthn:challenge:*`). Signs an RS256 JWT on successful login.
+ * - **Notes:** RP ID and expected origin are resolved at call time from
+ *   `WEBAUTHN_RP_ID` / `ALLOWED_ORIGINS` so the same binary serves multiple environments.
+ */
 export class WebauthnService {
   constructor(
     private readonly userService: UserService,

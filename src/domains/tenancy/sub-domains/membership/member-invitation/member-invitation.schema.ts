@@ -13,6 +13,13 @@ import { tenancySchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
 
+/**
+ * `tenancy.member_invitations` table — outstanding invites for a membership.
+ * `token_hash` stores the SHA-256 of the raw token (only the original is
+ * emailed); `accepted_at` / `revoked_at` are mutually exclusive terminal
+ * states enforced by `chk_member_inv_accepted`. RLS scopes rows to the
+ * invitation's owning membership/organization.
+ */
 export const member_invitations = tenancySchema
   .table(
     'member_invitations',

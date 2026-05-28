@@ -16,9 +16,27 @@ import { withOrganizationDatabaseContext } from '@/infrastructure/database/conte
  * Coordinates plan lookups, payment-provider calls, and subscription updates
  * for a single organization.
  *
- * Under DATABASE_RLS_SCOPED_CONTEXTS, database reads/writes run inside
- * `withOrganizationDatabaseContext` so RLS sees the org GUC. Stripe (paymentProvider)
- * calls are network I/O and MUST stay OUTSIDE those contexts.
+ * @remarks
+ * - **Algorithm:** Each public method runs the database portion inside
+ *   {@link withOrganizationDatabaseContext} so Postgres sees the org GUC for
+ *   RLS, then performs the Stripe API call (create / change-plan / cancel /
+ *   resume) outside that context, then re-opens an organization context to
+ *   write back the resulting row. Webhook-triggered methods
+ *   (`syncFromStripeProviderSubscription`, `markCanceledByStripeProviderSubscriptionId`)
+ *   accept a repository override so the webhook worker can pass its own
+ *   worker-scoped handle.
+ * - **Failure modes:** Throws {@link NotFoundError} when the organization,
+ *   plan, or subscription cannot be loaded. On `create`, if persistence fails
+ *   after the Stripe call succeeded, the provider is rolled back via
+ *   `compensateFailedCreate`. On `changePlan`, a successful provider price
+ *   update followed by a local write failure triggers
+ *   `compensatePlanChange` back to the previous price.
+ * - **Side effects:** External Stripe API calls (create / update / cancel /
+ *   resume / compensations) and writes to `billing.subscriptions`.
+ * - **Notes:** Stripe network calls MUST stay outside the database context to
+ *   avoid blocking a Postgres connection on remote I/O. Idempotency for
+ *   `create` is forwarded to Stripe via `idempotencyKey` (the
+ *   `Idempotency-Key` HTTP header).
  */
 export class SubscriptionService {
   constructor(

@@ -9,6 +9,7 @@ export const IDEMPOTENCY_CACHE_KEY_MATCH_PATTERN = 'idempotency:*';
 
 const IDEMPOTENCY_KEY_BODY_PATTERN = /^[A-Za-z0-9._:~+/=-]+$/;
 
+/** Discriminated result from {@link parseIdempotencyKeyHeader}: present-valid, present-invalid, or absent. */
 export type ParsedIdempotencyKeyHeader =
   | { kind: 'absent' }
   | { kind: 'invalid' }

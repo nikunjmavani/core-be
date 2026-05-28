@@ -9,14 +9,28 @@ import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 /** Explicit Drizzle handle passed from a worker context wrapper into processors/repositories. */
 export type WorkerDatabaseHandle = PostgresDatabaseHandle;
 
+/**
+ * Decorates a per-queue job payload `TJob` with the `organizationPublicId` discriminator
+ * required by {@link runTenantScopedWorkerJob} so the processor can re-enter Postgres
+ * inside `withOrganizationContext` (sets `app.current_organization_id` for RLS).
+ */
 export type TenantScopedWorkerJob<TJob> = TJob & {
   organizationPublicId: string;
 };
 
+/**
+ * Minimal shape every tenant-scoped BullMQ job must satisfy — extracted as its own type
+ * so {@link createTenantScopedBullMQWorker}'s generic constraint stays narrow.
+ */
 export type TenantScopedJobData = {
   organizationPublicId: string;
 };
 
+/**
+ * Decorates a per-queue job payload `TJob` with the `userPublicId` discriminator required
+ * by {@link runUserScopedWorkerJob} so the processor can re-enter Postgres inside
+ * `withUserDatabaseContext` (sets `app.current_user_id` for GDPR-scoped reads).
+ */
 export type UserScopedWorkerJob<TJob> = TJob & {
   userPublicId: string;
 };

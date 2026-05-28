@@ -2,12 +2,29 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { verification_tokens } from './verification-token.schema.js';
 
+/** Enum of token categories that share the unified {@link verification_tokens} table. */
 export type VerificationTokenType =
   | 'MAGIC_LINK'
   | 'PASSWORD_RESET'
   | 'EMAIL_VERIFICATION'
   | 'EMAIL_CHANGE';
 
+/**
+ * Drizzle repository for the shared `verification_tokens` table.
+ *
+ * @remarks
+ * - **Algorithm:** `consumeIfValid` performs an atomic `UPDATE … SET used_at`
+ *   guarded by `expires_at > now()` and `used_at IS NULL`, which serializes
+ *   concurrent consumers via row locking; only the winning caller observes the
+ *   row.
+ * - **Failure modes:** returns `null` when the token hash is unknown, expired,
+ *   or already used — the caller maps this to `UnauthorizedError`.
+ * - **Side effects:** writes only via Drizzle; honours request-scoped RLS via
+ *   {@link getRequestDatabase}. `invalidateAllForUser` revokes outstanding
+ *   tokens of a category in bulk before a new one is minted.
+ * - **Notes:** invariant — a token may be consumed at most once. The replay
+ *   tests in `verification-token.replay.db.unit.test.ts` assert this property.
+ */
 export class VerificationTokenRepository {
   async create(
     tokenType: VerificationTokenType,

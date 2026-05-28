@@ -1,3 +1,4 @@
+/** Functional category of an upload — drives key prefix, max size, and allowed MIME types. */
 export const UPLOAD_PURPOSES = {
   AVATAR: 'avatar',
   ORGANIZATION_LOGO: 'organization-logo',
@@ -5,13 +6,16 @@ export const UPLOAD_PURPOSES = {
   ORGANIZATION_FILE: 'organization-file',
 } as const;
 
+/** Union of valid purpose codes from {@link UPLOAD_PURPOSES}. */
 export type UploadPurpose = (typeof UPLOAD_PURPOSES)[keyof typeof UPLOAD_PURPOSES];
 
+/** Ownership scope for an upload: belongs to a `user` (private) or an `organization` (org-scoped). */
 export const UPLOAD_TARGETS = {
   USER: 'user',
   ORGANIZATION: 'organization',
 } as const;
 
+/** Union of valid target codes from {@link UPLOAD_TARGETS}. */
 export type UploadTarget = (typeof UPLOAD_TARGETS)[keyof typeof UPLOAD_TARGETS];
 
 /**
@@ -25,6 +29,7 @@ export const UPLOAD_STATUS = {
   FAILED: 'FAILED',
 } as const;
 
+/** Union of valid status codes from {@link UPLOAD_STATUS}. */
 export type UploadStatus = (typeof UPLOAD_STATUS)[keyof typeof UPLOAD_STATUS];
 
 /**
@@ -40,6 +45,11 @@ export interface UploadPurposeConfig {
   keyPrefix: string;
 }
 
+/**
+ * Per-purpose policy table consulted by the validator and presigned-URL
+ * service: allowed MIME types, max byte size, and the S3 key prefix used
+ * when constructing object keys.
+ */
 export const UPLOAD_PURPOSE_CONFIG: Record<UploadPurpose, UploadPurposeConfig> = {
   [UPLOAD_PURPOSES.AVATAR]: {
     allowedTypes: ['image/png', 'image/jpeg', 'image/webp'],

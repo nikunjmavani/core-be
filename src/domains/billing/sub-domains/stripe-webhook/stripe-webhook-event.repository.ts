@@ -13,6 +13,13 @@ import {
   type StripeWebhookProcessingStatus,
 } from './stripe-webhook.schema.js';
 
+/**
+ * Outcome of {@link StripeWebhookEventRepository.tryClaimEvent}: `claimed` for a
+ * brand-new event, `processed_duplicate` for an at-least-once redelivery,
+ * `reclaimed` when a previously failed or stuck-processing row was retried, and
+ * `still_processing_within_lease` when another worker is actively processing the
+ * event and the caller must back off.
+ */
 export type StripeWebhookEventClaimResult =
   | 'claimed'
   | 'processed_duplicate'
@@ -26,6 +33,25 @@ function stripeWebhookLedgerDatabase() {
   return getRequestDatabase();
 }
 
+/**
+ * Append-mostly ledger access for the `billing.stripe_webhook_events` system
+ * table that backs at-least-once Stripe delivery idempotency.
+ *
+ * @remarks
+ * - **Algorithm:** {@link tryClaimEvent} attempts an `INSERT ... ON CONFLICT DO
+ *   NOTHING` to atomically reserve the event id, falling back to a status read
+ *   that classifies duplicates, stuck-processing leases, and reclaim windows.
+ *   {@link tryReclaimEvent} flips a `failed` or stale-`processing` row back to
+ *   `processing` (incrementing `attempt_count`) so the worker can retry safely.
+ * - **Failure modes:** Returning `still_processing_within_lease` signals the
+ *   caller to defer; the in-process service raises `ConflictError` on that
+ *   outcome. `markFailed` truncates failure reasons to 2,000 characters.
+ * - **Side effects:** All writes happen on a worker-context handle when running
+ *   under {@link isWorkerRuntime}; otherwise on the request-scoped database.
+ *   Reclaim sweeps touch up to `batchSize` rows per invocation.
+ * - **Notes:** The ledger row is the source of truth for delivery state and is
+ *   intentionally separate from any business-side subscription mutations.
+ */
 export class StripeWebhookEventRepository {
   async tryClaimEvent(input: {
     stripe_event_id: string;

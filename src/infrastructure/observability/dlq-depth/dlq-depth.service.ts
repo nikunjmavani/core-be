@@ -50,6 +50,18 @@ const SOURCE_QUEUE_NAMES_FOR_DLQ_MONITORING = [
   IDEMPOTENCY_CARDINALITY_QUEUE_NAME,
 ] as const;
 
+/**
+ * One-pass dead-letter queue depth snapshot returned by
+ * {@link sampleDeadLetterQueueDepths} — `waiting + failed` counts per DLQ.
+ *
+ * @remarks
+ * - **Algorithm:** the inner `depths` array preserves the order of
+ *   `SOURCE_QUEUE_NAMES_FOR_DLQ_MONITORING` so consumers can join by index.
+ * - **Failure modes:** queues that fail to connect raise inside the sampler and
+ *   abort the call; partial results are not returned.
+ * - **Side effects:** none from the type itself.
+ * - **Notes:** consumed by the DLQ depth worker and `getTotalDeadLetterJobCount`.
+ */
 export interface DlqDepthSampleResult {
   readonly depths: ReadonlyArray<{
     readonly deadLetterQueueName: string;
@@ -60,7 +72,19 @@ export interface DlqDepthSampleResult {
 }
 
 /**
- * Samples waiting + failed job counts on each dead-letter queue and alerts when over threshold.
+ * Samples waiting + failed counts on every per-source DLQ and raises a Sentry
+ * warning whenever a single queue crosses `DLQ_DEPTH_WARN_THRESHOLD`.
+ *
+ * @remarks
+ * - **Algorithm:** iterates `SOURCE_QUEUE_NAMES_FOR_DLQ_MONITORING`, opens a
+ *   short-lived `Queue` against each `<source>-dlq` name, reads
+ *   `getJobCounts('waiting','failed')`, and aggregates totals.
+ * - **Failure modes:** Redis connectivity errors during `getJobCounts` propagate
+ *   to the worker; queue clients are closed in `finally` to release sockets.
+ * - **Side effects:** Sentry `captureMessage('queue.dlq.depth.high', ...)` and
+ *   structured log when `total >= warnThreshold`; transient Redis client open/close.
+ * - **Notes:** driven by `createDlqDepthWorker`'s repeatable schedule; safe to
+ *   call ad hoc for one-shot health probing.
  */
 export async function sampleDeadLetterQueueDepths(): Promise<DlqDepthSampleResult> {
   const warnThreshold = env.DLQ_DEPTH_WARN_THRESHOLD;
@@ -98,7 +122,17 @@ export async function sampleDeadLetterQueueDepths(): Promise<DlqDepthSampleResul
   return { depths };
 }
 
-/** Sum of waiting + failed jobs across monitored dead-letter queues. */
+/**
+ * Convenience aggregator that returns the cluster-wide DLQ backlog.
+ *
+ * @remarks
+ * - **Algorithm:** runs {@link sampleDeadLetterQueueDepths} and sums each entry's
+ *   `total` (waiting + failed).
+ * - **Failure modes:** propagates any error from the sampler.
+ * - **Side effects:** same as the sampler — Sentry alerts may fire as a side
+ *   effect of reading per-queue counts.
+ * - **Notes:** used by health-check probes that just need a single scalar.
+ */
 export async function getTotalDeadLetterJobCount(): Promise<number> {
   const sample = await sampleDeadLetterQueueDepths();
   return sample.depths.reduce((total, entry) => total + entry.total, 0);

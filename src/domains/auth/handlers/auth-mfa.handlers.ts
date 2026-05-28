@@ -9,6 +9,7 @@ import type { AuthContainer } from '../auth.container.js';
 
 type AuthMfaHandlersDependencies = Pick<AuthContainer, 'mfaService'>;
 
+/** Builds the MFA Fastify handlers: `verifyMfa` (login-flow step + post-login confirmation), `enrollMfa`, `listMfaMethods`, and `deleteMfa`. */
 export function createAuthMfaHandlers({ mfaService }: AuthMfaHandlersDependencies) {
   return {
     verifyMfa: async (request: FastifyRequest, reply: FastifyReply) => {

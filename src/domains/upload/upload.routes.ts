@@ -4,6 +4,11 @@ import { MODERATE_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit-pres
 import { createUploadController } from './upload.controller.js';
 import { createUploadDto } from './upload.dto.js';
 
+/**
+ * Fastify plugin mounting upload routes under the upload prefix: presigned URL
+ * issue, metadata fetch, server-side confirm, and soft-delete. All routes
+ * require authentication and share the moderate authed-user rate limit.
+ */
 export const uploadRoutesPlugin: FastifyPluginAsync = async (app) => {
   const controller = createUploadController(app.uploadDomain.uploadService);
   const zodApplication = app.withTypeProvider<ZodTypeProvider>();

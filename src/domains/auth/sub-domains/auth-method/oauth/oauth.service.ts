@@ -22,6 +22,25 @@ import { completeOAuthUserSession } from './oauth-user-session.js';
 
 export type { OAuthProvider } from './oauth.types.js';
 
+/**
+ * Coordinates the OAuth authorize-and-callback dance for supported providers.
+ *
+ * @remarks
+ * - **Algorithm:** `getRedirectUrl` mints a CSRF `state` in Redis via
+ *   {@link createOAuthState} and returns the provider authorize URL.
+ *   `handleCallback` consumes the `state` exactly once via
+ *   {@link consumeOAuthState}, exchanges the authorization code with the
+ *   provider, then delegates to {@link completeOAuthUserSession} to find-or-create
+ *   the user, link the auth method, and issue an access token + session.
+ * - **Failure modes:** unsupported providers throw `NotImplementedError`;
+ *   missing or mismatched `state` throws `UnauthorizedError`; provider code
+ *   exchange surfaces network/parse errors to the caller.
+ * - **Side effects:** writes to Redis (`oauth:state:*`), the {@link auth_methods}
+ *   and `auth.sessions` tables, and signs a JWT. No event-bus emit — the user
+ *   creation path inside `completeOAuthUserSession` calls into {@link UserService}.
+ * - **Notes:** the `state` token is single-use (deleted on `consumeOAuthState`)
+ *   to prevent replay and provider-mismatch attacks.
+ */
 export class OAuthService {
   constructor(
     private readonly userService: UserService,

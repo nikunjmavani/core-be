@@ -7,6 +7,10 @@ import type { NotificationService } from './notification.service.js';
 import { NotificationSerializer } from './notification.serializer.js';
 import { validateListNotificationsQuery } from './notification.validator.js';
 
+/**
+ * Build the Fastify handler map for notification routes — thin coordinators that parse params,
+ * call {@link NotificationService}, and shape responses via {@link NotificationSerializer}.
+ */
 export function createNotificationController(service: NotificationService) {
   return {
     listNotifications: async (request: FastifyRequest, _reply: FastifyReply) => {

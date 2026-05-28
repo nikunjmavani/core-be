@@ -1,5 +1,6 @@
 import { baseTemplate } from './base.template.js';
 
+/** Template variables for {@link invitationTemplate} — inviter, target org, accept URL, and TTL. */
 export interface InvitationTemplateData {
   inviterName: string;
   organizationName: string;
@@ -7,6 +8,11 @@ export interface InvitationTemplateData {
   expiresInDays: number;
 }
 
+/**
+ * Renders the member-invitation HTML email (wrapped in `baseTemplate`). Emitted
+ * from `member-invitation.events` handlers; the `acceptUrl` must already include
+ * the signed invitation token so the recipient can complete acceptance.
+ */
 export function invitationTemplate(data: InvitationTemplateData): string {
   return baseTemplate({
     title: `You're invited to join ${data.organizationName}`,

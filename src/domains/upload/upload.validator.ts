@@ -10,6 +10,13 @@ import {
 import type { CreateUploadInput } from './upload.types.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
+/**
+ * Validates the request body for `POST /api/v1/uploads`: structure via
+ * {@link createUploadDto}, then policy checks for `organizationId`
+ * presence/absence per target, allowed content type for the purpose, declared
+ * filename extension matching the content type, and size against
+ * {@link UPLOAD_PURPOSE_CONFIG}. Throws {@link ValidationError} on any failure.
+ */
 export function validateCreateUpload(data: unknown): CreateUploadInput {
   const result = createUploadDto.safeParse(data);
   if (!result.success) {
@@ -111,6 +118,10 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
   return omitUndefined(input);
 }
 
+/**
+ * Validates the `:publicId` URL param against {@link uploadPublicIdParamDto}
+ * and the shared public-id format check; returns the normalized public id.
+ */
 export function validateUploadPublicIdParam(public_id: string): string {
   const parsed = uploadPublicIdParamDto.safeParse({ publicId: public_id });
   if (!parsed.success) {

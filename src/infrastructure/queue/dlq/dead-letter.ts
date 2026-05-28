@@ -9,6 +9,7 @@ import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
+/** Suffix appended to a source queue name to derive its dead-letter queue (`<source>-dlq`). */
 export const DLQ_QUEUE_SUFFIX = '-dlq';
 
 const DEAD_LETTER_JOB_NAME = 'dead-letter';
@@ -22,6 +23,12 @@ const DEAD_LETTER_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 
 const deadLetterQueuesByName = new Map<string, Queue>();
 
+/**
+ * Snapshot persisted on the `<source>-dlq` queue when a job exhausts its retry budget.
+ * Carries only a hand-picked metadata summary (see {@link buildReplayJobPayload}) — the
+ * original payload is intentionally not stored so secrets, HTML bodies, and full webhook
+ * payloads never sit in Redis past the 30-day retention window.
+ */
 export interface DeadLetterJobData {
   original_queue: string;
   original_job_id?: string;
@@ -52,10 +59,12 @@ function summarizeJobDataForDeadLetter(data: unknown): Record<string, unknown> {
   return summary;
 }
 
+/** Resolves the BullMQ dead-letter queue name (`<source>-dlq`) for a source queue. */
 export function getDeadLetterQueueName(sourceQueueName: string): string {
   return `${sourceQueueName}${DLQ_QUEUE_SUFFIX}`;
 }
 
+/** Batch variant of {@link getDeadLetterQueueName}, used by the dashboard and DLQ replay tool. */
 export function listDeadLetterQueueNames(sourceQueueNames: readonly string[]): string[] {
   return sourceQueueNames.map((name) => getDeadLetterQueueName(name));
 }
@@ -79,6 +88,21 @@ export function isFinalJobFailure(job: Job | undefined): boolean {
   return job.attemptsMade >= maxAttempts;
 }
 
+/**
+ * Persists a job snapshot to `<sourceQueueName>-dlq` after the final retry has failed.
+ *
+ * @remarks
+ * - **Algorithm:** lazily opens (or reuses) a BullMQ {@link Queue} for the DLQ, builds a
+ *   safe {@link DeadLetterJobData} record via `summarizeJobDataForDeadLetter`, and adds a
+ *   `dead-letter` job keyed by `dlq-<source>-<originalJobId>` for replay deduplication.
+ * - **Failure modes:** any Redis error bubbles back to {@link attachDeadLetterAndAlerting},
+ *   which logs `queue.dead_letter.enqueue_failed`; the original failed job remains in
+ *   BullMQ's `failed` set so operators can still inspect it.
+ * - **Side effects:** writes a row to the DLQ Redis stream with 30-day retention on
+ *   `removeOnComplete` and `removeOnFail`; no Postgres writes.
+ * - **Notes:** stable `jobId` makes repeated DLQ inserts for the same source job idempotent,
+ *   so replays that fail again do not multiply DLQ entries. Never store secrets here.
+ */
 export async function enqueueDeadLetter(
   sourceQueueName: string,
   job: Job,
@@ -192,6 +216,11 @@ export function attachDeadLetterAndAlerting(worker: Worker, queueName: string): 
   });
 }
 
+/**
+ * Closes every BullMQ DLQ producer this module has lazily created and clears the cache.
+ * Called by the worker shutdown sequence so Redis connections drain cleanly. Failures are
+ * swallowed via `Promise.allSettled` so one stuck queue cannot block the others.
+ */
 export async function closeDeadLetterQueues(): Promise<void> {
   const queues = [...deadLetterQueuesByName.values()];
   deadLetterQueuesByName.clear();

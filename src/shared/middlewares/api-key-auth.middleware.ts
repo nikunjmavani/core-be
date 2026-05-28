@@ -5,6 +5,11 @@ import type { AuthContext } from '@/shared/types/index.js';
 
 const API_KEY_PREFIX = 'ak_';
 
+/**
+ * Extracts an API key from `Authorization: ApiKey ...`, `Authorization:
+ * Bearer ak_...`, or `X-Api-Key`, in that order. Returns `null` when no
+ * recognised header is present; never throws.
+ */
 export function extractApiKeyFromRequest(request: FastifyRequest): string | null {
   const authorizationHeader = request.headers.authorization;
   if (authorizationHeader) {

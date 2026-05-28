@@ -9,6 +9,12 @@ import { PutNotificationPreferencesDto } from './sub-domains/user-notification-p
 import { UpdateUserSettingsDto } from './sub-domains/user-settings/user-settings.dto.js';
 import { AdminUpdateUserDto, UpdateMeDto, UploadAvatarDto } from './user.dto.js';
 
+/**
+ * Fastify plugin that mounts the user domain HTTP surface: admin user management routes, the
+ * `/me` self-service routes (profile, settings, notification preferences, avatar), and the GDPR
+ * data-export request/status endpoints. Admin routes require the `SUPER_ADMIN` or `ADMIN` global
+ * role; data-export request is rate-limited via {@link EXPENSIVE_AUTHED_RATE_LIMIT}.
+ */
 export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
   const controller = createUserController(app.userDomain);
   const dataExportController = createUserDataExportController(app.userDomain.userDataExportService);

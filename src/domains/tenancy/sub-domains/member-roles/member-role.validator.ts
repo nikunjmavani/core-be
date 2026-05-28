@@ -11,6 +11,11 @@ import type {
   ListMemberRolesQueryInput,
 } from './member-role.dto.js';
 
+/**
+ * Validates a `POST /organizations/:id/roles` body against
+ * {@link createMemberRoleDto}; throws `ValidationError('errors:invalidInput')`
+ * with per-field details on failure.
+ */
 export function validateCreateMemberRole(data: unknown): CreateMemberRoleInput {
   const result = createMemberRoleDto.safeParse(data);
   if (!result.success) {
@@ -19,6 +24,11 @@ export function validateCreateMemberRole(data: unknown): CreateMemberRoleInput {
   return result.data;
 }
 
+/**
+ * Validates a `PATCH /organizations/:id/roles/:roleId` body against
+ * {@link updateMemberRoleDto}; throws `ValidationError('errors:invalidInput')`
+ * with per-field details on failure.
+ */
 export function validateUpdateMemberRole(data: unknown): UpdateMemberRoleInput {
   const result = updateMemberRoleDto.safeParse(data);
   if (!result.success) {
@@ -27,6 +37,11 @@ export function validateUpdateMemberRole(data: unknown): UpdateMemberRoleInput {
   return result.data;
 }
 
+/**
+ * Validates the `GET /organizations/:id/roles` query string, rejecting legacy
+ * page-number pagination via {@link ensureCursorOnlyPagination} before parsing
+ * against {@link listMemberRolesQueryDto}.
+ */
 export function validateListMemberRolesQuery(data: unknown): ListMemberRolesQueryInput {
   ensureCursorOnlyPagination(data);
   const result = listMemberRolesQueryDto.safeParse(data);

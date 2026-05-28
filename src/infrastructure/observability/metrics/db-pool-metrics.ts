@@ -83,6 +83,12 @@ export function resolvePostgresPoolPollIntervalMs(): number {
 
 let poolMonitoringInterval: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Polls `pg_stat_activity` for connection-state counts, updates the
+ * `db_pool_connections` / `pg_pool_*` / `postgres_pool_*` gauges, and feeds the
+ * sample into {@link evaluatePoolExhaustionAndAlert}. Sampling errors fall back
+ * to all-zero counts so the alerter still runs (and may flip to `ok`).
+ */
 export async function refreshPostgresPoolMetrics(): Promise<void> {
   const maxConnections = getEnv().DATABASE_POOL_MAX ?? 10;
   let samples: PoolCountRow[] = [];
@@ -112,6 +118,10 @@ export async function refreshPostgresPoolMetrics(): Promise<void> {
   });
 }
 
+/**
+ * Schedules the recurring {@link refreshPostgresPoolMetrics} timer used by the
+ * metrics scrape path. Idempotent — repeat calls do not stack intervals.
+ */
 export function registerPostgresPoolMetrics(): void {
   if (poolMonitoringInterval) {
     return;
@@ -123,6 +133,7 @@ export function registerPostgresPoolMetrics(): void {
   }, resolvePostgresPoolPollIntervalMs());
 }
 
+/** Cancels the polling timer started by {@link registerPostgresPoolMetrics} (used on shutdown and in tests). */
 export function stopPostgresPoolMetricsPolling(): void {
   if (poolMonitoringInterval) {
     clearInterval(poolMonitoringInterval);

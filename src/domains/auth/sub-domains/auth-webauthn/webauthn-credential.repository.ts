@@ -3,8 +3,10 @@ import { database } from '@/infrastructure/database/connection.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { webauthn_credentials } from './webauthn-credential.schema.js';
 
+/** Drizzle row type inferred from {@link webauthn_credentials}; used by the WebAuthn service when reading stored passkeys. */
 export type WebauthnCredentialRow = typeof webauthn_credentials.$inferSelect;
 
+/** Drizzle repository for {@link webauthn_credentials}; tracks signature counter monotonicity via {@link updateCounter} and revokes via `revoked_at` (partial unique index keeps `credential_id` reusable after revocation). */
 export class WebauthnCredentialRepository {
   async listActiveByUserId(userId: number): Promise<WebauthnCredentialRow[]> {
     return database

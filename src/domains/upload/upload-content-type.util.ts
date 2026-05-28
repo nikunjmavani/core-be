@@ -16,6 +16,11 @@ export const CONTENT_TYPE_TO_EXTENSIONS: Readonly<Record<string, readonly string
   'application/pdf': ['.pdf'],
 } as const;
 
+/**
+ * Returns the content types accepted for an {@link UploadPurpose}, optionally
+ * appending `image/svg+xml` when `UPLOAD_ALLOW_SVG` is enabled and the purpose
+ * already permits image uploads. The base list comes from {@link UPLOAD_PURPOSE_CONFIG}.
+ */
 export function getAllowedContentTypesForPurpose(purpose: UploadPurpose): readonly string[] {
   // eslint-disable-next-line security/detect-object-injection -- purpose is a UploadPurpose enum key.
   const baseTypes = UPLOAD_PURPOSE_CONFIG[purpose].allowedTypes;

@@ -65,6 +65,11 @@ export async function connectBullMqRedis(): Promise<void> {
   });
 }
 
+/**
+ * Closes the dedicated BullMQ Redis client during graceful shutdown. No-op when BullMQ
+ * shares the cache Redis endpoint (closing the cache client is sufficient). Races a 5s
+ * timeout so a misbehaving Redis cannot stall process exit.
+ */
 export async function closeBullMqRedis(): Promise<void> {
   if (!usesSeparateBullMqRedisDatabase()) {
     return;

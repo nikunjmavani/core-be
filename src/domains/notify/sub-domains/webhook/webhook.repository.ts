@@ -13,14 +13,23 @@ import {
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
 
+/** Drizzle row type inferred from the `notify.webhooks` table. */
 export type WebhookRow = typeof webhooks.$inferSelect;
 
+/** Keyset pagination input for {@link WebhookRepository.listByOrganization}. */
 export interface WebhookListPagination {
   after?: string;
   limit: number;
   include_total?: boolean;
 }
 
+/**
+ * Drizzle-backed access to `notify.webhooks` — owns the SQL for the dashboard list (ascending
+ * keyset by `(created_at, id)` with optional total), single-webhook reads, and the
+ * upsert/soft-delete lifecycle. Insert uses an `ON CONFLICT (organization_id, url) DO UPDATE`
+ * to revive a soft-deleted row when the same URL is re-added; `softDelete` stamps `deleted_at`
+ * so the tombstone-retention worker can later hard-delete rows.
+ */
 export class WebhookRepository {
   async listByOrganization(organization_id: number, pagination: WebhookListPagination) {
     const { after, limit } = pagination;

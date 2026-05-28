@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import i18next from 'i18next';
 
+/** Pair of a translation key and optional interpolation params returned from services to controllers. */
 export type MessageKeyPayload = {
   messageKey: string;
   messageParams?: Record<string, string | number>;

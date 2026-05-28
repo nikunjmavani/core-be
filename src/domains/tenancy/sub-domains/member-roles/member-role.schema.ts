@@ -15,6 +15,13 @@ import { tenancySchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * `tenancy.roles` table — per-organization roles (both system and custom).
+ * `is_system` marks built-in roles that must not be deleted; `deleted_at`
+ * enables soft-delete with a partial unique index ensuring `name` is unique
+ * within an organization only for active rows. RLS isolates rows to the
+ * caller's organization.
+ */
 export const roles = tenancySchema
   .table(
     'roles',

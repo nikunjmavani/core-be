@@ -8,7 +8,18 @@ import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
- * BullMQ worker that samples dead-letter queue depths on a schedule.
+ * Creates the BullMQ worker that polls every per-source DLQ on a schedule and
+ * fans the readings into Sentry alerts plus structured logs.
+ *
+ * @remarks
+ * - **Algorithm:** runs {@link sampleDeadLetterQueueDepths} per tick at
+ *   concurrency 1 so the sampler doesn't open duplicate Redis clients.
+ * - **Failure modes:** sampler errors propagate to BullMQ retry; stalled jobs
+ *   are logged at warn via the `stalled` listener.
+ * - **Side effects:** alerts emitted by the sampler (Sentry warnings + logs)
+ *   when any DLQ exceeds `DLQ_DEPTH_WARN_THRESHOLD`.
+ * - **Notes:** repeatable schedule is registered in
+ *   `src/infrastructure/queue/scheduler.ts`.
  */
 export function createDlqDepthWorker(): WorkerHandle {
   const worker = new Worker(

@@ -9,4 +9,5 @@ export const stripeWebhookJobDataSchema = z
   })
   .merge(dlqReplayJobFieldsSchema);
 
+/** Inferred payload type for jobs on the `stripe-webhook` queue (validated form). */
 export type StripeWebhookJobDataValidated = z.infer<typeof stripeWebhookJobDataSchema>;

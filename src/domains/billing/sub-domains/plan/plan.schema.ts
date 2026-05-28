@@ -15,6 +15,11 @@ import {
 import { billingSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 
+/**
+ * Drizzle table for `billing.plans` — the global subscription plan catalog with
+ * monthly / yearly pricing and Stripe product/price identifiers; no tenant RLS
+ * because plans are shared across all organizations.
+ */
 export const plans = billingSchema.table(
   'plans',
   {

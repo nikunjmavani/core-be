@@ -6,6 +6,19 @@ import { serializeUserSettings } from './user-settings.serializer.js';
 import type { UserSettingsOutput } from './user-settings.types.js';
 import { validateUpdateUserSettings } from './user-settings.validator.js';
 
+/**
+ * Read or merge the authenticated user's personalization toggles and locale preferences.
+ *
+ * @remarks
+ * - **Algorithm:** resolve the user via {@link UserService.findUserRecordByPublicId}; `get`
+ *   returns the serialized row (or platform defaults if no row exists); `update` validates the
+ *   patch, drops `undefined` fields, and asks the repository to upsert-merge over the existing row.
+ * - **Failure modes:** unknown user → {@link NotFoundError}; invalid body →
+ *   {@link ValidationError} from the validator.
+ * - **Side effects:** writes to `auth.user_settings`. No event emission today.
+ * - **Notes:** the repository handles defaulting on first write so this service stays patch-only;
+ *   `omitUndefined` avoids accidentally clearing fields the client did not send.
+ */
 export class UserSettingsService {
   constructor(
     private readonly userService: UserService,

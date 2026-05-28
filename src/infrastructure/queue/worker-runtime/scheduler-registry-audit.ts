@@ -14,11 +14,22 @@ import { getScheduledJobs } from '@/infrastructure/queue/scheduler.js';
 import { getWorkerQueueRegistrationDefinitions } from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+/**
+ * One drift entry between the worker registry's `scheduled` flag and `scheduler.ts`'s
+ * canonical cron list: either a worker claims to be scheduled but has no cron, or a cron
+ * exists for a queue whose worker is not marked scheduled.
+ */
 export type SchedulerRegistryMismatch = {
   readonly queueName: string;
   readonly issue: 'scheduled_flag_without_cron' | 'cron_without_scheduled_flag';
 };
 
+/**
+ * Diffs the worker registry's `scheduled` flags against the cron list emitted by
+ * {@link getScheduledJobs}. Returns the empty array when the two agree; used by both the
+ * startup warning ({@link auditSchedulerRegistryConsistency}) and dedicated unit tests so
+ * drift fails CI rather than going unnoticed.
+ */
 export function detectSchedulerRegistryMismatches(): SchedulerRegistryMismatch[] {
   const scheduledQueueNames = new Set(getScheduledJobs().map((job) => job.queueName));
   const registry = getWorkerQueueRegistrationDefinitions();

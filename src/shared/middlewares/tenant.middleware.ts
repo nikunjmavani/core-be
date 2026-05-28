@@ -5,6 +5,12 @@ import { PUBLIC_ID_REGEX } from '@/shared/utils/identity/public-id.util.js';
 
 const ORGANIZATION_PATH_PUBLIC_ID_PATTERN = /\/organizations\/([A-Za-z0-9_-]{21})(?:\/|$)/;
 
+/**
+ * Extracts a 21-char NanoID-shaped organization public id from `/organizations/:id/...`
+ * route paths. Returned value is used as a fallback when the `X-Organization-Id` header
+ * is missing and as a consistency check when both header and path are present (mismatch
+ * is rejected to prevent permission/RLS-GUC divergence).
+ */
 export function parseOrganizationPublicIdFromUrl(url: string): string | null {
   const pathWithoutQuery = url.split('?')[0] ?? url;
   const match = ORGANIZATION_PATH_PUBLIC_ID_PATTERN.exec(pathWithoutQuery);

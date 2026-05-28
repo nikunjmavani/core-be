@@ -78,6 +78,11 @@ const callApiInputSchema = z.object({
     .describe('Optional headers (e.g. Authorization, X-Organization-Id)'),
 });
 
+/**
+ * Construction parameters for {@link createMcpServer}. `inject` is the in-process HTTP
+ * back-channel (Fastify `app.inject`) the `call_api` tool uses to invoke real route
+ * handlers without an external network hop.
+ */
 export type CreateMcpServerOptions = {
   name: string;
   version: string;
@@ -89,7 +94,9 @@ export type CreateMcpServerOptions = {
   }) => Promise<{ statusCode: number; payload: unknown; headers: Record<string, string> }>;
 };
 
+/** Concrete instance type of the lazily-loaded `@modelcontextprotocol/sdk` `McpServer`. */
 export type McpServerInstance = InstanceType<McpSdk['McpServer']>;
+/** Concrete instance type of the lazily-loaded `StreamableHTTPServerTransport`. */
 export type McpTransportInstance = InstanceType<McpSdk['StreamableHTTPServerTransport']>;
 
 /**
@@ -208,6 +215,10 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
   return server;
 }
 
+/**
+ * Pair of MCP server + transport that must be created together: stateless mode requires
+ * a fresh transport per request, so callers cannot reuse them across requests.
+ */
 export type McpTransportAndServer = {
   transport: McpTransportInstance;
   server: McpServerInstance;

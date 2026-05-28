@@ -59,12 +59,18 @@ const SKIP_PATH_SEGMENTS = [
   '/tests/',
 ] as const;
 
+/** A single source location where a duplicated numeric literal was assigned at module scope. */
 export interface DuplicateLiteralOccurrence {
   readonly file: string;
   readonly line: number;
   readonly snippet: string;
 }
 
+/**
+ * One numeric value found at module-level `const` assignments in two or more
+ * files outside `src/shared/constants/`. Reported by
+ * {@link findDuplicateLiteralViolations}.
+ */
 export interface DuplicateLiteralViolation {
   readonly value: number;
   readonly occurrences: readonly DuplicateLiteralOccurrence[];
@@ -196,6 +202,13 @@ export function loadCanonicalConstantValues(): Set<number> {
   return values;
 }
 
+/**
+ * Walks the `domains/`, `infrastructure/`, `shared/`, and `core/` source roots
+ * and returns numeric literals declared at module scope in two or more files,
+ * excluding values listed in {@link ALLOWED_DUPLICATE_NUMBERS} or already
+ * exported from `src/shared/constants/`. Used by the constants-centralization
+ * lint script to enforce a single source of truth for cross-file magic numbers.
+ */
 export function findDuplicateLiteralViolations(): DuplicateLiteralViolation[] {
   const occurrencesByValue = new Map<number, DuplicateLiteralOccurrence[]>();
 
