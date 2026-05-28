@@ -8,10 +8,9 @@
 
 ## [3.1.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.1.0-dev.0...v3.1.1-dev.0) (2026-05-28)
 
-
 ### Documentation
 
-* remove redirect stub docs/index.md (use docs/README.md as canonical index) ([#128](https://github.com/nikunjmavani/core-be/issues/128)) ([2cb1c88](https://github.com/nikunjmavani/core-be/commit/2cb1c88c3e4239da60ae956a445a4ebb31dedf2a))
+- remove redirect stub docs/index.md (use docs/README.md as canonical index) ([#128](https://github.com/nikunjmavani/core-be/issues/128)) ([2cb1c88](https://github.com/nikunjmavani/core-be/commit/2cb1c88c3e4239da60ae956a445a4ebb31dedf2a))
 
 ## [3.1.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.0.0-dev.0...v3.1.0-dev.0) (2026-05-27)
 
