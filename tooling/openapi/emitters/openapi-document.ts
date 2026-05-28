@@ -58,9 +58,9 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
 
     const pathParameters: object[] = [];
     const parameterRegex = /\{([^}]+)\}/g;
-    let parameterMatch: RegExpExecArray | null;
-    while ((parameterMatch = parameterRegex.exec(openapiPath)) !== null) {
-      const parameterName = parameterMatch[1]!;
+    for (const parameterMatch of openapiPath.matchAll(parameterRegex)) {
+      const parameterName = parameterMatch[1];
+      if (!parameterName) continue;
       pathParameters.push({
         name: parameterName,
         in: 'path',
@@ -72,7 +72,7 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
     }
 
     const tags = metadata?.tags ?? [inferTagFromPath(openapiPath)];
-    tags.forEach((tag) => tagSet.add(tag));
+    for (const tag of tags) tagSet.add(tag);
 
     const queryParameters = getQueryParameters(method, openapiPath);
     const allParameters = [...pathParameters, ...queryParameters];

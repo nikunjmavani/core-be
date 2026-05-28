@@ -108,8 +108,9 @@ function buildEnvContent(
       }
 
       // Non-provisioned keys: preserve existing value if present, else keep default.
-      if (existingValues?.has(key)) {
-        result.push(`${key}=${escapeEnvValue(existingValues.get(key)!)}`);
+      const existingValue = existingValues?.get(key);
+      if (existingValue !== undefined) {
+        result.push(`${key}=${escapeEnvValue(existingValue)}`);
         continue;
       }
     }

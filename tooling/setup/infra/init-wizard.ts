@@ -218,7 +218,7 @@ export async function runInitWizard(): Promise<void> {
 
   const config = buildConfig(organization, projectName, displayName, environmentNames);
 
-  writeFileSync(SETUP_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  writeFileSync(SETUP_CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
   logger.success(`Wrote ${SETUP_CONFIG_PATH}`);
   logger.info(`  Project: ${config.project.displayName} (${config.project.name})`);
   logger.info(`  Organization: ${config.project.organization}`);

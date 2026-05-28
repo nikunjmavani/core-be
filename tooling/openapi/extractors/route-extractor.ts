@@ -25,8 +25,7 @@ const ROUTE_PATTERN =
 export function extractRoutesFromFile(filePath: string, prefix: string): ExtractedRoute[] {
   const content = readFileSync(filePath, 'utf-8');
   const routes: ExtractedRoute[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = ROUTE_PATTERN.exec(content)) !== null) {
+  for (const match of content.matchAll(ROUTE_PATTERN)) {
     const method = match[1];
     const rawPath = match[2];
     if (!(method && rawPath)) continue;
@@ -34,7 +33,6 @@ export function extractRoutesFromFile(filePath: string, prefix: string): Extract
       prefix + (rawPath === '/' ? '' : rawPath.startsWith('/') ? rawPath : `/${rawPath}`);
     routes.push({ method: method.toUpperCase(), path });
   }
-  ROUTE_PATTERN.lastIndex = 0;
   return routes;
 }
 

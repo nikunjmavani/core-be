@@ -63,6 +63,7 @@ describe('Worker readiness (global)', () => {
     const workflow = readFileSync(workflowPath, 'utf8');
     expect(workflow).toContain('Deploy API and worker to Railway');
     expect(workflow).toContain('wait_for_service_health()');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal bash variable in the workflow YAML — not a TS template.
     expect(workflow).toContain('${base_url}/health');
     expect(workflow).toContain(
       'deploy_service_from_image "$RAILWAY_SERVICE_ID" "$API_IMAGE" "api"',

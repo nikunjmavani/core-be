@@ -8,8 +8,7 @@ export interface MagicLinkTemplateData {
 export function magicLinkTemplate(data: MagicLinkTemplateData): string {
   return baseTemplate({
     title: 'Sign in to your account',
-    preheader:
-      'Click the link below to sign in — expires in ' + data.expiresInMinutes + ' minutes.',
+    preheader: `Click the link below to sign in — expires in ${data.expiresInMinutes} minutes.`,
     body: `
       <h1>Sign in to your account</h1>
       <p>Click the button below to securely sign in. This link expires in ${data.expiresInMinutes} minutes.</p>

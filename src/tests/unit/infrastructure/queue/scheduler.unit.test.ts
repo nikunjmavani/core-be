@@ -7,7 +7,6 @@ const { upsertJobSchedulerMock, queueCloseMock } = vi.hoisted(() => ({
 
 vi.mock('bullmq', () => ({
   Queue: class MockQueue {
-    constructor(_queueName: string, _options?: object) {}
     upsertJobScheduler = upsertJobSchedulerMock;
     close = queueCloseMock;
   },

@@ -216,7 +216,7 @@ export function setEnvSetupVariable(key: string, value: string): void {
     content = content.replace(lineRegex, `$1${value}`);
   } else {
     const comment = TOKEN_URLS[key as keyof typeof TOKEN_URLS] ?? key;
-    content = content.trimEnd() + `\n\n# ${comment}\n${key}=${value}\n`;
+    content = `${content.trimEnd()}\n\n# ${comment}\n${key}=${value}\n`;
   }
   writeFileSync(ENV_SETUP_PATH, content, 'utf-8');
 }
@@ -338,7 +338,7 @@ export function appendMissingEnvSetupVariables(config: SetupConfig): string[] {
   if (blocks.length === 0) return [];
   const trimmed = content.trimEnd();
   const suffix = trimmed.endsWith('\n') ? '' : '\n';
-  writeFileSync(ENV_SETUP_PATH, trimmed + suffix + '\n' + blocks.join('\n\n') + '\n', 'utf-8');
+  writeFileSync(ENV_SETUP_PATH, `${trimmed + suffix}\n${blocks.join('\n\n')}\n`, 'utf-8');
   return appended;
 }
 
@@ -365,8 +365,7 @@ export function updateEnvSetupHeader(config: SetupConfig): boolean {
   if (prefixIndex === -1) {
     const insertAfter = content.indexOf('\n\n');
     const insertAt = insertAfter === -1 ? content.length : insertAfter + 2;
-    content =
-      content.slice(0, insertAt) + '\n' + newHeaderLines.join('\n') + content.slice(insertAt);
+    content = `${content.slice(0, insertAt)}\n${newHeaderLines.join('\n')}${content.slice(insertAt)}`;
   } else {
     const lineStart = content.lastIndexOf('\n', prefixIndex) + 1;
     const endMarkerIndex = content.indexOf(ENV_SETUP_HEADER_END, prefixIndex);

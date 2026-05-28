@@ -132,7 +132,6 @@ function buildZodField(options: AddEnvOptions): string {
       }
       field = `z.string().optional().default('false').transform((v) => v === 'true' || v === '1')`;
       return `  /** ${options.description || options.key} */\n  ${options.key}: ${field},`;
-    case 'string':
     default:
       field = `z.string().min(1)`;
       break;
@@ -180,7 +179,7 @@ function addToSchema(options: AddEnvOptions): boolean {
   const lineStart = content.lastIndexOf('\n', lastClosing);
   const insertAt = lineStart === -1 ? lastClosing : lineStart;
 
-  content = content.slice(0, insertAt) + '\n' + field + '\n' + content.slice(insertAt);
+  content = `${content.slice(0, insertAt)}\n${field}\n${content.slice(insertAt)}`;
   writeFileSync(SCHEMA_PATH, content, 'utf-8');
   console.log(`  + Added ${options.key} to env-schema.ts`);
   return true;

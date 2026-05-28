@@ -136,7 +136,7 @@ export function loadState(): z.infer<typeof setupStateSchema> {
 
 export function saveState(state: z.infer<typeof setupStateSchema>): void {
   state.updatedAt = new Date().toISOString();
-  writeFileSync(STATE_PATH, JSON.stringify(state, null, 2) + '\n', 'utf-8');
+  writeFileSync(STATE_PATH, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
 }
 
 export function stateFileExists(): boolean {
@@ -145,6 +145,6 @@ export function stateFileExists(): boolean {
 
 export function clearState(): void {
   if (existsSync(STATE_PATH)) {
-    writeFileSync(STATE_PATH, JSON.stringify(createEmptyState(), null, 2) + '\n', 'utf-8');
+    writeFileSync(STATE_PATH, `${JSON.stringify(createEmptyState(), null, 2)}\n`, 'utf-8');
   }
 }

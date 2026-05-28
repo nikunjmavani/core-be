@@ -316,9 +316,16 @@ export async function provision(
       logger.stopSpinner(spinner, `Neon project already exists: ${projectId}`);
     }
 
-    await waitForOperations(apiKey, projectId!);
+    if (projectId === undefined) {
+      throw new Error(
+        'Neon projectId is unset after create/adopt flow (unreachable; both branches assign it).',
+      );
+    }
+    const neonProjectId: string = projectId;
 
-    const remoteBranches = await listBranches(apiKey, projectId!);
+    await waitForOperations(apiKey, neonProjectId);
+
+    const remoteBranches = await listBranches(apiKey, neonProjectId);
 
     // Create branches for remaining environments
     const nonProductionEnvironments = environments.slice(0, -1);
@@ -331,11 +338,11 @@ export async function provision(
 
       const remoteBranch = remoteBranches.find((branch) => branch.name === environmentName);
       if (remoteBranch) {
-        await waitForOperations(apiKey, projectId!);
+        await waitForOperations(apiKey, neonProjectId);
         const adoptSpinner = logger.startSpinner(
           `Adopting existing Neon branch: ${environmentName}...`,
         );
-        const databaseUrl = await getConnectionUri(apiKey, projectId!, remoteBranch.id, true);
+        const databaseUrl = await getConnectionUri(apiKey, neonProjectId, remoteBranch.id, true);
         branches[environmentName] = {
           branchId: remoteBranch.id,
           endpointId: '',
@@ -347,12 +354,12 @@ export async function provision(
 
       const branchSpinner = logger.startSpinner(`Creating branch: ${environmentName}...`);
 
-      await waitForOperations(apiKey, projectId!);
+      await waitForOperations(apiKey, neonProjectId);
 
       const branchResponse = await neonRequest<NeonBranch>(
         apiKey,
         'POST',
-        `/projects/${projectId}/branches`,
+        `/projects/${neonProjectId}/branches`,
         {
           branch: { name: environmentName },
           endpoints: [{ type: 'read_write' }],
@@ -364,7 +371,7 @@ export async function provision(
 
       const databaseUrl =
         branchResponse.connection_uris?.[0]?.connection_uri ??
-        (await getConnectionUri(apiKey, projectId!, branchId, true));
+        (await getConnectionUri(apiKey, neonProjectId, branchId, true));
 
       branches[environmentName] = { branchId, endpointId, databaseUrl };
       logger.stopSpinner(branchSpinner, `Branch "${environmentName}" created: ${branchId}`);
@@ -380,10 +387,10 @@ export async function provision(
         remoteBranches[0];
       if (!productionBranch) {
         throw new Error(
-          `Neon project "${projectId}" has no branches; cannot resolve production connection URI.`,
+          `Neon project "${neonProjectId}" has no branches; cannot resolve production connection URI.`,
         );
       }
-      const databaseUrl = await getConnectionUri(apiKey, projectId!, productionBranch.id, true);
+      const databaseUrl = await getConnectionUri(apiKey, neonProjectId, productionBranch.id, true);
       branches[productionEnvironment] = {
         branchId: productionBranch.id,
         endpointId: 'default',
@@ -394,7 +401,7 @@ export async function provision(
     return {
       success: true,
       message: `Neon: ${Object.keys(branches).length} branches ready`,
-      stateUpdates: { neon: { projectId: projectId!, branches } },
+      stateUpdates: { neon: { projectId: neonProjectId, branches } },
     };
   } catch (provisionError) {
     const message =

@@ -1,6 +1,6 @@
 /** OpenAPI success responses — notify and stripe webhook. */
 import type { ResponseDefinition } from '../building-blocks.js';
-import { wrapPaginated, wrapSuccess } from '../building-blocks.js';
+import { wrapSuccess } from '../building-blocks.js';
 import * as schemas from '../resource-schemas.js';
 
 export const notifyRouteResponses: Record<string, ResponseDefinition> = {

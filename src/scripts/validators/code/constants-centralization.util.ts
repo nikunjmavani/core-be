@@ -85,8 +85,11 @@ function evaluateNumericExpression(expression: string): number | undefined {
     return undefined;
   }
   try {
-    // biome-ignore lint/nursery/noImpliedEval: evaluates only the numeric-expression allowlist above in a repository validator.
-    const result = new Function(`return (${trimmed});`)() as unknown;
+    // Evaluates a strictly validated numeric expression (digits, whitespace, `_`, `*+().`) in a
+    // repository validator — never attacker-controlled input. The regex above is the security
+    // boundary; do not relax it without revisiting this call site.
+    const numericExpressionEvaluator = new Function(`return (${trimmed});`);
+    const result = numericExpressionEvaluator() as unknown;
     return typeof result === 'number' && Number.isFinite(result) ? result : undefined;
   } catch {
     return undefined;

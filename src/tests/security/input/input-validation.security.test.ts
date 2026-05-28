@@ -120,7 +120,7 @@ describe('Security: Input Validation', () => {
         method: 'POST',
         url: testApiPath('/auth/login'),
         payload: {
-          email: 'a'.repeat(500) + '@test.com',
+          email: `${'a'.repeat(500)}@test.com`,
           password: 'a'.repeat(500),
         },
       });

@@ -79,19 +79,6 @@ export class UserService {
     await this.repository.update(public_id, { avatar_url: null });
   }
 
-  private async runOffboarding(
-    public_id: string,
-    user_id: number,
-    avatar_url: string | null,
-  ): Promise<void> {
-    if (!this.offboardingDependencies) return;
-    await this.clearAvatarStorage(public_id, avatar_url);
-    await this.offboardingDependencies.authSessionService.revokeAllSessions(public_id);
-    await this.offboardingDependencies.authMethodService.revokeAllForUser(public_id);
-    await this.offboardingDependencies.uploadService.tombstoneAllByUserId(user_id);
-    await this.offboardingDependencies.userDataExportService.deleteAllExportsForUser(user_id);
-  }
-
   private async softDeleteUserWithOffboarding(public_id: string): Promise<void> {
     const user = await this.repository.findByPublicId(public_id);
     if (!user) throw new NotFoundError('User');
