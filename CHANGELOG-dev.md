@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.1.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.1.2-dev.0...v3.1.3-dev.0) (2026-05-28)
+
+
+### Documentation
+
+* add PR review and intake defaults ([#144](https://github.com/nikunjmavani/core-be/issues/144)) ([fc89a49](https://github.com/nikunjmavani/core-be/commit/fc89a49da75e780ee525ea8b9d9c057b0a1befb2))
+
 ## [3.1.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.1.1-dev.0...v3.1.2-dev.0) (2026-05-28)
 
 ### Documentation
