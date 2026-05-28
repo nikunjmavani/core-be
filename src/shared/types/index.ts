@@ -1,4 +1,4 @@
-import type { GlobalRole } from '@/shared/constants/roles.js';
+import type { GlobalRole } from '@/shared/constants/roles.constants.js';
 
 export interface AuthContext {
   userId: string;

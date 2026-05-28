@@ -1,5 +1,5 @@
-export { GLOBAL_ROLES } from './roles.js';
-export type { GlobalRole } from './roles.js';
+export { GLOBAL_ROLES } from './roles.constants.js';
+export type { GlobalRole } from './roles.constants.js';
 
 /** Generic message returned to clients for any 500 response; internal details go to Sentry only. */
 export const EXTERNAL_ERROR_MESSAGE = 'Something went wrong! Please try again later.';

@@ -1,5 +1,5 @@
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
-import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.js';
+import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.constants.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { OrganizationRepository } from './organization.repository.js';

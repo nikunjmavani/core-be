@@ -4,7 +4,7 @@ import { UnauthorizedError } from '@/shared/errors/index.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { AuthContext } from '@/shared/types/index.js';
-import type { GlobalRole } from '@/shared/constants/roles.js';
+import type { GlobalRole } from '@/shared/constants/roles.constants.js';
 import { applyApiKeyAuthentication } from './api-key-auth.middleware.js';
 
 function getBearerToken(request: FastifyRequest): string {
