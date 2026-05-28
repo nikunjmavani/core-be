@@ -99,13 +99,13 @@ Review this runbook at the start of each calendar quarter (January, April, July,
 
 | Quarter | Reviewer                    | Review date | Outcome | Notes                                                                                                    |
 | ------- | --------------------------- | ----------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| 2026-Q2 | Production readiness verify | 2026-05-20  | Passed  | Linked from [docs/index.md](../index.md); procedures aligned with restore drill and migrations reference |
+| 2026-Q2 | Production readiness verify | 2026-05-20  | Passed  | Linked from [docs/README.md](../README.md); procedures aligned with restore drill and migrations reference |
 
 ---
 
 ## Related
 
-- [docs/index.md](../index.md) — documentation index (links here)
+- [docs/README.md](../README.md) — documentation index (links here)
 - [backup-drills.md](backup-drills.md) — monthly automated restore drill (`MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY`; Neon project `core-be` by name; parent branch = workflow ref)
 - [restore-drill.md](../deployment/restore-drill.md) — workflow secrets and CI artifact names
 - [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md) — deploy and secrets
