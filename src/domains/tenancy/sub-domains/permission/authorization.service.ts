@@ -1,4 +1,4 @@
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { ConfigurationError } from '@/shared/errors/index.js';
 import {

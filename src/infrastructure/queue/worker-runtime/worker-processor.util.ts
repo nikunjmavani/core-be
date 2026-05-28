@@ -1,7 +1,7 @@
 import { Worker, type Job, type WorkerOptions } from 'bullmq';
 import type { PostgresDatabaseHandle } from '@/infrastructure/database/database-handle.types.js';
 import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-close.util.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';

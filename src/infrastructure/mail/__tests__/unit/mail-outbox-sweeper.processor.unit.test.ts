@@ -5,7 +5,7 @@ const findStalePendingMailOutboxIdsMock = vi.fn();
 const reclaimStaleSendingMailOutboxIdsMock = vi.fn();
 const enqueueMailOutboxJobMock = vi.fn();
 
-vi.mock('@/infrastructure/database/contexts/worker-database-context.js', () => ({
+vi.mock('@/infrastructure/database/contexts/worker-database.context.js', () => ({
   withSystemTableWorkerContext: (callback: () => Promise<unknown>) => callback(),
 }));
 

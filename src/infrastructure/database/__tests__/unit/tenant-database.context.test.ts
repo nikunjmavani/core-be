@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 
 const mockExecute = vi.fn().mockResolvedValue(undefined);
 const mockTransactionHandle = { execute: mockExecute, tag: 'transaction-handle' };

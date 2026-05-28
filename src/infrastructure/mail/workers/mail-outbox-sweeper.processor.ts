@@ -1,4 +1,4 @@
-import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database-context.js';
+import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import {
   findStalePendingMailOutboxIds,
   reclaimStaleSendingMailOutboxIds,

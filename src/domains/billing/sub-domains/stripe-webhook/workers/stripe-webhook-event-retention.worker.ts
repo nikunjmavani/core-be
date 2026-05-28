@@ -8,7 +8,7 @@ import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 import { STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-retention.constants.js';
 import { runStripeWebhookEventRetentionJob } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-retention.processor.js';
-import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database-context.js';
+import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**

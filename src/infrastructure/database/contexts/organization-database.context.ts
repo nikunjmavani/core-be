@@ -1,4 +1,4 @@
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 
 /**

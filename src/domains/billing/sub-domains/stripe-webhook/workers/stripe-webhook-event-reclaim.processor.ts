@@ -1,4 +1,4 @@
-import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database-context.js';
+import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { enqueueStripeWebhookByEventId } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
 import { StripeWebhookEventRepository } from '@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-event.repository.js';
 import { setStripeWebhookEventsFailedCount } from '@/infrastructure/observability/metrics/prometheus-metrics.js';

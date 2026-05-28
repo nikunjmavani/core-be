@@ -5,7 +5,7 @@ import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-
 import { NOTIFICATION_QUEUE_NAME, type NotificationJobData } from '../queues/notification.queue.js';
 import { createWorkerNotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 import { dispatchOutboxEmail, recordOutboxEmail } from '@/infrastructure/mail/queues/mail.queue.js';
-import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database-context.js';
+import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { baseTemplate } from '@/infrastructure/mail/templates/base.template.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -17,7 +17,7 @@ import {
   type WorkerDatabaseHandle,
 } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import type { NotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 
 type NotificationDispatchData = {

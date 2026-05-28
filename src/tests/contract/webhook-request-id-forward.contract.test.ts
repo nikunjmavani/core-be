@@ -36,7 +36,7 @@ vi.mock('@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js', (
     findOrganizationPublicIdByDeliveryAttemptIdMock(...arguments_),
 }));
 
-vi.mock('@/infrastructure/database/contexts/tenant-context.js', () => ({
+vi.mock('@/infrastructure/database/contexts/tenant-database.context.js', () => ({
   withOrganizationContext: async (
     _organizationPublicId: string,
     callback: (databaseHandle: never) => unknown,

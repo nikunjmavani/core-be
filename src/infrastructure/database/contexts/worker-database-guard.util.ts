@@ -3,13 +3,13 @@ import {
   getRequestDatabase,
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
-import type { WorkerDatabaseContextKind } from '@/infrastructure/database/contexts/worker-database-context.js';
+import type { WorkerDatabaseContextKind } from '@/infrastructure/database/contexts/worker-database.context.js';
 import {
   assertWorkerDatabaseContext,
   getWorkerDatabaseContext,
   isWorkerRuntime,
-} from '@/infrastructure/database/contexts/worker-database-context.js';
-import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database-context.error.js';
+} from '@/infrastructure/database/contexts/worker-database.context.js';
+import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database.context.error.js';
 
 const GUC_BY_CONTEXT_KIND: Record<
   Exclude<WorkerDatabaseContextKind, 'system_table'>,

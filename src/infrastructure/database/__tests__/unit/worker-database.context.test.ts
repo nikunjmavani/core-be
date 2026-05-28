@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
-import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database-context.error.js';
+import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database.context.error.js';
 import {
   assertWorkerDatabaseContext,
   assertWorkerForceRlsTableAccess,
@@ -10,7 +10,7 @@ import {
   isWorkerRuntime,
   runWithWorkerDatabaseContext,
   withSystemTableWorkerContext,
-} from '@/infrastructure/database/contexts/worker-database-context.js';
+} from '@/infrastructure/database/contexts/worker-database.context.js';
 
 const mockExecute = vi.fn().mockResolvedValue(undefined);
 const mockTransactionHandle = { execute: mockExecute, tag: 'transaction-handle' };

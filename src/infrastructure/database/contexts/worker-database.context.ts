@@ -6,7 +6,7 @@ import {
 } from '@/infrastructure/database/force-rls-tables.constants.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { runWithPinnedDatabaseHandle } from '@/infrastructure/database/contexts/request-database.context.js';
-import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database-context.error.js';
+import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database.context.error.js';
 
 export type WorkerDatabaseContextKind =
   | 'organization'
