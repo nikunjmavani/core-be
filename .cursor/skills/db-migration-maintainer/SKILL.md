@@ -33,10 +33,13 @@ These are enforced by `pnpm db:migrate:lint` and cannot be overridden by the `--
 1. **Update Drizzle schema** in the domain/sub-domain folder (`<resource>.schema.ts`).
 2. **Run sql-design-guard** on the schema (indexes, constraints, naming).
 3. **Author SQL migration** in `migrations/`:
-   - Filename: `YYYYMMDDHHMMSS_short_description.sql` — **14-digit lexicographic ordering key** + snake_case suffix (e.g. `20260520000001_system_tables_rls_deny_all.sql`).
-   - Prefix must be **strictly greater** than every existing up-migration prefix (`pnpm db:migrate:lint` enforces monotonic order). Run **`pnpm db:migrate:next-prefix`** for the suggested prefix — do not use `date -u +%Y%m%d` unless it sorts after the current max (see [migrations.md](../../../docs/reference/data/migrations.md#migration-filename-ordering)).
-   - **Do not rename** applied migration files — `public.schema_migrations` keys on `filename`.
-   - Historical mixes of `202502*` and `202605*` prefixes are intentional; ordering is by prefix, not calendar “when written.”
+   - **Generate with `pnpm db:migrate:new <snake_case_slug>`** — this creates `migrations/YYYYMMDDHHMMSS_<slug>.sql` with the proper header. The 14-digit prefix is real UTC wall-clock time (e.g. `20260528054321`) so concurrent developers on different branches naturally land on distinct prefixes and avoid the trivial merge conflict that happens with `_000001 / _000002` counter-based suffixes.
+   - For just the prefix (no file): `pnpm db:migrate:next-prefix [description]`.
+   - Both helpers fall back to incrementing the current max when "now" is not strictly greater (clock skew / two migrations in the same second), so monotonic ordering is preserved.
+   - Filename pattern: `YYYYMMDDHHMMSS_short_description.sql` — **14-digit lexicographic ordering key** + snake_case suffix.
+   - Prefix must be **strictly greater** than every existing up-migration prefix (`pnpm db:migrate:lint` enforces monotonic order). Do not use `date -u +%Y%m%d000001` — that re-introduces the counter pattern. Use the helper.
+   - **Do not rename** applied migration files — `public.schema_migrations` keys on `filename`; renaming a file makes the runner think it's a brand-new migration and re-apply it in environments that already had it.
+   - Historical mixes of `202502*` / `202605*` and `_000001` / `_000002` suffixes are intentional; ordering is by prefix, not calendar "when written." Leave them alone.
    - One logical change per file when possible (add table, add column, add index).
    - Use schema-qualified names: `tenancy.organizations`, `auth.users`, etc.
    - Include `IF NOT EXISTS` / safe patterns where re-run risk exists; migrations are tracked in `public.schema_migrations` and run once.

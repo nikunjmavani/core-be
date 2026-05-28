@@ -798,15 +798,29 @@ export function incrementMigrationPrefix(prefix: string): string {
   return nextPrefix;
 }
 
-/** Suggests the next migration prefix strictly after the current max (or UTC now when none exist). */
-export function suggestNextMigrationPrefix(upMigrationFilenames: string[]): {
+/**
+ * Suggests the next migration prefix strictly after the current max.
+ *
+ * Prefers the real UTC wall-clock time (`YYYYMMDDHHMMSS`) so concurrent
+ * developers on different branches naturally land on distinct prefixes and
+ * avoid merge conflicts. Only falls back to `incrementMigrationPrefix` when
+ * "now" is not strictly greater than the current max (clock skew, or two
+ * migrations created in the same second).
+ *
+ * `now` is injectable for deterministic tests.
+ */
+export function suggestNextMigrationPrefix(
+  upMigrationFilenames: string[],
+  now: Date = new Date(),
+): {
   currentMax: string | null;
   nextPrefix: string;
 } {
   const currentMax = getMaxMigrationPrefix(upMigrationFilenames);
-  const nextPrefix =
-    currentMax === null ? formatTimestampPrefix(new Date()) : incrementMigrationPrefix(currentMax);
-  return { currentMax, nextPrefix };
+  const nowPrefix = formatTimestampPrefix(now);
+  if (currentMax === null) return { currentMax, nextPrefix: nowPrefix };
+  if (nowPrefix > currentMax) return { currentMax, nextPrefix: nowPrefix };
+  return { currentMax, nextPrefix: incrementMigrationPrefix(currentMax) };
 }
 
 function parsePrefixDateUtc(prefix: string): Date {
@@ -822,7 +836,8 @@ function daysBetweenPrefixDates(previousPrefix: string, prefix: string): number 
   return Math.abs(currentDate.getTime() - previousDate.getTime()) / (24 * 60 * 60 * 1000);
 }
 
-function formatTimestampPrefix(date: Date): string {
+/** Formats a Date as a 14-digit UTC `YYYYMMDDHHMMSS` migration ordering prefix. */
+export function formatTimestampPrefix(date: Date): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const day = String(date.getUTCDate()).padStart(2, '0');
