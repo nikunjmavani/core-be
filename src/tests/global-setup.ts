@@ -7,6 +7,12 @@ import '@/shared/config/load-env-files.js';
 import { execSync } from 'node:child_process';
 import postgres from 'postgres';
 
+/**
+ * Vitest global setup: applies migrations against the test database and
+ * ensures a small set of fallback tables exist for older fixtures. Skipped
+ * when contract / property / unit-only test slices set their respective
+ * `*_TESTS_ONLY` / `VITEST_SKIP_DATABASE` env vars.
+ */
 export default async function globalSetup(): Promise<void> {
   process.env.NODE_ENV ??= 'test';
 
