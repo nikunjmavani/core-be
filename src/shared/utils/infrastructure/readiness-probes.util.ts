@@ -9,10 +9,13 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { HEALTH_READINESS_PROBE_TIMEOUT_MS } from '@/shared/constants/ttl.constants.js';
 import { readinessProbeTimeout } from '@/shared/utils/infrastructure/readiness-probe-timeout.util.js';
 
+/** Re-export of {@link HEALTH_READINESS_PROBE_TIMEOUT_MS} kept for legacy import paths. */
 export const HEALTH_READINESS_PROBE_TIMEOUT_MILLISECONDS = HEALTH_READINESS_PROBE_TIMEOUT_MS;
 
+/** Components a readiness probe checks: Postgres, primary Redis, BullMQ Redis. */
 export type ReadinessComponentName = 'database' | 'redis' | 'bullmq';
 
+/** Aggregated readiness result returned by {@link runDependencyReadinessProbes}. */
 export type ReadinessProbeSummary = {
   readonly status: 'ok' | 'error' | 'draining';
   readonly database: 'connected' | 'unavailable';
@@ -80,6 +83,12 @@ function buildReadinessConnectivityLabel(
   return connectivitySucceeded ? 'connected' : 'unavailable';
 }
 
+/**
+ * Runs Postgres, Redis, and BullMQ readiness probes in parallel under a shared
+ * {@link HEALTH_READINESS_PROBE_TIMEOUT_MILLISECONDS} budget and returns
+ * `status: 'ok'` only when every probe succeeded. Used by the `/health/ready`
+ * route and worker process readiness signal.
+ */
 export async function runDependencyReadinessProbes(): Promise<ReadinessProbeSummary> {
   const [databaseOutcome, redisOutcome, bullMqOutcome] = await Promise.all([
     runReadinessProbe('database', async () => {
