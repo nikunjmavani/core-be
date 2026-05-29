@@ -24,6 +24,14 @@ vi.mock('@/infrastructure/cache/redis.client.js', () => ({
   redisConnection: { ping: vi.fn() },
 }));
 
+vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
+  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
+  Sentry: { addBreadcrumb: vi.fn() },
+}));
+
 import rateLimitMiddleware from '@/shared/middlewares/rate-limit.middleware.js';
 
 describe('rate-limit.middleware', () => {
