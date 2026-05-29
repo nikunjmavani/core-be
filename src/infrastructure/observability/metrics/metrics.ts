@@ -1,17 +1,7 @@
-import { refreshBullMQQueueGauges } from '@/infrastructure/observability/metrics/bullmq-metrics.js';
-import {
-  registerPostgresPoolMetrics,
-  refreshPostgresPoolMetrics,
-} from '@/infrastructure/observability/metrics/db-pool-metrics.js';
-import {
-  registerEventLoopMetrics,
-  refreshEventLoopMetrics,
-} from '@/infrastructure/observability/metrics/event-loop-metrics.js';
 import {
   getMetricsRegistry,
   isMetricsEnabled,
 } from '@/infrastructure/observability/metrics/metrics-registry.js';
-import { ensurePrometheusMetricsRegistered } from '@/infrastructure/observability/metrics/prometheus-metrics.js';
 
 export {
   getMetricsRegistry,
@@ -19,32 +9,59 @@ export {
   resetMetricsRegistryForTests,
 } from '@/infrastructure/observability/metrics/metrics-registry.js';
 
-function ensureMetricsStackInitialized(): void {
+type MetricsStackModules = {
+  bullmq: typeof import('@/infrastructure/observability/metrics/bullmq-metrics.js');
+  eventLoop: typeof import('@/infrastructure/observability/metrics/event-loop-metrics.js');
+  postgresPool: typeof import('@/infrastructure/observability/metrics/db-pool-metrics.js');
+  prometheus: typeof import('@/infrastructure/observability/metrics/prometheus-metrics.js');
+};
+
+let metricsStackModulesPromise: Promise<MetricsStackModules> | null = null;
+
+function loadMetricsStackModules(): Promise<MetricsStackModules> {
+  metricsStackModulesPromise ??= Promise.all([
+    import('@/infrastructure/observability/metrics/bullmq-metrics.js'),
+    import('@/infrastructure/observability/metrics/event-loop-metrics.js'),
+    import('@/infrastructure/observability/metrics/db-pool-metrics.js'),
+    import('@/infrastructure/observability/metrics/prometheus-metrics.js'),
+  ]).then(([bullmq, eventLoop, postgresPool, prometheus]) => ({
+    bullmq,
+    eventLoop,
+    postgresPool,
+    prometheus,
+  }));
+  return metricsStackModulesPromise;
+}
+
+async function ensureMetricsStackInitialized(): Promise<MetricsStackModules | null> {
   if (!isMetricsEnabled()) {
-    return;
+    return null;
   }
+  const modules = await loadMetricsStackModules();
   const registry = getMetricsRegistry();
-  ensurePrometheusMetricsRegistered(registry);
-  registerPostgresPoolMetrics();
-  registerEventLoopMetrics();
+  modules.prometheus.ensurePrometheusMetricsRegistered(registry);
+  modules.postgresPool.registerPostgresPoolMetrics();
+  modules.eventLoop.registerEventLoopMetrics();
+  return modules;
 }
 
 /** Refreshes dynamic gauges (BullMQ depths) immediately before a Prometheus scrape. */
 export async function refreshMetricsBeforeScrape(): Promise<void> {
-  if (!isMetricsEnabled()) {
+  const modules = await ensureMetricsStackInitialized();
+  if (!modules) {
     return;
   }
-  ensureMetricsStackInitialized();
-  refreshEventLoopMetrics();
-  await Promise.all([refreshPostgresPoolMetrics(), refreshBullMQQueueGauges()]);
+  modules.eventLoop.refreshEventLoopMetrics();
+  await Promise.all([
+    modules.postgresPool.refreshPostgresPoolMetrics(),
+    modules.bullmq.refreshBullMQQueueGauges(),
+  ]);
 }
 
-/**
- * Renders the Prometheus exposition payload served by `GET /metrics`. Lazily
- * registers custom metrics + DB pool / event-loop pollers on first call so the
- * scrape endpoint also bootstraps the polling stack.
- */
+/** Renders the current Prometheus exposition payload after the scrape refresh path has run. */
 export async function renderMetrics(): Promise<string> {
-  ensureMetricsStackInitialized();
+  if (!isMetricsEnabled()) {
+    return '';
+  }
   return getMetricsRegistry().metrics();
 }
