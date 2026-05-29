@@ -290,7 +290,7 @@ The canonical exports live under [src/shared/constants/](src/shared/constants/) 
 
 - **Value**: 120 000 ms (2 minutes)
 - **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
-- **Rationale**: Retention worker lock. Retention sweeps may scan large partitions; 2 minutes covers the longest legitimate sweep without triggering spurious re-runs.
+- **Rationale**: Retention worker lock. Retention sweeps may scan large tables; 2 minutes covers the longest legitimate sweep without triggering spurious re-runs.
 - **Consequences of change**: See `BULLMQ_DEFAULT_LOCK_DURATION_MS`.
 - **Last reviewed**: 2026-05-28
 

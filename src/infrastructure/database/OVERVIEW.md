@@ -23,7 +23,7 @@ Postgres connection management, the abstract `BaseRepository` (with cursor pagin
 - **Statement timeout**: enforced via `DATABASE_STATEMENT_TIMEOUT_MS` (set on connection options); long-running queries are killed.
 - **Pool sizing**: `DATABASE_POOL_SIZE` env. The `assert-connection-budget` helper warns at startup when the configured size exceeds the budget.
 - **Checkout observability**: [organization-rls-checkout-counter.ts](src/infrastructure/database/organization-rls-checkout-counter.ts) tracks in-flight org-scoped RLS checkouts (both the `withOrganizationContext` unit-of-work and the legacy request-pinned transaction). It feeds the pool-exhaustion alerter and the `database_rls_active_checkouts` gauge + `database_rls_checkout_hold_seconds` histogram (see [observability runbook](docs/deployment/runbooks/observability.md)) so checkout starvation and over-long holds are caught before requests queue.
-- **Partition maintenance**: `partition-maintenance.ts` + the partition-maintenance worker create future partitions and detach old ones for tables that are time-partitioned (e.g. audit logs).
+- **Append-heavy table retention**: `audit.logs` and `notify.notifications` are plain (non-partitioned) tables. Growth is bounded by row-level retention workers (`audit-retention`, `notification-retention`) that batch-`DELETE` rows older than their configured retention window, backed by the `created_at` indexes.
 - **Migrations** live under [migrations/](migrations/) at repo root; the runner is `pnpm db:migrate`. The lint check is `pnpm db:migrate:lint`.
 
 ## External dependencies

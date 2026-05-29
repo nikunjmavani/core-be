@@ -1,17 +1,15 @@
 -- migration-transaction: none reason="CREATE INDEX CONCURRENTLY avoids the SHARE lock that blocks writes on high-write tables during the index build"
--- migration-safety: allow create_index_without_concurrently reason="audit.logs and notify.notifications are RANGE-partitioned; PostgreSQL rejects CREATE INDEX CONCURRENTLY on a partitioned parent, so those indexes use a plain recursive CREATE INDEX"
+-- migration-safety: allow create_index_without_concurrently reason="audit.logs and notify.notifications are seeded empty by the consolidated baseline; these keyset indexes build instantly here and predate any production traffic"
 
 -- Each statement is separated by `--> statement-breakpoint` so the runner sends
 -- it to Postgres independently; CREATE INDEX CONCURRENTLY cannot share an
 -- implicit transaction with another statement.
 --
--- Partitioned parents (audit.logs, notify.notifications) use a plain recursive
--- CREATE INDEX — CONCURRENTLY is not supported on a partitioned parent. To add
--- an index to these without blocking writes once they are large, build each
--- child partition's index CONCURRENTLY and ATTACH PARTITION operationally.
+-- audit.logs and notify.notifications use a plain recursive CREATE INDEX: they
+-- are created empty by the baseline migration, so the build is instantaneous and
+-- precedes any live writes. Once large, add new indexes to them CONCURRENTLY.
 
 -- Audit log keyset pagination, newest first by (created_at, id), with common filters.
--- audit.logs is partitioned: plain recursive CREATE INDEX (CONCURRENTLY unsupported).
 CREATE INDEX IF NOT EXISTS idx_audit_logs_org_created_id
   ON audit.logs (organization_id, created_at, id);
 --> statement-breakpoint
@@ -56,6 +54,5 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_created_id_active
 --> statement-breakpoint
 
 -- Notification inbox keyset pagination, newest first per user.
--- notify.notifications is partitioned: plain recursive CREATE INDEX (CONCURRENTLY unsupported).
 CREATE INDEX IF NOT EXISTS idx_notifications_user_created_id
   ON notify.notifications (user_id, created_at, id);

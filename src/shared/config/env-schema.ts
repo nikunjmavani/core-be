@@ -302,6 +302,7 @@ const envSchemaBase = z.object({
   /** Interpret cron patterns in this IANA timezone; omit for server default. */
   SCHEDULER_TIMEZONE: z.string().min(1).optional(),
   AUDIT_RETENTION_CRON: z.string().min(1).optional(),
+  NOTIFICATION_RETENTION_CRON: z.string().min(1).optional(),
   AUTH_SESSION_CLEANUP_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RETENTION_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),

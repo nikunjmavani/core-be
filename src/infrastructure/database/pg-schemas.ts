@@ -14,7 +14,7 @@ export const tenancySchema = pgSchema('tenancy');
 export const billingSchema = pgSchema('billing');
 /** Drizzle handle for the Postgres `notify` schema — notifications, webhooks, delivery attempts. */
 export const notifySchema = pgSchema('notify');
-/** Drizzle handle for the Postgres `audit` schema — append-only audit log (partitioned by month). */
+/** Drizzle handle for the Postgres `audit` schema — append-only audit log with row-level retention. */
 export const auditSchema = pgSchema('audit');
 /** Drizzle handle for the Postgres `upload` schema — S3 upload metadata + tombstone retention. */
 export const uploadSchema = pgSchema('upload');
