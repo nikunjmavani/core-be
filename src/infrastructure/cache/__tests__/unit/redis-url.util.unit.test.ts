@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildRedisTlsOptions,
   deriveBullMqRedisUrlFromCacheUrl,
+  isPrivateOrInternalRedisHost,
   isRedisTlsUrl,
   parseRedisUrl,
   usesSeparateBullMqRedisEndpoint,
@@ -54,6 +56,28 @@ describe('redis-url.parse.util', () => {
     expect(
       usesSeparateBullMqRedisEndpoint('redis://localhost:6379/0', 'redis://localhost:6379/1'),
     ).toBe(true);
+  });
+
+  it('isPrivateOrInternalRedisHost recognizes trusted private/internal hosts', () => {
+    expect(isPrivateOrInternalRedisHost('localhost')).toBe(true);
+    expect(isPrivateOrInternalRedisHost('core-redis.railway.internal')).toBe(true);
+    expect(isPrivateOrInternalRedisHost('redis.svc.cluster.local')).toBe(true);
+    expect(isPrivateOrInternalRedisHost('10.1.2.3')).toBe(true);
+    expect(isPrivateOrInternalRedisHost('192.168.0.5')).toBe(true);
+    expect(isPrivateOrInternalRedisHost('172.16.4.4')).toBe(true);
+  });
+
+  it('isPrivateOrInternalRedisHost rejects public hosts', () => {
+    expect(isPrivateOrInternalRedisHost('cache.example.com')).toBe(false);
+    expect(isPrivateOrInternalRedisHost('8.8.8.8')).toBe(false);
+    expect(isPrivateOrInternalRedisHost('172.32.0.1')).toBe(false);
+  });
+
+  it('buildRedisTlsOptions enables strict TLS for rediss:// only', () => {
+    expect(buildRedisTlsOptions('rediss://cache.example.com:6379')).toEqual({
+      tls: { rejectUnauthorized: true },
+    });
+    expect(buildRedisTlsOptions('redis://localhost:6379')).toEqual({});
   });
 
   it('validateProductionRedisTopology allows a single shared Redis endpoint', () => {

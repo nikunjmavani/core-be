@@ -67,11 +67,13 @@ A startup **warning** is logged when BullMQ is configured to use a separate Redi
 
 `REDIS_URL` intentionally uses the unencrypted `redis://` scheme against Railway's private domain (`*.railway.internal`). Railway's private network is an IPv6 WireGuard mesh — traffic between `api`, `worker`, and `redis` services never leaves Railway's encrypted infrastructure, so application-layer TLS (`rediss://`) is not required for the current topology and is **not** enabled on the Redis container.
 
+A boot assertion ([`assert-redis-tls-safety.ts`](../../../src/infrastructure/cache/assert-redis-tls-safety.ts), run from `server.ts` and `worker.ts`) **fails closed in hosted deployments** when `REDIS_URL` (or a `REDIS_BULLMQ_URL` override) is plaintext `redis://` to a **public** host. Plaintext is allowed only on trusted private/internal networks — `*.railway.internal`, `*.cluster.local`, `*.local`, RFC 1918, and loopback — which keeps the Railway private-mesh topology above valid. Outside hosted deployments (local/CI) the check only warns. When a URL is `rediss://`, ioredis is given an explicit `tls: { rejectUnauthorized: true }` ([`buildRedisTlsOptions`](../../../src/infrastructure/cache/redis-url.parse.util.ts)) so the certificate is verified, not merely encrypted.
+
 If Redis is ever exposed on a public TCP proxy (or moved off the Railway private mesh), enable TLS by:
 
 1. Configuring the Redis service with `--tls-port`, `--tls-cert-file`, and `--tls-key-file` (and dropping `--port`).
 2. Mounting a CA cert into API/worker containers via `REDIS_TLS_CA` and switching `tls: {}` in [`getBullMQConnectionOptions`](../../../src/infrastructure/queue/connection.ts) and [`redis.client.ts`](../../../src/infrastructure/cache/redis.client.ts) to `tls: { ca: [REDIS_TLS_CA] }`.
-3. Updating `REDIS_URL` (and `REDIS_BULLMQ_URL` if set) to `rediss://`.
+3. Updating `REDIS_URL` (and `REDIS_BULLMQ_URL` if set) to `rediss://` — which also satisfies the boot assertion for public endpoints.
 
 #### Blast radius
 

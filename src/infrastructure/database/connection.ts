@@ -2,26 +2,13 @@ import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 import { env } from '@/shared/config/env.config.js';
+import {
+  isNeonPoolerConnection,
+  isStrictDatabaseTlsVerification,
+  parseSslMode,
+} from '@/infrastructure/database/connection-url.util.js';
 
-function parseSslMode(databaseUrl: string): string | null {
-  const match = databaseUrl.match(/[?&]sslmode=([^&]+)/i);
-  if (!match?.[1]) return null;
-  const raw = match[1];
-  try {
-    return decodeURIComponent(raw).toLowerCase();
-  } catch {
-    return raw.toLowerCase();
-  }
-}
-
-/**
- * Heuristic for Neon's PgBouncer-fronted connection string — when true we disable
- * postgres.js prepared statements because PgBouncer in transaction-pooling mode
- * does not preserve server-side prepared statement state across checkouts.
- */
-export function isNeonPoolerConnection(databaseUrl: string): boolean {
-  return /-pooler\./i.test(databaseUrl) || /[?&]pgbouncer=true/i.test(databaseUrl);
-}
+export { isNeonPoolerConnection };
 
 /**
  * Builds the postgres.js client options from `DATABASE_URL` + env: SSL mode parsed from
@@ -31,10 +18,10 @@ export function isNeonPoolerConnection(databaseUrl: string): boolean {
  */
 export function buildPostgresOptions(databaseUrl: string) {
   const sslMode = parseSslMode(databaseUrl);
-  const strictVerification =
-    sslMode === 'verify-ca' ||
-    sslMode === 'verify-full' ||
-    env.DATABASE_SSL_REJECT_UNAUTHORIZED === true;
+  const strictVerification = isStrictDatabaseTlsVerification({
+    databaseUrl,
+    rejectUnauthorizedOverride: env.DATABASE_SSL_REJECT_UNAUTHORIZED,
+  });
 
   const sslEnabled = sslMode === 'disable' ? false : sslMode !== null || env.DATABASE_SSL_ENABLED;
 

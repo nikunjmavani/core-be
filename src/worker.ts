@@ -15,6 +15,8 @@ import { warnWhenBullMqSharesCacheRedisHost } from '@/infrastructure/cache/redis
 import { closeDatabase } from '@/infrastructure/database/connection.js';
 import { assertPostgresConnectionBudget } from '@/infrastructure/database/assert-connection-budget.js';
 import { assertDatabaseRoleRlsSafety } from '@/infrastructure/database/assert-database-rls-safety.js';
+import { assertDatabaseTlsVerification } from '@/infrastructure/database/assert-database-tls-safety.js';
+import { assertRedisTlsVerification } from '@/infrastructure/cache/assert-redis-tls-safety.js';
 import { computeWorkerPostgresPoolDemand } from '@/infrastructure/queue/worker-runtime/worker-connection-budget.js';
 import { setWorkerPostgresPoolDemandContext } from '@/infrastructure/queue/worker-runtime/worker-pool-demand-context.js';
 import { registerPostgresPoolMetrics } from '@/infrastructure/observability/metrics/db-pool-metrics.js';
@@ -62,6 +64,10 @@ process.on(
 
 async function main() {
   process.env.CORE_BE_RUNTIME = 'worker';
+
+  /** Fail fast on insecure DB/Redis transport before opening connections. No-op outside hosted. */
+  assertDatabaseTlsVerification();
+  assertRedisTlsVerification();
 
   /** Avoids a startup race where the first scheduled job's direct command on the shared
    * `redisConnection` (lazyConnect + enableOfflineQueue:false) fails with

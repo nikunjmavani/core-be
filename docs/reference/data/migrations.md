@@ -59,6 +59,10 @@ pnpm db:migrate:dry-run  # print SQL without applying (when debugging)
 
 CI and `pnpm verify:base` run migrate against ephemeral Postgres before API smoke tests.
 
+### Connection URL — direct (non-pooler) only
+
+The runner serializes the whole migration run behind a session-level `pg_advisory_lock` so two concurrent deploys cannot double-apply a file. That lock is only meaningful on a connection pinned to a single Postgres backend, so `pnpm db:migrate` **fails fast** when `DATABASE_MIGRATION_URL` (or the `DATABASE_URL` fallback) is a transaction-mode pooler — a `-pooler` host or `?pgbouncer=true`. Point `DATABASE_MIGRATION_URL` at the **direct** database host (Neon's non-pooler endpoint); only `DATABASE_URL` used by the API/worker runtime should use the pooled endpoint.
+
 ---
 
 ## Non-transactional migrations (`CREATE INDEX CONCURRENTLY`)

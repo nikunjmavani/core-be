@@ -15,6 +15,48 @@ export function isRedisTlsUrl(redisUrl: string): boolean {
   return redisUrl.toLowerCase().startsWith('rediss://');
 }
 
+/** RFC 1918 private IPv4 ranges (10/8, 172.16/12, 192.168/16) plus loopback. */
+const PRIVATE_IPV4_PATTERN = /^(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/;
+
+/**
+ * True when the Redis host sits on a trusted private/internal network where plaintext
+ * `redis://` is acceptable (Railway private networking, Kubernetes cluster DNS, loopback,
+ * RFC 1918). Public endpoints reached over untrusted networks must use `rediss://`.
+ *
+ * @remarks
+ * - **Algorithm:** matches loopback names, `*.railway.internal` / `*.internal` /
+ *   `*.local` / `*.cluster.local` suffixes, and RFC 1918 / IPv6 loopback literals.
+ * - **Side effects:** none — pure string parsing.
+ */
+export function isPrivateOrInternalRedisHost(host: string): boolean {
+  const normalizedHost = host.trim().toLowerCase();
+  if (normalizedHost.length === 0) return false;
+  if (normalizedHost === 'localhost' || normalizedHost === '::1') return true;
+  if (
+    normalizedHost.endsWith('.railway.internal') ||
+    normalizedHost.endsWith('.internal') ||
+    normalizedHost.endsWith('.local') ||
+    normalizedHost.endsWith('.cluster.local')
+  ) {
+    return true;
+  }
+  return PRIVATE_IPV4_PATTERN.test(normalizedHost);
+}
+
+/** ioredis TLS options applied when (and only when) the Redis URL uses `rediss://`. */
+export type RedisTlsOptions = { tls: { rejectUnauthorized: true } } | Record<string, never>;
+
+/**
+ * Builds the ioredis `tls` option for a Redis URL. When the URL is `rediss://`, returns
+ * `{ tls: { rejectUnauthorized: true } }` so the server certificate chain is explicitly
+ * verified (ioredis otherwise relies on Node's default, which this makes intentional and
+ * tamper-evident). For plaintext `redis://` URLs it returns an empty object so no TLS
+ * handshake is attempted.
+ */
+export function buildRedisTlsOptions(redisUrl: string): RedisTlsOptions {
+  return isRedisTlsUrl(redisUrl) ? { tls: { rejectUnauthorized: true } } : {};
+}
+
 /**
  * Parses a `redis://` or `rediss://` URL into host/port/password/database fields.
  * Uses `new URL()` after a scheme rewrite so percent-encoded passwords decode correctly,

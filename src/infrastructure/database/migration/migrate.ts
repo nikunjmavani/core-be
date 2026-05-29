@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import { resolve } from 'node:path';
 import { readdir, readFile } from 'node:fs/promises';
 import { parseMigrationExecutionMode } from '@/infrastructure/database/migration/migration-execution-mode.js';
+import { isNeonPoolerConnection } from '@/infrastructure/database/connection-url.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
@@ -13,6 +14,23 @@ const migrationUrl = process.env.DATABASE_MIGRATION_URL ?? process.env.DATABASE_
 
 if (!migrationUrl) {
   throw new Error('DATABASE_URL or DATABASE_MIGRATION_URL must be set for migrations');
+}
+
+/**
+ * Migrations MUST run against a direct (non-pooler) endpoint. Through a transaction-mode
+ * PgBouncer/Neon pooler the session-level `pg_advisory_lock` acquired below is not pinned
+ * to a single backend across statements, so the serialization that prevents two concurrent
+ * deploys from double-applying a migration silently becomes a no-op. Fail fast instead of
+ * running with broken mutual exclusion. Set `DATABASE_MIGRATION_URL` to the direct host
+ * (no `-pooler` segment, no `pgbouncer=true`).
+ */
+if (isNeonPoolerConnection(migrationUrl)) {
+  throw new Error(
+    'Migrations must use a direct (non-pooler) DATABASE_MIGRATION_URL: the migration advisory ' +
+      'lock relies on a session pinned to one Postgres backend, which a transaction-mode pooler ' +
+      '(-pooler host or ?pgbouncer=true) does not provide. Point DATABASE_MIGRATION_URL at the ' +
+      'direct database host. See .env.example and docs/reference/data/migrations.md.',
+  );
 }
 
 const sql = postgres(migrationUrl, { max: 1 });

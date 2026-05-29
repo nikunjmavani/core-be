@@ -10,9 +10,12 @@ import { connectBullMqRedis } from '@/infrastructure/cache/bullmq-redis.client.j
 import { warnWhenBullMqSharesCacheRedisHost } from '@/infrastructure/cache/redis-topology-warn.util.js';
 import { assertPostgresConnectionBudget } from '@/infrastructure/database/assert-connection-budget.js';
 import { assertDatabaseRoleRlsSafety } from '@/infrastructure/database/assert-database-rls-safety.js';
+import { assertDatabaseTlsVerification } from '@/infrastructure/database/assert-database-tls-safety.js';
+import { assertRedisTlsVerification } from '@/infrastructure/cache/assert-redis-tls-safety.js';
 import { registerPostgresPoolMetrics } from '@/infrastructure/observability/metrics/db-pool-metrics.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { assertHostedTrustProxyConfigured } from '@/shared/utils/http/trust-proxy.util.js';
 import { buildApp } from '@/app.js';
 
 // Initialize Sentry before anything else
@@ -40,6 +43,14 @@ process.on(
 );
 
 async function main() {
+  /**
+   * Fail fast on insecure transport / proxy configuration before opening any connection
+   * or binding the listener. All three are no-ops outside hosted deployments.
+   */
+  assertDatabaseTlsVerification();
+  assertRedisTlsVerification();
+  assertHostedTrustProxyConfigured();
+
   /** Avoids a startup race where the first request that hits idempotency / rate-limit
    * issues a direct command on the shared `redisConnection` (lazyConnect +
    * enableOfflineQueue:false) and fails with "Stream isn't writeable" before
