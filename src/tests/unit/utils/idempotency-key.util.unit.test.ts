@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   buildIdempotencyCacheKey,
+  buildIdempotencyClaimCounterShardKey,
+  hasAuthenticatedIdempotencyActor,
+  IDEMPOTENCY_CLAIM_COUNTER_SHARD_COUNT,
   parseIdempotencyKeyHeader,
+  selectIdempotencyClaimCounterShardKey,
   IDEMPOTENCY_KEY_MAX_LENGTH,
 } from '@/shared/utils/idempotency/idempotency-key.util.js';
 
@@ -72,6 +76,56 @@ describe('buildIdempotencyCacheKey', () => {
       organizationId: 'org-1',
     });
     expect(key).toBe('idempotency:org-1:user-1:my-key');
+  });
+});
+
+describe('hasAuthenticatedIdempotencyActor', () => {
+  it('is true when a user id is present', () => {
+    expect(hasAuthenticatedIdempotencyActor({ userId: 'user-1' })).toBe(true);
+  });
+
+  it('is true when an api key public id is present', () => {
+    expect(hasAuthenticatedIdempotencyActor({ apiKeyPublicId: 'api-key-1' })).toBe(true);
+  });
+
+  it('is false for an empty scope', () => {
+    expect(hasAuthenticatedIdempotencyActor({})).toBe(false);
+  });
+
+  it('is false when only an (unverified) organization id is present', () => {
+    expect(hasAuthenticatedIdempotencyActor({ organizationId: 'org-1' })).toBe(false);
+  });
+
+  it('is false when actor identifiers are empty strings', () => {
+    expect(hasAuthenticatedIdempotencyActor({ userId: '', apiKeyPublicId: '' })).toBe(false);
+  });
+});
+
+describe('idempotency claim counter sharding', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('builds a shard key under the claim-counter namespace', () => {
+    expect(buildIdempotencyClaimCounterShardKey(3)).toBe('idempotency-claim-counter:shard:3');
+  });
+
+  it('selects a shard key within the configured shard range', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    expect(selectIdempotencyClaimCounterShardKey()).toBe(
+      `idempotency-claim-counter:shard:${IDEMPOTENCY_CLAIM_COUNTER_SHARD_COUNT - 1}`,
+    );
+
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    expect(selectIdempotencyClaimCounterShardKey()).toBe('idempotency-claim-counter:shard:0');
+  });
+
+  it('never selects a shard outside the namespace prefix', () => {
+    for (let attempt = 0; attempt < 64; attempt += 1) {
+      expect(selectIdempotencyClaimCounterShardKey()).toMatch(
+        /^idempotency-claim-counter:shard:\d+$/,
+      );
+    }
   });
 });
 

@@ -5,8 +5,9 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
   buildIdempotencyCacheKey,
-  IDEMPOTENCY_CLAIM_COUNTER_LOGICAL_KEY,
+  hasAuthenticatedIdempotencyActor,
   parseIdempotencyKeyHeader,
+  selectIdempotencyClaimCounterShardKey,
 } from '@/shared/utils/idempotency/idempotency-key.util.js';
 import { translateRequestMessage } from '@/shared/utils/i18n/translate-request.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -164,6 +165,17 @@ async function idempotencyClaimPreHandler(
   if (!idempotencyKey) return;
 
   const scope = resolveIdempotencyScope(request);
+  if (!hasAuthenticatedIdempotencyActor(scope)) {
+    /**
+     * Never store or replay idempotent responses for unauthenticated callers. Two anonymous
+     * callers presenting the same `Idempotency-Key` would otherwise collide on a single
+     * `idempotency:none:anonymous:<key>` bucket, letting the second caller receive the first
+     * caller's cached (possibly token-bearing) response body. The request still proceeds
+     * normally — it simply gets no idempotency dedup.
+     */
+    return;
+  }
+
   const cacheKey = buildIdempotencyCacheKey(idempotencyKey, scope);
   requestWithIdempotency._idempotencyScope = scope;
 
@@ -248,7 +260,12 @@ async function idempotencyClaimPreHandler(
   requestWithIdempotency._idempotencyClaimed = true;
 
   try {
-    await redisConnection.incr(IDEMPOTENCY_CLAIM_COUNTER_LOGICAL_KEY);
+    /**
+     * Spread the claim counter over a fixed shard fan-out instead of one global key so high
+     * write throughput (or Redis Cluster) does not turn a single slot into a hot spot. The
+     * total is the sum across shards; the cardinality monitor's SCAN is independent of this.
+     */
+    await redisConnection.incr(selectIdempotencyClaimCounterShardKey());
   } catch (counterError) {
     logger.warn({ error: counterError }, 'idempotency.claim.counter.incr.failed');
   }
