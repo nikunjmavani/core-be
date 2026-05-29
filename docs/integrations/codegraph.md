@@ -18,7 +18,8 @@ The index is **machine-local and regenerable** — it is never committed. Only t
 | `.codegraph/.gitignore` | **committed** | Keeps the index DB, cache, logs, and daemon runtime files out of git. |
 | `.codegraph/codegraph.db` | gitignored | The ~26 MB SQLite index. Built per machine. |
 | `.codegraph/daemon.sock`, `daemon.pid`, `cache/`, `*.log` | gitignored | Local MCP daemon runtime files. |
-| `.cursor/mcp.json` | gitignored (this repo) | Cursor MCP config; regenerated locally by `codegraph install` (may hold other secrets, so it is not committed). |
+| `.cursor/mcp.example.json` | **committed** | Secret-free Cursor MCP template (all servers, `${CONTEXT7_API_KEY}` placeholder, no machine path). |
+| `.cursor/mcp.json` | gitignored (this repo) | Real Cursor MCP config; holds live API keys + an absolute path, so it is not committed. Written by `codegraph install` / copied from the example. |
 | `.claude/settings.json` | gitignored | Claude Code auto-allow permissions. |
 
 Because the DB and per-agent configs are gitignored, they **survive branch switches** (they are not part of any commit) and are **rebuilt on each teammate's machine** the first time they run `setup:local`.
@@ -52,6 +53,13 @@ flowchart TD
 ```bash
 npm i -g @colbymchenry/codegraph
 codegraph install --target=cursor,claude --location=local --yes   # configure agents + build index
+```
+
+Or copy the committed Cursor template and fill in your own keys (Cursor's real config is gitignored):
+
+```bash
+cp .cursor/mcp.example.json .cursor/mcp.json
+# replace ${CONTEXT7_API_KEY} with your key; the codegraph entry needs no edits
 ```
 
 Non-interactive variants:
