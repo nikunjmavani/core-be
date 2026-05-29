@@ -12,9 +12,19 @@ import {
   updateStripeSubscription,
 } from '@/infrastructure/payment/stripe.client.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { ServiceUnavailableError } from '@/shared/errors/index.js';
 
 /**
  * Stripe implementation of {@link PaymentProvider}.
+ *
+ * @remarks
+ * Mutation paths (`createSubscription`, `cancelSubscriptionAtPeriodEnd`,
+ * `resumeSubscription`) are **fail-closed**: a Stripe API failure is logged and
+ * re-surfaced as a {@link ServiceUnavailableError} so the caller never persists
+ * local billing state for a provider mutation that did not succeed. Compensation
+ * helpers (`compensateFailedCreate`, `compensatePlanChange`) intentionally swallow
+ * their own errors because they run on an already-failing path where the
+ * Stripe webhook remains the reconciliation source of truth.
  */
 export class StripePaymentProvider implements PaymentProvider {
   constructor(private readonly organizationService: OrganizationService) {}
@@ -81,7 +91,7 @@ export class StripePaymentProvider implements PaymentProvider {
       };
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.create.failed');
-      return {};
+      throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
     }
   }
 
@@ -91,6 +101,7 @@ export class StripePaymentProvider implements PaymentProvider {
       await cancelStripeSubscription(providerSubscriptionId, true);
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.cancel.failed');
+      throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
     }
   }
 
@@ -100,6 +111,7 @@ export class StripePaymentProvider implements PaymentProvider {
       await resumeStripeSubscription(providerSubscriptionId);
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.resume.failed');
+      throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
     }
   }
 

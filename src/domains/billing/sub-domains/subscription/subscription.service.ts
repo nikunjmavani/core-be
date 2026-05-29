@@ -31,11 +31,15 @@ import { withOrganizationDatabaseContext } from '@/infrastructure/database/conte
  *   {@link ConflictError} (`errors:subscriptionAlreadyExists`) when the
  *   organization already has a non-terminal subscription (checked before the
  *   Stripe call) or when a concurrent create loses the partial-unique-index
- *   race (Postgres `unique_violation`, `23505`). If persistence fails
- *   after the Stripe call succeeded, the provider is rolled back via
- *   `compensateFailedCreate`. On `changePlan`, a successful provider price
- *   update followed by a local write failure triggers
- *   `compensatePlanChange` back to the previous price.
+ *   race (Postgres `unique_violation`, `23505`). The payment provider is
+ *   **fail-closed**: a Stripe failure on `create` / `cancel` / `resume`
+ *   surfaces as `ServiceUnavailableError` from the provider, which runs
+ *   *before* any local write, so no local subscription row is created or
+ *   mutated when the provider call fails — the Stripe webhook stays the
+ *   reconciliation source of truth. If persistence fails *after* the Stripe
+ *   create succeeded, the provider is rolled back via `compensateFailedCreate`.
+ *   On `changePlan`, a successful provider price update followed by a local
+ *   write failure triggers `compensatePlanChange` back to the previous price.
  * - **Side effects:** External Stripe API calls (create / update / cancel /
  *   resume / compensations) and writes to `billing.subscriptions`.
  * - **Notes:** Stripe network calls MUST stay outside the database context to

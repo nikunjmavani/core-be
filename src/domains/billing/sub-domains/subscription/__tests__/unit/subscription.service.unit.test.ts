@@ -6,7 +6,7 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
-import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, NotFoundError, ServiceUnavailableError } from '@/shared/errors/index.js';
 import { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
@@ -293,7 +293,7 @@ describe('SubscriptionService', () => {
     });
   });
 
-  it('create falls back to local subscription when Stripe create fails', async () => {
+  it('create fails closed when Stripe create fails — no local subscription committed', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
     vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
       ...plan,
@@ -301,12 +301,14 @@ describe('SubscriptionService', () => {
     } as never);
     stripeMocks.createStripeSubscription.mockRejectedValueOnce(new Error('stripe down'));
 
-    await service.create(
-      'org_public',
-      { plan_id: 'plan_public', billing_cycle: 'monthly' },
-      'user_public',
-    );
-    expect(repository.create).toHaveBeenCalled();
+    await expect(
+      service.create(
+        'org_public',
+        { plan_id: 'plan_public', billing_cycle: 'monthly' },
+        'user_public',
+      ),
+    ).rejects.toBeInstanceOf(ServiceUnavailableError);
+    expect(repository.create).not.toHaveBeenCalled();
   });
 
   it('syncFromStripeProviderSubscription and markCanceled delegate to repository', async () => {
@@ -317,7 +319,7 @@ describe('SubscriptionService', () => {
     expect(repository.markCanceledByProviderSubscriptionId).toHaveBeenCalled();
   });
 
-  it('cancel and resume continue when Stripe calls fail', async () => {
+  it('cancel and resume fail closed when Stripe calls fail — local state unchanged', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...subscriptionRow,
@@ -326,9 +328,13 @@ describe('SubscriptionService', () => {
     stripeMocks.cancelStripeSubscription.mockRejectedValueOnce(new Error('stripe cancel failed'));
     stripeMocks.resumeStripeSubscription.mockRejectedValueOnce(new Error('stripe resume failed'));
 
-    await service.cancel('org_public', 'sub_public');
-    await service.resume('org_public', 'sub_public');
-    expect(repository.update).toHaveBeenCalled();
+    await expect(service.cancel('org_public', 'sub_public')).rejects.toBeInstanceOf(
+      ServiceUnavailableError,
+    );
+    await expect(service.resume('org_public', 'sub_public')).rejects.toBeInstanceOf(
+      ServiceUnavailableError,
+    );
+    expect(repository.update).not.toHaveBeenCalled();
   });
 
   it('update throws when repository returns no row', async () => {
