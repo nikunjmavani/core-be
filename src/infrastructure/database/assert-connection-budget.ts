@@ -1,4 +1,5 @@
 import { sql } from '@/infrastructure/database/connection.js';
+import { isHostedDeployment } from '@/infrastructure/database/hosted-deployment.util.js';
 import { computeWorkerPostgresPoolDemand } from '@/infrastructure/queue/worker-runtime/worker-connection-budget.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -54,27 +55,6 @@ export async function resolvePostgresMaxConnections(): Promise<number> {
     throw new Error(`database.connection_budget.invalid_max_connections:${setting}`);
   }
   return parsed;
-}
-
-/**
- * Detect hosted deployments where the connection budget must always be validated
- * against explicit replica counts. Local development and CI runners do not set
- * these markers, so they retain the 1-API + 1-worker docker-compose fallback.
- */
-function isHostedDeployment(): boolean {
-  if (env.NODE_ENV === 'production') {
-    return true;
-  }
-  if (env.RAILWAY_GIT_COMMIT_SHA !== undefined) {
-    return true;
-  }
-  if (
-    typeof process.env.KUBERNETES_SERVICE_HOST === 'string' &&
-    process.env.KUBERNETES_SERVICE_HOST.length > 0
-  ) {
-    return true;
-  }
-  return false;
 }
 
 function resolveDeploymentCounts(): ResolvedDeploymentCounts | undefined {

@@ -15,6 +15,7 @@ Postgres connection management, the abstract `BaseRepository` (with cursor pagin
 - **Context family pattern**: instead of per-call `SET LOCAL`, contexts open a Drizzle transaction, set the GUC once, and pass a pinned `databaseHandle` to a callback. Reuse semantics: a worker context inside an HTTP request (or vice versa) for the same organization reuses the active handle (no nested top-level transaction, no lost `SET LOCAL`).
 - **Workers cannot use HTTP request DB context**: enforced by [contexts/worker-database-guard.util.ts](src/infrastructure/database/contexts/worker-database-guard.util.ts) and by global tests that scan `*.worker.ts` / `*.processor.ts` imports.
 - **Connection budget**: [assert-connection-budget.ts](src/infrastructure/database/assert-connection-budget.ts) caps the per-process pool size against the managed Postgres tier limits.
+- **RLS role safety**: [assert-database-rls-safety.ts](src/infrastructure/database/assert-database-rls-safety.ts) refuses to boot in hosted deployments when `DATABASE_URL` resolves to a superuser or a `BYPASSRLS` role. PostgreSQL skips RLS (even `FORCE`d) for those roles, so a misconfigured connection string would silently collapse tenant isolation. Local docker-compose still tolerates the default `postgres` superuser (warn-only).
 - **Force-RLS table list** at [force-rls-tables.constants.ts](src/infrastructure/database/force-rls-tables.constants.ts): the migration linter rejects new tables that should be RLS-eligible but aren't in the list.
 
 ## Operational concerns

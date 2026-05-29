@@ -8,6 +8,7 @@ import { connectRedis } from '@/infrastructure/cache/redis.client.js';
 import { connectBullMqRedis } from '@/infrastructure/cache/bullmq-redis.client.js';
 import { warnWhenBullMqSharesCacheRedisHost } from '@/infrastructure/cache/redis-topology-warn.util.js';
 import { assertPostgresConnectionBudget } from '@/infrastructure/database/assert-connection-budget.js';
+import { assertDatabaseRoleRlsSafety } from '@/infrastructure/database/assert-database-rls-safety.js';
 import { registerPostgresPoolMetrics } from '@/infrastructure/observability/metrics/db-pool-metrics.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -37,6 +38,7 @@ async function main() {
   await connectBullMqRedis();
   warnWhenBullMqSharesCacheRedisHost();
   await assertPostgresConnectionBudget();
+  await assertDatabaseRoleRlsSafety();
   registerPostgresPoolMetrics();
 
   const app = await buildApp();
