@@ -1,6 +1,6 @@
 # Setup Guide (core-be)
 
-Single reference for local setup, Git workflow, and testing. **Want one document to set everything up via CLI?** → [railway-github-cli-setup.md](../deployment/setup/railway-github-cli-setup.md) (follow top to bottom). **CI/CD, deployment, and tokens:** [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md). **GitHub branch protection / required CI checks:** [branch-protection.md](../deployment/ci-cd/branch-protection.md). See also [README.md](../../README.md), [runbook-dev-to-production.md](../deployment/runbooks/runbook-dev-to-production.md), [load-testing.md](../reference/testing/load-testing.md), and [credentials-and-env.md](../integrations/credentials-and-env.md).
+Single reference for local setup, Git workflow, and testing. **Want one document to set everything up via CLI?** → [railway-github-cli-setup.md](../deployment/setup/railway-github-cli-setup.md) (follow top to bottom). **CI/CD, deployment, and tokens:** [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md). **GitHub branch protection / required CI checks:** [branch-protection.md](../deployment/ci-cd/branch-protection.md). See also [README.md](../../README.md), [runbook-dev-to-production.md](../deployment/runbooks/runbook-dev-to-production.md), [load-testing.md](../reference/testing/load-testing.md), [credentials-and-env.md](../integrations/credentials-and-env.md), and [understand-anything.md](../integrations/understand-anything.md) (codebase knowledge graph and learning curve).
 
 ---
 
