@@ -30,6 +30,7 @@ Load tests for the core-be API. Keep this doc in sync with [docs/reference/testi
 | Daily ops       | `scenarios/daily-ops.js`       | `TEST_TOKEN`, `TEST_ORG_ID`                              | `pnpm load:daily-ops`                             |
 | Billing         | `scenarios/billing.js`         | `TEST_TOKEN`, `TEST_ORG_ID` (optional for authed routes) | `pnpm load:billing`                               |
 | Webhooks        | `scenarios/webhooks.js`        | `TEST_TOKEN`, `TEST_ORG_ID`                              | `pnpm load:webhooks`                              |
+| RLS concurrency | `scenarios/rls-concurrency-beyond-pool.js` | `TEST_TOKEN`, `TEST_ORG_ID` (optional `DATABASE_POOL_MAX`, `BEYOND_POOL_FACTOR`, `BEYOND_POOL_VUS`) | `pnpm load:rls-concurrency`          |
 | Admin           | `scenarios/admin.js`           | `ADMIN_TOKEN`                                            | `pnpm load:admin` (after `pnpm tool:admin-token`) |
 
 **Obtaining credentials:**
