@@ -55,6 +55,36 @@ CI and `pnpm verify:base` run migrate against ephemeral Postgres before API smok
 
 ---
 
+## Non-transactional migrations (`CREATE INDEX CONCURRENTLY`)
+
+By default the runner wraps **each migration file in a single transaction** — DML and most DDL apply atomically and roll back automatically on a mid-file error. A few statements cannot run inside a transaction, most importantly `CREATE INDEX CONCURRENTLY`, which is the zero-downtime way to add an index: plain `CREATE INDEX` takes a `SHARE` lock that **blocks all writes** for the build duration (minutes on a large high-write table such as `audit.logs`).
+
+Opt a migration into the non-transactional lane with a header in the first 20 lines:
+
+```sql
+-- migration-transaction: none reason="CREATE INDEX CONCURRENTLY cannot run inside a transaction"
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_org_created_id
+  ON audit.logs (organization_id, created_at, id);
+```
+
+Rules and guardrails (enforced by `pnpm db:migrate:lint`):
+
+- **`CREATE INDEX CONCURRENTLY` requires** the `migration-transaction: none` header — otherwise it would fail at apply time inside the wrapping transaction (`concurrent_index_requires_non_transactional`, **non-overridable**).
+- **Every statement must be idempotent** (`IF NOT EXISTS`). There is no enclosing transaction, so a statement that fails mid-file is not rolled back; re-running `pnpm db:migrate` re-executes the file from the top.
+- **One concern per file.** Keep non-transactional migrations to index DDL only; put DML and constraint changes in separate (transactional) migrations.
+- After a non-transactional migration, the runner **checks for `INVALID` / unready indexes** (the signature of a concurrent build that aborted) and refuses to record the migration as applied. If this fires, drop the broken index (`DROP INDEX CONCURRENTLY IF EXISTS <schema>.<name>`) and re-run `pnpm db:migrate`.
+
+### Expand / contract (keep deploys backward-compatible)
+
+Production runs `pnpm db:migrate` **before** the new application version is rolled out, while the old version still serves traffic. Schema changes must therefore stay compatible with the **currently running** code:
+
+1. **Expand** — add the new index/column/table (additive, backward-compatible). Index additions go in a `migration-transaction: none` migration so writes are never blocked.
+2. **Migrate code** — deploy the version that reads/writes the new shape.
+3. **Contract** — in a *later* migration (after the old version is fully gone), drop the now-unused column/constraint.
+
+---
+
 ## Rollback testing approach
 
 Production deploys are **forward-only**: we do not run automatic down migrations on Railway. Rollback validation is done **before merge** using one of these patterns:

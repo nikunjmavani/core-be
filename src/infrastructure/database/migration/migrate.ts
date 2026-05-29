@@ -2,6 +2,7 @@ import '@/shared/config/load-env-files.js';
 import postgres from 'postgres';
 import { resolve } from 'node:path';
 import { readdir, readFile } from 'node:fs/promises';
+import { parseMigrationExecutionMode } from '@/infrastructure/database/migration/migration-execution-mode.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
@@ -97,6 +98,73 @@ async function baselineExistingInitialMigrationIfNeeded({
   );
 }
 
+/** Minimal shape shared by the top-level `sql` tag and a `sql.begin` transaction. */
+interface MigrationStatementExecutor {
+  unsafe: (query: string) => PromiseLike<unknown>;
+}
+
+interface RunMigrationStatementsInput {
+  filename: string;
+  statements: string[];
+  executor: MigrationStatementExecutor;
+}
+
+/**
+ * Executes the ordered statements of one migration against the provided
+ * executor (a transaction in the default lane, the connection itself in the
+ * non-transactional lane), logging the offending statement on failure.
+ */
+async function runMigrationStatements({
+  filename,
+  statements,
+  executor,
+}: RunMigrationStatementsInput): Promise<void> {
+  let statementIndex = 0;
+  for (const statement of statements) {
+    statementIndex += 1;
+    try {
+      await executor.unsafe(statement);
+    } catch (statementError) {
+      logger.error(
+        {
+          filename,
+          statementIndex,
+          statementHead: statement.slice(0, 200),
+          error: statementError,
+        },
+        'Migration statement failed',
+      );
+      throw statementError;
+    }
+  }
+}
+
+/**
+ * Fails the migration when any INVALID/UNREADY index exists, which is the
+ * signature of a `CREATE INDEX CONCURRENTLY` that aborted mid-build. Only used
+ * by the non-transactional lane (the sole place concurrent indexes are built).
+ */
+async function assertNoInvalidIndexes({ filename }: { filename: string }): Promise<void> {
+  const invalidIndexes = await sql<{ schema_name: string; index_name: string }[]>`
+    SELECT n.nspname AS schema_name, c.relname AS index_name
+    FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE (NOT i.indisvalid OR NOT i.indisready)
+      AND n.nspname NOT IN ('pg_catalog', 'pg_toast', 'information_schema')
+    ORDER BY n.nspname, c.relname
+  `;
+
+  if (invalidIndexes.length === 0) return;
+
+  const indexNames = invalidIndexes.map((row) => `${row.schema_name}.${row.index_name}`).join(', ');
+  throw new Error(
+    `Non-transactional migration ${filename} left INVALID/UNREADY index(es): ${indexNames}. ` +
+      'A CREATE INDEX CONCURRENTLY likely failed mid-build. Drop the invalid index ' +
+      '(DROP INDEX CONCURRENTLY IF EXISTS <schema>.<name>) and re-run pnpm db:migrate.',
+  );
+}
+
 async function main() {
   const migrationsFolder = resolve(process.cwd(), 'migrations');
   logger.info({ migrationsFolder }, 'Running migrations');
@@ -126,7 +194,14 @@ async function main() {
     const fullPath = resolve(migrationsFolder, filename);
     const contents = await readFile(fullPath, 'utf8');
 
-    logger.info({ filename }, 'Applying migration');
+    const { transactional, headerErrors } = parseMigrationExecutionMode(contents);
+    if (headerErrors.length > 0) {
+      throw new Error(
+        `Invalid migration-transaction header in ${filename}: ${headerErrors.join('; ')}`,
+      );
+    }
+
+    logger.info({ filename, transactional }, 'Applying migration');
     /**
      * Drizzle-style splitter: SQL files use `--> statement-breakpoint` between
      * statements so that each statement is sent independently. This prevents
@@ -139,28 +214,27 @@ async function main() {
       .map((statement) => statement.trim())
       .filter((statement) => statement.length > 0);
 
-    await sql.begin(async (transaction) => {
-      let statementIndex = 0;
-      for (const statement of statements) {
-        statementIndex += 1;
-        try {
-          await transaction.unsafe(statement);
-        } catch (statementError) {
-          logger.error(
-            {
-              statementIndex,
-              statementHead: statement.slice(0, 200),
-              error: statementError,
-            },
-            'Migration statement failed',
-          );
-          throw statementError;
-        }
-      }
-      await transaction.unsafe('insert into public.schema_migrations (filename) values ($1)', [
-        filename,
-      ]);
-    });
+    if (transactional) {
+      await sql.begin(async (transaction) => {
+        await runMigrationStatements({ filename, statements, executor: transaction });
+        await transaction.unsafe('insert into public.schema_migrations (filename) values ($1)', [
+          filename,
+        ]);
+      });
+      continue;
+    }
+
+    /**
+     * Non-transactional lane: each statement runs in its own implicit
+     * transaction (autocommit) so `CREATE INDEX CONCURRENTLY` is legal. Because
+     * there is no enclosing transaction to roll back, statements must be
+     * idempotent (`IF NOT EXISTS`). A concurrent index build that fails leaves
+     * an INVALID index behind, so we check for that before recording success —
+     * an operator must `DROP INDEX CONCURRENTLY` the invalid index and re-run.
+     */
+    await runMigrationStatements({ filename, statements, executor: sql });
+    await assertNoInvalidIndexes({ filename });
+    await sql.unsafe('insert into public.schema_migrations (filename) values ($1)', [filename]);
   }
 
   logger.info('Migrations complete');

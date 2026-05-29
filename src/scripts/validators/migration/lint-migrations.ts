@@ -13,6 +13,7 @@ import chalk from 'chalk';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseMigrationExecutionMode } from '@/infrastructure/database/migration/migration-execution-mode.js';
 
 /** Identifiers of every rule {@link lintMigrationFileContent} can report; used for header-comment allow-lists. */
 export const migrationSafetyRuleIds = [
@@ -21,6 +22,7 @@ export const migrationSafetyRuleIds = [
   'add_foreign_key_without_not_valid',
   'add_unique_constraint_inline',
   'alter_column_type',
+  'concurrent_index_requires_non_transactional',
   'create_index_without_concurrently',
   'disable_row_security_guc',
   'drop_column',
@@ -46,6 +48,8 @@ const ruleFixHints: Record<MigrationSafetyRuleId, string> = {
     'Prefer CREATE UNIQUE INDEX CONCURRENTLY, then ADD CONSTRAINT ... UNIQUE USING INDEX (runner may need a non-transactional migration).',
   alter_column_type:
     'Add a new column with the target type, backfill, switch reads/writes, then drop the old column in a later migration.',
+  concurrent_index_requires_non_transactional:
+    'CREATE INDEX CONCURRENTLY cannot run inside a transaction. Mark this migration non-transactional by adding `-- migration-transaction: none reason="..."` in the first 20 lines, and keep the index DDL idempotent (IF NOT EXISTS).',
   create_index_without_concurrently:
     'Prefer CREATE INDEX CONCURRENTLY in a non-transactional migration. This repo runs each file inside a transaction, so CONCURRENTLY cannot run as-is; split the index into a follow-up migration that runs outside a transaction, or explicitly allow this rule with a documented reason.',
   disable_row_security_guc:
@@ -528,10 +532,12 @@ export function lintMigrationFileContent(
 } {
   const violations: Violation[] = [];
   const { allows, headerErrors } = parseMigrationHeader(fileContent);
+  const executionMode = parseMigrationExecutionMode(fileContent);
+  const combinedHeaderErrors = [...headerErrors, ...executionMode.headerErrors];
   const usedAllowRules = new Set<MigrationSafetyRuleId>();
 
-  if (headerErrors.length > 0) {
-    return { violations, headerErrors, usedAllowRules };
+  if (combinedHeaderErrors.length > 0) {
+    return { violations, headerErrors: combinedHeaderErrors, usedAllowRules };
   }
 
   violations.push(...findRowSecurityGucViolations(filename, fileContent));
@@ -607,6 +613,14 @@ export function lintMigrationFileContent(
 
     const createIndexInfo = parseCreateIndexPrefix(normalized);
     if (createIndexInfo.isCreateIndex) {
+      if (createIndexInfo.hasConcurrently && executionMode.transactional) {
+        violations.push({
+          filename,
+          lineNumber,
+          ruleId: 'concurrent_index_requires_non_transactional',
+          message: ruleFixHints.concurrent_index_requires_non_transactional,
+        });
+      }
       if (!createIndexInfo.hasConcurrently) {
         const violation = emitViolationIfNotAllowed(
           allows,
@@ -726,7 +740,7 @@ export function lintMigrationFileContent(
     }
   }
 
-  return { violations, headerErrors, usedAllowRules };
+  return { violations, headerErrors: combinedHeaderErrors, usedAllowRules };
 }
 
 /** A single failure from {@link lintMigrationRollbackPairing}. */

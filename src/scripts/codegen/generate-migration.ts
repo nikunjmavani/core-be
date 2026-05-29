@@ -41,11 +41,16 @@ function migrationFileHeader({
 -- between statements only when the postgres simple-query protocol needs each
 -- statement sent independently (DO blocks, dollar quoting, dependent DDL).
 --
+-- Non-transactional lane (CREATE INDEX CONCURRENTLY): add
+-- \`-- migration-transaction: none reason="..."\` in the first 20 lines to run
+-- statements outside a transaction. Keep every statement idempotent
+-- (IF NOT EXISTS) — there is no rollback if one fails mid-file.
+--
 -- Migration-safety lints (\`pnpm db:migrate:lint\`):
 --   - CREATE TABLE / INDEX / SCHEMA must use IF NOT EXISTS.
 --   - Use \`ADD COLUMN ... NULL\` + backfill + \`SET NOT NULL\` (never NOT NULL inline).
 --   - Use \`ADD CONSTRAINT ... NOT VALID\` for FK / CHECK, then \`VALIDATE\` later.
---   - Use \`CREATE INDEX CONCURRENTLY\` in a follow-up non-transactional migration.
+--   - Use \`CREATE INDEX CONCURRENTLY\` in a \`migration-transaction: none\` migration.
 --
 -- Override a rule with: \`-- migration-safety: allow <rule_id> reason="..."\` in
 -- the first 20 lines.
