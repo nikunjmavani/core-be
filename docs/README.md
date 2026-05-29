@@ -136,6 +136,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 
 | Doc                                                                                                        | Description                                                    |
 | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [reviews/production-readiness-audit-2026-05-29.md](reviews/production-readiness-audit-2026-05-29.md)       | Principal-staff production-readiness audit for scale risks.    |
 | [reviews/production-readiness-2026-05-15.md](reviews/production-readiness-2026-05-15.md)                   | Pre-production checklist (Prometheus/OTel deferred).           |
 | [reviews/full-codebase-review-deliverables.md](reviews/full-codebase-review-deliverables.md)               | Full review deliverables: security, performance, dependencies. |
 | [reviews/architecture-consistency-roadmap-2026-05.md](reviews/architecture-consistency-roadmap-2026-05.md) | Completed domain-layout / route-catalog program (archival).    |
