@@ -15,7 +15,6 @@ vi.mock('@/shared/config/env.config.js', () => ({
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
     RATE_LIMIT_MAX: 100,
-    RATE_LIMIT_ORG_MAX: 200,
     RATE_LIMIT_WINDOW_MS: 60_000,
     REDIS_URL: 'redis://127.0.0.1:6379',
   },
@@ -62,8 +61,7 @@ describe('rate-limit.middleware', () => {
     vi.resetModules();
   });
 
-  it('registers global rate limit without Redis in test environment', async () => {
-    // max uses env.RATE_LIMIT_MAX (no per-org quota lookup)
+  it('registers a global IP-keyed rate limit without Redis in test environment', async () => {
     application = Fastify();
     await application.register(rateLimitMiddleware);
     await application.ready();
@@ -71,13 +69,13 @@ describe('rate-limit.middleware', () => {
     expect(rateLimitPlugin).toHaveBeenCalled();
     const options = rateLimitPlugin.mock.calls[0]![1] as {
       global: boolean;
-      max: (request: { organizationId?: string | null }) => number | Promise<number>;
+      max: number;
       timeWindow: number;
       allowList: (request: { url: string }) => boolean;
     };
     expect(options.global).toBe(true);
-    await expect(options.max({ organizationId: null })).resolves.toBe(100);
-    await expect(options.max({ organizationId: 'org_public' })).resolves.toBe(200);
+    // Global cap is a fixed per-IP number; org/user quotas live in post-auth presets.
+    expect(options.max).toBe(100);
     expect(options.timeWindow).toBe(60_000);
     expect(options.allowList({ url: '/health' })).toBe(true);
     expect(options.allowList({ url: testApiPath('/auth/login') })).toBe(false);
@@ -91,7 +89,6 @@ describe('rate-limit.middleware', () => {
       env: {
         NODE_ENV: 'development',
         RATE_LIMIT_MAX: 25,
-        RATE_LIMIT_ORG_MAX: 50,
         RATE_LIMIT_WINDOW_MS: 15_000,
         REDIS_URL: undefined,
       },
@@ -117,7 +114,6 @@ describe('rate-limit.middleware', () => {
       env: {
         NODE_ENV: 'production',
         RATE_LIMIT_MAX: 50,
-        RATE_LIMIT_ORG_MAX: 100,
         RATE_LIMIT_WINDOW_MS: 30_000,
         REDIS_URL: 'redis://127.0.0.1:6379',
       },
@@ -136,35 +132,18 @@ describe('rate-limit.middleware', () => {
   });
 
   describe('keyGenerator and allowList', () => {
-    it('uses organization-scoped key when request.organizationId is set', async () => {
+    it('always keys on request.ip, ignoring the request-asserted organizationId', async () => {
       application = Fastify();
       await application.register(rateLimitMiddleware);
       await application.ready();
       const options = rateLimitPlugin.mock.calls.at(-1)![1] as {
         keyGenerator: (request: { organizationId?: string; ip: string }) => string;
       };
+      // A forged/fresh or victim org id must not influence the global per-IP bucket.
       expect(options.keyGenerator({ organizationId: 'org_public_1', ip: '1.2.3.4' })).toBe(
-        'org:org_public_1',
+        '1.2.3.4',
       );
-    });
-
-    it('falls back to request.ip when organizationId is absent', async () => {
-      application = Fastify();
-      await application.register(rateLimitMiddleware);
-      await application.ready();
-      const options = rateLimitPlugin.mock.calls.at(-1)![1] as {
-        keyGenerator: (request: { organizationId?: string; ip: string }) => string;
-      };
       expect(options.keyGenerator({ ip: '1.2.3.4' })).toBe('1.2.3.4');
-    });
-
-    it('falls back to request.ip when organizationId is empty string', async () => {
-      application = Fastify();
-      await application.register(rateLimitMiddleware);
-      await application.ready();
-      const options = rateLimitPlugin.mock.calls.at(-1)![1] as {
-        keyGenerator: (request: { organizationId?: string; ip: string }) => string;
-      };
       expect(options.keyGenerator({ organizationId: '', ip: '1.2.3.4' })).toBe('1.2.3.4');
     });
 

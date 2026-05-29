@@ -25,8 +25,9 @@ import shutdownMiddleware from './shutdown.middleware.js';
 /**
  * Ordered Fastify plugin list registered by {@link registerMiddleware}. Order
  * is significant: `requestLifecycleMiddleware` MUST be first to own the
- * `onResponse` orchestration, and `tenantMiddleware` runs before
- * `rateLimitMiddleware` so org-scoped limits see the resolved organization.
+ * `onResponse` orchestration, and `rateLimitMiddleware` runs before
+ * `organizationRlsTransactionMiddleware` so throttled requests never open a DB
+ * transaction.
  */
 export const middlewarePlugins = [
   // MUST be first: registers the only `onResponse` hook that orchestrates
@@ -47,11 +48,10 @@ export const middlewarePlugins = [
   zodTypeProviderMiddleware,
   authMiddleware,
   tenantMiddleware,
-  // MUST run after tenantMiddleware so `request.organizationId` is populated before the
-  // rate-limit keyGenerator/max read it (otherwise org-scoped limits silently degrade to
-  // per-IP). Kept before organizationRlsTransactionMiddleware so throttled requests never
-  // open a DB transaction. tenantMiddleware itself stays after i18nMiddleware because it
-  // throws a translated ValidationError on header/path mismatch.
+  // The global limiter is keyed strictly on `request.ip` (see rate-limit.middleware.ts), so it
+  // no longer depends on tenant resolution. It MUST stay before organizationRlsTransactionMiddleware
+  // so throttled requests never open a DB transaction. tenantMiddleware stays after i18nMiddleware
+  // because it throws a translated ValidationError on header/path mismatch.
   rateLimitMiddleware,
   organizationRlsTransactionMiddleware,
   requestStatementTimeoutMiddleware,
