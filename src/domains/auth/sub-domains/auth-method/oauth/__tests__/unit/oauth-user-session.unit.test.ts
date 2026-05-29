@@ -10,6 +10,16 @@ vi.mock('@/shared/utils/security/jwt.util.js', () => ({
   signAccessToken: vi.fn().mockResolvedValue('access-token'),
 }));
 
+// Run the signup flow without a real database: invoke the transaction callback
+// directly and pass through the pinned-handle wrapper.
+vi.mock('@/infrastructure/database/transaction.js', () => ({
+  withTransaction: (callback: (transaction: unknown) => Promise<unknown>) => callback({}),
+}));
+
+vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => ({
+  runWithPinnedDatabaseHandle: (_handle: unknown, callback: () => Promise<unknown>) => callback(),
+}));
+
 describe('completeOAuthUserSession', () => {
   const userService = {
     findByEmail: vi.fn().mockResolvedValue(null),

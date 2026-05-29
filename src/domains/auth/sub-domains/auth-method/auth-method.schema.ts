@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
+import { AUTH_METHOD_TYPES } from './auth-method.constants.js';
 
 /** Drizzle table for `auth.auth_methods` — one row per linked credential (PASSWORD, MAGIC_LINK, OAUTH, MFA_TOTP, MFA_SMS, MFA_EMAIL); soft-deleted via `revoked_at`. */
 export const auth_methods = authSchema.table(
@@ -39,7 +40,10 @@ export const auth_methods = authSchema.table(
     index('idx_auth_methods_user_primary').on(table.user_id, table.is_primary),
     check(
       'chk_auth_methods_type',
-      sql`${table.method_type} IN ('PASSWORD', 'MAGIC_LINK', 'OAUTH', 'MFA_TOTP', 'MFA_SMS', 'MFA_EMAIL')`,
+      sql`${table.method_type} IN (${sql.join(
+        AUTH_METHOD_TYPES.map((methodType) => sql`${methodType}`),
+        sql`, `,
+      )})`,
     ),
   ],
 );
