@@ -13,7 +13,8 @@ WebAuthn / passkey enrolment and authentication ceremonies, backed by [@simplewe
 - **Challenges are server-generated and short-lived**: stored in Redis with `WEBAUTHN_CHALLENGE_TTL_SECONDS = 300` (5 min). Reuse of a challenge is rejected.
 - **Credential ids are unique per user**: enrolling the same authenticator twice replaces the row (or is rejected, depending on UX policy).
 - **Counter regression detection**: WebAuthn responses include a usage counter; a counter that does not increase indicates a cloned credential and is rejected.
-- **Origin + RPID checked**: the relying-party id (`RP_ID` env) and origin must match the values registered with the authenticator.
+- **Origin + RPID checked**: the relying-party id (`WEBAUTHN_RP_ID` env) and origin must match the values registered with the authenticator.
+- **Expected origin is server-trusted, never caller-controlled**: `resolveWebauthnExpectedOrigin` accepts a request `Origin` header only when it EXACTLY matches an entry in the canonical CORS allowlist (`ALLOWED_ORIGINS`, via `parseAllowedOriginsList`). A present-but-unlisted origin is rejected with `ForbiddenError` (`errors:originNotAllowed`) before any credential verification; a missing origin falls back to the configured allowlist (never the caller). Registration and authentication verification use the identical validated value.
 
 ## Lifecycle
 
@@ -32,6 +33,7 @@ stateDiagram-v2
 
 - **Counter regression** → 401, credential flagged.
 - **Origin / RPID mismatch** → 401.
+- **Request `Origin` not in `ALLOWED_ORIGINS`** → 403 (`errors:originNotAllowed`), rejected before verification.
 - **Challenge expired or reused** → 401.
 - **Unknown credential id** → 401 (anti-enumeration: response is identical to wrong-signature case).
 
