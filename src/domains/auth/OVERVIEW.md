@@ -18,7 +18,9 @@ What it does not own: user profile (lives in [user](src/domains/user/)), organiz
 ## Key invariants
 
 - **Anti-enumeration**: magic-link send, password-reset, and login responses are identical for unknown emails as for known ones (silent success for sends, generic-401 for login).
-- **One-shot tokens**: every `verification_tokens` row has a single use. Verifies use atomic `UPDATE ... RETURNING` so two concurrent verifies cannot both produce a session.
+- **One-shot tokens**: every `verification_tokens` row has a single use. Verifies use atomic `UPDATE ... RETURNING` so two concurrent verifies cannot both produce a session. The short-lived Redis handles (MFA session, WebAuthn challenge, OAuth state) are consumed with an atomic `GETDEL` for the same single-use guarantee against a GET-then-DEL race.
+- **Active-account gate**: a session is issued only for an `ACTIVE` user. Every issuance path (password login, magic-link verify, OAuth completion, WebAuthn verify, MFA login completion) rejects a non-active account with `errors:accountNotActive` before a JWT or session row is created.
+- **Session revocation on state change**: suspending a user (or any admin status change away from `ACTIVE`) revokes all of their sessions; a password reset revokes all sessions; an authenticated password change revokes every session except the caller's current one. Each revoke invalidates the Redis token-validity cache so it takes effect immediately.
 - **Hashed-at-rest secrets**: passwords use argon2id; verification tokens, magic-link tokens, password-reset tokens, MFA backup codes, and session JWT hashes are stored as `sha256(raw)` (or argon2 for passwords). Raw secrets leave the platform only via outbound email or to the client at issuance time.
 - **Short JWT lifetime**: `ACCESS_TOKEN_EXPIRY_SECONDS = 900` (15 min). Refresh requires the Origin-checked session cookie.
 - **Lockout**: `MAX_FAILED_LOGIN_ATTEMPTS = 10` per (email, IP); locks for `ACCOUNT_LOCKOUT_MINUTES = 30`.

@@ -48,7 +48,9 @@ export type UserOffboardingDependencies = {
  * - **Algorithm:** profile reads/writes go through {@link UserRepository}; admin list builds
  *   keyset pagination over `(created_at, id)`; avatar upload validates the S3 key against the
  *   user's owned namespace, calls `headObject` for content-type sanity, and asserts the upload
- *   row is `confirmed` inside the user-database context. Account deletion runs
+ *   row is `confirmed` inside the user-database context. Suspending a user (or any admin status
+ *   change away from `ACTIVE`) revokes all of that user's sessions so an outstanding token cannot
+ *   survive the deactivation. Account deletion runs
  *   `softDeleteUserWithOffboarding`: revoke all auth sessions, revoke all auth methods, then
  *   inside `withTransaction` tombstone uploads + purge data-export rows + soft-delete the user.
  * - **Failure modes:** missing user → {@link NotFoundError}; avatar key outside owner namespace
@@ -309,6 +311,9 @@ export class UserService {
     const parsed = validateAdminUpdateUser(body);
     const user = await this.repository.adminUpdate(publicId, omitUndefined(parsed));
     if (!user) throw new NotFoundError('User');
+    if (parsed.status !== undefined && parsed.status !== 'ACTIVE') {
+      await this.revokeAllSessionsForDeactivatedUser(publicId);
+    }
     return UserSerializer.one(user);
   }
 
@@ -319,7 +324,20 @@ export class UserService {
   async suspendUser(publicId: string): Promise<UserOutput> {
     const user = await this.repository.suspend(publicId);
     if (!user) throw new NotFoundError('User');
+    await this.revokeAllSessionsForDeactivatedUser(publicId);
     return UserSerializer.one(user);
+  }
+
+  /**
+   * Revokes every active session for a user that just transitioned out of `ACTIVE`
+   * (suspend or admin status change) so an outstanding bearer/cookie session cannot
+   * outlive the deactivation. Session-validity cache invalidation is handled by
+   * {@link AuthSessionService.revokeAllSessions}. No-ops when the auth-session
+   * dependency has not been wired (e.g. minimal containers / unit tests).
+   */
+  private async revokeAllSessionsForDeactivatedUser(publicId: string): Promise<void> {
+    if (!this.authSessionService) return;
+    await this.authSessionService.revokeAllSessions(publicId);
   }
 
   async unsuspendUser(publicId: string): Promise<UserOutput> {

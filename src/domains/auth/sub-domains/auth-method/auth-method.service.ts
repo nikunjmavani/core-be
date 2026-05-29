@@ -13,6 +13,7 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
+import type { AuthSessionService } from '../auth-session/auth-session.service.js';
 import {
   validateCreateAuthMethod,
   validateForgotPassword,
@@ -41,7 +42,10 @@ const EMAIL_VERIFICATION_EXPIRES_IN_HOURS = 24;
  * - **Side effects:** invalidates outstanding tokens before issuing new ones;
  *   emits `AUTH_EVENT.PASSWORD_RESET_REQUESTED` and `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED`
  *   (mail enqueue happens in the auth-method event handlers); rehashes user
- *   passwords via {@link UserService.updatePassword}.
+ *   passwords via {@link UserService.updatePassword}. A password reset revokes
+ *   all of the user's sessions; an authenticated change revokes every session
+ *   except the caller's current one (or all sessions when no current token is
+ *   supplied) via {@link AuthSessionService}.
  * - **Notes:** the forgot-password flow always returns the same success message
  *   even when the email is unknown, to prevent account enumeration. OAuth
  *   linkage is idempotent via {@link AuthMethodService.linkOAuthProviderIfMissing}.
@@ -51,6 +55,7 @@ export class AuthMethodService {
     private readonly userService: UserService,
     private readonly authMethodRepository: AuthMethodRepository,
     private readonly verificationTokenRepository: VerificationTokenRepository,
+    private readonly authSessionService: AuthSessionService,
   ) {}
 
   async list(userPublicId: string) {
@@ -193,9 +198,17 @@ export class AuthMethodService {
     await this.userService.updatePassword(user.public_id, passwordHash);
 
     await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
+
+    // A reset is the recovery path for a potentially compromised account, so every
+    // existing session is revoked (cache invalidation makes revocation immediate).
+    await this.authSessionService.revokeAllSessions(user.public_id);
   }
 
-  async changePassword(userPublicId: string, body: unknown): Promise<void> {
+  async changePassword(
+    userPublicId: string,
+    body: unknown,
+    options?: { currentAccessToken?: string },
+  ): Promise<void> {
     const parsed = validateChangePassword(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
@@ -205,6 +218,18 @@ export class AuthMethodService {
     const passwordHash = await hashPassword(parsed.new_password);
     const updatedUser = await this.userService.updatePassword(user.public_id, passwordHash);
     if (!updatedUser) throw new NotFoundError('User');
+
+    // An authenticated change keeps the caller's current session and terminates
+    // every other device. Without a current token we cannot single one out, so
+    // fall back to revoking all sessions.
+    if (options?.currentAccessToken) {
+      await this.authSessionService.revokeAllSessionsExceptCurrent({
+        userPublicId: user.public_id,
+        currentAccessToken: options.currentAccessToken,
+      });
+    } else {
+      await this.authSessionService.revokeAllSessions(user.public_id);
+    }
   }
 
   // ── Email Verification ────────────────────────────────────────

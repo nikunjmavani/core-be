@@ -24,7 +24,7 @@ export async function createMfaSession(redis: Redis, userPublicId: string): Prom
   return mfaSessionToken;
 }
 
-/** Single-use lookup: deletes the Redis entry, parses the JSON payload, and returns the original user public id; throws `UnauthorizedError` (`errors:mfaInvalidOrExpiredSession`) on any failure. */
+/** Single-use lookup: atomically reads-and-deletes the Redis entry (`GETDEL`), parses the JSON payload, and returns the original user public id; throws `UnauthorizedError` (`errors:mfaInvalidOrExpiredSession`) on any failure. The atomic consume guarantees only one of two concurrent verifies can read a non-null value, preventing token replay in a GET-then-DEL race. */
 export async function verifyMfaSession(
   redis: Redis,
   mfaSessionToken: string,
@@ -33,12 +33,10 @@ export async function verifyMfaSession(
     throw new UnauthorizedError('errors:mfaInvalidOrExpiredSession');
   }
 
-  const storedPayloadRaw = await redis.get(`${MFA_SESSION_KEY_PREFIX}${mfaSessionToken}`);
+  const storedPayloadRaw = await redis.getdel(`${MFA_SESSION_KEY_PREFIX}${mfaSessionToken}`);
   if (!storedPayloadRaw) {
     throw new UnauthorizedError('errors:mfaInvalidOrExpiredSession');
   }
-
-  await redis.del(`${MFA_SESSION_KEY_PREFIX}${mfaSessionToken}`);
 
   let storedPayload: MfaSessionPayload;
   try {

@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
@@ -41,6 +42,7 @@ const MAGIC_LINK_EXPIRES_IN_MINUTES = 15;
  * - Token expired or already consumed → 401 `errors:invalidOrExpiredMagicLink`
  *   from `verify`.
  * - User soft-deleted between issue and verify → 401 `errors:userNotFound`.
+ * - User suspended/locked between issue and verify → 401 `errors:accountNotActive`.
  *
  * Side effects:
  * - `send` emits a domain event whose handler enqueues an outbound email via
@@ -122,6 +124,7 @@ export class MagicLinkService {
     }
     const user = await this.userService.findById(record.user_id);
     if (!user) throw new UnauthorizedError('errors:userNotFound');
+    assertUserAccountActive(user.status);
 
     const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
     const expiresAt = new Date(Date.now() + sessionMaxAgeDays * 86_400_000);

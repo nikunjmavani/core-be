@@ -38,7 +38,7 @@ export async function createWebauthnChallenge(
   return challengeToken;
 }
 
-/** Single-use lookup of a WebAuthn challenge: deletes the Redis entry, parses the JSON payload, and verifies the ceremony kind matches; throws `UnauthorizedError` (`errors:webauthnInvalidChallenge`) on any mismatch. */
+/** Single-use lookup of a WebAuthn challenge: atomically reads-and-deletes the Redis entry (`GETDEL`), parses the JSON payload, and verifies the ceremony kind matches; throws `UnauthorizedError` (`errors:webauthnInvalidChallenge`) on any mismatch. The atomic consume guarantees only one of two concurrent verifies can read a non-null value, preventing challenge replay in a GET-then-DEL race. */
 export async function consumeWebauthnChallenge(
   redis: Redis,
   challengeToken: string,
@@ -48,12 +48,10 @@ export async function consumeWebauthnChallenge(
     throw new UnauthorizedError('errors:webauthnInvalidChallenge');
   }
 
-  const storedPayloadRaw = await redis.get(`${WEBAUTHN_CHALLENGE_KEY_PREFIX}${challengeToken}`);
+  const storedPayloadRaw = await redis.getdel(`${WEBAUTHN_CHALLENGE_KEY_PREFIX}${challengeToken}`);
   if (!storedPayloadRaw) {
     throw new UnauthorizedError('errors:webauthnInvalidChallenge');
   }
-
-  await redis.del(`${WEBAUTHN_CHALLENGE_KEY_PREFIX}${challengeToken}`);
 
   let storedPayload: WebauthnChallengePayload;
   try {

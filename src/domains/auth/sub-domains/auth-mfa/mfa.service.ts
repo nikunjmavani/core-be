@@ -6,6 +6,7 @@ import {
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
 import { UnauthorizedError } from '@/shared/errors/index.js';
+import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
@@ -43,7 +44,8 @@ const MFA_TOTP_CONSUMED_KEY_PREFIX = 'mfa:totp:consumed:';
  * - **Failure modes:** unknown user / wrong code / expired MFA session all throw
  *   `UnauthorizedError` with i18n keys (`errors:mfaInvalidOrExpiredCode`,
  *   `errors:mfaInvalidOrExpiredSession`, `errors:mfaUserNotFound`,
- *   `errors:mfaInvalidOrExpiredRecoveryCode`).
+ *   `errors:mfaInvalidOrExpiredRecoveryCode`). A suspended/locked account is
+ *   rejected on the login-verify step with `errors:accountNotActive`.
  * - **Side effects:** writes to {@link auth_methods}, {@link mfa_recovery_codes},
  *   and `auth.sessions`; flips `users.is_mfa_enabled` on enroll and on the last
  *   method removal; refreshes `auth_methods.last_used_at` on every successful
@@ -83,6 +85,7 @@ export class MfaService {
     if (!user) {
       throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
     }
+    assertUserAccountActive(user.status);
 
     let verified = false;
     if (parsed.totp_code) {

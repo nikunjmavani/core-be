@@ -12,6 +12,7 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { MILLISECONDS_PER_DAY } from '@/shared/constants/index.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
@@ -252,6 +253,7 @@ export class WebauthnService {
     if (!user || user.id !== storedCredential.user_id) {
       throw new UnauthorizedError('errors:webauthnInvalidChallenge');
     }
+    assertUserAccountActive(user.status);
 
     const expectedOrigin = resolveWebauthnExpectedOrigin(requestOrigin);
     const verification = await verifyAuthenticationResponse({

@@ -154,6 +154,45 @@ describe('Auth Domain — Integration', () => {
       const secondBody = secondLogin.json() as { data: { access_token: string } };
       expect(firstBody.data.access_token).not.toBe(secondBody.data.access_token);
     });
+
+    it('rejects login for a suspended user and revokes existing sessions on suspend (bug 31)', async () => {
+      const { user, password } = await createTestUserWithPassword();
+
+      // Establish an active session and prime the positive token-validity cache.
+      const loginResponse = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/login'),
+        payload: { email: user.email, password },
+      });
+      expect(loginResponse.statusCode).toBe(200);
+      const accessToken = (loginResponse.json() as { data: { access_token: string } }).data
+        .access_token;
+      const beforeSuspend = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token: accessToken,
+      });
+      expect(beforeSuspend.statusCode).toBe(200);
+
+      // Suspend the user out-of-band, exercising UserService.suspendUser revocation.
+      await app.userDomain.userService.suspendUser(user.public_id);
+
+      // The previously-valid bearer token is rejected immediately (cache invalidated).
+      const afterSuspend = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token: accessToken,
+      });
+      expect(afterSuspend.statusCode).toBe(401);
+
+      // A suspended user cannot mint a fresh session via password login.
+      const reLogin = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/login'),
+        payload: { email: user.email, password },
+      });
+      expect(reLogin.statusCode).toBe(401);
+    });
   });
 
   // ─── Logout ───────────────────────────────────────────────────

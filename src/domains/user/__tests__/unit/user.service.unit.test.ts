@@ -179,6 +179,36 @@ describe('UserService', () => {
     expect(repository.suspend).toHaveBeenCalled();
   });
 
+  it('suspendUser revokes all of the user sessions (bug 31)', async () => {
+    const revokeAllSessions = vi.fn().mockResolvedValue(undefined);
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions } as never,
+      authMethodService: { revokeAllForUser: vi.fn() } as never,
+      uploadService: {} as never,
+      userDataExportService: {} as never,
+    });
+    await service.suspendUser(userRow.public_id);
+    expect(revokeAllSessions).toHaveBeenCalledWith(userRow.public_id);
+  });
+
+  it('adminUpdateUser revokes sessions when status changes to a non-active state (bug 31)', async () => {
+    const revokeAllSessions = vi.fn().mockResolvedValue(undefined);
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions } as never,
+      authMethodService: { revokeAllForUser: vi.fn() } as never,
+      uploadService: {} as never,
+      userDataExportService: {} as never,
+    });
+
+    await service.adminUpdateUser(userRow.public_id, { status: 'SUSPENDED' });
+    expect(revokeAllSessions).toHaveBeenCalledWith(userRow.public_id);
+
+    revokeAllSessions.mockClear();
+    await service.adminUpdateUser(userRow.public_id, { status: 'ACTIVE' });
+    await service.adminUpdateUser(userRow.public_id, { first_name: 'NoStatusChange' });
+    expect(revokeAllSessions).not.toHaveBeenCalled();
+  });
+
   it('getUser throws when user is missing', async () => {
     vi.mocked(repository.findByPublicId).mockResolvedValue(null);
     await expect(service.getUser(userRow.public_id)).rejects.toBeInstanceOf(NotFoundError);

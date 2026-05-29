@@ -4,6 +4,7 @@ import { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-m
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodRepository } from '@/domains/auth/sub-domains/auth-method/auth-method.repository.js';
 import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type * as EventBusModule from '@/core/events/event-bus.js';
 
 vi.mock('@/core/events/event-bus.js', async (importOriginal) => {
@@ -29,6 +30,7 @@ const user = {
   email: 'user@example.com',
   password_hash: 'hash',
   is_email_verified: false,
+  status: 'ACTIVE',
 };
 
 describe('AuthMethodService', () => {
@@ -60,10 +62,16 @@ describe('AuthMethodService', () => {
     markUsed: vi.fn(),
   } as unknown as VerificationTokenRepository;
 
+  const authSessionService = {
+    revokeAllSessions: vi.fn().mockResolvedValue(undefined),
+    revokeAllSessionsExceptCurrent: vi.fn().mockResolvedValue(undefined),
+  } as unknown as AuthSessionService;
+
   const service = new AuthMethodService(
     userService,
     authMethodRepository,
     verificationTokenRepository,
+    authSessionService,
   );
 
   beforeEach(() => {
@@ -121,6 +129,7 @@ describe('AuthMethodService', () => {
     } as never);
     await service.resetPassword({ token: 'reset-token', password: 'NewPassword123!' });
     expect(userService.updatePassword).toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessions).toHaveBeenCalledWith(user.public_id);
   });
 
   it('resetPassword rejects invalid token', async () => {
@@ -130,12 +139,30 @@ describe('AuthMethodService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
-  it('changePassword verifies current password', async () => {
+  it('changePassword verifies current password and revokes other sessions', async () => {
+    await service.changePassword(
+      'user_public',
+      {
+        current_password: 'old',
+        new_password: 'NewPassword123!',
+      },
+      { currentAccessToken: 'current-bearer-token' },
+    );
+    expect(userService.updatePassword).toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessionsExceptCurrent).toHaveBeenCalledWith({
+      userPublicId: user.public_id,
+      currentAccessToken: 'current-bearer-token',
+    });
+    expect(authSessionService.revokeAllSessions).not.toHaveBeenCalled();
+  });
+
+  it('changePassword revokes all sessions when no current token is supplied', async () => {
     await service.changePassword('user_public', {
       current_password: 'old',
       new_password: 'NewPassword123!',
     });
-    expect(userService.updatePassword).toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessionsExceptCurrent).not.toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessions).toHaveBeenCalledWith(user.public_id);
   });
 
   it('changePassword rejects when password auth disabled', async () => {

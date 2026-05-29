@@ -29,7 +29,7 @@ export async function createOAuthState(redis: Redis, provider: OAuthProvider): P
   return state;
 }
 
-/** Single-use lookup of an OAuth `state` token: deletes the Redis entry and verifies it was issued for the same provider; throws `UnauthorizedError` (`errors:oauthInvalidState`) otherwise. */
+/** Single-use lookup of an OAuth `state` token: atomically reads-and-deletes the Redis entry (`GETDEL`) and verifies it was issued for the same provider; throws `UnauthorizedError` (`errors:oauthInvalidState`) otherwise. The atomic consume guarantees only one of two concurrent callbacks can read a non-null value, preventing state replay in a GET-then-DEL race. */
 export async function consumeOAuthState(
   redis: Redis,
   provider: string,
@@ -39,11 +39,10 @@ export async function consumeOAuthState(
     throw new UnauthorizedError('errors:oauthInvalidState');
   }
 
-  const storedProvider = await redis.get(`${OAUTH_STATE_KEY_PREFIX}${state}`);
+  const storedProvider = await redis.getdel(`${OAUTH_STATE_KEY_PREFIX}${state}`);
   if (!storedProvider) {
     throw new UnauthorizedError('errors:oauthInvalidState');
   }
-  await redis.del(`${OAUTH_STATE_KEY_PREFIX}${state}`);
 
   const normalizedProvider = normalizeOAuthProvider(provider);
   if (storedProvider !== normalizedProvider) {

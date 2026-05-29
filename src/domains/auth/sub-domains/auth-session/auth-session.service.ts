@@ -77,6 +77,43 @@ export class AuthSessionService {
     );
   }
 
+  /**
+   * Revokes every active session for a user except the one identified by the
+   * supplied bearer access token, and invalidates their token caches.
+   *
+   * @remarks
+   * - **Algorithm:** hashes `currentAccessToken` (SHA-256) and runs a single
+   *   `UPDATE … WHERE user_id = ? AND is_revoked = false AND token_hash <> ?`,
+   *   then invalidates the Redis token cache for each revoked hash.
+   * - **Failure modes:** throws `NotFoundError('User')` when the user no longer
+   *   exists. If the current token's session was already rotated/revoked, this
+   *   simply revokes the remaining sessions.
+   * - **Side effects:** writes `auth.sessions` rows; invalidates cached
+   *   token-validity entries so revocation takes effect immediately.
+   * - **Notes:** used by the authenticated change-password flow to terminate all
+   *   other devices while keeping the caller's current session alive.
+   */
+  async revokeAllSessionsExceptCurrent({
+    userPublicId,
+    currentAccessToken,
+  }: {
+    userPublicId: string;
+    currentAccessToken: string;
+  }): Promise<void> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new NotFoundError('User');
+    const currentTokenHash = hashAccessToken(currentAccessToken);
+    const revokedSessions = await withUserDatabaseContext(userPublicId, (_databaseHandle) =>
+      this.sessionRepository.revokeAllByUserIdExcept(user.id, currentTokenHash),
+    );
+    await Promise.all(
+      revokedSessions
+        .map((session) => session.token_hash)
+        .filter((tokenHash): tokenHash is string => Boolean(tokenHash))
+        .map((tokenHash) => invalidateCachedSessionToken(tokenHash)),
+    );
+  }
+
   async createSessionForUser(
     userPublicId: string,
     data: Omit<AuthSessionCreateData, 'user_id'>,

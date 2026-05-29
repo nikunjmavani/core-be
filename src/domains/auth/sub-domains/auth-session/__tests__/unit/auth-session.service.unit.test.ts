@@ -33,6 +33,7 @@ describe('AuthSessionService', () => {
     listByUserId: vi.fn().mockResolvedValue([{ public_id: 'session_public' }]),
     revoke: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
     revokeAllByUserId: vi.fn().mockResolvedValue([]),
+    revokeAllByUserIdExcept: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({ public_id: 'session_new' }),
     revokeByTokenHash: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
     findByPublicId: vi
@@ -88,6 +89,38 @@ describe('AuthSessionService', () => {
   it('revokeAllSessions throws when user is not found', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
     await expect(service.revokeAllSessions('missing')).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('revokeAllSessionsExceptCurrent keeps the current token and invalidates revoked hashes (bug 33)', async () => {
+    vi.mocked(sessionRepository.revokeAllByUserIdExcept).mockResolvedValue([
+      { token_hash: 'revoked-hash-a' },
+      { token_hash: 'revoked-hash-b' },
+      { token_hash: null },
+    ] as never);
+    const { invalidateCachedSessionToken } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
+    await service.revokeAllSessionsExceptCurrent({
+      userPublicId: 'user_public',
+      currentAccessToken: 'current-bearer-token',
+    });
+    // The except-hash passed to the repository is the SHA-256 of the current token, never the raw token.
+    const [, exceptHash] = vi.mocked(sessionRepository.revokeAllByUserIdExcept).mock.calls[0]!;
+    expect(exceptHash).not.toBe('current-bearer-token');
+    expect(exceptHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(invalidateCachedSessionToken).toHaveBeenCalledWith('revoked-hash-a');
+    expect(invalidateCachedSessionToken).toHaveBeenCalledWith('revoked-hash-b');
+    expect(invalidateCachedSessionToken).toHaveBeenCalledTimes(2);
+  });
+
+  it('revokeAllSessionsExceptCurrent throws when user is not found', async () => {
+    vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
+    await expect(
+      service.revokeAllSessionsExceptCurrent({
+        userPublicId: 'missing',
+        currentAccessToken: 'token',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('createSessionForUser creates session under user database context', async () => {

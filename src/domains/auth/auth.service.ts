@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
@@ -97,6 +98,10 @@ export class AuthService {
       await this.userService.updateLoginAttempt(user.public_id, failedCount, lockUntil);
       throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
+
+    // First factor verified — refuse to issue (or escalate to MFA for) a session
+    // for a suspended/locked account before any token is minted.
+    assertUserAccountActive(user.status);
 
     if (user.failed_login_count > 0) {
       await this.userService.updateLoginAttempt(user.public_id, 0, null);

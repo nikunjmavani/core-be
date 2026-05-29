@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ForbiddenError } from '@/shared/errors/index.js';
+import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
@@ -12,7 +13,7 @@ import type { AuthSessionService } from '../../auth-session/auth-session.service
 import type { OAuthProfile, OAuthProvider } from './oauth.types.js';
 import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
-/** Final stage of an OAuth callback: finds-or-creates the user, idempotently links the OAuth provider via {@link AuthMethodService.linkOAuthProviderIfMissing}, then mints an access token + persisted session. Rejects disposable emails for first-time signups. Refuses to silently find-or-link into a pre-existing account whose email is not verified (unless that OAuth identity is already linked), throwing `ForbiddenError` to prevent account takeover. */
+/** Final stage of an OAuth callback: finds-or-creates the user, idempotently links the OAuth provider via {@link AuthMethodService.linkOAuthProviderIfMissing}, then mints an access token + persisted session. Rejects disposable emails for first-time signups. Refuses to silently find-or-link into a pre-existing account whose email is not verified (unless that OAuth identity is already linked), throwing `ForbiddenError` to prevent account takeover. Rejects suspended/locked accounts with `UnauthorizedError('errors:accountNotActive')` before issuing a session. */
 export async function completeOAuthUserSession(parameters: {
   userService: UserService;
   authMethodService: AuthMethodService;
@@ -65,6 +66,10 @@ export async function completeOAuthUserSession(parameters: {
     is_primary: false,
     created_by_user_id: user.id,
   });
+
+  // A pre-existing account may have been suspended/locked since signup; never
+  // mint a session for it via the OAuth callback (freshly created users are ACTIVE).
+  assertUserAccountActive(user.status);
 
   const jsonWebToken = await signAccessToken({
     userId: user.public_id,

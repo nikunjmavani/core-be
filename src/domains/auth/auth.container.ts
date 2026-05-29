@@ -39,6 +39,7 @@ export function createAuthContainer(
     userService,
     authMethodRepository,
     verificationTokenRepository,
+    authSessionService,
   );
   const mfaService = new MfaService(
     userService,
