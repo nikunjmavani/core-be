@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.2.8-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.2.7-dev.0...v3.2.8-dev.0) (2026-05-29)
+
+
+### Fixed
+
+* **database:** zero-downtime index migrations via concurrent non-transactional lane (audit [#6](https://github.com/nikunjmavani/core-be/issues/6)) ([#176](https://github.com/nikunjmavani/core-be/issues/176)) ([c38671b](https://github.com/nikunjmavani/core-be/commit/c38671ba372ea2faef593f3806c61b146d4f25d2))
+
 ## [3.2.7-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.2.6-dev.0...v3.2.7-dev.0) (2026-05-29)
 
 
