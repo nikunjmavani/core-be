@@ -10,9 +10,9 @@ export type ParsedRedisUrl = {
   databaseIndex: number;
 };
 
-/** True when the Redis URL explicitly uses TLS (`rediss://`). */
-export function isRedisTlsUrl(redisUrl: string): boolean {
-  return redisUrl.toLowerCase().startsWith('rediss://');
+/** True when the Redis URL explicitly uses TLS (`rediss://`). A falsy/absent URL is not TLS. */
+export function isRedisTlsUrl(redisUrl: string | undefined): boolean {
+  return typeof redisUrl === 'string' && redisUrl.toLowerCase().startsWith('rediss://');
 }
 
 /** RFC 1918 private IPv4 ranges (10/8, 172.16/12, 192.168/16) plus loopback. */
@@ -53,7 +53,7 @@ export type RedisTlsOptions = { tls: { rejectUnauthorized: true } } | Record<str
  * tamper-evident). For plaintext `redis://` URLs it returns an empty object so no TLS
  * handshake is attempted.
  */
-export function buildRedisTlsOptions(redisUrl: string): RedisTlsOptions {
+export function buildRedisTlsOptions(redisUrl: string | undefined): RedisTlsOptions {
   return isRedisTlsUrl(redisUrl) ? { tls: { rejectUnauthorized: true } } : {};
 }
 
