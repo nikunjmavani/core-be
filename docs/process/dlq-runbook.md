@@ -35,7 +35,7 @@ The full list of source queues (work + retention/cleanup + observability) is in 
 | `mail-dlq` | `{ mailOutboxId }` from `original_data_summary` | Fix `auth.mail_outbox` row, then replay |
 | `webhook-delivery-dlq` | `{ deliveryAttemptId, organizationPublicId }` | Fix URL/secret; create a new attempt if the row is terminal |
 | `stripe-webhook-dlq` | `{ stripeEventId }` — worker fetches event from Stripe API | Reclaim ledger row (`pnpm tool:stripe-webhook-replay`) if needed |
-| `notification-dlq` | Manual — inspect `original_data_summary` in Bull Board | Re-enqueue from application code or Bull Board **Retry** after fix |
+| `notification-dlq` | `{ notificationId, organizationPublicId }` (`organizationPublicId` is `null` for global notifications) — worker reloads content from `notify.notifications` | Fix the notification row, then replay |
 
 ## Operational checklist
 

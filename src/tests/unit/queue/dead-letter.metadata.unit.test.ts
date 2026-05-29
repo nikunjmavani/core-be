@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Job, Worker } from 'bullmq';
+import type { DeadLetterJobData } from '@/infrastructure/queue/dlq/dead-letter.js';
 
 interface QueueAddCall {
   jobName: string;
@@ -159,6 +160,71 @@ describe('enqueueDeadLetter metadata', () => {
 
     expect(unhandledRejections).toEqual([]);
     expect(sentryCaptureExceptionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures the replay keys for webhook, stripe, and notification jobs (bug 43)', async () => {
+    const { enqueueDeadLetter } = await import('@/infrastructure/queue/dlq/dead-letter.js');
+    const { buildReplayJobPayload } = await import('@/infrastructure/queue/dlq/dlq-replay.util.js');
+    const { WEBHOOK_DELIVERY_QUEUE_NAME } = await import(
+      '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js'
+    );
+    const { STRIPE_WEBHOOK_QUEUE_NAME } = await import(
+      '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js'
+    );
+    const { NOTIFICATION_QUEUE_NAME } = await import(
+      '@/domains/notify/sub-domains/notification/queues/notification.queue.js'
+    );
+
+    const cases = [
+      {
+        queue: WEBHOOK_DELIVERY_QUEUE_NAME,
+        jobName: 'deliver-webhook',
+        data: {
+          deliveryAttemptId: 9,
+          organizationPublicId: 'org_public_abc',
+          requestId: 'req-1',
+          secret: 'should-not-be-captured',
+        },
+        expectedSummary: {
+          delivery_attempt_id: 9,
+          organization_public_id: 'org_public_abc',
+        },
+        expectedReplay: { deliveryAttemptId: 9, organizationPublicId: 'org_public_abc' },
+      },
+      {
+        queue: STRIPE_WEBHOOK_QUEUE_NAME,
+        jobName: 'process-stripe-webhook',
+        data: { stripeEventId: 'evt_123', requestId: 'req-2' },
+        expectedSummary: { stripe_event_id: 'evt_123' },
+        expectedReplay: { stripeEventId: 'evt_123' },
+      },
+      {
+        queue: NOTIFICATION_QUEUE_NAME,
+        jobName: 'dispatch-notification',
+        data: { notificationId: 77, organizationPublicId: 'org_public_xyz', requestId: 'req-3' },
+        expectedSummary: { notification_id: 77, organization_public_id: 'org_public_xyz' },
+        expectedReplay: { notificationId: 77, organizationPublicId: 'org_public_xyz' },
+      },
+    ];
+
+    for (const testCase of cases) {
+      queueAddCalls.length = 0;
+      await enqueueDeadLetter(
+        testCase.queue,
+        buildJob({ id: `job-${testCase.queue}`, name: testCase.jobName, data: testCase.data }),
+        new Error('boom'),
+      );
+
+      const [{ data }] = queueAddCalls as [QueueAddCall];
+      const summary = data.original_data_summary as Record<string, unknown>;
+      expect(summary).toMatchObject(testCase.expectedSummary);
+      // Secrets/PII beyond the replay keys must never reach the DLQ summary.
+      expect(summary.secret).toBeUndefined();
+
+      const replayPayload = buildReplayJobPayload(data as unknown as DeadLetterJobData);
+      expect(replayPayload).not.toBeNull();
+      expect(replayPayload).toMatchObject(testCase.expectedReplay);
+    }
   });
 
   it('dead-letter hook for final failure captures Sentry exactly once', async () => {

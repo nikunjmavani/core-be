@@ -44,6 +44,16 @@ export interface DeadLetterJobData {
   failed_at: string;
 }
 
+/**
+ * Extracts the non-secret replay keys from a failed job's data into the DLQ summary.
+ *
+ * Each replayable queue type contributes the identifiers {@link buildReplayJobPayload} needs
+ * to reconstruct its job: mail (`mail_outbox_id`), webhook delivery (`delivery_attempt_id` +
+ * `organization_public_id`), notification (`notification_id` + `organization_public_id`), and
+ * Stripe webhook (`stripe_event_id`). These are public/internal identifiers only — full
+ * payloads, HTML bodies, signing secrets, and PII are deliberately left out so nothing
+ * sensitive sits in Redis or `audit.dead_letter_jobs` past the retention window.
+ */
 function summarizeJobDataForDeadLetter(data: unknown): Record<string, unknown> {
   if (typeof data !== 'object' || data === null) {
     return {};
@@ -57,6 +67,12 @@ function summarizeJobDataForDeadLetter(data: unknown): Record<string, unknown> {
   if (record.webhookId !== undefined) summary.webhook_id = record.webhookId;
   if (record.eventType !== undefined) summary.event_type = record.eventType;
   if (record.notificationId !== undefined) summary.notification_id = record.notificationId;
+  // Tenant scope for webhook + notification replay (notification jobs may carry an explicit null).
+  if (record.organizationPublicId !== undefined) {
+    summary.organization_public_id = record.organizationPublicId;
+  }
+  // Stripe event id is required to re-fetch and replay a Stripe webhook job.
+  if (record.stripeEventId !== undefined) summary.stripe_event_id = record.stripeEventId;
   return summary;
 }
 
