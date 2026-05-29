@@ -73,6 +73,16 @@ export const UPLOAD_PURPOSE_CONFIG: Record<UploadPurpose, UploadPurposeConfig> =
   },
 } as const;
 
+/**
+ * Postgres advisory-lock namespace (`classid`) used to serialize per-user PENDING
+ * upload-quota reservations. Combined with the user's internal id as the `objid`
+ * in the two-key `pg_advisory_xact_lock(classid, objid)` form so it occupies a
+ * distinct lock space from single-key advisory locks (e.g. the migration runner)
+ * and never collides with them. The value is the ASCII for `UPLD` and is otherwise
+ * arbitrary — only its stability matters.
+ */
+export const UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE = 0x55_50_4c_44;
+
 export { PRESIGNED_URL_EXPIRY_SECONDS } from '@/shared/constants/ttl.constants.js';
 
 /** S3 key prefix for a user's avatar uploads (`avatars/{userPublicId}/...`). */

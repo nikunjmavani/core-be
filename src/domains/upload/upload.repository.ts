@@ -1,8 +1,9 @@
-import { and, asc, count, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, lt, sql as drizzleSql } from 'drizzle-orm';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { uploads } from '@/domains/upload/upload.schema.js';
+import { UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE } from '@/domains/upload/upload.constants.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 
@@ -120,6 +121,20 @@ export class UploadRepository {
       )
       .returning();
     return rows[0] ?? null;
+  }
+
+  /**
+   * Takes a transaction-scoped advisory lock that serializes concurrent PENDING-quota
+   * reservations for a single user. The lock is released automatically at COMMIT/ROLLBACK,
+   * so it must be acquired inside the same transaction as the subsequent
+   * {@link UploadRepository.countPendingByUserId} + {@link UploadRepository.create}
+   * (e.g. within `withUserDatabaseContext`). This closes the race where concurrent
+   * create-upload requests each pass the pending-count check before any row is inserted.
+   */
+  async acquirePendingUploadQuotaLock(user_id: number): Promise<void> {
+    await getRequestDatabase().execute(
+      drizzleSql`SELECT pg_advisory_xact_lock(${UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE}::int, ${user_id}::int)`,
+    );
   }
 
   /** Number of in-flight PENDING uploads for a user (active, not soft-deleted). */
