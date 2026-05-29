@@ -43,8 +43,10 @@ function migrationFileHeader({
 --
 -- Non-transactional lane (CREATE INDEX CONCURRENTLY): add
 -- \`-- migration-transaction: none reason="..."\` in the first 20 lines to run
--- statements outside a transaction. Keep every statement idempotent
--- (IF NOT EXISTS) — there is no rollback if one fails mid-file.
+-- statements outside a transaction. Separate every statement with
+-- \`--> statement-breakpoint\` (each runs independently — CONCURRENTLY cannot
+-- share an implicit transaction) and keep them idempotent (IF NOT EXISTS);
+-- there is no rollback if one fails mid-file.
 --
 -- Migration-safety lints (\`pnpm db:migrate:lint\`):
 --   - CREATE TABLE / INDEX / SCHEMA must use IF NOT EXISTS.

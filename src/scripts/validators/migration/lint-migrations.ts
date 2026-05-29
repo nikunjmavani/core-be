@@ -14,6 +14,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseMigrationExecutionMode } from '@/infrastructure/database/migration/migration-execution-mode.js';
+import { isPartitionedTable } from '@/infrastructure/database/partitioned-tables.constants.js';
 
 /** Identifiers of every rule {@link lintMigrationFileContent} can report; used for header-comment allow-lists. */
 export const migrationSafetyRuleIds = [
@@ -22,12 +23,14 @@ export const migrationSafetyRuleIds = [
   'add_foreign_key_without_not_valid',
   'add_unique_constraint_inline',
   'alter_column_type',
+  'concurrent_index_on_partitioned_table',
   'concurrent_index_requires_non_transactional',
   'create_index_without_concurrently',
   'disable_row_security_guc',
   'drop_column',
   'drop_table',
   'missing_if_not_exists_on_create',
+  'non_transactional_statements_need_breakpoints',
   'rename_column_or_table',
   'set_not_null_on_existing_column',
 ] as const;
@@ -48,6 +51,8 @@ const ruleFixHints: Record<MigrationSafetyRuleId, string> = {
     'Prefer CREATE UNIQUE INDEX CONCURRENTLY, then ADD CONSTRAINT ... UNIQUE USING INDEX (runner may need a non-transactional migration).',
   alter_column_type:
     'Add a new column with the target type, backfill, switch reads/writes, then drop the old column in a later migration.',
+  concurrent_index_on_partitioned_table:
+    'PostgreSQL cannot CREATE INDEX CONCURRENTLY on a partitioned parent (audit.logs, notify.notifications). Use a plain recursive CREATE INDEX for the parent, or build each child partition index CONCURRENTLY then ATTACH PARTITION operationally.',
   concurrent_index_requires_non_transactional:
     'CREATE INDEX CONCURRENTLY cannot run inside a transaction. Mark this migration non-transactional by adding `-- migration-transaction: none reason="..."` in the first 20 lines, and keep the index DDL idempotent (IF NOT EXISTS).',
   create_index_without_concurrently:
@@ -60,6 +65,8 @@ const ruleFixHints: Record<MigrationSafetyRuleId, string> = {
     'DROP TABLE is destructive: use IF EXISTS for idempotency and add a migration-safety allow with a documented reason.',
   missing_if_not_exists_on_create:
     'Add IF NOT EXISTS to CREATE TABLE / CREATE INDEX / CREATE SCHEMA for safer retries.',
+  non_transactional_statements_need_breakpoints:
+    'A `migration-transaction: none` file runs each `--> statement-breakpoint` segment as its own command. Put exactly one statement per segment (separate every statement with `--> statement-breakpoint`) — CREATE INDEX CONCURRENTLY cannot share an implicit transaction with another statement.',
   rename_column_or_table:
     'Prefer add-new + backfill + switch + drop-old instead of in-place RENAME for zero-downtime.',
   set_not_null_on_existing_column:
@@ -417,6 +424,32 @@ function parseCreateIndexPrefix(normalizedStatement: string): {
   };
 }
 
+/**
+ * Extracts the `ON [ONLY] schema.table` target of a normalized CREATE INDEX
+ * statement. Returns `schema: null` for an unqualified table. Used to detect
+ * indexes targeting a partitioned parent.
+ */
+function parseCreateIndexTargetTable(
+  normalizedStatement: string,
+): { schema: string | null; table: string } | null {
+  const match = /\bON\s+(?:ONLY\s+)?("?[\w$]+"?(?:\s*\.\s*"?[\w$]+"?)?)/iu.exec(
+    normalizedStatement,
+  );
+  if (!match?.[1]) return null;
+  const parts = match[1]
+    .replace(/"/gu, '')
+    .split('.')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length === 2 && parts[0] && parts[1]) {
+    return { schema: parts[0], table: parts[1] };
+  }
+  if (parts.length === 1 && parts[0]) {
+    return { schema: null, table: parts[0] };
+  }
+  return null;
+}
+
 function parseMigrationHeader(rawFileContent: string): ParsedHeader {
   const allows = new Map<MigrationSafetyRuleId, string>();
   const headerErrors: string[] = [];
@@ -498,6 +531,46 @@ function emitViolationIfNotAllowed(
 const rowSecurityGucPattern =
   /\b(?:SET\s+LOCAL\s+row_security\b|SET\s+SESSION\s+row_security\b|SET\s+row_security\b|RESET\s+row_security\b)/iu;
 
+/** Splitter used by the migration runner to send each segment independently. */
+const statementBreakpointPattern = /\n--> statement-breakpoint\s*\n?/g;
+
+/**
+ * Flags non-transactional migrations whose `--> statement-breakpoint` segments
+ * contain more than one statement. The runner sends each segment to Postgres as
+ * a single command, so a segment with two statements becomes an implicit
+ * transaction — and `CREATE INDEX CONCURRENTLY` cannot run inside one. Reports
+ * each offending segment at the line of its second statement.
+ */
+function findNonTransactionalBreakpointViolations(
+  filename: string,
+  fileContent: string,
+): Violation[] {
+  const violations: Violation[] = [];
+  let searchOffset = 0;
+
+  for (const segment of fileContent.split(statementBreakpointPattern)) {
+    const segmentStart = fileContent.indexOf(segment, searchOffset);
+    searchOffset = segmentStart === -1 ? searchOffset : segmentStart + segment.length;
+
+    const statements = splitSqlStatements(segment);
+    if (statements.length <= 1) continue;
+
+    const secondStatement = statements[1];
+    const lineNumber =
+      segmentStart === -1 || !secondStatement
+        ? 1
+        : offsetToLineNumber(fileContent, segmentStart + secondStatement.startOffset);
+    violations.push({
+      filename,
+      lineNumber,
+      ruleId: 'non_transactional_statements_need_breakpoints',
+      message: ruleFixHints.non_transactional_statements_need_breakpoints,
+    });
+  }
+
+  return violations;
+}
+
 function findRowSecurityGucViolations(filename: string, fileContent: string): Violation[] {
   const violations: Violation[] = [];
   const lines = fileContent.split('\n');
@@ -538,6 +611,10 @@ export function lintMigrationFileContent(
 
   if (combinedHeaderErrors.length > 0) {
     return { violations, headerErrors: combinedHeaderErrors, usedAllowRules };
+  }
+
+  if (!executionMode.transactional) {
+    violations.push(...findNonTransactionalBreakpointViolations(filename, fileContent));
   }
 
   violations.push(...findRowSecurityGucViolations(filename, fileContent));
@@ -613,6 +690,17 @@ export function lintMigrationFileContent(
 
     const createIndexInfo = parseCreateIndexPrefix(normalized);
     if (createIndexInfo.isCreateIndex) {
+      if (createIndexInfo.hasConcurrently) {
+        const target = parseCreateIndexTargetTable(normalized);
+        if (target && isPartitionedTable(target)) {
+          violations.push({
+            filename,
+            lineNumber,
+            ruleId: 'concurrent_index_on_partitioned_table',
+            message: ruleFixHints.concurrent_index_on_partitioned_table,
+          });
+        }
+      }
       if (createIndexInfo.hasConcurrently && executionMode.transactional) {
         violations.push({
           filename,

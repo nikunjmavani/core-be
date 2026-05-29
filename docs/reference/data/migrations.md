@@ -59,21 +59,35 @@ CI and `pnpm verify:base` run migrate against ephemeral Postgres before API smok
 
 By default the runner wraps **each migration file in a single transaction** — DML and most DDL apply atomically and roll back automatically on a mid-file error. A few statements cannot run inside a transaction, most importantly `CREATE INDEX CONCURRENTLY`, which is the zero-downtime way to add an index: plain `CREATE INDEX` takes a `SHARE` lock that **blocks all writes** for the build duration (minutes on a large high-write table such as `audit.logs`).
 
-Opt a migration into the non-transactional lane with a header in the first 20 lines:
+Opt a migration into the non-transactional lane with a header in the first 20 lines, and separate **every** statement with `--> statement-breakpoint` so the runner sends each one to Postgres independently:
 
 ```sql
 -- migration-transaction: none reason="CREATE INDEX CONCURRENTLY cannot run inside a transaction"
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_org_created_id
   ON audit.logs (organization_id, created_at, id);
+--> statement-breakpoint
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_notifications_user_created_id
+  ON notify.notifications (user_id, created_at, id);
 ```
 
 Rules and guardrails (enforced by `pnpm db:migrate:lint`):
 
 - **`CREATE INDEX CONCURRENTLY` requires** the `migration-transaction: none` header — otherwise it would fail at apply time inside the wrapping transaction (`concurrent_index_requires_non_transactional`, **non-overridable**).
+- **Separate every statement with `--> statement-breakpoint`.** The runner sends each breakpoint segment as one command; two statements in a segment form an implicit transaction, and `CREATE INDEX CONCURRENTLY` cannot run inside one. The linter flags a segment that holds more than one statement (`non_transactional_statements_need_breakpoints`, **non-overridable**).
 - **Every statement must be idempotent** (`IF NOT EXISTS`). There is no enclosing transaction, so a statement that fails mid-file is not rolled back; re-running `pnpm db:migrate` re-executes the file from the top.
 - **One concern per file.** Keep non-transactional migrations to index DDL only; put DML and constraint changes in separate (transactional) migrations.
 - After a non-transactional migration, the runner **checks for `INVALID` / unready indexes** (the signature of a concurrent build that aborted) and refuses to record the migration as applied. If this fires, drop the broken index (`DROP INDEX CONCURRENTLY IF EXISTS <schema>.<name>`) and re-run `pnpm db:migrate`.
+
+### Partitioned tables cannot use `CONCURRENTLY`
+
+`audit.logs` and `notify.notifications` are RANGE-partitioned (see [`partitioned-tables.constants.ts`](../../../src/infrastructure/database/partitioned-tables.constants.ts)). PostgreSQL **rejects `CREATE INDEX CONCURRENTLY` on a partitioned parent** (`cannot create index on partitioned table ... concurrently`). The linter blocks it too (`concurrent_index_on_partitioned_table`, **non-overridable**).
+
+To index a partitioned parent:
+
+- **Small / base data**: use a plain recursive `CREATE INDEX IF NOT EXISTS ON <parent>` (allowed with `-- migration-safety: allow create_index_without_concurrently reason="<parent> is partitioned"`). This builds each child index under a lock — acceptable while tables are small.
+- **Large data (zero-downtime)**: operationally build each child partition's index `CONCURRENTLY`, then `ALTER INDEX <parent_index> ATTACH PARTITION <child_index>` until the parent index is valid. This is partition-aware and cannot be expressed as static idempotent SQL (partitions are created dynamically by the partition-maintenance worker), so it belongs in an operational runbook, not a migration file.
 
 ### Expand / contract (keep deploys backward-compatible)
 
