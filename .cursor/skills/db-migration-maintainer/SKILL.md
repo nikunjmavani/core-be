@@ -70,9 +70,12 @@ These are enforced by `pnpm db:migrate:lint` and cannot be overridden by the `--
 7. **Seeds**: if new tables need reference/demo data, invoke **seed-maintainer**.
 8. **DBML diagram** (`docs/database/core-be.dbml`): regenerated automatically by the local `.husky/pre-commit` hook whenever `migrations/*.sql` is staged (`pnpm tool:generate-dbdiagram` → `git add`). The diagram captures columns, primary keys, foreign keys (with `ON DELETE` actions), unique constraints, RLS rules, and partitioning. It is **local only** — no CI check enforces it. Run `pnpm tool:generate-dbdiagram` manually if you want to preview the output before committing.
 
-## Drizzle Kit (optional)
+## Drizzle Kit (optional, drafting only — NOT the source of truth)
 
-- `drizzle-kit generate` can draft SQL from schema drift; **review every statement** before committing.
+- The migration **source of truth** is the hand-written, timestamp-named `migrations/*.sql` set applied by `pnpm db:migrate` and tracked in `public.schema_migrations`. Drizzle Kit's snapshot/journal are **not** involved.
+- `drizzle.config.ts` writes to `./drizzle/` (gitignored scratch), **not** `migrations/`. So `pnpm db:generate` drafts a full SQL diff + `meta/` snapshot there; copy the useful statements into a `pnpm db:migrate:new <slug>` file, **review every statement**, then delete or ignore the scratch output. Never apply from `./drizzle/`.
+- Do **not** commit a `migrations/meta/` folder or any `*_snapshot.json` / `_journal.json` — they are Drizzle's sequential bookkeeping (`0000`, `0001`, …), which collides across parallel branches; our timestamp prefixes exist precisely to avoid that.
+- `pnpm db:push` / `pnpm db:studio` are local-only convenience (push bypasses the migration ledger — never use against shared/hosted databases).
 - Hand-written migrations are preferred when RLS, data backfills, or partial deploys need explicit control.
 
 ## Naming and layout

@@ -14,6 +14,12 @@ How schema changes ship, how CI guards them, and how to validate **rollback** wi
 
 See **db-migration-maintainer** skill and [data-lifecycle-deletion.md](../data/data-lifecycle-deletion.md) when retention or `deleted_at` changes.
 
+### Source of truth — no Drizzle Kit snapshot in `migrations/`
+
+The authoritative migration set is the hand-written, **timestamp-named** `migrations/*.sql` files, applied by `pnpm db:migrate` (`src/infrastructure/database/migration/migrate.ts`) and recorded in the `public.schema_migrations` table. Drizzle Kit's snapshot/journal (`meta/_journal.json`, `*_snapshot.json`) are **not** part of this — they use a sequential `0000`/`0001` index that collides when two developers branch in parallel, which is the exact problem the timestamp prefix avoids.
+
+`drizzle.config.ts` therefore points `out` at `./drizzle/` (gitignored scratch). `pnpm db:generate` is a **drafting aid only**: it writes a full diff there; copy what you need into a `pnpm db:migrate:new <slug>` file and discard the scratch output. Never commit a `migrations/meta/` folder, and never apply from `./drizzle/`.
+
 ---
 
 ## Migration filename ordering
