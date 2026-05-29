@@ -157,6 +157,8 @@
     "setup:push-retention-secrets": "tsx tooling/setup/push-retention-secrets.ts",
     "security:secrets": "gitleaks detect --source . --verbose --redact",
     "security:sast": "semgrep --config auto src/",
+    "sbom:generate": "npx @cyclonedx/cyclonedx-npm --output-file sbom.cyclonedx.json .",
+    "sbom:verify": "npx @cyclonedx/cyclonedx-npm --validate --output-file sbom.cyclonedx.json .",
     "deps:audit": "pnpm audit",
     "deps:audit:prod": "pnpm audit --prod",
     "deps:update": "pnpm update --recursive",
