@@ -48,6 +48,7 @@ Dynamic gauges (pool, BullMQ depth, event loop) refresh on each scrape via [`ref
 | `database_rls_checkout_hold_seconds` | Histogram (`path`) | How long an org-RLS checkout pins a pooled connection (`scoped_context` unit of work vs legacy `request_transaction`) |
 | `http_request_duration_seconds` | Histogram | Per-route latency; p95 via `histogram_quantile` |
 | `bullmq_jobs_waiting` | Gauge (`queue`) | Queue backlog per BullMQ queue |
+| `process_unhandled_rejections_total` | Counter (`process`) | Non-fatal `unhandledRejection` events tolerated by the burst handler (`process="api"` / `"worker"`); alert on a sustained sub-threshold rate — it hides a persistent failing path that never trips the fatal burst exit |
 
 Also exported: `db_pool_connections{state}`, `bullmq_queue_*`, `http_requests_total`, default Node metrics (`nodejs_eventloop_lag_*`, heap), and domain gauges (e.g. `stripe_webhook_events_failed`). See [health-checks.md](../../reference/reliability/health-checks.md) and [workers-and-events.md](../../reference/runtime/workers-and-events.md).
 

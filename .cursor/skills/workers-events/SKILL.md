@@ -53,6 +53,12 @@ For a visual flow diagram (Service → EventBus → Handler → Queue → Redis 
 - Workers return `{ worker, queueName, close }` (see `WorkerHandle` in `bootstrap.ts`) so bootstrap can attach the hook; the repeatable-job **scheduler** handle has `close` only.
 - Bull Board (`queue-dashboard.ts`) lists each `-dlq` queue next to its source queue when the dashboard is enabled.
 - On worker shutdown, `closeDeadLetterQueues()` runs after worker handles close (see `src/worker.ts`).
+- **Poison messages:** at each worker processing entry point, validate `job.data` with `parseJobDataOrDeadLetter({ schema, job, queueName })` (`src/infrastructure/queue/dlq/poison-job.util.ts`) instead of `parseBullMQJobData`. On a schema failure it records the dead-letter (Postgres + Redis mirror) and throws BullMQ `UnrecoverableError`, so a malformed payload skips the remaining retries instead of burning the backoff budget. `attachDeadLetterAndAlerting` recognises `UnrecoverableError` and does not record a second time. Keep using `parseBullMQJobData` in the producer-side `enqueue*` helpers (enqueue is not a retry path).
+
+## Distributed tracing across the queue
+
+- **Inject on enqueue:** spread `captureTraceContextForPropagation()` into the job payload in every `enqueue*` helper, and merge `traceContextJobFieldsSchema` (`src/infrastructure/observability/tracing/trace-context-job-fields.schema.ts`) into the job's `*.job.schema.ts` so `traceparent` / `tracestate` validate.
+- **Extract in the worker:** wrap the job body in `runWithPropagatedTraceContext({ traceparent, tracestate }, job.name, () => …)` (`trace-context.util.ts`) so the worker span is a child of the originating request. Both helpers no-op when no span is active or OTEL is disabled.
 
 ## Canonical examples
 

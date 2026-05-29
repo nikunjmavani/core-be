@@ -194,6 +194,11 @@ Operational sizing per family is documented in [resource-limits.md → Worker Po
 - Workers return `{ worker, queueName, close }` (`WorkerHandle` in `bootstrap.ts`).
 - Bull Board lists each `-dlq` next to its source queue when enabled.
 - On shutdown: close workers, then `closeDeadLetterQueues()`, then Redis (`src/worker.ts`).
+- **Poison messages** (payload that fails `*.job.schema.ts` validation) never burn the retry budget: each worker entry point validates `job.data` via `parseJobDataOrDeadLetter` (`src/infrastructure/queue/dlq/poison-job.util.ts`), which records the dead-letter (Postgres + Redis mirror) and throws BullMQ `UnrecoverableError` so remaining attempts are skipped. `attachDeadLetterAndAlerting` treats `UnrecoverableError` as already-handled (logs `queue.job.unrecoverable`, no second record). The producer-side `parseBullMQJobData` still throws a plain error — enqueue is not a retry path.
+
+## Distributed tracing across the queue
+
+Every `enqueue*` helper injects the active W3C trace context (`captureTraceContextForPropagation`) into the job payload (`traceparent` / `tracestate`, shared `traceContextJobFieldsSchema`); each worker re-enters that context with `runWithPropagatedTraceContext` (`src/infrastructure/observability/tracing/trace-context.util.ts`), so the worker span is a child of the originating API request. Jobs enqueued outside an active span (or with OTEL disabled) simply omit the fields and run without a new span.
 
 ---
 

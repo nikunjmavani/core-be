@@ -14,7 +14,8 @@ import {
   WEBHOOK_DELIVERY_QUEUE_NAME,
   type WebhookDeliveryJobData,
 } from '../queues/webhook-delivery.queue.js';
-import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
+import { parseJobDataOrDeadLetter } from '@/infrastructure/queue/dlq/poison-job.util.js';
+import { runWithPropagatedTraceContext } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { createWorkerWebhookDeliveryQueries } from '@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js';
 import {
   createWorkerWebhookDeliveryAttemptRepository,
@@ -265,22 +266,25 @@ export function createWebhookDeliveryWorker(): WorkerHandle {
   const workerHandle = createTenantScopedBullMQWorker<WebhookDeliveryJobData>(
     WEBHOOK_DELIVERY_QUEUE_NAME,
     async (databaseHandle, job) => {
-      const { deliveryAttemptId, organizationPublicId, requestId } = parseBullMQJobData(
-        webhookDeliveryJobDataSchema,
-        job.data,
-        WEBHOOK_DELIVERY_QUEUE_NAME,
-      );
-      return processWebhookDeliveryAttemptInContext(
-        databaseHandle,
-        deliveryAttemptId,
-        organizationPublicId,
-        omitUndefined({
-          id: job.id,
-          attemptsMade: job.attemptsMade,
-          requestId,
-        }),
-        globalThis.fetch,
-        createWorkerWebhookDeliveryAttemptRepository(databaseHandle),
+      const { deliveryAttemptId, organizationPublicId, requestId, traceparent, tracestate } =
+        await parseJobDataOrDeadLetter({
+          schema: webhookDeliveryJobDataSchema,
+          job,
+          queueName: WEBHOOK_DELIVERY_QUEUE_NAME,
+        });
+      return runWithPropagatedTraceContext({ traceparent, tracestate }, job.name, () =>
+        processWebhookDeliveryAttemptInContext(
+          databaseHandle,
+          deliveryAttemptId,
+          organizationPublicId,
+          omitUndefined({
+            id: job.id,
+            attemptsMade: job.attemptsMade,
+            requestId,
+          }),
+          globalThis.fetch,
+          createWorkerWebhookDeliveryAttemptRepository(databaseHandle),
+        ),
       );
     },
     {

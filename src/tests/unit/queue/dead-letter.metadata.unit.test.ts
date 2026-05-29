@@ -25,6 +25,7 @@ vi.mock('bullmq', () => ({
 
     close = queueCloseMock;
   },
+  UnrecoverableError: class UnrecoverableError extends Error {},
 }));
 
 vi.mock('@/infrastructure/queue/dlq/dead-letter.repository.js', () => ({

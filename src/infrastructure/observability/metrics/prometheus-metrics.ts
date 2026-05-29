@@ -25,6 +25,7 @@ let eventLoopLagMilliseconds: Gauge | null = null;
 let stripeWebhookEventsFailed: Gauge | null = null;
 let databaseRlsActiveCheckouts: Gauge | null = null;
 let databaseRlsCheckoutHoldSeconds: Histogram<'path'> | null = null;
+let processUnhandledRejectionsTotal: Counter<'process'> | null = null;
 
 function registerOn(registry: Registry): void {
   httpRequestsTotal = new Counter({
@@ -147,6 +148,13 @@ function registerOn(registry: Registry): void {
     buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
     registers: [registry],
   });
+
+  processUnhandledRejectionsTotal = new Counter({
+    name: 'process_unhandled_rejections_total',
+    help: 'Non-fatal unhandledRejection events tolerated by the burst handler, by process (api | worker). Alert on a sustained sub-threshold rate — it hides a persistent failing path that never trips the fatal burst exit',
+    labelNames: ['process'],
+    registers: [registry],
+  });
 }
 
 function bindMetricHandlesFromRegistry(registry: Registry): void {
@@ -178,6 +186,9 @@ function bindMetricHandlesFromRegistry(registry: Registry): void {
   databaseRlsCheckoutHoldSeconds = registry.getSingleMetric(
     'database_rls_checkout_hold_seconds',
   ) as Histogram<'path'>;
+  processUnhandledRejectionsTotal = registry.getSingleMetric(
+    'process_unhandled_rejections_total',
+  ) as Counter<'process'>;
   registeredMetricsRegistry = registry;
 }
 
@@ -354,4 +365,20 @@ export function recordOrganizationRlsCheckoutHold(options: {
   if (!isMetricsEnabled()) return;
   if (!databaseRlsCheckoutHoldSeconds) return;
   databaseRlsCheckoutHoldSeconds.observe({ path: options.path }, options.durationSeconds);
+}
+
+/** Process whose `unhandledRejection` handler fired — distinguishes API from worker series. */
+export type UnhandledRejectionProcess = 'api' | 'worker';
+
+/**
+ * Increments `process_unhandled_rejections_total{process}` for one non-fatal
+ * `unhandledRejection`. Lazily registers metrics so the very first rejection (which can occur
+ * before any scrape) is still counted. No-op when metrics are disabled — the rejection is still
+ * logged + captured by the caller, so observability never depends on `METRICS_ENABLED`.
+ */
+export function recordUnhandledRejection(process: UnhandledRejectionProcess): void {
+  if (!isMetricsEnabled()) return;
+  ensurePrometheusMetricsRegistered(getMetricsRegistry());
+  if (!processUnhandledRejectionsTotal) return;
+  processUnhandledRejectionsTotal.inc({ process });
 }

@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
 import {
   userDataExportJobDataSchema,
@@ -34,7 +35,7 @@ export async function enqueueUserDataExport(jobData: UserDataExportJobData): Pro
   const queue = getUserDataExportQueue();
   const validated = parseBullMQJobData(
     userDataExportJobDataSchema,
-    jobData,
+    { ...jobData, ...captureTraceContextForPropagation() },
     USER_DATA_EXPORT_QUEUE_NAME,
   );
   await queue.add('process-user-data-export', validated);
