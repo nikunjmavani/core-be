@@ -32,25 +32,50 @@ export async function getCachedSessionTokenValid(tokenHash: string): Promise<boo
 }
 
 /**
- * Marks a token hash as a recently validated active session in Redis.
+ * Input for {@link setCachedSessionTokenValid}: the token hash to cache plus the backing session's expiry, used to bound the cache TTL so it can never outlive the session.
  *
  * @remarks
- * - **Algorithm:** `SETEX session:tok:<hash> 1 <ttl>` with TTL =
- *   {@link SESSION_TOKEN_CACHE_TTL_SECONDS}.
+ * - **Algorithm:** `sessionExpiresAt` is the authoritative session expiry from Postgres; the
+ *   caller derives the cache TTL as `min(SESSION_TOKEN_CACHE_TTL_SECONDS, expires_at - now)`.
+ * - **Failure modes:** none — this is a plain data carrier with no behavior.
+ * - **Side effects:** none.
+ * - **Notes:** `tokenHash` is the hashed access token (never the raw bearer); pairing it with
+ *   `sessionExpiresAt` is what prevents a cached "valid" sentinel from outliving the session.
+ */
+export interface SetCachedSessionTokenValidInput {
+  tokenHash: string;
+  sessionExpiresAt: Date;
+}
+
+/**
+ * Marks a token hash as a recently validated active session in Redis, capped to the session lifetime.
+ *
+ * @remarks
+ * - **Algorithm:** `SETEX session:tok:<hash> 1 <ttl>` where `ttl =
+ *   min(SESSION_TOKEN_CACHE_TTL_SECONDS, floor((sessionExpiresAt - now) / 1000))`.
+ *   Bounding by the remaining session lifetime ensures the cached "valid" sentinel
+ *   can never outlive the session itself — a token validated just before expiry is
+ *   no longer accepted once the session actually expires. When the bounded TTL is
+ *   `<= 0` (session already expired or expiring within the current second) nothing
+ *   is cached and the next check falls back to Postgres.
  * - **Failure modes:** Redis errors are logged and swallowed; the caller's request
  *   succeeds even when caching is unavailable.
- * - **Side effects:** writes a single short-lived Redis entry.
+ * - **Side effects:** writes a single short-lived Redis entry (or none when the
+ *   bounded TTL is non-positive).
  * - **Notes:** the cache is invalidated on every revoke or rotate via
  *   {@link invalidateCachedSessionToken} to bound staleness to that TTL.
  */
-export async function setCachedSessionTokenValid(tokenHash: string): Promise<void> {
+export async function setCachedSessionTokenValid({
+  tokenHash,
+  sessionExpiresAt,
+}: SetCachedSessionTokenValidInput): Promise<void> {
+  const remainingSeconds = Math.floor((sessionExpiresAt.getTime() - Date.now()) / 1000);
+  const ttlSeconds = Math.min(SESSION_TOKEN_CACHE_TTL_SECONDS, remainingSeconds);
+  if (ttlSeconds <= 0) {
+    return;
+  }
   try {
-    await redisConnection.set(
-      buildSessionTokenCacheKey(tokenHash),
-      '1',
-      'EX',
-      SESSION_TOKEN_CACHE_TTL_SECONDS,
-    );
+    await redisConnection.set(buildSessionTokenCacheKey(tokenHash), '1', 'EX', ttlSeconds);
   } catch (error) {
     logger.warn({ error }, 'session-token-cache.set.failed');
   }

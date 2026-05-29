@@ -104,7 +104,12 @@ export class AuthSessionService {
   }
 
   /**
-   * Ensures the bearer token matches an active, non-revoked session row (Redis-cached 60s).
+   * Ensures the bearer token matches an active, non-revoked session row.
+   *
+   * @remarks
+   * The positive result is cached in Redis for up to 60s, but the cache TTL is
+   * capped to the session's remaining lifetime so a cached "valid" entry can
+   * never outlive the session (see {@link setCachedSessionTokenValid}).
    */
   async verifyActiveAccessToken(rawToken: string): Promise<void> {
     const tokenHash = hashAccessToken(rawToken);
@@ -120,7 +125,7 @@ export class AuthSessionService {
       throw new UnauthorizedError('errors:invalidOrExpiredSession');
     }
 
-    await setCachedSessionTokenValid(tokenHash);
+    await setCachedSessionTokenValid({ tokenHash, sessionExpiresAt: session.expires_at });
   }
 
   async findActiveSessionByPublicId(sessionPublicId: string) {

@@ -38,7 +38,10 @@ describe('AuthSessionService', () => {
     findByPublicId: vi
       .fn()
       .mockResolvedValue({ public_id: 'session_public', token_hash: 'old-hash' }),
-    findActiveByTokenHash: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
+    findActiveByTokenHash: vi.fn().mockResolvedValue({
+      public_id: 'session_public',
+      expires_at: new Date('2026-12-31T00:00:00.000Z'),
+    }),
     rotateTokenHash: vi.fn().mockResolvedValue(undefined),
   } as unknown as AuthSessionRepository;
 
@@ -138,14 +141,21 @@ describe('AuthSessionService', () => {
     expect(sessionRepository.findActiveByTokenHash).not.toHaveBeenCalled();
   });
 
-  it('verifyActiveAccessToken loads session and caches on miss', async () => {
+  it('verifyActiveAccessToken loads session and caches with the session expiry on miss', async () => {
+    const sessionExpiresAt = new Date('2026-12-31T00:00:00.000Z');
     const { getCachedSessionTokenValid, setCachedSessionTokenValid } = await import(
       '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
     );
     vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(false);
+    vi.mocked(sessionRepository.findActiveByTokenHash).mockResolvedValueOnce({
+      public_id: 'session_public',
+      expires_at: sessionExpiresAt,
+    } as never);
     await service.verifyActiveAccessToken('fresh-token');
     expect(sessionRepository.findActiveByTokenHash).toHaveBeenCalled();
-    expect(setCachedSessionTokenValid).toHaveBeenCalled();
+    expect(setCachedSessionTokenValid).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionExpiresAt }),
+    );
   });
 
   it('verifyActiveAccessToken throws when session is missing', async () => {
