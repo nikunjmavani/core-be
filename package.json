@@ -96,6 +96,7 @@
     "load:daily-ops": "k6 run src/tests/load/k6/scenarios/daily-ops.js",
     "load:billing": "k6 run src/tests/load/k6/scenarios/billing.js",
     "load:webhooks": "k6 run src/tests/load/k6/scenarios/webhooks.js",
+    "load:rls-concurrency": "k6 run src/tests/load/k6/scenarios/rls-concurrency-beyond-pool.js",
     "load:admin": "k6 run src/tests/load/k6/scenarios/admin.js",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

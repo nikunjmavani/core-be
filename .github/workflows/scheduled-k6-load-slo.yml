@@ -1,5 +1,5 @@
 # Nightly k6 load tests against an ephemeral API (Postgres + Redis).
-# Gate: health-stress + api-stress (SLO thresholds). Informational: auth, daily-ops, billing, webhooks, admin.
+# Gate: health-stress + api-stress (SLO thresholds). Informational: auth, daily-ops, billing, webhooks, admin, org-scoped routes (incl. rls-concurrency-beyond-pool).
 # Secrets (optional email): RESEND_API_KEY, LOAD_TEST_RESULT_EMAIL_TO or TEST_REPORT_EMAIL_TO
 name: Scheduled k6 API load & SLO
 
@@ -168,6 +168,7 @@ jobs:
           k6 run --summary-export=k6-notification-policy.json src/tests/load/k6/scenarios/notification-policy-crud.js
           k6 run --summary-export=k6-billing-subscriptions-rls.json src/tests/load/k6/scenarios/billing-subscriptions-rls.js
           k6 run --summary-export=k6-user-data-export.json src/tests/load/k6/scenarios/user-data-export.js
+          k6 run --summary-export=k6-rls-concurrency.json src/tests/load/k6/scenarios/rls-concurrency-beyond-pool.js
         env:
           ADMIN_TOKEN: ${{ env.ADMIN_TOKEN }}
           TEST_TOKEN: ${{ env.TEST_TOKEN }}

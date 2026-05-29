@@ -115,6 +115,7 @@
     "pipefail",
     "pooler",
     "postmanv",
+    "regenerable",
     "semgrep",
     "TOTP",
     "toxiproxy",

@@ -77,5 +77,5 @@ reports/
 tooling/setup.secrets.json
 .setup-state.json
 
-# Understand Anything — intermediate batches are regenerable (see docs/integrations/understand-anything.md)
-.understand-anything/intermediate/
+# Understand Anything — fully regenerable analysis output
+.understand-anything/
