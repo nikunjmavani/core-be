@@ -71,12 +71,15 @@ describe('rate-limit.middleware', () => {
       global: boolean;
       max: number;
       timeWindow: number;
+      skipOnError: boolean;
       allowList: (request: { url: string }) => boolean;
     };
     expect(options.global).toBe(true);
     // Global cap is a fixed per-IP number; org/user quotas live in post-auth presets.
     expect(options.max).toBe(100);
     expect(options.timeWindow).toBe(60_000);
+    // Fail-open on Redis blip — a few seconds of unmetered traffic beats a blanket 5xx.
+    expect(options.skipOnError).toBe(true);
     expect(options.allowList({ url: '/health' })).toBe(true);
     expect(options.allowList({ url: testApiPath('/auth/login') })).toBe(false);
   });
@@ -125,8 +128,40 @@ describe('rate-limit.middleware', () => {
     await application.register(productionRateLimitMiddleware);
     await application.ready();
 
-    const options = rateLimitPlugin.mock.calls.at(-1)![1] as { redis?: unknown };
+    const options = rateLimitPlugin.mock.calls.at(-1)![1] as {
+      redis?: unknown;
+      skipOnError: boolean;
+    };
     expect(options.redis).toBeDefined();
+    // Fail-open must also be set in production so a Redis blip cannot blanket-5xx the API.
+    expect(options.skipOnError).toBe(true);
+    process.env.RUN_REDIS_TESTS = previousFlag;
+    vi.resetModules();
+  });
+
+  it('always sets skipOnError: true so Redis outages cannot blanket-fail the API', async () => {
+    const previousFlag = process.env.RUN_REDIS_TESTS;
+    delete process.env.RUN_REDIS_TESTS;
+    vi.resetModules();
+    vi.doMock('@/shared/config/env.config.js', () => ({
+      env: {
+        NODE_ENV: 'development',
+        RATE_LIMIT_MAX: 25,
+        RATE_LIMIT_WINDOW_MS: 15_000,
+        REDIS_URL: undefined,
+      },
+    }));
+    const { default: developmentRateLimitMiddleware } = await import(
+      '@/shared/middlewares/rate-limit.middleware.js'
+    );
+    application = Fastify();
+    await application.register(developmentRateLimitMiddleware);
+    await application.ready();
+
+    // Even the in-memory configuration registers skipOnError: true, so the option is
+    // never accidentally dropped when toggling between stores.
+    const options = rateLimitPlugin.mock.calls.at(-1)![1] as { skipOnError: boolean };
+    expect(options.skipOnError).toBe(true);
     process.env.RUN_REDIS_TESTS = previousFlag;
     vi.resetModules();
   });
