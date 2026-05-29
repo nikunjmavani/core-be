@@ -63,8 +63,10 @@ export interface MembershipPermissionsOutput {
  *   transfers; `ValidationError` from Zod-backed validators.
  * - **Side effects:** writes through `MembershipRepository` (insert / update /
  *   soft-delete with `deleted_at`); calls {@link invalidatePermissions} after
- *   creating a membership so the Redis permission cache is purged for that
- *   user; updates {@link UserSettingsService} for locale defaults.
+ *   every membership mutation that changes effective permissions (create,
+ *   update, delete, leave) so the affected user's Redis permission cache is
+ *   purged immediately instead of lingering for the cache TTL; updates
+ *   {@link UserSettingsService} for locale defaults.
  * - **Notes:** `getPermissions` reads through
  *   {@link MemberRolePermissionService.listPermissionCodesForRole} so role
  *   permissions remain a single source of truth.
@@ -78,6 +80,17 @@ export class MembershipService {
     private readonly organizationSettingsService?: OrganizationSettingsService,
     private readonly userSettingsService?: UserSettingsService,
   ) {}
+
+  private async invalidatePermissionsForMembership(
+    user_internal_id: number,
+    organization_public_id: string,
+  ): Promise<void> {
+    const userPublicId =
+      await this.organizationService.resolveUserPublicIdByInternalId(user_internal_id);
+    if (userPublicId) {
+      await invalidatePermissions(userPublicId, organization_public_id);
+    }
+  }
 
   private async applyOrganizationLocaleDefaults(
     userPublicId: string,
@@ -198,6 +211,7 @@ export class MembershipService {
         userId ?? null,
       );
       if (!updated) throw new NotFoundError('Membership');
+      await this.invalidatePermissionsForMembership(updated.user_id, organization_public_id);
       return serializeMembership(updated, organization_public_id);
     });
   }
@@ -213,6 +227,7 @@ export class MembershipService {
         organization.id,
       );
       if (!deleted) throw new NotFoundError('Membership');
+      await this.invalidatePermissionsForMembership(deleted.user_id, organization_public_id);
     });
   }
 
@@ -258,6 +273,7 @@ export class MembershipService {
         organization.id,
       );
       if (!deleted) throw new NotFoundError('Membership');
+      await invalidatePermissions(user_public_id, organization_public_id);
     });
   }
 

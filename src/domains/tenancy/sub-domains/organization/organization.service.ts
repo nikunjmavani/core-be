@@ -172,6 +172,24 @@ export class OrganizationService {
     return this.repository.resolveUserIdByPublicId(user_public_id);
   }
 
+  /**
+   * Resolve a user's public id from their internal numeric id.
+   *
+   * @remarks
+   * - **Algorithm:** delegates to
+   *   {@link OrganizationRepository.resolveUserPublicIdByInternalId}, which
+   *   reads the active `users` row by internal id.
+   * - **Failure modes:** returns `null` when no active user matches; never
+   *   throws on a miss.
+   * - **Side effects:** single read-only Postgres lookup.
+   * - **Notes:** the inverse of {@link resolveUserInternalIdByPublicId}; used by
+   *   tenancy services that hold a membership's internal `user_id` but need the
+   *   public id to invalidate the per-user permission cache.
+   */
+  async resolveUserPublicIdByInternalId(user_internal_id: number): Promise<string | null> {
+    return this.repository.resolveUserPublicIdByInternalId(user_internal_id);
+  }
+
   async updateStripeCustomerIdForOrganization(
     organization_public_id: string,
     stripe_customer_id: string,

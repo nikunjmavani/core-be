@@ -22,6 +22,7 @@ describe('MembershipService — permission cache invalidation', () => {
       owner_user_id: 10,
     }),
     resolveUserInternalIdByPublicId: vi.fn().mockResolvedValue(5),
+    resolveUserPublicIdByInternalId: vi.fn().mockResolvedValue('user_public_affected'),
     transferOrganizationOwnership: vi.fn().mockResolvedValue(undefined),
   };
 
@@ -88,5 +89,30 @@ describe('MembershipService — permission cache invalidation', () => {
     );
 
     expect(invalidatePermissions).toHaveBeenCalledWith('user_public_new', 'org_public_abc');
+  });
+
+  it('update invalidates the affected user permission cache', async () => {
+    await service.update('org_public_abc', 'membership_public', { status: 'SUSPENDED' }, 'admin');
+
+    expect(organizationService.resolveUserPublicIdByInternalId).toHaveBeenCalledWith(5);
+    expect(invalidatePermissions).toHaveBeenCalledWith('user_public_affected', 'org_public_abc');
+  });
+
+  it('delete invalidates the affected user permission cache', async () => {
+    membershipRepository.softDelete.mockResolvedValueOnce({
+      public_id: 'membership_public',
+      user_id: 5,
+    });
+
+    await service.delete('org_public_abc', 'membership_public');
+
+    expect(organizationService.resolveUserPublicIdByInternalId).toHaveBeenCalledWith(5);
+    expect(invalidatePermissions).toHaveBeenCalledWith('user_public_affected', 'org_public_abc');
+  });
+
+  it('leaveOrganization invalidates the leaving user permission cache', async () => {
+    await service.leaveOrganization('org_public_abc', 'user_public_leaver');
+
+    expect(invalidatePermissions).toHaveBeenCalledWith('user_public_leaver', 'org_public_abc');
   });
 });

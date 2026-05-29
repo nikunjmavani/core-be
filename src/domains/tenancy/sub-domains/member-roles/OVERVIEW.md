@@ -12,7 +12,7 @@ Per-organization role definitions and the role ↔ permission join table. A `mem
 
 - **Roles are organization-scoped**: every role row carries `organization_id`; cross-org reads are forbidden by RLS.
 - **Permission catalog is global, role assignments are scoped**: the permission constants (`TENANCY_PERMISSIONS`, `BILLING_PERMISSIONS`, etc.) are platform-defined; what a role grants is per-organization.
-- **Updating a role's permissions invalidates every member's cache**: role-permission writes invalidate every `(user_with_this_role, org)` cache key.
+- **Updating a role's permissions invalidates every member's cache**: role-permission replacement and role deletion bump the organization permission cache version (`invalidateOrganizationPermissions`), orphaning every `(user, org)` cache key in the org in O(1) — a role change can affect many members, so the whole org namespace is invalidated rather than enumerating holders.
 - **Built-in roles are uneditable** (when present): the seed creates "Owner" / "Admin" / "Member" with fixed permission sets that admins can clone but not edit in place.
 
 ## Lifecycle
@@ -30,4 +30,4 @@ stateDiagram-v2
 
 - **Soft-deleting a role with active members** → 409; admin must reassign members first.
 - **Granting a permission constant that doesn't exist** → 400.
-- **Concurrent role-permission writes** → second write merges; permission cache invalidated for every affected member.
+- **Concurrent role-permission writes** → second write merges; the organization permission cache version is bumped so every affected member re-resolves.

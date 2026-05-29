@@ -36,6 +36,7 @@ describe('MembershipService', () => {
   const organizationService = {
     requireOrganizationMembershipByPublicId: vi.fn().mockResolvedValue(organization),
     resolveUserInternalIdByPublicId: vi.fn().mockResolvedValue(10),
+    resolveUserPublicIdByInternalId: vi.fn().mockResolvedValue('user_public'),
   } as unknown as OrganizationService;
 
   const memberRoleService = {

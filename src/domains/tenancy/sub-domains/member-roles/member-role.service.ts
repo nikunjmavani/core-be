@@ -9,6 +9,7 @@ import {
   validateListMemberRolesQuery,
 } from './member-role.validator.js';
 import { serializeMemberRole } from './member-role.serializer.js';
+import { invalidateOrganizationPermissions } from '../permission/permission-cache.service.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { CursorPaginationInput } from '@/shared/utils/http/pagination.util.js';
 
@@ -27,7 +28,9 @@ import type { CursorPaginationInput } from '@/shared/utils/http/pagination.util.
  *   illegal pagination. The repository's unique index on `(organization_id,
  *   name)` raises duplicate-key errors for collisions on create/update.
  * - **Side effects:** writes through `MemberRoleRepository` (insert / update /
- *   soft-delete with `deleted_at`). The companion
+ *   soft-delete with `deleted_at`). Deleting a role calls
+ *   {@link invalidateOrganizationPermissions} so members who held it stop
+ *   resolving its permissions from cache. The companion
  *   {@link MemberRolePermissionService} owns the role's permission set; this
  *   service does not touch `role_permissions`.
  * - **Notes:** `requireRoleRecord*` and `resolveRolePublicId*` helpers are
@@ -186,6 +189,7 @@ export class MemberRoleService {
         );
       const deleted = await this.memberRoleRepository.softDelete(role_public_id, organization.id);
       if (!deleted) throw new NotFoundError('Role');
+      await invalidateOrganizationPermissions(organization_public_id);
     });
   }
 }
