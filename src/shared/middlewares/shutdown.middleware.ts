@@ -12,6 +12,36 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 import { getShutdownWatchdogMs } from '@/infrastructure/queue/worker-runtime/shutdown-timing.util.js';
 
+/**
+ * Pause between flipping `/health` to 503 (draining) and closing the server, so an
+ * external load balancer observes the unhealthy state on its next probe and stops
+ * routing new connections before sockets close.
+ *
+ * @remarks
+ * Sized at roughly 1.5–2× a typical 1.5–2s load-balancer health-probe interval so at
+ * least one probe reliably lands inside the draining window. Without this pause a
+ * Railway/LB redeploy (SIGTERM) races `app.close()`: `/health` only reports 503 once
+ * the LB next polls, and any traffic sent in between resets → connection errors / 502s
+ * on every deploy. The delay is added on top of the shutdown watchdog budget (see
+ * {@link getShutdownDrainDelayMs}) so it never eats into the in-flight drain budget or
+ * trips the force-exit watchdog.
+ */
+export const SHUTDOWN_DRAIN_DELAY_MS = 3_000;
+
+/**
+ * Runtimes that sit behind a load balancer and therefore need the pre-close drain pause.
+ * Local/development/test processes are reached directly, so the delay is skipped to keep
+ * shutdowns (and test suites) fast.
+ */
+const ENVIRONMENTS_BEHIND_LOAD_BALANCER = new Set(['staging', 'production']);
+
+/** Drain pause for the current runtime: {@link SHUTDOWN_DRAIN_DELAY_MS} behind a load balancer, otherwise 0. */
+function getShutdownDrainDelayMs(): number {
+  return ENVIRONMENTS_BEHIND_LOAD_BALANCER.has(process.env.NODE_ENV ?? '')
+    ? SHUTDOWN_DRAIN_DELAY_MS
+    : 0;
+}
+
 const shutdownMiddleware: FastifyPluginAsync = async (app) => {
   app.addHook('onClose', async () => {
     /**
@@ -32,13 +62,19 @@ const shutdownMiddleware: FastifyPluginAsync = async (app) => {
     setApplicationDraining(true);
     logger.info({ signal }, 'Shutdown requested');
 
-    const watchdogMs = getShutdownWatchdogMs();
+    const drainDelayMs = getShutdownDrainDelayMs();
+    /** Add the drain pause on top of the close budget so the watchdog cannot kill the drain. */
+    const watchdogMs = getShutdownWatchdogMs() + drainDelayMs;
     const timer = setTimeout(() => {
       logger.error({ watchdogMs }, 'Shutdown timeout exceeded');
       process.exit(1);
     }, watchdogMs).unref();
 
     try {
+      if (drainDelayMs > 0) {
+        logger.info({ drainDelayMs }, 'Draining: waiting for load balancer to observe 503');
+        await new Promise<void>((resolve) => setTimeout(resolve, drainDelayMs).unref());
+      }
       await app.close();
       clearTimeout(timer);
       process.exit(0);

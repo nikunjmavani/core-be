@@ -51,17 +51,22 @@ const SHUTDOWN_WATCHDOG_BUFFER_MS = 5_000;
 /** Default shutdown timeout when SHUTDOWN_TIMEOUT_MS env is unset. */
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
 
-import shutdownMiddleware from '@/shared/middlewares/shutdown.middleware.js';
+import shutdownMiddleware, {
+  SHUTDOWN_DRAIN_DELAY_MS,
+} from '@/shared/middlewares/shutdown.middleware.js';
 
 describe('shutdown.middleware', () => {
   let processExitSpy: ReturnType<typeof vi.spyOn>;
+  let originalNodeEnv: string | undefined;
 
   beforeEach(() => {
     mockEnv.SHUTDOWN_TIMEOUT_MS = undefined;
+    originalNodeEnv = process.env.NODE_ENV;
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
   });
 
   afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
     process.removeAllListeners('SIGTERM');
     process.removeAllListeners('SIGINT');
     vi.restoreAllMocks();
@@ -123,6 +128,70 @@ describe('shutdown.middleware', () => {
     expect(scheduledDelaysListeningForShutdownTimeout).toContain(
       5_000 + SHUTDOWN_WATCHDOG_BUFFER_MS,
     );
+  });
+
+  it('skips the load-balancer drain delay outside staging/production', async () => {
+    const originalSetTimeout = global.setTimeout;
+    const scheduledDelaysListeningForShutdownTimeout: number[] = [];
+    vi.spyOn(global, 'setTimeout').mockImplementation(((handler, timeout, ...arguments_) => {
+      if (typeof timeout === 'number') {
+        scheduledDelaysListeningForShutdownTimeout.push(timeout);
+      }
+      return originalSetTimeout(handler, timeout, ...arguments_);
+    }) as typeof setTimeout);
+
+    process.env.NODE_ENV = 'test';
+
+    const applicationListeningForShutdown = Fastify({ logger: false });
+    const applicationCloseSpy = vi.spyOn(applicationListeningForShutdown, 'close');
+    await applicationListeningForShutdown.register(shutdownMiddleware);
+    await applicationListeningForShutdown.ready();
+
+    process.emit('SIGTERM');
+    await waitUntilProcessExitIsCalled();
+
+    expect(processExitSpy).toHaveBeenCalledWith(0);
+    expect(applicationCloseSpy).toHaveBeenCalled();
+    expect(scheduledDelaysListeningForShutdownTimeout).not.toContain(SHUTDOWN_DRAIN_DELAY_MS);
+    expect(scheduledDelaysListeningForShutdownTimeout).toContain(
+      DEFAULT_SHUTDOWN_TIMEOUT_MS + SHUTDOWN_WATCHDOG_BUFFER_MS,
+    );
+  });
+
+  it('waits the drain delay before app.close and extends the watchdog in production', async () => {
+    const originalSetTimeout = global.setTimeout;
+    const scheduledDelaysListeningForShutdownTimeout: number[] = [];
+    let applicationCloseObservedDuringDrain = false;
+    const applicationListeningForShutdown = Fastify({ logger: false });
+    const applicationCloseSpy = vi.spyOn(applicationListeningForShutdown, 'close');
+
+    /** Fire the drain timer immediately so the test does not block for the full 3s delay. */
+    vi.spyOn(global, 'setTimeout').mockImplementation(((handler, timeout, ...arguments_) => {
+      if (typeof timeout === 'number') {
+        scheduledDelaysListeningForShutdownTimeout.push(timeout);
+      }
+      if (timeout === SHUTDOWN_DRAIN_DELAY_MS) {
+        applicationCloseObservedDuringDrain = applicationCloseSpy.mock.calls.length > 0;
+        return originalSetTimeout(handler, 0, ...arguments_);
+      }
+      return originalSetTimeout(handler, timeout, ...arguments_);
+    }) as typeof setTimeout);
+
+    process.env.NODE_ENV = 'production';
+
+    await applicationListeningForShutdown.register(shutdownMiddleware);
+    await applicationListeningForShutdown.ready();
+
+    process.emit('SIGTERM');
+    await waitUntilProcessExitIsCalled();
+
+    expect(processExitSpy).toHaveBeenCalledWith(0);
+    expect(scheduledDelaysListeningForShutdownTimeout).toContain(SHUTDOWN_DRAIN_DELAY_MS);
+    expect(scheduledDelaysListeningForShutdownTimeout).toContain(
+      DEFAULT_SHUTDOWN_TIMEOUT_MS + SHUTDOWN_WATCHDOG_BUFFER_MS + SHUTDOWN_DRAIN_DELAY_MS,
+    );
+    expect(applicationCloseObservedDuringDrain).toBe(false);
+    expect(applicationCloseSpy).toHaveBeenCalled();
   });
 
   it('calls process.exit(1) when app.close exceeds SHUTDOWN_TIMEOUT_MS + buffer', async () => {
