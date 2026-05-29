@@ -12,7 +12,7 @@ import type { AuthSessionService } from '../../auth-session/auth-session.service
 import type { OAuthProfile, OAuthProvider } from './oauth.types.js';
 import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
-/** Final stage of an OAuth callback: finds-or-creates the user, idempotently links the OAuth provider via {@link AuthMethodService.linkOAuthProviderIfMissing}, then mints an access token + persisted session. Rejects disposable emails for first-time signups. */
+/** Final stage of an OAuth callback: finds-or-creates the user, idempotently links the OAuth provider via {@link AuthMethodService.linkOAuthProviderIfMissing}, then mints an access token + persisted session. Rejects disposable emails for first-time signups. Refuses to silently find-or-link into a pre-existing account whose email is not verified (unless that OAuth identity is already linked), throwing `ForbiddenError` to prevent account takeover. */
 export async function completeOAuthUserSession(parameters: {
   userService: UserService;
   authMethodService: AuthMethodService;
@@ -40,6 +40,21 @@ export async function completeOAuthUserSession(parameters: {
       }),
     );
     logger.info({ email: profile.email, provider }, 'oauth.user.created');
+  } else {
+    // Account-takeover guard: a pre-existing account (e.g. created by password)
+    // must not be silently merged into via find-or-link. Only auto-link when this
+    // OAuth identity is already linked to the account, or the account's email is
+    // already verified (proving the account owner controls the address). Otherwise
+    // require explicit linking from an authenticated session.
+    const existingProviderMethod = await authMethodService.findByProviderUserId(
+      provider,
+      profile.provider_user_id,
+    );
+    const isOAuthIdentityAlreadyLinked = existingProviderMethod?.user_id === user.id;
+    if (!(isOAuthIdentityAlreadyLinked || user.is_email_verified)) {
+      logger.warn({ email: profile.email, provider }, 'oauth.user.link_blocked_unverified_account');
+      throw new ForbiddenError('errors:oauthLinkRequiresVerifiedAccount');
+    }
   }
 
   await authMethodService.linkOAuthProviderIfMissing({
