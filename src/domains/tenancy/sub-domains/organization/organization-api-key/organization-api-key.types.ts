@@ -42,3 +42,18 @@ export interface OrganizationApiKeyAuthMatch {
   organization_public_id: string;
   scopes: string[];
 }
+
+/**
+ * Candidate row returned by the `tenancy.resolve_api_key_for_authentication` SECURITY DEFINER
+ * resolver — enough to verify the secret and establish tenancy without reading `tenancy.api_keys`
+ * or `tenancy.organizations` directly (both are FORCE RLS and the auth phase has no org context).
+ */
+export interface OrganizationApiKeyAuthenticationCandidate {
+  public_id: string;
+  organization_id: number;
+  organization_public_id: string;
+  key_hash: string;
+  scopes: string[];
+  status: string;
+  expires_at: Date | null;
+}

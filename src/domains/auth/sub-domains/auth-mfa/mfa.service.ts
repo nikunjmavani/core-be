@@ -10,6 +10,7 @@ import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-
 import { env } from '@/shared/config/env.config.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodService } from '../auth-method/auth-method.service.js';
 import type { AuthSessionService } from '../auth-session/auth-session.service.js';
@@ -100,7 +101,12 @@ export class MfaService {
       await this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id);
       verified = true;
     } else if (parsed.recovery_code) {
-      const consumed = await consumeMfaRecoveryCode(user.id, parsed.recovery_code);
+      // auth.mfa_recovery_codes is FORCE RLS keyed on app.current_user_id; the MFA session already
+      // identifies the user, so consume the single-use code inside that user's context.
+      const recoveryCode = parsed.recovery_code;
+      const consumed = await withUserDatabaseContext(user.public_id, () =>
+        consumeMfaRecoveryCode(user.id, recoveryCode),
+      );
       if (!consumed) {
         throw new UnauthorizedError('errors:mfaInvalidOrExpiredRecoveryCode');
       }

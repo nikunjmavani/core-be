@@ -127,7 +127,10 @@ export class UserService {
     await this.offboardingDependencies.authMethodService.revokeAllForUser(public_id);
     await withTransaction(async () => {
       await this.offboardingDependencies!.uploadService.tombstoneAllByUserId(user.id);
-      await this.offboardingDependencies!.userDataExportService.deleteAllExportsForUser(user.id);
+      await this.offboardingDependencies!.userDataExportService.deleteAllExportsForUser(
+        user.id,
+        public_id,
+      );
       const deleted = await this.repository.softDelete(public_id);
       if (!deleted) throw new NotFoundError('User');
     });

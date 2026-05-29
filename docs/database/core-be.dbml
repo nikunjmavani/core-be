@@ -155,7 +155,7 @@ Table auth.mfa_methods {
 }
 
 Note auth.mfa_methods {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: mfa_methods_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.mfa_recovery_codes {
@@ -167,7 +167,7 @@ Table auth.mfa_recovery_codes {
 }
 
 Note auth.mfa_recovery_codes {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: mfa_recovery_codes_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.sessions {
@@ -203,7 +203,7 @@ Table auth.user_data_exports {
 }
 
 Note auth.user_data_exports {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: user_data_exports_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.user_notification_preferences {
@@ -234,7 +234,7 @@ Table auth.user_settings {
 }
 
 Note auth.user_settings {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: user_settings_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.users {
@@ -292,7 +292,7 @@ Table auth.webauthn_credentials {
 }
 
 Note auth.webauthn_credentials {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: webauthn_credentials_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table billing.plans {

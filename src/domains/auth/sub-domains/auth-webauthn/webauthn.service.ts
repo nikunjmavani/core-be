@@ -17,6 +17,7 @@ import { MILLISECONDS_PER_DAY } from '@/shared/constants/index.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionService } from '../auth-session/auth-session.service.js';
 import type { WebauthnCredentialRepository } from './webauthn-credential.repository.js';
@@ -102,7 +103,9 @@ export class WebauthnService {
       throw new UnauthorizedError('errors:userNotFound');
     }
 
-    const existingCredentials = await this.credentialRepository.listActiveByUserId(user.id);
+    const existingCredentials = await withUserDatabaseContext(user.public_id, () =>
+      this.credentialRepository.listActiveByUserId(user.id),
+    );
     const relyingPartyId = resolveWebauthnRelyingPartyId();
     const options = await generateRegistrationOptions({
       rpName: resolveWebauthnRelyingPartyName(),
@@ -166,15 +169,17 @@ export class WebauthnService {
     }
 
     const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
-    const created = await this.credentialRepository.createCredential({
-      user_id: user.id,
-      credential_id: credential.id,
-      public_key: Buffer.from(credential.publicKey).toString('base64url'),
-      counter: credential.counter,
-      device_type: credentialDeviceType,
-      backed_up: credentialBackedUp,
-      transports: credential.transports ?? [],
-    });
+    const created = await withUserDatabaseContext(user.public_id, () =>
+      this.credentialRepository.createCredential({
+        user_id: user.id,
+        credential_id: credential.id,
+        public_key: Buffer.from(credential.publicKey).toString('base64url'),
+        counter: credential.counter,
+        device_type: credentialDeviceType,
+        backed_up: credentialBackedUp,
+        transports: credential.transports ?? [],
+      }),
+    );
 
     return { verified: true, credential_id: created.credential_id };
   }
@@ -193,7 +198,9 @@ export class WebauthnService {
       throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
-    const credentials = await this.credentialRepository.listActiveByUserId(user.id);
+    const credentials = await withUserDatabaseContext(user.public_id, () =>
+      this.credentialRepository.listActiveByUserId(user.id),
+    );
     if (credentials.length === 0) {
       throw new UnauthorizedError('errors:webauthnNoCredentials');
     }
@@ -232,7 +239,11 @@ export class WebauthnService {
     );
 
     const response = parsed.response as unknown as AuthenticationResponseJSON;
-    const storedCredential = await this.credentialRepository.findActiveByCredentialId(response.id);
+    // The challenge binds this assertion to a user; auth.webauthn_credentials is FORCE RLS keyed on
+    // app.current_user_id, so look the credential up inside that user's context.
+    const storedCredential = await withUserDatabaseContext(challenge.user_public_id, () =>
+      this.credentialRepository.findActiveByCredentialId(response.id),
+    );
     if (!storedCredential || storedCredential.user_id === undefined) {
       throw new UnauthorizedError('errors:webauthnCredentialNotFound');
     }
@@ -262,7 +273,9 @@ export class WebauthnService {
     }
 
     const { newCounter } = verification.authenticationInfo;
-    await this.credentialRepository.updateCounter(storedCredential.credential_id, newCounter);
+    await withUserDatabaseContext(user.public_id, () =>
+      this.credentialRepository.updateCounter(storedCredential.credential_id, newCounter),
+    );
 
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
