@@ -111,6 +111,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.post(
       '/organizations',
       {
+        config: { idempotencyRequired: true },
         schema: {
           summary: 'Create organization',
           description:

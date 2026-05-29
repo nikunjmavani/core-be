@@ -1,9 +1,38 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import fastifyRateLimit from '@fastify/rate-limit';
 import type { RateLimitPluginOptions } from '@fastify/rate-limit';
 import { env } from '@/shared/config/env.config.js';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { Sentry } from '@/infrastructure/observability/sentry/sentry.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+
+/**
+ * Observes a request that is about to be throttled by the global limiter: emits a structured
+ * `rate_limit.exceeded` warning (with the resolved bucket key) and a warning-level Sentry
+ * breadcrumb so the next captured error carries the throttle context. Purely additive — it
+ * does not alter limiter behavior. Matches the `onExceeding` signature `(request, key)`.
+ */
+function recordGlobalRateLimitExceeded(request: FastifyRequest, key: string): void {
+  const url = request.routeOptions?.url ?? request.url;
+  logger.warn({
+    event: 'rate_limit.exceeded',
+    ip: request.ip,
+    method: request.method,
+    url,
+    key,
+  });
+  Sentry.addBreadcrumb({
+    category: 'rate_limit',
+    message: `Rate limit exceeded: ${key}`,
+    level: 'warning',
+    data: {
+      method: request.method,
+      url,
+      ip: request.ip,
+    },
+  });
+}
 
 /**
  * Liveness/readiness probe paths bypassed by the global limiter. Matched by exact
@@ -60,6 +89,8 @@ const rateLimitMiddleware: FastifyPluginAsync = async (app) => {
     // Fail-open on store unavailability — see @remarks above. The Redis client's `error`
     // event handler still surfaces the underlying issue for on-call.
     skipOnError: true,
+    // Observe-only: surface every throttled request as a structured log + Sentry breadcrumb.
+    onExceeding: recordGlobalRateLimitExceeded,
   };
 
   // Use Redis when configured; chaos suite sets RUN_REDIS_TESTS=0 for in-memory limiting.

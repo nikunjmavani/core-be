@@ -80,6 +80,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     app.post<{ Params: { id: string } }>(
       '/organizations/:id/memberships',
       {
+        config: { idempotencyRequired: true },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE, 'id')],
         schema: {
@@ -135,6 +136,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     app.post<{ Params: { id: string } }>(
       '/organizations/:id/transfer-ownership',
       {
+        config: { idempotencyRequired: true },
         onRequest: [app.authenticate],
         schema: {
           summary: 'Transfer organization ownership',
@@ -169,7 +171,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE, 'id')],
-        ...MODERATE_AUTHED_RATE_LIMIT,
+        config: { ...MODERATE_AUTHED_RATE_LIMIT.config, idempotencyRequired: true },
         schema: {
           summary: 'Create invitation',
           description:

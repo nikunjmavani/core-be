@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
   injectAuthenticated,
@@ -82,6 +83,7 @@ describe('Tenancy Domain — Integration', () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/tenancy/organizations'),
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
         payload: {},
       });
       expect([400, 401]).toContain(response.statusCode);
@@ -94,6 +96,7 @@ describe('Tenancy Domain — Integration', () => {
         method: 'POST',
         url: testApiPath('/tenancy/organizations'),
         token,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
         payload: { name: 'Test Org', slug: 'test-org' },
       });
       expect(response.statusCode).toBe(201);
@@ -325,6 +328,7 @@ describe('Tenancy Domain — Integration', () => {
         method: 'POST',
         url: testApiPath(`/tenancy/organizations/${organization.public_id}/invitations`),
         token,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
         payload: {
           membership_id: membershipId,
           email: 'invite@yopmail.com',

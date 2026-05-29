@@ -150,6 +150,10 @@ jobs:
   sbom:
     name: SBOM
     needs: [changes]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     if: |
       always() &&
       needs.changes.outputs.src-code == 'true'
@@ -168,6 +172,12 @@ jobs:
           path: .
           format: cyclonedx-json
           output-file: sbom.cyclonedx.json
+
+      - name: Attest CycloneDX source SBOM
+        uses: actions/attest-sbom@51e74621a501c89df81fc1391c5a8f4cfc9fab2f # v3
+        with:
+          subject-path: sbom.cyclonedx.json
+          sbom-path: sbom.cyclonedx.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

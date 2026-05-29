@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
@@ -31,6 +32,7 @@ describe('Cross-domain e2e: tenancy + billing organization', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
       token,
+      headers: { 'idempotency-key': `idem-${randomUUID()}` },
       payload: { name: 'Billing E2E Org', slug: `billing-e2e-${Date.now()}` },
     });
     expect(createResponse.statusCode).toBe(201);

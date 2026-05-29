@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
@@ -123,6 +124,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organizations/${organization.public_id}/memberships`),
         token: adminToken,
         organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
         payload: {
           user_id: newMember.public_id,
           role_id: memberRole.public_id,
@@ -237,6 +239,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/organizations/${organization.public_id}/invitations`),
         token,
         organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
         payload: {
           membership_id: membership.public_id,
           email: `route-invite-${Date.now()}@test.com`,

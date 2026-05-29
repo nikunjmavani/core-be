@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
+  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
+  Sentry: { addBreadcrumb: vi.fn() },
+}));
+
 describe('rate-limit-presets', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
