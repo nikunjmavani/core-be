@@ -30,7 +30,7 @@ vi.mock('@/shared/utils/infrastructure/health-operational-metrics.util.js', () =
 }));
 
 vi.mock('@/shared/utils/infrastructure/readiness-probes.util.js', () => ({
-  runDependencyReadinessProbes: vi.fn().mockResolvedValue({
+  getCachedDependencyReadinessProbes: vi.fn().mockResolvedValue({
     status: 'ok',
     database: 'connected',
     redis: 'connected',
@@ -41,7 +41,7 @@ vi.mock('@/shared/utils/infrastructure/readiness-probes.util.js', () => ({
 
 import healthMiddleware from '@/shared/middlewares/health.middleware.js';
 import { isApplicationDraining } from '@/shared/utils/infrastructure/application-lifecycle.util.js';
-import { runDependencyReadinessProbes } from '@/shared/utils/infrastructure/readiness-probes.util.js';
+import { getCachedDependencyReadinessProbes } from '@/shared/utils/infrastructure/readiness-probes.util.js';
 
 describe('health.middleware', () => {
   let application: ReturnType<typeof Fastify>;
@@ -49,7 +49,7 @@ describe('health.middleware', () => {
   afterEach(async () => {
     vi.clearAllMocks();
     vi.mocked(isApplicationDraining).mockReturnValue(false);
-    vi.mocked(runDependencyReadinessProbes).mockResolvedValue({
+    vi.mocked(getCachedDependencyReadinessProbes).mockResolvedValue({
       status: 'ok',
       database: 'connected',
       redis: 'connected',
@@ -59,6 +59,63 @@ describe('health.middleware', () => {
     if (application) {
       await application.close();
     }
+  });
+
+  it('returns liveness ok at GET /livez without running dependency probes', async () => {
+    application = Fastify();
+    await application.register(healthMiddleware);
+    await application.ready();
+
+    const response = await application.inject({ method: 'GET', url: '/livez' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: 'ok' });
+    expect(getCachedDependencyReadinessProbes).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 draining at GET /livez when application is shutting down', async () => {
+    vi.mocked(isApplicationDraining).mockReturnValue(true);
+    application = Fastify();
+    await application.register(healthMiddleware);
+    await application.ready();
+
+    const response = await application.inject({ method: 'GET', url: '/livez' });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ status: 'draining' });
+    expect(getCachedDependencyReadinessProbes).not.toHaveBeenCalled();
+  });
+
+  it('returns readiness payload at GET /readyz', async () => {
+    application = Fastify();
+    await application.register(healthMiddleware);
+    await application.ready();
+
+    const response = await application.inject({ method: 'GET', url: '/readyz' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: 'ok',
+      database: 'connected',
+      redis: 'connected',
+      bullmq: 'connected',
+      migration_version: '20260501000000_test.sql',
+    });
+    expect(getCachedDependencyReadinessProbes).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 503 at GET /readyz when a dependency probe fails', async () => {
+    vi.mocked(getCachedDependencyReadinessProbes).mockResolvedValueOnce({
+      status: 'error',
+      database: 'connected',
+      redis: 'unavailable',
+      bullmq: 'connected',
+      latencyMs: { database: 1, redis: null, bullmq: 1 },
+    });
+    application = Fastify();
+    await application.register(healthMiddleware);
+    await application.ready();
+
+    const response = await application.inject({ method: 'GET', url: '/readyz' });
+    expect(response.statusCode).toBe(503);
+    expect(response.json().redis).toBe('unavailable');
   });
 
   it('returns readiness payload at GET /health', async () => {
@@ -107,7 +164,7 @@ describe('health.middleware', () => {
   });
 
   it('returns 503 when redis ping response is unexpected', async () => {
-    vi.mocked(runDependencyReadinessProbes).mockResolvedValueOnce({
+    vi.mocked(getCachedDependencyReadinessProbes).mockResolvedValueOnce({
       status: 'error',
       database: 'connected',
       redis: 'unavailable',
@@ -124,7 +181,7 @@ describe('health.middleware', () => {
   });
 
   it('returns 503 when bullmq probe fails', async () => {
-    vi.mocked(runDependencyReadinessProbes).mockResolvedValueOnce({
+    vi.mocked(getCachedDependencyReadinessProbes).mockResolvedValueOnce({
       status: 'error',
       database: 'connected',
       redis: 'connected',

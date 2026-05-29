@@ -5,6 +5,13 @@ import { env } from '@/shared/config/env.config.js';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 
 /**
+ * Health/liveness/readiness probe paths bypassed by the global limiter. Matched by exact
+ * path equality (query string stripped) so deploy probes and load balancers are never
+ * throttled, while arbitrary paths sharing a prefix (e.g. `/healthxyz`) are not exempt.
+ */
+const RATE_LIMIT_ALLOWLISTED_PATHS = new Set(['/health', '/livez', '/readyz']);
+
+/**
  * Global rate limiting, keyed strictly on `request.ip`.
  *
  * This limiter runs in the `onRequest` phase, before route authentication (which happens
@@ -38,7 +45,9 @@ const rateLimitMiddleware: FastifyPluginAsync = async (app) => {
     global: true,
     max: env.RATE_LIMIT_MAX,
     timeWindow: env.RATE_LIMIT_WINDOW_MS,
-    allowList: (request) => request.url.startsWith('/health'),
+    // Exact-match the liveness/readiness probe paths so unmetered bypass cannot be
+    // smuggled via a prefix collision like `/healthxyz` (the old `startsWith('/health')`).
+    allowList: (request) => RATE_LIMIT_ALLOWLISTED_PATHS.has(request.url.split('?', 1)[0] ?? ''),
     keyGenerator: (request) => request.ip,
     // Fail-open on store unavailability — see @remarks above. The Redis client's `error`
     // event handler still surfaces the underlying issue for on-call.
