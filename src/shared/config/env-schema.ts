@@ -317,6 +317,13 @@ const envSchemaBase = z.object({
   AUDIT_EXPORT_BATCH_SIZE: z.coerce.number().int().min(100).max(50_000).default(5_000),
   AUDIT_EXPORT_CRON: z.string().min(1).optional(),
   MAIL_OUTBOX_SWEEP_PENDING_MINUTES: z.coerce.number().int().min(1).default(15),
+  /**
+   * Minimum age (minutes) before a row stuck in `sending` is reclaimed to
+   * `pending`. Must sit comfortably above worst-case Resend delivery time
+   * (BullMQ retry/backoff + circuit cooldown) so a still-in-flight send is not
+   * reclaimed prematurely; Resend idempotency keys de-duplicate any overlap.
+   */
+  MAIL_OUTBOX_RECLAIM_SENDING_MINUTES: z.coerce.number().int().min(1).default(30),
   MAIL_OUTBOX_SWEEP_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
   MAIL_OUTBOX_SWEEPER_CRON: z.string().min(1).optional(),
   WEBHOOK_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),

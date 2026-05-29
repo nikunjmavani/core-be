@@ -40,6 +40,9 @@ function getClient(): Resend {
  *   `insertMailOutbox`, transport happens in `sendEmail`.
  * - **Notes:** `requestId` is propagated into Resend retry-context and structured
  *   logs so a single mail can be correlated across HTTP, BullMQ, and Resend logs.
+ *   `idempotencyKey` is forwarded to Resend as the `Idempotency-Key` header so a
+ *   retried or sweeper-reclaimed send (same outbox row) is de-duplicated by
+ *   Resend instead of delivering twice (audit #20).
  */
 export interface SendEmailOptions {
   to: string | string[];
@@ -49,6 +52,7 @@ export interface SendEmailOptions {
   replyTo?: string;
   tags?: { name: string; value: string }[];
   requestId?: string;
+  idempotencyKey?: string;
 }
 
 async function sendEmailViaResend(
@@ -59,7 +63,10 @@ async function sendEmailViaResend(
   const fromAddress = env.EMAIL_FROM_ADDRESS ?? 'noreply@albetrios.com';
   const fromName = env.EMAIL_FROM_NAME ?? 'Core';
   const client = getClient();
-  const requestOptions: ResendEmailRequestOptions = { signal };
+  const requestOptions: ResendEmailRequestOptions = omitUndefined({
+    signal,
+    idempotencyKey: options.idempotencyKey,
+  });
   const sendResult = await client.emails.send(
     omitUndefined({
       from: `${fromName} <${fromAddress}>`,

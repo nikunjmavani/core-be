@@ -23,6 +23,7 @@ vi.mock('@/infrastructure/mail/queues/mail.queue.js', () => ({
 vi.mock('@/shared/config/env.config.js', () => ({
   env: {
     MAIL_OUTBOX_SWEEP_PENDING_MINUTES: 5,
+    MAIL_OUTBOX_RECLAIM_SENDING_MINUTES: 10,
     MAIL_OUTBOX_SWEEP_BATCH_SIZE: 50,
     LOG_LEVEL: 'silent',
   },

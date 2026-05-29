@@ -34,8 +34,11 @@ export type MailOutboxSweeperJobResult = {
  *
  * @remarks
  * - **Algorithm:** runs inside a `system_table` worker context (no tenant RLS);
- *   reclaims rows stuck in `sending` beyond `MAIL_OUTBOX_SWEEP_PENDING_MINUTES`,
- *   then scans `pending` rows older than the same cutoff, and re-enqueues each id.
+ *   reclaims rows stuck in `sending` beyond `MAIL_OUTBOX_RECLAIM_SENDING_MINUTES`
+ *   (a cutoff comfortably above worst-case delivery time), then scans `pending`
+ *   rows older than `MAIL_OUTBOX_SWEEP_PENDING_MINUTES`, and re-enqueues each id.
+ *   Resend idempotency keys (set in the mail processor) de-duplicate any send
+ *   that overlaps a premature reclaim (audit #20).
  * - **Failure modes:** a failed `enqueueMailOutboxJob` per row is logged at warn
  *   and skipped — the next sweep retries it.
  * - **Side effects:** updates `auth.mail_outbox.status`/`updated_at` for reclaimed
@@ -49,13 +52,17 @@ export async function runMailOutboxSweeperJob(): Promise<MailOutboxSweeperJobRes
 
 async function runMailOutboxSweeperJobInner(): Promise<MailOutboxSweeperJobResult> {
   const pendingOlderThanMinutes = env.MAIL_OUTBOX_SWEEP_PENDING_MINUTES;
-  const cutoff = new Date(Date.now() - pendingOlderThanMinutes * 60_000);
+  const reclaimSendingOlderThanMinutes = env.MAIL_OUTBOX_RECLAIM_SENDING_MINUTES;
+  const pendingCutoff = new Date(Date.now() - pendingOlderThanMinutes * 60_000);
+  const sendingCutoff = new Date(Date.now() - reclaimSendingOlderThanMinutes * 60_000);
   const batchSize = env.MAIL_OUTBOX_SWEEP_BATCH_SIZE ?? DEFAULT_SWEEP_BATCH_SIZE;
 
-  const reclaimedSendingIds = await reclaimStaleSendingMailOutboxIds(cutoff, batchSize);
+  const reclaimedSendingIds = await reclaimStaleSendingMailOutboxIds(sendingCutoff, batchSize);
   const pendingBatchSize = Math.max(0, batchSize - reclaimedSendingIds.length);
   const stalePendingIds =
-    pendingBatchSize > 0 ? await findStalePendingMailOutboxIds(cutoff, pendingBatchSize) : [];
+    pendingBatchSize > 0
+      ? await findStalePendingMailOutboxIds(pendingCutoff, pendingBatchSize)
+      : [];
   const staleMailOutboxIds = [...reclaimedSendingIds, ...stalePendingIds];
   let reEnqueuedCount = 0;
 
@@ -71,6 +78,7 @@ async function runMailOutboxSweeperJobInner(): Promise<MailOutboxSweeperJobResul
   logger.info(
     {
       pendingOlderThanMinutes,
+      reclaimSendingOlderThanMinutes,
       scannedCount: staleMailOutboxIds.length,
       reclaimedSendingCount: reclaimedSendingIds.length,
       reEnqueuedCount,
