@@ -1,5 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import type { RateLimitOptions } from '@fastify/rate-limit';
+import { Sentry } from '@/infrastructure/observability/sentry/sentry.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
  * Per-route rate limit presets for high-risk endpoints.
@@ -8,6 +10,33 @@ import type { RateLimitOptions } from '@fastify/rate-limit';
  */
 function buildRateLimitKeyFromIpAddress(request: FastifyRequest): string {
   return `ip:${request.ip}`;
+}
+
+/**
+ * Shared `onExceeding` observer wired into every preset below so a throttled per-email / per-user /
+ * per-org request surfaces its bucket key. Emits the same structured `rate_limit.exceeded` warning
+ * as the global limiter plus a warning-level Sentry breadcrumb for trace context. Observe-only — it
+ * never changes throttling behavior. Matches the `onExceeding` signature `(request, key)`.
+ */
+function recordRouteRateLimitExceeded(request: FastifyRequest, key: string): void {
+  const url = request.routeOptions?.url ?? request.url;
+  logger.warn({
+    event: 'rate_limit.exceeded',
+    ip: request.ip,
+    method: request.method,
+    url,
+    key,
+  });
+  Sentry.addBreadcrumb({
+    category: 'rate_limit',
+    message: `Rate limit exceeded: ${key}`,
+    level: 'warning',
+    data: {
+      method: request.method,
+      url,
+      ip: request.ip,
+    },
+  });
 }
 
 /**
@@ -63,6 +92,7 @@ export const STRICT_PUBLIC_RATE_LIMIT = {
       max: STRICT_PUBLIC_ROUTE_MAX_REQUESTS_PER_WINDOW,
       timeWindow: 60_000,
       keyGenerator: buildRateLimitKeyFromIpAddress,
+      onExceeding: recordRouteRateLimitExceeded,
     },
   },
 } as const;
@@ -89,6 +119,7 @@ export const STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS: RateLimitOptions = {
   timeWindow: STRICT_PUBLIC_PER_EMAIL_WINDOW_MS,
   hook: 'preHandler',
   keyGenerator: buildRateLimitKeyFromRequestBodyEmail,
+  onExceeding: recordRouteRateLimitExceeded,
 };
 
 const STRICT_AUTHED_MAX_REQUESTS_PER_WINDOW = NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 10;
@@ -106,6 +137,7 @@ export const STRICT_AUTHED_RATE_LIMIT = {
       timeWindow: 60_000,
       hook: 'preHandler' as const,
       keyGenerator: buildRateLimitKeyFromAuthenticatedUserOrIpAddress,
+      onExceeding: recordRouteRateLimitExceeded,
     },
   },
 } as const;
@@ -118,6 +150,7 @@ export const MODERATE_AUTHED_RATE_LIMIT = {
       timeWindow: 60_000,
       hook: 'preHandler' as const,
       keyGenerator: buildRateLimitKeyFromAuthenticatedUserOrIpAddress,
+      onExceeding: recordRouteRateLimitExceeded,
     },
   },
 } as const;
@@ -129,6 +162,7 @@ export const REFRESH_RATE_LIMIT = {
       max: 30,
       timeWindow: 60_000,
       keyGenerator: buildRateLimitKeyFromIpAddress,
+      onExceeding: recordRouteRateLimitExceeded,
     },
   },
 } as const;
@@ -140,6 +174,7 @@ export const WEBHOOK_RATE_LIMIT = {
       max: NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 60,
       timeWindow: 60_000,
       keyGenerator: buildRateLimitKeyFromIpAddress,
+      onExceeding: recordRouteRateLimitExceeded,
     },
   },
 } as const;
@@ -152,6 +187,7 @@ export const ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT = {
       timeWindow: 60_000,
       hook: 'preHandler' as const,
       keyGenerator: buildRateLimitKeyFromOrganizationUserOrIpAddress,
+      onExceeding: recordRouteRateLimitExceeded,
     },
   },
 } as const;
@@ -164,6 +200,7 @@ export const EXPENSIVE_AUTHED_RATE_LIMIT = {
       timeWindow: 5 * 60_000,
       hook: 'preHandler' as const,
       keyGenerator: buildRateLimitKeyFromAuthenticatedUserOrIpAddress,
+      onExceeding: recordRouteRateLimitExceeded,
     },
   },
 } as const;
