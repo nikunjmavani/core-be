@@ -29,10 +29,20 @@ const iamUserStateSchema = z.object({
   secretAccessKey: z.string(),
 });
 
+const railwayCustomDomainStateSchema = z.object({
+  domain: z.string(),
+  customDomainId: z.string(),
+  targetPort: z.number().int().positive().optional(),
+  verified: z.boolean().optional(),
+  certificateStatus: z.string().optional(),
+  attachedAt: z.string(),
+});
+
 const railwayServiceStateSchema = z.object({
   serviceId: z.string(),
   environmentId: z.string().optional(),
   url: z.string().optional(),
+  customDomain: railwayCustomDomainStateSchema.optional(),
 });
 
 const jwtSecretStateSchema = z.union([
