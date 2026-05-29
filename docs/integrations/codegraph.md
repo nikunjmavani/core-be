@@ -14,12 +14,13 @@ The index is **machine-local and regenerable** — it is never committed. Only t
 
 | Path | Tracked? | Purpose |
 | --- | --- | --- |
-| `.mcp.json` | **committed** | Claude Code MCP server config (`codegraph serve --mcp`). |
+| `.mcp.example.json` | **committed** | Secret-free Claude Code MCP template (all servers, `${CONTEXT7_API_KEY}` placeholder, no machine path). |
+| `.mcp.json` | gitignored | Real Claude Code MCP config; written by `codegraph install` / copied from the example. |
+| `.cursor/mcp.example.json` | **committed** | Secret-free Cursor MCP template (all servers, `${CONTEXT7_API_KEY}` placeholder, no machine path). |
+| `.cursor/mcp.json` | gitignored | Real Cursor MCP config; holds live API keys + an absolute path, so it is not committed. Written by `codegraph install` / copied from the example. |
 | `.codegraph/.gitignore` | **committed** | Keeps the index DB, cache, logs, and daemon runtime files out of git. |
 | `.codegraph/codegraph.db` | gitignored | The ~26 MB SQLite index. Built per machine. |
 | `.codegraph/daemon.sock`, `daemon.pid`, `cache/`, `*.log` | gitignored | Local MCP daemon runtime files. |
-| `.cursor/mcp.example.json` | **committed** | Secret-free Cursor MCP template (all servers, `${CONTEXT7_API_KEY}` placeholder, no machine path). |
-| `.cursor/mcp.json` | gitignored (this repo) | Real Cursor MCP config; holds live API keys + an absolute path, so it is not committed. Written by `codegraph install` / copied from the example. |
 | `.claude/settings.json` | gitignored | Claude Code auto-allow permissions. |
 
 Because the DB and per-agent configs are gitignored, they **survive branch switches** (they are not part of any commit) and are **rebuilt on each teammate's machine** the first time they run `setup:local`.
@@ -55,10 +56,11 @@ npm i -g @colbymchenry/codegraph
 codegraph install --target=cursor,claude --location=local --yes   # configure agents + build index
 ```
 
-Or copy the committed Cursor template and fill in your own keys (Cursor's real config is gitignored):
+Or copy the committed templates and fill in your own keys (both real configs are gitignored):
 
 ```bash
-cp .cursor/mcp.example.json .cursor/mcp.json
+cp .cursor/mcp.example.json .cursor/mcp.json   # Cursor
+cp .mcp.example.json .mcp.json                 # Claude Code
 # replace ${CONTEXT7_API_KEY} with your key; the codegraph entry needs no edits
 ```
 
@@ -93,7 +95,7 @@ codegraph install --print-config cursor            # print the MCP snippet, no f
 ## Git and CI
 
 - The index DB and daemon runtime files are **never committed** (see `.codegraph/.gitignore`); each developer builds their own from their checkout.
-- `.mcp.json` is committed so a clone gets the CodeGraph MCP server in Claude Code automatically.
+- The real per-agent configs (`.mcp.json`, `.cursor/mcp.json`) are **gitignored** because they may hold live API keys and machine-specific paths. Only the secret-free templates (`.mcp.example.json`, `.cursor/mcp.example.json`) are committed; `setup:local` writes the real configs per machine.
 - CI does not run CodeGraph; the index is developer-local.
 
 ---
