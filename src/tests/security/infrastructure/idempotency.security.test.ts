@@ -84,9 +84,9 @@ describe('Security: Idempotency', () => {
       payload: { name: 'Bad Key Org', slug: uniqueSlug('bad-key-org') },
     });
 
-    expect(longKeyResponse.statusCode).toBe(400);
+    expect(longKeyResponse.statusCode).toBe(422);
     expect((longKeyResponse.json() as { error?: { code?: string } }).error?.code).toBe(
-      'invalid_field',
+      'unprocessable_entity',
     );
 
     const spaceKeyResponse = await injectAuthenticated(app, {
@@ -97,9 +97,9 @@ describe('Security: Idempotency', () => {
       payload: { name: 'Bad Key Org 2', slug: uniqueSlug('bad-key-org-2') },
     });
 
-    expect(spaceKeyResponse.statusCode).toBe(400);
+    expect(spaceKeyResponse.statusCode).toBe(422);
     expect((spaceKeyResponse.json() as { error?: { code?: string } }).error?.code).toBe(
-      'invalid_field',
+      'unprocessable_entity',
     );
   });
 
@@ -131,6 +131,7 @@ describe('Security: Idempotency', () => {
       method: 'POST',
       url: testApiPath('/tenancy/organizations'),
       token,
+      headers: { 'idempotency-key': uniqueKey('delete-setup') },
       payload: { name: 'Delete Idempotent Org', slug },
     });
     if (createRes.statusCode !== 201) throw new Error('Setup: create organization failed');
