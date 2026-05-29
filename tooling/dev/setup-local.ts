@@ -15,6 +15,7 @@
  *   pnpm setup:local --no-start                 (bootstrap only, skip dev)
  *   pnpm setup:local --check                    (preflight only, no mutations)
  *   pnpm setup:local --skip-deps --skip-docker  (granular skips)
+ *   pnpm setup:local --skip-codegraph           (skip the CodeGraph agent index)
  *
  * Designed to never overwrite real credentials. If `.env.development` already
  * exists, it is left untouched; if `.env.local` already exists, it is left
@@ -49,6 +50,7 @@ interface BootstrapOptions {
   skipDeps: boolean;
   skipDocker: boolean;
   skipMigrate: boolean;
+  skipCodegraph: boolean;
   forceEnvLocal: boolean;
   seed: 'none' | 'minimal' | 'full';
   withWorker: boolean;
@@ -140,6 +142,7 @@ function parseArgs(): BootstrapOptions {
     skipDeps: has('--skip-deps'),
     skipDocker: has('--skip-docker'),
     skipMigrate: has('--skip-migrate'),
+    skipCodegraph: has('--skip-codegraph'),
     forceEnvLocal: has('--force-env-local'),
     seed,
     withWorker: has('--with-worker'),
@@ -205,7 +208,7 @@ function inspectContainer(name: string): ContainerState {
 }
 
 function runPreflight(reports: StepReport[]): void {
-  logHeading('1/8 Preflight');
+  logHeading('1/9 Preflight');
 
   const nodeStartedAt = performance.now();
   const nodeMajor = Number(process.versions.node.split('.')[0] ?? 0);
@@ -272,7 +275,7 @@ function fetchLatestPnpmVersion(): string | null {
 }
 
 function runInstallDependencies(reports: StepReport[], options: BootstrapOptions): void {
-  logHeading('2/8 Dependencies');
+  logHeading('2/9 Dependencies');
   const startedAt = performance.now();
   if (options.skipDeps) {
     reportStep(reports, 'pnpm install', 'skipped', startedAt, '--skip-deps');
@@ -308,7 +311,7 @@ function runInstallDependencies(reports: StepReport[], options: BootstrapOptions
 }
 
 function runEnvScaffolding(reports: StepReport[], options: BootstrapOptions): void {
-  logHeading('3/8 Environment files');
+  logHeading('3/9 Environment files');
   scaffoldEnvDevelopmentIfMissing(reports, options);
   scaffoldEnvLocal(reports, options);
 }
@@ -415,7 +418,7 @@ function scaffoldEnvLocal(reports: StepReport[], options: BootstrapOptions): voi
 }
 
 function runDocker(reports: StepReport[], options: BootstrapOptions): void {
-  logHeading('4/8 Docker Compose (postgres + redis)');
+  logHeading('4/9 Docker Compose (postgres + redis)');
   if (options.skipDocker) {
     const startedAt = performance.now();
     reportStep(reports, 'docker compose', 'skipped', startedAt, '--skip-docker');
@@ -514,7 +517,7 @@ function startOrSkipContainer(
 }
 
 function runMigrations(reports: StepReport[], options: BootstrapOptions): void {
-  logHeading('5/8 Migrations');
+  logHeading('5/9 Migrations');
   const startedAt = performance.now();
   if (options.skipMigrate) {
     reportStep(reports, 'db:migrate', 'skipped', startedAt, '--skip-migrate');
@@ -533,7 +536,7 @@ function runMigrations(reports: StepReport[], options: BootstrapOptions): void {
 }
 
 function runSeed(reports: StepReport[], options: BootstrapOptions): void {
-  logHeading('6/8 Seed');
+  logHeading('6/9 Seed');
   const startedAt = performance.now();
   if (options.seed === 'none') {
     reportStep(reports, 'seed', 'skipped', startedAt, 'pass --seed minimal | --seed full to seed');
@@ -558,8 +561,78 @@ function runSeed(reports: StepReport[], options: BootstrapOptions): void {
   reportStep(reports, script, 'done', startedAt);
 }
 
+const CODEGRAPH_PACKAGE = '@colbymchenry/codegraph';
+
+function runCodeGraphSetup(reports: StepReport[], options: BootstrapOptions): void {
+  logHeading('7/9 CodeGraph (semantic index for AI agents)');
+  const startedAt = performance.now();
+  if (options.skipCodegraph) {
+    reportStep(reports, 'codegraph', 'skipped', startedAt, '--skip-codegraph');
+    return;
+  }
+  if (options.check) {
+    reportStep(
+      reports,
+      'codegraph',
+      'skipped',
+      startedAt,
+      '--check mode (would install CLI + configure agents + index)',
+    );
+    return;
+  }
+
+  const cliAvailable = captureCommand('codegraph', ['--version']).code === 0;
+  if (!cliAvailable) {
+    const install = captureCommand('npm', ['install', '-g', CODEGRAPH_PACKAGE]);
+    if (install.code !== 0) {
+      reportStep(
+        reports,
+        'codegraph',
+        'warning',
+        startedAt,
+        `global install failed — run \`npm i -g ${CODEGRAPH_PACKAGE}\` manually (non-fatal)`,
+      );
+      return;
+    }
+  }
+
+  const databasePath = resolve(PROJECT_ROOT, '.codegraph/codegraph.db');
+  const claudeMcpPath = resolve(PROJECT_ROOT, '.mcp.json');
+  const alreadyConfigured = existsSync(databasePath) && existsSync(claudeMcpPath);
+
+  if (alreadyConfigured) {
+    const sync = captureCommand('codegraph', ['sync']);
+    const status: StepStatus = sync.code === 0 ? 'done' : 'warning';
+    reportStep(
+      reports,
+      'codegraph',
+      status,
+      startedAt,
+      status === 'done' ? 'index refreshed (codegraph sync)' : 'codegraph sync failed (non-fatal)',
+    );
+    return;
+  }
+
+  const result = captureCommand('codegraph', [
+    'install',
+    '--target=cursor,claude',
+    '--location=local',
+    '--yes',
+  ]);
+  const status: StepStatus = result.code === 0 ? 'done' : 'warning';
+  reportStep(
+    reports,
+    'codegraph',
+    status,
+    startedAt,
+    status === 'done'
+      ? 'cursor + claude MCP configured + project indexed (restart agents to load)'
+      : 'codegraph install failed (non-fatal)',
+  );
+}
+
 function runOptionalWorker(reports: StepReport[], options: BootstrapOptions): ChildProcess | null {
-  logHeading('7/8 Background worker');
+  logHeading('8/9 Background worker');
   const startedAt = performance.now();
   if (!options.withWorker) {
     reportStep(reports, 'dev:worker', 'skipped', startedAt, 'pass --with-worker to spawn');
@@ -589,7 +662,7 @@ async function runDevServer(
   options: BootstrapOptions,
   worker: ChildProcess | null,
 ): Promise<void> {
-  logHeading('8/8 Dev server');
+  logHeading('9/9 Dev server');
   const startedAt = performance.now();
   if (options.check) {
     reportStep(reports, 'dev', 'skipped', startedAt, '--check mode');
@@ -677,6 +750,7 @@ async function main(): Promise<void> {
   runDocker(reports, options);
   runMigrations(reports, options);
   runSeed(reports, options);
+  runCodeGraphSetup(reports, options);
   const worker = runOptionalWorker(reports, options);
   printSummary(reports);
   await runDevServer(reports, options, worker);
