@@ -43,6 +43,8 @@ These are enforced by `pnpm db:migrate:lint` and cannot be overridden by the `--
    - One logical change per file when possible (add table, add column, add index).
    - Use schema-qualified names: `tenancy.organizations`, `auth.users`, etc.
    - Include `IF NOT EXISTS` / safe patterns where re-run risk exists; migrations are tracked in `public.schema_migrations` and run once.
+   - **Index DDL on high-write tables**: use `CREATE INDEX CONCURRENTLY IF NOT EXISTS` so writes are not blocked during the build. This cannot run inside a transaction, so mark the file with `-- migration-transaction: none reason="..."` in the first 20 lines (the runner then executes statements outside a transaction and post-checks for `INVALID` indexes) and separate **every** statement with `--> statement-breakpoint` so each runs as its own command. `pnpm db:migrate:lint` fails (non-overridable) if `CONCURRENTLY` appears without the header (`concurrent_index_requires_non_transactional`) or if a non-transactional breakpoint segment holds more than one statement (`non_transactional_statements_need_breakpoints`). Keep non-transactional files idempotent and index-only — there is no rollback if a statement fails mid-file. See **[migrations.md → Non-transactional migrations](../../../docs/reference/data/migrations.md)**.
+   - **Partitioned tables** (`audit.logs`, `notify.notifications`, listed in [`partitioned-tables.constants.ts`](../../../src/infrastructure/database/partitioned-tables.constants.ts)): PostgreSQL forbids `CREATE INDEX CONCURRENTLY` on a partitioned parent (lint rule `concurrent_index_on_partitioned_table`, non-overridable). Index the parent with a plain recursive `CREATE INDEX IF NOT EXISTS` + `-- migration-safety: allow create_index_without_concurrently reason="<parent> is partitioned"`, or build per-child indexes `CONCURRENTLY` + `ATTACH PARTITION` operationally for large tables.
 4. **RLS**: if the table is tenant-scoped, add or update RLS policies in the same or follow-up migration (see existing `migrations/*_enable_rls.sql` patterns).
 5. **`pnpm db:migrate:lint`** (required in CI): filename/timestamp ordering (`migration_filename_format`, `migration_timestamp_not_monotonic`) plus unsafe SQL patterns (`NOT NULL` without default when adding columns, `RENAME`, `DROP TABLE`/column destructive moves, locking `CREATE INDEX` without `CONCURRENTLY`, FK/CHECK additions without `NOT VALID`, missing `IF NOT EXISTS` on `CREATE TABLE` / `CREATE INDEX` / `CREATE SCHEMA`). Run after editing SQL migrations.
    - **Overrides** — only in the first 20 lines of a file:
@@ -68,9 +70,12 @@ These are enforced by `pnpm db:migrate:lint` and cannot be overridden by the `--
 7. **Seeds**: if new tables need reference/demo data, invoke **seed-maintainer**.
 8. **DBML diagram** (`docs/database/core-be.dbml`): regenerated automatically by the local `.husky/pre-commit` hook whenever `migrations/*.sql` is staged (`pnpm tool:generate-dbdiagram` → `git add`). The diagram captures columns, primary keys, foreign keys (with `ON DELETE` actions), unique constraints, RLS rules, and partitioning. It is **local only** — no CI check enforces it. Run `pnpm tool:generate-dbdiagram` manually if you want to preview the output before committing.
 
-## Drizzle Kit (optional)
+## Drizzle Kit (optional, drafting only — NOT the source of truth)
 
-- `drizzle-kit generate` can draft SQL from schema drift; **review every statement** before committing.
+- The migration **source of truth** is the hand-written, timestamp-named `migrations/*.sql` set applied by `pnpm db:migrate` and tracked in `public.schema_migrations`. Drizzle Kit's snapshot/journal are **not** involved.
+- `drizzle.config.ts` writes to `./drizzle/` (gitignored scratch), **not** `migrations/`. So `pnpm db:generate` drafts a full SQL diff + `meta/` snapshot there; copy the useful statements into a `pnpm db:migrate:new <slug>` file, **review every statement**, then delete or ignore the scratch output. Never apply from `./drizzle/`.
+- Do **not** commit a `migrations/meta/` folder or any `*_snapshot.json` / `_journal.json` — they are Drizzle's sequential bookkeeping (`0000`, `0001`, …), which collides across parallel branches; our timestamp prefixes exist precisely to avoid that.
+- `pnpm db:push` / `pnpm db:studio` are local-only convenience (push bypasses the migration ledger — never use against shared/hosted databases).
 - Hand-written migrations are preferred when RLS, data backfills, or partial deploys need explicit control.
 
 ## Naming and layout

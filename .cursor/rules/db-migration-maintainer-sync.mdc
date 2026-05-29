@@ -13,3 +13,34 @@ When you create or modify matching files:
 3. After editing `migrations/*.sql`, run `pnpm db:migrate:lint` (CI blocks unsafe DDL).
 4. Verify with `pnpm db:migrate` on a local database when the change is non-trivial.
 5. If new tables need demo/reference data, invoke **seed-maintainer**.
+
+## Adding an index — always use the concurrent (non-transactional) lane
+
+Plain `CREATE INDEX` takes a `SHARE` lock that blocks all writes for the build
+duration. Migrations run before the new app version is deployed (while the old
+one serves traffic), so this stalls live requests on high-write tables. Always
+add indexes with `CREATE INDEX CONCURRENTLY`, which cannot run inside a
+transaction — so the migration file must opt out of the default transactional
+lane:
+
+```sql
+-- migration-transaction: none reason="CREATE INDEX CONCURRENTLY avoids the write-blocking SHARE lock"
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_table_cols ON schema.table (col_a, col_b);
+--> statement-breakpoint
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_table_other ON schema.table (col_c);
+```
+
+Non-negotiable for the non-transactional lane (all enforced by `pnpm db:migrate:lint`):
+
+- **Header required**: `-- migration-transaction: none reason="..."` in the first 20 lines. Omitting it while using `CONCURRENTLY` fails the lint (`concurrent_index_requires_non_transactional`).
+- **One statement per `--> statement-breakpoint` segment**: each segment is sent as a single command; two statements in one segment form an implicit transaction where `CONCURRENTLY` fails (`non_transactional_statements_need_breakpoints`).
+- **Idempotent + index-only**: use `IF NOT EXISTS`; there is no rollback if a statement fails mid-file. Keep DML/constraint changes in a separate (default, transactional) migration.
+- On failure the runner detects the leftover `INVALID` index and refuses to record the migration — drop it (`DROP INDEX CONCURRENTLY IF EXISTS <schema>.<name>`) and re-run `pnpm db:migrate`.
+
+### Partitioned tables (`audit.logs`, `notify.notifications`) — no `CONCURRENTLY`
+
+PostgreSQL forbids `CREATE INDEX CONCURRENTLY` on a partitioned parent, and the linter blocks it (`concurrent_index_on_partitioned_table`, non-overridable). The partitioned parents are listed in `src/infrastructure/database/partitioned-tables.constants.ts`. To index one, use a plain recursive `CREATE INDEX IF NOT EXISTS ON <parent>` with `-- migration-safety: allow create_index_without_concurrently reason="<parent> is partitioned"`; for large tables, build per-child indexes `CONCURRENTLY` + `ATTACH PARTITION` operationally (not in a migration). A single migration may mix both lanes' statements as long as the file is `migration-transaction: none` and each statement is its own breakpoint segment.
+
+See **`docs/reference/data/migrations.md` → Non-transactional migrations** for the full playbook (including expand/contract).

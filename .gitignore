@@ -48,6 +48,11 @@ docs/openapi/openapi.json
 docs/openapi/openapi.*.json
 docs/postman-collection.json
 
+# Drizzle Kit scratch output (drafting only). Hand-written, timestamp-named
+# migrations/*.sql applied by `pnpm db:migrate` are the source of truth; the
+# drizzle-kit generate snapshot/journal must never be committed or applied.
+/drizzle/
+
 # Vite/Vitest caches (should never be in repo)
 **/.vite/
 src/tests/node_modules/

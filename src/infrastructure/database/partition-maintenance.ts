@@ -1,11 +1,7 @@
 import { sql } from '@/infrastructure/database/connection.js';
+import { PARTITIONED_TABLES } from '@/infrastructure/database/partitioned-tables.constants.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-
-const PARTITIONED_TABLES = [
-  { schema: 'audit', table: 'logs', column: 'created_at' },
-  { schema: 'notify', table: 'notifications', column: 'created_at' },
-] as const;
 
 /** Parents whose empty child partitions are dropped after row-level retention. */
 const PARTITION_DROP_TARGETS = [
