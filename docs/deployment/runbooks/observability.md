@@ -13,6 +13,8 @@ What is **in place today** for production signals, and what is **deferred**. For
 | Liveness / readiness        | `GET /livez`, `GET /readyz`                             | See [health-checks.md](../../reference/reliability/health-checks.md); deploy probes and load tests               |
 | Idempotency cardinality     | Repeatable BullMQ job `idempotency-cardinality`                     | Bounded Redis SCAN + log / Sentry thresholds (`IDEMPOTENCY_CARDINALITY_*`)                           |
 | DB pool exhaustion          | API process poll (`db-pool-metrics.ts`)                             | Sentry `database.pool.exhaustion.*` — independent of `METRICS_ENABLED`; see [resource-limits.md](resource-limits.md) |
+| Redis memory saturation     | [`redis-saturation.service.ts`](../../../src/infrastructure/observability/redis-saturation/redis-saturation.service.ts) sampled by the dlq-depth worker | `used_memory`/`maxmemory` ratio; warn/critical via `REDIS_MEMORY_WARN_RATIO` / `REDIS_MEMORY_CRITICAL_RATIO` → log + Sentry. Leading indicator for the `noeviction` write-outage mode — see [redis-topology.md](redis-topology.md) |
+| BullMQ waiting depth        | [`redis-saturation.service.ts`](../../../src/infrastructure/observability/redis-saturation/redis-saturation.service.ts) sampled by the dlq-depth worker | `waiting`+`delayed` across source queues; warn via `QUEUE_WAITING_DEPTH_WARN_THRESHOLD` → log + Sentry. Surfaces a worker outage before the backlog fills Redis |
 | Queue inspection (optional) | Bull Board at `/admin/queues`                                       | `ENABLE_QUEUE_DASHBOARD=true` + super_admin JWT — see [bull-board.md](../../reference/runtime/bull-board.md) |
 | **Prometheus metrics** | `GET /metrics` on API + worker (`WORKER_HEALTH_PORT`)              | **On by default** (`METRICS_ENABLED` defaults true); bearer auth required — see [Prometheus](#prometheus-opt-in) below |
 
@@ -79,7 +81,7 @@ curl -sS http://127.0.0.1:3000/metrics | head
 | Item | Status |
 | ---- | ------ |
 | Grafana / Prometheus server in-repo | Out of scope — configure scraper + dashboards in your platform |
-| Redis memory / eviction metrics | Not in app metrics yet |
+| Redis memory / eviction Prometheus gauges | Threshold log + Sentry alerting is in place (see "In place" above); not yet exported as a `/metrics` gauge |
 | Deploy workflow `METRICS_*` secret sync | Optional — set on Railway/GitHub Environment when enabling scrape |
 
 ---

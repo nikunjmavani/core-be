@@ -36,6 +36,13 @@ export const IDEMPOTENCY_PLACEHOLDER_TTL_SECONDS = SESSION_TOKEN_CACHE_TTL_SECON
 /** Cached idempotent HTTP response TTL (seconds). */
 export const IDEMPOTENCY_RESPONSE_CACHE_TTL_SECONDS = SECONDS_PER_DAY;
 
+/**
+ * `Retry-After` advertised on the idempotency-store-unavailable 503 (seconds). Kept short
+ * so well-behaved clients retry quickly once a transient Redis blip clears, instead of
+ * treating the degraded response as a hard failure.
+ */
+export const IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS = 2;
+
 /** MFA challenge session lifetime in Redis (seconds). */
 export const MFA_SESSION_TTL_SECONDS = 300;
 

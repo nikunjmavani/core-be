@@ -62,7 +62,12 @@ const envSchemaBase = z.object({
 
   // Redis (managed service)
   REDIS_URL: z.string().min(1),
-  /** BullMQ queues — defaults to REDIS_URL when unset. */
+  /**
+   * Dedicated Redis endpoint for BullMQ queues. Recommended in production so a queue
+   * backlog (e.g. during a worker outage) cannot exhaust the write-critical cache /
+   * idempotency / rate-limit store on REDIS_URL. Defaults to REDIS_URL when unset
+   * (single-instance local development).
+   */
   REDIS_BULLMQ_URL: z.string().min(1).optional(),
   /**
    * Redis key prefix for cache, idempotency, rate limits, and BullMQ (default `core:<NODE_ENV>:`).
@@ -352,6 +357,22 @@ const envSchemaBase = z.object({
   /** Alert when a dead-letter queue has at least this many waiting + failed jobs. */
   DLQ_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(10),
   DLQ_DEPTH_CRON: z.string().min(1).optional(),
+
+  /**
+   * Alert when a single BullMQ source queue's waiting + delayed backlog reaches this many
+   * jobs. A growing backlog (e.g. a worker outage) on a shared Redis can fill memory and,
+   * with `maxmemory-policy=noeviction`, reject the write-critical store — so the backlog is
+   * sampled alongside DLQ depth. See docs/deployment/runbooks/redis-topology.md.
+   */
+  QUEUE_WAITING_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(1000),
+  /**
+   * Warn / critical `used_memory / maxmemory` ratios for the cache Redis (0–1). The
+   * observability tick samples `INFO memory` + `CONFIG GET maxmemory`; a high ratio under
+   * `noeviction` means writes (idempotency/rate-limit) are about to start failing.
+   * Skipped when Redis reports `maxmemory=0` (unbounded).
+   */
+  REDIS_MEMORY_WARN_RATIO: z.coerce.number().min(0).max(1).default(0.85),
+  REDIS_MEMORY_CRITICAL_RATIO: z.coerce.number().min(0).max(1).default(0.95),
   ENABLE_QUEUE_DASHBOARD: z
     .string()
     .optional()
@@ -445,6 +466,10 @@ export const envSchema = envSchemaBase
       path: ['IDEMPOTENCY_CARDINALITY_CRITICAL_THRESHOLD'],
     },
   )
+  .refine((data) => data.REDIS_MEMORY_CRITICAL_RATIO >= data.REDIS_MEMORY_WARN_RATIO, {
+    message: 'REDIS_MEMORY_CRITICAL_RATIO must be >= REDIS_MEMORY_WARN_RATIO',
+    path: ['REDIS_MEMORY_CRITICAL_RATIO'],
+  })
   .refine(
     (data) => {
       if (data.METRICS_ENABLED) {
@@ -491,7 +516,7 @@ export const envSchema = envSchemaBase
     },
     {
       message:
-        'REDIS_BULLMQ_URL must be unset or point to the same Redis endpoint as REDIS_URL (see docs/deployment/runbooks/redis-topology.md)',
+        'REDIS_BULLMQ_URL, when set, must be a valid redis:// or rediss:// URL (a dedicated BullMQ endpoint is supported; see docs/deployment/runbooks/redis-topology.md)',
       path: ['REDIS_BULLMQ_URL'],
     },
   )

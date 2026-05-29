@@ -155,6 +155,7 @@ src/infrastructure/
     idempotency-cardinality.constants.ts  # BullMQ queue name for idempotency Redis cardinality sampling
     idempotency-cardinality.service.ts    # Bounded SCAN + threshold log / Sentry
     idempotency-cardinality.worker.ts     # Worker processor (repeatable schedule in queue/scheduler.ts)
+    redis-saturation/                     # Redis used_memory/maxmemory ratio + BullMQ waiting-depth sampling (log + Sentry; sampled by dlq-depth worker)
   mcp/
     mcp-server.ts             # MCP (ENABLE_MCP_SERVER, dynamic import; @modelcontextprotocol/sdk optionalDependency): POST /api/v1/mcp
 ```

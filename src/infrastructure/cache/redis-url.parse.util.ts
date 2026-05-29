@@ -117,16 +117,26 @@ export function usesSeparateBullMqRedisEndpoint(
 }
 
 /**
- * Production topology currently allows a single shared Redis instance.
+ * Validates the configured Redis topology.
+ *
+ * A dedicated `REDIS_BULLMQ_URL` endpoint is fully supported (and recommended for
+ * production) so a BullMQ backlog cannot starve the write-critical cache /
+ * idempotency / rate-limit store that lives on `REDIS_URL`. When the override is
+ * unset, BullMQ shares `REDIS_URL`, which keeps local development single-instance.
+ * The only constraint is that an override, when present, must be a parseable
+ * `redis://` / `rediss://` URL — a different host or logical database is allowed.
  */
 export function validateProductionRedisTopology(
-  cacheRedisUrl: string,
+  _cacheRedisUrl: string,
   bullMqRedisUrl: string | undefined,
 ): boolean {
   if (!bullMqRedisUrl?.trim()) {
     return true;
   }
-  return (
-    normalizeRedisUrlForComparison(cacheRedisUrl) === normalizeRedisUrlForComparison(bullMqRedisUrl)
-  );
+  try {
+    parseRedisUrl(bullMqRedisUrl);
+    return true;
+  } catch {
+    return false;
+  }
 }

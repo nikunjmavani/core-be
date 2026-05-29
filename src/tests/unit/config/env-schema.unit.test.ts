@@ -255,7 +255,7 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('allows one Redis instance in production', () => {
+  it('allows a shared or dedicated BullMQ Redis endpoint in production', () => {
     const sharedWithoutBullMqUrl = envSchema.safeParse({
       ...productionRequiredBase,
       REDIS_BULLMQ_URL: undefined,
@@ -269,11 +269,19 @@ describe('env-schema', () => {
     });
     expect(sharedWithSameBullMqUrl.success).toBe(true);
 
+    // A dedicated BullMQ endpoint is supported (recommended production isolation).
     const separateBullMqHost = envSchema.safeParse({
       ...productionRequiredBase,
       REDIS_BULLMQ_URL: 'redis://bullmq.example.railway.internal:6379',
     });
-    expect(separateBullMqHost.success).toBe(false);
+    expect(separateBullMqHost.success).toBe(true);
+
+    // A non-parseable override is rejected.
+    const invalidBullMqUrl = envSchema.safeParse({
+      ...productionRequiredBase,
+      REDIS_BULLMQ_URL: 'not a url',
+    });
+    expect(invalidBullMqUrl.success).toBe(false);
   });
 
   it('allows single Redis host when NODE_ENV is local', () => {

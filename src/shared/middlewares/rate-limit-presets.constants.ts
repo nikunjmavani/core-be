@@ -61,18 +61,33 @@ function buildRateLimitKeyFromAuthenticatedUserOrIpAddress(request: FastifyReque
   return userId ? `user:${userId}` : `ip:${request.ip}`;
 }
 
-function buildRateLimitKeyFromOrganizationUserOrIpAddress(request: FastifyRequest): string {
+/**
+ * Builds the organization-scoped rate-limit key, namespaced by the authenticated actor
+ * (`organization:<id>:actor:<userId|apiKeyPublicId>`).
+ *
+ * Keying on organization + actor — rather than the organization alone — prevents
+ * cross-tenant rate-limit exhaustion: an actor probing `/organizations/:victimOrgId/...`
+ * can only ever consume its OWN bucket within that namespace, never the shared bucket of
+ * the victim org's real members (audit #14). It also isolates one member from exhausting
+ * the quota of other members in the same organization. Falls back to the actor alone (no
+ * verified org context yet) and finally to the caller IP for unauthenticated edge cases.
+ */
+function buildRateLimitKeyFromOrganizationActorOrIpAddress(request: FastifyRequest): string {
+  const actorId = request.auth?.userId ?? request.auth?.apiKeyPublicId;
   const requestWithOrganization = request as FastifyRequest & { organizationId?: string | null };
   const organizationPublicId = requestWithOrganization.organizationId;
   if (
     organizationPublicId !== undefined &&
     organizationPublicId !== null &&
-    organizationPublicId.length > 0
+    organizationPublicId.length > 0 &&
+    actorId
   ) {
-    return `organization:${organizationPublicId}`;
+    return `organization:${organizationPublicId}:actor:${actorId}`;
   }
-  const userId = request.auth?.userId;
-  return userId ? `user:${userId}` : `ip:${request.ip}`;
+  if (actorId) {
+    return `actor:${actorId}`;
+  }
+  return `ip:${request.ip}`;
 }
 
 const NODE_ENV_FOR_RATE_LIMIT_CAPS = process.env.NODE_ENV;
@@ -179,14 +194,21 @@ export const WEBHOOK_RATE_LIMIT = {
   },
 } as const;
 
-/** Organization-scoped mutations (100 req / 60s), keyed by X-Organization-Id when set. */
+/**
+ * Organization-scoped mutations (100 req / 60s), keyed by organization + authenticated
+ * actor (`organization:<id>:actor:<actorId>`). Per-actor namespacing prevents cross-tenant
+ * exhaustion of a victim org's shared bucket and isolates members from one another
+ * (audit #14). Runs on the `preHandler` hook so it is appended AFTER the route's
+ * `requireOrganizationPermission` preHandler — unauthorized callers are rejected before the
+ * key is ever derived.
+ */
 export const ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT = {
   config: {
     rateLimit: {
       max: 100,
       timeWindow: 60_000,
       hook: 'preHandler' as const,
-      keyGenerator: buildRateLimitKeyFromOrganizationUserOrIpAddress,
+      keyGenerator: buildRateLimitKeyFromOrganizationActorOrIpAddress,
       onExceeding: recordRouteRateLimitExceeded,
     },
   },
