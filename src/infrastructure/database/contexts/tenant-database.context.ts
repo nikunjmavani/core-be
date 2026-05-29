@@ -9,6 +9,11 @@ import {
   runWithWorkerDatabaseContext,
   workerDatabaseContextForOrganization,
 } from '@/infrastructure/database/contexts/worker-database.context.js';
+import {
+  decrementOrganizationRlsCheckoutCount,
+  incrementOrganizationRlsCheckoutCount,
+  observeOrganizationRlsCheckoutHold,
+} from '@/infrastructure/database/organization-rls-checkout-counter.js';
 
 /**
  * Runs a callback inside a transaction with RLS organization context set via SET LOCAL.
@@ -34,17 +39,34 @@ export async function withOrganizationContext<T>(
     );
   }
 
-  return runWithWorkerDatabaseContext(
-    workerDatabaseContextForOrganization(organizationPublicId),
-    () =>
-      database.transaction(async (transaction) => {
-        const databaseHandle = transaction as unknown as RequestScopedPostgresDatabase;
-        await databaseHandle.execute(
-          drizzleSql`SELECT set_config('app.current_organization_id', ${organizationPublicId}, true)`,
-        );
-        return runWithPinnedOrganizationDatabaseSession(organizationPublicId, databaseHandle, () =>
-          callback(databaseHandle),
-        );
-      }),
-  );
+  // A fresh top-level transaction acquires its own pooled checkout — count it so the
+  // pool-exhaustion alerter and `database_rls_checkout_hold_seconds` histogram observe
+  // scoped units of work (the default `DATABASE_RLS_SCOPED_CONTEXTS=true` path). Reused
+  // sessions above share the caller's checkout and are intentionally not counted.
+  incrementOrganizationRlsCheckoutCount();
+  const checkoutStartedAtNanoseconds = process.hrtime.bigint();
+  try {
+    return await runWithWorkerDatabaseContext(
+      workerDatabaseContextForOrganization(organizationPublicId),
+      () =>
+        database.transaction(async (transaction) => {
+          const databaseHandle = transaction as unknown as RequestScopedPostgresDatabase;
+          await databaseHandle.execute(
+            drizzleSql`SELECT set_config('app.current_organization_id', ${organizationPublicId}, true)`,
+          );
+          return runWithPinnedOrganizationDatabaseSession(
+            organizationPublicId,
+            databaseHandle,
+            () => callback(databaseHandle),
+          );
+        }),
+    );
+  } finally {
+    decrementOrganizationRlsCheckoutCount();
+    observeOrganizationRlsCheckoutHold({
+      path: 'scoped_context',
+      durationSeconds:
+        Number(process.hrtime.bigint() - checkoutStartedAtNanoseconds) / 1_000_000_000,
+    });
+  }
 }

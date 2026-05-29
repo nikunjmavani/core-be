@@ -1,5 +1,6 @@
 import { sql } from '@/infrastructure/database/connection.js';
 import { resolvePostgresAllowedApplicationConnections } from '@/infrastructure/database/assert-connection-budget.js';
+import { registerOrganizationRlsCheckoutHoldObserver } from '@/infrastructure/database/organization-rls-checkout-counter.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import { isMetricsEnabled } from '@/infrastructure/observability/metrics/metrics-registry.js';
 import {
@@ -7,6 +8,8 @@ import {
   resetPoolExhaustionAlertStateForTests,
 } from '@/infrastructure/observability/dlq-depth/db-pool-alert.service.js';
 import {
+  recordOrganizationRlsCheckoutHold,
+  setOrganizationRlsActiveCheckouts,
   setPostgresPoolConfigMetrics,
   setPostgresPoolConnectionCounts,
 } from '@/infrastructure/observability/metrics/prometheus-metrics.js';
@@ -112,10 +115,14 @@ export async function refreshPostgresPoolMetrics(): Promise<void> {
 
   const allowedApplicationConnections = await resolveAllowedApplicationConnectionsCached();
   const clusterActiveConnections = sumClusterActiveConnections(samples);
-  evaluatePoolExhaustionAndAlert({
+  const pressureSample = evaluatePoolExhaustionAndAlert({
     clusterActiveConnections,
     allowedApplicationConnections,
   });
+
+  if (isMetricsEnabled()) {
+    setOrganizationRlsActiveCheckouts(pressureSample.activeOrganizationRlsCheckouts);
+  }
 }
 
 /**
@@ -123,6 +130,10 @@ export async function refreshPostgresPoolMetrics(): Promise<void> {
  * metrics scrape path. Idempotent — repeat calls do not stack intervals.
  */
 export function registerPostgresPoolMetrics(): void {
+  registerOrganizationRlsCheckoutHoldObserver((sample) => {
+    recordOrganizationRlsCheckoutHold(sample);
+  });
+
   if (poolMonitoringInterval) {
     return;
   }
@@ -145,5 +156,6 @@ export function stopPostgresPoolMetricsPolling(): void {
 export function resetPostgresPoolMonitoringForTests(): void {
   stopPostgresPoolMetricsPolling();
   resetPoolExhaustionAlertStateForTests();
+  registerOrganizationRlsCheckoutHoldObserver(null);
   cachedAllowedApplicationConnections = null;
 }

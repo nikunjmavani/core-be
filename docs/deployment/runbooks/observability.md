@@ -44,10 +44,14 @@ Dynamic gauges (pool, BullMQ depth, event loop) refresh on each scrape via [`ref
 | ------ | ---- | --- |
 | `event_loop_lag_ms` | Gauge | Node event-loop delay p99 (ms) |
 | `pg_pool_active`, `pg_pool_idle`, `pg_pool_waiting` | Gauge | Postgres connection pressure (sampled from `pg_stat_activity`) |
+| `database_rls_active_checkouts` | Gauge | In-process org-scoped RLS transaction checkouts held now; alert near `DATABASE_POOL_MAX` |
+| `database_rls_checkout_hold_seconds` | Histogram (`path`) | How long an org-RLS checkout pins a pooled connection (`scoped_context` unit of work vs legacy `request_transaction`) |
 | `http_request_duration_seconds` | Histogram | Per-route latency; p95 via `histogram_quantile` |
 | `bullmq_jobs_waiting` | Gauge (`queue`) | Queue backlog per BullMQ queue |
 
 Also exported: `db_pool_connections{state}`, `bullmq_queue_*`, `http_requests_total`, default Node metrics (`nodejs_eventloop_lag_*`, heap), and domain gauges (e.g. `stripe_webhook_events_failed`). See [health-checks.md](../../reference/reliability/health-checks.md) and [workers-and-events.md](../../reference/runtime/workers-and-events.md).
+
+`database_rls_checkout_hold_seconds` is the primary scale signal for production-readiness finding #2 (per-request checkout pinning): a rising p95 on `path="scoped_context"` means units of work are holding pooled connections too long (often external I/O leaking into an RLS transaction), and `database_rls_active_checkouts` approaching `DATABASE_POOL_MAX` predicts checkout starvation before requests start queuing.
 
 ### Example PromQL
 
@@ -56,6 +60,8 @@ histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by 
 pg_pool_waiting
 bullmq_jobs_waiting
 event_loop_lag_ms
+max_over_time(database_rls_active_checkouts[5m])
+histogram_quantile(0.95, sum(rate(database_rls_checkout_hold_seconds_bucket[5m])) by (le, path))
 ```
 
 ### Local smoke
