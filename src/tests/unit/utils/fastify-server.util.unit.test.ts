@@ -49,6 +49,8 @@ describe('fastify-server.util', () => {
     vi.resetModules();
   });
 
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   it('genReqId prefers X-Request-Id header when present', () => {
     const options = buildFastifyServerOptions();
     const incomingMessage = new IncomingMessage({} as never);
@@ -56,6 +58,43 @@ describe('fastify-server.util', () => {
 
     const requestIdentifier = options.genReqId?.(incomingMessage as never);
     expect(requestIdentifier).toBe('trace-abc');
+  });
+
+  it('genReqId accepts a well-formed inbound UUID unchanged', () => {
+    const options = buildFastifyServerOptions();
+    const incomingMessage = new IncomingMessage({} as never);
+    const inboundUuid = '550e8400-e29b-41d4-a716-446655440000';
+    incomingMessage.headers = { 'x-request-id': inboundUuid };
+
+    const requestIdentifier = options.genReqId?.(incomingMessage as never);
+    expect(requestIdentifier).toBe(inboundUuid);
+  });
+
+  it('genReqId rejects a malformed x-request-id and generates a server-side id', () => {
+    const options = buildFastifyServerOptions();
+    const incomingMessage = new IncomingMessage({} as never);
+    incomingMessage.headers = { 'x-request-id': 'bad id with spaces/and:chars' };
+
+    const requestIdentifier = options.genReqId?.(incomingMessage as never);
+    expect(requestIdentifier).toMatch(UUID_PATTERN);
+  });
+
+  it('genReqId rejects an oversized x-request-id and generates a server-side id', () => {
+    const options = buildFastifyServerOptions();
+    const incomingMessage = new IncomingMessage({} as never);
+    incomingMessage.headers = { 'x-request-id': 'a'.repeat(129) };
+
+    const requestIdentifier = options.genReqId?.(incomingMessage as never);
+    expect(requestIdentifier).toMatch(UUID_PATTERN);
+  });
+
+  it('genReqId rejects an oversized array header value and generates a server-side id', () => {
+    const options = buildFastifyServerOptions();
+    const incomingMessage = new IncomingMessage({} as never);
+    incomingMessage.headers = { 'x-request-id': ['x'.repeat(200), 'ignored'] };
+
+    const requestIdentifier = options.genReqId?.(incomingMessage as never);
+    expect(requestIdentifier).toMatch(UUID_PATTERN);
   });
 
   it('disables trust proxy when TRUST_PROXY is unset', async () => {
