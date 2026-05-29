@@ -6,22 +6,13 @@ import organizationRlsTransactionMiddleware from '@/shared/middlewares/organizat
 import i18nMiddleware from '@/shared/middlewares/i18n.middleware.js';
 
 /**
- * Regression test for production hardening item #3 — global org rate limiting must run
- * after tenant resolution. The rate-limit keyGenerator/max read `request.organizationId`
- * in the onRequest phase; if rate limiting is registered before tenant middleware, that
- * value is still null and org-scoped limits silently degrade to per-IP keys.
+ * Regression test for middleware ordering. The global limiter is keyed strictly on
+ * `request.ip`, so it no longer depends on tenant resolution; the load-bearing constraint
+ * is that rate limiting runs before the per-request RLS transaction so throttled requests
+ * never open a DB connection. i18n must precede tenant so its translated errors render.
  */
 describe('middleware registration order', () => {
   const order = middlewarePlugins as readonly unknown[];
-
-  it('registers tenant middleware before rate limiting', () => {
-    const tenantIndex = order.indexOf(tenantMiddleware);
-    const rateLimitIndex = order.indexOf(rateLimitMiddleware);
-
-    expect(tenantIndex).toBeGreaterThanOrEqual(0);
-    expect(rateLimitIndex).toBeGreaterThanOrEqual(0);
-    expect(tenantIndex).toBeLessThan(rateLimitIndex);
-  });
 
   it('rate limits before opening the per-request RLS transaction', () => {
     const rateLimitIndex = order.indexOf(rateLimitMiddleware);

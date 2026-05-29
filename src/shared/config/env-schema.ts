@@ -86,7 +86,6 @@ const envSchemaBase = z.object({
 
   // Rate limiting
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
-  RATE_LIMIT_ORG_MAX: z.coerce.number().int().min(1).default(200),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(60_000),
   /** Comma-separated hostnames allowed for outbound webhooks (optional; empty = no extra restriction). */
   WEBHOOK_URL_ALLOWLIST: z.string().optional(),
