@@ -41,7 +41,7 @@ describe('Security: retention cleanup RLS', () => {
   it('hard-deletes tombstoned webhooks under core_be_app when global_retention_cleanup is set', async () => {
     if (!migrationApplied) {
       console.warn(
-        'Skipping retention RLS test: apply migrations/20260530000001_global_retention_cleanup_rls.sql',
+        'Skipping retention RLS test: apply migrations/00000000000000_init.sql (defines the global_retention_cleanup RLS policies)',
       );
       return;
     }

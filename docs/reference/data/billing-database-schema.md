@@ -14,7 +14,7 @@ For tables **without** tenant RLS, see [system-tables-without-tenant-rls.md](../
 | HTTP | Org-scoped routes run inside `organizationRlsTransactionMiddleware` (single connection + `SET LOCAL` for the request) |
 | Workers / scripts | **Do not** rely on RLS alone — pass `organization_id` / `organizationPublicId` explicitly in queries |
 | FORCE RLS | Enabled on tenant tables ([`20260516000006_force_row_level_security.sql`](../../../migrations/00000000000000_init.sql)) |
-| Retention | Policies allow `app.global_retention_cleanup = 'true'` for purge workers ([`20260530000001_global_retention_cleanup_rls.sql`](../../../migrations/00000000000000_init.sql)) |
+| Retention | Policies allow `app.global_retention_cleanup = 'true'` for purge workers ([`00000000000000_init.sql`](../../../migrations/00000000000000_init.sql)) |
 
 ---
 
