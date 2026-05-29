@@ -157,7 +157,9 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     usesPostgres: true,
     scheduled: false,
     criticality: 'throughput',
-    holdsConnectionDuringExternalIo: true,
+    // Claim + record run in separate short transactions; the outbound POST happens with no
+    // open Postgres checkout, so delivery no longer pins a connection during external IO.
+    holdsConnectionDuringExternalIo: false,
     resolvePostgresConcurrency: () => getWorkerConcurrencyWebhook(),
     create: () => createWebhookDeliveryWorker(),
   },

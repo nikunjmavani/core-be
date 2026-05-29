@@ -10,6 +10,7 @@ import {
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
 import { validateWebhookUrl } from '@/shared/utils/security/webhook-url.util.js';
+import { invalidateWebhookOutboundCircuit } from '@/domains/notify/sub-domains/webhook/workers/webhook-outbound-circuit.js';
 import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
 import { createPinnedWebhookFetch } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
 import { buildWebhookSignatureHeader } from '@/shared/utils/security/webhook-signature.util.js';
@@ -168,6 +169,9 @@ export class WebhookService {
         userId ?? undefined,
       );
       if (!updated) throw new NotFoundError('Webhook');
+      // Best-effort: drop any cached breaker so a URL/secret change does not reuse stale state.
+      // Cross-process delivery workers fall back to the breaker cache's idle TTL.
+      invalidateWebhookOutboundCircuit(updated.id);
       return WebhookSerializer.one(updated);
     });
   }
@@ -178,6 +182,8 @@ export class WebhookService {
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
       const deleted = await this.webhookRepository.softDelete(webhook_public_id, organization.id);
       if (!deleted) throw new NotFoundError('Webhook');
+      // Best-effort: drop any cached breaker for the removed webhook (idle TTL covers other processes).
+      invalidateWebhookOutboundCircuit(deleted.id);
     });
   }
 
@@ -298,6 +304,8 @@ export class WebhookService {
       );
       statusCode = response.status;
       try {
+        // The pinned fetch enforces WEBHOOK_RESPONSE_BODY_MAX_BYTES while streaming, so a hostile
+        // target cannot OOM this path before we further truncate the persisted/returned body.
         responseBody = await response.text();
       } catch (parseError) {
         logger.warn(

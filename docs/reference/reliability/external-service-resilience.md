@@ -2,7 +2,7 @@
 
 Outbound HTTP to Stripe, Resend, and S3 uses a **Redis-backed circuit breaker** ([`circuit-breaker.ts`](../../../src/infrastructure/resilience/circuit-breaker.ts)) shared across API replicas. State changes are logged and reported to Sentry via `captureMessage`.
 
-Notify **outbound webhooks** (customer URLs) use a separate **in-memory** [opossum](https://github.com/nodeshift/opossum) circuit per destination URL in [`webhook-outbound-circuit.ts`](../../../src/domains/notify/sub-domains/webhook/workers/webhook-outbound-circuit.ts) — not cluster-wide.
+Notify **outbound webhooks** (customer URLs) use a separate **in-memory** [opossum](https://github.com/nodeshift/opossum) circuit per destination webhook in [`webhook-outbound-circuit.ts`](../../../src/domains/notify/sub-domains/webhook/workers/webhook-outbound-circuit.ts) — not cluster-wide. Breakers are cached in a bounded LRU+TTL map keyed by internal webhook id (cap 5,000, idle TTL 1h), so URL churn and multi-tenant growth cannot leak breakers and a URL update reuses the same breaker rather than orphaning it.
 
 ---
 

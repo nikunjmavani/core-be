@@ -79,7 +79,7 @@ describe('worker-registration.registry', () => {
     ).toHaveLength(2);
     expect(
       definitions.filter((definition) => definition.holdsConnectionDuringExternalIo === true),
-    ).toHaveLength(6);
+    ).toHaveLength(5);
   });
 
   it('has no maintenance workers left unscheduled (every retention worker has a cron)', () => {
