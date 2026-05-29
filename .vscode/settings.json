@@ -82,6 +82,7 @@
     "bullmq",
     "cicd",
     "codegen",
+    "codegraph",
     "cyclonedx",
     "dbdiagram",
     "dorny",
