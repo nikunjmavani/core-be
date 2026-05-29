@@ -4,53 +4,128 @@ import { getEnv } from '@/shared/config/env.config.js';
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
-const VERSION_PREFIX = 'v1:';
 
-function resolveFieldSecretEncryptionKey(): Buffer {
-  const environment = getEnv();
-  if (environment.SECRETS_ENCRYPTION_KEY) {
-    return Buffer.from(environment.SECRETS_ENCRYPTION_KEY, 'hex');
-  }
-  if (environment.NODE_ENV === 'production') {
-    throw new Error('SECRETS_ENCRYPTION_KEY is required in production');
-  }
-  throw new Error(
-    'SECRETS_ENCRYPTION_KEY must be set (64 hex chars) for field-secret encryption in non-production',
-  );
+/** Supported field-secret key versions, newest last. The stored prefix is `<version>:`. */
+const SUPPORTED_VERSIONS = ['v1', 'v2'] as const;
+type FieldSecretKeyVersion = (typeof SUPPORTED_VERSIONS)[number];
+
+function isSupportedVersion(value: string): value is FieldSecretKeyVersion {
+  return (SUPPORTED_VERSIONS as readonly string[]).includes(value);
 }
 
-function isEncryptedFieldSecret(value: string): boolean {
-  return value.startsWith(VERSION_PREFIX);
+/** Returns the `<version>` of a stored value's `<version>:` prefix, or `null` for legacy plaintext. */
+function parseVersionPrefix(stored: string): FieldSecretKeyVersion | null {
+  const colonIndex = stored.indexOf(':');
+  if (colonIndex <= 0) {
+    return null;
+  }
+  const candidate = stored.slice(0, colonIndex);
+  return isSupportedVersion(candidate) ? candidate : null;
+}
+
+/** Parses the optional `SECRETS_ENCRYPTION_KEYS` JSON map into version→key buffers (empty when unset). */
+function parseFieldSecretKeyring(): Map<string, Buffer> {
+  const raw = getEnv().SECRETS_ENCRYPTION_KEYS;
+  if (!raw || raw.trim().length === 0) {
+    return new Map();
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new Error(
+      'SECRETS_ENCRYPTION_KEYS must be a JSON object mapping version to a 64-hex key',
+    );
+  }
+
+  const keyring = new Map<string, Buffer>();
+  for (const [version, hex] of Object.entries(parsed)) {
+    if (typeof hex !== 'string') {
+      continue;
+    }
+    if (!/^[0-9a-f]{64}$/i.test(hex)) {
+      throw new Error(`SECRETS_ENCRYPTION_KEYS["${version}"] must be 64 hex characters (32 bytes)`);
+    }
+    keyring.set(version, Buffer.from(hex, 'hex'));
+  }
+  return keyring;
+}
+
+/**
+ * Resolves the AES-256-GCM key buffer for a given field-secret version. The optional
+ * `SECRETS_ENCRYPTION_KEYS` keyring wins when it contains the version; otherwise `v1` falls back to
+ * the single `SECRETS_ENCRYPTION_KEY` so deployments without a keyring behave exactly as before.
+ */
+function resolveFieldSecretEncryptionKey(version: FieldSecretKeyVersion): Buffer {
+  const environment = getEnv();
+  const keyring = parseFieldSecretKeyring();
+  const keyForVersion = keyring.get(version);
+  if (keyForVersion) {
+    return keyForVersion;
+  }
+
+  if (version === 'v1') {
+    if (environment.SECRETS_ENCRYPTION_KEY) {
+      return Buffer.from(environment.SECRETS_ENCRYPTION_KEY, 'hex');
+    }
+    if (environment.NODE_ENV === 'production') {
+      throw new Error('SECRETS_ENCRYPTION_KEY is required in production');
+    }
+    throw new Error(
+      'SECRETS_ENCRYPTION_KEY must be set (64 hex chars) for field-secret encryption in non-production',
+    );
+  }
+
+  throw new Error(
+    `SECRETS_ENCRYPTION_KEYS has no key for version "${version}" — add it before encrypting or decrypting "${version}:" values`,
+  );
 }
 
 /**
  * Encrypts a short secret for at-rest storage (MFA seeds, webhook signing keys).
  * Legacy plaintext values are still readable via decryptFieldSecret.
+ *
+ * @remarks
+ * - Algorithm: AES-256-GCM with a random 12-byte IV; output is `<version>:base64(iv|authTag|cipher)`.
+ * - The write version is `SECRETS_ENCRYPTION_CURRENT_VERSION` (default `v1`), letting operators cut
+ *   over to a new key during a `SECRETS_ENCRYPTION_KEYS` rotation without touching existing rows.
+ * - Failure modes: throws when no key is configured for the current version.
+ * - Side effects: none (pure crypto over the resolved key).
  */
 export function encryptFieldSecret(plaintext: string): string {
   if (plaintext.length === 0) {
     return plaintext;
   }
-  const key = resolveFieldSecretEncryptionKey();
+  const version = getEnv().SECRETS_ENCRYPTION_CURRENT_VERSION;
+  const key = resolveFieldSecretEncryptionKey(version);
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const authTag = cipher.getAuthTag();
   const payload = Buffer.concat([iv, authTag, encrypted]);
-  return `${VERSION_PREFIX}${payload.toString('base64')}`;
+  return `${version}:${payload.toString('base64')}`;
 }
 
 /**
- * Reverse of {@link encryptFieldSecret}. Returns the input unchanged when it
- * lacks the `v1:` prefix so legacy plaintext rows continue to work during
- * migrations from plaintext to encrypted columns.
+ * Reverse of {@link encryptFieldSecret}. Returns the input unchanged when it lacks a recognised
+ * `<version>:` prefix so legacy plaintext rows continue to work during migrations from plaintext
+ * to encrypted columns.
+ *
+ * @remarks
+ * - Decrypts using the key for the value's OWN stored version, so values written under an older key
+ *   stay readable after a newer current version is configured.
+ * - Failure modes: throws when no key is configured for the stored version or when the GCM auth tag
+ *   fails (tampered ciphertext or wrong key).
+ * - Side effects: none.
  */
 export function decryptFieldSecret(stored: string): string {
-  if (!isEncryptedFieldSecret(stored)) {
+  const version = parseVersionPrefix(stored);
+  if (!version) {
     return stored;
   }
-  const key = resolveFieldSecretEncryptionKey();
-  const data = Buffer.from(stored.slice(VERSION_PREFIX.length), 'base64');
+  const key = resolveFieldSecretEncryptionKey(version);
+  const data = Buffer.from(stored.slice(version.length + 1), 'base64');
   const iv = data.subarray(0, IV_LENGTH);
   const authTag = data.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
   const encrypted = data.subarray(IV_LENGTH + AUTH_TAG_LENGTH);

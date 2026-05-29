@@ -88,6 +88,13 @@ const envSchemaBase = z.object({
   JWT_PUBLIC_KEY: z.string().min(1),
   /** Key id in JWT header when signing with RS256 (default: `default`). */
   JWT_SIGNING_KID: z.string().min(1).optional().default('default'),
+  /**
+   * Optional `kid`→PEM verification keyring (JSON object) enabling zero-downtime RS256
+   * rotation. When set, a token is verified against the public key whose `kid` matches the
+   * token header (current + previous keys during an overlap window). Unset preserves the
+   * single `JWT_PUBLIC_KEY` path exactly. Public key material → GitHub Variable.
+   */
+  JWT_PUBLIC_KEYS: z.string().min(1).optional(),
   /** Comma-separated emails that receive super_admin in JWT on login/refresh (platform ops). */
   GLOBAL_ADMIN_EMAILS: z.string().optional(),
   /** Shorter access-token TTL (seconds) for GLOBAL_ADMIN_EMAILS super_admin JWTs. Default 300 (5 min). */
@@ -428,6 +435,17 @@ const envSchemaBase = z.object({
   SECRETS_ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-f]{64}$/i, 'SECRETS_ENCRYPTION_KEY must be 64 hex characters (32 bytes)'),
+  /**
+   * Optional version→hex keyring (JSON object, e.g. `{"v1":"<hex>","v2":"<hex>"}`) enabling
+   * zero-downtime rotation of field-secret encryption keys. Stored values decrypt by their own
+   * version prefix; unset preserves the single `SECRETS_ENCRYPTION_KEY` (`v1`) path exactly.
+   */
+  SECRETS_ENCRYPTION_KEYS: z.string().min(1).optional(),
+  /**
+   * Field-secret version used when ENCRYPTING new secrets (default `v1`). Decryption always uses
+   * the stored value's own version prefix, so this only selects the write key during rotation.
+   */
+  SECRETS_ENCRYPTION_CURRENT_VERSION: z.enum(['v1', 'v2']).optional().default('v1'),
 
   // Monthly database restore drill (GitHub Actions only — not loaded by API/worker at runtime)
   /** Neon API key for scheduled monthly PITR restore drill. GitHub Environment secret via `pnpm github:sync`. */

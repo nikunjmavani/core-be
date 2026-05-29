@@ -10,8 +10,14 @@
  * lines plus a `gh secret set` snippet for the operator to review. Pass `--apply` to push
  * the new values via `gh secret set` (requires the GitHub CLI to be authenticated).
  *
+ * Zero-downtime rotation uses an overlap window: keep BOTH the old and new public keys in the
+ * `JWT_PUBLIC_KEYS` kid→PEM map and sign with the new `JWT_SIGNING_KID`. Tokens minted under the
+ * old kid keep verifying until they expire; once the access-token TTL elapses, drop the old key
+ * from `JWT_PUBLIC_KEYS`. See docs/deployment/runbooks/jwt-key-rotation.md.
+ *
  * Usage:
  *   pnpm ops:jwt:rotate                       # print-only (dry-run)
+ *   pnpm ops:jwt:rotate --kid 2026-05-prod-b  # name the new kid (default: jwt-<date>)
  *   pnpm ops:jwt:rotate --apply               # push via `gh secret set` (mutates)
  *   pnpm ops:jwt:rotate --apply --repository owner/name --environment production
  */
@@ -34,6 +40,12 @@ interface RotateOptions {
   apply: boolean;
   repository: string | null;
   environment: string | null;
+  kid: string;
+}
+
+/** Default `kid` for a freshly generated key when the operator does not pass `--kid`. */
+function defaultKid(): string {
+  return `jwt-${new Date().toISOString().slice(0, 10)}`;
 }
 
 interface GeneratedKeyPair {
@@ -62,12 +74,14 @@ function parseOptions(): RotateOptions {
       apply: { type: 'boolean', default: false },
       repository: { type: 'string' },
       environment: { type: 'string' },
+      kid: { type: 'string' },
     },
   });
   return {
     apply: values.apply === true,
     repository: values.repository ?? null,
     environment: values.environment ?? null,
+    kid: values.kid && values.kid.trim().length > 0 ? values.kid.trim() : defaultKid(),
   };
 }
 
@@ -139,20 +153,54 @@ function printSyncSnippet({
   console.log('');
 }
 
+/**
+ * Prints the zero-downtime overlap-window snippet: a `JWT_PUBLIC_KEYS` kid→PEM map containing both
+ * the current public key (kept for in-flight tokens) and the new one, plus the new `JWT_SIGNING_KID`.
+ */
+function printOverlapWindowSnippet({
+  keyPair,
+  options,
+}: {
+  keyPair: GeneratedKeyPair;
+  options: RotateOptions;
+}): void {
+  const currentPublicPem = process.env.JWT_PUBLIC_KEY;
+  const currentKid = process.env.JWT_SIGNING_KID ?? 'default';
+  const overlapMap: Record<string, string> = {};
+  if (currentPublicPem && currentPublicPem.trim().length > 0) {
+    overlapMap[currentKid] = toEscapedSingleLinePem(currentPublicPem.replaceAll('\\n', '\n'));
+  }
+  overlapMap[options.kid] = toEscapedSingleLinePem(keyPair.publicKeyPem);
+
+  console.log('Zero-downtime overlap window (recommended) — verify against current + previous:');
+  console.log('');
+  console.log(`  JWT_SIGNING_KID=${options.kid}`);
+  console.log(`  JWT_PUBLIC_KEYS=${JSON.stringify(overlapMap)}`);
+  console.log('');
+  console.log(
+    '  Deploy the new JWT_PRIVATE_KEY together with the JWT_PUBLIC_KEYS map above and the new',
+  );
+  console.log(
+    '  JWT_SIGNING_KID. Drop the old kid from JWT_PUBLIC_KEYS after the TTL window below.',
+  );
+  console.log('');
+}
+
 function printRotationChecklist(): void {
   const accessTokenTtlMinutes = ACCESS_TOKEN_EXPIRY_SECONDS / 60;
   console.log('Post-rotation checklist:');
   console.log(
-    '  1. Deploy the new JWT_PRIVATE_KEY / JWT_PUBLIC_KEY to every runtime (API + worker).',
+    '  1. Deploy the new JWT_PRIVATE_KEY plus the JWT_PUBLIC_KEYS overlap map and new ' +
+      'JWT_SIGNING_KID to every runtime (API + worker).',
   );
-  console.log('  2. Newly issued access tokens are signed with the new key immediately.');
+  console.log('  2. Newly issued access tokens are signed with the new kid immediately.');
   console.log(
-    `  3. Keep the OLD key valid until all in-flight access tokens expire — access token TTL is ` +
-      `${ACCESS_TOKEN_EXPIRY_SECONDS}s (${accessTokenTtlMinutes} min, ACCESS_TOKEN_EXPIRY_SECONDS).`,
+    `  3. Tokens minted under the OLD kid keep verifying via JWT_PUBLIC_KEYS until they expire — ` +
+      `access token TTL is ${ACCESS_TOKEN_EXPIRY_SECONDS}s (${accessTokenTtlMinutes} min, ACCESS_TOKEN_EXPIRY_SECONDS).`,
   );
   console.log(
-    '  4. Revoke / delete the OLD key only AFTER that TTL window elapses, so no live session ' +
-      'verifies against a removed key.',
+    '  4. Drop the OLD kid from JWT_PUBLIC_KEYS only AFTER that TTL window elapses. ' +
+      '(Single-key deploys without JWT_PUBLIC_KEYS instead accept a short 401 burst.)',
   );
   console.log('');
 }
@@ -194,6 +242,7 @@ function main(): void {
   printCurrentState();
   const keyPair = generateRs256KeyPair();
   printEnvFileLines(keyPair);
+  printOverlapWindowSnippet({ keyPair, options });
 
   if (options.apply) {
     applyViaGhSecretSet({ keyPair, options });
