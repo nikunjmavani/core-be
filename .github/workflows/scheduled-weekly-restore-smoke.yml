@@ -1,0 +1,113 @@
+# Weekly lightweight restore smoke drill — catches restore/migrate regressions 4x faster
+# than the monthly RTO drill, without the full RTO overhead. Creates a throwaway Neon PITR
+# branch from the workflow ref (main/dev), runs migrate + auth integration smoke, then deletes
+# the branch. No RTO assertion. See docs/process/backup-drills.md.
+
+name: Weekly restore smoke drill
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-smoke-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-environment:
+    name: Resolve environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.map.outputs.environment }}
+    steps:
+      - name: Map branch to GitHub Environment
+        # Canonical mapping (see docs/deployment/runbooks/add-new-environment.md):
+        #   main → production
+        #   dev  → development
+        id: map
+        run: |
+          set -euo pipefail
+          case "${{ github.ref_name }}" in
+            main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
+            dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
+            *)    echo "::error::Unsupported branch for restore drill: ${{ github.ref_name }} (Neon parent must be main or dev)" && exit 1 ;;
+          esac
+
+  restore-smoke:
+    name: Restore branch — migrate and auth smoke
+    needs: [resolve-environment]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve-environment.outputs.environment }}
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:8.6.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: ${{ secrets.MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY }}
+      RESTORE_DRILL_PARENT_BRANCH_NAME: ${{ github.ref_name }}
+      NODE_ENV: test
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Require restore drill secrets
+        run: |
+          set -euo pipefail
+          if [ -z "${MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY}" ]; then
+            echo "::error::GitHub Environment secret MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY is required (sync via pnpm github:sync)."
+            exit 1
+          fi
+
+      - name: Provision Neon PITR restore branch
+        id: neon_drill
+        run: bash tooling/ci/restore-drill-neon.sh create
+
+      - name: Setup Node and pnpm
+        if: env.NEON_DRILL_DATABASE_URL != ''
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export shared CI test env
+        if: env.NEON_DRILL_DATABASE_URL != ''
+        uses: ./.github/actions/test-env
+
+      - name: Run migrations on restored branch
+        env:
+          DATABASE_URL: ${{ steps.neon_drill.outputs.database_url }}
+        run: pnpm db:migrate
+
+      - name: Auth integration smoke on restored database
+        env:
+          DATABASE_URL: ${{ steps.neon_drill.outputs.database_url }}
+        run: pnpm test:integration -- --run src/domains/auth/__tests__/integration/auth.integration.test.ts
+
+      - name: Delete Neon restore drill branch
+        if: always() && steps.neon_drill.outputs.branch_id != ''
+        env:
+          DRILL_BRANCH_ID: ${{ steps.neon_drill.outputs.branch_id }}
+          MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: ${{ secrets.MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY }}
+        run: bash tooling/ci/restore-drill-neon.sh delete
+
+  alert-on-failure:
+    name: Alert on drill failure
+    needs: [resolve-environment, restore-smoke]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit workflow failure notice
+        run: |
+          echo "::error title=Weekly restore smoke failed::Review docs/process/backup-drills.md — weekly drill validates migrate + auth smoke on a restored Neon PITR branch."
