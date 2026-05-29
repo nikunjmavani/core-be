@@ -17,6 +17,9 @@ vi.mock('@/shared/config/env.config.js', () => ({
   get env() {
     return envState;
   },
+  // Defensive: other modules pulled into the same fork (e.g. the Redis key-prefix
+  // resolver) call getEnv(); expose it so this mock never poisons a co-located suite.
+  getEnv: () => envState,
 }));
 
 describe('fastify-server.util', () => {
