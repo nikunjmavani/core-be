@@ -113,6 +113,7 @@
   "missingRawBody": "Falta el cuerpo sin procesar de la solicitud",
   "stripeWebhookVerificationFailed": "Error al verificar la firma del webhook",
   "stripeWebhookEventInFlight": "El evento de webhook de Stripe {{eventId}} aún se está procesando; reintente en breve.",
+  "subscriptionAlreadyExists": "Ya existe una suscripción activa para esta organización",
   "captchaRequired": "Se requiere verificación CAPTCHA",
   "captchaInvalid": "La verificación CAPTCHA falló",
   "captchaProviderUnavailable": "La verificación CAPTCHA no está disponible temporalmente",

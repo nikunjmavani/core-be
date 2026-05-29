@@ -1,4 +1,5 @@
-import { NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
 import type { PaymentProvider } from './payment-provider.port.js';
@@ -26,7 +27,11 @@ import { withOrganizationDatabaseContext } from '@/infrastructure/database/conte
  *   accept a repository override so the webhook worker can pass its own
  *   worker-scoped handle.
  * - **Failure modes:** Throws {@link NotFoundError} when the organization,
- *   plan, or subscription cannot be loaded. On `create`, if persistence fails
+ *   plan, or subscription cannot be loaded. On `create`, throws
+ *   {@link ConflictError} (`errors:subscriptionAlreadyExists`) when the
+ *   organization already has a non-terminal subscription (checked before the
+ *   Stripe call) or when a concurrent create loses the partial-unique-index
+ *   race (Postgres `unique_violation`, `23505`). If persistence fails
  *   after the Stripe call succeeded, the provider is rolled back via
  *   `compensateFailedCreate`. On `changePlan`, a successful provider price
  *   update followed by a local write failure triggers
@@ -105,6 +110,12 @@ export class SubscriptionService {
       async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        // Reject before the Stripe call when a non-terminal subscription already
+        // exists, so a duplicate request never churns the payment provider.
+        const existingActive = await this.repository.findActiveByOrganization(organization.id);
+        if (existingActive) {
+          throw new ConflictError('errors:subscriptionAlreadyExists');
+        }
         const plan = await this.planService.requirePlanRecordByPublicId(parsed.plan_id);
         const createdByUserInternalId =
           await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
@@ -147,6 +158,11 @@ export class SubscriptionService {
     } catch (error) {
       if (paymentResult.providerSubscriptionId) {
         await this.paymentProvider.compensateFailedCreate(paymentResult.providerSubscriptionId);
+      }
+      // A concurrent create that lost the race to the partial unique index
+      // surfaces as a 409 instead of a 500 (the Stripe sub is already rolled back above).
+      if (isPostgresUniqueViolation(error)) {
+        throw new ConflictError('errors:subscriptionAlreadyExists');
       }
       throw error;
     }

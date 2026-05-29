@@ -215,6 +215,16 @@ describe('OrganizationService', () => {
     ).rejects.toBeInstanceOf(ConflictError);
   });
 
+  it('create maps a slug unique_violation race to ConflictError instead of 500', async () => {
+    vi.mocked(repository.findBySlug).mockResolvedValue(null);
+    vi.mocked(repository.create).mockRejectedValueOnce(
+      Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' }),
+    );
+    await expect(
+      service.create({ name: 'Race', slug: 'race-slug' }, 'owner_public'),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+
   it('getByPublicId throws when organization missing', async () => {
     vi.mocked(repository.findByPublicId).mockResolvedValue(null);
     await expect(service.getByPublicId('missing', 'user_public')).rejects.toBeInstanceOf(

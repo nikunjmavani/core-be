@@ -581,7 +581,7 @@ CREATE INDEX "idx_plans_active_price" ON "billing"."plans" USING btree ("is_acti
 CREATE INDEX "idx_stripe_webhook_events_status_created" ON "billing"."stripe_webhook_events" USING btree ("processing_status","stripe_created_at");--> statement-breakpoint
 CREATE INDEX "idx_stripe_webhook_events_status_updated" ON "billing"."stripe_webhook_events" USING btree ("processing_status","updated_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_subscriptions_public_id" ON "billing"."subscriptions" USING btree ("public_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "idx_subscriptions_org" ON "billing"."subscriptions" USING btree ("organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "idx_subscriptions_org" ON "billing"."subscriptions" USING btree ("organization_id") WHERE "billing"."subscriptions"."status" <> 'CANCELED';--> statement-breakpoint
 CREATE INDEX "idx_subscriptions_org_status" ON "billing"."subscriptions" USING btree ("organization_id","status");--> statement-breakpoint
 CREATE INDEX "idx_subscriptions_plan" ON "billing"."subscriptions" USING btree ("plan_id");--> statement-breakpoint
 CREATE INDEX "idx_subscriptions_status_period" ON "billing"."subscriptions" USING btree ("status","current_period_end");--> statement-breakpoint
