@@ -145,6 +145,28 @@ describe('MembershipService', () => {
     expect(membershipRepository.update).toHaveBeenCalled();
   });
 
+  it('update rejects activating a never-joined (INVITED) membership via PATCH', async () => {
+    vi.mocked(membershipRepository.findByPublicId).mockResolvedValue({
+      ...membershipRow,
+      status: 'INVITED',
+      joined_at: null,
+    } as never);
+    await expect(
+      service.update('org_public', 'mem_public', { status: 'ACTIVE' }, 'updater_public'),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(membershipRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('update allows reactivating a previously-joined membership (SUSPENDED -> ACTIVE)', async () => {
+    vi.mocked(membershipRepository.findByPublicId).mockResolvedValue({
+      ...membershipRow,
+      status: 'SUSPENDED',
+      joined_at: new Date(),
+    } as never);
+    await service.update('org_public', 'mem_public', { status: 'ACTIVE' }, 'updater_public');
+    expect(membershipRepository.update).toHaveBeenCalled();
+  });
+
   it('delete soft-deletes membership', async () => {
     await service.delete('org_public', 'mem_public');
     expect(membershipRepository.softDelete).toHaveBeenCalled();

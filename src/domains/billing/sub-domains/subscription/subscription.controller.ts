@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import { getRequestIdentifier, requirePrincipal } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { SubscriptionService } from './subscription.service.js';
 import { SubscriptionSerializer } from './subscription.serializer.js';
@@ -17,7 +17,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       request: FastifyRequest<{ Params: { id: string } }>,
       _reply: FastifyReply,
     ) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const data = await service.list(validatePublicIdParam(request.params.id, 'id'));
       return successResponse(SubscriptionSerializer.many(data), getRequestIdentifier(request));
     },
@@ -25,7 +25,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       request: FastifyRequest<{ Params: { id: string; subscriptionId: string } }>,
       _reply: FastifyReply,
     ) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const data = await service.get(
         validatePublicIdParam(request.params.id, 'id'),
         request.params.subscriptionId,
@@ -36,7 +36,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       request: FastifyRequest<{ Params: { id: string } }>,
       _reply: FastifyReply,
     ) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const idempotencyKey =
         typeof request.headers['idempotency-key'] === 'string'
           ? request.headers['idempotency-key']
@@ -53,7 +53,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       request: FastifyRequest<{ Params: { id: string; subscriptionId: string } }>,
       _reply: FastifyReply,
     ) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const data = await service.update(
         validatePublicIdParam(request.params.id, 'id'),
         request.params.subscriptionId,
@@ -65,7 +65,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       request: FastifyRequest<{ Params: { id: string; subscriptionId: string } }>,
       _reply: FastifyReply,
     ) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const data = await service.changePlan(
         validatePublicIdParam(request.params.id, 'id'),
         request.params.subscriptionId,
@@ -77,7 +77,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       request: FastifyRequest<{ Params: { id: string; subscriptionId: string } }>,
       _reply: FastifyReply,
     ) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const data = await service.cancel(
         validatePublicIdParam(request.params.id, 'id'),
         request.params.subscriptionId,
@@ -88,7 +88,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       request: FastifyRequest<{ Params: { id: string; subscriptionId: string } }>,
       _reply: FastifyReply,
     ) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const data = await service.resume(
         validatePublicIdParam(request.params.id, 'id'),
         request.params.subscriptionId,

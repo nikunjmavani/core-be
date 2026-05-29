@@ -19,6 +19,7 @@ import {
 } from './member-invitation.validator.js';
 import { serializeMemberInvitation } from './member-invitation.serializer.js';
 import { hashInvitationToken, generateInvitationToken } from './member-invitation.token.js';
+import { invalidatePermissions } from '../../permission/permission-cache.service.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import {
   MEMBER_INVITATION_EVENT,
@@ -68,12 +69,15 @@ export interface MemberInvitationListOptions {
  *   `ForbiddenError('errors:declineOwnInvitationOnly')` when a user tries to
  *   decline somebody else's invitation; `ConfigurationError` if the optional
  *   `UserService` is required but not wired by the container.
- * - **Side effects:** writes to `tenancy.member_invitations`; emits
- *   {@link MEMBER_INVITATION_EVENT.CREATED} / `RESENT` on the in-process
- *   event bus, which the invitation email handler turns into a mail-outbox
- *   row dispatched on commit. The raw token is only returned to the API
- *   caller and embedded in the outgoing email — it never leaves the service
- *   in any other form.
+ * - **Side effects:** writes to `tenancy.member_invitations`; `accept`
+ *   additionally activates the linked `tenancy.memberships` row
+ *   (`status = 'ACTIVE'`, `joined_at = now()`) in the same transaction and
+ *   purges the member's Redis permission cache so access is granted
+ *   immediately. Emits {@link MEMBER_INVITATION_EVENT.CREATED} / `RESENT` on
+ *   the in-process event bus, which the invitation email handler turns into a
+ *   mail-outbox row dispatched on commit. The raw token is only returned to
+ *   the API caller and embedded in the outgoing email — it never leaves the
+ *   service in any other form.
  * - **Notes:** invitations have mutually-exclusive terminal states
  *   (`accepted_at` vs `revoked_at`); resend regenerates the token and pushes
  *   `expires_at`. {@link listPendingInvitations} is intentionally
@@ -197,6 +201,24 @@ export class MemberInvitationService {
         throw new ValidationError('errors:validation.invitationExpired', undefined, {});
       const updated = await this.invitationRepository.accept(invitation_public_id);
       if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      /**
+       * Atomically activate the membership in the same transaction so accepting
+       * the token actually grants access (permission resolution requires
+       * `memberships.status = 'ACTIVE'`). Without this the invitation flow set
+       * `accepted_at` but left the membership `INVITED`, so the user appeared
+       * to have no access until a manager separately PATCHed the status.
+       */
+      const activatedMembership = await this.membershipRepository.activateForInvitationAccept(
+        lookup.membership_id,
+        lookup.organization_id,
+      );
+      if (!activatedMembership) throw new NotFoundError('Membership');
+      const memberUserPublicId = await this.organizationRepository.resolveUserPublicIdByInternalId(
+        activatedMembership.user_id,
+      );
+      if (memberUserPublicId) {
+        await invalidatePermissions(memberUserPublicId, lookup.organization_public_id);
+      }
       return serializeMemberInvitation(updated, lookup.membership_public_id);
     });
   }

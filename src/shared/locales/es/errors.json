@@ -61,6 +61,7 @@
   "organizationSlugExists": "Ya existe una organización con el slug \"{{slug}}\"",
   "ownerCannotLeave": "El propietario no puede abandonar la organización; transfiere la propiedad primero",
   "onlyOwnerCanTransfer": "Solo el propietario puede transferir la propiedad",
+  "membershipActivationRequiresInvitationAccept": "La membresía solo puede activarse aceptando la invitación",
   "oauthProviderNotConfigured": "El proveedor OAuth \"{{provider}}\" no está configurado.",
   "oauthProviderNotSupported": "El proveedor OAuth \"{{provider}}\" no es compatible.",
   "oauthNotImplemented": "OAuth para \"{{provider}}\" no está implementado.",
