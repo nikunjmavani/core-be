@@ -29,6 +29,11 @@
       "@tooling/tsdoc-coverage/*": ["./tooling/tsdoc-coverage/*"]
     }
   },
-  "include": ["src/**/*.ts", "tooling/openapi/**/*.ts", "tooling/tsdoc-coverage/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "tooling/openapi/**/*.ts",
+    "tooling/setup/**/*.ts",
+    "tooling/tsdoc-coverage/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist", "migrations"]
 }

@@ -232,15 +232,11 @@ export async function provision(
 
   try {
     let projectId = state.railway?.projectId;
-    const services: Record<string, { serviceId: string; environmentId?: string; url?: string }> =
-      state.railway?.services ? { ...state.railway.services } : {};
-    const railwayEnvironments: Record<
-      string,
-      {
-        environmentId: string;
-        services: Record<string, { serviceId: string; environmentId: string }>;
-      }
-    > = state.railway?.environments ? { ...state.railway.environments } : {};
+    const services: NonNullable<SetupState['railway']>['services'] = state.railway?.services
+      ? { ...state.railway.services }
+      : {};
+    const railwayEnvironments: NonNullable<NonNullable<SetupState['railway']>['environments']> =
+      state.railway?.environments ? { ...state.railway.environments } : {};
 
     // Adopt remote project by name when local state is missing the project ID.
     if (!projectId) {

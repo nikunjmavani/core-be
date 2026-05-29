@@ -162,7 +162,7 @@ async function requestGitHub<T>(
   }
 
   for (let attempt = 0; ; attempt += 1) {
-    const response = await fetch(buildGitHubApiUrl(pathname), {
+    const requestInit: RequestInit = {
       method: options.method ?? 'GET',
       headers: {
         Accept: 'application/vnd.github+json',
@@ -170,8 +170,9 @@ async function requestGitHub<T>(
         'Content-Type': 'application/json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    };
+    const response = await fetch(buildGitHubApiUrl(pathname), requestInit);
     recordRateLimitHeaders(response.headers);
 
     if (response.ok) {
@@ -187,8 +188,8 @@ async function requestGitHub<T>(
       );
     }
     const retryAfterMs = rateLimitState.retryAfterMs;
-    const waitMs =
-      retryAfterMs !== null && retryAfterMs > 0 ? retryAfterMs : RATE_LIMIT_BACKOFF_MS[attempt];
+    const backoffMs = RATE_LIMIT_BACKOFF_MS[attempt] ?? 0;
+    const waitMs = retryAfterMs !== null && retryAfterMs > 0 ? retryAfterMs : backoffMs;
     console.warn(
       `  ! GitHub API throttled "${label}" — backing off ${formatDuration(waitMs)} ` +
         `(retry ${attempt + 1}/${RATE_LIMIT_BACKOFF_MS.length})`,

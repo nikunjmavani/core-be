@@ -126,7 +126,7 @@ function getEnvironmentBranchEntries(config: SetupConfig): logger.EnvironmentBra
     label: environment.label,
     branch: environment.branch,
     services: SETUP_SERVICE_NAMES.map(formatSetupServiceName),
-    isDefault: environment.isDefault,
+    ...(environment.isDefault !== undefined ? { isDefault: environment.isDefault } : {}),
   }));
 }
 
@@ -408,7 +408,9 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
   const outcomes: StepOutcome<unknown>[] = [];
 
   for (let index = 0; index < steps.length; index += 1) {
-    const outcome = await runInteractiveStep(index + 1, totalSteps, steps[index], {
+    const step = steps[index];
+    if (!step) continue;
+    const outcome = await runInteractiveStep(index + 1, totalSteps, step, {
       assumeYes: isAssumeYes(options),
     });
     outcomes.push(outcome);
@@ -812,7 +814,7 @@ export function runDeleteInstructions(
     (provider.deleteInstructions?.(context) ?? []).map((block) => ({
       provider: block.provider,
       dashboardUrl: block.dashboardUrl,
-      steps: block.steps,
+      ...(block.steps !== undefined ? { steps: block.steps } : {}),
       resources: block.resources,
     })),
   );

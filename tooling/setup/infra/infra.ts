@@ -60,9 +60,11 @@ function parseProviderList(flagName: string): string[] | undefined {
 }
 
 function getProviderSelection(): ProviderSelectionInput {
+  const includeKeys = parseProviderList('--providers') ?? parseProviderList('--only-providers');
+  const skipKeys = parseProviderList('--skip-providers');
   return {
-    includeKeys: parseProviderList('--providers') ?? parseProviderList('--only-providers'),
-    skipKeys: parseProviderList('--skip-providers'),
+    ...(includeKeys !== undefined ? { includeKeys } : {}),
+    ...(skipKeys !== undefined ? { skipKeys } : {}),
   };
 }
 

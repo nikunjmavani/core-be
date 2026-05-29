@@ -462,7 +462,11 @@ export async function provision(
     };
     applyStateUpdates?.({
       redis: { subscriptionId: 0, databases },
-      railway: { ...state.railway, environments: railwayEnvironments },
+      railway: {
+        projectId,
+        services: state.railway?.services ?? {},
+        environments: railwayEnvironments,
+      },
     });
   };
 
@@ -534,7 +538,7 @@ export async function provision(
         template,
         projectId,
         environmentId: environmentState.environmentId,
-        workspaceId,
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
       });
       await waitForWorkflow(token, workflowId);
 

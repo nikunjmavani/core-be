@@ -24,7 +24,7 @@ interface AddEnvOptions {
   type: 'string' | 'number' | 'boolean';
   section: 'secret' | 'variable';
   description: string;
-  defaultValue?: string;
+  defaultValue?: string | undefined;
   optional: boolean;
 }
 
@@ -45,7 +45,7 @@ function parseArgs(): AddEnvOptions | null {
   }
 
   const key = args[0];
-  if (!/^[A-Z][A-Z0-9_]*$/.test(key)) {
+  if (!(key && /^[A-Z][A-Z0-9_]*$/.test(key))) {
     console.error(`Invalid key name "${key}". Must be SCREAMING_SNAKE_CASE.`);
     return null;
   }

@@ -96,9 +96,8 @@ function buildEnvContent(
 
   for (const line of lines) {
     const match = line.match(ENV_KEY_RE);
-    if (match) {
-      const key = match[1];
-
+    const key = match?.[1];
+    if (match && key) {
       // Provisioned keys always get fresh values from state.
       if (key in provisioned) {
         const value = provisioned[key as keyof EnvironmentVariables];
