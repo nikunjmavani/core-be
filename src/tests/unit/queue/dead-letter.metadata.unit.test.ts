@@ -13,6 +13,7 @@ const queueAddCalls: QueueAddCall[] = [];
 const queueAddMock = vi.fn<(jobName: string, data: unknown, options: unknown) => Promise<void>>();
 const queueCloseMock = vi.fn().mockResolvedValue(undefined);
 const sentryCaptureExceptionMock = vi.fn();
+const insertDeadLetterJobMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('bullmq', () => ({
   Queue: class MockQueue {
@@ -24,6 +25,10 @@ vi.mock('bullmq', () => ({
 
     close = queueCloseMock;
   },
+}));
+
+vi.mock('@/infrastructure/queue/dlq/dead-letter.repository.js', () => ({
+  insertDeadLetterJob: (...arguments_: unknown[]) => insertDeadLetterJobMock(...arguments_),
 }));
 
 vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
@@ -65,6 +70,8 @@ describe('enqueueDeadLetter metadata', () => {
     queueConstructorMock.mockClear();
     queueCloseMock.mockClear();
     sentryCaptureExceptionMock.mockClear();
+    insertDeadLetterJobMock.mockClear();
+    insertDeadLetterJobMock.mockResolvedValue(undefined);
     /** Reset module state so the queue cache is fresh for every test. */
     vi.resetModules();
   });

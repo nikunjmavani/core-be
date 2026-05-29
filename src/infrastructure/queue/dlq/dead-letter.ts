@@ -6,6 +6,7 @@
 import { Queue, type Job, type Worker } from 'bullmq';
 import { isSentryInitialized, Sentry } from '@/infrastructure/observability/sentry/sentry.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { insertDeadLetterJob } from '@/infrastructure/queue/dlq/dead-letter.repository.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
@@ -145,6 +146,100 @@ export async function enqueueDeadLetter(
   );
 }
 
+/**
+ * Persists one terminal job failure to `audit.dead_letter_jobs` (the durable source of
+ * truth) before the best-effort Redis mirror.
+ *
+ * @remarks
+ * - **Algorithm:** builds a redacted record (reusing {@link summarizeJobDataForDeadLetter})
+ *   and inserts it via {@link insertDeadLetterJob} using the base database connection.
+ * - **Failure modes:** never throws — a Postgres write failure is logged
+ *   (`queue.dead_letter.persist_failed`) and captured to Sentry so the `failed` listener
+ *   stays stable even when both Redis and Postgres are degraded.
+ * - **Side effects:** appends one row to `audit.dead_letter_jobs`; emits one structured log
+ *   line (`queue.dead_letter.persisted` on success).
+ * - **Notes:** runs outside any request/worker DB context; identifiers are passed
+ *   explicitly (no RLS session reliance).
+ */
+async function persistDeadLetterFailureToPostgres(
+  queueName: string,
+  job: Job,
+  error: Error | unknown,
+): Promise<void> {
+  const errorObject = error instanceof Error ? error : new Error(String(error));
+  const maxAttempts = job.opts.attempts ?? 1;
+
+  try {
+    await insertDeadLetterJob({
+      source_queue: queueName,
+      dead_letter_queue: getDeadLetterQueueName(queueName),
+      job_id: job.id ?? null,
+      job_name: job.name,
+      payload_summary: summarizeJobDataForDeadLetter(job.data),
+      failed_reason: errorObject.message,
+      error_stack: errorObject.stack ?? null,
+      attempts_made: job.attemptsMade,
+      max_attempts: maxAttempts,
+      failed_at: new Date(),
+    });
+
+    logger.info(
+      { queue: queueName, jobId: job.id, jobName: job.name },
+      'queue.dead_letter.persisted',
+    );
+  } catch (persistError) {
+    logger.error(
+      {
+        persistError: persistError instanceof Error ? persistError.message : String(persistError),
+        queue: queueName,
+        jobId: job.id,
+        jobName: job.name,
+      },
+      'queue.dead_letter.persist_failed',
+    );
+    captureDeadLetterPersistFailureInSentry(queueName, job, persistError);
+  }
+}
+
+/**
+ * Mirrors a terminal failure to the `<source>-dlq` Redis queue for replay convenience.
+ * Best-effort: any error is logged (`queue.dead_letter.enqueue_failed`) and swallowed —
+ * the durable record already lives in Postgres via {@link persistDeadLetterFailureToPostgres}.
+ */
+async function mirrorDeadLetterToRedis(
+  queueName: string,
+  job: Job,
+  error: Error | unknown,
+): Promise<void> {
+  try {
+    await enqueueDeadLetter(queueName, job, error);
+  } catch (deadLetterError) {
+    logger.error(
+      {
+        deadLetterError:
+          deadLetterError instanceof Error ? deadLetterError.message : String(deadLetterError),
+        queue: queueName,
+        jobId: job.id,
+      },
+      'queue.dead_letter.enqueue_failed',
+    );
+  }
+}
+
+/**
+ * Writes the durable Postgres record first, then the best-effort Redis mirror. Resolves
+ * without throwing in every branch so it is safe to `void` from the synchronous `failed`
+ * listener.
+ */
+async function recordDeadLetterFailure(
+  queueName: string,
+  job: Job,
+  error: Error | unknown,
+): Promise<void> {
+  await persistDeadLetterFailureToPostgres(queueName, job, error);
+  await mirrorDeadLetterToRedis(queueName, job, error);
+}
+
 function captureFinalFailureInSentry(queueName: string, job: Job, error: Error | unknown): void {
   if (!isSentryInitialized()) return;
 
@@ -161,8 +256,29 @@ function captureFinalFailureInSentry(queueName: string, job: Job, error: Error |
   });
 }
 
+function captureDeadLetterPersistFailureInSentry(
+  queueName: string,
+  job: Job,
+  error: Error | unknown,
+): void {
+  if (!isSentryInitialized()) return;
+
+  const errorObject = error instanceof Error ? error : new Error(String(error));
+
+  Sentry.withScope((scope) => {
+    scope.setLevel('error');
+    scope.setFingerprint(['dead_letter_persist_failure', queueName, job.name]);
+    scope.setTag('queue', queueName);
+    scope.setTag('job_id', String(job.id ?? 'unknown'));
+    scope.setTag('job_name', job.name);
+    scope.setTag('dead_letter_persist_failure', 'true');
+    Sentry.captureException(errorObject);
+  });
+}
+
 /**
- * Subscribes once to `failed`: warn on transient retries; on final failure, DLQ + Sentry.
+ * Subscribes once to `failed`: warn on transient retries; on final failure, persist the
+ * durable Postgres record + mirror to Redis + alert Sentry.
  */
 export function attachDeadLetterAndAlerting(worker: Worker, queueName: string): void {
   worker.on('failed', (job, error) => {
@@ -200,17 +316,7 @@ export function attachDeadLetterAndAlerting(worker: Worker, queueName: string): 
       'queue.job.final_failure',
     );
 
-    void enqueueDeadLetter(queueName, job, error).catch((deadLetterError) => {
-      logger.error(
-        {
-          deadLetterError:
-            deadLetterError instanceof Error ? deadLetterError.message : String(deadLetterError),
-          queue: queueName,
-          jobId: job.id,
-        },
-        'queue.dead_letter.enqueue_failed',
-      );
-    });
+    void recordDeadLetterFailure(queueName, job, error);
 
     captureFinalFailureInSentry(queueName, job, error);
   });
