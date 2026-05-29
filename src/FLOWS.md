@@ -89,9 +89,9 @@ sequenceDiagram
     Login->>MFA: createChallenge → mfa_session_token (Redis, 5m)
     Login-->>Auth: {requires_mfa: true, mfa_session_token}
     Auth-->>Client: 200
-    Client->>Auth: POST /auth/mfa/verify {mfa_session_token, code}
-    Auth->>MFA: verifyChallenge
-    MFA->>Login: completeLoginAfterMfa
+    Client->>Auth: POST /auth/mfa/login {mfa_session_token, totp_code|recovery_code}
+    Auth->>MFA: verifyLoginMfa (validate session token, then TOTP/recovery)
+    MFA->>Login: issue access token + session
   end
   Login->>DB: INSERT auth_sessions
   Login-->>Auth: {access_token, session_public_id}

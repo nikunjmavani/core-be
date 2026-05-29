@@ -35,8 +35,8 @@ Legend:
   DELETE/api/v1/auth/me/sessions/:id                           AUTH
   GET   /api/v1/auth/mfa                                       AUTH
   DELETE/api/v1/auth/mfa/:mfaMethodId                          AUTH
-  POST  /api/v1/auth/mfa/challenge                             PUBLIC
   POST  /api/v1/auth/mfa/enroll                                AUTH
+  POST  /api/v1/auth/mfa/login                                 PUBLIC
   POST  /api/v1/auth/mfa/verify                                AUTH
   GET   /api/v1/auth/oauth/:provider                           PUBLIC
   GET   /api/v1/auth/oauth/:provider/callback                  PUBLIC

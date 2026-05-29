@@ -16,8 +16,8 @@ import {
   LoginDto,
   MagicLinkSendDto,
   MagicLinkVerifyDto,
-  MfaChallengeDto,
   MfaEnrollDto,
+  MfaLoginVerifyDto,
   MfaVerifyDto,
   mfaMethodIdParamsDto,
   OauthCallbackQueryDto,
@@ -164,18 +164,18 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     handler: controller.verifyEmail,
   });
   zodApplication.post(
-    '/mfa/challenge',
+    '/mfa/login',
     {
       ...STRICT_PUBLIC_RATE_LIMIT,
       schema: {
-        summary: 'Issue MFA challenge',
+        summary: 'Complete MFA during login',
         description:
-          'Issues a new MFA challenge for a user during the login flow. The user must respond with a valid TOTP code.',
+          'Completes the login flow for an MFA-enabled account. Requires the short-lived mfa_session_token issued by POST /auth/login after password verification, plus a valid TOTP or recovery code. Returns access and refresh tokens and sets the session cookie on success.',
         tags: ['Auth', 'MFA'],
-        body: MfaChallengeDto,
+        body: MfaLoginVerifyDto,
       },
     },
-    controller.challengeMfa,
+    controller.verifyMfaLogin,
   );
   zodApplication.post('/webauthn/authenticate/options', {
     ...STRICT_PUBLIC_RATE_LIMIT,

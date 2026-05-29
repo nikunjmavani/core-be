@@ -77,6 +77,8 @@
   "mfaUserNotFound": "Usuario no encontrado",
   "mfaNotEnabled": "MFA no está habilitado para esta cuenta",
   "mfaInvalidOrExpiredCode": "Código no válido o caducado",
+  "mfaInvalidOrExpiredSession": "Sesión MFA no válida o caducada. Por favor, inicia sesión de nuevo.",
+  "mfaInvalidOrExpiredRecoveryCode": "Código de recuperación no válido o ya utilizado",
   "mfaMethodNotFound": "Método MFA no encontrado",
   "mfaNotTotpMethod": "No es un método MFA",
   "mfaRevokeFailed": "Error al revocar el método MFA",

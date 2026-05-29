@@ -9,18 +9,17 @@ import type { AuthContainer } from '../auth.container.js';
 
 type AuthMfaHandlersDependencies = Pick<AuthContainer, 'mfaService'>;
 
-/** Builds the MFA Fastify handlers: `verifyMfa` (login-flow step + post-login confirmation), `enrollMfa`, `listMfaMethods`, and `deleteMfa`. */
+/** Builds the MFA Fastify handlers: `verifyMfaLogin` (public login completion via `mfa_session_token`), `verifyMfa` (authenticated step-up), `enrollMfa`, `listMfaMethods`, and `deleteMfa`. */
 export function createAuthMfaHandlers({ mfaService }: AuthMfaHandlersDependencies) {
   return {
-    verifyMfa: async (request: FastifyRequest, reply: FastifyReply) => {
-      const body = request.body as Record<string, unknown> | undefined;
-      if (body !== undefined && typeof body.mfa_session_token === 'string') {
-        const ipAddress = getIpAddress(request);
-        const userAgent = getUserAgent(request) ?? undefined;
-        const data = await mfaService.verifyLoginMfa(request.body, ipAddress, userAgent);
-        setSessionCookie(reply, data.session_public_id);
-        return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
-      }
+    verifyMfaLogin: async (request: FastifyRequest, reply: FastifyReply) => {
+      const ipAddress = getIpAddress(request);
+      const userAgent = getUserAgent(request) ?? undefined;
+      const data = await mfaService.verifyLoginMfa(request.body, ipAddress, userAgent);
+      setSessionCookie(reply, data.session_public_id);
+      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
+    },
+    verifyMfa: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const data = await mfaService.verify(auth.userId, request.body);
       return successResponse(AuthSerializer.mfaVerified(data), getRequestIdentifier(request));
@@ -34,17 +33,6 @@ export function createAuthMfaHandlers({ mfaService }: AuthMfaHandlersDependencie
         resource_type: 'mfa_method',
       });
       return successResponse(AuthSerializer.mfaEnroll(data), getRequestIdentifier(request));
-    },
-    challengeMfa: async (request: FastifyRequest, reply: FastifyReply) => {
-      const ipAddress = getIpAddress(request);
-      const userAgent = getUserAgent(request) ?? undefined;
-      const data = await mfaService.challenge(request.body, ipAddress, userAgent);
-
-      if ('session_public_id' in data && typeof data.session_public_id === 'string') {
-        setSessionCookie(reply, data.session_public_id);
-      }
-
-      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
     },
     deleteMfa: async (
       request: FastifyRequest<{ Params: { mfaMethodId: string } }>,

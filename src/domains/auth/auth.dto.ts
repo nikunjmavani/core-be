@@ -100,16 +100,6 @@ export const MfaEnrollDto = z
 /** Inferred input type of {@link MfaEnrollDto}. */
 export type MfaEnrollInput = z.infer<typeof MfaEnrollDto>;
 
-/** Zod schema for the `POST /api/v1/auth/mfa/challenge` request body (user id + 6-digit code). */
-export const MfaChallengeDto = z
-  .object({
-    user_id: trimmedStringMinMax(1, 255),
-    code: z.string().trim().length(6).regex(/^\d+$/),
-  })
-  .strict();
-/** Inferred input type of {@link MfaChallengeDto}. */
-export type MfaChallengeInput = z.infer<typeof MfaChallengeDto>;
-
 /** Public login MFA step after password verification (no JWT yet). */
 export const MfaLoginVerifyDto = z
   .object({

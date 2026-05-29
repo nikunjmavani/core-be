@@ -13,10 +13,10 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodService } from '../auth-method/auth-method.service.js';
 import type { AuthSessionService } from '../auth-session/auth-session.service.js';
+import { MFA_TOTP_CODE_REPLAY_TTL_SECONDS } from '@/shared/constants/index.js';
 import {
   validateMfaVerify,
   validateMfaEnroll,
-  validateMfaChallenge,
   validateMfaLoginVerify,
 } from '../../auth.validator.js';
 import { createMfaSession, verifyMfaSession } from './mfa-session.js';
@@ -24,6 +24,10 @@ import { consumeMfaRecoveryCode } from './mfa-recovery-code.repository.js';
 
 const TOTP_ISSUER = 'core-be';
 const ERROR_KEY_MFA_USER_NOT_FOUND = 'errors:mfaUserNotFound';
+const ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE = 'errors:mfaInvalidOrExpiredCode';
+
+/** Redis key prefix marking a TOTP code consumed by a user, used to reject replay within its validity window. */
+const MFA_TOTP_CONSUMED_KEY_PREFIX = 'mfa:totp:consumed:';
 
 /**
  * TOTP-based MFA and recovery-code orchestrator for the auth domain.
@@ -42,10 +46,13 @@ const ERROR_KEY_MFA_USER_NOT_FOUND = 'errors:mfaUserNotFound';
  * - **Side effects:** writes to {@link auth_methods}, {@link mfa_recovery_codes},
  *   and `auth.sessions`; flips `users.is_mfa_enabled` on enroll and on the last
  *   method removal; refreshes `auth_methods.last_used_at` on every successful
- *   verification.
+ *   verification; records each consumed TOTP code in Redis for
+ *   {@link MFA_TOTP_CODE_REPLAY_TTL_SECONDS} to reject replay.
  * - **Notes:** secrets are encrypted at rest using the field-secret KMS path;
  *   recovery codes are stored only as SHA-256 hashes and consumed exactly once
- *   via an atomic `UPDATE … WHERE used_at IS NULL`.
+ *   via an atomic `UPDATE … WHERE used_at IS NULL`. The public login step is
+ *   reachable only with a valid `mfa_session_token` minted by `auth.login`
+ *   after first-factor (password) verification — there is no TOTP-only login.
  */
 export class MfaService {
   constructor(
@@ -87,8 +94,9 @@ export class MfaService {
         token: parsed.totp_code,
       });
       if (!result.valid) {
-        throw new UnauthorizedError('errors:mfaInvalidOrExpiredCode');
+        throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
       }
+      await this.rejectReplayedTotpCode(user.id, parsed.totp_code);
       await this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id);
       verified = true;
     } else if (parsed.recovery_code) {
@@ -100,20 +108,39 @@ export class MfaService {
     }
 
     if (!verified) {
-      throw new UnauthorizedError('errors:mfaInvalidOrExpiredCode');
+      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
 
     return this.issueAccessTokenAndSession(user, ipAddress, userAgent);
   }
 
+  /**
+   * Marks a freshly-verified TOTP code as consumed in Redis and rejects it if it
+   * was already used. `SET NX` makes the check-and-set atomic so two concurrent
+   * requests carrying the same valid code cannot both succeed; a replay surfaces
+   * as the generic invalid-code error to avoid leaking that the code was valid.
+   */
+  private async rejectReplayedTotpCode(userId: number, totpCode: string): Promise<void> {
+    const codeHash = createHash('sha256').update(totpCode).digest('hex');
+    const key = `${MFA_TOTP_CONSUMED_KEY_PREFIX}${userId}:${codeHash}`;
+    const stored = await this.redis.set(key, '1', 'EX', MFA_TOTP_CODE_REPLAY_TTL_SECONDS, 'NX');
+    if (stored === null) {
+      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
+    }
+  }
+
   private async issueAccessTokenAndSession(
-    user: { public_id: string; email: string; status: string },
+    user: { public_id: string; email: string; status: string; is_email_verified: boolean },
     ipAddress: string,
     userAgent?: string,
   ): Promise<{ access_token: string; session_public_id: string }> {
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
-      role: resolveAccessTokenRoleForUser(user.email, user.status),
+      role: resolveAccessTokenRoleForUser({
+        email: user.email,
+        status: user.status,
+        isEmailVerified: user.is_email_verified,
+      }),
     });
     const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
     const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
@@ -144,8 +171,9 @@ export class MfaService {
       token: parsed.code,
     });
     if (!result.valid) {
-      throw new UnauthorizedError('errors:mfaInvalidOrExpiredCode');
+      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
+    await this.rejectReplayedTotpCode(user.id, parsed.code);
     await this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id);
     return { verified: true };
   }
@@ -180,30 +208,6 @@ export class MfaService {
       provisioning_uri: provisioningUri,
       method_id: record.id,
     };
-  }
-
-  /** Challenge MFA during login (public). Verifies code and returns access token. */
-  async challenge(
-    body: unknown,
-    ipAddress: string,
-    userAgent?: string,
-  ): Promise<{ access_token: string; session_public_id: string }> {
-    const parsed = validateMfaChallenge(body);
-    const user = await this.userService.requireUserRecordByPublicId(parsed.user_id);
-    if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
-    const totpMethod = await this.authMethodService.findTotpByUserId(user.id);
-    if (!totpMethod?.encrypted_secret) {
-      throw new UnauthorizedError('errors:mfaNotEnabled');
-    }
-    const result = await verify({
-      secret: decryptFieldSecret(totpMethod.encrypted_secret),
-      token: parsed.code,
-    });
-    if (!result.valid) {
-      throw new UnauthorizedError('errors:mfaInvalidOrExpiredCode');
-    }
-    await this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id);
-    return this.issueAccessTokenAndSession(user, ipAddress, userAgent);
   }
 
   /** Delete (revoke) an MFA method for the current user. */

@@ -683,14 +683,23 @@ describe('Auth Domain — Integration', () => {
 
   // ─── MFA ──────────────────────────────────────────────────────
 
-  describe('POST /api/v1/auth/mfa/challenge', () => {
+  describe('POST /api/v1/auth/mfa/login', () => {
     it('should return 400 for missing body', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/challenge'),
+        url: testApiPath('/auth/mfa/login'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
+    });
+
+    it('should return 401 for a TOTP code without a valid mfa_session_token', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/login'),
+        payload: { mfa_session_token: 'forged-or-expired-token', totp_code: '123456' },
+      });
+      expect(response.statusCode).toBe(401);
     });
   });
 

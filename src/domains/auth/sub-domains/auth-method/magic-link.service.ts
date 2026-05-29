@@ -128,7 +128,11 @@ export class MagicLinkService {
 
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
-      role: resolveAccessTokenRoleForUser(user.email, user.status),
+      role: resolveAccessTokenRoleForUser({
+        email: user.email,
+        status: user.status,
+        isEmailVerified: user.is_email_verified,
+      }),
     });
 
     const jsonWebTokenHash = createHash('sha256').update(jsonWebToken).digest('hex');

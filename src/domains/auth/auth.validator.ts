@@ -10,7 +10,6 @@ import type {
   ChangePasswordInput,
   VerifyEmailInput,
   MfaEnrollInput,
-  MfaChallengeInput,
   MfaLoginVerifyInput,
   OauthCallbackQueryInput,
 } from './auth.dto.js';
@@ -25,7 +24,6 @@ import {
   ChangePasswordDto,
   VerifyEmailDto,
   MfaEnrollDto,
-  MfaChallengeDto,
   MfaLoginVerifyDto,
   OauthCallbackQueryDto,
 } from './auth.dto.js';
@@ -152,19 +150,6 @@ export function validateVerifyEmail(body: unknown): VerifyEmailInput {
 /** Validates the authenticated `POST /api/v1/auth/mfa/enroll` request body against {@link MfaEnrollDto}. */
 export function validateMfaEnroll(body: unknown): MfaEnrollInput {
   const result = MfaEnrollDto.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      ERROR_KEY_INVALID_INPUT,
-      undefined,
-      result.error.flatten().fieldErrors,
-    );
-  }
-  return result.data;
-}
-
-/** Validates the `POST /api/v1/auth/mfa/challenge` request body against {@link MfaChallengeDto}. */
-export function validateMfaChallenge(body: unknown): MfaChallengeInput {
-  const result = MfaChallengeDto.safeParse(body);
   if (!result.success) {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,

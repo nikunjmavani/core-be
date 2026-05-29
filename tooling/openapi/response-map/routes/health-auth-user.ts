@@ -151,7 +151,7 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     schema: wrapSuccess(schemas.mfaVerifiedSchema, { verified: true }),
     example: null,
   },
-  'POST /api/v1/auth/mfa/challenge': {
+  'POST /api/v1/auth/mfa/login': {
     statusCode: 200,
     schema: wrapSuccess(schemas.accessTokenSchema, schemas.accessTokenExample),
     example: null,

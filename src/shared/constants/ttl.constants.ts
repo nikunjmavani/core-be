@@ -39,6 +39,14 @@ export const IDEMPOTENCY_RESPONSE_CACHE_TTL_SECONDS = SECONDS_PER_DAY;
 /** MFA challenge session lifetime in Redis (seconds). */
 export const MFA_SESSION_TTL_SECONDS = 300;
 
+/**
+ * Window during which a successfully consumed TOTP code is remembered in Redis
+ * to reject replay (seconds). Covers the current 30-second step plus the
+ * ±1-step verification tolerance, so a captured code cannot be reused while it
+ * is still cryptographically valid.
+ */
+export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = 90;
+
 /** WebAuthn ceremony challenge lifetime in Redis (seconds). */
 export const WEBAUTHN_CHALLENGE_TTL_SECONDS = MFA_SESSION_TTL_SECONDS;
 

@@ -78,6 +78,8 @@
   "mfaUserNotFound": "User not found",
   "mfaNotEnabled": "MFA is not enabled for this account",
   "mfaInvalidOrExpiredCode": "Invalid or expired code",
+  "mfaInvalidOrExpiredSession": "Invalid or expired MFA session. Please log in again.",
+  "mfaInvalidOrExpiredRecoveryCode": "Invalid or already-used recovery code",
   "mfaMethodNotFound": "MFA method not found",
   "mfaNotTotpMethod": "Not an MFA method",
   "mfaRevokeFailed": "Failed to revoke MFA method",
