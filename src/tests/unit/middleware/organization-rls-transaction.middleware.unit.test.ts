@@ -5,6 +5,10 @@ import organizationRlsTransactionMiddleware, {
   type OrganizationRlsTransactionSettlementOutcome,
 } from '@/shared/middlewares/organization-rls-transaction.middleware.js';
 import requestLifecycleMiddleware from '@/shared/middlewares/request-lifecycle.middleware.js';
+import {
+  type OrganizationRlsCheckoutHoldSample,
+  registerOrganizationRlsCheckoutHoldObserver,
+} from '@/infrastructure/database/organization-rls-checkout-counter.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 /**
@@ -460,5 +464,35 @@ describe('organization-rls-transaction.middleware', () => {
     );
     warnSpy.mockRestore();
     await scopedApplication.close();
+  });
+
+  it('records a request_transaction checkout hold-time sample after settlement', async () => {
+    const samples: OrganizationRlsCheckoutHoldSample[] = [];
+    registerOrganizationRlsCheckoutHoldObserver((sample) => {
+      samples.push(sample);
+    });
+
+    try {
+      const organizationPublicId = generatePublicId();
+      const capture: { outcome?: OrganizationRlsTransactionSettlementOutcome } = {};
+      const scopedApplication = Fastify({ logger: false });
+      scopedApplication.addHook('onRequest', (request, _reply, done) => {
+        (request as { organizationId?: string }).organizationId = organizationPublicId;
+        done();
+      });
+      await registerOrganizationRlsWithSettlementCapture(scopedApplication, capture);
+      scopedApplication.get('/probe', async () => ({ ok: true }));
+      await scopedApplication.ready();
+
+      const response = await scopedApplication.inject({ method: 'GET', url: '/probe' });
+      expect(response.statusCode).toBe(200);
+      expect(capture.outcome).toBe('committed');
+      expect(samples).toHaveLength(1);
+      expect(samples[0]?.path).toBe('request_transaction');
+      expect(samples[0]?.durationSeconds).toBeGreaterThanOrEqual(0);
+      await scopedApplication.close();
+    } finally {
+      registerOrganizationRlsCheckoutHoldObserver(null);
+    }
   });
 });

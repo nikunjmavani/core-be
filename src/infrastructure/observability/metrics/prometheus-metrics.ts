@@ -1,4 +1,5 @@
 import { Counter, Gauge, Histogram, type Registry } from 'prom-client';
+import type { OrganizationRlsCheckoutPath } from '@/infrastructure/database/organization-rls-checkout-counter.js';
 import {
   getMetricsRegistry,
   isMetricsEnabled,
@@ -22,6 +23,8 @@ let pgPoolWaiting: Gauge | null = null;
 let bullmqJobsWaiting: Gauge<'queue'> | null = null;
 let eventLoopLagMilliseconds: Gauge | null = null;
 let stripeWebhookEventsFailed: Gauge | null = null;
+let databaseRlsActiveCheckouts: Gauge | null = null;
+let databaseRlsCheckoutHoldSeconds: Histogram<'path'> | null = null;
 
 function registerOn(registry: Registry): void {
   httpRequestsTotal = new Counter({
@@ -130,6 +133,20 @@ function registerOn(registry: Registry): void {
     help: 'Stripe webhook ledger rows in failed processing_status (alert when >0 for >10m)',
     registers: [registry],
   });
+
+  databaseRlsActiveCheckouts = new Gauge({
+    name: 'database_rls_active_checkouts',
+    help: 'In-process org-scoped RLS transaction checkouts currently held (early pool-saturation signal; alert near DATABASE_POOL_MAX)',
+    registers: [registry],
+  });
+
+  databaseRlsCheckoutHoldSeconds = new Histogram({
+    name: 'database_rls_checkout_hold_seconds',
+    help: 'Wall-clock seconds an org-scoped RLS transaction held a pooled connection, by path (scoped_context | request_transaction)',
+    labelNames: ['path'],
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+    registers: [registry],
+  });
 }
 
 function bindMetricHandlesFromRegistry(registry: Registry): void {
@@ -157,6 +174,10 @@ function bindMetricHandlesFromRegistry(registry: Registry): void {
   bullmqJobsWaiting = registry.getSingleMetric('bullmq_jobs_waiting') as Gauge<'queue'>;
   eventLoopLagMilliseconds = registry.getSingleMetric('event_loop_lag_ms') as Gauge;
   stripeWebhookEventsFailed = registry.getSingleMetric('stripe_webhook_events_failed') as Gauge;
+  databaseRlsActiveCheckouts = registry.getSingleMetric('database_rls_active_checkouts') as Gauge;
+  databaseRlsCheckoutHoldSeconds = registry.getSingleMetric(
+    'database_rls_checkout_hold_seconds',
+  ) as Histogram<'path'>;
   registeredMetricsRegistry = registry;
 }
 
@@ -307,4 +328,30 @@ export function setStripeWebhookEventsFailedCount(count: number): void {
   if (!isMetricsEnabled()) return;
   if (!stripeWebhookEventsFailed) return;
   stripeWebhookEventsFailed.set(count);
+}
+
+/**
+ * Sets the `database_rls_active_checkouts` gauge from the in-process org-RLS checkout
+ * counter. Fed by the pool-metrics scrape refresh so dashboards see how many org-scoped
+ * RLS checkouts are held against `DATABASE_POOL_MAX` before postgres.js starts queuing.
+ */
+export function setOrganizationRlsActiveCheckouts(count: number): void {
+  if (!isMetricsEnabled()) return;
+  if (!databaseRlsActiveCheckouts) return;
+  databaseRlsActiveCheckouts.set(count);
+}
+
+/**
+ * Observes one completed org-RLS checkout hold on the `database_rls_checkout_hold_seconds`
+ * histogram, labelled by `path` (`scoped_context` unit of work vs legacy full-request
+ * `request_transaction`). Wired via `registerOrganizationRlsCheckoutHoldObserver` so the hot
+ * database-checkout paths stay free of a prom-client import. No-op when metrics are disabled.
+ */
+export function recordOrganizationRlsCheckoutHold(options: {
+  path: OrganizationRlsCheckoutPath;
+  durationSeconds: number;
+}): void {
+  if (!isMetricsEnabled()) return;
+  if (!databaseRlsCheckoutHoldSeconds) return;
+  databaseRlsCheckoutHoldSeconds.observe({ path: options.path }, options.durationSeconds);
 }

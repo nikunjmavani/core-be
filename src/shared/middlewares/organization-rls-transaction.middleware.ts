@@ -5,6 +5,7 @@ import { database } from '@/infrastructure/database/connection.js';
 import {
   decrementOrganizationRlsCheckoutCount,
   incrementOrganizationRlsCheckoutCount,
+  observeOrganizationRlsCheckoutHold,
 } from '@/infrastructure/database/organization-rls-checkout-counter.js';
 import {
   organizationRequestDatabaseStorage,
@@ -48,6 +49,29 @@ const organizationRlsTransactionCompletions = new WeakMap<
 const organizationRlsTransactionOuterPromises = new WeakMap<FastifyRequest, Promise<void>>();
 
 const organizationRlsCheckoutHeld = new WeakMap<FastifyRequest, boolean>();
+
+/** `process.hrtime.bigint()` captured when the request-pinned checkout was acquired. */
+const organizationRlsCheckoutStartedAtNanoseconds = new WeakMap<FastifyRequest, bigint>();
+
+/**
+ * Releases the pooled checkout counter for `request` and records how long the request-pinned
+ * checkout was held on the `database_rls_checkout_hold_seconds{path="request_transaction"}`
+ * histogram. Idempotent — only the first call for a given request decrements/records.
+ */
+function releaseOrganizationRlsCheckout(request: FastifyRequest): void {
+  if (!organizationRlsCheckoutHeld.delete(request)) {
+    return;
+  }
+  decrementOrganizationRlsCheckoutCount();
+  const startedAtNanoseconds = organizationRlsCheckoutStartedAtNanoseconds.get(request);
+  if (startedAtNanoseconds !== undefined) {
+    organizationRlsCheckoutStartedAtNanoseconds.delete(request);
+    observeOrganizationRlsCheckoutHold({
+      path: 'request_transaction',
+      durationSeconds: Number(process.hrtime.bigint() - startedAtNanoseconds) / 1_000_000_000,
+    });
+  }
+}
 
 function getOrganizationPublicIdFromRequest(request: FastifyRequest): string | null {
   const organizationPublicId = (request as FastifyRequest & { organizationId: string | null })
@@ -102,25 +126,19 @@ export async function settleAndAwaitOrganizationRlsTransaction(
     organizationRlsTransactionOuterPromises.delete(request);
     try {
       await outerPromise;
-      if (organizationRlsCheckoutHeld.delete(request)) {
-        decrementOrganizationRlsCheckoutCount();
-      }
+      releaseOrganizationRlsCheckout(request);
       return intendedRollback ? 'rolled_back' : 'committed';
     } catch (error) {
       logger.warn(
         { error, organizationPublicId: getOrganizationPublicIdFromRequest(request) },
         'organization.rls.transaction.settle_await_error',
       );
-      if (organizationRlsCheckoutHeld.delete(request)) {
-        decrementOrganizationRlsCheckoutCount();
-      }
+      releaseOrganizationRlsCheckout(request);
       return intendedRollback ? 'rolled_back' : 'settle_failed';
     }
   }
 
-  if (organizationRlsCheckoutHeld.delete(request)) {
-    decrementOrganizationRlsCheckoutCount();
-  }
+  releaseOrganizationRlsCheckout(request);
   return 'no_transaction';
 }
 
@@ -166,6 +184,7 @@ const organizationRlsTransactionMiddlewarePlugin: FastifyPluginAsync = async (ap
     const statementTimeoutMs = env.DATABASE_HTTP_STATEMENT_TIMEOUT_MS;
 
     organizationRlsCheckoutHeld.set(request, true);
+    organizationRlsCheckoutStartedAtNanoseconds.set(request, process.hrtime.bigint());
     incrementOrganizationRlsCheckoutCount();
     const outerPromise = database
       .transaction(async (transaction) => {
