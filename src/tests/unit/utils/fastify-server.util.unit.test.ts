@@ -103,14 +103,14 @@ describe('fastify-server.util', () => {
     vi.resetModules();
   });
 
-  it('honors explicit TRUST_PROXY=true', async () => {
+  it('does not enable unbounded trust proxy from a boolean true value', async () => {
     envState.TRUST_PROXY = true;
     envState.NODE_ENV = 'test';
     vi.resetModules();
     const { buildFastifyServerOptions: buildTrustedProxyOptions } = await import(
       '@/shared/utils/http/fastify-server.util.js'
     );
-    expect(buildTrustedProxyOptions().trustProxy).toBe(true);
+    expect(buildTrustedProxyOptions().trustProxy).toBe(false);
     envState.TRUST_PROXY = false;
     vi.resetModules();
   });

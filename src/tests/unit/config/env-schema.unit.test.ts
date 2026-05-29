@@ -72,7 +72,7 @@ describe('env-schema', () => {
     }
   });
 
-  it('transforms TRUST_PROXY "1" to true', () => {
+  it('transforms TRUST_PROXY "1" to a hop count', () => {
     const parsed = envSchema.safeParse({
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
@@ -86,12 +86,12 @@ describe('env-schema', () => {
 
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.TRUST_PROXY).toBe(true);
+      expect(parsed.data.TRUST_PROXY).toBe(1);
     }
   });
 
-  it('transforms TRUST_PROXY string values to boolean', () => {
-    const enabled = envSchema.safeParse({
+  it('rejects bare TRUST_PROXY=true', () => {
+    const parsed = envSchema.safeParse({
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
@@ -99,6 +99,14 @@ describe('env-schema', () => {
       NODE_ENV: 'test',
       TRUST_PROXY: 'true',
     });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.flatten().fieldErrors.TRUST_PROXY).toBeDefined();
+    }
+  });
+
+  it('transforms TRUST_PROXY disabled values to false', () => {
     const disabled = envSchema.safeParse({
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
@@ -108,7 +116,6 @@ describe('env-schema', () => {
       TRUST_PROXY: '0',
     });
 
-    expect(enabled.success && enabled.data.TRUST_PROXY).toBe(true);
     expect(disabled.success && disabled.data.TRUST_PROXY).toBe(false);
   });
 

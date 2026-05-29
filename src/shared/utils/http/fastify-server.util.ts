@@ -36,7 +36,6 @@ export const PINO_REDACT_PATHS = [
 function resolveTrustProxy(): boolean | number {
   const trustProxy = env.TRUST_PROXY;
   if (trustProxy === false) return false;
-  if (trustProxy === true) return true;
   if (typeof trustProxy === 'number') return trustProxy;
   return false;
 }

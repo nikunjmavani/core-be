@@ -16,6 +16,30 @@ const booleanString = (defaultValue: 'true' | 'false') =>
     .default(defaultValue)
     .transform((value) => value === 'true' || value === '1');
 
+const MAX_TRUST_PROXY_HOPS = 10;
+
+const trustProxyHopCountSchema = z
+  .string()
+  .optional()
+  .transform((value, context) => {
+    const normalizedValue = value?.trim().toLowerCase();
+    if (!normalizedValue || normalizedValue === 'false' || normalizedValue === '0') {
+      return false;
+    }
+
+    const hopCount = Number(normalizedValue);
+    if (Number.isInteger(hopCount) && hopCount >= 1 && hopCount <= MAX_TRUST_PROXY_HOPS) {
+      return hopCount;
+    }
+
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'TRUST_PROXY must be false/0 or an integer proxy hop count from 1 to 10; do not use bare true',
+    });
+    return z.NEVER;
+  });
+
 const envSchemaBase = z.object({
   // Server
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
@@ -23,11 +47,8 @@ const envSchemaBase = z.object({
   HTTP_BIND_HOST: z.string().min(1).default('0.0.0.0'),
   NODE_ENV: nodeEnvSchema,
   LOG_LEVEL: z.string().min(1).default('info'),
-  /** When true, Fastify trusts X-Forwarded-* from the reverse proxy (required behind LB). */
-  TRUST_PROXY: z
-    .string()
-    .optional()
-    .transform((value) => value === 'true' || value === '1'),
+  /** Number of reverse-proxy hops Fastify may trust for X-Forwarded-* headers. */
+  TRUST_PROXY: trustProxyHopCountSchema,
   FASTIFY_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
   FASTIFY_HEADERS_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
   /** Fastify request timeout (ms). Default: 30000. */
