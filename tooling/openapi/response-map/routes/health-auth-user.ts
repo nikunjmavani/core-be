@@ -5,7 +5,19 @@ import * as schemas from '../resource-schemas.js';
 
 export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = {
   // ── Health ──
-  'GET /health': {
+  'GET /livez': {
+    statusCode: 200,
+    schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string' },
+      },
+    },
+    example: {
+      status: 'ok',
+    },
+  },
+  'GET /readyz': {
     statusCode: 200,
     schema: {
       type: 'object',

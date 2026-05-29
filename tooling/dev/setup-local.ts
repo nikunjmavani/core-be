@@ -712,7 +712,8 @@ async function runDevServer(
 function printReadyBanner(): void {
   process.stdout.write(`\n${ANSI.bold}${ANSI.green}Ready — starting pnpm dev${ANSI.reset}\n`);
   logInfo(`API           ${ANSI.cyan}http://localhost:${DEFAULT_DEV_PORT}${ANSI.reset}`);
-  logInfo(`Health        ${ANSI.cyan}http://localhost:${DEFAULT_DEV_PORT}/health${ANSI.reset}`);
+  logInfo(`Liveness      ${ANSI.cyan}http://localhost:${DEFAULT_DEV_PORT}/livez${ANSI.reset}`);
+  logInfo(`Readiness     ${ANSI.cyan}http://localhost:${DEFAULT_DEV_PORT}/readyz${ANSI.reset}`);
   logInfo(
     `Scalar docs   ${ANSI.cyan}http://localhost:${DEFAULT_DEV_PORT}/api/reference${ANSI.reset} (if ENABLE_API_REFERENCE)`,
   );

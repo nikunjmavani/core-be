@@ -36,7 +36,7 @@ Postgres connection management, the abstract `BaseRepository` (with cursor pagin
 
 ## Failure modes
 
-- **Postgres unavailable** → connection probe fails; readiness `/health` returns 503; load balancer yanks traffic.
+- **Postgres unavailable** → connection probe fails; readiness `/readyz` returns 503; load balancer yanks traffic.
 - **RLS GUC missing** (workers that forgot to use a context wrapper) → RLS policies treat the access as cross-tenant and return zero rows. Caught in tests; never reaches production.
 - **Long-running query** → statement timeout fires; the query is killed and the request returns 5xx.
 - **Multi-region replica lag** → the managed provider routes reads; this module does not split read/write.

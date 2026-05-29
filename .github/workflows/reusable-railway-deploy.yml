@@ -1,5 +1,5 @@
 # Reusable Railway deploy (called from post-merge-ci.yml) or manual workflow_dispatch.
-# Gate sequence: migrate → deploy API → API /health → deploy worker.
+# Gate sequence: migrate → deploy API → API /readyz → deploy worker.
 # When the worker deploy reaches Railway terminal SUCCESS the environment is
 # fully live for traffic.
 #
@@ -7,11 +7,11 @@
 # public domain) and DATABASE_URL / REDIS_URL in the GitHub Environment point
 # at `*.railway.internal`, which is reachable only from other Railway services
 # — not from the GitHub Actions runner. We therefore cannot probe worker
-# `/health` over public HTTP, and we cannot dial Postgres/Redis from the
+# `/readyz` over public HTTP, and we cannot dial Postgres/Redis from the
 # runner either. Instead we rely on `pnpm tool:railway-deploy-image` polling
 # Railway until the deployment reaches a terminal status. Railway only
 # reports SUCCESS once the container HEALTHCHECK in `Dockerfile.worker`
-# (127.0.0.1:9090/health inside the pod) starts returning 200, which covers
+# (127.0.0.1:9090/readyz inside the pod) starts returning 200, which covers
 # process-up + dependency probes + queue heartbeats. DLQ growth on a stalled
 # worker is caught by the `dlq-depth` Sentry alert.
 #
@@ -534,13 +534,13 @@ jobs:
         id: api_health
         # API and worker share `deploy_service_from_image` so retries and
         # deployment behaviour stay identical. Health gating differs:
-        #   - API: public Railway domain, so we curl `/health` from the runner.
+        #   - API: public Railway domain, so we curl `/readyz` from the runner.
         #   - Worker: no public domain, and Postgres/Redis sit on the Railway
         #     private network (`*.railway.internal`) which is unreachable from
         #     the GitHub runner. Worker readiness is therefore gated only by
         #     the Railway deployment terminal status — Railway flips a
         #     deployment to SUCCESS once the in-pod container HEALTHCHECK in
-        #     `Dockerfile.worker` (127.0.0.1:9090/health) starts returning 200,
+        #     `Dockerfile.worker` (127.0.0.1:9090/readyz) starts returning 200,
         #     which already covers process up + dependency probes + queue
         #     heartbeats.
         env:
@@ -577,10 +577,10 @@ jobs:
             local base_url="$1"
             local label="$2"
             local output_file="$3"
-            local health_url="${base_url}/health"
+            local health_url="${base_url}/readyz"
             local deadline=$(( $(date +%s) + 300 ))
             until curl -sfS "$health_url" -o "$output_file"; do
-              [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::${label} /health timeout"; exit 1; }
+              [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::${label} /readyz timeout"; exit 1; }
               sleep 5
             done
             node -e "const health = require(process.argv[1]); if (health.status !== 'ok') { console.error('${label} health status is not ok:', health.status ?? 'unknown'); process.exit(1); }" "$output_file"

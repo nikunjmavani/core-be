@@ -40,10 +40,10 @@ describe('request-statement-timeout.middleware', () => {
   it('skips health routes without opening a transaction', async () => {
     const application = Fastify({ logger: false });
     await application.register(requestStatementTimeoutMiddleware);
-    application.get('/health', async () => ({ status: 'ok' }));
+    application.get('/livez', async () => ({ status: 'ok' }));
     await application.ready();
 
-    const response = await application.inject({ method: 'GET', url: '/health' });
+    const response = await application.inject({ method: 'GET', url: '/livez' });
     expect(response.statusCode).toBe(200);
     expect(mockTransaction).not.toHaveBeenCalled();
     await application.close();

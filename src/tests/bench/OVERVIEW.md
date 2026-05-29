@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Autocannon-driven micro-benchmarks for single endpoints. Used to detect catastrophic latency regressions on the platform's hottest paths (`/health`, `/auth/me`, the cached permission read path).
+Autocannon-driven micro-benchmarks for single endpoints. Used to detect catastrophic latency regressions on the platform's hottest paths (`/readyz`, `/auth/me`, the cached permission read path).
 
 What this suite covers:
 

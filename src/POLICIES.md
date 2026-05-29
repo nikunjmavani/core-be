@@ -254,7 +254,7 @@ The canonical exports live under [src/shared/constants/](src/shared/constants/) 
 
 - **Value**: 1 500 ms per dependency
 - **Source**: [src/shared/constants/ttl.constants.ts](src/shared/constants/ttl.constants.ts)
-- **Rationale**: Per-dependency budget inside `GET /health`. The `/health` endpoint must return within Railway's readiness-probe window; with three probes (Postgres, Redis, BullMQ) running in parallel the worst-case is 1.5 s.
+- **Rationale**: Per-dependency budget inside `GET /readyz`. The `/readyz` endpoint must return within Railway's readiness-probe window; with three probes (Postgres, Redis, BullMQ) running in parallel the worst-case is 1.5 s.
 - **Consequences of change**:
   - Decreasing → flapping readiness on slow days; instances cycle.
   - Increasing → readiness probe may exceed Railway's deadline and the platform yanks traffic.

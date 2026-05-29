@@ -54,11 +54,10 @@ async function handleReadinessProbe(reply: FastifyReply) {
  * | ---- | ------- |
  * | `GET /livez` | Liveness — process/event loop responsive; no dependency probes. 503 only while draining. |
  * | `GET /readyz` | Readiness — Postgres, Redis, BullMQ broker reachable from this process (cached). |
- * | `GET /health` | Backward-compatible alias of `/readyz`. |
  *
  * Liveness (`/livez`) backs the container `HEALTHCHECK` so a healthy-but-not-yet-ready
- * process is not killed during dependency warm-up; readiness (`/readyz`, `/health`) backs
- * deploy gating and load-balancer routing. Readiness results are cached for a short window
+ * process is not killed during dependency warm-up; readiness (`/readyz`) backs deploy
+ * gating and load-balancer routing. Readiness results are cached for a short window
  * (see `getCachedDependencyReadinessProbes`) to bound probe load.
  */
 const healthMiddleware: FastifyPluginAsync = async (application) => {
@@ -90,20 +89,6 @@ const healthMiddleware: FastifyPluginAsync = async (application) => {
         summary: 'Readiness check',
         description:
           'Returns 200 when the service is ready: Postgres, Redis, and BullMQ respond within timeouts. Returns 503 with per-dependency unavailable flags if any probe fails or while draining. Results are cached briefly to bound probe load; used for deploy gating and load-balancer routing.',
-        tags: ['Health'],
-      },
-    },
-    async (_request, reply) => handleReadinessProbe(reply),
-  );
-
-  application.get(
-    '/health',
-    {
-      ...RAW_RESPONSE_ROUTE_CONFIG,
-      schema: {
-        summary: 'Health check (readiness alias)',
-        description:
-          'Backward-compatible alias of GET /readyz. Returns 200 when Postgres, Redis, and BullMQ respond within timeouts, otherwise 503 with per-dependency unavailable flags. Prefer /readyz for readiness and /livez for liveness.',
         tags: ['Health'],
       },
     },

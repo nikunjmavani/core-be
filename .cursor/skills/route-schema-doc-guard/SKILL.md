@@ -14,7 +14,7 @@ Run this skill **every time** you:
 - Add a new route to any `*.routes.ts`.
 - Remove or rename a route.
 - Add a new public route to one of the **two non-routes files** that also register HTTP routes:
-  - `src/shared/middlewares/health.middleware.ts` (the `/health` endpoint)
+  - `src/shared/middlewares/health.middleware.ts` (the `/livez` and `/readyz` endpoints)
   - `src/infrastructure/mcp/mcp-server.ts` (the `/api/v1/mcp` GET + POST endpoints)
 - See a route in `docs/routes.txt` or `docs/openapi/openapi.json` with an empty / generic summary or description.
 

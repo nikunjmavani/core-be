@@ -21,7 +21,7 @@ describe('Security: Rate Limiting', () => {
   it('should include rate limit headers in response', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health',
+      url: '/livez',
     });
     const rateLimitHeaders = [
       'x-ratelimit-limit',
@@ -40,7 +40,7 @@ describe('Security: Rate Limiting', () => {
       responses.push(
         await injectUnauthenticated(app, {
           method: 'GET',
-          url: '/health',
+          url: '/livez',
         }),
       );
     }

@@ -13,7 +13,7 @@ const requestContextMiddleware: FastifyPluginAsync = async (app) => {
   app.addHook('onResponse', async (request, reply) => {
     // Outbox flush moved to request-lifecycle.middleware.ts so it runs strictly after the
     // RLS transaction has committed. This hook now only emits the request completion log.
-    if (request.url.startsWith('/health')) {
+    if (request.url.startsWith('/livez') || request.url.startsWith('/readyz')) {
       return;
     }
 

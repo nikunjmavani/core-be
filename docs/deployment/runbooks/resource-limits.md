@@ -156,7 +156,7 @@ Org-scoped HTTP routes (`X-Organization-Id` set) hold **one pool checkout** for 
 
 When `DATABASE_RLS_SCOPED_CONTEXTS=false`, org-scoped routes hold a pool checkout for the **full** request. Slow outbound calls (Stripe, S3, Resend) inside that window still occupy the slot — keep external calls **outside** `withOrganizationDatabaseContext` blocks even in scoped mode.
 
-Non-org routes (auth, user without `X-Organization-Id`) use `request-statement-timeout` middleware with the same `DATABASE_HTTP_STATEMENT_TIMEOUT_MS`. `/health/*` and `/metrics` are excluded.
+Non-org routes (auth, user without `X-Organization-Id`) use `request-statement-timeout` middleware with the same `DATABASE_HTTP_STATEMENT_TIMEOUT_MS`. `/livez`, `/readyz`, and `/metrics` are excluded.
 
 ### DATABASE_RLS_SCOPED_CONTEXTS rollout (item 2)
 
@@ -208,7 +208,7 @@ Alerting runs on API startup (`registerPostgresPoolMetrics` in `server.ts`) and 
 
 3. **CD workflow:** `NODE_OPTIONS` can be synced from GitHub Environment variables (`NODE_OPTIONS`) via [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) to both API and worker services. Use equal or higher heap for workers if they run heavier jobs.
 
-4. **Graceful drain:** On `SIGTERM`/`SIGINT`, the API sets a process-wide draining flag before `app.close()`. **`GET /health` returns HTTP 503** with `status: "draining"` so the load balancer stops sending traffic while in-flight requests finish. Align platform **draining / health-check grace** with `SHUTDOWN_TIMEOUT_MS` (default 30s).
+4. **Graceful drain:** On `SIGTERM`/`SIGINT`, the API sets a process-wide draining flag before `app.close()`. **`GET /readyz` returns HTTP 503** with `status: "draining"` so the load balancer stops sending traffic while in-flight requests finish, while **`GET /livez` stays HTTP 200** until the process exits. Align platform **draining / health-check grace** with `SHUTDOWN_TIMEOUT_MS` (default 30s).
 
 ---
 

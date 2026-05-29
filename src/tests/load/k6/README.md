@@ -13,7 +13,7 @@ Load tests for the core-be API. Keep this doc in sync with [docs/reference/testi
 
 - `pnpm load:health` — health endpoints
 - `pnpm load:stress` — health under stress (up to 100 VUs)
-- `pnpm test:bench` — Autocannon on `/health`
+- `pnpm test:bench` — Autocannon on `/readyz`
 
 **Full confidence:** Run `pnpm load:stress` (health) and `pnpm load:stress:api` (API with TEST_TOKEN + TEST_ORG_ID). See [docs/reference/testing/load-testing.md](../../../../docs/reference/testing/load-testing.md#full-confidence-recommended).
 

@@ -6,7 +6,10 @@ import { resolveBullMqRedisUrl } from '@/infrastructure/cache/redis-url.util.js'
 import { sql } from '@/infrastructure/database/connection.js';
 import { pingBullMQ } from '@/infrastructure/queue/health.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import { HEALTH_READINESS_PROBE_TIMEOUT_MS } from '@/shared/constants/ttl.constants.js';
+import {
+  HEALTH_READINESS_PROBE_CACHE_TTL_MS,
+  HEALTH_READINESS_PROBE_TIMEOUT_MS,
+} from '@/shared/constants/ttl.constants.js';
 import { readinessProbeTimeout } from '@/shared/utils/infrastructure/readiness-probe-timeout.util.js';
 
 /** Re-export of {@link HEALTH_READINESS_PROBE_TIMEOUT_MS} kept for legacy import paths. */
@@ -90,7 +93,7 @@ function buildReadinessConnectivityLabel(
  * Postgres/Redis/BullMQ probes; intentionally small so a genuine dependency
  * outage is reflected within a couple of seconds.
  */
-const READINESS_PROBE_CACHE_TTL_MILLISECONDS = 2_000;
+const READINESS_PROBE_CACHE_TTL_MILLISECONDS = HEALTH_READINESS_PROBE_CACHE_TTL_MS;
 
 type CachedReadinessProbeSummary = {
   readonly summary: ReadinessProbeSummary;
@@ -152,8 +155,8 @@ export async function runDependencyReadinessProbes(): Promise<ReadinessProbeSumm
 /**
  * Returns dependency readiness, reusing a result computed within the last
  * {@link READINESS_PROBE_CACHE_TTL_MILLISECONDS}. Concurrent callers during a
- * cache miss share a single in-flight probe so a burst of `/readyz` (or the
- * `/health` alias) requests collapses to one round of Postgres/Redis/BullMQ
+ * cache miss share a single in-flight probe so a burst of `/readyz`
+ * requests collapses to one round of Postgres/Redis/BullMQ
  * checks. Used by the HTTP readiness endpoints.
  *
  * @remarks

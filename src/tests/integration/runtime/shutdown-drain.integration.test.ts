@@ -34,7 +34,7 @@ function sendHttpGetRequestListeningForUrl(
 }
 
 describe('graceful shutdown drain', () => {
-  describe('/health returns 503 while application is draining', () => {
+  describe('/readyz returns 503 while application is draining', () => {
     afterEach(() => {
       resetApplicationDrainingForTests();
       vi.restoreAllMocks();
@@ -63,7 +63,7 @@ describe('graceful shutdown drain', () => {
       }
 
       const typedAddressListeningForObservation = addressListeningForObservation as AddressInfo;
-      const readyUrlListeningForObservation = `http://127.0.0.1:${typedAddressListeningForObservation.port}/health`;
+      const readyUrlListeningForObservation = `http://127.0.0.1:${typedAddressListeningForObservation.port}/readyz`;
 
       setApplicationDraining(true);
 

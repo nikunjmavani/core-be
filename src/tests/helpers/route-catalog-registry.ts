@@ -50,7 +50,7 @@ function parseRouteCatalogLine(line: string): {
 }
 
 function domainSlugFromPrefix(prefix: string): string {
-  if (prefix === '/health') return 'health';
+  if (prefix === '/livez') return 'health';
   const segments = prefix.split('/').filter(Boolean);
   return segments[segments.length - 1] ?? 'unknown';
 }

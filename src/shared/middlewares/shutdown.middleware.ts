@@ -13,14 +13,14 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { getShutdownWatchdogMs } from '@/infrastructure/queue/worker-runtime/shutdown-timing.util.js';
 
 /**
- * Pause between flipping `/health` to 503 (draining) and closing the server, so an
+ * Pause between flipping `/readyz` to 503 (draining) and closing the server, so an
  * external load balancer observes the unhealthy state on its next probe and stops
  * routing new connections before sockets close.
  *
  * @remarks
  * Sized at roughly 1.5–2× a typical 1.5–2s load-balancer health-probe interval so at
  * least one probe reliably lands inside the draining window. Without this pause a
- * Railway/LB redeploy (SIGTERM) races `app.close()`: `/health` only reports 503 once
+ * Railway/LB redeploy (SIGTERM) races `app.close()`: `/readyz` only reports 503 once
  * the LB next polls, and any traffic sent in between resets → connection errors / 502s
  * on every deploy. The delay is added on top of the shutdown watchdog budget (see
  * {@link getShutdownDrainDelayMs}) so it never eats into the in-flight drain budget or

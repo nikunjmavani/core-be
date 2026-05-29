@@ -5,21 +5,23 @@ import { resolve } from 'node:path';
 const ROOT = process.cwd();
 
 describe('Worker readiness (global)', () => {
-  it('registers GET /health on the API process', () => {
+  it('registers GET /livez and GET /readyz on the API process', () => {
     const healthMiddlewarePath = resolve(ROOT, 'src/shared/middlewares/health.middleware.ts');
     const content = readFileSync(healthMiddlewarePath, 'utf8');
     // Tolerate Biome line-wrapping when the route options object grows
     // large enough to force multi-line formatting (e.g. with a `schema:` block).
-    expect(content).toMatch(/application\.get\(\s*['"]\/health['"]/);
+    expect(content).toMatch(/application\.get\(\s*['"]\/livez['"]/);
+    expect(content).toMatch(/application\.get\(\s*['"]\/readyz['"]/);
   });
 
-  it('worker HTTP server serves GET /health with queue heartbeats', () => {
+  it('worker HTTP server serves GET /livez and GET /readyz with queue heartbeats', () => {
     const workerHealthServerPath = resolve(
       ROOT,
       'src/infrastructure/queue/worker-runtime/worker-health.server.ts',
     );
     const content = readFileSync(workerHealthServerPath, 'utf8');
-    expect(content).toContain('/health');
+    expect(content).toContain('/livez');
+    expect(content).toContain('/readyz');
     expect(content).toContain('readWorkerQueueHeartbeats');
   });
 
@@ -66,7 +68,7 @@ describe('Worker readiness (global)', () => {
     expect(workflow).toContain('Deploy API and worker to Railway');
     expect(workflow).toContain('wait_for_service_health()');
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal bash variable in the workflow YAML — not a TS template.
-    expect(workflow).toContain('${base_url}/health');
+    expect(workflow).toContain('${base_url}/readyz');
     expect(workflow).toContain(
       'deploy_service_from_image "$RAILWAY_SERVICE_ID" "$API_IMAGE" "api"',
     );
@@ -98,6 +100,6 @@ describe('Worker readiness (global)', () => {
     expect(content).toContain('WORKER_THROUGHPUT_QUEUE_NAMES');
     expect(content).toContain('getTotalDeadLetterJobCount');
     expect(content).toContain('runDependencyReadinessProbes');
-    expect(content).toContain('/health');
+    expect(content).toContain('/readyz');
   });
 });

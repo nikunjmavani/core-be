@@ -90,7 +90,7 @@ describe('Performance: N+1 Detection', () => {
     const promises: Array<Promise<InjectHttpResult>> = [];
 
     for (let i = 0; i < CONCURRENT_REQUESTS; i++) {
-      promises.push(injectUnauthenticated(app, { method: 'GET', url: '/health' }));
+      promises.push(injectUnauthenticated(app, { method: 'GET', url: '/livez' }));
     }
 
     const start = performance.now();

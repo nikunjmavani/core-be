@@ -1,6 +1,6 @@
 ================================================================================
   ROUTE CATALOG — core-be
-  Total routes: 124
+  Total routes: 123
 ================================================================================
 
 Legend:
@@ -182,11 +182,10 @@ Legend:
   PATCH /api/v1/users/me/settings                              AUTH
 
 ================================================================================
-  DOMAIN: HEALTH (/health)
-  Routes: 3
+  DOMAIN: HEALTH (/livez)
+  Routes: 2
 ================================================================================
 
-  GET   /health                                                PUBLIC
   GET   /livez                                                 PUBLIC
   GET   /readyz                                                PUBLIC
 
@@ -194,8 +193,8 @@ Legend:
   SUMMARY
 ================================================================================
 
-  Total routes    : 124
-  Public          : 21
+  Total routes    : 123
+  Public          : 20
   Authenticated   : 46
   Role-guarded    : 7
   Perm-guarded    : 50

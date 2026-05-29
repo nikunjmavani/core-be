@@ -97,6 +97,10 @@ describe('health.middleware', () => {
       redis: 'connected',
       bullmq: 'connected',
       migration_version: '20260501000000_test.sql',
+      mail_outbox_pending: 0,
+      dlq_depth: 0,
+      draining: false,
+      worker_queues: [],
     });
     expect(getCachedDependencyReadinessProbes).toHaveBeenCalledTimes(1);
   });
@@ -118,69 +122,7 @@ describe('health.middleware', () => {
     expect(response.json().redis).toBe('unavailable');
   });
 
-  it('returns readiness payload at GET /health', async () => {
-    application = Fastify();
-    await application.register(healthMiddleware);
-    await application.ready();
-
-    const response = await application.inject({ method: 'GET', url: '/health' });
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      status: 'ok',
-      database: 'connected',
-      redis: 'connected',
-      bullmq: 'connected',
-      migration_version: '20260501000000_test.sql',
-      mail_outbox_pending: 0,
-      dlq_depth: 0,
-      draining: false,
-      worker_queues: [],
-    });
-  });
-
-  it('returns ok when all readiness dependencies succeed', async () => {
-    application = Fastify();
-    await application.register(healthMiddleware);
-    await application.ready();
-
-    const response = await application.inject({ method: 'GET', url: '/health' });
-    expect(response.statusCode).toBe(200);
-    expect(response.json().status).toBe('ok');
-    expect(response.json().database).toBe('connected');
-    expect(response.json().migration_version).toBe('20260501000000_test.sql');
-    expect(response.json().mail_outbox_pending).toBe(0);
-    expect(response.json().dlq_depth).toBe(0);
-  });
-
-  it('returns draining status when application is shutting down', async () => {
-    vi.mocked(isApplicationDraining).mockReturnValue(true);
-    application = Fastify();
-    await application.register(healthMiddleware);
-    await application.ready();
-
-    const response = await application.inject({ method: 'GET', url: '/health' });
-    expect(response.statusCode).toBe(503);
-    expect(response.json().status).toBe('draining');
-  });
-
-  it('returns 503 when redis ping response is unexpected', async () => {
-    vi.mocked(getCachedDependencyReadinessProbes).mockResolvedValueOnce({
-      status: 'error',
-      database: 'connected',
-      redis: 'unavailable',
-      bullmq: 'connected',
-      latencyMs: { database: 1, redis: null, bullmq: 1 },
-    });
-    application = Fastify();
-    await application.register(healthMiddleware);
-    await application.ready();
-
-    const response = await application.inject({ method: 'GET', url: '/health' });
-    expect(response.statusCode).toBe(503);
-    expect(response.json().redis).toBe('unavailable');
-  });
-
-  it('returns 503 when bullmq probe fails', async () => {
+  it('returns 503 at GET /readyz when the bullmq probe fails', async () => {
     vi.mocked(getCachedDependencyReadinessProbes).mockResolvedValueOnce({
       status: 'error',
       database: 'connected',
@@ -192,17 +134,17 @@ describe('health.middleware', () => {
     await application.register(healthMiddleware);
     await application.ready();
 
-    const response = await application.inject({ method: 'GET', url: '/health' });
+    const response = await application.inject({ method: 'GET', url: '/readyz' });
     expect(response.statusCode).toBe(503);
     expect(response.json().bullmq).toBe('unavailable');
   });
 
-  it('does not set deprecation headers on canonical GET /health', async () => {
+  it('does not set deprecation headers on GET /readyz', async () => {
     application = Fastify();
     await application.register(healthMiddleware);
     await application.ready();
 
-    const response = await application.inject({ method: 'GET', url: '/health' });
+    const response = await application.inject({ method: 'GET', url: '/readyz' });
     expect(response.statusCode).toBe(200);
     expect(response.headers.deprecation).toBeUndefined();
     expect(response.headers.sunset).toBeUndefined();

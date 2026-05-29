@@ -17,13 +17,13 @@ describe('API contract (integration)', () => {
     if (app) await app.close();
   });
 
-  it('GET /health returns database, redis, and bullmq status', async () => {
+  it('GET /readyz returns database, redis, and bullmq status', async () => {
     const testApp = await createTestApp();
     app = testApp.app;
 
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health',
+      url: '/readyz',
     });
     expect(response.statusCode).toBe(200);
     const body = response.json() as {

@@ -11,7 +11,7 @@ import { isApplicationDraining } from '@/shared/utils/infrastructure/application
 
 const OPERATIONAL_METRICS_CACHE_TTL_MILLISECONDS = MILLISECONDS_PER_MINUTE;
 
-/** Operational health snapshot returned by {@link getCachedHealthOperationalMetrics} and surfaced on `/health`. */
+/** Operational health snapshot returned by {@link getCachedHealthOperationalMetrics} and surfaced on `/readyz`. */
 export type HealthOperationalMetrics = {
   migration_version: string | null;
   mail_outbox_pending: number;
@@ -26,7 +26,7 @@ let cachedOperationalMetrics: {
 } | null = null;
 
 /**
- * Operational signals for `/health` (cached 60s to limit DB/Redis load).
+ * Operational signals for `/readyz` (cached 60s to limit DB/Redis load).
  */
 export async function getCachedHealthOperationalMetrics(): Promise<HealthOperationalMetrics> {
   const now = Date.now();

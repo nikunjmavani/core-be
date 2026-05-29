@@ -1,15 +1,16 @@
 import type { FastifyPluginAsync } from 'fastify';
+import fp from 'fastify-plugin';
 import fastifyRateLimit from '@fastify/rate-limit';
 import type { RateLimitPluginOptions } from '@fastify/rate-limit';
 import { env } from '@/shared/config/env.config.js';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 
 /**
- * Health/liveness/readiness probe paths bypassed by the global limiter. Matched by exact
+ * Liveness/readiness probe paths bypassed by the global limiter. Matched by exact
  * path equality (query string stripped) so deploy probes and load balancers are never
- * throttled, while arbitrary paths sharing a prefix (e.g. `/healthxyz`) are not exempt.
+ * throttled, while arbitrary paths sharing a prefix (e.g. `/livezxyz`) are not exempt.
  */
-const RATE_LIMIT_ALLOWLISTED_PATHS = new Set(['/health', '/livez', '/readyz']);
+const RATE_LIMIT_ALLOWLISTED_PATHS = new Set(['/livez', '/readyz']);
 
 /**
  * Global rate limiting, keyed strictly on `request.ip`.
@@ -30,13 +31,20 @@ const RATE_LIMIT_ALLOWLISTED_PATHS = new Set(['/health', '/livez', '/readyz']);
  * `enableOfflineQueue: false`, so during a Redis blip (failover, maintenance, brief network
  * partition) `store.incr` rejects immediately. Without `skipOnError`, `@fastify/rate-limit`
  * rethrows that error from the `onRequest` hook, turning every single request — including
- * `/health` allow-list bypasses below the hook chain — into a 5xx and taking the API down.
+ * `/livez` / `/readyz` allow-list bypasses below the hook chain — into a 5xx and taking the API down.
  *
  * The deliberate trade-off is **availability over rate-limit enforcement during partial
  * outages**: a few seconds of unmetered traffic is preferable to a blanket outage. Defense
  * in depth is preserved by (1) the per-route auth-gated presets, (2) the Redis client's
  * `error` event handler which logs `redis.connection.error` for alerting, and (3) the
  * idempotency middleware which intentionally fail-closes for write safety.
+ *
+ * Wrapped with `fastify-plugin` so `@fastify/rate-limit` decorates the root app rather than an
+ * encapsulated child context. This is required for two reasons: (1) the `global: true` limiter's
+ * `onRequest` hook must apply to every route (and run before `organizationRlsTransactionMiddleware`
+ * so throttled requests never open a DB transaction), and (2) per-route presets that build a second
+ * limiter via `app.rateLimit(...)` (e.g. the per-email throttle in `auth.routes.ts`) need the
+ * `rateLimit` decorator visible at the instance where routes register.
  */
 const rateLimitMiddleware: FastifyPluginAsync = async (app) => {
   const plugin = fastifyRateLimit as unknown as FastifyPluginAsync<RateLimitPluginOptions>;
@@ -62,4 +70,4 @@ const rateLimitMiddleware: FastifyPluginAsync = async (app) => {
   await app.register(plugin, options);
 };
 
-export default rateLimitMiddleware;
+export default fp(rateLimitMiddleware, { name: 'rate-limit-middleware' });

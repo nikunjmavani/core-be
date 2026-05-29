@@ -31,7 +31,7 @@ describe('Performance: Concurrent Requests', () => {
 
   it('should handle 50 parallel unauthenticated requests', async () => {
     const promises = Array.from({ length: 50 }, () =>
-      injectUnauthenticated(app, { method: 'GET', url: '/health' }).catch(() => ({
+      injectUnauthenticated(app, { method: 'GET', url: '/livez' }).catch(() => ({
         statusCode: 503,
       })),
     );

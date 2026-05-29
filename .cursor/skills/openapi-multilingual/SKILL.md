@@ -31,7 +31,7 @@ Keep **multilingual OpenAPI documentation** in sync with the API. The generator 
    - `OPENAPI_LOCALE=es pnpm docs:generate` — uses Spanish; writes `docs/openapi/openapi.es.json`
    - `pnpm docs:generate:multilang` — runs the generator for each locale (en, es) in sequence
 
-3. **Operation summaries and descriptions**: Route-level summary, description, and tags come from the Fastify `schema` block on the route registration in `*.routes.ts` (read by `tooling/openapi/extractors/route-schema-metadata.ts`). Those are currently English-only. To support per-locale operation text later, you could add a `routes` object in each `src/shared/locales/{locale}/openapi.json` mapping route key (e.g. `"GET /health"`) to `{ "summary": "...", "description": "..." }` and have the generator prefer locale routes when present.
+3. **Operation summaries and descriptions**: Route-level summary, description, and tags come from the Fastify `schema` block on the route registration in `*.routes.ts` (read by `tooling/openapi/extractors/route-schema-metadata.ts`). Those are currently English-only. To support per-locale operation text later, you could add a `routes` object in each `src/shared/locales/{locale}/openapi.json` mapping route key (e.g. `"GET /readyz"`) to `{ "summary": "...", "description": "..." }` and have the generator prefer locale routes when present.
 
 ## How to Run (checklist)
 

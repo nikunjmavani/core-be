@@ -4,7 +4,7 @@
  * Verifies the BullMQ worker fleet is healthy from outside the worker container.
  * Railway worker services are deployed without a public HTTP domain (only the
  * API service exposes one), so the default "redis" mode reaches the same signals
- * the worker's internal /health endpoint exposes by reading them straight from
+ * the worker's internal /readyz endpoint exposes by reading them straight from
  * Redis + Postgres + BullMQ:
  *
  *   - DLQ depth (Redis) — total waiting + failed jobs across dead-letter queues.
@@ -12,7 +12,7 @@
  *   - Dependency readiness probes — Postgres `select 1`, Redis ping, BullMQ ping.
  *
  * The "http" mode is preserved for local dev and any environment that does
- * publicly expose the worker /health server (set --url or WORKER_HEALTH_URL).
+ * publicly expose the worker /readyz server (set --url or WORKER_HEALTH_URL).
  *
  * Usage:
  *   pnpm tool:worker-readiness                       # redis-direct (default)
@@ -79,7 +79,7 @@ function findStaleQueues({
 }
 
 async function fetchWorkerHealth(baseUrl: string): Promise<WorkerHealthPayload> {
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/health`, {
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/readyz`, {
     signal: AbortSignal.timeout(HTTP_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {

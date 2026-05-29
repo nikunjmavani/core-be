@@ -8,7 +8,7 @@ Live API smoke tests that hit a running server (local dev or CI). Used as the fi
 
 What this suite covers:
 
-- `/health` returns 200.
+- `/readyz` returns 200 (readiness — dependencies connected).
 - A handful of canonical authenticated routes per domain return 200 with the expected response shape.
 - Idempotency middleware is wired (same key → same response).
 

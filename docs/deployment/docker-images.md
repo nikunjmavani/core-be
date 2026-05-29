@@ -106,7 +106,7 @@ RUN pnpm build && pnpm build:check \
 
 **MCP SDK:** `@modelcontextprotocol/sdk` is an **optional** dependency. Production images omit it by default (`INSTALL_MCP_OPTIONAL=false`). When `ENABLE_MCP_SERVER=true`, set `INSTALL_MCP_OPTIONAL=true` at image build time (or run `pnpm install` without `--no-optional` outside Docker).
 
-**Health:** `HEALTHCHECK` uses Node 24 `fetch` against `GET http://127.0.0.1:3000/health` (no extra OS packages).
+**Health:** `HEALTHCHECK` uses Node 24 `fetch` against `GET http://127.0.0.1:3000/livez` (liveness; no extra OS packages).
 
 **`.dockerignore`:** Host `docs/` is excluded from the build context; docs are **generated inside the build stage**, not copied from the host.
 
@@ -116,7 +116,7 @@ Standalone Dockerfile with the same `build` / `runtime` pattern as the root file
 
 **Health / monitoring:** No `HEALTHCHECK` in the worker image. Use orchestrator process monitoring (e.g. Railway restarts on exit, logs/metrics).
 
-**Railway:** `reusable-railway-deploy.yml` deploys the scanned GHCR worker image to the separate worker service. Set `RAILWAY_WORKER_SERVICE_ID` in the GitHub environment so CD can sync shared variables and trigger the redeploy. Worker readiness is gated only by the Railway deployment terminal status — Railway flips the deployment to SUCCESS once the in-pod `Dockerfile.worker` HEALTHCHECK (`127.0.0.1:9090/health`) returns 200, which already covers process up + dependency probes + queue heartbeats. The runner cannot probe further: the worker has no public domain and Postgres/Redis live on `*.railway.internal`, unreachable from GitHub Actions hosts.
+**Railway:** `reusable-railway-deploy.yml` deploys the scanned GHCR worker image to the separate worker service. Set `RAILWAY_WORKER_SERVICE_ID` in the GitHub environment so CD can sync shared variables and trigger the redeploy. Worker readiness is gated only by the Railway deployment terminal status — Railway flips the deployment to SUCCESS once the in-pod `Dockerfile.worker` HEALTHCHECK (`127.0.0.1:9090/readyz`) returns 200, which already covers process up + dependency probes + queue heartbeats. The runner cannot probe further: the worker has no public domain and Postgres/Redis live on `*.railway.internal`, unreachable from GitHub Actions hosts.
 
 ## Running production images locally
 
@@ -137,7 +137,7 @@ pnpm compose:up
 pnpm compose:wait          # optional: wait for Postgres
 pnpm db:migrate            # if DB is empty — required for connected health
 pnpm docker:smoke:up       # builds api-smoke on first run (profile smoke)
-curl -sf http://localhost:3000/health
+curl -sf http://localhost:3000/readyz
 pnpm docker:smoke:logs     # optional
 pnpm docker:smoke:down
 ```
@@ -175,7 +175,7 @@ On **every pull request and push**, the `docker-build` job:
 2. Builds `core-be:ci` (API) and `core-be-worker:ci` (`Dockerfile.worker`)
 3. Trivy-scans both images (CRITICAL/HIGH; fails the job on findings)
 4. Worker: `node --check` + native module imports
-5. API: boot container with `NODE_ENV=test`, verify `GET /health`
+5. API: boot container with `NODE_ENV=test`, verify `GET /readyz`
 
 On **push to `main`** (after scan), images are pushed to GHCR:
 
