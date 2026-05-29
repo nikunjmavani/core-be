@@ -4,6 +4,7 @@ import { captchaPreHandler } from '@/shared/middlewares/captcha.middleware.js';
 import {
   REFRESH_RATE_LIMIT,
   STRICT_AUTHED_RATE_LIMIT,
+  STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS,
   STRICT_PUBLIC_RATE_LIMIT,
 } from '@/shared/middlewares/rate-limit-presets.constants.js';
 import { createAuthController } from './auth.controller.js';
@@ -36,10 +37,15 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
   const controller = createAuthController(app.authDomain);
   const zodApplication = app.withTypeProvider<ZodTypeProvider>();
 
+  // Per-identity (per-email) throttle layered on top of the IP-only STRICT_PUBLIC_RATE_LIMIT.
+  // Applied to unauthenticated credential and outbound-email endpoints so abuse cannot bypass
+  // the cap by rotating spoofed IPs (defense in depth when CAPTCHA is acknowledged-disabled).
+  const perEmailRateLimit = app.rateLimit(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS);
+
   // Public — strict rate limits on login/magic-link/password endpoints
   zodApplication.post('/login', {
     ...STRICT_PUBLIC_RATE_LIMIT,
-    preHandler: [captchaPreHandler],
+    preHandler: [perEmailRateLimit, captchaPreHandler],
     schema: {
       summary: 'Login with email and password',
       description:
@@ -64,7 +70,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
   );
   zodApplication.post('/magic-link/send', {
     ...STRICT_PUBLIC_RATE_LIMIT,
-    preHandler: [captchaPreHandler],
+    preHandler: [perEmailRateLimit, captchaPreHandler],
     schema: {
       summary: 'Send magic link email',
       description:
@@ -124,7 +130,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
   });
   zodApplication.post('/password/forgot', {
     ...STRICT_PUBLIC_RATE_LIMIT,
-    preHandler: [captchaPreHandler],
+    preHandler: [perEmailRateLimit, captchaPreHandler],
     schema: {
       summary: 'Request password reset',
       description:

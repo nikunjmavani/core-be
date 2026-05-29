@@ -176,9 +176,15 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
         };
       }
       const data = parsed.data;
-      if (!(data.path.startsWith('/api/v1/') || data.path.startsWith('/health'))) {
+      if (
+        !(
+          data.path.startsWith('/api/v1/') ||
+          data.path.startsWith('/livez') ||
+          data.path.startsWith('/readyz')
+        )
+      ) {
         return {
-          content: [{ type: 'text', text: 'Path must start with /api/v1/ or /health' }],
+          content: [{ type: 'text', text: 'Path must start with /api/v1/, /livez, or /readyz' }],
           isError: true,
         };
       }

@@ -20,7 +20,7 @@ let workerReady = false;
 let registeredWorkerCount = 0;
 
 /**
- * Flips the `/health` probe from `starting` to ready once every worker is registered.
+ * Flips the `/readyz` probe from `starting` to ready once every worker is registered.
  * `workerCount` is reflected back as `workersRegistered` in the probe response so
  * deployment automation can confirm the expected fleet size has bound to BullMQ.
  */
@@ -77,7 +77,15 @@ function resolveWorkerHealthStatus({
   return dependencyStatus;
 }
 
-async function handleHealthProbe(response: http.ServerResponse): Promise<void> {
+/**
+ * Liveness: the process and its HTTP server are responsive. Runs no dependency probes and is
+ * independent of worker registration, so a healthy-but-still-warming-up worker is not killed.
+ */
+function handleLivenessProbe(response: http.ServerResponse): void {
+  sendJson(response, 200, { status: 'live', role: 'worker' });
+}
+
+async function handleReadinessProbe(response: http.ServerResponse): Promise<void> {
   const [readiness, worker_queues, throughputHeartbeats] = await Promise.all([
     runDependencyReadinessProbes(),
     readWorkerQueueHeartbeats(MONITORED_BULLMQ_QUEUE_NAMES),
@@ -131,8 +139,12 @@ async function handleHealthRequest(
     return;
   }
 
-  if (url === '/health') {
-    await handleHealthProbe(response);
+  if (url === '/livez') {
+    handleLivenessProbe(response);
+    return;
+  }
+  if (url === '/readyz') {
+    await handleReadinessProbe(response);
     return;
   }
   if (url === '/metrics' && isMetricsEnabled()) {
@@ -145,11 +157,11 @@ async function handleHealthRequest(
 }
 
 /**
- * Boots a lightweight Node HTTP server (no Fastify) exposing `/health` and (when metrics
- * are enabled) `/metrics` on `WORKER_HEALTH_PORT`. Idempotent — subsequent calls are
- * no-ops while the server is already listening. Listens on `HTTP_BIND_HOST` so the same
- * binding rules as the API apply. `/metrics` is gated by `METRICS_SCRAPE_TOKEN` (required
- * in production when metrics are enabled).
+ * Boots a lightweight Node HTTP server (no Fastify) exposing `/livez` (liveness), `/readyz`
+ * (readiness — deps + worker registration + stall) and (when metrics are enabled) `/metrics`
+ * on `WORKER_HEALTH_PORT`. Idempotent — subsequent calls are no-ops while the server is
+ * already listening. Listens on `HTTP_BIND_HOST` so the same binding rules as the API apply.
+ * `/metrics` is gated by `METRICS_SCRAPE_TOKEN` (required in production when metrics are enabled).
  */
 export async function startWorkerHealthServer(): Promise<void> {
   if (healthServer) return;

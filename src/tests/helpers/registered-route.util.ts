@@ -13,7 +13,8 @@ export const ROUTE_REGISTRY_ALLOWLIST = new Set<string>([
   'GET /admin/queues',
   'HEAD /admin/queues',
   'POST /api/v1/billing/stripe/webhook',
-  'GET /health',
+  'GET /livez',
+  'GET /readyz',
 ]);
 
 export function normalizeRegisteredRouteKey(method: string, url: string): string {
@@ -38,5 +39,5 @@ export function isAllowlistedRegisteredRoute(method: string, url: string): boole
 }
 
 export function isApiRoutePath(url: string): boolean {
-  return url.startsWith('/api/v1/') || url.startsWith('/health/');
+  return url.startsWith('/api/v1/') || url === '/livez' || url === '/readyz';
 }

@@ -10,13 +10,13 @@ describe('health', () => {
     if (app) await app.close();
   });
 
-  it('GET /health returns raw readiness payload', async () => {
+  it('GET /readyz returns raw readiness payload', async () => {
     const testApp = await createTestApp();
     app = testApp.app;
 
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/health',
+      url: '/readyz',
     });
 
     expect(response.statusCode).toBe(200);

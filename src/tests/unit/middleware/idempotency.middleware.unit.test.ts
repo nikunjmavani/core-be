@@ -256,6 +256,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const { claimPreHandler } = await registerIdempotencyHooks();
     const request = {
       headers: {},
+      auth: { userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
       t: (key: string) => `translated:${key}`,
     } as unknown as FastifyRequest;
@@ -688,6 +689,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const { claimPreHandler } = await registerIdempotencyHooks();
     const request = {
       headers: {},
+      auth: { userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
       t: (key: string) => `translated:${key}`,
     } as unknown as FastifyRequest;
@@ -705,6 +707,44 @@ describe('idempotency middleware happy paths and conflicts', () => {
         error: expect.objectContaining({ detail: 'translated:errors:serviceUnavailable' }),
       }),
     );
+  });
+
+  it('skips claim and cache entirely for unauthenticated callers (no cross-caller replay)', async () => {
+    const { claimPreHandler } = await registerIdempotencyHooks();
+    const request = {
+      method: 'POST',
+      headers: {
+        [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY,
+        'x-organization-id': 'unverified-org',
+      },
+      _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+    } as unknown as FastifyRequest & { _idempotencyClaimed?: boolean };
+
+    const reply = { sent: false } as unknown as FastifyReply;
+
+    await claimPreHandler(request, reply);
+
+    expect(mockRedisGet).not.toHaveBeenCalled();
+    expect(mockRedisSet).not.toHaveBeenCalled();
+    expect(mockRedisIncr).not.toHaveBeenCalled();
+    expect(request._idempotencyClaimed).toBeUndefined();
+  });
+
+  it('increments a sharded claim counter key after a successful claim (no global hot key)', async () => {
+    mockRedisSet.mockResolvedValue('OK');
+    const { claimPreHandler } = await registerIdempotencyHooks();
+    const request = {
+      method: 'POST',
+      headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
+      auth: { userId: TEST_USER_PUBLIC_ID },
+      _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+    } as unknown as FastifyRequest;
+
+    await claimPreHandler(request, { sent: false } as FastifyReply);
+
+    expect(mockRedisIncr).toHaveBeenCalledTimes(1);
+    const [counterKey] = mockRedisIncr.mock.calls.at(-1) as [string];
+    expect(counterKey).toMatch(/^idempotency-claim-counter:shard:\d+$/);
   });
 
   it('onResponse releases unclaimed placeholders when handler throws (no pending completion, statusCode 500)', async () => {

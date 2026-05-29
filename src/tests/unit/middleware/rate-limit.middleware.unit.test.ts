@@ -80,7 +80,10 @@ describe('rate-limit.middleware', () => {
     expect(options.timeWindow).toBe(60_000);
     // Fail-open on Redis blip — a few seconds of unmetered traffic beats a blanket 5xx.
     expect(options.skipOnError).toBe(true);
-    expect(options.allowList({ url: '/health' })).toBe(true);
+    expect(options.allowList({ url: '/livez' })).toBe(true);
+    expect(options.allowList({ url: '/readyz' })).toBe(true);
+    // The removed /health route is no longer allow-listed.
+    expect(options.allowList({ url: '/health' })).toBe(false);
     expect(options.allowList({ url: testApiPath('/auth/login') })).toBe(false);
   });
 
@@ -182,19 +185,26 @@ describe('rate-limit.middleware', () => {
       expect(options.keyGenerator({ organizationId: '', ip: '1.2.3.4' })).toBe('1.2.3.4');
     });
 
-    it('allowList does not bypass non-health routes whose path includes "health" as a substring', async () => {
+    it('allowList exact-matches the liveness/readiness probe paths and rejects prefix collisions', async () => {
       application = Fastify();
       await application.register(rateLimitMiddleware);
       await application.ready();
       const options = rateLimitPlugin.mock.calls.at(-1)![1] as {
         allowList: (request: { url: string }) => boolean;
       };
-      // Real health endpoints are allowed
-      expect(options.allowList({ url: '/health' })).toBe(true);
-      expect(options.allowList({ url: '/health' })).toBe(true);
-      expect(options.allowList({ url: '/health' })).toBe(true);
+      // Real probe endpoints are allowed (exact path match)
+      expect(options.allowList({ url: '/livez' })).toBe(true);
+      expect(options.allowList({ url: '/readyz' })).toBe(true);
+      // Query strings are stripped before matching
+      expect(options.allowList({ url: '/readyz?verbose=1' })).toBe(true);
+      expect(options.allowList({ url: '/livez?probe=docker' })).toBe(true);
 
-      // Look-alike paths must NOT be allowed (defense-in-depth: prefix match, not contains)
+      // Prefix collisions must NOT be allowed — exact match, not startsWith/contains
+      expect(options.allowList({ url: '/livezz' })).toBe(false);
+      expect(options.allowList({ url: '/readyzz' })).toBe(false);
+      // The removed /health route (and its prefix collisions) are no longer allow-listed.
+      expect(options.allowList({ url: '/health' })).toBe(false);
+      expect(options.allowList({ url: '/healthxyz' })).toBe(false);
       expect(options.allowList({ url: testApiPath('/healthcheck') })).toBe(false);
       expect(options.allowList({ url: testApiPath('/health-tracker') })).toBe(false);
       expect(options.allowList({ url: '/foo/health/bar' })).toBe(false);

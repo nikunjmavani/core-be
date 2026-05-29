@@ -61,7 +61,7 @@ Artifacts (`k6-*.json` summaries and `server.log`) are uploaded for 14 days. Opt
 To gain confidence in the **whole system** (not just health endpoints), run both infrastructure stress and API stress:
 
 1. **Health + infra stress** (no auth): `pnpm load:stress`
-   - Hits `GET /health` and `GET /health` with up to 100 VUs.
+   - Hits `GET /livez` and `GET /readyz` with up to 100 VUs.
 
 2. **API stress** (authenticated): set credentials, then run `pnpm load:stress:api`
    - Get credentials: `pnpm tool:load-test-credentials` (server up, `pnpm db:seed:full` done).
@@ -110,8 +110,8 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
 
 ## Quick commands (no auth)
 
-- **Autocannon** (single endpoint): `pnpm test:bench` — hits `http://localhost:3000/health`.
-- **k6 health**: `pnpm load:health` — runs `src/tests/load/k6/scenarios/health.js` (health/live and health/ready). No env vars needed.
+- **Autocannon** (single endpoint): `pnpm test:bench` — hits `http://localhost:3000/readyz`.
+- **k6 health**: `pnpm load:health` — runs `src/tests/load/k6/scenarios/health.js` (`/livez` and `/readyz`). No env vars needed.
 
 ## Scenarios (all seven)
 

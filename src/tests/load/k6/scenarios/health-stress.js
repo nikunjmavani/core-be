@@ -22,7 +22,7 @@ export const options = {
 };
 
 export function health() {
-  const response = http.get(`${BASE_URL}/health`, {
+  const response = http.get(`${BASE_URL}/readyz`, {
     tags: { name: 'health' },
   });
   check(response, {

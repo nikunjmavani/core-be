@@ -31,7 +31,7 @@ export function inferSubDomainLabel(subDomain: string | undefined): string | und
 }
 
 export function inferDomainSlug(domainFolder: string, fullPath: string): string {
-  if (fullPath.startsWith('/health')) return 'health';
+  if (fullPath.startsWith('/livez') || fullPath.startsWith('/readyz')) return 'health';
   if (fullPath.startsWith('/api/v1/mcp')) return 'mcp';
   const apiSegment = fullPath.split('/')[3];
   if (apiSegment === 'users') return 'user';

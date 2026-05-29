@@ -156,7 +156,7 @@ Long-lived branches: **`dev`** → **`main`**. Short-lived branches use `feature
 - Before commit → `pnpm validate && pnpm test:unit`
 - Before PR → `pnpm validate && pnpm test`
 - Before release → add `pnpm test:security`, `pnpm load:stress` (and optionally `pnpm load:stress:api`)
-- After deploy → smoke (`pnpm load:health` or hit `/health`)
+- After deploy → smoke (`pnpm load:health` or hit `/readyz`)
 
 Full k6 scenarios: [load-testing.md](../reference/testing/load-testing.md) and [src/tests/load/k6/README.md](../../src/tests/load/k6/README.md).
 
@@ -183,7 +183,7 @@ That document includes:
 | Local run | `pnpm compose:up` → `pnpm compose:wait` → `pnpm db:migrate` → `pnpm dev` + `pnpm dev:worker` |
 | Before PR | `pnpm validate && pnpm test` |
 | Before release | + `pnpm test:security`, `pnpm load:stress` |
-| Smoke after deploy | `pnpm load:health` or `GET /health` |
+| Smoke after deploy | `pnpm load:health` or `GET /readyz` |
 | Load-test credentials | `pnpm tool:load-test-credentials` (server + full seed) |
 | Admin token (k6) | `pnpm tool:admin-token` |
 

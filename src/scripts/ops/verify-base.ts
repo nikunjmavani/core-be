@@ -15,7 +15,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const BASE_URL_FOR_HEALTH = (process.env.BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-const HEALTH_URL = `${BASE_URL_FOR_HEALTH}/health`;
+const HEALTH_URL = `${BASE_URL_FOR_HEALTH}/readyz`;
 const POLL_INTERVAL_MILLISECONDS = 500;
 const HEALTH_CHECK_TIMEOUT_MILLISECONDS = 1000;
 const READY_WAIT_TIMEOUT_MILLISECONDS = 60_000;

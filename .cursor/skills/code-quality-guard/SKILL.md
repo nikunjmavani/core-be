@@ -132,7 +132,7 @@ Pre-commit mirrors a **subset** of the static checks in [`.github/workflows/pr-c
 
 ### `api-smoke` job (runs after `quality` passes)
 
-- Postgres + Redis service containers → `pnpm db:migrate` → `pnpm db:seed:full` → background `pnpm tsx src/server.ts` → wait for `/health` → `pnpm test:api-smoke`. Catches route/DI wiring regressions against real HTTP.
+- Postgres + Redis service containers → `pnpm db:migrate` → `pnpm db:seed:full` → background `pnpm tsx src/server.ts` → wait for `/readyz` → `pnpm test:api-smoke`. Catches route/DI wiring regressions against real HTTP.
 
 ### Supporting ignore files
 

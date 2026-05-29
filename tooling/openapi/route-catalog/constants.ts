@@ -15,7 +15,7 @@ export const DOMAIN_LABELS: Record<string, string> = {
   '/api/v1/notify': 'NOTIFY',
   '/api/v1/uploads': 'UPLOAD',
   '/api/v1/mcp': 'MCP',
-  '/health': 'HEALTH',
+  '/livez': 'HEALTH',
 };
 
 export const ROUTE_METHOD_PATTERN = /(?:app|zodApplication)\.(get|post|patch|put|delete)/g;
@@ -24,9 +24,16 @@ export const ROUTE_PATH_PATTERN = /['"]([/][^'"]*)['"]/;
 export const SUPPLEMENTAL_ROUTES: ParsedRoute[] = [
   {
     method: 'GET',
-    fullPath: '/health',
+    fullPath: '/livez',
     access: 'PUBLIC',
-    domainKey: '/health',
+    domainKey: '/livez',
+    domain: 'health',
+  },
+  {
+    method: 'GET',
+    fullPath: '/readyz',
+    access: 'PUBLIC',
+    domainKey: '/livez',
     domain: 'health',
   },
   {

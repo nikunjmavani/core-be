@@ -75,6 +75,13 @@ export const CATALOG_CACHE_STALE_WHILE_REVALIDATE_SECONDS = SESSION_TOKEN_CACHE_
 /** Aggregate readiness probe budget per dependency (milliseconds). */
 export const HEALTH_READINESS_PROBE_TIMEOUT_MS = 1_500;
 
+/**
+ * Window during which a dependency readiness result is reused before re-probing
+ * (milliseconds). Bounds probe load from deploy gating and external pollers
+ * while staying small enough that a genuine outage surfaces within ~2 seconds.
+ */
+export const HEALTH_READINESS_PROBE_CACHE_TTL_MS = 2_000;
+
 /** S3 presigned URL lifetime (seconds); aligns with access token TTL. */
 export const PRESIGNED_URL_EXPIRY_SECONDS = ACCESS_TOKEN_EXPIRY_SECONDS;
 

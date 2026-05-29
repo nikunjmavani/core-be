@@ -50,7 +50,11 @@ const requestStatementTimeoutMiddlewarePlugin: FastifyPluginAsync = async (appli
     return;
   }
   application.addHook('onRequest', (request: FastifyRequest, _reply, done) => {
-    if (request.url.startsWith('/health') || request.url === '/metrics') {
+    if (
+      request.url.startsWith('/livez') ||
+      request.url.startsWith('/readyz') ||
+      request.url === '/metrics'
+    ) {
       done();
       return;
     }

@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import type { RateLimitOptions } from '@fastify/rate-limit';
 
 /**
  * Per-route rate limit presets for high-risk endpoints.
@@ -6,6 +7,23 @@ import type { FastifyRequest } from 'fastify';
  * @see https://github.com/fastify/fastify-rate-limit#custom-hook-example-usage-after-authentication
  */
 function buildRateLimitKeyFromIpAddress(request: FastifyRequest): string {
+  return `ip:${request.ip}`;
+}
+
+/**
+ * Derives a stable per-identity rate-limit key from the normalized email in the request body.
+ * Falls back to the caller IP when no email is present (e.g. malformed body that still reaches
+ * the limiter), so the bucket is never globally shared.
+ */
+function buildRateLimitKeyFromRequestBodyEmail(request: FastifyRequest): string {
+  const body = request.body as { email?: unknown } | undefined;
+  const rawEmail = body?.email;
+  if (typeof rawEmail === 'string') {
+    const normalizedEmail = rawEmail.trim().toLowerCase();
+    if (normalizedEmail.length > 0) {
+      return `email:${normalizedEmail}`;
+    }
+  }
   return `ip:${request.ip}`;
 }
 
@@ -48,6 +66,30 @@ export const STRICT_PUBLIC_RATE_LIMIT = {
     },
   },
 } as const;
+
+/**
+ * Per-identity cap (5 requests / 15 min per normalized email in production) for unauthenticated
+ * credential and outbound-email endpoints (login, magic-link request, password-reset request).
+ * The IP-only {@link STRICT_PUBLIC_RATE_LIMIT} is spoofable, so this complements it by binding the
+ * limit to the targeted account/email — blunting credential stuffing, account enumeration, and
+ * mailbomb abuse even when CAPTCHA is acknowledged-disabled in production. Lifted under
+ * NODE_ENV=test so loopback suites that loop these routes do not produce flaky 429s.
+ */
+const STRICT_PUBLIC_PER_EMAIL_MAX_REQUESTS_PER_WINDOW =
+  NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 5;
+const STRICT_PUBLIC_PER_EMAIL_WINDOW_MS = 15 * 60_000;
+
+/**
+ * Options for an `app.rateLimit(...)` preHandler that throttles per normalized email/identity,
+ * independent of IP. Pass to `app.rateLimit(...)` and add the returned hook to a route's
+ * `preHandler` array; keying happens at `preHandler` so the validated body is available.
+ */
+export const STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS: RateLimitOptions = {
+  max: STRICT_PUBLIC_PER_EMAIL_MAX_REQUESTS_PER_WINDOW,
+  timeWindow: STRICT_PUBLIC_PER_EMAIL_WINDOW_MS,
+  hook: 'preHandler',
+  keyGenerator: buildRateLimitKeyFromRequestBodyEmail,
+};
 
 const STRICT_AUTHED_MAX_REQUESTS_PER_WINDOW = NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 10;
 const MODERATE_AUTHED_MAX_REQUESTS_PER_WINDOW = NODE_ENV_FOR_RATE_LIMIT_CAPS === 'test' ? 5000 : 30;

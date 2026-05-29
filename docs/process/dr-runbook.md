@@ -15,7 +15,7 @@ Neon point-in-time recovery (PITR) and Railway redeploys are the primary mechani
 
 - Regional or provider outage affecting Neon, Railway Redis, or Railway
 - Accidental destructive migration or data corruption confirmed in Postgres
-- Complete loss of the production API or worker service with no healthy `/health`
+- Complete loss of the production API or worker service with no healthy `/readyz`
 
 ---
 
@@ -72,7 +72,7 @@ flowchart TD
 1. Redeploy latest known-good image from `main` (or previous green deployment).
 2. Confirm secrets: `JWT_*`, `STRIPE_*`, `SENTRY_DSN`, `ALLOWED_ORIGINS`, `DATABASE_URL`, `REDIS_URL`, `DEPLOYMENT_TOTAL_REPLICA_COUNT`.
 3. Scale workers to normal count ([worker-scaling.md](../deployment/runbooks/worker-scaling.md)).
-4. Hit `GET /health` until 200 with all dependencies available.
+4. Hit `GET /readyz` until 200 with all dependencies available.
 
 ### 4. Validation (before closing)
 

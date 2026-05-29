@@ -27,6 +27,47 @@ const sql = postgres(migrationUrl, { max: 1 });
 const MINIMUM_POSTGRES_SERVER_VERSION_NUM = 170000;
 const INIT_MIGRATION_FILENAME = '00000000000000_init.sql';
 
+/**
+ * Fixed 64-bit key for the session-level advisory lock that serializes the
+ * entire migration run.
+ *
+ * Without it, two deploy jobs or app instances starting migrations
+ * concurrently can both begin applying the same file: the `schema_migrations`
+ * primary key prevents a duplicate row, but non-idempotent or long-running DDL
+ * can still race, producing failed deploys or partially-applied state. Each
+ * runner calls `pg_advisory_lock(<this key>)` up front, so the second runner
+ * blocks until the first finishes and releases. Session-level advisory locks
+ * are NOT auto-released on COMMIT/ROLLBACK, so we always release explicitly in
+ * a `finally`. The value is an arbitrary but stable constant (well within the
+ * 53-bit safe-integer range and cast to `bigint` in SQL) — only its
+ * uniqueness within this application matters.
+ */
+const MIGRATION_ADVISORY_LOCK_KEY = 4_017_309_021;
+
+/**
+ * Acquires the migration advisory lock on the shared `sql` session. The pool
+ * is created with `max: 1`, so every statement in this process runs on the
+ * same Postgres backend/session that holds the lock.
+ */
+async function acquireMigrationAdvisoryLock(): Promise<void> {
+  await sql`SELECT pg_advisory_lock(${MIGRATION_ADVISORY_LOCK_KEY}::bigint)`;
+  logger.info({ lockKey: MIGRATION_ADVISORY_LOCK_KEY }, 'Acquired migration advisory lock');
+}
+
+/**
+ * Releases the migration advisory lock. Safe to call even if the lock was not
+ * held (`pg_advisory_unlock` simply returns false); never throws so it can run
+ * in a `finally` without masking the original error.
+ */
+async function releaseMigrationAdvisoryLock(): Promise<void> {
+  try {
+    await sql`SELECT pg_advisory_unlock(${MIGRATION_ADVISORY_LOCK_KEY}::bigint)`;
+    logger.info({ lockKey: MIGRATION_ADVISORY_LOCK_KEY }, 'Released migration advisory lock');
+  } catch (unlockError) {
+    logger.error({ error: unlockError }, 'Failed to release migration advisory lock');
+  }
+}
+
 async function assertPostgresMajorVersionAtLeast17(): Promise<void> {
   const [row] = await sql<
     { server_version_num: string; server_version: string }[]
@@ -171,73 +212,84 @@ async function main() {
 
   await assertPostgresMajorVersionAtLeast17();
 
-  await sql`
-    create table if not exists public.schema_migrations (
-      filename text primary key,
-      applied_at timestamptz not null default now()
-    )
-  `;
+  /**
+   * Serialize the whole run behind a session-level advisory lock so concurrent
+   * deploy jobs/instances cannot apply the same migration at the same time.
+   * The lock wraps BOTH the transactional and non-transactional
+   * (`CREATE INDEX CONCURRENTLY`) lanes and is released even on error.
+   */
+  await acquireMigrationAdvisoryLock();
+  try {
+    await sql`
+      create table if not exists public.schema_migrations (
+        filename text primary key,
+        applied_at timestamptz not null default now()
+      )
+    `;
 
-  const applied = await sql<{ filename: string }[]>`
-    select filename from public.schema_migrations order by filename asc
-  `;
-  const appliedSet = new Set(applied.map((row) => row.filename));
+    const applied = await sql<{ filename: string }[]>`
+      select filename from public.schema_migrations order by filename asc
+    `;
+    const appliedSet = new Set(applied.map((row) => row.filename));
 
-  const allFiles = await readdir(migrationsFolder);
-  const sqlFiles = allFiles.filter((file) => file.endsWith('.sql')).sort();
+    const allFiles = await readdir(migrationsFolder);
+    const sqlFiles = allFiles.filter((file) => file.endsWith('.sql')).sort();
 
-  await baselineExistingInitialMigrationIfNeeded({ appliedSet, sqlFiles });
+    await baselineExistingInitialMigrationIfNeeded({ appliedSet, sqlFiles });
 
-  for (const filename of sqlFiles) {
-    if (appliedSet.has(filename)) continue;
+    for (const filename of sqlFiles) {
+      if (appliedSet.has(filename)) continue;
 
-    const fullPath = resolve(migrationsFolder, filename);
-    const contents = await readFile(fullPath, 'utf8');
+      const fullPath = resolve(migrationsFolder, filename);
+      const contents = await readFile(fullPath, 'utf8');
 
-    const { transactional, headerErrors } = parseMigrationExecutionMode(contents);
-    if (headerErrors.length > 0) {
-      throw new Error(
-        `Invalid migration-transaction header in ${filename}: ${headerErrors.join('; ')}`,
-      );
+      const { transactional, headerErrors } = parseMigrationExecutionMode(contents);
+      if (headerErrors.length > 0) {
+        throw new Error(
+          `Invalid migration-transaction header in ${filename}: ${headerErrors.join('; ')}`,
+        );
+      }
+
+      logger.info({ filename, transactional }, 'Applying migration');
+      /**
+       * Drizzle-style splitter: SQL files use `--> statement-breakpoint` between
+       * statements so that each statement is sent independently. This prevents
+       * issues with the postgres simple-query protocol mis-reporting errors when
+       * a single batch contains many statements with DO blocks, dollar-quoting,
+       * and DDL that depend on prior statements in the same batch.
+       */
+      const statements = contents
+        .split(/\n--> statement-breakpoint\s*\n?/g)
+        .map((statement) => statement.trim())
+        .filter((statement) => statement.length > 0);
+
+      if (transactional) {
+        await sql.begin(async (transaction) => {
+          await runMigrationStatements({ filename, statements, executor: transaction });
+          await transaction.unsafe('insert into public.schema_migrations (filename) values ($1)', [
+            filename,
+          ]);
+        });
+        continue;
+      }
+
+      /**
+       * Non-transactional lane: each statement runs in its own implicit
+       * transaction (autocommit) so `CREATE INDEX CONCURRENTLY` is legal. Because
+       * there is no enclosing transaction to roll back, statements must be
+       * idempotent (`IF NOT EXISTS`). A concurrent index build that fails leaves
+       * an INVALID index behind, so we check for that before recording success —
+       * an operator must `DROP INDEX CONCURRENTLY` the invalid index and re-run.
+       */
+      await runMigrationStatements({ filename, statements, executor: sql });
+      await assertNoInvalidIndexes({ filename });
+      await sql.unsafe('insert into public.schema_migrations (filename) values ($1)', [filename]);
     }
 
-    logger.info({ filename, transactional }, 'Applying migration');
-    /**
-     * Drizzle-style splitter: SQL files use `--> statement-breakpoint` between
-     * statements so that each statement is sent independently. This prevents
-     * issues with the postgres simple-query protocol mis-reporting errors when
-     * a single batch contains many statements with DO blocks, dollar-quoting,
-     * and DDL that depend on prior statements in the same batch.
-     */
-    const statements = contents
-      .split(/\n--> statement-breakpoint\s*\n?/g)
-      .map((statement) => statement.trim())
-      .filter((statement) => statement.length > 0);
-
-    if (transactional) {
-      await sql.begin(async (transaction) => {
-        await runMigrationStatements({ filename, statements, executor: transaction });
-        await transaction.unsafe('insert into public.schema_migrations (filename) values ($1)', [
-          filename,
-        ]);
-      });
-      continue;
-    }
-
-    /**
-     * Non-transactional lane: each statement runs in its own implicit
-     * transaction (autocommit) so `CREATE INDEX CONCURRENTLY` is legal. Because
-     * there is no enclosing transaction to roll back, statements must be
-     * idempotent (`IF NOT EXISTS`). A concurrent index build that fails leaves
-     * an INVALID index behind, so we check for that before recording success —
-     * an operator must `DROP INDEX CONCURRENTLY` the invalid index and re-run.
-     */
-    await runMigrationStatements({ filename, statements, executor: sql });
-    await assertNoInvalidIndexes({ filename });
-    await sql.unsafe('insert into public.schema_migrations (filename) values ($1)', [filename]);
+    logger.info('Migrations complete');
+  } finally {
+    await releaseMigrationAdvisoryLock();
   }
-
-  logger.info('Migrations complete');
 }
 
 main()

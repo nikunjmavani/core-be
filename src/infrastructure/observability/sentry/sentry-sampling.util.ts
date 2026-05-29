@@ -34,14 +34,11 @@ export type TransactionTailInput = {
 /** Output of {@link resolveTailTransactionDecision} — `keep` sends to Sentry, `drop` discards. */
 export type TailTransactionDecision = 'drop' | 'keep';
 
-const HEALTH_TRANSACTION_MARKERS = ['/health', 'GET /health'] as const;
+const HEALTH_TRANSACTION_MARKERS = ['/livez', 'GET /livez', '/readyz', 'GET /readyz'] as const;
 
-/** Recognises health-check transaction names so they can be dropped from Sentry sampling. */
+/** Recognises liveness/readiness probe transaction names so they can be dropped from Sentry sampling. */
 export function isHealthCheckTransaction(transactionName: string): boolean {
-  if (HEALTH_TRANSACTION_MARKERS.some((marker) => transactionName === marker)) {
-    return true;
-  }
-  return transactionName.includes('/health/');
+  return HEALTH_TRANSACTION_MARKERS.some((marker) => transactionName === marker);
 }
 
 /** Matches billing API or Stripe webhook routes so they are always kept (revenue-critical). */

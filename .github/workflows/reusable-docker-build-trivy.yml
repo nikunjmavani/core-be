@@ -317,7 +317,7 @@ jobs:
           sbom-path: worker-image.spdx.json
           push-to-registry: true
 
-      - name: Boot API container and verify /health
+      - name: Boot API container and verify /readyz
         env:
           DATABASE_URL: postgresql://core:core@localhost:5432/core
           REDIS_URL: redis://localhost:6379
@@ -354,7 +354,7 @@ jobs:
             -e METRICS_SCRAPE_TOKEN="$METRICS_SCRAPE_TOKEN" \
             -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
             core-be:ci
-          if ! timeout 90 bash -c 'until curl -sf http://localhost:3000/health; do sleep 2; done'; then
+          if ! timeout 90 bash -c 'until curl -sf http://localhost:3000/readyz; do sleep 2; done'; then
             docker logs core-be-health --tail 200 || true
             docker rm -f core-be-health || true
             exit 1

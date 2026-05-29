@@ -1,5 +1,5 @@
 name: Start API server
-description: Start the API in the background and wait for /health
+description: Start the API in the background and wait for /readyz
 
 inputs:
   rate-limit-max:
@@ -35,13 +35,13 @@ runs:
             exit 1
           fi
 
-          if curl -sf http://localhost:3000/health; then
+          if curl -sf http://localhost:3000/readyz; then
             exit 0
           fi
 
           if [ $((SECONDS % 10)) -eq 0 ]; then
             echo "Waiting for API readiness..."
-            curl -s http://localhost:3000/health || true
+            curl -s http://localhost:3000/readyz || true
             echo
           fi
 

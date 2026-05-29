@@ -8,6 +8,7 @@ Project core_be {
 }
 
 TableGroup audit {
+  audit.dead_letter_jobs
   audit.logs
 }
 
@@ -51,6 +52,28 @@ TableGroup tenancy {
 
 TableGroup upload {
   upload.uploads
+}
+
+Table audit.dead_letter_jobs {
+  attempts_made int [not null]
+  created_at timestamptz [not null]
+  dead_letter_queue text [not null]
+  error_stack text
+  failed_at timestamptz [not null]
+  failed_reason text [not null]
+  id bigint [increment, not null]
+  job_id text
+  job_name text [not null]
+  max_attempts int [not null]
+  payload_summary jsonb [not null]
+  source_queue text [not null]
+  indexes {
+    (id) [pk]
+  }
+}
+
+Note audit.dead_letter_jobs {
+  'RLS: enabled\nPolicies: dead_letter_jobs_deny_all, dead_letter_jobs_app_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table audit.logs {

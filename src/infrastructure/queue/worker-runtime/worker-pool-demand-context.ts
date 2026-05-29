@@ -4,7 +4,7 @@ let workerPoolDemandReport: WorkerPostgresPoolDemandReport | undefined;
 
 /**
  * Stores the {@link WorkerPostgresPoolDemandReport} computed at worker bootstrap so other
- * modules (pool-pressure alerts, `/health` enrichment, readiness probes) can read the
+ * modules (pool-pressure alerts, `/readyz` enrichment, readiness probes) can read the
  * current process's Postgres demand without recomputing it.
  */
 export function setWorkerPostgresPoolDemandContext(report: WorkerPostgresPoolDemandReport): void {

@@ -1,7 +1,7 @@
 /**
  * Extracts `schema.summary`, `schema.description`, and `schema.tags` literals
  * from every Fastify route registration in `src/domains/**\/*.routes.ts` plus
- * the supplemental `/health` and `/api/v1/mcp` registrations.
+ * the supplemental `/livez`, `/readyz`, and `/api/v1/mcp` registrations.
  *
  * Returned map is keyed by `${METHOD} ${OPENAPI_PATH}` (Fastify path params
  * `:name` are converted to OpenAPI `{name}`).
