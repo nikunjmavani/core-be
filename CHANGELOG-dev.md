@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.2.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.2.3-dev.0...v3.2.4-dev.0) (2026-05-29)
+
+
+### Fixed
+
+* **database:** fail closed on RLS-bypassing runtime roles ([#164](https://github.com/nikunjmavani/core-be/issues/164)) ([55f13ca](https://github.com/nikunjmavani/core-be/commit/55f13cab619e0341d4085bbe3d0842c16532548c))
+
 ## [3.2.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.2.2-dev.0...v3.2.3-dev.0) (2026-05-29)
 
 
