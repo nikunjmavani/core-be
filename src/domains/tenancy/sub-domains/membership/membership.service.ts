@@ -316,7 +316,9 @@ export class MembershipService {
         newOwnerUserId,
         organization.id,
       );
-      if (!newOwnerMembership) throw new NotFoundError('New owner must be an active member');
+      if (!newOwnerMembership || newOwnerMembership.status !== 'ACTIVE') {
+        throw new NotFoundError('New owner must be an active member');
+      }
       await this.organizationService.transferOrganizationOwnership(
         organization_public_id,
         newOwnerUserId,
