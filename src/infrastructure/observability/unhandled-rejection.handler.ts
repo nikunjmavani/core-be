@@ -15,6 +15,8 @@ const UNHANDLED_REJECTION_BURST_WINDOW_MS = 60_000;
 /** Rejections within {@link UNHANDLED_REJECTION_BURST_WINDOW_MS} that force a fatal restart. */
 const UNHANDLED_REJECTION_BURST_THRESHOLD = 20;
 
+export { UNHANDLED_REJECTION_BURST_THRESHOLD, UNHANDLED_REJECTION_BURST_WINDOW_MS };
+
 /** Inputs for {@link createUnhandledRejectionHandler}: the process series + Sentry source tag. */
 export interface UnhandledRejectionHandlerOptions {
   process: UnhandledRejectionProcess;

@@ -13,7 +13,8 @@ import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/co
  * Use from services and controllers for the **service-layer unit of work**, not the entire HTTP
  * request. External I/O (Stripe API, S3, Resend) **must not** run inside this callback — phase
  * such work into separate short transactions to avoid holding a pool checkout across network
- * round trips. This is the contract enforced by the `no-restricted-syntax` ESLint guardrail.
+ * round trips. Enforced by the global regression guard in
+ * `src/tests/global/rls-context-network-isolation.global.test.ts`.
  */
 export function withOrganizationDatabaseContext<T>(
   organizationPublicId: string,

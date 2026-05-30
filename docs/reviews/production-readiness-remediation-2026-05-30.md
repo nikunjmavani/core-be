@@ -23,7 +23,7 @@
 | 2 | Redis blip → global rate limit fail-closed | **Done** | #165 | `skipOnError: true` on global limiter |
 | 3 | Global rate limit trusts `X-Organization-Id` | **Done** | #160 | Global key is IP-only; org quotas in post-auth presets |
 | 4 | `TRUST_PROXY` boolean / spoofable IP | **Done** | #168 | Hop-count parsing + hosted assertion |
-| 5 | Per-request RLS pins DB connection | **Partial** | #174, #178, #182 | `DATABASE_RLS_SCOPED_CONTEXTS` defaults `true`; k6 concurrency scenario. **Verify** no HTTP path holds checkout across outbound I/O |
+| 5 | Per-request RLS pins DB connection | **Done** | #174, #178, #182, *this PR* | `DATABASE_RLS_SCOPED_CONTEXTS` defaults `true`; k6 concurrency scenario; global guard forbids outbound I/O inside DB context callbacks |
 | 6 | Index migrations block writes pre-deploy | **Done** | #176 | Concurrent non-transactional migration lane |
 | 7 | Anonymous idempotency cross-caller replay | **Done** | #178, #184 | Skip/fingerprint on unauthenticated auth routes |
 | 8 | CAPTCHA off-by-default in production | **Done** | #180, #186, #188 | Production boot requires `CAPTCHA_PROVIDER=turnstile` + `CAPTCHA_SECRET`; removed `CAPTCHA_DISABLED_ACK` fail-open path |
@@ -32,7 +32,7 @@
 | 11 | Migration runner no advisory lock | **Done** | #178 | `pg_advisory_lock` in migrate runner |
 | 12 | Session cache accepts expired token ≤60s | **Done** | #178 | TTL bounded to `min(60s, session remaining)` |
 | 13 | Global idempotency counter hot key | **Done** | #184 | Request fingerprint in cache key; observability sampling |
-| 14 | `unhandledRejection` kills process | **Partial** | #184 | Burst-tolerant handler + metrics (not immediate exit on first rejection) |
+| 14 | `unhandledRejection` kills process | **Done** | #184, *this PR* | Burst-tolerant handler (20/min window) + metrics; documented in [process-error-handling.md](../reference/reliability/process-error-handling.md); `uncaughtException` remains immediate exit |
 | 15 | DLQ enqueue best-effort only | **Done** | #182 | `audit.dead_letter_jobs` Postgres ledger |
 | 16 | Client-supplied `x-request-id` | **Done** | #178 | Strict pattern validation in `genReqId` |
 
@@ -66,7 +66,6 @@
 
 | Priority | Item | Suggested action |
 | ---: | --- | --- |
-| P1 | **Finding 5 — RLS checkout audit** | Scan org HTTP handlers for outbound calls inside checkout; fix stragglers |
 | P2 | **Remediation doc maintenance** | Update this file when new dated audits land |
 | P2 | **Stale branches** | Close `fix/extended-audit-security-hardening` and `fix/auth-session-and-tenant-correctness` after diff vs `dev` (superseded by #182/#184) |
 | P2 | **Dependabot high alert** | Triage on default branch |
@@ -103,6 +102,7 @@ Run before production traffic:
 | #184 | Idempotency, auth escalation, queue reliability (bugs 44–56) |
 | #186 | Upload revocation, auth/billing/notify (bugs 57–64) |
 | #188 | Email verification fail-closed, remediation tracker, CAPTCHA production gate, auth lint cleanup |
+| *this PR* | RLS context network-isolation guard (finding #5); process error-handling doc (finding #14) |
 
 ---
 
