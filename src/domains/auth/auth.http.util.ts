@@ -53,9 +53,46 @@ export function clearCsrfCookie(reply: FastifyReply): void {
   reply.clearCookie(CSRF_COOKIE_NAME, { path: '/api/v1/auth' });
 }
 
+/** Separator between session public id and refresh secret in {@link SESSION_COOKIE_NAME}. */
+const SESSION_COOKIE_SEPARATOR = '.';
+
+/** Generates a cryptographically random refresh secret (32 bytes, base64url-encoded). */
+export function generateRefreshSecret(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+/** Builds the opaque session cookie value: `<sessionPublicId>.<refreshSecret>`. */
+export function formatSessionCookieValue(sessionPublicId: string, refreshSecret: string): string {
+  return `${sessionPublicId}${SESSION_COOKIE_SEPARATOR}${refreshSecret}`;
+}
+
+/** Parses {@link SESSION_COOKIE_NAME}; returns null for legacy session-id-only cookies. */
+export function parseSessionCookieValue(
+  rawValue: string,
+): { sessionPublicId: string; refreshSecret: string } | null {
+  const separatorIndex = rawValue.indexOf(SESSION_COOKIE_SEPARATOR);
+  if (separatorIndex <= 0) {
+    return null;
+  }
+  const sessionPublicId = rawValue.slice(0, separatorIndex);
+  const refreshSecret = rawValue.slice(separatorIndex + 1);
+  if (sessionPublicId.length === 0 || refreshSecret.length === 0) {
+    return null;
+  }
+  return { sessionPublicId, refreshSecret };
+}
+
 /** Writes the session cookie carrying `sessionPublicId` and simultaneously refreshes the CSRF cookie. */
-export function setSessionCookie(reply: FastifyReply, sessionPublicId: string): void {
-  reply.setCookie(SESSION_COOKIE_NAME, sessionPublicId, getSessionCookieOptions());
+export function setSessionCookie(
+  reply: FastifyReply,
+  sessionPublicId: string,
+  refreshSecret: string,
+): void {
+  reply.setCookie(
+    SESSION_COOKIE_NAME,
+    formatSessionCookieValue(sessionPublicId, refreshSecret),
+    getSessionCookieOptions(),
+  );
   setCsrfCookie(reply);
 }
 

@@ -30,6 +30,7 @@ export const sessions = authSchema
         { onDelete: 'set null' },
       ),
       token_hash: varchar('token_hash', { length: 64 }).notNull().unique(),
+      refresh_token_hash: varchar('refresh_token_hash', { length: 64 }),
       ip_address: inet('ip_address').notNull(),
       user_agent: text('user_agent'),
       last_active_at: timestamp('last_active_at', { withTimezone: true }).notNull().defaultNow(),
@@ -54,6 +55,7 @@ export const sessions = authSchema
           )
           OR ${table.public_id} = current_setting('app.current_session_public_id', true)
           OR ${table.token_hash} = current_setting('app.current_session_token_hash', true)
+          OR ${table.refresh_token_hash} = current_setting('app.current_session_refresh_token_hash', true)
           OR current_setting('app.session_retention_cleanup', true) = 'true'
         )`,
         withCheck: sql`(
@@ -64,6 +66,7 @@ export const sessions = authSchema
           )
           OR ${table.public_id} = current_setting('app.current_session_public_id', true)
           OR ${table.token_hash} = current_setting('app.current_session_token_hash', true)
+          OR ${table.refresh_token_hash} = current_setting('app.current_session_refresh_token_hash', true)
           OR current_setting('app.session_retention_cleanup', true) = 'true'
         )`,
       }),

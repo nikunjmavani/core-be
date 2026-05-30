@@ -49,11 +49,16 @@ export function createAuthWebauthnHandlers({ webauthnService }: AuthWebauthnHand
       if ('mfa_required' in data && data.mfa_required === true) {
         return successResponse(AuthSerializer.mfaRequired(data), getRequestIdentifier(request));
       }
-      if ('session_public_id' in data) {
-        setSessionCookie(reply, data.session_public_id);
+      if (
+        'session_public_id' in data &&
+        'session_refresh_secret' in data &&
+        typeof data.session_public_id === 'string' &&
+        typeof data.session_refresh_secret === 'string'
+      ) {
+        setSessionCookie(reply, data.session_public_id, data.session_refresh_secret);
       }
       return successResponse(
-        AuthSerializer.accessToken(data as { access_token: string; session_public_id: string }),
+        AuthSerializer.accessToken(data as { access_token: string; session_public_id?: string }),
         getRequestIdentifier(request),
       );
     },

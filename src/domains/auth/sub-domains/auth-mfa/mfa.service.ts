@@ -78,7 +78,7 @@ export class MfaService {
     body: unknown,
     ipAddress: string,
     userAgent?: string,
-  ): Promise<{ access_token: string; session_public_id: string }> {
+  ): Promise<{ access_token: string; session_public_id: string; session_refresh_secret: string }> {
     const parsed = validateMfaLoginVerify(body);
     const session = await verifyMfaSession(this.redis, parsed.mfa_session_token);
     const user = await this.userService.requireUserRecordByPublicId(session.user_public_id);
@@ -148,7 +148,7 @@ export class MfaService {
     user: { public_id: string; email: string; status: string; is_email_verified: boolean },
     ipAddress: string,
     userAgent?: string,
-  ): Promise<{ access_token: string; session_public_id: string }> {
+  ): Promise<{ access_token: string; session_public_id: string; session_refresh_secret: string }> {
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
       role: resolveAccessTokenRoleForUser({
@@ -169,7 +169,11 @@ export class MfaService {
         expires_at: expiresAt,
       }),
     );
-    return { access_token: jsonWebToken, session_public_id: authSession.public_id };
+    return {
+      access_token: jsonWebToken,
+      session_public_id: authSession.public_id,
+      session_refresh_secret: authSession.refresh_secret,
+    };
   }
 
   /** Verify TOTP code for the current user. Requires authenticated request (user public_id). */

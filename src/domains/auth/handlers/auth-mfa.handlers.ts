@@ -18,7 +18,7 @@ export function createAuthMfaHandlers({ mfaService }: AuthMfaHandlersDependencie
       const ipAddress = getIpAddress(request);
       const userAgent = getUserAgent(request) ?? undefined;
       const data = await mfaService.verifyLoginMfa(request.body, ipAddress, userAgent);
-      setSessionCookie(reply, data.session_public_id);
+      setSessionCookie(reply, data.session_public_id, data.session_refresh_secret);
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
     },
     verifyMfa: async (request: FastifyRequest, _reply: FastifyReply) => {

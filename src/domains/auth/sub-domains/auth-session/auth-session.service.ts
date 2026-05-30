@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { NotFoundError, UnauthorizedError } from '@/shared/errors/index.js';
 import type { UserService } from '@/domains/user/user.service.js';
+import { generateRefreshSecret } from '@/domains/auth/auth.http.util.js';
 import {
   withSessionPublicIdDatabaseContext,
   withSessionTokenHashDatabaseContext,
@@ -16,6 +17,10 @@ import {
 
 function hashAccessToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
+}
+
+function hashRefreshSecret(refreshSecret: string): string {
+  return createHash('sha256').update(refreshSecret).digest('hex');
 }
 
 /**
@@ -116,17 +121,19 @@ export class AuthSessionService {
 
   async createSessionForUser(
     userPublicId: string,
-    data: Omit<AuthSessionCreateData, 'user_id'>,
-  ): Promise<{ public_id: string }> {
+    data: Omit<AuthSessionCreateData, 'user_id' | 'refresh_token_hash'>,
+  ): Promise<{ public_id: string; refresh_secret: string }> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
+    const refreshSecret = generateRefreshSecret();
     const session = await withUserDatabaseContext(userPublicId, (_databaseHandle) =>
       this.sessionRepository.create({
         user_id: user.id,
+        refresh_token_hash: hashRefreshSecret(refreshSecret),
         ...data,
       }),
     );
-    return { public_id: session.public_id };
+    return { public_id: session.public_id, refresh_secret: refreshSecret };
   }
 
   async revokeSessionByAccessToken(token: string): Promise<void> {
@@ -179,5 +186,54 @@ export class AuthSessionService {
       }
       await this.sessionRepository.rotateTokenHash(sessionPublicId, tokenHash);
     });
+  }
+
+  async refreshSessionCredentials({
+    sessionPublicId,
+    refreshSecret,
+    nextAccessToken,
+  }: {
+    sessionPublicId: string;
+    refreshSecret: string;
+    nextAccessToken: string;
+  }): Promise<{ refresh_secret: string }> {
+    const currentRefreshHash = hashRefreshSecret(refreshSecret);
+    const nextRefreshSecret = generateRefreshSecret();
+    const nextRefreshHash = hashRefreshSecret(nextRefreshSecret);
+    const nextTokenHash = hashAccessToken(nextAccessToken);
+
+    const rotated = await withSessionPublicIdDatabaseContext(
+      sessionPublicId,
+      async (_databaseHandle) => {
+        const existing = await this.sessionRepository.findByPublicId(sessionPublicId);
+        if (!existing?.refresh_token_hash) {
+          return null;
+        }
+        if (existing.token_hash) {
+          await invalidateCachedSessionToken(existing.token_hash);
+        }
+        return this.sessionRepository.rotateSessionCredentials(
+          sessionPublicId,
+          currentRefreshHash,
+          nextTokenHash,
+          nextRefreshHash,
+        );
+      },
+    );
+
+    if (!rotated) {
+      await withSessionPublicIdDatabaseContext(sessionPublicId, async (_databaseHandle) => {
+        const existing = await this.sessionRepository.findByPublicId(sessionPublicId);
+        if (existing?.refresh_token_hash && existing.refresh_token_hash !== currentRefreshHash) {
+          await this.sessionRepository.revoke(sessionPublicId, existing.user_id);
+          if (existing.token_hash) {
+            await invalidateCachedSessionToken(existing.token_hash);
+          }
+        }
+      });
+      throw new UnauthorizedError('errors:invalidOrExpiredSession');
+    }
+
+    return { refresh_secret: nextRefreshSecret };
   }
 }
