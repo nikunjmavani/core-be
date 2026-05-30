@@ -83,7 +83,7 @@ export function getRuntimeEnvironmentEntries(
  * given GitHub environment. Mirrors the `.refine()` clauses in `env-schema.ts` so
  * the validator only warns when the runtime would actually fail to boot — gating
  * by the controlling variable (e.g. `CAPTCHA_PROVIDER`, `METRICS_ENABLED`) or by
- * the environment (e.g. `CAPTCHA_DISABLED_ACK` is only enforced in `production`).
+ * the environment (e.g. `CAPTCHA_SECRET` is always required in `production`).
  */
 export function shouldReportMissingConditional(
   entry: { readonly key: string },
@@ -91,6 +91,9 @@ export function shouldReportMissingConditional(
   variableValues: ReadonlyMap<string, string>,
 ): boolean {
   if (entry.key === 'CAPTCHA_SECRET') {
+    if (environment === 'production') {
+      return true;
+    }
     // Required only when CAPTCHA_PROVIDER is explicitly `turnstile`.
     // Schema default is `disabled`; absence ⇒ disabled ⇒ no warning.
     return variableValues.get('CAPTCHA_PROVIDER') === 'turnstile';
@@ -99,13 +102,6 @@ export function shouldReportMissingConditional(
     const metricsEnabled = variableValues.get('METRICS_ENABLED');
     // METRICS_ENABLED schema default is true; warn unless explicitly disabled.
     return metricsEnabled !== 'false' && metricsEnabled !== '0';
-  }
-  if (entry.key === 'CAPTCHA_DISABLED_ACK') {
-    // Production boot fails when CAPTCHA_PROVIDER=disabled unless this is true.
-    // Outside production, the schema does not enforce the acknowledgement, and
-    // when CAPTCHA_PROVIDER=turnstile is set the ack is irrelevant.
-    if (environment !== 'production') return false;
-    return variableValues.get('CAPTCHA_PROVIDER') !== 'turnstile';
   }
   return true;
 }

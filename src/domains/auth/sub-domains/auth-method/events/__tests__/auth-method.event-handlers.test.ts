@@ -144,6 +144,14 @@ describe('auth event handlers', () => {
       AUTH_EVENT.PASSWORD_RESET_REQUESTED,
       { email: 'user@example.com', reset_token: 'reset', expires_in_minutes: 60 },
     ],
+    [
+      AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
+      {
+        email: 'user@example.com',
+        verification_token: 'verify',
+        expires_in_hours: 24,
+      },
+    ],
   ])('throws when mail is not configured for %s', async (eventType, payload) => {
     vi.mocked(isMailConfigured).mockReturnValue(false);
 

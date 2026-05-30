@@ -403,13 +403,6 @@ const envSchemaBase = z.object({
    * Ignored in production.
    */
   CAPTCHA_BYPASS_HEADER: z.string().min(1).optional(),
-  /**
-   * Production safety acknowledgement. CAPTCHA fail-closes on public auth routes, so a
-   * production deploy with CAPTCHA_PROVIDER=disabled (the default) would turn login and
-   * recovery into 401s. Boot fails in that case unless this is explicitly set to true,
-   * which also switches the middleware to fail-open (skip CAPTCHA) instead of 401.
-   */
-  CAPTCHA_DISABLED_ACK: booleanString('false'),
 
   // MCP server (Model Context Protocol) at POST /api/v1/mcp — exposes APIs as tools for frontends/agents
   ENABLE_MCP_SERVER: z
@@ -469,7 +462,7 @@ const envSchemaBase = z.object({
 /**
  * Process environment Zod schema. Refines `envSchemaBase` with cross-field invariants
  * (idempotency threshold ordering, METRICS_ENABLED → token, CAPTCHA configuration,
- * production CAPTCHA acknowledgement, Redis topology, and FRONTEND_URL protocol) so
+ * production Turnstile requirement, Redis topology, and FRONTEND_URL protocol) so
  * the API/worker boot fails fast on misconfiguration instead of surfacing partial
  * failures at runtime.
  */
@@ -517,14 +510,11 @@ export const envSchema = envSchemaBase
       if (data.NODE_ENV !== 'production') {
         return true;
       }
-      if (data.CAPTCHA_PROVIDER === 'turnstile') {
-        return true;
-      }
-      return data.CAPTCHA_DISABLED_ACK === true;
+      return data.CAPTCHA_PROVIDER === 'turnstile' && Boolean(data.CAPTCHA_SECRET);
     },
     {
       message:
-        'In production, configure CAPTCHA (CAPTCHA_PROVIDER=turnstile + CAPTCHA_SECRET) or set CAPTCHA_DISABLED_ACK=true to explicitly run with CAPTCHA disabled (fail-open on auth routes)',
+        'In production, CAPTCHA_PROVIDER=turnstile and CAPTCHA_SECRET are required on public auth routes',
       path: ['CAPTCHA_PROVIDER'],
     },
   )
@@ -596,12 +586,8 @@ export const envSchemaConditionallyRequiredKeys: ReadonlyArray<{
   },
   {
     key: 'CAPTCHA_SECRET',
-    condition: 'CAPTCHA_PROVIDER=turnstile (schema default is `disabled`)',
-  },
-  {
-    key: 'CAPTCHA_DISABLED_ACK',
     condition:
-      'NODE_ENV=production with CAPTCHA_PROVIDER=disabled (must be true to acknowledge fail-open auth routes)',
+      'CAPTCHA_PROVIDER=turnstile (schema default is `disabled`; required in NODE_ENV=production)',
   },
 ];
 

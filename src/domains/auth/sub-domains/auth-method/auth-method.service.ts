@@ -299,7 +299,7 @@ export class AuthMethodService {
       expiresAt,
     );
 
-    await eventBus.emit({
+    await eventBus.emitStrict({
       type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
       payload: {
         email: user.email,

@@ -2,8 +2,6 @@ import { createHash, randomBytes } from 'node:crypto';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
-import { env } from '@/shared/config/env.config.js';
-import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { MagicLinkSendResult } from '@/domains/auth/auth.types.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
