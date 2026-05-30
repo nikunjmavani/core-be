@@ -59,12 +59,8 @@ describe('WebhookRepository', () => {
     expect(result.has_more).toBe(false);
   });
 
-  it('listEnabledSubscribedToEvent filters by event subscription', async () => {
-    const rows = [
-      { public_id: 'wh_1', is_enabled: true, events: ['subscription.updated'] },
-      { public_id: 'wh_2', is_enabled: true, events: ['user.created'] },
-      { public_id: 'wh_3', is_enabled: false, events: ['subscription.updated'] },
-    ];
+  it('listEnabledSubscribedToEvent returns SQL-filtered enabled subscribers', async () => {
+    const rows = [{ public_id: 'wh_1', is_enabled: true, events: ['subscription.updated'] }];
     mockLimit.mockResolvedValue(rows);
 
     const result = await repository.listEnabledSubscribedToEvent(10, 'subscription.updated');

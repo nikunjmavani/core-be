@@ -23,7 +23,7 @@ export function createAuthLoginHandlers({ authService }: AuthLoginHandlersDepend
         return successResponse(AuthSerializer.mfaRequired(data), getRequestIdentifier(request));
       }
 
-      setSessionCookie(reply, data.session_public_id);
+      setSessionCookie(reply, data.session_public_id, data.session_refresh_secret);
 
       try {
         const payload = await verifyAccessToken(data.access_token);

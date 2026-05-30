@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
@@ -32,7 +31,7 @@ import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js'
  * - **Notes:** the session is created server-side; clients use the session cookie for refresh.
  */
 export type LoginResult =
-  | { access_token: string; session_public_id: string }
+  | { access_token: string; session_public_id: string; session_refresh_secret: string }
   | { mfa_required: true; mfa_session_token: string };
 
 /**
@@ -133,7 +132,13 @@ export class AuthService {
     await this.authSessionService.revokeSessionByAccessToken(token);
   }
 
-  async refreshToken(sessionPublicId: string): Promise<{ access_token: string }> {
+  async refreshToken({
+    sessionPublicId,
+    refreshSecret,
+  }: {
+    sessionPublicId: string;
+    refreshSecret: string;
+  }): Promise<{ access_token: string; refresh_secret: string }> {
     const session = await this.authSessionService.findActiveSessionByPublicId(sessionPublicId);
     if (!session) {
       throw new UnauthorizedError('errors:invalidOrExpiredSession');
@@ -159,9 +164,12 @@ export class AuthService {
       }),
     });
 
-    const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
-    await this.authSessionService.rotateSessionTokenHash(session.public_id, tokenHash);
+    const rotated = await this.authSessionService.refreshSessionCredentials({
+      sessionPublicId,
+      refreshSecret,
+      nextAccessToken: jsonWebToken,
+    });
 
-    return { access_token: jsonWebToken };
+    return { access_token: jsonWebToken, refresh_secret: rotated.refresh_secret };
   }
 }

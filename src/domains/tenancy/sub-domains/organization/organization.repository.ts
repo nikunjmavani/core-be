@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
@@ -272,11 +272,26 @@ export class OrganizationRepository extends BaseRepository {
     return (rows[0] ?? null) as Organization | null;
   }
 
+  async markDeletionStarted(public_id: string): Promise<Organization | null> {
+    const rows = await getRequestDatabase()
+      .update(organizations)
+      .set({ deletion_started_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .where(and(eq(organizations.public_id, public_id), isNull(organizations.deleted_at)))
+      .returning();
+    return (rows[0] ?? null) as Organization | null;
+  }
+
   async softDelete(public_id: string): Promise<Organization | null> {
     const rows = await getRequestDatabase()
       .update(organizations)
       .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
-      .where(and(eq(organizations.public_id, public_id), isNull(organizations.deleted_at)))
+      .where(
+        and(
+          eq(organizations.public_id, public_id),
+          isNull(organizations.deleted_at),
+          isNotNull(organizations.deletion_started_at),
+        ),
+      )
       .returning();
     return (rows[0] ?? null) as Organization | null;
   }

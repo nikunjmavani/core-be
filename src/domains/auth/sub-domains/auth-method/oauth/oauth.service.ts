@@ -115,6 +115,7 @@ export class OAuthService {
     return {
       access_token: session.access_token,
       session_public_id: session.session_public_id,
+      session_refresh_secret: session.session_refresh_secret,
     };
   }
 }

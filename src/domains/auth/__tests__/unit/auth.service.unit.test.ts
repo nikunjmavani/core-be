@@ -61,7 +61,10 @@ describe('AuthService', () => {
   } as unknown as UserService;
 
   const authSessionService = {
-    createSessionForUser: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
+    createSessionForUser: vi.fn().mockResolvedValue({
+      public_id: 'session_public',
+      refresh_secret: 'refresh-secret',
+    }),
     revokeSessionByAccessToken: vi.fn().mockResolvedValue(undefined),
     findActiveSessionByPublicId: vi.fn().mockResolvedValue({
       public_id: 'session_public',
@@ -70,6 +73,7 @@ describe('AuthService', () => {
       revoked_at: null,
     }),
     rotateSessionTokenHash: vi.fn().mockResolvedValue(undefined),
+    refreshSessionCredentials: vi.fn().mockResolvedValue({ refresh_secret: 'new-refresh-secret' }),
   } as unknown as AuthSessionService;
 
   const mfaService = {
@@ -178,8 +182,13 @@ describe('AuthService', () => {
   });
 
   it('refreshToken issues new jwt for valid session', async () => {
-    const result = await service.refreshToken('session_public');
+    const result = await service.refreshToken({
+      sessionPublicId: 'session_public',
+      refreshSecret: 'refresh-secret',
+    });
     expect(result.access_token).toBe('jwt-access-token');
+    expect(result.refresh_secret).toBe('new-refresh-secret');
+    expect(authSessionService.refreshSessionCredentials).toHaveBeenCalled();
   });
 
   it('increments failed attempts without lockout below the maximum threshold', async () => {
@@ -207,7 +216,9 @@ describe('AuthService', () => {
 
   it('refreshToken rejects missing session', async () => {
     vi.mocked(authSessionService.findActiveSessionByPublicId).mockResolvedValue(null);
-    await expect(service.refreshToken('missing')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(
+      service.refreshToken({ sessionPublicId: 'missing', refreshSecret: 'refresh-secret' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('refreshToken rejects expired sessions and inactive users', async () => {
@@ -217,7 +228,9 @@ describe('AuthService', () => {
       expires_at: new Date(Date.now() - 1000),
       revoked_at: null,
     } as never);
-    await expect(service.refreshToken('session_public')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(
+      service.refreshToken({ sessionPublicId: 'session_public', refreshSecret: 'refresh-secret' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
 
     vi.mocked(authSessionService.findActiveSessionByPublicId).mockResolvedValue({
       public_id: 'session_public',
@@ -226,7 +239,9 @@ describe('AuthService', () => {
       revoked_at: null,
     } as never);
     vi.mocked(userService.findById).mockResolvedValue({ ...user, status: 'SUSPENDED' } as never);
-    await expect(service.refreshToken('session_public')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(
+      service.refreshToken({ sessionPublicId: 'session_public', refreshSecret: 'refresh-secret' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('login rehashes password when verifyPassword reports needsRehash', async () => {
@@ -314,7 +329,9 @@ describe('AuthService', () => {
 
   it('refreshToken rejects when user record is missing', async () => {
     vi.mocked(userService.findById).mockResolvedValue(null);
-    await expect(service.refreshToken('session_public')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(
+      service.refreshToken({ sessionPublicId: 'session_public', refreshSecret: 'refresh-secret' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('login resets failed login count after successful authentication', async () => {

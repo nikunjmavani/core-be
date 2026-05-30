@@ -61,6 +61,31 @@ export class AuthSessionRepository {
       .where(eq(sessions.public_id, publicId));
   }
 
+  async rotateSessionCredentials(
+    publicId: string,
+    currentRefreshTokenHash: string,
+    nextTokenHash: string,
+    nextRefreshTokenHash: string,
+  ) {
+    const rows = await getRequestDatabase()
+      .update(sessions)
+      .set({
+        token_hash: nextTokenHash,
+        refresh_token_hash: nextRefreshTokenHash,
+        last_active_at: databaseNowTimestamp,
+      })
+      .where(
+        and(
+          eq(sessions.public_id, publicId),
+          eq(sessions.refresh_token_hash, currentRefreshTokenHash),
+          eq(sessions.is_revoked, false),
+          gt(sessions.expires_at, databaseNowTimestamp),
+        ),
+      )
+      .returning();
+    return rows[0] ?? null;
+  }
+
   async findByTokenHash(tokenHash: string) {
     const rows = await getRequestDatabase()
       .select()
@@ -135,6 +160,7 @@ export class AuthSessionRepository {
           public_id: publicId,
           user_id: data.user_id,
           token_hash: data.token_hash,
+          refresh_token_hash: data.refresh_token_hash,
           ip_address: data.ip_address,
           user_agent: data.user_agent,
           expires_at: data.expires_at,

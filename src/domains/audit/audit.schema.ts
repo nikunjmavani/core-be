@@ -68,6 +68,16 @@ export const logs = auditSchema
           )
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
       }),
+      pgPolicy('audit_logs_user_export_select', {
+        as: 'permissive',
+        for: 'select',
+        to: 'public',
+        using: sql`${table.actor_user_id} = (
+            SELECT id FROM auth.users
+            WHERE public_id = current_setting('app.current_user_id', true)
+              AND deleted_at IS NULL
+          )`,
+      }),
     ],
   )
   .enableRLS();

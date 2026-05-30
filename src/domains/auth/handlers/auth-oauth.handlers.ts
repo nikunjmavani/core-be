@@ -63,8 +63,13 @@ export function createAuthOauthHandlers({ oauthService }: AuthOauthHandlersDepen
         return successResponse(AuthSerializer.mfaRequired(data), getRequestIdentifier(request));
       }
 
-      if ('session_public_id' in data && typeof data.session_public_id === 'string') {
-        setSessionCookie(reply, data.session_public_id);
+      if (
+        'session_public_id' in data &&
+        typeof data.session_public_id === 'string' &&
+        'session_refresh_secret' in data &&
+        typeof data.session_refresh_secret === 'string'
+      ) {
+        setSessionCookie(reply, data.session_public_id, data.session_refresh_secret);
       }
 
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));

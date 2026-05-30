@@ -101,13 +101,24 @@ export class UserDataExportService {
       }),
     );
 
-    eventBus.onCommit(() =>
-      enqueueUserDataExport({
-        exportPublicId,
-        userPublicId,
-        userInternalId: user.id,
-      }),
-    );
+    eventBus.onCommit(async () => {
+      try {
+        await enqueueUserDataExport({
+          exportPublicId,
+          userPublicId,
+          userInternalId: user.id,
+        });
+      } catch (error) {
+        logger.error({ error, userPublicId, exportPublicId }, 'user-data-export.enqueue.failed');
+        await withUserDatabaseContext(userPublicId, () =>
+          this.exportRepository.updateStatus(exportPublicId, user.id, {
+            status: USER_DATA_EXPORT_STATUSES.FAILED,
+            failed_at: new Date(),
+            error_code: 'enqueue_failed',
+          }),
+        );
+      }
+    });
 
     logger.info({ userPublicId, exportPublicId }, 'user-data-export.requested');
 

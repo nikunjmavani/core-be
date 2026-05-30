@@ -5,7 +5,12 @@ import { UnauthorizedError } from '@/shared/errors/index.js';
 import { requireAllowedSourceOriginForCookieSessionRoute } from '@/shared/middlewares/cookie-session-origin.pre-handler.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
-import { clearSessionCookie, SESSION_COOKIE_NAME, setCsrfCookie } from '../auth.http.util.js';
+import {
+  clearSessionCookie,
+  parseSessionCookieValue,
+  SESSION_COOKIE_NAME,
+  setSessionCookie,
+} from '../auth.http.util.js';
 import { AuthSerializer } from '../auth.serializer.js';
 import type { AuthContainer } from '../auth.container.js';
 
@@ -69,12 +74,16 @@ export function createAuthSessionHandlers({
     refreshToken: async (request: FastifyRequest, reply: FastifyReply) => {
       requireAllowedSourceOriginForCookieSessionRoute(request);
       // eslint-disable-next-line security/detect-object-injection -- SESSION_COOKIE_NAME is a constant.
-      const sessionPublicId = request.cookies?.[SESSION_COOKIE_NAME];
-      if (!sessionPublicId) {
+      const rawSessionCookie = request.cookies?.[SESSION_COOKIE_NAME];
+      const parsedSession = rawSessionCookie ? parseSessionCookieValue(rawSessionCookie) : null;
+      if (!parsedSession) {
         throw new UnauthorizedError('errors:missingSessionCookie');
       }
-      const data = await authService.refreshToken(sessionPublicId);
-      setCsrfCookie(reply);
+      const data = await authService.refreshToken({
+        sessionPublicId: parsedSession.sessionPublicId,
+        refreshSecret: parsedSession.refreshSecret,
+      });
+      setSessionCookie(reply, parsedSession.sessionPublicId, data.refresh_secret);
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
     },
     revokeAllSessions: async (request: FastifyRequest, reply: FastifyReply) => {

@@ -78,4 +78,39 @@ describe('webhook-url.util', () => {
       messageKey: 'errors:webhookUrlDnsFailed',
     });
   });
+
+  it('rejects IPv4-mapped IPv6 loopback literal without DNS lookup', async () => {
+    await expect(validateWebhookUrl('http://[::ffff:127.0.0.1]/hook')).rejects.toThrow(
+      ValidationError,
+    );
+    expect(mockedLookup).not.toHaveBeenCalled();
+  });
+
+  it('rejects IPv4-mapped IPv6 loopback in hex form without DNS lookup', async () => {
+    await expect(validateWebhookUrl('http://[::ffff:7f00:1]/hook')).rejects.toThrow(
+      ValidationError,
+    );
+    expect(mockedLookup).not.toHaveBeenCalled();
+  });
+
+  it('rejects IPv4-mapped private IPv4 literal without DNS lookup', async () => {
+    await expect(validateWebhookUrl('http://[::ffff:10.0.0.1]/hook')).rejects.toThrow(
+      ValidationError,
+    );
+    expect(mockedLookup).not.toHaveBeenCalled();
+  });
+
+  it('rejects IPv4-mapped link-local metadata literal without DNS lookup', async () => {
+    await expect(validateWebhookUrl('http://[::ffff:169.254.169.254]/hook')).rejects.toThrow(
+      ValidationError,
+    );
+    expect(mockedLookup).not.toHaveBeenCalled();
+  });
+
+  it('accepts public IPv6 literal without DNS lookup', async () => {
+    await expect(
+      validateWebhookUrl('https://[2001:4860:4860::8888]/hook'),
+    ).resolves.toBeUndefined();
+    expect(mockedLookup).not.toHaveBeenCalled();
+  });
 });

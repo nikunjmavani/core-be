@@ -47,6 +47,7 @@ describe('OrganizationService', () => {
     create: vi.fn().mockResolvedValue(organizationRow),
     update: vi.fn().mockResolvedValue(organizationRow),
     softDelete: vi.fn().mockResolvedValue(organizationRow),
+    markDeletionStarted: vi.fn().mockResolvedValue(organizationRow),
     resolveUserIdByPublicId: vi.fn().mockResolvedValue(10),
     updateOwner: vi.fn().mockResolvedValue(undefined),
     updateStripeCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -81,6 +82,7 @@ describe('OrganizationService', () => {
     vi.mocked(repository.resolveUserIdByPublicId).mockResolvedValue(10);
     vi.mocked(repository.update).mockResolvedValue(organizationRow as never);
     vi.mocked(repository.softDelete).mockResolvedValue(organizationRow as never);
+    vi.mocked(repository.markDeletionStarted).mockResolvedValue(organizationRow as never);
     vi.mocked(repository.userCanAccessOrganization).mockResolvedValue(true);
   });
 

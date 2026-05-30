@@ -130,11 +130,26 @@ export class UserService {
     if (!user) throw new NotFoundError('User');
     const offboarding = this.offboardingDependencies;
     if (!offboarding) {
+      const marked = await withUserDatabaseContext(public_id, () =>
+        this.repository.markDeletionStarted(public_id),
+      );
+      if (!marked) throw new NotFoundError('User');
       const deleted = await withUserDatabaseContext(public_id, () =>
         this.repository.softDelete(public_id),
       );
       if (!deleted) throw new NotFoundError('User');
       return;
+    }
+    const marked = await withUserDatabaseContext(public_id, () =>
+      this.repository.markDeletionStarted(public_id),
+    );
+    if (!marked) {
+      const current = await withUserDatabaseContext(public_id, () =>
+        this.repository.findByPublicId(public_id),
+      );
+      if (!current?.deletion_started_at || current.deleted_at) {
+        throw new NotFoundError('User');
+      }
     }
     await this.clearAvatarStorage(public_id, user.avatar_url);
     await offboarding.authSessionService.revokeAllSessions(public_id);

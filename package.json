@@ -217,6 +217,7 @@
     "i18next-fs-backend": "^2.6.6",
     "i18next-http-middleware": "^3.9.7",
     "ioredis": "5.10.1",
+    "ipaddr.js": "^2.4.0",
     "isomorphic-dompurify": "^3.14.0",
     "jose": "^6.2.3",
     "opossum": "^9.0.0",
@@ -233,6 +234,7 @@
   },
   "devDependencies": {
     "@aws-sdk/client-iam": "^3.1053.0",
+    "@biomejs/biome": "^2.4.15",
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
     "@faker-js/faker": "^10.4.0",
@@ -241,7 +243,6 @@
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@testcontainers/postgresql": "^12.0.0",
-    "@biomejs/biome": "^2.4.15",
     "@types/node": "^25.9.1",
     "@types/opossum": "^8.1.9",
     "@vitest/coverage-v8": "^4.1.7",

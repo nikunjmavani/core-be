@@ -21,7 +21,7 @@ export interface FirstFactorAuthUser {
 
 /** Result of a successful first-factor authentication step (password, magic link, OAuth, WebAuthn). */
 export type FirstFactorAuthResult =
-  | { access_token: string; session_public_id: string }
+  | { access_token: string; session_public_id: string; session_refresh_secret: string }
   | { mfa_required: true; mfa_session_token: string };
 
 /**
@@ -71,5 +71,9 @@ export async function completeFirstFactorAuth(options: {
 
   await recordRecentStepUp(redisConnection, options.user.public_id);
 
-  return { access_token: jsonWebToken, session_public_id: session.public_id };
+  return {
+    access_token: jsonWebToken,
+    session_public_id: session.public_id,
+    session_refresh_secret: session.refresh_secret,
+  };
 }

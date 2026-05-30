@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
@@ -6,7 +6,6 @@ import { webhooks } from '@/domains/notify/sub-domains/webhook/webhook.schema.js
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { WebhookCreateData, WebhookUpdateData } from './webhook.types.js';
-import { webhookSubscribesToEvent } from './webhook-subscription.util.js';
 import {
   buildAscendingCreatedAtIdCursorCondition,
   createOpaqueCursorFromRow,
@@ -78,12 +77,52 @@ export class WebhookRepository {
   async listEnabledSubscribedToEvent(
     organization_id: number,
     event_type: string,
-    limit = DEFAULT_REPOSITORY_LIST_LIMIT,
-  ) {
-    const { items } = await this.listByOrganization(organization_id, { limit });
-    return items.filter(
-      (row) => row.is_enabled && webhookSubscribesToEvent(row.events, event_type),
-    );
+    page_size = DEFAULT_REPOSITORY_LIST_LIMIT,
+  ): Promise<WebhookRow[]> {
+    const subscribedEventFilter = sql`${webhooks.events} @> ${JSON.stringify([event_type])}::jsonb`;
+    const filterConditions: SQL[] = [
+      eq(webhooks.organization_id, organization_id),
+      eq(webhooks.is_enabled, true),
+      subscribedEventFilter,
+      isNull(webhooks.deleted_at)!,
+    ];
+    const allRows: WebhookRow[] = [];
+    let after: string | undefined;
+
+    while (true) {
+      const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
+        webhooks.created_at,
+        webhooks.id,
+        parseListCursor(after),
+      );
+      const where =
+        cursorCondition !== undefined
+          ? and(...filterConditions, cursorCondition)
+          : and(...filterConditions);
+
+      const fetchedRows = await getRequestDatabase()
+        .select()
+        .from(webhooks)
+        .where(where)
+        .orderBy(asc(webhooks.created_at), asc(webhooks.id))
+        .limit(page_size + 1);
+
+      const hasMore = fetchedRows.length > page_size;
+      const pageItems = hasMore ? fetchedRows.slice(0, page_size) : fetchedRows;
+      allRows.push(...pageItems);
+
+      if (!hasMore) {
+        break;
+      }
+
+      const lastItem = pageItems.at(-1);
+      if (lastItem === undefined) {
+        break;
+      }
+      after = createOpaqueCursorFromRow(lastItem);
+    }
+
+    return allRows;
   }
 
   async findByPublicId(public_id: string, organization_id: number) {

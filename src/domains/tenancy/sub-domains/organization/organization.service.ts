@@ -349,6 +349,10 @@ export class OrganizationService {
     const organization = await withOrganizationDatabaseContext(public_id, async () => {
       const found = await this.repository.findByPublicId(public_id);
       if (!found) throw new NotFoundError('Organization');
+      const marked = await this.repository.markDeletionStarted(public_id);
+      if (!(marked || found.deletion_started_at)) {
+        throw new NotFoundError('Organization');
+      }
       return found;
     });
     // External I/O (S3) and the upload-service tombstone run outside the DB context.

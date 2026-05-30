@@ -41,6 +41,7 @@ export const users = authSchema
       status: varchar('status', { length: 20 }).notNull().default('ACTIVE'),
       last_active_at: timestamp('last_active_at', { withTimezone: true }),
       deleted_at: timestamp('deleted_at', { withTimezone: true }),
+      deletion_started_at: timestamp('deletion_started_at', { withTimezone: true }),
       created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
       updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     },

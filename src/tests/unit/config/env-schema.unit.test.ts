@@ -405,6 +405,40 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('rejects production boot when legacy RLS pinning is enabled without break-glass ack', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      DATABASE_RLS_SCOPED_CONTEXTS: 'false',
+      DATABASE_RLS_LEGACY_PINNING_ACK: 'false',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(
+        parsed.error.issues.some((issue) => issue.path[0] === 'DATABASE_RLS_SCOPED_CONTEXTS'),
+      ).toBe(true);
+    }
+  });
+
+  it('allows production boot with legacy RLS pinning when break-glass ack is set', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      DATABASE_RLS_SCOPED_CONTEXTS: 'false',
+      DATABASE_RLS_LEGACY_PINNING_ACK: 'true',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('defaults DATABASE_RLS_SCOPED_CONTEXTS to true', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'test',
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.DATABASE_RLS_SCOPED_CONTEXTS).toBe(true);
+    }
+  });
+
   it('rejects FRONTEND_URL that is not a valid http(s) URL', () => {
     const parsed = envSchema.safeParse({
       DATABASE_URL: DATABASE_URL_FIXTURE,

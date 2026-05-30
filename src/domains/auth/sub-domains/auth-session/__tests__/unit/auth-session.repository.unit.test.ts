@@ -102,6 +102,7 @@ describe('AuthSessionRepository', () => {
     const result = await repository.create({
       user_id: 10,
       token_hash: 'hash',
+      refresh_token_hash: 'refresh-hash',
       ip_address: '127.0.0.1',
       user_agent: 'vitest',
       expires_at: new Date(Date.now() + 86_400_000),

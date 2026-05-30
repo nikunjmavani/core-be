@@ -92,7 +92,7 @@ Table audit.logs {
 }
 
 Note audit.logs {
-  'RLS: enabled\nPolicies: audit_logs_tenant_isolation\nFORCE ROW LEVEL SECURITY'
+  'RLS: enabled\nPolicies: audit_logs_tenant_isolation, audit_logs_user_export_select\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.auth_methods {
@@ -176,6 +176,7 @@ Table auth.sessions {
   last_active_at timestamptz [not null]
   organization_id bigint
   public_id varchar(21) [not null, unique]
+  refresh_token_hash varchar(64)
   token_hash varchar(64) [not null, unique]
   user_agent text
   user_id bigint [not null]
@@ -239,6 +240,7 @@ Table auth.users {
   avatar_url varchar(512)
   created_at timestamptz [not null]
   deleted_at timestamptz
+  deletion_started_at timestamptz
   email varchar(255) [not null]
   email_hash varchar(64) [not null]
   failed_login_count int [not null]
@@ -515,6 +517,7 @@ Table tenancy.organizations {
   created_at timestamptz [not null]
   created_by_user_id bigint
   deleted_at timestamptz
+  deletion_started_at timestamptz
   id bigint [pk, increment, not null]
   logo_url varchar(512)
   name varchar(255) [not null]

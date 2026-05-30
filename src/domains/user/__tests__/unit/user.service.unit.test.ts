@@ -56,6 +56,7 @@ describe('UserService', () => {
     updateMfaEnabled: vi.fn().mockResolvedValue(userRow),
     insertOAuthUser: vi.fn().mockResolvedValue(userRow),
     softDelete: vi.fn().mockResolvedValue(userRow),
+    markDeletionStarted: vi.fn().mockResolvedValue(userRow),
     findMany: vi.fn().mockResolvedValue({
       items: [userRow],
       total: null,
@@ -75,6 +76,7 @@ describe('UserService', () => {
     vi.clearAllMocks();
     vi.mocked(repository.findByPublicId).mockResolvedValue(userRow as never);
     vi.mocked(repository.softDelete).mockResolvedValue(userRow as never);
+    vi.mocked(repository.markDeletionStarted).mockResolvedValue(userRow as never);
     vi.mocked(repository.update).mockResolvedValue(userRow as never);
     service.wireOffboardingServices({
       authSessionService: { revokeAllSessions: vi.fn().mockResolvedValue(undefined) } as never,

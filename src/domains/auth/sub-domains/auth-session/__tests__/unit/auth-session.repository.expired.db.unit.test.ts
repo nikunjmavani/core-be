@@ -44,6 +44,7 @@ describe('AuthSessionRepository — expiry, revocation, and idempotency', () => 
     const session = await repository.create({
       user_id: user.id,
       token_hash: 'revoked-hash',
+      refresh_token_hash: 'refresh-hash',
       ip_address: '127.0.0.1',
       user_agent: 'vitest',
       expires_at: expiresAt,
@@ -62,6 +63,7 @@ describe('AuthSessionRepository — expiry, revocation, and idempotency', () => 
     await repository.create({
       user_id: user.id,
       token_hash: 'active-hash',
+      refresh_token_hash: 'refresh-hash',
       ip_address: '127.0.0.1',
       user_agent: 'vitest',
       expires_at: expiresAt,
@@ -78,6 +80,7 @@ describe('AuthSessionRepository — expiry, revocation, and idempotency', () => 
     await repository.create({
       user_id: user.id,
       token_hash: 'hash-to-revoke',
+      refresh_token_hash: 'refresh-hash',
       ip_address: '127.0.0.1',
       user_agent: 'vitest',
       expires_at: expiresAt,
@@ -94,6 +97,7 @@ describe('AuthSessionRepository — expiry, revocation, and idempotency', () => 
     await repository.create({
       user_id: user.id,
       token_hash: 'hash-double',
+      refresh_token_hash: 'refresh-hash',
       ip_address: '127.0.0.1',
       user_agent: 'vitest',
       expires_at: expiresAt,
@@ -119,6 +123,7 @@ describe('AuthSessionRepository — expiry, revocation, and idempotency', () => 
     await repository.create({
       user_id: user.id,
       token_hash: 'one',
+      refresh_token_hash: 'refresh-hash',
       ip_address: '127.0.0.1',
       user_agent: 'vitest',
       expires_at: expiresAt,
@@ -126,6 +131,7 @@ describe('AuthSessionRepository — expiry, revocation, and idempotency', () => 
     await repository.create({
       user_id: user.id,
       token_hash: 'two',
+      refresh_token_hash: 'refresh-hash',
       ip_address: '127.0.0.1',
       user_agent: 'vitest',
       expires_at: expiresAt,
