@@ -121,11 +121,9 @@ export async function runAuditExportJob(databaseHandle: WorkerDatabaseHandle): P
       continue;
     }
 
-    const partId = randomUUID();
-    const objectKey = buildExportKey(organizationId, dateLabel, partId);
     const batchSize = env.AUDIT_EXPORT_BATCH_SIZE;
     let afterId = 0;
-    const lines: string[] = [];
+    const manifestObjects: AuditExportManifest['objects'] = [];
 
     while (true) {
       const rows = await databaseHandle
@@ -154,48 +152,48 @@ export async function runAuditExportJob(databaseHandle: WorkerDatabaseHandle): P
 
       if (rows.length === 0) break;
 
-      for (const row of rows) {
-        lines.push(`${JSON.stringify(row)}\n`);
-        afterId = row.id;
-      }
+      const lines = rows.map((row) => `${JSON.stringify(row)}\n`);
+      const body = gzipSync(Buffer.from(lines.join(''), 'utf8'));
+      const sha256 = createHash('sha256').update(body).digest('hex');
+      const batchPartId = randomUUID();
+      const objectKey = buildExportKey(organizationId, dateLabel, batchPartId);
+
+      await putObjectBuffer({
+        key: objectKey,
+        body,
+        contentType: 'application/gzip',
+        metadata: {
+          format: 'ndjson',
+          schema_version: AUDIT_EXPORT_SCHEMA_VERSION,
+          export_date: dateLabel,
+          row_count: String(rows.length),
+          sha256,
+        },
+      });
+
+      manifestObjects.push({
+        key: objectKey,
+        row_count: rows.length,
+        sha256,
+        format: 'ndjson',
+        content_type: 'application/gzip',
+      });
+
+      afterId = rows.at(-1)?.id ?? afterId;
 
       if (rows.length < batchSize) break;
     }
 
-    if (lines.length === 0) {
+    if (manifestObjects.length === 0) {
       skipped += 1;
       continue;
     }
-
-    const body = gzipSync(Buffer.from(lines.join(''), 'utf8'));
-    const sha256 = createHash('sha256').update(body).digest('hex');
-
-    await putObjectBuffer({
-      key: objectKey,
-      body,
-      contentType: 'application/gzip',
-      metadata: {
-        format: 'ndjson',
-        schema_version: AUDIT_EXPORT_SCHEMA_VERSION,
-        export_date: dateLabel,
-        row_count: String(lines.length),
-        sha256,
-      },
-    });
 
     const manifest: AuditExportManifest = {
       schema_version: AUDIT_EXPORT_SCHEMA_VERSION,
       export_date: dateLabel,
       organization_id: organizationId,
-      objects: [
-        {
-          key: objectKey,
-          row_count: lines.length,
-          sha256,
-          format: 'ndjson',
-          content_type: 'application/gzip',
-        },
-      ],
+      objects: manifestObjects,
     };
 
     await putObjectBuffer({
@@ -205,8 +203,9 @@ export async function runAuditExportJob(databaseHandle: WorkerDatabaseHandle): P
     });
 
     exportedOrganizations += 1;
+    const rowCount = manifestObjects.reduce((total, object) => total + object.row_count, 0);
     logger.info(
-      { organizationId, objectKey, manifestKey, rowCount: lines.length, sha256 },
+      { organizationId, manifestKey, partCount: manifestObjects.length, rowCount },
       'audit-export.organization.completed',
     );
   }
