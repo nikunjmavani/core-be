@@ -409,6 +409,7 @@ describe('env-schema', () => {
     const parsed = envSchema.safeParse({
       ...productionRequiredBase,
       DATABASE_RLS_SCOPED_CONTEXTS: 'false',
+      DATABASE_RLS_LEGACY_PINNING_ACK: 'false',
     });
     expect(parsed.success).toBe(false);
     if (!parsed.success) {

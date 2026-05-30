@@ -270,12 +270,12 @@ const envSchemaBase = z.object({
    * environments inherit the post-migration mode. See
    * `docs/deployment/runbooks/resource-limits.md` for the full rollout sequence.
    */
-  DATABASE_RLS_SCOPED_CONTEXTS: z.coerce.boolean().default(true),
+  DATABASE_RLS_SCOPED_CONTEXTS: booleanString('true'),
   /**
    * Break-glass acknowledgement to run legacy request-pinned RLS transactions in production
    * (`DATABASE_RLS_SCOPED_CONTEXTS=false`). Must be explicitly `true`; only for emergency rollback.
    */
-  DATABASE_RLS_LEGACY_PINNING_ACK: z.coerce.boolean().default(false),
+  DATABASE_RLS_LEGACY_PINNING_ACK: booleanString('false'),
   /** Per-connection idle_in_transaction_session_timeout (ms). Caps stuck transactions; 0 disables. Default: 30000. */
   DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
   /** Warn when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.8). */

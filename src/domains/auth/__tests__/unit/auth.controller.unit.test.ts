@@ -74,9 +74,12 @@ describe('createAuthController', () => {
     login: vi.fn().mockResolvedValue({
       access_token: 'token',
       session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
     }),
     logout: vi.fn().mockResolvedValue(undefined),
-    refreshToken: vi.fn().mockResolvedValue({ access_token: 'new-token' }),
+    refreshToken: vi
+      .fn()
+      .mockResolvedValue({ access_token: 'new-token', refresh_secret: 'new-refresh-secret' }),
   };
 
   const authMethodService = {
@@ -99,6 +102,7 @@ describe('createAuthController', () => {
     verify: vi.fn().mockResolvedValue({
       access_token: 'token',
       session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
     }),
   };
 
@@ -108,15 +112,18 @@ describe('createAuthController', () => {
     handleCallback: vi.fn().mockResolvedValue({
       access_token: 'token',
       session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
     }),
   };
 
   const mfaService = {
     verify: vi.fn().mockResolvedValue({ verified: true }),
     enroll: vi.fn().mockResolvedValue({ secret: 'secret', provisioning_uri: 'uri', method_id: 1 }),
-    verifyLoginMfa: vi
-      .fn()
-      .mockResolvedValue({ access_token: 'token', session_public_id: 'session' }),
+    verifyLoginMfa: vi.fn().mockResolvedValue({
+      access_token: 'token',
+      session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
+    }),
     listMfaMethods: vi.fn().mockResolvedValue([]),
     deleteMfa: vi.fn().mockResolvedValue(undefined),
   };
@@ -231,7 +238,7 @@ describe('createAuthController', () => {
     });
     expect(loginReply.setCookie).toHaveBeenCalledWith(
       'session_id',
-      'session',
+      'session.refresh-secret',
       expect.objectContaining({ httpOnly: true }),
     );
   });
@@ -269,16 +276,19 @@ describe('createAuthController', () => {
   it('refreshToken and revokeAllSessions use session cookie', async () => {
     const refreshReply = mockReply();
     await controller.refreshToken(
-      mockRequest({ cookies: { session_id: 'session' } }),
+      mockRequest({ cookies: { session_id: 'session.refresh-secret' } }),
       refreshReply,
     );
     const revokeAllReply = mockReply();
     await controller.revokeAllSessions(mockRequest(), revokeAllReply);
-    expect(authService.refreshToken).toHaveBeenCalledWith('session');
+    expect(authService.refreshToken).toHaveBeenCalledWith({
+      sessionPublicId: 'session',
+      refreshSecret: 'refresh-secret',
+    });
     expect(refreshReply.setCookie).toHaveBeenCalledWith(
-      'csrf_token',
-      expect.any(String),
-      expect.objectContaining({ httpOnly: false }),
+      'session_id',
+      'session.new-refresh-secret',
+      expect.objectContaining({ httpOnly: true }),
     );
     expect(revokeAllReply.clearCookie).toHaveBeenCalled();
   });
