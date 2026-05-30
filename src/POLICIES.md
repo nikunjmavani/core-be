@@ -148,7 +148,7 @@ The canonical exports live under [src/shared/constants/](src/shared/constants/) 
 
 - **Value**: 30 minutes
 - **Source**: [src/shared/constants/security.constants.ts](src/shared/constants/security.constants.ts)
-- **Rationale**: Lockout duration after `MAX_FAILED_LOGIN_ATTEMPTS` exceeded. Long enough to deter password-guess attacks, short enough that legitimate users can retry within a single support call.
+- **Rationale**: Lockout duration after `MAX_FAILED_LOGIN_ATTEMPTS` exceeded. Long enough to deter password-guess attacks, short enough that legitimate users can retry within a single support call. The lock is evaluated *after* password verification, so a correct credential always bypasses it and clears the counter — the lock only rejects further wrong attempts, so it cannot be weaponized to deny the legitimate owner (no victim-account DoS). Online brute force is independently bounded by the per-IP + per-email rate limits and CAPTCHA on `/login`.
 - **Consequences of change**:
   - Decreasing → less deterrent against credential-stuffing.
   - Increasing → more support pressure on legitimate-user lockouts.

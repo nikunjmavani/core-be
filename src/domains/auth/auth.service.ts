@@ -39,9 +39,11 @@ export type LoginResult =
  *
  * @remarks
  * - **Algorithm:** lookup user by email, verify password (argon2 with optional rehash),
- *   enforce account-lockout window, then either issue a JWT + persisted session or
- *   return an `mfa_required` token when MFA is enabled on the user or required by org
- *   policy via {@link OrganizationSettingsService.userHasOrganizationRequiringMfa}.
+ *   then either issue a JWT + persisted session or return an `mfa_required` token when MFA
+ *   is enabled on the user or required by org policy via
+ *   {@link OrganizationSettingsService.userHasOrganizationRequiringMfa}. The account-lockout
+ *   window is checked *after* password verification so a correct credential always bypasses
+ *   it — the lock only rejects further failed attempts, preventing a victim-account DoS.
  * - **Failure modes:** disposable-email check throws `ValidationError`; bad password,
  *   missing user, locked account, expired session, inactive user all throw
  *   `UnauthorizedError` with i18n keys (`errors:invalidEmailOrPassword`,
@@ -77,9 +79,14 @@ export class AuthService {
       throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
-    if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
-      throw new UnauthorizedError('errors:accountLocked');
-    }
+    // Lockout is verified AFTER the password so that a correct credential always bypasses it.
+    // Keying the hard lockout purely on the account makes it a victim-DoS vector: anyone who
+    // knows the email could submit wrong passwords to lock the real owner out. Online brute
+    // force is already bounded by the per-IP + per-email rate limits and CAPTCHA on /login, so
+    // the lockout's job is narrowed to throttling *failed* attempts, never denying the owner.
+    const isLockedOut = Boolean(
+      user.account_locked_until && new Date(user.account_locked_until) > new Date(),
+    );
 
     const { valid: isValid, needsRehash } = await verifyPassword(
       parsed.password,
@@ -94,14 +101,21 @@ export class AuthService {
           : null;
 
       await this.userService.updateLoginAttempt(user.public_id, failedCount, lockUntil);
-      throw new UnauthorizedError('errors:invalidEmailOrPassword');
+      // Surface accountLocked only when the credential was ALSO wrong (a correct password
+      // would have bypassed the lock above), so the lock status is never an oracle for a
+      // valid email and the lockout cannot be weaponized against the legitimate user.
+      throw new UnauthorizedError(
+        isLockedOut ? 'errors:accountLocked' : 'errors:invalidEmailOrPassword',
+      );
     }
 
     // First factor verified — refuse to issue (or escalate to MFA for) a session
     // for a suspended/locked account before any token is minted.
     assertUserAccountActive(user.status);
 
-    if (user.failed_login_count > 0) {
+    // Correct password clears the failure counter and lifts any active lock so the owner is
+    // never held out by attacker-driven failed attempts.
+    if ((user.failed_login_count ?? 0) > 0 || isLockedOut) {
       await this.userService.updateLoginAttempt(user.public_id, 0, null);
     }
 

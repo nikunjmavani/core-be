@@ -154,14 +154,31 @@ describe('AuthService', () => {
     expect(verifyPassword).toHaveBeenCalledWith('WrongPassword1!', DUMMY_ARGON2_HASH);
   });
 
-  it('login rejects locked account', async () => {
+  it('login rejects a locked account only when the password is also wrong', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue({
       ...user,
       account_locked_until: new Date(Date.now() + 60_000),
     } as never);
+    const { verifyPassword } = await import('@/shared/utils/security/password.util.js');
+    vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
     await expect(
       service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('login lets a correct password bypass an active lockout (no victim-account DoS)', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue({
+      ...user,
+      failed_login_count: 10,
+      account_locked_until: new Date(Date.now() + 60_000),
+    } as never);
+    const result = await service.login(
+      { email: user.email, password: 'ValidPassword12!' },
+      '127.0.0.1',
+    );
+    expect('access_token' in result && result.access_token).toBe('jwt-access-token');
+    // The successful login lifts the lock and clears the failure counter for the owner.
+    expect(userService.updateLoginAttempt).toHaveBeenCalledWith(user.public_id, 0, null);
   });
 
   it('allows login when account lock has expired', async () => {
