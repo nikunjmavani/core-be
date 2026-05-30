@@ -59,6 +59,15 @@ export interface UserDataExport {
     resource_type: string;
     created_at: string;
   }[];
+  /**
+   * Disclosure of any per-category row caps hit while building this export. When
+   * `truncated_categories` is non-empty the listed sections contain only the most
+   * recent `row_cap` rows, so the data subject knows the export is not exhaustive.
+   */
+  truncation: {
+    row_cap: number;
+    truncated_categories: string[];
+  };
   exported_at: string;
 }
 
