@@ -264,6 +264,68 @@ describe('UploadService', () => {
     expect(repository.markStatus).toHaveBeenCalledWith(uploadPublicId, user.id, 'FAILED');
   });
 
+  it('confirmUpload sanitizes a stored SVG in place before marking UPLOADED', async () => {
+    const svgRow = {
+      ...uploadRow,
+      file_name: 'logo.svg',
+      file_key: 'avatars/user_public/key.svg',
+      mime_type: 'image/svg+xml',
+      file_size: 80,
+      status: 'PENDING',
+    };
+    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue(svgRow as never);
+    vi.mocked(repository.markStatus).mockResolvedValue({ ...svgRow, status: 'UPLOADED' } as never);
+    vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
+      contentType: 'image/svg+xml',
+      contentLength: 80,
+    });
+    const hostileSvg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script><circle r="5"/></svg>',
+      'utf8',
+    );
+    vi.mocked(objectStorage.getObject).mockResolvedValueOnce({
+      body: hostileSvg,
+      contentType: 'image/svg+xml',
+    });
+
+    const result = await service.confirmUpload(uploadPublicId, userPublicId);
+
+    expect(objectStorage.getObject).toHaveBeenCalledWith(svgRow.file_key);
+    expect(objectStorage.putObject).toHaveBeenCalledTimes(1);
+    const putArgs = vi.mocked(objectStorage.putObject).mock.calls[0]?.[0];
+    expect(putArgs?.key).toBe(svgRow.file_key);
+    expect(putArgs?.contentType).toBe('image/svg+xml');
+    const rewritten = (putArgs?.body as Buffer).toString('utf8');
+    expect(rewritten).not.toMatch(/<script/i);
+    expect(rewritten).not.toMatch(/\bon\w+\s*=/i);
+    expect(result.status).toBe('UPLOADED');
+  });
+
+  it('confirmUpload marks FAILED when an SVG sanitizes to empty content (hostile/zero-byte)', async () => {
+    const svgRow = {
+      ...uploadRow,
+      file_key: 'avatars/user_public/empty.svg',
+      mime_type: 'image/svg+xml',
+      file_size: 12,
+      status: 'PENDING',
+    };
+    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue(svgRow as never);
+    vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
+      contentType: 'image/svg+xml',
+      contentLength: 12,
+    });
+    vi.mocked(objectStorage.getObject).mockResolvedValueOnce({
+      body: Buffer.from('<script>alert(1)</script>', 'utf8'),
+      contentType: 'image/svg+xml',
+    });
+
+    await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(repository.markStatus).toHaveBeenCalledWith(uploadPublicId, user.id, 'FAILED');
+    expect(objectStorage.putObject).not.toHaveBeenCalled();
+  });
+
   it('confirmUpload is idempotent for already-UPLOADED rows', async () => {
     vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
       ...uploadRow,

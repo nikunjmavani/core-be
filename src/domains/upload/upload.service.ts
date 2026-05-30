@@ -24,6 +24,7 @@ import {
   buildUserAvatarKeyPrefix,
 } from './upload.constants.js';
 import { getCanonicalExtensionForContentType } from './upload-content-type.util.js';
+import { isSvgContentType, sanitizeSvgBuffer } from './upload-svg.util.js';
 import { UPLOAD_PERMISSIONS } from './upload.permissions.js';
 import type { CreateUploadInput, UploadCreateOutput, UploadDetailOutput } from './upload.types.js';
 import type { UploadRepository, UploadRow } from './upload.repository.js';
@@ -315,8 +316,10 @@ export class UploadService {
   /**
    * Server-side finalization: HEAD the uploaded object and compare its content type/length
    * against the values declared at create time. On success the row moves PENDING → UPLOADED;
-   * on mismatch/missing it moves to FAILED and a validation error is surfaced. Consumers must
-   * require UPLOADED before attaching the object. Idempotent for already-UPLOADED rows.
+   * on mismatch/missing it moves to FAILED and a validation error is surfaced. SVG objects are
+   * sanitized in place (scripts/event handlers stripped) before being marked UPLOADED so the
+   * served bytes can never execute as stored XSS. Consumers must require UPLOADED before
+   * attaching the object. Idempotent for already-UPLOADED rows.
    */
   async confirmUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
     const validatedPublicId = validateUploadPublicIdParam(public_id);
@@ -349,6 +352,13 @@ export class UploadService {
       const typeMatches =
         metadata.contentType === undefined || metadata.contentType === row.mime_type;
       verified = objectExists && lengthMatches && typeMatches;
+      // SVGs are active content: an uploaded <svg onload=…> served from S3/CDN with an
+      // image/svg+xml type executes as stored XSS. Neutralise the bytes in place before the
+      // object is ever marked UPLOADED (and therefore servable). Hostile/empty SVGs throw and
+      // fail verification below.
+      if (verified && isSvgContentType(row.mime_type)) {
+        await this.sanitizeStoredSvg(row.file_key, row.mime_type);
+      }
     } catch (error) {
       logger.warn(
         { publicId: validatedPublicId, fileKey: row.file_key, error },
@@ -373,6 +383,24 @@ export class UploadService {
     }
 
     return this.toUploadDetail(updated, userPublicId);
+  }
+
+  /**
+   * Fetches a stored SVG object, strips XSS vectors (scripts, event handlers, hostile filters)
+   * via {@link sanitizeSvgBuffer}, and re-writes the sanitized bytes to the same key when they
+   * differ from the original. Throws when sanitization yields an empty document so the caller
+   * fails verification for hostile or zero-byte SVGs.
+   */
+  private async sanitizeStoredSvg(fileKey: string, contentType: string): Promise<void> {
+    const object = await this.objectStorage.getObject(fileKey);
+    const sanitized = sanitizeSvgBuffer(object.body);
+    if (!sanitized.equals(object.body)) {
+      await this.objectStorage.putObject({
+        key: fileKey,
+        body: sanitized,
+        contentType,
+      });
+    }
   }
 
   private async toUploadDetail(row: UploadRow, userPublicId?: string): Promise<UploadDetailOutput> {
