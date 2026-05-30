@@ -41,7 +41,18 @@ describe('OAuthService', () => {
   const userService = {} as UserService;
   const authMethodService = {} as AuthMethodService;
   const authSessionService = {} as AuthSessionService;
-  const service = new OAuthService(userService, authMethodService, authSessionService, redis);
+  const organizationSettingsService = {
+    userHasOrganizationRequiringMfa: vi.fn().mockResolvedValue(false),
+  } as never;
+  const mfaService = { createMfaSession: vi.fn() } as never;
+  const service = new OAuthService(
+    userService,
+    authMethodService,
+    authSessionService,
+    redis,
+    organizationSettingsService,
+    mfaService,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -73,6 +84,7 @@ describe('OAuthService', () => {
       code: 'auth-code',
       state: 'oauth-state',
     });
+    if (!('access_token' in result)) throw new Error('expected oauth session');
     expect(result.access_token).toBe('oauth-access');
     expect(result.session_public_id).toBe('session_oauth');
   });
@@ -105,6 +117,7 @@ describe('OAuthService', () => {
       userAgent: 'vitest-agent',
     });
 
+    if (!('access_token' in result)) throw new Error('expected oauth session');
     expect(result.access_token).toBe('oauth-access');
   });
 

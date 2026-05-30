@@ -38,7 +38,7 @@ function payloadForPermissionRoute(
     return { cancel_at_period_end: true };
   }
   if (route.path.endsWith('/api-keys')) {
-    return { name: 'Matrix API key', scopes: ['read'] };
+    return { name: 'Matrix API key', scopes: [route.permissionCode] };
   }
   if (route.path.includes('/api-keys/:apiKeyId')) {
     return { name: 'Matrix API key updated' };

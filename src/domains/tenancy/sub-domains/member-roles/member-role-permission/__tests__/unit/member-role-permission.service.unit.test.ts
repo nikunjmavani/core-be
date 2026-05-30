@@ -30,10 +30,22 @@ describe('MemberRolePermissionService — permission cache invalidation', () => 
     replace: vi.fn().mockResolvedValue([{ permission_code: 'tenancy:read' }]),
   } as unknown as MemberRolePermissionRepository;
 
+  const authorizationService = {
+    resolveUserOrganizationPermissions: vi
+      .fn()
+      .mockResolvedValue(['tenancy:read', 'tenancy:write']),
+  };
+
+  const permissionRepository = {
+    findAll: vi.fn().mockResolvedValue([{ code: 'tenancy:read' }, { code: 'tenancy:write' }]),
+  };
+
   const service = new MemberRolePermissionService(
     organizationRepository,
     memberRoleRepository,
     memberRolePermissionRepository,
+    authorizationService as never,
+    permissionRepository as never,
   );
 
   beforeEach(() => {

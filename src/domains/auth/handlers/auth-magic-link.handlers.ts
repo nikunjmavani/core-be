@@ -31,6 +31,10 @@ export function createAuthMagicLinkHandlers({
       const userAgent = getUserAgent(request) ?? undefined;
       const data = await magicLinkService.verify(request.body, ipAddress, userAgent);
 
+      if ('mfa_required' in data) {
+        return successResponse(AuthSerializer.mfaRequired(data), getRequestIdentifier(request));
+      }
+
       if ('session_public_id' in data && typeof data.session_public_id === 'string') {
         setSessionCookie(reply, data.session_public_id);
       }

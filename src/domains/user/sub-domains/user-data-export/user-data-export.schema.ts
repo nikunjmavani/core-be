@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { bigserial, varchar, timestamp, bigint, index, check, pgPolicy } from 'drizzle-orm/pg-core';
+import {
+  bigserial,
+  varchar,
+  timestamp,
+  bigint,
+  index,
+  uniqueIndex,
+  check,
+  pgPolicy,
+} from 'drizzle-orm/pg-core';
 import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 
@@ -31,6 +40,9 @@ export const user_data_exports = authSchema
     (table) => [
       index('idx_user_data_exports_user_id').on(table.user_id),
       index('idx_user_data_exports_user_id_status').on(table.user_id, table.status),
+      uniqueIndex('idx_user_data_exports_user_pending')
+        .on(table.user_id)
+        .where(sql`${table.status} IN ('pending', 'processing')`),
       index('idx_user_data_exports_expires_at')
         .on(table.expires_at)
         .where(sql`${table.expires_at} IS NOT NULL`),

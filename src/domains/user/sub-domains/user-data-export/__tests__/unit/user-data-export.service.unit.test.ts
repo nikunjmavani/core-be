@@ -55,6 +55,7 @@ describe('UserDataExportService', () => {
   };
   const exportRepository = {
     create: vi.fn(),
+    findPendingOrProcessingByUserId: vi.fn().mockResolvedValue(null),
     findByPublicIdAndUserId: vi.fn(),
     listByUserId: vi.fn(),
     updateStatus: vi.fn(),

@@ -4,6 +4,7 @@ import { validateListAuditLogsQuery } from './audit.validator.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
+import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
@@ -55,6 +56,41 @@ export class AuditService {
    * Side effects: one INSERT; no event emitted.
    */
   async record(input: AuditLogRecordInput): Promise<void> {
+    if (input.organization_id) {
+      const organization = await this.organizationService.findOrganizationByInternalId(
+        input.organization_id,
+      );
+      if (!organization) {
+        logger.warn(
+          { organizationId: input.organization_id },
+          'audit.record.unknownOrganizationId',
+        );
+        return;
+      }
+      return withOrganizationDatabaseContext(organization.public_id, async () => {
+        const user = await this.userService.findUserRecordByPublicId(input.actorUserPublicId);
+        if (!user) {
+          logger.warn(
+            { actorUserPublicId: input.actorUserPublicId },
+            'audit.record.unknownActorUserPublicId',
+          );
+          return;
+        }
+        await this.repository.insert({
+          actor_user_id: user.id,
+          action: input.action,
+          resource_type: input.resource_type,
+          resource_id: input.resource_id ?? null,
+          target_user_id: input.target_user_id ?? null,
+          organization_id: input.organization_id ?? null,
+          ip_address: input.ip_address ?? null,
+          user_agent: input.user_agent ?? null,
+          severity: input.severity ?? 'INFO',
+          metadata: input.metadata ?? {},
+        });
+      });
+    }
+
     const user = await withUserDatabaseContext(input.actorUserPublicId, () =>
       this.userService.findUserRecordByPublicId(input.actorUserPublicId),
     );
@@ -104,6 +140,10 @@ export class AuditService {
    * Notes: caller must already have global admin role (enforced at the route
    * level via `requireRole('admin')`).
    */
+  async listForOrganization(organization_public_id: string, query: Record<string, unknown>) {
+    return withOrganizationDatabaseContext(organization_public_id, () => this.list(query));
+  }
+
   async list(query: Record<string, unknown>) {
     const parsed = validateListAuditLogsQuery(query);
 

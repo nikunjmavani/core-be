@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { captchaPreHandler } from '@/shared/middlewares/captcha.middleware.js';
+import { requireRecentStepUpPreHandler } from '@/shared/middlewares/recent-step-up.middleware.js';
 import {
   REFRESH_RATE_LIMIT,
   STRICT_AUTHED_RATE_LIMIT,
@@ -206,6 +207,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/password/change',
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Change current password',
@@ -234,6 +236,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/mfa/enroll',
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Enroll in MFA',
@@ -249,6 +252,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/webauthn/register/options',
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {},
     },
@@ -258,6 +262,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/webauthn/register/verify',
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: { body: webauthnRegisterVerifyDto },
     },
@@ -279,6 +284,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/mfa/:mfaMethodId',
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
       schema: {
         summary: 'Remove MFA method',
         description:
@@ -334,6 +340,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/auth-methods',
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
       schema: {
         summary: 'Add auth method',
         description:
@@ -348,6 +355,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/auth-methods/:id',
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
       schema: {
         summary: 'Remove auth method',
         description:

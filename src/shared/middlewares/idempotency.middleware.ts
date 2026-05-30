@@ -9,6 +9,11 @@ import {
   parseIdempotencyKeyHeader,
   selectIdempotencyClaimCounterShardKey,
 } from '@/shared/utils/idempotency/idempotency-key.util.js';
+import {
+  buildIdempotencyRequestFingerprint,
+  isIdempotencyRouteExcluded,
+  responseBodyContainsSecretFields,
+} from '@/shared/utils/idempotency/idempotency-fingerprint.util.js';
 import { translateRequestMessage } from '@/shared/utils/i18n/translate-request.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { assertIdempotencyKeyPresentWhenRequired } from '@/shared/utils/idempotency/idempotency-required.util.js';
@@ -44,6 +49,7 @@ interface PendingIdempotencyCompletion {
 
 interface RequestWithIdempotency extends FastifyRequest {
   _idempotencyKey?: string;
+  _idempotencyRequestFingerprint?: string;
   _idempotencyScope?: { userId?: string; organizationId?: string; apiKeyPublicId?: string };
   /** Set when this request claimed the placeholder via SETNX. Used to release on error. */
   _idempotencyClaimed?: boolean;
@@ -155,6 +161,15 @@ function sendInFlightConflict(request: FastifyRequest, reply: FastifyReply): Fas
  * window short avoids 24h "ghost" placeholders if the worker crashes hard before `onSend`
  * runs (and the error-path DEL has not had a chance to execute).
  */
+function resolveIdempotencyRoutePath(request: FastifyRequest): string {
+  const routeTemplate = request.routeOptions?.url;
+  if (typeof routeTemplate === 'string' && routeTemplate.length > 0) {
+    return routeTemplate;
+  }
+  const pathOnly = request.url?.split('?')[0];
+  return pathOnly && pathOnly.length > 0 ? pathOnly : '/';
+}
+
 async function idempotencyClaimPreHandler(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -164,6 +179,11 @@ async function idempotencyClaimPreHandler(
   const requestWithIdempotency = request as RequestWithIdempotency;
   const idempotencyKey = requestWithIdempotency._idempotencyKey;
   if (!idempotencyKey) return;
+
+  const routePath = resolveIdempotencyRoutePath(request);
+  if (isIdempotencyRouteExcluded(routePath)) {
+    return;
+  }
 
   const scope = resolveIdempotencyScope(request);
   if (!hasAuthenticatedIdempotencyActor(scope)) {
@@ -177,7 +197,14 @@ async function idempotencyClaimPreHandler(
     return;
   }
 
-  const cacheKey = buildIdempotencyCacheKey(idempotencyKey, scope);
+  const requestFingerprint = buildIdempotencyRequestFingerprint({
+    method: request.method,
+    routePath,
+    body: request.body,
+  });
+  requestWithIdempotency._idempotencyRequestFingerprint = requestFingerprint;
+
+  const cacheKey = buildIdempotencyCacheKey(idempotencyKey, scope, requestFingerprint);
   requestWithIdempotency._idempotencyScope = scope;
 
   let cached: string | null;
@@ -338,6 +365,12 @@ async function idempotencyOnSend(
     return payload;
   }
 
+  if (responseBodyContainsSecretFields(body)) {
+    logger.info({ idempotencyKey }, 'idempotency.cache.secret_response_skipped');
+    delete requestWithIdempotency._idempotencyPendingCompleted;
+    return payload;
+  }
+
   requestWithIdempotency._idempotencyPendingCompleted = {
     statusCode,
     body,
@@ -384,7 +417,8 @@ export async function idempotencyOnResponse(
   if (!idempotencyKey) return;
 
   const scope = requestWithIdempotency._idempotencyScope ?? resolveIdempotencyScope(request);
-  const cacheKey = buildIdempotencyCacheKey(idempotencyKey, scope);
+  const requestFingerprint = requestWithIdempotency._idempotencyRequestFingerprint;
+  const cacheKey = buildIdempotencyCacheKey(idempotencyKey, scope, requestFingerprint);
   requestWithIdempotency._idempotencyClaimed = false;
 
   const statusCode = reply.statusCode;

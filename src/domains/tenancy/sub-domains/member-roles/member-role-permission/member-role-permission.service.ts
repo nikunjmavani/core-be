@@ -5,6 +5,9 @@ import type { MemberRoleRepository } from '../member-role.repository.js';
 import type { MemberRolePermissionRepository } from './member-role-permission.repository.js';
 import { invalidateOrganizationPermissions } from '../../permission/permission-cache.service.js';
 import { validatePutMemberRolePermissions } from './member-role-permission.validator.js';
+import type { AuthorizationService } from '../../permission/authorization.service.js';
+import type { PermissionRepository } from '../../permission/permission.repository.js';
+import { assertCallerCanGrantPermissionCodes } from '../../permission/assert-grantable-permissions.util.js';
 
 /**
  * Manages the set of permission codes assigned to a member role within an
@@ -32,6 +35,8 @@ export class MemberRolePermissionService {
     private readonly organizationRepository: OrganizationRepository,
     private readonly memberRoleRepository: MemberRoleRepository,
     private readonly memberRolePermissionRepository: MemberRolePermissionRepository,
+    private readonly authorizationService: AuthorizationService,
+    private readonly permissionRepository: PermissionRepository,
   ) {}
 
   async listPermissionCodesForRole(role_id: number): Promise<string[]> {
@@ -56,6 +61,13 @@ export class MemberRolePermissionService {
     created_by_user_public_id: string,
   ) {
     const parsed = validatePutMemberRolePermissions(body);
+    await assertCallerCanGrantPermissionCodes({
+      authorizationService: this.authorizationService,
+      permissionRepository: this.permissionRepository,
+      callerUserPublicId: created_by_user_public_id,
+      organizationPublicId: organization_public_id,
+      requestedPermissionCodes: parsed.permission_codes,
+    });
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');

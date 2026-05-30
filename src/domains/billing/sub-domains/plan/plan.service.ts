@@ -34,6 +34,12 @@ export type PlanRecord = typeof plans.$inferSelect;
 export class PlanService {
   constructor(private readonly repository: PlanRepository) {}
 
+  async requireActivePlanByPublicId(public_id: string): Promise<PlanRecord> {
+    const row = await this.repository.findByPublicId(public_id);
+    if (!row?.is_active) throw new NotFoundError('Plan');
+    return row;
+  }
+
   async requirePlanRecordByPublicId(public_id: string): Promise<PlanRecord> {
     const row = await this.repository.findByPublicId(public_id);
     if (!row) throw new NotFoundError('Plan');

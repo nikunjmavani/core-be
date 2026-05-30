@@ -46,8 +46,16 @@ export function createAuthWebauthnHandlers({ webauthnService }: AuthWebauthnHand
         readRequestOrigin(request),
         getUserAgent(request) ?? undefined,
       );
-      setSessionCookie(reply, data.session_public_id);
-      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
+      if ('mfa_required' in data && data.mfa_required === true) {
+        return successResponse(AuthSerializer.mfaRequired(data), getRequestIdentifier(request));
+      }
+      if ('session_public_id' in data) {
+        setSessionCookie(reply, data.session_public_id);
+      }
+      return successResponse(
+        AuthSerializer.accessToken(data as { access_token: string; session_public_id: string }),
+        getRequestIdentifier(request),
+      );
     },
   };
 }

@@ -8,6 +8,10 @@ vi.mock('@/shared/middlewares/cookie-session-origin.pre-handler.js', () => ({
   requireAllowedSourceOriginForCookieSessionRoute: vi.fn(),
 }));
 
+vi.mock('@/shared/utils/auth/recent-step-up.util.js', () => ({
+  recordRecentStepUp: vi.fn().mockResolvedValue(undefined),
+}));
+
 /**
  * NOTE: `DATABASE_URL` and the SSL/timeout fields are required because auth handlers
  * import `audit-request-context.util.ts`, which now imports `user-database.context.ts`

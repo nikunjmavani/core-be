@@ -15,12 +15,12 @@ describe('buildIdempotencyCacheKey', () => {
       userId: 'user-1',
       organizationId: 'org-1',
     });
-    expect(key).toBe('idempotency:org-1:user-1:my-key');
+    expect(key).toBe('idempotency:org-1:user-1:none:my-key');
   });
 
   it('uses anonymous and none when scope is missing', () => {
     const key = buildIdempotencyCacheKey('my-key', {});
-    expect(key).toBe('idempotency:none:anonymous:my-key');
+    expect(key).toBe('idempotency:none:anonymous:none:my-key');
   });
 
   it('separates the same idempotency key across different users (no cross-user replay)', () => {
@@ -57,7 +57,16 @@ describe('buildIdempotencyCacheKey', () => {
       organizationId: 'org-1',
     });
     expect(userScopedKey).not.toBe(apiKeyScopedKey);
-    expect(apiKeyScopedKey).toBe('idempotency:org-1:api-key:public-id-abc:shared-key');
+    expect(apiKeyScopedKey).toBe('idempotency:org-1:api-key:public-id-abc:none:shared-key');
+  });
+
+  it('includes request fingerprint when provided', () => {
+    const key = buildIdempotencyCacheKey(
+      'my-key',
+      { userId: 'user-1', organizationId: 'org-1' },
+      'abc123fingerprint',
+    );
+    expect(key).toBe('idempotency:org-1:user-1:abc123fingerprint:my-key');
   });
 
   it('prefers api-key over user when both are provided', () => {
@@ -66,7 +75,7 @@ describe('buildIdempotencyCacheKey', () => {
       apiKeyPublicId: 'api-key-1',
       organizationId: 'org-1',
     });
-    expect(key).toBe('idempotency:org-1:api-key:api-key-1:my-key');
+    expect(key).toBe('idempotency:org-1:api-key:api-key-1:none:my-key');
   });
 
   it('falls back to user when api-key is empty string', () => {
@@ -75,7 +84,7 @@ describe('buildIdempotencyCacheKey', () => {
       apiKeyPublicId: '',
       organizationId: 'org-1',
     });
-    expect(key).toBe('idempotency:org-1:user-1:my-key');
+    expect(key).toBe('idempotency:org-1:user-1:none:my-key');
   });
 });
 

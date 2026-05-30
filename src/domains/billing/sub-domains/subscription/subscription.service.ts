@@ -120,7 +120,7 @@ export class SubscriptionService {
         if (existingActive) {
           throw new ConflictError('errors:subscriptionAlreadyExists');
         }
-        const plan = await this.planService.requirePlanRecordByPublicId(parsed.plan_id);
+        const plan = await this.planService.requireActivePlanByPublicId(parsed.plan_id);
         const createdByUserInternalId =
           await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
         return { organization, plan, createdByUserInternalId };
@@ -137,7 +137,6 @@ export class SubscriptionService {
         organization,
         plan,
         billingCycle: parsed.billing_cycle,
-        trialEnd: parsed.trial_end,
         idempotencyKey,
       }),
     );
@@ -151,7 +150,6 @@ export class SubscriptionService {
             billing_cycle: parsed.billing_cycle.toUpperCase() as 'MONTHLY' | 'YEARLY',
             current_period_start: now,
             current_period_end: periodEnd,
-            trial_end: parsed.trial_end ? new Date(parsed.trial_end) : undefined,
             created_by_user_id: createdByUserInternalId ?? undefined,
             provider: paymentResult.providerSubscriptionId ? 'stripe' : undefined,
             provider_subscription_id: paymentResult.providerSubscriptionId,
@@ -193,7 +191,7 @@ export class SubscriptionService {
       await withOrganizationDatabaseContext(organization_public_id, async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-        const plan = await this.planService.requirePlanRecordByPublicId(parsed.plan_id);
+        const plan = await this.planService.requireActivePlanByPublicId(parsed.plan_id);
         const subscription = await this.repository.findByPublicId(
           subscription_public_id,
           organization.id,

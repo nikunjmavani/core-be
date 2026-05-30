@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MagicLinkService } from '@/domains/auth/sub-domains/auth-method/magic-link.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
-import type { AuthSessionRepository } from '@/domains/auth/sub-domains/auth-session/auth-session.repository.js';
+vi.mock('@/domains/auth/shared/complete-first-factor-auth.js', () => ({
+  completeFirstFactorAuth: vi.fn().mockResolvedValue({
+    access_token: 'jwt-token',
+    session_public_id: 'session_public',
+  }),
+}));
+
+import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
+import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/mfa.service.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
 
 vi.mock('@/core/events/event-bus.js', () => ({
@@ -56,9 +65,17 @@ describe('MagicLinkService', () => {
     findById: vi.fn(),
   } as unknown as UserService;
 
-  const authSessionRepository = {
-    create: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
-  } as unknown as AuthSessionRepository;
+  const organizationSettingsService = {
+    userHasOrganizationRequiringMfa: vi.fn().mockResolvedValue(false),
+  } as unknown as OrganizationSettingsService;
+
+  const mfaService = {
+    createMfaSession: vi.fn(),
+  } as unknown as MfaService;
+
+  const authSessionService = {
+    createSessionForUser: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
+  } as unknown as AuthSessionService;
 
   const verificationTokenRepository = {
     create: vi.fn().mockResolvedValue(undefined),
@@ -69,8 +86,10 @@ describe('MagicLinkService', () => {
 
   const service = new MagicLinkService(
     userService,
-    authSessionRepository,
     verificationTokenRepository,
+    organizationSettingsService,
+    mfaService,
+    authSessionService,
   );
 
   beforeEach(() => {
@@ -114,10 +133,10 @@ describe('MagicLinkService', () => {
     } as never);
 
     const result = await service.verify({ token: 'raw-magic-token' }, '127.0.0.1', 'vitest');
+    if (!('access_token' in result)) throw new Error('expected access token result');
 
     expect(result.access_token).toBe('jwt-token');
     expect(result.session_public_id).toBe('session_public');
-    expect(authSessionRepository.create).toHaveBeenCalled();
   });
 
   it('verify rejects when user record is missing after token consume', async () => {

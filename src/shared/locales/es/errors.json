@@ -3,6 +3,8 @@
   "notFound": "{{resource}} no encontrado",
   "unauthorized": "No autorizado",
   "forbidden": "Prohibido",
+  "cannotGrantPermissionNotHeld": "No puedes otorgar un permiso que no posees",
+  "recentStepUpRequired": "Se requiere una autenticación de confirmación reciente para esta acción",
   "originNotAllowed": "Origen de la solicitud no permitido para esta operación.",
   "invalidRefererOrigin": "El encabezado Referer falta o no es válido para esta operación.",
   "invalidCsrfToken": "El token CSRF falta o no es válido para esta operación.",

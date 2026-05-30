@@ -76,17 +76,21 @@ export function createTenancyContainer(
     organizationRepository,
     organizationNotificationPolicyRepository,
   );
+  const permissionService = new PermissionService(permissionRepository);
+  const authorizationService = new AuthorizationService(permissionRepository);
   const organizationApiKeyService = new OrganizationApiKeyService(
     organizationRepository,
     organizationApiKeyRepository,
+    authorizationService,
+    permissionRepository,
   );
   const memberRoleService = new MemberRoleService(organizationService, memberRoleRepository);
-  const permissionService = new PermissionService(permissionRepository);
-  const authorizationService = new AuthorizationService(permissionRepository);
   const memberRolePermissionService = new MemberRolePermissionService(
     organizationRepository,
     memberRoleRepository,
     memberRolePermissionRepository,
+    authorizationService,
+    permissionRepository,
   );
   const membershipService = new MembershipService(
     organizationService,

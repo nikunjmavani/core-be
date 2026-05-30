@@ -13,15 +13,16 @@ import type {
 } from '@simplewebauthn/server';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
-import { env } from '@/shared/config/env.config.js';
-import { MILLISECONDS_PER_DAY } from '@/shared/constants/index.js';
-import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
-import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
-import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionService } from '../auth-session/auth-session.service.js';
 import type { WebauthnCredentialRepository } from './webauthn-credential.repository.js';
+import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
+import type { MfaService } from '../auth-mfa/mfa.service.js';
+import {
+  completeFirstFactorAuth,
+  type FirstFactorAuthResult,
+} from '@/domains/auth/shared/complete-first-factor-auth.js';
 import { consumeWebauthnChallenge, createWebauthnChallenge } from './webauthn-challenge.js';
 import {
   resolveWebauthnExpectedOrigin,
@@ -93,6 +94,8 @@ export class WebauthnService {
     private readonly authSessionService: AuthSessionService,
     private readonly credentialRepository: WebauthnCredentialRepository,
     private readonly redis: Redis,
+    private readonly organizationSettingsService: OrganizationSettingsService,
+    private readonly mfaService: MfaService,
   ) {}
 
   async generateRegistrationOptions(
@@ -231,7 +234,7 @@ export class WebauthnService {
     ipAddress: string,
     requestOrigin?: string,
     userAgent?: string,
-  ): Promise<{ access_token: string; session_public_id: string }> {
+  ): Promise<FirstFactorAuthResult> {
     const parsed = validateWebauthnAuthenticateVerify(body);
     const challenge = await consumeWebauthnChallenge(
       this.redis,
@@ -279,27 +282,20 @@ export class WebauthnService {
       this.credentialRepository.updateCounter(storedCredential.credential_id, newCounter),
     );
 
-    const jsonWebToken = await signAccessToken({
-      userId: user.public_id,
-      role: resolveAccessTokenRoleForUser({
+    return completeFirstFactorAuth({
+      user: {
+        id: user.id,
+        public_id: user.public_id,
         email: user.email,
         status: user.status,
-        isEmailVerified: user.is_email_verified,
-      }),
+        is_email_verified: user.is_email_verified,
+        is_mfa_enabled: user.is_mfa_enabled,
+      },
+      ipAddress,
+      userAgent,
+      organizationSettingsService: this.organizationSettingsService,
+      mfaService: this.mfaService,
+      authSessionService: this.authSessionService,
     });
-    const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
-    const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
-    const expiresAt = new Date(Date.now() + sessionMaxAgeDays * MILLISECONDS_PER_DAY);
-    const authSession = await this.authSessionService.createSessionForUser(
-      user.public_id,
-      omitUndefined({
-        token_hash: tokenHash,
-        ip_address: ipAddress,
-        user_agent: userAgent,
-        expires_at: expiresAt,
-      }),
-    );
-
-    return { access_token: jsonWebToken, session_public_id: authSession.public_id };
   }
 }

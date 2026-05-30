@@ -10,9 +10,19 @@ import { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-m
 import { AUTH_METHOD_TYPE } from '@/domains/auth/sub-domains/auth-method/auth-method.constants.js';
 import { completeOAuthUserSession } from '@/domains/auth/sub-domains/auth-method/oauth/oauth-user-session.js';
 
-vi.mock('@/shared/utils/security/jwt.util.js', () => ({
-  signAccessToken: vi.fn().mockResolvedValue('signed-access-token'),
+vi.mock('@/domains/auth/shared/complete-first-factor-auth.js', () => ({
+  completeFirstFactorAuth: vi.fn().mockResolvedValue({
+    access_token: 'signed-access-token',
+    session_public_id: 'session_db_test',
+  }),
 }));
+
+const organizationSettingsServiceStub = {
+  userHasOrganizationRequiringMfa: vi.fn().mockResolvedValue(false),
+};
+const mfaServiceStub = {
+  createMfaSession: vi.fn(),
+};
 
 const userRepository = new UserRepository();
 const userService = new UserService(userRepository, {} as never);
@@ -39,6 +49,8 @@ describe('completeOAuthUserSession (database transaction boundary)', () => {
         userService,
         authMethodService: failingAuthMethodService as never,
         authSessionService: authSessionServiceStub as never,
+        organizationSettingsService: organizationSettingsServiceStub as never,
+        mfaService: mfaServiceStub as never,
         provider: 'google',
         profile: { email, provider_user_id: 'google-rollback-1' },
         ipAddress: '127.0.0.1',
@@ -63,12 +75,14 @@ describe('completeOAuthUserSession (database transaction boundary)', () => {
       userService,
       authMethodService,
       authSessionService: authSessionServiceStub as never,
+      organizationSettingsService: organizationSettingsServiceStub as never,
+      mfaService: mfaServiceStub as never,
       provider: 'github',
       profile: { email, provider_user_id: 'github-signup-1', name: 'Octo Cat' },
       ipAddress: '127.0.0.1',
     });
 
-    expect(result.session_public_id).toBe('session_db_test');
+    expect('session_public_id' in result && result.session_public_id).toBe('session_db_test');
 
     const [createdUser] = await database.select().from(users).where(eq(users.email, email));
     expect(createdUser).toBeDefined();

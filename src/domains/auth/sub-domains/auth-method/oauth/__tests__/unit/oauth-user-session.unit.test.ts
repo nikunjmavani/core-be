@@ -20,6 +20,13 @@ vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => 
   runWithPinnedDatabaseHandle: (_handle: unknown, callback: () => Promise<unknown>) => callback(),
 }));
 
+vi.mock('@/domains/auth/shared/complete-first-factor-auth.js', () => ({
+  completeFirstFactorAuth: vi.fn().mockResolvedValue({
+    access_token: 'access-token',
+    session_public_id: 'session_public',
+  }),
+}));
+
 describe('completeOAuthUserSession', () => {
   const userService = {
     findByEmail: vi.fn().mockResolvedValue(null),
@@ -39,11 +46,20 @@ describe('completeOAuthUserSession', () => {
     createSessionForUser: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
   };
 
+  const organizationSettingsService = {
+    userHasOrganizationRequiringMfa: vi.fn().mockResolvedValue(false),
+  };
+  const mfaService = {
+    createMfaSession: vi.fn(),
+  };
+
   function callCompleteOAuthUserSession() {
     return completeOAuthUserSession({
       userService: userService as never,
       authMethodService: authMethodService as never,
       authSessionService: authSessionService as never,
+      organizationSettingsService: organizationSettingsService as never,
+      mfaService: mfaService as never,
       provider: 'google',
       profile: {
         email: 'victim@example.com',
@@ -68,6 +84,8 @@ describe('completeOAuthUserSession', () => {
         userService: userService as never,
         authMethodService: authMethodService as never,
         authSessionService: authSessionService as never,
+        organizationSettingsService: organizationSettingsService as never,
+        mfaService: mfaService as never,
         provider: 'google',
         profile: {
           email: 'test@yopmail.com',
@@ -108,7 +126,7 @@ describe('completeOAuthUserSession', () => {
 
     const result = await callCompleteOAuthUserSession();
 
-    expect(result.session_public_id).toBe('session_public');
+    expect('session_public_id' in result && result.session_public_id).toBe('session_public');
     expect(authMethodService.linkOAuthProviderIfMissing).toHaveBeenCalledTimes(1);
     expect(userService.createFromOAuth).not.toHaveBeenCalled();
   });
@@ -130,8 +148,7 @@ describe('completeOAuthUserSession', () => {
 
     const result = await callCompleteOAuthUserSession();
 
-    expect(result.session_public_id).toBe('session_public');
-    expect(authSessionService.createSessionForUser).toHaveBeenCalledTimes(1);
+    expect('session_public_id' in result && result.session_public_id).toBe('session_public');
   });
 
   it('creates a new user on first-time OAuth signup', async () => {
@@ -140,6 +157,6 @@ describe('completeOAuthUserSession', () => {
     const result = await callCompleteOAuthUserSession();
 
     expect(userService.createFromOAuth).toHaveBeenCalledTimes(1);
-    expect(result.session_public_id).toBe('session_public');
+    expect('session_public_id' in result && result.session_public_id).toBe('session_public');
   });
 });

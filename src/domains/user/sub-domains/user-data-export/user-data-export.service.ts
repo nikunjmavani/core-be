@@ -74,6 +74,17 @@ export class UserDataExportService {
     const user = await this.userService.findUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
 
+    const existingPending = await withUserDatabaseContext(userPublicId, () =>
+      this.exportRepository.findPendingOrProcessingByUserId(user.id),
+    );
+    if (existingPending) {
+      logger.info(
+        { userPublicId, exportPublicId: existingPending.public_id },
+        'user-data-export.existing_pending_returned',
+      );
+      return serializeUserDataExport(existingPending);
+    }
+
     const exportPublicId = generatePublicId();
     const s3Key = buildExportS3Key(userPublicId, exportPublicId);
     const expiresAt = computeArtifactExpiresAt();
