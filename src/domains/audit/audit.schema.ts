@@ -17,7 +17,9 @@ import { organizations } from '@/domains/tenancy/sub-domains/organization/organi
 /**
  * Drizzle definition for `audit.logs` — the append-only ledger of actor/resource
  * actions. RLS tenant-isolation policy scopes rows to the current organization
- * (or to retention-cleanup workers that set `app.global_retention_cleanup`).
+ * (or to retention-cleanup workers that set `app.global_retention_cleanup`, or
+ * the cross-tenant admin escape hatch `app.global_admin` used by the admin
+ * audit-log listing via `withGlobalAdminDatabaseContext`).
  */
 export const logs = auditSchema
   .table(
@@ -66,7 +68,8 @@ export const logs = auditSchema
             SELECT id FROM tenancy.organizations
             WHERE public_id = current_setting('app.current_organization_id', true)
           )
-          OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+          OR current_setting('app.global_retention_cleanup', true) = 'true'
+          OR current_setting('app.global_admin', true) = 'true'`,
       }),
       pgPolicy('audit_logs_user_export_select', {
         as: 'permissive',

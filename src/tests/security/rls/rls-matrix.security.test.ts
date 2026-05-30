@@ -10,6 +10,7 @@ import {
   countRowsAsTenant,
   countRowsAsUser,
   deleteRowAsTenant,
+  executeAsCoreBeAppGlobalAdmin,
   executeAsCoreBeAppTenant,
   executeAsCoreBeAppUser,
   grantCoreBeAppRoleForTests,
@@ -412,6 +413,42 @@ describe('Security: RLS matrix (all FORCE RLS tables)', () => {
           drizzleSql`SELECT count(*)::int AS count FROM audit.logs`,
         );
         expect(countFromExecuteResult(result)).toBe(0);
+      });
+    });
+
+    it('exposes audit.logs across tenants under the app.global_admin escape hatch (audit #21)', async () => {
+      // The admin audit-log listing (AuditService.listForAdmin) reads cross-tenant under
+      // withGlobalAdminDatabaseContext. The tenant-isolation policy must honour app.global_admin
+      // so the listing is RLS-correct under the least-privilege role instead of relying on the
+      // table-owner bypass.
+      const userA = await createTestUser();
+      const userB = await createTestUser();
+      const organizationA = await createTestOrganization({ ownerUserId: userA.id });
+      const organizationB = await createTestOrganization({ ownerUserId: userB.id });
+      const [logA] = await database
+        .insert(logs)
+        .values({
+          organization_id: organizationA.id,
+          actor_user_id: userA.id,
+          action: 'test.action',
+          resource_type: 'organization',
+        })
+        .returning();
+      const [logB] = await database
+        .insert(logs)
+        .values({
+          organization_id: organizationB.id,
+          actor_user_id: userB.id,
+          action: 'test.action',
+          resource_type: 'organization',
+        })
+        .returning();
+
+      await executeAsCoreBeAppGlobalAdmin(async (transaction) => {
+        const result = await transaction.execute(
+          drizzleSql`SELECT count(*)::int AS count FROM audit.logs WHERE id IN (${logA!.id}, ${logB!.id})`,
+        );
+        expect(countFromExecuteResult(result), 'global admin sees both tenants').toBe(2);
       });
     });
   });
