@@ -19,6 +19,8 @@ describe('OrganizationApiKeyService.authenticate', () => {
   const service = new OrganizationApiKeyService(
     organizationRepository as never,
     apiKeyRepository as never,
+    { resolveUserOrganizationPermissions: vi.fn() } as never,
+    { findAll: vi.fn().mockResolvedValue([]) } as never,
   );
 
   // Shape returned by the tenancy.resolve_api_key_for_authentication SECURITY DEFINER resolver —

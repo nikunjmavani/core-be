@@ -3,6 +3,8 @@
   "notFound": "{{resource}} not found",
   "unauthorized": "Unauthorized",
   "forbidden": "Forbidden",
+  "cannotGrantPermissionNotHeld": "You cannot grant a permission you do not hold",
+  "recentStepUpRequired": "Recent step-up authentication is required for this action",
   "originNotAllowed": "Request origin is not allowed for this operation.",
   "invalidRefererOrigin": "Referer header is missing or invalid for this operation.",
   "invalidCsrfToken": "CSRF token is missing or invalid for this operation.",

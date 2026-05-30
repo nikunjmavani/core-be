@@ -4,6 +4,9 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationRepository } from '../organization.repository.js';
 import type { OrganizationApiKeyRepository } from './organization-api-key.repository.js';
+import type { AuthorizationService } from '../../permission/authorization.service.js';
+import type { PermissionRepository } from '../../permission/permission.repository.js';
+import { assertCallerCanGrantPermissionCodes } from '../../permission/assert-grantable-permissions.util.js';
 import type {
   OrganizationApiKeyOutput,
   CreateOrganizationApiKeyResult,
@@ -58,6 +61,8 @@ export class OrganizationApiKeyService {
   constructor(
     private readonly organizationRepository: OrganizationRepository,
     private readonly apiKeyRepository: OrganizationApiKeyRepository,
+    private readonly authorizationService: AuthorizationService,
+    private readonly permissionRepository: PermissionRepository,
   ) {}
 
   async list(organization_public_id: string, query: unknown) {
@@ -98,6 +103,13 @@ export class OrganizationApiKeyService {
     created_by_user_public_id: string,
   ): Promise<CreateOrganizationApiKeyResult> {
     const parsed = validateCreateOrganizationApiKey(body);
+    await assertCallerCanGrantPermissionCodes({
+      authorizationService: this.authorizationService,
+      permissionRepository: this.permissionRepository,
+      callerUserPublicId: created_by_user_public_id,
+      organizationPublicId: organization_public_id,
+      requestedPermissionCodes: parsed.scopes,
+    });
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
