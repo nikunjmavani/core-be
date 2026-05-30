@@ -147,8 +147,9 @@ describe('auth event handlers', () => {
   ])('throws when mail is not configured for %s', async (eventType, payload) => {
     vi.mocked(isMailConfigured).mockReturnValue(false);
 
+    enterOnCommitScope();
     await expect(
-      emitAndFlushOnCommit({ type: eventType, payload, timestamp: new Date() }),
+      eventBus.emitStrict({ type: eventType, payload, timestamp: new Date() }),
     ).rejects.toBeInstanceOf(ServiceUnavailableError);
     expect(recordOutboxEmailMock).not.toHaveBeenCalled();
   });
