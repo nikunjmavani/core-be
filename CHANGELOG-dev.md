@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.3.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.3.2-dev.0...v3.3.3-dev.0) (2026-05-30)
+
+
+### Fixed
+
+* production audit hardening — upload revocation, auth, billing, notify ([#186](https://github.com/nikunjmavani/core-be/issues/186)) ([3a0f605](https://github.com/nikunjmavani/core-be/commit/3a0f605f77afe6aabf41e307794077063f51b218))
+
 ## [3.3.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.3.1-dev.0...v3.3.2-dev.0) (2026-05-30)
 
 
