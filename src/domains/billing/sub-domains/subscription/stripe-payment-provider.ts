@@ -19,9 +19,10 @@ import { ServiceUnavailableError } from '@/shared/errors/index.js';
  *
  * @remarks
  * Mutation paths (`createSubscription`, `cancelSubscriptionAtPeriodEnd`,
- * `resumeSubscription`) are **fail-closed**: a Stripe API failure is logged and
- * re-surfaced as a {@link ServiceUnavailableError} so the caller never persists
- * local billing state for a provider mutation that did not succeed. Compensation
+ * `resumeSubscription`, `updateSubscriptionPrice`) are **fail-closed**: a Stripe
+ * API failure is logged and re-surfaced as a {@link ServiceUnavailableError} so
+ * the caller never persists local billing state for a provider mutation that did
+ * not succeed. Compensation
  * helpers (`compensateFailedCreate`, `compensatePlanChange`) intentionally swallow
  * their own errors because they run on an already-failing path where the
  * Stripe webhook remains the reconciliation source of truth.
@@ -118,14 +119,13 @@ export class StripePaymentProvider implements PaymentProvider {
   async updateSubscriptionPrice(
     providerSubscriptionId: string,
     providerPriceId: string,
-  ): Promise<boolean> {
-    if (!isStripeConfigured()) return false;
+  ): Promise<void> {
+    if (!isStripeConfigured()) return;
     try {
       await updateStripeSubscription(providerSubscriptionId, { priceId: providerPriceId });
-      return true;
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.change_plan.failed');
-      return false;
+      throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
     }
   }
 

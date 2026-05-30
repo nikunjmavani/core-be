@@ -21,6 +21,24 @@ import {
 } from '@/tests/helpers/rls-matrix.helper.js';
 import { diffForceRlsTables } from '@/infrastructure/database/force-rls-tables.constants.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { createTestUser } from '@/tests/factories/user.factory.js';
+import { createTestOrganization } from '@/tests/factories/organization.factory.js';
+import { logs } from '@/domains/audit/audit.schema.js';
+import {
+  createMembership,
+  createRoleWithPermissions,
+  seedPermissions,
+} from '@/domains/tenancy/__tests__/factories/permission.factory.js';
+import { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+
+function countFromExecuteResult(result: unknown): number {
+  const rows = Array.isArray(result)
+    ? result
+    : ((result as { rows?: { count: number }[] }).rows ?? []);
+  return Number(rows[0]?.count ?? 0);
+}
 
 describe('Security: RLS matrix (all FORCE RLS tables)', () => {
   beforeAll(async () => {
@@ -271,6 +289,130 @@ describe('Security: RLS matrix (all FORCE RLS tables)', () => {
       expect(resolved).toHaveLength(1);
       expect(resolved[0]?.user_public_id).toBe(fixture.userAPublicId);
       expect(resolved[0]?.provider).toBe(fixture.oauthProvider);
+    });
+  });
+
+  describe('permission resolution under ORG-only FORCE RLS (no app.current_user_id)', () => {
+    // Regression guard: requireOrganizationPermission resolves permissions inside
+    // withOrganizationContext, which sets app.current_organization_id but NOT
+    // app.current_user_id. Under the non-superuser core_be_app role with FORCE RLS,
+    // a direct auth.users join returned zero rows → empty permission set → 403 on all
+    // org PERM-gated routes in production (CI runs as a superuser and never saw it).
+    // The repository now resolves the user via a SECURITY DEFINER function, so this
+    // must return the member's permissions with ONLY org context set.
+    it("returns a member's permissions with org context only (auth.users not joined)", async () => {
+      await seedPermissions(['organization:read', 'webhook:manage']);
+      const member = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: member.id });
+      const role = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: ['organization:read', 'webhook:manage'],
+        createdByUserId: member.id,
+      });
+      await createMembership({
+        userId: member.id,
+        organizationId: organization.id,
+        roleId: role.id,
+      });
+
+      const repository = new PermissionRepository();
+      const codes = await executeAsCoreBeAppTenant(organization.public_id, (transaction) =>
+        repository.findPermissionCodesForUserInOrganization(
+          member.public_id,
+          organization.public_id,
+          transaction as unknown as PostgresJsDatabase,
+        ),
+      );
+
+      expect([...codes].sort()).toEqual(['organization:read', 'webhook:manage']);
+    });
+
+    it('returns an empty set for a soft-deleted member even with org context', async () => {
+      await seedPermissions(['organization:read']);
+      const member = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: member.id });
+      const role = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: ['organization:read'],
+        createdByUserId: member.id,
+      });
+      await createMembership({
+        userId: member.id,
+        organizationId: organization.id,
+        roleId: role.id,
+      });
+      // Soft-delete the member via the superuser handle (RLS-exempt) so the resolver
+      // (deleted_at IS NULL) must exclude them.
+      await database.execute(
+        drizzleSql`UPDATE auth.users SET deleted_at = now() WHERE id = ${member.id}`,
+      );
+
+      const repository = new PermissionRepository();
+      const codes = await executeAsCoreBeAppTenant(organization.public_id, (transaction) =>
+        repository.findPermissionCodesForUserInOrganization(
+          member.public_id,
+          organization.public_id,
+          transaction as unknown as PostgresJsDatabase,
+        ),
+      );
+
+      expect(codes).toEqual([]);
+    });
+  });
+
+  describe('audit.logs user-export SELECT policy under FORCE RLS (audit #7)', () => {
+    it('lets a user read only their own actor audit logs with no org context (cross-user denial)', async () => {
+      const userA = await createTestUser();
+      const userB = await createTestUser();
+      const organizationA = await createTestOrganization({ ownerUserId: userA.id });
+      const organizationB = await createTestOrganization({ ownerUserId: userB.id });
+      await database.insert(logs).values({
+        organization_id: organizationA.id,
+        actor_user_id: userA.id,
+        action: 'test.action',
+        resource_type: 'organization',
+      });
+      const [logB] = await database
+        .insert(logs)
+        .values({
+          organization_id: organizationB.id,
+          actor_user_id: userB.id,
+          action: 'test.action',
+          resource_type: 'organization',
+        })
+        .returning();
+
+      // The GDPR export worker reads audit.logs under app.current_user_id with NO org context.
+      // The audit_logs_user_export_select policy must expose only the actor's own rows.
+      await executeAsCoreBeAppUser(userA.public_id, async (transaction) => {
+        const ownRows = await transaction.execute(
+          drizzleSql`SELECT count(*)::int AS count FROM audit.logs WHERE actor_user_id = ${userA.id}`,
+        );
+        expect(countFromExecuteResult(ownRows), 'user A sees own actor logs').toBe(1);
+
+        const otherRows = await transaction.execute(
+          drizzleSql`SELECT count(*)::int AS count FROM audit.logs WHERE id = ${logB!.id}`,
+        );
+        expect(countFromExecuteResult(otherRows), 'user A cannot see user B actor logs').toBe(0);
+      });
+    });
+
+    it('returns zero audit.logs rows when neither user nor org context is set', async () => {
+      const user = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: user.id });
+      await database.insert(logs).values({
+        organization_id: organization.id,
+        actor_user_id: user.id,
+        action: 'test.action',
+        resource_type: 'organization',
+      });
+
+      await executeAsCoreBeAppUser(null, async (transaction) => {
+        const result = await transaction.execute(
+          drizzleSql`SELECT count(*)::int AS count FROM audit.logs`,
+        );
+        expect(countFromExecuteResult(result)).toBe(0);
+      });
     });
   });
 

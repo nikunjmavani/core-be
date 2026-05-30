@@ -1,4 +1,9 @@
-# Skill: Test Generator (write test cases)
+---
+name: test-generator
+description: Decides which test layer to add and writes tests following core-be conventions — unit for pure layers (validators, serializers, shared/utils, errors) and domain e2e via fastify.inject. Use when adding or changing routes, controllers, services, workers, validators, or serializers, after creating a domain/sub-domain, or when tests are missing.
+---
+
+# Test generator (core-be)
 
 ## Purpose
 

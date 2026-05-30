@@ -17,4 +17,9 @@ describe('field-examples', () => {
     const example = generateFieldExample('organization_id', { type: 'string' });
     expect(String(example)).toMatch(/^org_/);
   });
+
+  it('generateFieldExample uses redacted placeholders for secret-bearing fields', () => {
+    expect(generateFieldExample('secret', { type: 'string' })).toBe('whsec_...');
+    expect(generateFieldExample('raw_key', { type: 'string' })).toBe('sk_live_abc1...');
+  });
 });

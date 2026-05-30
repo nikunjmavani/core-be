@@ -32,9 +32,9 @@ import { withOrganizationDatabaseContext } from '@/infrastructure/database/conte
  *   organization already has a non-terminal subscription (checked before the
  *   Stripe call) or when a concurrent create loses the partial-unique-index
  *   race (Postgres `unique_violation`, `23505`). The payment provider is
- *   **fail-closed**: a Stripe failure on `create` / `cancel` / `resume`
- *   surfaces as `ServiceUnavailableError` from the provider, which runs
- *   *before* any local write, so no local subscription row is created or
+ *   **fail-closed**: a Stripe failure on `create` / `cancel` / `resume` /
+ *   `changePlan` surfaces as `ServiceUnavailableError` from the provider, which
+ *   runs *before* any local write, so no local subscription row is created or
  *   mutated when the provider call fails — the Stripe webhook stays the
  *   reconciliation source of truth. If persistence fails *after* the Stripe
  *   create succeeded, the provider is rolled back via `compensateFailedCreate`.
@@ -209,12 +209,16 @@ export class SubscriptionService {
     );
     let providerPlanUpdated = false;
 
-    // Stripe network call — outside any database context.
+    // Stripe network call — outside any database context. Fail-closed: a provider
+    // failure throws ServiceUnavailableError here (before any local write), so the
+    // local plan never silently diverges from Stripe. Local-only subscriptions
+    // (no provider_subscription_id or no mapped price) skip the call and proceed.
     if (subscription.provider_subscription_id && providerPriceId) {
-      providerPlanUpdated = await this.paymentProvider.updateSubscriptionPrice(
+      await this.paymentProvider.updateSubscriptionPrice(
         subscription.provider_subscription_id,
         providerPriceId,
       );
+      providerPlanUpdated = true;
     }
 
     const periodStart = new Date(subscription.current_period_start);

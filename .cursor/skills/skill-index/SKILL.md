@@ -3,13 +3,13 @@ name: skill-index
 description: Master index of all project skills with trigger conditions. Use this skill FIRST to determine which other skill(s) to invoke based on what changed. Consult after any code change to check if a skill should run.
 ---
 
-# Skill Index (core-be)
+# Skill index (core-be)
 
-Master directory of all **37 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
+Master directory of all **36 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
 
 For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global-skills**.
 
-## Project skills (37)
+## Project skills (36)
 
 | Skill                          | Path                                                                      |
 | ------------------------------ | ------------------------------------------------------------------------- |

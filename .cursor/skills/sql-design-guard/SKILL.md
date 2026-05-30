@@ -3,7 +3,7 @@ name: sql-design-guard
 description: Enforces the PostgreSQL senior-level design style guide whenever Drizzle schema files are created or modified — auto-suggesting indexes, partitioning strategies, constraint names, and formatting all SQL objects according to production-ready conventions.
 ---
 
-# SQL Design Guard (core-be)
+# SQL design guard (core-be)
 
 Enforces production-ready PostgreSQL design conventions on every Drizzle schema change. Run the checklist top-to-bottom whenever a `*.schema.ts` file is created or modified under `src/domains/`.
 

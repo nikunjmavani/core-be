@@ -11,6 +11,8 @@ Thank you for improving this backend. This document is intentionally short—use
 
 ## Local setup
 
+One command (Docker + env + migrate + dev): `pnpm setup:local`. Full clone-to-running guide: **[SETUP.md](SETUP.md)**. Manual steps:
+
 ```bash
 pnpm install
 pnpm compose:up

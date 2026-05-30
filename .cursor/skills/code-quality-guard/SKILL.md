@@ -3,7 +3,7 @@ name: code-quality-guard
 description: Maintains the 3-layer code quality and security pipeline (editor Biome, Husky pre-commit hooks, CI security scanning). Use after changing Biome rules, pre-commit hooks, CI workflows, lint-staged config, or adding new security tooling.
 ---
 
-# Code Quality Guard (core-be)
+# Code quality guard (core-be)
 
 Maintains the layered code quality and security checking pipeline. Run this skill after any change to linting rules, pre-commit hooks, CI security steps, or related config files.
 

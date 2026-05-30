@@ -477,7 +477,7 @@ describe('SubscriptionService', () => {
     expect(createPayload).not.toHaveProperty('created_by_user_id');
   });
 
-  it('changePlan continues when Stripe update fails or price id is missing', async () => {
+  it('changePlan proceeds local-only when target plan has no Stripe price id', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...subscriptionRow,
@@ -491,13 +491,24 @@ describe('SubscriptionService', () => {
 
     await service.changePlan('org_public', 'sub_public', { plan_id: 'plan_public' });
     expect(stripeMocks.updateStripeSubscription).not.toHaveBeenCalled();
+    expect(repository.update).toHaveBeenCalled();
+  });
 
+  it('changePlan fails closed when Stripe price update fails — local plan unchanged', async () => {
+    stripeMocks.isStripeConfigured.mockReturnValue(true);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...subscriptionRow,
+      provider_subscription_id: 'sub_stripe',
+    } as never);
     vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
-      stripe_price_yearly_id: 'price_yearly',
+      stripe_price_monthly_id: 'price_new',
     } as never);
     stripeMocks.updateStripeSubscription.mockRejectedValueOnce(new Error('stripe update failed'));
-    await service.changePlan('org_public', 'sub_public', { plan_id: 'plan_public' });
-    expect(repository.update).toHaveBeenCalled();
+
+    await expect(
+      service.changePlan('org_public', 'sub_public', { plan_id: 'plan_public' }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableError);
+    expect(repository.update).not.toHaveBeenCalled();
   });
 });

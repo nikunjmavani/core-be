@@ -35,7 +35,8 @@ export function generateFieldExample(fieldName: string, schema: Record<string, u
   if (lowerField === 'token' || lowerField === 'refresh_token') {
     return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
   }
-  if (lowerField === 'secret') return faker.string.alphanumeric(32);
+  if (lowerField === 'secret') return 'whsec_...';
+  if (lowerField === 'raw_key') return 'sk_live_abc1...';
 
   // ── URL fields ──
   if (lowerField === 'url') return 'https://api.example.com/webhooks/receive';

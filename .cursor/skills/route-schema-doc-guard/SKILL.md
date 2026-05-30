@@ -3,7 +3,7 @@ name: route-schema-doc-guard
 description: Ensures every Fastify route registration in src/**/*.routes.ts (plus the special non-routes files src/shared/middlewares/health.middleware.ts and src/infrastructure/mcp/mcp-server.ts) carries a schema block with summary, description, and tags. Use when adding, removing, or renaming any route, or when openapi/route-catalog generation reports a missing summary.
 ---
 
-# Route schema doc guard
+# Route schema doc guard (core-be)
 
 Owns the **`schema`** block on every Fastify route registration. The block is the single source of truth for the OpenAPI document and the route catalog descriptions.
 

@@ -44,7 +44,10 @@ export function getFieldSpecificDescription(fieldName: string): string {
     token: 'Verification or authentication token.',
     refresh_token: 'Refresh token for obtaining new access tokens.',
     code: 'TOTP verification code (6 digits).',
-    secret: 'Webhook signing secret for payload verification.',
+    secret:
+      'Optional webhook signing secret on create/update requests (encrypted at rest; never returned in responses).',
+    raw_key:
+      'Full organization API key returned once on create/rotate (store securely; not shown again).',
     url: 'Webhook endpoint URL that will receive event payloads.',
     logo_url: 'URL to the organization logo image.',
     avatar_url: 'URL to the user avatar image.',

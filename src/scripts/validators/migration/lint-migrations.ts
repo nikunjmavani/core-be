@@ -871,24 +871,15 @@ export function getMaxMigrationPrefix(upMigrationFilenames: string[]): string | 
   return maxPrefix;
 }
 
-/** Returns the next strictly greater 14-digit prefix (numeric increment with zero-padding). */
-export function incrementMigrationPrefix(prefix: string): string {
-  const nextValue = BigInt(prefix) + 1n;
-  const nextPrefix = nextValue.toString().padStart(14, '0');
-  if (nextPrefix.length !== 14) {
-    throw new Error(`Migration prefix overflow after incrementing ${prefix}`);
-  }
-  return nextPrefix;
-}
-
 /**
- * Suggests the next migration prefix strictly after the current max.
+ * Suggests the next migration prefix using the real UTC wall clock.
  *
- * Prefers the real UTC wall-clock time (`YYYYMMDDHHMMSS`) so concurrent
- * developers on different branches naturally land on distinct prefixes and
- * avoid merge conflicts. Only falls back to `incrementMigrationPrefix` when
- * "now" is not strictly greater than the current max (clock skew, or two
- * migrations created in the same second).
+ * Always returns the current UTC time formatted as `YYYYMMDDHHMMSS` so
+ * concurrent developers on different branches naturally land on distinct
+ * prefixes and avoid the merge conflict that comes from incrementing a shared
+ * counter. `currentMax` is returned for display/diagnostics only; the
+ * monotonic-ordering invariant is enforced separately by
+ * `lintMigrationTimestamps` (`pnpm db:migrate:lint`).
  *
  * `now` is injectable for deterministic tests.
  */
@@ -900,10 +891,7 @@ export function suggestNextMigrationPrefix(
   nextPrefix: string;
 } {
   const currentMax = getMaxMigrationPrefix(upMigrationFilenames);
-  const nowPrefix = formatTimestampPrefix(now);
-  if (currentMax === null) return { currentMax, nextPrefix: nowPrefix };
-  if (nowPrefix > currentMax) return { currentMax, nextPrefix: nowPrefix };
-  return { currentMax, nextPrefix: incrementMigrationPrefix(currentMax) };
+  return { currentMax, nextPrefix: formatTimestampPrefix(now) };
 }
 
 function parsePrefixDateUtc(prefix: string): Date {

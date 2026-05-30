@@ -1,4 +1,9 @@
-# Skill: Production Hardening Guard
+---
+name: production-hardening-guard
+description: Enforces production-readiness checks across the codebase — security headers, JWT/CORS/rate limits, DB pool and SSL, Redis, external-service circuit breakers, logging redaction, worker resource limits, and CI/CD scanning. Use before deploying to production or after changing middleware, infrastructure, or security-related code.
+---
+
+# Production hardening guard (core-be)
 
 ## Purpose
 

@@ -12,6 +12,12 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
+const invalidateOrganizationPermissionsMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', () => ({
+  invalidateOrganizationPermissions: (...parameters: unknown[]) =>
+    invalidateOrganizationPermissionsMock(...parameters),
+}));
+
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
@@ -142,6 +148,17 @@ describe('OrganizationService', () => {
     service.wireOffboardingUploadService(uploadService as never);
     await service.delete(organizationRow.public_id);
     expect(uploadService.tombstoneAllByOrganizationId).toHaveBeenCalledWith(organizationRow.id);
+  });
+
+  it('delete invalidates the organization permission cache so access stops immediately', async () => {
+    await service.delete(organizationRow.public_id);
+    expect(invalidateOrganizationPermissionsMock).toHaveBeenCalledWith(organizationRow.public_id);
+  });
+
+  it('delete does not invalidate the permission cache when soft delete fails', async () => {
+    vi.mocked(repository.softDelete).mockResolvedValue(null);
+    await expect(service.delete(organizationRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+    expect(invalidateOrganizationPermissionsMock).not.toHaveBeenCalled();
   });
 
   it('uploadLogo validates key prefix and updates logo url', async () => {

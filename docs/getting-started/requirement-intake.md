@@ -366,7 +366,7 @@ flowchart LR
 
 | Skill                          | Path                                                     | When to invoke                                            |
 | ------------------------------ | -------------------------------------------------------- | --------------------------------------------------------- |
-| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (37 project skills) |
+| **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (36 project skills) |
 | domain-generator               | `.cursor/skills/domain-generator/SKILL.md`               | New domain/sub-domain scaffold                            |
 | route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                  | Any change to `*.routes.ts`                               |
 | openapi-route-sync             | `.cursor/skills/openapi-route-sync/SKILL.md`             | After route-catalog — OpenAPI metadata                    |

@@ -3,7 +3,7 @@ name: cursor-global-skills
 description: Reference for Cursor-built-in skills in ~/.cursor/skills-cursor/. Use when deciding whether a task needs a project skill (core-be) or a global Cursor skill. Not invoked for domain/API work.
 ---
 
-# Cursor Global Skills (reference)
+# Cursor global skills (reference)
 
 These skills ship with **Cursor** under `~/.cursor/skills-cursor/`. They are **not** part of the core-be repo. Use **skill-index** and `.cursor/skills/*` for backend work in this project.
 

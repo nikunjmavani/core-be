@@ -3,7 +3,7 @@ name: system-narrative-maintainer
 description: Maintains the four system-level documentation files at src/ root — src/OVERVIEW.md (platform overview), src/PATTERNS.md (cross-cutting patterns), src/FLOWS.md (end-to-end feature flows), src/POLICIES.md (platform policy constants). Use when adding a new domain, a new cross-cutting pattern, a new end-to-end flow, or a new policy constant in src/shared/constants/.
 ---
 
-# System narrative maintainer
+# System narrative maintainer (core-be)
 
 Owns the four hand-authored, cross-domain narrative files that sit at `src/` root:
 

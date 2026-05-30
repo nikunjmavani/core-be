@@ -3,7 +3,7 @@ name: tsdoc-export-guard
 description: Ensures every public TypeScript export under src/ has a TSDoc summary, and every public export in service/worker/processor/policy files has an additional @remarks block (Algorithm / Failure modes / Side effects / Notes). Use when adding or renaming exported symbols, when MISSING_DESCRIPTION or MISSING_REMARKS counts regress against `pnpm tsdoc:check`, or when authoring a policy constant.
 ---
 
-# TSDoc export guard
+# TSDoc export guard (core-be)
 
 Owns symbol-level documentation: the TSDoc comment that sits immediately above every public `export <kind> <name>` declaration. TSDoc is the canonical per-symbol documentation in this codebase — IDE hover, [TypeDoc](https://typedoc.org/), and the `pnpm tsdoc:check` coverage gate all read directly from it.
 

@@ -71,7 +71,7 @@ function buildService() {
     createSubscription: vi.fn().mockResolvedValue({ providerSubscriptionId: 'sub_provider' }),
     cancelSubscriptionAtPeriodEnd: vi.fn().mockResolvedValue(undefined),
     resumeSubscription: vi.fn().mockResolvedValue(undefined),
-    updateSubscriptionPrice: vi.fn().mockResolvedValue(true),
+    updateSubscriptionPrice: vi.fn().mockResolvedValue(undefined),
     compensateFailedCreate: vi.fn().mockResolvedValue(undefined),
     compensatePlanChange: vi.fn().mockResolvedValue(undefined),
   } satisfies PaymentProvider;
