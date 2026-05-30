@@ -3,7 +3,7 @@ name: code-smells-and-best-practices
 description: When adding or modifying code in src/, fix Biome lint issues in touched files. Full validate runs on pre-commit and CI — do not duplicate. Uses lint-warnings-handler for warning details.
 ---
 
-# Skill: Code Smells and Best Practices
+# Code smells and best practices (core-be)
 
 ## Purpose
 

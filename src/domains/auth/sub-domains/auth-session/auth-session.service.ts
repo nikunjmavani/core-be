@@ -38,7 +38,9 @@ function hashRefreshSecret(refreshSecret: string): string {
  *   `UnauthorizedError` with `errors:invalidOrRevokedToken` / `errors:invalidOrExpiredSession`.
  * - **Side effects:** writes to `auth.sessions`; invalidates the Redis token
  *   cache via {@link invalidateCachedSessionToken} on every revoke / rotate so
- *   downstream bearer checks see the change immediately.
+ *   downstream bearer checks see the change immediately. On refresh-secret reuse
+ *   (an already-rotated secret replayed), {@link refreshSessionCredentials}
+ *   revokes the user's entire session family, not just the targeted session.
  * - **Notes:** {@link verifyActiveAccessToken} is hot-pathed by the auth
  *   middleware and uses a 60-second Redis cache to amortise DB round-trips.
  */
@@ -68,18 +70,24 @@ export class AuthSessionService {
     }
   }
 
-  async revokeAllSessions(userPublicId: string): Promise<void> {
-    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
-    if (!user) throw new NotFoundError('User');
-    const revokedSessions = await withUserDatabaseContext(userPublicId, (_databaseHandle) =>
-      this.sessionRepository.revokeAllByUserId(user.id),
-    );
+  private async invalidateRevokedSessionCaches(
+    revokedSessions: { token_hash: string | null }[],
+  ): Promise<void> {
     await Promise.all(
       revokedSessions
         .map((session) => session.token_hash)
         .filter((tokenHash): tokenHash is string => Boolean(tokenHash))
         .map((tokenHash) => invalidateCachedSessionToken(tokenHash)),
     );
+  }
+
+  async revokeAllSessions(userPublicId: string): Promise<void> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new NotFoundError('User');
+    const revokedSessions = await withUserDatabaseContext(userPublicId, (_databaseHandle) =>
+      this.sessionRepository.revokeAllByUserId(user.id),
+    );
+    await this.invalidateRevokedSessionCaches(revokedSessions);
   }
 
   /**
@@ -111,12 +119,7 @@ export class AuthSessionService {
     const revokedSessions = await withUserDatabaseContext(userPublicId, (_databaseHandle) =>
       this.sessionRepository.revokeAllByUserIdExcept(user.id, currentTokenHash),
     );
-    await Promise.all(
-      revokedSessions
-        .map((session) => session.token_hash)
-        .filter((tokenHash): tokenHash is string => Boolean(tokenHash))
-        .map((tokenHash) => invalidateCachedSessionToken(tokenHash)),
-    );
+    await this.invalidateRevokedSessionCaches(revokedSessions);
   }
 
   async createSessionForUser(
@@ -222,18 +225,50 @@ export class AuthSessionService {
     );
 
     if (!rotated) {
-      await withSessionPublicIdDatabaseContext(sessionPublicId, async (_databaseHandle) => {
-        const existing = await this.sessionRepository.findByPublicId(sessionPublicId);
-        if (existing?.refresh_token_hash && existing.refresh_token_hash !== currentRefreshHash) {
-          await this.sessionRepository.revoke(sessionPublicId, existing.user_id);
-          if (existing.token_hash) {
-            await invalidateCachedSessionToken(existing.token_hash);
+      // Reuse detection: the presented refresh secret did not match the stored hash. If the
+      // session still exists with a *different* refresh hash, an already-rotated (old/stolen)
+      // secret is being replayed. Revoke the user's entire session family so a leaked refresh
+      // token cannot be used to keep — or regain — access on any device (OAuth refresh-token
+      // rotation reuse-detection per RFC 9700).
+      const reusedUserId = await withSessionPublicIdDatabaseContext(
+        sessionPublicId,
+        async (_databaseHandle) => {
+          const existing = await this.sessionRepository.findByPublicId(sessionPublicId);
+          if (existing?.refresh_token_hash && existing.refresh_token_hash !== currentRefreshHash) {
+            return existing.user_id;
           }
-        }
-      });
+          return null;
+        },
+      );
+      if (reusedUserId !== null) {
+        await this.revokeAllSessionsForReusedRefreshSecret(reusedUserId);
+      }
       throw new UnauthorizedError('errors:invalidOrExpiredSession');
     }
 
     return { refresh_secret: nextRefreshSecret };
+  }
+
+  /**
+   * Revokes every session for the owner of a replayed refresh secret.
+   *
+   * @remarks
+   * - **Algorithm:** resolves the owner's public id from the internal `userId`
+   *   via {@link UserService.findById} (RLS-safe SECURITY DEFINER resolver),
+   *   then revokes all of that user's sessions under their own `app.current_user_id`
+   *   context so the `sessions_user_access` policy authorizes the family-wide update.
+   * - **Failure modes:** if the owner can no longer be resolved (already
+   *   hard-deleted) the revoke is skipped — the replay is rejected regardless by
+   *   the `UnauthorizedError` thrown by the caller.
+   * - **Side effects:** writes `auth.sessions` rows and invalidates each revoked
+   *   token's Redis cache entry.
+   */
+  private async revokeAllSessionsForReusedRefreshSecret(userId: number): Promise<void> {
+    const user = await this.userService.findById(userId);
+    if (!user) return;
+    const revokedSessions = await withUserDatabaseContext(user.public_id, (_databaseHandle) =>
+      this.sessionRepository.revokeAllByUserId(user.id),
+    );
+    await this.invalidateRevokedSessionCaches(revokedSessions);
   }
 }

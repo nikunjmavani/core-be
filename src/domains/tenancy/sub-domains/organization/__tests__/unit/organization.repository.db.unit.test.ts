@@ -61,6 +61,12 @@ describe('OrganizationRepository (database)', () => {
     expect(await repository.findByStripeCustomerId('cus_missing')).toBeNull();
 
     await repository.updateOwner(created.public_id, owner.id);
+
+    // Soft-delete is two-phase: deletion must be marked started before it can be finalized.
+    expect(await repository.softDelete(created.public_id)).toBeNull();
+    const markedForDeletion = await repository.markDeletionStarted(created.public_id);
+    expect(markedForDeletion?.deletion_started_at).not.toBeNull();
+
     const deleted = await repository.softDelete(created.public_id);
     expect(deleted?.deleted_at).not.toBeNull();
     expect(await repository.softDelete(created.public_id)).toBeNull();

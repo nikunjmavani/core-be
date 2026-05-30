@@ -73,6 +73,30 @@ describe('notification.worker', () => {
     expect(result).toEqual({ channels: ['email:queued', 'in_app:persisted'] });
   });
 
+  it('escapes untrusted notification fields and drops unsafe action URLs in the email HTML', async () => {
+    const repository = createNotificationRepository(
+      buildNotificationRow({
+        title: '<script>alert(1)</script>',
+        message: 'Hello <img src=x onerror=alert(1)>',
+        actionUrl: 'javascript:alert(document.cookie)',
+      }),
+    );
+
+    await processNotificationDispatchJob(
+      10,
+      'organization_public_id',
+      { id: 'job-1', requestId: 'request-1' },
+      repository,
+    );
+
+    const emailPayload = recordOutboxEmailMock.mock.calls[0]?.[0] as { html: string };
+    expect(emailPayload.html).not.toContain('<script>alert(1)</script>');
+    expect(emailPayload.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(emailPayload.html).not.toContain('<img src=x');
+    expect(emailPayload.html).not.toContain('href="javascript:');
+    expect(emailPayload.html).not.toContain('class="button"');
+  });
+
   it('skips email channel when mail is not configured', async () => {
     isMailConfiguredMock.mockReturnValue(false);
     const repository = createNotificationRepository(buildNotificationRow());

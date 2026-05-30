@@ -3,12 +3,11 @@
  * `pnpm db:migrate:new <slug>` — create a new empty migration file with a
  * timestamp-based ordering prefix.
  *
- * The 14-digit prefix is real UTC `YYYYMMDDHHMMSS` (not a `_000001` counter)
- * so concurrent developers on different branches generate distinct prefixes
- * by default and avoid the trivial merge conflict that comes from two PRs
- * each claiming `_000NNN` on the same day. Falls back to incrementing the
- * current max when "now" is not strictly greater (clock skew or two
- * migrations created in the same second).
+ * The 14-digit prefix is always the real UTC `YYYYMMDDHHMMSS` wall clock (not
+ * a `_000001` counter) so concurrent developers on different branches generate
+ * distinct prefixes by default and avoid the trivial merge conflict that comes
+ * from two PRs each claiming `_000NNN` on the same day. Monotonic ordering is
+ * enforced separately by `pnpm db:migrate:lint`.
  *
  * Usage:
  *   pnpm db:migrate:new add_user_avatar_url

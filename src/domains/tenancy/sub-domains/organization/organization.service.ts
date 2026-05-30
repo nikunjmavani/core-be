@@ -15,6 +15,7 @@ import {
   validateUploadLogo,
 } from './organization.validator.js';
 import { serializeOrganization } from './organization.serializer.js';
+import { invalidateOrganizationPermissions } from '../permission/permission-cache.service.js';
 import { buildOrganizationLogoKeyPrefix } from '@/domains/upload/upload.constants.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -60,8 +61,9 @@ export type OrganizationOffboardingDependencies = {
  * - **Side effects:** S3 deletes and head-object calls via the injected
  *   {@link ObjectStoragePort}; tombstones uploads and clears the logo URL on
  *   organization deletion (cross-domain wiring through
- *   {@link OrganizationOffboardingDependencies}); does not emit domain events
- *   or write audit logs directly.
+ *   {@link OrganizationOffboardingDependencies}); purges the org's permission
+ *   cache on soft-delete via {@link invalidateOrganizationPermissions}; does not
+ *   emit domain events or write audit logs directly.
  * - **Notes:** soft-delete only — the row remains until the tombstone
  *   retention worker hard-deletes it; offboarding S3/upload-service work runs
  *   outside the DB context to avoid holding a transaction across HTTP.
@@ -366,6 +368,9 @@ export class OrganizationService {
       this.repository.softDelete(public_id),
     );
     if (!deleted) throw new NotFoundError('Organization');
+    // Purge every member's cached permissions for this org so access stops
+    // immediately on soft-delete rather than lingering until the cache TTL.
+    await invalidateOrganizationPermissions(public_id);
   }
 
   async uploadLogo(

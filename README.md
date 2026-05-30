@@ -10,7 +10,7 @@
 
 **core-be** is a multi-tenant SaaS backend: a Node.js + Fastify HTTP API plus a separate BullMQ worker process, both speaking to a single Postgres database and a Redis instance. Postgres is the only source of truth — workers are pull-based, idempotent, and may be restarted without coordination.
 
-**Quick links:** [Quick Start](#-quick-start) · [Documentation](#-documentation) · [src/OVERVIEW.md](src/OVERVIEW.md) · [CLAUDE.md](CLAUDE.md) · [AGENTS.md](AGENTS.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
+**Quick links:** [Quick Start](#-quick-start) · [SETUP.md](SETUP.md) · [Documentation](#-documentation) · [src/OVERVIEW.md](src/OVERVIEW.md) · [CLAUDE.md](CLAUDE.md) · [AGENTS.md](AGENTS.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
@@ -51,6 +51,8 @@ pnpm db:migrate && pnpm db:seed
 pnpm dev          # API on :3000
 pnpm dev:worker   # BullMQ worker (separate terminal)
 ```
+
+**One-command local bootstrap:** `pnpm setup:local` (Docker + env + migrate + dev). Full clone-to-running guide: [SETUP.md](SETUP.md).
 
 **Environment:** copy values from [`.env.example`](.env.example) into `.env.development`, or run `pnpm github:sync` to bootstrap env files. For one-command cloud provisioning (Neon, Redis, S3, Sentry, Railway, GitHub), see [setup automation](docs/deployment/setup/setup-automation.md) (`pnpm setup:infra`).
 
@@ -156,6 +158,7 @@ CI runs on GitHub Actions; API and worker deploy to Railway on push to **dev** a
 
 | Doc | Purpose |
 | --- | --- |
+| [SETUP.md](SETUP.md) | Clone-to-running setup (local + cloud infra) |
 | [docs/README.md](docs/README.md) | Full documentation index |
 | [src/OVERVIEW.md](src/OVERVIEW.md) | System narrative and domain map |
 | [CLAUDE.md](CLAUDE.md) | Architecture rules, commands, conventions |

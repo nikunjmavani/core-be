@@ -3,7 +3,7 @@ name: overview-doc-maintainer
 description: Authors and maintains per-folder OVERVIEW.md files following one of four templates (A.1 domain, A.2 sub-domain, A.3 infrastructure/shared module, A.4 test suite). Use when adding a new domain, sub-domain, infrastructure module, or test suite folder, or when an existing OVERVIEW.md is stale.
 ---
 
-# Overview doc maintainer
+# Overview doc maintainer (core-be)
 
 Owns the hand-authored **`OVERVIEW.md`** at every documentable folder under `src/`. Each folder uses one of four templates depending on its role; the validator picks the right template from the folder path.
 

@@ -3,7 +3,7 @@ name: setup-infra-maintainer
 description: Keeps setup:infra third-party providers and all dependent files in sync. Use when adding or removing any provider (Neon, Railway Redis, AWS, Sentry, GitHub, Railway, Postman, Stripe, Resend, OAuth, etc.).
 ---
 
-# Skill: Setup Infra Maintainer (core-be)
+# Setup infra maintainer (core-be)
 
 ## Purpose
 

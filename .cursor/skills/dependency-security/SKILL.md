@@ -3,7 +3,7 @@ name: dependency-security
 description: Keeps pnpm dependencies non-vulnerable and avoids breaking changes when updating. Use when adding/updating dependencies, when CI audit fails, or when reviewing package.json / pnpm-lock.yaml.
 ---
 
-# Dependency Security (core-be)
+# Dependency security (core-be)
 
 Keep **zero known vulnerabilities** in dependencies and avoid **breaking changes** when updating. Follow this skill whenever you add, upgrade, or change dependencies.
 

@@ -62,6 +62,9 @@ describe('UserRepository (database)', () => {
     const adminUpdated = await repository.adminUpdate(user.public_id, { status: 'SUSPENDED' });
     expect(adminUpdated?.status).toBe('SUSPENDED');
 
+    // Soft-delete is a two-phase contract: deletion must be marked started before the row can be
+    // soft-deleted (mirrors UserService.softDeleteUserWithOffboarding).
+    await repository.markDeletionStarted(user.public_id);
     await repository.softDelete(user.public_id);
     const afterDelete = await repository.findByPublicId(user.public_id);
     expect(afterDelete).toBeNull();

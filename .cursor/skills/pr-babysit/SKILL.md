@@ -3,7 +3,7 @@ name: pr-babysit
 description: Keep a core-be PR merge-ready — triage review comments, resolve merge conflicts, and fix CI in a loop. Use when the user asks to babysit a PR, fix CI on a PR, or get a branch merge-ready.
 ---
 
-# PR Babysit (core-be)
+# PR babysit (core-be)
 
 Get the current PR to **mergeable + green CI + review comments addressed**.
 

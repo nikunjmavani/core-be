@@ -27,6 +27,7 @@ const user = { id: 1, public_id: 'user_public', email: 'user@example.com' };
 describe('AuthSessionService', () => {
   const userService = {
     requireUserRecordByPublicId: vi.fn().mockResolvedValue(user),
+    findById: vi.fn().mockResolvedValue(user),
   } as unknown as UserService;
 
   const sessionRepository = {
@@ -44,6 +45,7 @@ describe('AuthSessionService', () => {
       expires_at: new Date('2026-12-31T00:00:00.000Z'),
     }),
     rotateTokenHash: vi.fn().mockResolvedValue(undefined),
+    rotateSessionCredentials: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
   } as unknown as AuthSessionRepository;
 
   const service = new AuthSessionService(userService, sessionRepository);
@@ -51,6 +53,7 @@ describe('AuthSessionService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
+    vi.mocked(userService.findById).mockResolvedValue(user as never);
   });
 
   it('list returns sessions for user', async () => {
@@ -196,5 +199,57 @@ describe('AuthSessionService', () => {
     await expect(service.verifyActiveAccessToken('unknown-token')).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
+  });
+
+  it('refreshSessionCredentials rotates the secret and does not revoke the family on the happy path', async () => {
+    vi.mocked(sessionRepository.findByPublicId).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: user.id,
+      token_hash: 'old-token-hash',
+      refresh_token_hash: 'stored-refresh-hash',
+    } as never);
+    vi.mocked(sessionRepository.rotateSessionCredentials).mockResolvedValue({
+      public_id: 'session_public',
+    } as never);
+
+    const result = await service.refreshSessionCredentials({
+      sessionPublicId: 'session_public',
+      refreshSecret: 'presented-secret',
+      nextAccessToken: 'next-access-token',
+    });
+
+    expect(result.refresh_secret).toMatch(/.+/);
+    expect(sessionRepository.revokeAllByUserId).not.toHaveBeenCalled();
+  });
+
+  it('refreshSessionCredentials revokes the entire session family when an old refresh secret is replayed (reuse detection)', async () => {
+    vi.mocked(sessionRepository.findByPublicId).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: user.id,
+      token_hash: 'old-token-hash',
+      refresh_token_hash: 'already-rotated-hash',
+    } as never);
+    vi.mocked(sessionRepository.rotateSessionCredentials).mockResolvedValue(null as never);
+    vi.mocked(sessionRepository.revokeAllByUserId).mockResolvedValue([
+      { token_hash: 'family-hash-a' },
+      { token_hash: 'family-hash-b' },
+      { token_hash: null },
+    ] as never);
+    const { invalidateCachedSessionToken } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
+
+    await expect(
+      service.refreshSessionCredentials({
+        sessionPublicId: 'session_public',
+        refreshSecret: 'stolen-old-secret',
+        nextAccessToken: 'next-access-token',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+
+    expect(userService.findById).toHaveBeenCalledWith(user.id);
+    expect(sessionRepository.revokeAllByUserId).toHaveBeenCalledWith(user.id);
+    expect(invalidateCachedSessionToken).toHaveBeenCalledWith('family-hash-a');
+    expect(invalidateCachedSessionToken).toHaveBeenCalledWith('family-hash-b');
   });
 });

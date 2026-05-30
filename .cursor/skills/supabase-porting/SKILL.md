@@ -3,7 +3,7 @@ name: supabase-porting
 description: Ports Supabase Edge Functions (Deno) into core-be (Node/Fastify/Drizzle/BullMQ). Manual invoke only. Not for SQL migrations in migrations/ — use db-migration-maintainer.
 ---
 
-# Supabase Porting (Edge Functions → core-be)
+# Supabase porting (Edge Functions → core-be)
 
 > **Not** SQL migrations. For `migrations/*.sql` and Drizzle schema changes, use **db-migration-maintainer**.
 

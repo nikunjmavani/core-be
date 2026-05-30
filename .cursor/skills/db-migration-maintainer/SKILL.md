@@ -3,7 +3,7 @@ name: db-migration-maintainer
 description: Keeps SQL migrations in migrations/ aligned with Drizzle schema changes. Use when adding or changing *.schema.ts or creating/editing migrations/*.sql. Not for Supabase Edge Function porting (see supabase-porting).
 ---
 
-# DB Migration Maintainer (core-be)
+# DB migration maintainer (core-be)
 
 ## Purpose
 
@@ -35,7 +35,7 @@ These are enforced by `pnpm db:migrate:lint` and cannot be overridden by the `--
 3. **Author SQL migration** in `migrations/`:
    - **Generate with `pnpm db:migrate:new <snake_case_slug>`** — this creates `migrations/YYYYMMDDHHMMSS_<slug>.sql` with the proper header. The 14-digit prefix is real UTC wall-clock time (e.g. `20260528054321`) so concurrent developers on different branches naturally land on distinct prefixes and avoid the trivial merge conflict that happens with `_000001 / _000002` counter-based suffixes.
    - For just the prefix (no file): `pnpm db:migrate:next-prefix [description]`.
-   - Both helpers fall back to incrementing the current max when "now" is not strictly greater (clock skew / two migrations in the same second), so monotonic ordering is preserved.
+   - Both helpers always use the real UTC wall clock — there is no counter/increment fallback. Monotonic ordering is enforced separately by `pnpm db:migrate:lint`.
    - Filename pattern: `YYYYMMDDHHMMSS_short_description.sql` — **14-digit lexicographic ordering key** + snake_case suffix.
    - Prefix must be **strictly greater** than every existing up-migration prefix (`pnpm db:migrate:lint` enforces monotonic order). Do not use `date -u +%Y%m%d000001` — that re-introduces the counter pattern. Use the helper.
    - **Do not rename** applied migration files — `public.schema_migrations` keys on `filename`; renaming a file makes the runner think it's a brand-new migration and re-apply it in environments that already had it.

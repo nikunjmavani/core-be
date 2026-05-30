@@ -45,7 +45,7 @@ pnpm db:migrate:next-prefix add_my_table
 # → prints current max, next prefix, and example filename
 ```
 
-Both helpers share the same logic: prefer real UTC `HHMMSS`, fall back to incrementing the current max only when "now" is not strictly greater (clock skew, or two migrations created in the same second). Author SQL in the generated file and run `pnpm db:migrate:lint`.
+Both helpers share the same logic: the prefix is always the real UTC `YYYYMMDDHHMMSS` wall clock — there is no counter/increment fallback. Monotonic ordering is enforced separately by `pnpm db:migrate:lint`. Author SQL in the generated file and run the lint.
 
 ---
 

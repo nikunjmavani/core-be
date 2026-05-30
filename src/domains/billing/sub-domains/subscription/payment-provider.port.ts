@@ -31,10 +31,7 @@ export interface PaymentProvider {
 
   resumeSubscription(providerSubscriptionId: string): Promise<void>;
 
-  updateSubscriptionPrice(
-    providerSubscriptionId: string,
-    providerPriceId: string,
-  ): Promise<boolean>;
+  updateSubscriptionPrice(providerSubscriptionId: string, providerPriceId: string): Promise<void>;
 
   compensateFailedCreate(providerSubscriptionId: string): Promise<void>;
 

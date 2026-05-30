@@ -10,7 +10,7 @@ import { createWorkerNotificationRepository } from '@/domains/notify/sub-domains
 import { dispatchOutboxEmail, recordOutboxEmail } from '@/infrastructure/mail/queues/mail.queue.js';
 import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
-import { baseTemplate } from '@/infrastructure/mail/templates/base.template.js';
+import { buildNotificationEmailHtml } from './notification-email-content.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { getWorkerConcurrencyNotify } from '@/shared/config/worker-concurrency.util.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
@@ -93,20 +93,12 @@ export async function processNotificationDispatchJob(
           break;
         }
 
-        const html = baseTemplate({
-          title,
-          preheader: message,
-          body: `
-                <h1>${title}</h1>
-                <p>${message}</p>
-                ${actionUrl ? `<p style="text-align: center; margin: 32px 0;"><a href="${actionUrl}" class="button">View Details</a></p>` : ''}
-              `,
-        });
+        const { subject, html } = buildNotificationEmailHtml({ title, message, actionUrl });
 
         await withSystemTableWorkerContext(async () => {
           const mailOutboxId = await recordOutboxEmail({
             to: email,
-            subject: title,
+            subject,
             html,
             tags: [{ name: 'category', value: `notification-${type}` }],
           });

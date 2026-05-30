@@ -147,6 +147,58 @@ describe('PermissionRepository cross-organization isolation (database)', () => {
     expect(codesInB).toEqual([]);
   });
 
+  it('returns empty permission set when the organization is soft-deleted', async () => {
+    const owner = await createTestUser({ email: 'owner-deleted-org@example.com' });
+    const member = await createTestUser({ email: 'member-deleted-org@example.com' });
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: ['organization:read'],
+    });
+    await createMembership({
+      userId: member.id,
+      organizationId: organization.id,
+      roleId: role.id,
+      status: 'ACTIVE',
+    });
+
+    await sql`
+      UPDATE tenancy.organizations SET deleted_at = now(), updated_at = now() WHERE id = ${organization.id}
+    `;
+
+    const codes = await repository.findPermissionCodesForUserInOrganization(
+      member.public_id,
+      organization.public_id,
+    );
+    expect(codes).toEqual([]);
+  });
+
+  it('returns empty permission set when the user is soft-deleted', async () => {
+    const owner = await createTestUser({ email: 'owner-deleted-user@example.com' });
+    const member = await createTestUser({ email: 'member-deleted-user@example.com' });
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: ['organization:read'],
+    });
+    await createMembership({
+      userId: member.id,
+      organizationId: organization.id,
+      roleId: role.id,
+      status: 'ACTIVE',
+    });
+
+    await sql`
+      UPDATE auth.users SET deleted_at = now(), updated_at = now() WHERE id = ${member.id}
+    `;
+
+    const codes = await repository.findPermissionCodesForUserInOrganization(
+      member.public_id,
+      organization.public_id,
+    );
+    expect(codes).toEqual([]);
+  });
+
   it('returns empty permission set when role tied to membership is soft-deleted', async () => {
     const owner = await createTestUser({ email: 'owner-deleted-role@example.com' });
     const member = await createTestUser({ email: 'member-deleted-role@example.com' });
