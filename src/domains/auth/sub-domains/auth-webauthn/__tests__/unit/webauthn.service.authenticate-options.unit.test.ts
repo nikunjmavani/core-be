@@ -15,9 +15,13 @@ vi.mock('@/domains/auth/sub-domains/auth-webauthn/webauthn-challenge.js', () => 
 }));
 
 vi.mock('@simplewebauthn/server', () => ({
-  generateAuthenticationOptions: vi
-    .fn()
-    .mockResolvedValue({ challenge: 'challenge', rpId: 'localhost' }),
+  generateAuthenticationOptions: vi.fn(
+    async ({ allowCredentials }: { allowCredentials: { id: string }[] }) => ({
+      challenge: 'challenge',
+      rpId: 'localhost',
+      allowCredentials,
+    }),
+  ),
 }));
 
 describe('WebauthnService.generateAuthenticationOptions', () => {
@@ -42,27 +46,71 @@ describe('WebauthnService.generateAuthenticationOptions', () => {
     vi.clearAllMocks();
   });
 
-  it('returns the same auth error for missing email, unknown user, and user without passkeys', async () => {
+  it('rejects only when no email is supplied', async () => {
+    await expect(service.generateAuthenticationOptions({})).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
     await expect(service.generateAuthenticationOptions({})).rejects.toMatchObject({
       messageKey: 'errors:invalidEmailOrPassword',
     });
+  });
 
+  it('returns decoy options (not an error) for an unknown email to avoid enumeration', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue(null);
-    await expect(
-      service.generateAuthenticationOptions({ email: 'missing@example.com' }),
-    ).rejects.toMatchObject({ messageKey: 'errors:invalidEmailOrPassword' });
 
+    const result = await service.generateAuthenticationOptions({ email: 'missing@example.com' });
+
+    expect(result.challenge_token).toBe('challenge-token');
+    expect(result.options.allowCredentials).toHaveLength(1);
+    expect(credentialRepository.listActiveByUserId).not.toHaveBeenCalled();
+  });
+
+  it('returns decoy options for a known email that has no registered passkeys', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue({
       id: 1,
       public_id: 'abcdefghijklmnopqrstu',
       email: 'user@example.com',
     } as never);
     vi.mocked(credentialRepository.listActiveByUserId).mockResolvedValue([]);
-    await expect(
-      service.generateAuthenticationOptions({ email: 'user@example.com' }),
-    ).rejects.toBeInstanceOf(UnauthorizedError);
-    await expect(
-      service.generateAuthenticationOptions({ email: 'user@example.com' }),
-    ).rejects.toMatchObject({ messageKey: 'errors:invalidEmailOrPassword' });
+
+    const result = await service.generateAuthenticationOptions({ email: 'user@example.com' });
+
+    expect(result.challenge_token).toBe('challenge-token');
+    expect(result.options.allowCredentials).toHaveLength(1);
+  });
+
+  it('derives a stable decoy credential id per email across repeated probes', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue(null);
+
+    const first = await service.generateAuthenticationOptions({ email: 'probe@example.com' });
+    const second = await service.generateAuthenticationOptions({ email: 'probe@example.com' });
+    const other = await service.generateAuthenticationOptions({ email: 'different@example.com' });
+
+    const firstId = (first.options.allowCredentials as { id: string }[])[0]?.id;
+    const secondId = (second.options.allowCredentials as { id: string }[])[0]?.id;
+    const otherId = (other.options.allowCredentials as { id: string }[])[0]?.id;
+
+    expect(firstId).toBe(secondId);
+    expect(firstId).not.toBe(otherId);
+  });
+
+  it('returns real credentials for a known email that has passkeys', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue({
+      id: 7,
+      public_id: 'abcdefghijklmnopqrstu',
+      email: 'has-passkey@example.com',
+    } as never);
+    vi.mocked(credentialRepository.listActiveByUserId).mockResolvedValue([
+      { credential_id: 'real-credential', transports: ['internal'] },
+    ] as never);
+
+    const result = await service.generateAuthenticationOptions({
+      email: 'has-passkey@example.com',
+    });
+
+    const credentialIds = (result.options.allowCredentials as { id: string }[]).map(
+      (credential) => credential.id,
+    );
+    expect(credentialIds).toContain('real-credential');
   });
 });

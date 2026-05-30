@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import {
   generateAuthenticationOptions,
@@ -10,7 +11,9 @@ import type {
   AuthenticatorTransportFuture,
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
+import { env } from '@/shared/config/env.config.js';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -76,11 +79,12 @@ export type WebauthnAuthenticateOptionsResult = {
  *   {@link webauthn_credentials}; authentication validates the assertion, bumps
  *   the stored signature counter via {@link WebauthnCredentialRepository.updateCounter},
  *   and mints a JWT + session.
- * - **Failure modes:** unknown user, missing credentials, mismatched challenge
- *   user, replayed/forged assertions, or counter regression all surface as
- *   `UnauthorizedError` or `ValidationError` with WebAuthn-specific i18n keys
- *   (`errors:webauthnInvalidChallenge`, `errors:webauthnNoCredentials`,
- *   `errors:webauthnAuthenticationFailed`, …).
+ * - **Failure modes:** mismatched challenge user, replayed/forged assertions, or
+ *   counter regression surface as `UnauthorizedError` or `ValidationError` with
+ *   WebAuthn-specific i18n keys (`errors:webauthnInvalidChallenge`,
+ *   `errors:webauthnNoCredentials`, `errors:webauthnAuthenticationFailed`, …). The
+ *   `authenticate/options` step never reveals account existence: unknown emails and
+ *   emails without passkeys receive deterministic decoy options instead of an error.
  * - **Side effects:** writes to {@link webauthn_credentials} (`createCredential`,
  *   `updateCounter`), to `auth.sessions` via {@link AuthSessionService.createSessionForUser},
  *   and to Redis (`webauthn:challenge:*`). Signs an RS256 JWT on successful login.
@@ -197,15 +201,20 @@ export class WebauthnService {
     }
 
     const user = await this.userService.findByEmail(parsed.email);
-    if (!user) {
-      throw new UnauthorizedError('errors:invalidEmailOrPassword');
-    }
+    const credentials = user
+      ? await withUserDatabaseContext(user.public_id, () =>
+          this.credentialRepository.listActiveByUserId(user.id),
+        )
+      : [];
 
-    const credentials = await withUserDatabaseContext(user.public_id, () =>
-      this.credentialRepository.listActiveByUserId(user.id),
-    );
-    if (credentials.length === 0) {
-      throw new UnauthorizedError('errors:invalidEmailOrPassword');
+    // Anti-enumeration: never let the response reveal whether `email` maps to an account
+    // that has passkeys. Unknown accounts (and known accounts without credentials) receive
+    // structurally identical decoy options keyed deterministically on the email, so the
+    // 200 + allowCredentials payload is indistinguishable from a genuine challenge. The
+    // follow-up verify fails uniformly because no authenticator can satisfy the decoy.
+    if (!user || credentials.length === 0) {
+      void requestOrigin;
+      return this.buildDecoyAuthenticationOptions(parsed.email);
     }
 
     const options = await generateAuthenticationOptions({
@@ -225,6 +234,46 @@ export class WebauthnService {
     );
 
     void requestOrigin;
+    return { options, challenge_token: challengeToken };
+  }
+
+  /**
+   * Builds decoy authentication options for an email that has no usable passkey, so the
+   * `authenticate/options` endpoint cannot be used as an account/credential enumeration oracle.
+   *
+   * @remarks
+   * - **Algorithm:** derives a single stable decoy credential id from
+   *   `HMAC-SHA256(SECRETS_ENCRYPTION_KEY, "webauthn-auth-decoy:" + lowercased email)` so
+   *   repeated probes for the same email return identical credential descriptors (a real
+   *   account's credential ids are likewise stable). Generates real `simplewebauthn` options
+   *   around that decoy and stores a challenge bound to a non-resolvable synthetic user.
+   * - **Failure modes:** none surfaced to the caller — the point is to return a 200 that mirrors
+   *   the genuine shape; the eventual verify fails uniformly via the standard credential lookup.
+   * - **Side effects:** writes a short-lived `webauthn:challenge:*` entry to Redis.
+   * - **Notes:** the synthetic `decoy:<publicId>` owner never matches a real user, so even if the
+   *   client echoes the challenge back, `verifyAuthentication` rejects it like any other mismatch.
+   */
+  private async buildDecoyAuthenticationOptions(
+    email: string,
+  ): Promise<WebauthnAuthenticateOptionsResult> {
+    const decoyCredentialId = createHmac('sha256', env.SECRETS_ENCRYPTION_KEY)
+      .update(`webauthn-auth-decoy:${email.toLowerCase()}`)
+      .digest()
+      .toString('base64url');
+
+    const options = await generateAuthenticationOptions({
+      rpID: resolveWebauthnRelyingPartyId(),
+      allowCredentials: [{ id: decoyCredentialId, transports: ['internal'] }],
+      userVerification: 'preferred',
+    });
+
+    const challengeToken = await createWebauthnChallenge(
+      this.redis,
+      'authentication',
+      `decoy:${generatePublicId()}`,
+      options.challenge,
+    );
+
     return { options, challenge_token: challengeToken };
   }
 
