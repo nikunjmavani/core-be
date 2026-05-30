@@ -82,8 +82,7 @@ async function handleEmailVerificationEmail(
   requestId?: string,
 ): Promise<void> {
   if (!isMailConfigured()) {
-    logger.warn({ email: payload.email }, 'Mail not configured — verification email skipped');
-    return;
+    throw new ServiceUnavailableError('errors:mailNotConfigured');
   }
 
   const frontendUrl = env.FRONTEND_URL ?? 'http://localhost:3000';
