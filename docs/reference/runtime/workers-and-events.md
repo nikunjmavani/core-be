@@ -234,7 +234,7 @@ emitWebhookDeliveryRequested()  →  notify/sub-domains/webhook/events/
 webhook-delivery.event-handlers.ts  →  enqueueWebhookDeliveryByAttemptId()
 ```
 
-**Outbound webhook SSRF:** `webhook-delivery.worker` uses `createPinnedWebhookFetch()` (`src/shared/utils/security/webhook-outbound-fetch.util.ts`). DNS is resolved once per delivery via `resolveAndPinWebhookUrl()`; the HTTP client connects to the pinned public IP while sending the original `Host` / TLS SNI. `validateWebhookUrl()` at create/update time rejects private/link-local targets. Optional `WEBHOOK_URL_ALLOWLIST` (comma-separated host suffixes) further restricts hostnames in production.
+**Outbound webhook SSRF:** `webhook-delivery.worker` uses `createPinnedWebhookFetch()` (`src/shared/utils/security/webhook-outbound-fetch.util.ts`). DNS is resolved once per delivery via `resolveAndPinWebhookUrl()`; the HTTP client connects to the pinned public IP while sending the original `Host` / TLS SNI. `validateWebhookUrl()` at create/update time uses `ipaddr.js` to normalize IPv4-mapped IPv6 literals (e.g. `[::ffff:127.0.0.1]`) before range checks, and rejects private, link-local, CGNAT, loopback, and other non-routable targets. Optional `WEBHOOK_URL_ALLOWLIST` (comma-separated host suffixes) further restricts hostnames in production.
 
 `src/core/events/register-event-handlers.ts` calls each domain’s `register*EventHandlers()` from `buildApp()` before routes.
 

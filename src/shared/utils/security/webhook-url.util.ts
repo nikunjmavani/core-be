@@ -1,96 +1,64 @@
 import { lookup } from 'node:dns/promises';
-import { isIPv4, isIPv6 } from 'node:net';
+import { isIP } from 'node:net';
+import ipaddr from 'ipaddr.js';
 import { ValidationError } from '@/shared/errors/index.js';
 
 /** A single DNS-resolved IP for a webhook hostname; `family` is `4` (IPv4) or `6` (IPv6). */
 export type WebhookResolvedAddress = { address: string; family: number };
-
-/** Private and link-local IP ranges that must not be targeted by webhooks (SSRF protection). */
-const PRIVATE_IPV4_RANGES = [
-  { start: 0x00000000, end: 0x00ffffff }, // 0.0.0.0/8 (current network / unspecified)
-  { start: 0x7f000000, end: 0x7fffffff }, // 127.0.0.0/8
-  { start: 0x0a000000, end: 0x0affffff }, // 10.0.0.0/8
-  { start: 0x64400000, end: 0x647fffff }, // 100.64.0.0/10 (CGNAT, RFC 6598)
-  { start: 0xac100000, end: 0xac1fffff }, // 172.16.0.0/12
-  { start: 0xc0a80000, end: 0xc0a8ffff }, // 192.168.0.0/16
-  { start: 0xa9fe0000, end: 0xa9feffff }, // 169.254.0.0/16 (link-local, includes cloud metadata)
-] as const;
 
 /** Blocked hostnames (case-insensitive). */
 const BLOCKED_HOSTNAMES = ['localhost', '127.0.0.1', '0.0.0.0'];
 
 const WEBHOOK_URL_NOT_ALLOWED_KEY = 'errors:webhookUrlNotAllowed';
 
-function ipv4ToNumber(parts: [string, string, string, string]): number {
-  return (
-    ((parseInt(parts[0], 10) << 24) |
-      (parseInt(parts[1], 10) << 16) |
-      (parseInt(parts[2], 10) << 8) |
-      parseInt(parts[3], 10)) >>>
-    0
-  );
-}
+/** IP ranges that must not be targeted by outbound webhooks (SSRF protection). */
+const BLOCKED_IP_RANGES = new Set<string>([
+  'loopback',
+  'private',
+  'linkLocal',
+  'uniqueLocal',
+  'unspecified',
+  'multicast',
+  'reserved',
+  'broadcast',
+  'carrierGradeNat',
+]);
 
-function splitIpv4Address(address: string): [string, string, string, string] | null {
-  const parts = address.split('.');
-  if (parts.length !== 4) {
-    return null;
+/**
+ * Strips IPv6 bracket notation from URL hostnames (e.g. `[::1]` → `::1`).
+ */
+function unbracketIpv6Hostname(hostname: string): string {
+  if (hostname.startsWith('[') && hostname.endsWith(']')) {
+    return hostname.slice(1, -1);
   }
-  return parts as [string, string, string, string];
-}
-
-function isPrivateIpv4(address: string): boolean {
-  const parts = splitIpv4Address(address);
-  if (parts === null) return false;
-  const num = ipv4ToNumber(parts);
-  return PRIVATE_IPV4_RANGES.some((range) => num >= range.start && num <= range.end);
-}
-
-function isPrivateIpv6(address: string): boolean {
-  const normalized = address.toLowerCase();
-  // ::1 (loopback), :: (unspecified), fc00::/7 (unique local), fe80::/10 (link-local)
-  return (
-    normalized === '::1' ||
-    normalized === '::' ||
-    normalized.startsWith('fc') ||
-    normalized.startsWith('fd') ||
-    normalized.startsWith('fe80:')
-  );
+  return hostname;
 }
 
 /**
- * Extracts the embedded IPv4 from an IPv4-mapped (`::ffff:1.2.3.4`) or IPv4-compatible
- * (`::1.2.3.4`) IPv6 literal, or `null` when the address carries no dotted-quad suffix.
- * Used to re-run the IPv4 private-range checks so a mapped form like
- * `::ffff:169.254.169.254` cannot smuggle a cloud-metadata address past the filter.
+ * Normalizes IPv4-mapped and IPv4-compatible IPv6 addresses to IPv4 so private-range
+ * checks cannot be bypassed via forms like `::ffff:127.0.0.1` or `::ffff:7f00:1`.
  */
-function extractEmbeddedIpv4(normalizedIpv6: string): string | null {
-  const lastColonIndex = normalizedIpv6.lastIndexOf(':');
-  if (lastColonIndex === -1) return null;
-  const suffix = normalizedIpv6.slice(lastColonIndex + 1);
-  return isIPv4(suffix) ? suffix : null;
-}
-
-/**
- * Classifies a single resolved address as private/link-local/unsafe. Normalizes with
- * `node:net` so IPv4-mapped/compatible IPv6 forms are unwrapped to their IPv4 and re-checked,
- * and any unrecognized literal is rejected defensively.
- */
-function isResolvedAddressPrivate(address: string): boolean {
-  if (isIPv4(address)) {
-    return isPrivateIpv4(address);
-  }
-  if (isIPv6(address)) {
-    const normalized = address.toLowerCase();
-    const embeddedIpv4 = extractEmbeddedIpv4(normalized);
-    if (embeddedIpv4 !== null) {
-      // Mapped/compatible IPv6 carrying an IPv4 — block when the embedded IPv4 is private.
-      return isPrivateIpv4(embeddedIpv4);
+function normalizeParsedAddress(address: ipaddr.IPv4 | ipaddr.IPv6): ipaddr.IPv4 | ipaddr.IPv6 {
+  if (address.kind() === 'ipv6') {
+    const ipv6Address = address as ipaddr.IPv6;
+    if (ipv6Address.isIPv4MappedAddress()) {
+      return ipv6Address.toIPv4Address();
     }
-    return isPrivateIpv6(normalized);
   }
-  // Not a recognizable IP literal — reject rather than risk an SSRF bypass.
-  return true;
+  return address;
+}
+
+/**
+ * Returns true when `address` resolves to a loopback, private, link-local, or other
+ * non-internet-routable range. Unparseable literals are treated as unsafe.
+ */
+function isUnsafeIpLiteral(address: string): boolean {
+  try {
+    const parsed = normalizeParsedAddress(ipaddr.parse(address));
+    return BLOCKED_IP_RANGES.has(parsed.range());
+  } catch {
+    return true;
+  }
 }
 
 function assertWebhookScheme(parsed: URL): void {
@@ -112,12 +80,26 @@ function assertWebhookHostnameNotBlocked(hostname: string): void {
 
 function assertResolvedAddressesNotPrivate(addresses: WebhookResolvedAddress[]): void {
   for (const entry of addresses) {
-    if (isResolvedAddressPrivate(entry.address)) {
+    if (isUnsafeIpLiteral(entry.address)) {
       throw new ValidationError(WEBHOOK_URL_NOT_ALLOWED_KEY, undefined, undefined, [
         { field: 'url', messageKey: WEBHOOK_URL_NOT_ALLOWED_KEY },
       ]);
     }
   }
+}
+
+function resolveLiteralHostname(hostname: string): WebhookResolvedAddress[] {
+  const literalHost = unbracketIpv6Hostname(hostname);
+  const family = isIP(literalHost);
+  if (family === 0) {
+    return [];
+  }
+  if (isUnsafeIpLiteral(literalHost)) {
+    throw new ValidationError(WEBHOOK_URL_NOT_ALLOWED_KEY, undefined, undefined, [
+      { field: 'url', messageKey: WEBHOOK_URL_NOT_ALLOWED_KEY },
+    ]);
+  }
+  return [{ address: literalHost, family }];
 }
 
 /**
@@ -126,6 +108,11 @@ function assertResolvedAddressesNotPrivate(addresses: WebhookResolvedAddress[]):
 export async function resolveWebhookUrlAddresses(
   hostname: string,
 ): Promise<WebhookResolvedAddress[]> {
+  const literalAddresses = resolveLiteralHostname(hostname);
+  if (literalAddresses.length > 0) {
+    return literalAddresses;
+  }
+
   try {
     const addresses = await lookup(hostname, { all: true });
     return addresses.map((entry) => ({ address: entry.address, family: entry.family }));
@@ -166,6 +153,7 @@ export async function assertWebhookUrlSafe(urlString: string): Promise<WebhookRe
  * - Blocked hostnames (localhost, 127.0.0.1, 0.0.0.0)
  * - Hostnames resolving to private/link-local IPs
  * - Cloud metadata endpoints (169.254.169.254)
+ * - IPv4-mapped IPv6 literals (e.g. `[::ffff:127.0.0.1]`)
  *
  * @throws ValidationError if the URL is unsafe
  */
