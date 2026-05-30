@@ -1,4 +1,4 @@
-import { and, eq, isNull, lte, ne, or } from 'drizzle-orm';
+import { and, eq, isNull, lt, lte, ne, or } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
@@ -20,8 +20,9 @@ import type { SubscriptionCreateData, SubscriptionUpdateData } from './subscript
  *   writes
  *   ({@link syncFromStripeProviderSubscription},
  *   {@link markCanceledByProviderSubscriptionId}) gate the update on
- *   `last_stripe_event_created_at` being `NULL` or older than the incoming
- *   event timestamp so out-of-order webhooks are dropped — the local row is
+ *   `last_stripe_event_created_at` being `NULL` or strictly older than the incoming
+ *   event timestamp so out-of-order or same-second stale events are dropped;
+ *   cancellation uses `lte` so a terminal delete at the same second still wins.
  *   the immutable record of the latest authoritative state.
  * - **Failure modes:** Insert collisions on `public_id` are retried by
  *   {@link runInsertWithPublicIdentifierRetry}; updates that miss the
@@ -134,7 +135,7 @@ export class SubscriptionRepository {
           eq(subscriptions.provider_subscription_id, provider_subscription_id),
           or(
             isNull(subscriptions.last_stripe_event_created_at),
-            lte(subscriptions.last_stripe_event_created_at, stripe_event_created_at),
+            lt(subscriptions.last_stripe_event_created_at, stripe_event_created_at),
           ),
         ),
       )
