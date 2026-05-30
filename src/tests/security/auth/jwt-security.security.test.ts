@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { decodeJwt } from 'jose';
 import {
   signAccessToken,
   verifyAccessToken,
@@ -56,6 +57,22 @@ describe('Security: JWT', () => {
     const token = await signAccessToken({ userId: 'admin-id', role: 'super_admin' });
     const payload = await verifyAccessToken(token);
     expect(payload.role).toBe('super_admin');
+  });
+
+  it('issues shorter-lived tokens for super_admin to bound privilege de-escalation', async () => {
+    // De-escalation control (audit #4): the global role lives in the JWT claim, so a demoted
+    // admin (removed from GLOBAL_ADMIN_EMAILS) keeps super_admin only until the token expires.
+    // super_admin tokens therefore MUST expire sooner than ordinary user tokens so that window
+    // stays tightly bounded. (Account suspension/deactivation revokes sessions immediately via
+    // AuthSessionService.revokeAllSessions, so the status vector de-escalates without delay.)
+    const userToken = await signAccessToken({ userId: 'user-id', role: 'user' });
+    const superAdminToken = await signAccessToken({ userId: 'admin-id', role: 'super_admin' });
+
+    const userExpiry = decodeJwt(userToken).exp;
+    const superAdminExpiry = decodeJwt(superAdminToken).exp;
+    expect(userExpiry).toBeDefined();
+    expect(superAdminExpiry).toBeDefined();
+    expect(superAdminExpiry as number).toBeLessThan(userExpiry as number);
   });
 
   it('should handle token without role', async () => {
