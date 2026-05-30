@@ -157,6 +157,58 @@ describe('rate-limit.middleware', () => {
     vi.resetModules();
   });
 
+  it('ignores RUN_REDIS_TESTS=0 in production and keeps the Redis-backed store', async () => {
+    const previousFlag = process.env.RUN_REDIS_TESTS;
+    // A stray chaos-suite switch leaking into a prod env must NOT downgrade the cluster-wide
+    // Redis limiter to per-process counting — RUN_REDIS_TESTS is honored only outside production.
+    process.env.RUN_REDIS_TESTS = '0';
+    vi.resetModules();
+    vi.doMock('@/shared/config/env.config.js', () => ({
+      env: {
+        NODE_ENV: 'production',
+        RATE_LIMIT_MAX: 50,
+        RATE_LIMIT_WINDOW_MS: 30_000,
+        REDIS_URL: 'redis://127.0.0.1:6379',
+      },
+    }));
+    const { default: productionRateLimitMiddleware } = await import(
+      '@/shared/middlewares/rate-limit.middleware.js'
+    );
+    application = Fastify();
+    await application.register(productionRateLimitMiddleware);
+    await application.ready();
+
+    const options = rateLimitPlugin.mock.calls.at(-1)![1] as { store?: unknown };
+    expect(options.store).toBeDefined();
+    process.env.RUN_REDIS_TESTS = previousFlag;
+    vi.resetModules();
+  });
+
+  it('honors RUN_REDIS_TESTS=0 only outside production (in-memory store)', async () => {
+    const previousFlag = process.env.RUN_REDIS_TESTS;
+    process.env.RUN_REDIS_TESTS = '0';
+    vi.resetModules();
+    vi.doMock('@/shared/config/env.config.js', () => ({
+      env: {
+        NODE_ENV: 'test',
+        RATE_LIMIT_MAX: 100,
+        RATE_LIMIT_WINDOW_MS: 60_000,
+        REDIS_URL: 'redis://127.0.0.1:6379',
+      },
+    }));
+    const { default: testRateLimitMiddleware } = await import(
+      '@/shared/middlewares/rate-limit.middleware.js'
+    );
+    application = Fastify();
+    await application.register(testRateLimitMiddleware);
+    await application.ready();
+
+    const options = rateLimitPlugin.mock.calls.at(-1)![1] as { store?: unknown };
+    expect(options.store).toBeUndefined();
+    process.env.RUN_REDIS_TESTS = previousFlag;
+    vi.resetModules();
+  });
+
   it('always sets skipOnError: true so Redis outages cannot blanket-fail the API', async () => {
     const previousFlag = process.env.RUN_REDIS_TESTS;
     delete process.env.RUN_REDIS_TESTS;
