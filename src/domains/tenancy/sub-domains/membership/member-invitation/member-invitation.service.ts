@@ -26,8 +26,29 @@ import {
   type MemberInvitationEmailPayload,
 } from '@/domains/tenancy/sub-domains/membership/member-invitation/events/member-invitation.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import type { MemberInvitationRow } from './member-invitation.types.js';
 
 const MEMBER_INVITATION_RESOURCE = 'Member invitation';
+
+function assertInvitationAcceptable(row: MemberInvitationRow, now: Date): void {
+  if (row.revoked_at) {
+    throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
+  }
+  if (row.accepted_at) {
+    throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
+  }
+  if (now > row.expires_at) {
+    throw new ValidationError('errors:validation.invitationExpired', undefined, {});
+  }
+}
+
+function throwInvitationAcceptFailure(current: MemberInvitationRow | null, now: Date): never {
+  if (!current) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+  assertInvitationAcceptable(current, now);
+  throw new ValidationError('errors:validation.invalidToken', undefined, {
+    token: ['Invalid or expired'],
+  });
+}
 
 /**
  * Inputs to {@link MemberInvitationService.list}: the organization to scope
@@ -190,25 +211,11 @@ export class MemberInvitationService {
       if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
       const tokenHash = hashInvitationToken(parsed.token);
       const now = new Date();
-      if (row.revoked_at)
-        throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
-      if (row.accepted_at)
-        throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
-      if (now > row.expires_at)
-        throw new ValidationError('errors:validation.invitationExpired', undefined, {});
+      assertInvitationAcceptable(row, now);
       const updated = await this.invitationRepository.accept(invitation_public_id, tokenHash, now);
       if (!updated) {
         const current = await this.invitationRepository.findByPublicId(invitation_public_id);
-        if (!current) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
-        if (current.revoked_at)
-          throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
-        if (current.accepted_at)
-          throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
-        if (now > current.expires_at)
-          throw new ValidationError('errors:validation.invitationExpired', undefined, {});
-        throw new ValidationError('errors:validation.invalidToken', undefined, {
-          token: ['Invalid or expired'],
-        });
+        throwInvitationAcceptFailure(current, now);
       }
       /**
        * Atomically activate the membership in the same transaction so accepting
