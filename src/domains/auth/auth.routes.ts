@@ -40,7 +40,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
 
   // Per-identity (per-email) throttle layered on top of the IP-only STRICT_PUBLIC_RATE_LIMIT.
   // Applied to unauthenticated credential and outbound-email endpoints so abuse cannot bypass
-  // the cap by rotating spoofed IPs (defense in depth when CAPTCHA is acknowledged-disabled).
+  // the cap by rotating spoofed IPs (defense in depth alongside Turnstile CAPTCHA).
   const perEmailRateLimit = app.rateLimit(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS);
 
   // Public — strict rate limits on login/magic-link/password endpoints

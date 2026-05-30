@@ -26,7 +26,7 @@
 | 5 | Per-request RLS pins DB connection | **Partial** | #174, #178, #182 | `DATABASE_RLS_SCOPED_CONTEXTS` defaults `true`; k6 concurrency scenario. **Verify** no HTTP path holds checkout across outbound I/O |
 | 6 | Index migrations block writes pre-deploy | **Done** | #176 | Concurrent non-transactional migration lane |
 | 7 | Anonymous idempotency cross-caller replay | **Done** | #178, #184 | Skip/fingerprint on unauthenticated auth routes |
-| 8 | CAPTCHA off-by-default in production | **Partial** | #180, #186 | Per-email limits + WebAuthn CAPTCHA. Production can still set `CAPTCHA_DISABLED_ACK=true` |
+| 8 | CAPTCHA off-by-default in production | **Done** | #180, #186, #188 | Production boot requires `CAPTCHA_PROVIDER=turnstile` + `CAPTCHA_SECRET`; removed `CAPTCHA_DISABLED_ACK` fail-open path |
 | 9 | Shutdown without LB drain delay | **Done** | #178 | 3s drain in staging/production before `app.close()` |
 | 10 | `/health` conflates liveness/readiness | **Done** | #178 | `/livez` + `/readyz` with short readiness cache |
 | 11 | Migration runner no advisory lock | **Done** | #178 | `pg_advisory_lock` in migrate runner |
@@ -66,12 +66,11 @@
 
 | Priority | Item | Suggested action |
 | ---: | --- | --- |
-| P1 | **Finding 8 — CAPTCHA in production** | Require Turnstile in hosted bootstrap **or** document explicit exception + tighten per-email limits |
 | P1 | **Finding 5 — RLS checkout audit** | Scan org HTTP handlers for outbound calls inside checkout; fix stragglers |
 | P2 | **Remediation doc maintenance** | Update this file when new dated audits land |
 | P2 | **Stale branches** | Close `fix/extended-audit-security-hardening` and `fix/auth-session-and-tenant-correctness` after diff vs `dev` (superseded by #182/#184) |
 | P2 | **Dependabot high alert** | Triage on default branch |
-| P3 | **Biome unused-import warnings** | Cleanup in auth files flagged during validate |
+| P3 | **Biome unused-import warnings** | Done in #188 auth cleanup |
 | Release | **PR #157 dev → main** | Promote after staging verification checklist passes |
 
 ---
@@ -82,7 +81,7 @@ Run before production traffic:
 
 - [ ] `DATABASE_URL` role is non-superuser, non-`BYPASSRLS`, granted `core_be_app`
 - [ ] `TRUST_PROXY=1` (or correct hop count) on Railway
-- [ ] `CAPTCHA_PROVIDER=turnstile` (not `CAPTCHA_DISABLED_ACK` path)
+- [ ] `CAPTCHA_PROVIDER=turnstile` + `CAPTCHA_SECRET` set (production boot fails otherwise)
 - [ ] `RESEND_API_KEY` set; forgot-password / magic-link / resend-verification return 503 when unset (not false success)
 - [ ] Removed org member cannot GET/confirm/DELETE org-scoped upload
 - [ ] WebAuthn authenticate options returns indistinguishable 401 for unknown email / no passkeys
@@ -103,7 +102,7 @@ Run before production traffic:
 | #182 | Auth/RLS/DLQ/uploads extended hardening |
 | #184 | Idempotency, auth escalation, queue reliability (bugs 44–56) |
 | #186 | Upload revocation, auth/billing/notify (bugs 57–64) |
-| *next* | Email verification fail-closed (bug 61 completion) |
+| #188 | Email verification fail-closed, remediation tracker, CAPTCHA production gate, auth lint cleanup |
 
 ---
 

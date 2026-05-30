@@ -93,13 +93,18 @@ describe('shouldReportMissingConditional', () => {
       expect(shouldReportMissingConditional(entry, 'production', variableValues)).toBe(true);
     });
 
-    it('does not warn when CAPTCHA_PROVIDER=disabled', () => {
+    it('warns in production even when CAPTCHA_PROVIDER=disabled', () => {
       const variableValues = new Map([['CAPTCHA_PROVIDER', 'disabled']]);
-      expect(shouldReportMissingConditional(entry, 'production', variableValues)).toBe(false);
+      expect(shouldReportMissingConditional(entry, 'production', variableValues)).toBe(true);
     });
 
-    it('does not warn when CAPTCHA_PROVIDER is unset (schema default is disabled)', () => {
-      expect(shouldReportMissingConditional(entry, 'production', new Map())).toBe(false);
+    it('warns in production when CAPTCHA_PROVIDER is unset (schema default is disabled)', () => {
+      expect(shouldReportMissingConditional(entry, 'production', new Map())).toBe(true);
+    });
+
+    it('does not warn outside production when CAPTCHA_PROVIDER=disabled', () => {
+      const variableValues = new Map([['CAPTCHA_PROVIDER', 'disabled']]);
+      expect(shouldReportMissingConditional(entry, 'development', variableValues)).toBe(false);
     });
   });
 
@@ -117,35 +122,6 @@ describe('shouldReportMissingConditional', () => {
 
     it('does not warn when METRICS_ENABLED=0', () => {
       const variableValues = new Map([['METRICS_ENABLED', '0']]);
-      expect(shouldReportMissingConditional(entry, 'production', variableValues)).toBe(false);
-    });
-  });
-
-  describe('CAPTCHA_DISABLED_ACK', () => {
-    const entry = { key: 'CAPTCHA_DISABLED_ACK' };
-
-    it('does not warn outside production', () => {
-      expect(shouldReportMissingConditional(entry, 'development', new Map())).toBe(false);
-      expect(
-        shouldReportMissingConditional(
-          entry,
-          'development',
-          new Map([['CAPTCHA_PROVIDER', 'disabled']]),
-        ),
-      ).toBe(false);
-    });
-
-    it('warns in production when CAPTCHA_PROVIDER is unset (defaults to disabled)', () => {
-      expect(shouldReportMissingConditional(entry, 'production', new Map())).toBe(true);
-    });
-
-    it('warns in production when CAPTCHA_PROVIDER=disabled', () => {
-      const variableValues = new Map([['CAPTCHA_PROVIDER', 'disabled']]);
-      expect(shouldReportMissingConditional(entry, 'production', variableValues)).toBe(true);
-    });
-
-    it('does not warn in production when CAPTCHA_PROVIDER=turnstile (ack irrelevant)', () => {
-      const variableValues = new Map([['CAPTCHA_PROVIDER', 'turnstile']]);
       expect(shouldReportMissingConditional(entry, 'production', variableValues)).toBe(false);
     });
   });

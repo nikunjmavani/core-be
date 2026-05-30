@@ -117,7 +117,7 @@ export const STRICT_PUBLIC_RATE_LIMIT = {
  * credential and outbound-email endpoints (login, magic-link request, password-reset request).
  * The IP-only {@link STRICT_PUBLIC_RATE_LIMIT} is spoofable, so this complements it by binding the
  * limit to the targeted account/email — blunting credential stuffing, account enumeration, and
- * mailbomb abuse even when CAPTCHA is acknowledged-disabled in production. Lifted under
+ * mailbomb abuse on public auth routes. Lifted under
  * NODE_ENV=test so loopback suites that loop these routes do not produce flaky 429s.
  */
 const STRICT_PUBLIC_PER_EMAIL_MAX_REQUESTS_PER_WINDOW =

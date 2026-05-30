@@ -24,8 +24,8 @@ const commonRequiredBase = {
 const productionRequiredBase = {
   ...commonRequiredBase,
   NODE_ENV: 'production',
-  // CAPTCHA fail-closes; production boot requires turnstile+secret or this explicit ack.
-  CAPTCHA_DISABLED_ACK: 'true',
+  CAPTCHA_PROVIDER: 'turnstile',
+  CAPTCHA_SECRET: 'turnstile-secret',
   ...productionRedisTopology,
 };
 
@@ -366,39 +366,37 @@ describe('env-schema', () => {
     expect(parsedLocalhost.success).toBe(true);
   });
 
-  it('rejects production boot when CAPTCHA is disabled without explicit acknowledgement', () => {
-    const { CAPTCHA_DISABLED_ACK: _ack, ...withoutAck } = productionRequiredBase;
-    void _ack;
+  it('rejects production boot when CAPTCHA is not turnstile', () => {
+    const {
+      CAPTCHA_PROVIDER: _provider,
+      CAPTCHA_SECRET: _secret,
+      ...withoutCaptcha
+    } = productionRequiredBase;
+    void _provider;
+    void _secret;
 
-    const parsed = envSchema.safeParse(withoutAck);
+    const parsed = envSchema.safeParse(withoutCaptcha);
     expect(parsed.success).toBe(false);
     if (!parsed.success) {
       expect(parsed.error.issues.some((issue) => issue.path[0] === 'CAPTCHA_PROVIDER')).toBe(true);
     }
   });
 
-  it('allows production boot with CAPTCHA disabled when explicitly acknowledged', () => {
+  it('rejects production boot when CAPTCHA_PROVIDER=disabled', () => {
     const parsed = envSchema.safeParse({
       ...productionRequiredBase,
       CAPTCHA_PROVIDER: 'disabled',
-      CAPTCHA_DISABLED_ACK: 'true',
+      CAPTCHA_SECRET: undefined,
     });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('allows production boot with configured turnstile CAPTCHA', () => {
+    const parsed = envSchema.safeParse(productionRequiredBase);
     expect(parsed.success).toBe(true);
   });
 
-  it('allows production boot with configured turnstile CAPTCHA without acknowledgement', () => {
-    const { CAPTCHA_DISABLED_ACK: _ack, ...withoutAck } = productionRequiredBase;
-    void _ack;
-
-    const parsed = envSchema.safeParse({
-      ...withoutAck,
-      CAPTCHA_PROVIDER: 'turnstile',
-      CAPTCHA_SECRET: 'turnstile-secret',
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it('does not require CAPTCHA acknowledgement outside production', () => {
+  it('does not require Turnstile CAPTCHA outside production', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
       NODE_ENV: 'development',
