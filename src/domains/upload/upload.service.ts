@@ -25,6 +25,10 @@ import {
 } from './upload.constants.js';
 import { getCanonicalExtensionForContentType } from './upload-content-type.util.js';
 import { isSvgContentType, sanitizeSvgBuffer } from './upload-svg.util.js';
+import {
+  isMagicByteVerifiable,
+  verifyFileMagicBytes,
+} from '@/shared/utils/validation/file-magic.util.js';
 import { UPLOAD_PERMISSIONS } from './upload.permissions.js';
 import type { CreateUploadInput, UploadCreateOutput, UploadDetailOutput } from './upload.types.js';
 import type { UploadRepository, UploadRow } from './upload.repository.js';
@@ -358,6 +362,11 @@ export class UploadService {
       // fail verification below.
       if (verified && isSvgContentType(row.mime_type)) {
         await this.sanitizeStoredSvg(row.file_key, row.mime_type);
+      } else if (verified && isMagicByteVerifiable(row.mime_type)) {
+        // HEAD only echoes the client-declared content-type, which is trivially spoofable
+        // (e.g. an HTML/script payload uploaded as image/png). Verify the actual leading
+        // bytes match the declared type before the object becomes servable.
+        verified = await this.verifyStoredObjectMagicBytes(row.file_key, row.mime_type);
       }
     } catch (error) {
       logger.warn(
@@ -401,6 +410,20 @@ export class UploadService {
         contentType,
       });
     }
+  }
+
+  /**
+   * Fetches the stored object and confirms its leading magic bytes match `contentType`.
+   * Returns false (so the caller fails verification and marks the row FAILED) when the
+   * content does not match the declared type — closing the spoofed-content-type vector
+   * where, e.g., an HTML/script payload is uploaded under an image MIME type.
+   */
+  private async verifyStoredObjectMagicBytes(
+    fileKey: string,
+    contentType: string,
+  ): Promise<boolean> {
+    const object = await this.objectStorage.getObject(fileKey);
+    return verifyFileMagicBytes(object.body, contentType);
   }
 
   private async toUploadDetail(row: UploadRow, userPublicId?: string): Promise<UploadDetailOutput> {

@@ -224,7 +224,9 @@ describe('UploadService', () => {
     expect(count).toBe(2);
   });
 
-  it('confirmUpload marks UPLOADED when the object matches declared type and size', async () => {
+  const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+
+  it('confirmUpload marks UPLOADED when the object matches declared type, size, and magic bytes', async () => {
     vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
       ...uploadRow,
       status: 'PENDING',
@@ -232,6 +234,10 @@ describe('UploadService', () => {
     vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
       contentType: 'image/png',
       contentLength: 1024,
+    });
+    vi.mocked(objectStorage.getObject).mockResolvedValueOnce({
+      body: PNG_MAGIC,
+      contentType: 'image/png',
     });
     vi.mocked(repository.markStatus).mockResolvedValue({
       ...uploadRow,
@@ -246,6 +252,27 @@ describe('UploadService', () => {
     });
     expect(repository.markStatus).toHaveBeenCalledWith(uploadPublicId, user.id, 'UPLOADED');
     expect(result.status).toBe('UPLOADED');
+  });
+
+  it('confirmUpload marks FAILED when magic bytes do not match the declared type (spoofed content)', async () => {
+    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+      ...uploadRow,
+      status: 'PENDING',
+    } as never);
+    vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
+      contentType: 'image/png',
+      contentLength: 1024,
+    });
+    // HEAD says image/png, but the stored bytes are HTML — a stored-XSS / content-spoof attempt.
+    vi.mocked(objectStorage.getObject).mockResolvedValueOnce({
+      body: Buffer.from('<html><script>alert(1)</script></html>'),
+      contentType: 'image/png',
+    });
+
+    await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(repository.markStatus).toHaveBeenCalledWith(uploadPublicId, user.id, 'FAILED');
   });
 
   it('confirmUpload marks FAILED and throws when object size does not match', async () => {
