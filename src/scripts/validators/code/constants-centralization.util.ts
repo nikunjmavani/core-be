@@ -17,6 +17,7 @@ function getConstantsRoot(): string {
 const ALLOWED_DUPLICATE_NUMBERS = new Set([
   10, // parseInt radix, deciles
   16, // hex
+  20, // small independent thresholds (migration header scan limit, rejection burst threshold)
   24, // hours per day (non-TTL context)
   60, // seconds per minute in expressions
   100, // percentages, env defaults

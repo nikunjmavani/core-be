@@ -30,6 +30,7 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-close.util.js';
 import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
+import { TEN_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 
 /** Maximum response-body length persisted to the delivery-attempt record (bounds storage growth). */
 const WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH = 2_000;
@@ -38,7 +39,7 @@ const WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH = 2_000;
 const WEBHOOK_DELIVERY_MAX_RETRY_ATTEMPTS = 4;
 
 /** Base delay (ms) for the persisted `next_retry_at` hint, doubled per attempt. */
-const WEBHOOK_DELIVERY_RETRY_BASE_DELAY_MS = 10_000;
+const WEBHOOK_DELIVERY_RETRY_BASE_DELAY_MS = TEN_SECONDS_MS;
 
 /**
  * Sign a webhook payload with HMAC-SHA256 (Stripe-style signature).

@@ -18,6 +18,9 @@ export const MILLISECONDS_PER_DAY = SECONDS_PER_DAY * MILLISECONDS_PER_SECOND;
 /** Five seconds in milliseconds (metrics poll, shutdown buffer). */
 export const FIVE_SECONDS_MS = 5_000;
 
+/** Ten seconds in milliseconds (outbound HTTP timeouts, webhook retry base delay). */
+export const TEN_SECONDS_MS = 10_000;
+
 /** Fifteen seconds in milliseconds (mail enqueue deadline, graceful shutdown). */
 export const FIFTEEN_SECONDS_MS = 15_000;
 
