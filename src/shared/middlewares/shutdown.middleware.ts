@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
+import { env } from '@/shared/config/env.config.js';
 import { closeDatabase } from '@/infrastructure/database/connection.js';
 import { closeBullMqRedis } from '@/infrastructure/cache/bullmq-redis.client.js';
 import { closeRedis } from '@/infrastructure/cache/redis.client.js';
@@ -37,9 +38,7 @@ const ENVIRONMENTS_BEHIND_LOAD_BALANCER = new Set(['staging', 'production']);
 
 /** Drain pause for the current runtime: {@link SHUTDOWN_DRAIN_DELAY_MS} behind a load balancer, otherwise 0. */
 function getShutdownDrainDelayMs(): number {
-  return ENVIRONMENTS_BEHIND_LOAD_BALANCER.has(process.env.NODE_ENV ?? '')
-    ? SHUTDOWN_DRAIN_DELAY_MS
-    : 0;
+  return ENVIRONMENTS_BEHIND_LOAD_BALANCER.has(env.NODE_ENV) ? SHUTDOWN_DRAIN_DELAY_MS : 0;
 }
 
 const shutdownMiddleware: FastifyPluginAsync = async (app) => {
