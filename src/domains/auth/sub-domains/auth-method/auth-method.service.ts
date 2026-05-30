@@ -186,7 +186,7 @@ export class AuthMethodService {
       expiresAt,
     );
 
-    await eventBus.emit({
+    await eventBus.emitStrict({
       type: AUTH_EVENT.PASSWORD_RESET_REQUESTED,
       payload: {
         email: user.email,

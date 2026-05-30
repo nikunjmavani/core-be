@@ -66,7 +66,7 @@ stateDiagram-v2
 
 ## Events
 
-- Emits: `AUTH_EVENT.MAGIC_LINK_REQUESTED`, `AUTH_EVENT.PASSWORD_RESET_REQUESTED`, `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED` (each handler enqueues mail).
+- Emits: `AUTH_EVENT.MAGIC_LINK_REQUESTED`, `AUTH_EVENT.PASSWORD_RESET_REQUESTED`, `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED` (each handler enqueues mail). Magic-link and password-reset handlers fail closed with `503` / `errors:mailNotConfigured` when outbound mail is unavailable.
 - Consumes: nothing — auth is upstream.
 
 ## External integrations
