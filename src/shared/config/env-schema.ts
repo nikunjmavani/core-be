@@ -634,6 +634,22 @@ export const envSchema = envSchemaBase
       message: 'EMAIL_FROM_ADDRESS is required when RESEND_API_KEY is set.',
       path: ['EMAIL_FROM_ADDRESS'],
     },
+  )
+  .refine(
+    (data) => {
+      // In production, session + CSRF cookies must carry the Secure attribute so they are
+      // never transmitted over plaintext HTTP. COOKIE_SECURE=false is only valid for local
+      // plaintext loops (non-production); allowing it in production would expose the session
+      // cookie to network interception.
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      return data.COOKIE_SECURE === true;
+    },
+    {
+      message: 'COOKIE_SECURE must be true in production (cookies sent over HTTPS only).',
+      path: ['COOKIE_SECURE'],
+    },
   );
 
 /** Ordered list of env var names from the schema (for .env.example sync and scripts). */

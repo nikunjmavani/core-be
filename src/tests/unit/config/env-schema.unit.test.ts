@@ -503,6 +503,34 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('rejects production boot when COOKIE_SECURE is disabled', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      COOKIE_SECURE: 'false',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path[0] === 'COOKIE_SECURE')).toBe(true);
+    }
+  });
+
+  it('allows COOKIE_SECURE=false outside production (local plaintext loops)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      COOKIE_SECURE: 'false',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('defaults COOKIE_SECURE to true and accepts it in production', () => {
+    const parsed = envSchema.safeParse(productionRequiredBase);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.COOKIE_SECURE).toBe(true);
+    }
+  });
+
   it('rejects production boot when legacy RLS pinning is enabled without break-glass ack', () => {
     const parsed = envSchema.safeParse({
       ...productionRequiredBase,
