@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockEnv = vi.hoisted(() => ({
   LOG_LEVEL: 'silent',
+  NODE_ENV: 'test' as string,
   SHUTDOWN_TIMEOUT_MS: undefined as number | undefined,
 }));
 
@@ -57,16 +58,14 @@ import shutdownMiddleware, {
 
 describe('shutdown.middleware', () => {
   let processExitSpy: ReturnType<typeof vi.spyOn>;
-  let originalNodeEnv: string | undefined;
 
   beforeEach(() => {
     mockEnv.SHUTDOWN_TIMEOUT_MS = undefined;
-    originalNodeEnv = process.env.NODE_ENV;
+    mockEnv.NODE_ENV = 'test';
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv;
     process.removeAllListeners('SIGTERM');
     process.removeAllListeners('SIGINT');
     vi.restoreAllMocks();
@@ -140,7 +139,7 @@ describe('shutdown.middleware', () => {
       return originalSetTimeout(handler, timeout, ...arguments_);
     }) as typeof setTimeout);
 
-    process.env.NODE_ENV = 'test';
+    mockEnv.NODE_ENV = 'test';
 
     const applicationListeningForShutdown = Fastify({ logger: false });
     const applicationCloseSpy = vi.spyOn(applicationListeningForShutdown, 'close');
@@ -177,7 +176,7 @@ describe('shutdown.middleware', () => {
       return originalSetTimeout(handler, timeout, ...arguments_);
     }) as typeof setTimeout);
 
-    process.env.NODE_ENV = 'production';
+    mockEnv.NODE_ENV = 'production';
 
     await applicationListeningForShutdown.register(shutdownMiddleware);
     await applicationListeningForShutdown.ready();

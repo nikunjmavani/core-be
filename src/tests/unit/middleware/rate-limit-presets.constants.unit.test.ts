@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const mockEnv = vi.hoisted(() => ({
+  NODE_ENV: 'test' as string,
+}));
+
+vi.mock('@/shared/config/env.config.js', () => ({
+  env: mockEnv,
+}));
+
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -10,12 +18,12 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
 
 describe('rate-limit-presets', () => {
   afterEach(() => {
-    vi.unstubAllEnvs();
+    mockEnv.NODE_ENV = 'test';
     vi.resetModules();
   });
 
   it('STRICT_PUBLIC_RATE_LIMIT allows 5000 req/min in test NODE_ENV', async () => {
-    vi.stubEnv('NODE_ENV', 'test');
+    mockEnv.NODE_ENV = 'test';
     const { STRICT_PUBLIC_RATE_LIMIT } = await import(
       '@/shared/middlewares/rate-limit-presets.constants.js'
     );
@@ -23,7 +31,7 @@ describe('rate-limit-presets', () => {
   });
 
   it('STRICT_PUBLIC_RATE_LIMIT caps public auth routes at 5 req/min outside test', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
+    mockEnv.NODE_ENV = 'production';
     const { STRICT_PUBLIC_RATE_LIMIT } = await import(
       '@/shared/middlewares/rate-limit-presets.constants.js'
     );
@@ -32,7 +40,7 @@ describe('rate-limit-presets', () => {
   });
 
   it('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS caps per email at 5 / 15 min on preHandler outside test', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
+    mockEnv.NODE_ENV = 'production';
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit-presets.constants.js'
     );
@@ -42,7 +50,7 @@ describe('rate-limit-presets', () => {
   });
 
   it('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS lifts the cap under test NODE_ENV', async () => {
-    vi.stubEnv('NODE_ENV', 'test');
+    mockEnv.NODE_ENV = 'test';
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit-presets.constants.js'
     );
@@ -50,7 +58,7 @@ describe('rate-limit-presets', () => {
   });
 
   it('per-email key generator normalizes the body email (trim + lowercase) and ignores IP', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
+    mockEnv.NODE_ENV = 'production';
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit-presets.constants.js'
     );
@@ -64,7 +72,7 @@ describe('rate-limit-presets', () => {
   });
 
   it('per-email key generator falls back to IP when the body has no usable email', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
+    mockEnv.NODE_ENV = 'production';
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit-presets.constants.js'
     );
