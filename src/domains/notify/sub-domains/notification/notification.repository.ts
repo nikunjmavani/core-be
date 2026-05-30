@@ -167,12 +167,16 @@ export class NotificationRepository {
     return rows[0] ?? null;
   }
 
-  async markAllReadForUser(user_id: number) {
-    return this.db()
+  async markAllReadForUser(user_id: number): Promise<number> {
+    const unreadCount = await this.countUnreadForUser(user_id);
+    if (unreadCount === 0) return 0;
+
+    await this.db()
       .update(notifications)
       .set({ is_read: true, read_at: new Date() })
-      .where(and(eq(notifications.user_id, user_id), eq(notifications.is_read, false)))
-      .returning();
+      .where(and(eq(notifications.user_id, user_id), eq(notifications.is_read, false)));
+
+    return unreadCount;
   }
 
   async countUnreadForUser(user_id: number): Promise<number> {

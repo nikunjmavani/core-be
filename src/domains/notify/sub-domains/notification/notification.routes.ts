@@ -76,7 +76,8 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
         onRequest: [app.authenticate],
         schema: {
           summary: 'Mark all notifications as read',
-          description: 'Marks all unread notifications as read for the authenticated user.',
+          description:
+            'Marks all unread notifications as read for the authenticated user and returns `{ updated_count }` only (not the full row set).',
           tags: ['Notification'],
         },
       },

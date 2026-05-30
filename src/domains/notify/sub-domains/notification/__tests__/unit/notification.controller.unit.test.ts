@@ -28,7 +28,7 @@ describe('createNotificationController', () => {
     }),
     get: vi.fn().mockResolvedValue(notification),
     markRead: vi.fn().mockResolvedValue(notification),
-    markAllRead: vi.fn().mockResolvedValue([notification]),
+    markAllRead: vi.fn().mockResolvedValue(2),
     getUnreadCount: vi.fn().mockResolvedValue(2),
     deleteNotification: vi.fn().mockResolvedValue(notification),
   };
@@ -72,10 +72,14 @@ describe('createNotificationController', () => {
     expect(service.markRead).toHaveBeenCalled();
   });
 
-  it('markAllRead and getUnreadCount delegate to service', async () => {
-    await controller.markAllRead(mockRequest(), {} as FastifyReply);
-    await controller.getUnreadCount(mockRequest(), {} as FastifyReply);
+  it('markAllRead returns updated_count summary', async () => {
+    const response = await controller.markAllRead(mockRequest(), {} as FastifyReply);
     expect(service.markAllRead).toHaveBeenCalled();
+    expect((response as { data: { updated_count: number } }).data.updated_count).toBe(2);
+  });
+
+  it('getUnreadCount delegates to service', async () => {
+    await controller.getUnreadCount(mockRequest(), {} as FastifyReply);
     expect(service.getUnreadCount).toHaveBeenCalled();
   });
 
