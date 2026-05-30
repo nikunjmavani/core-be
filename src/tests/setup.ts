@@ -149,6 +149,7 @@ if (process.env.CONTRACT_TESTS_ONLY === 'true') {
   process.env.STRIPE_WEBHOOK_SECRET =
     'whsec_test_contract_fixture_webhook_signing_must_be_minimum_32characters';
   process.env.RESEND_API_KEY = 're_test_contract_fixture_key';
+  process.env.EMAIL_FROM_ADDRESS = 'noreply@example.com';
   process.env.S3_BUCKET = 'contract-test-bucket';
   process.env.S3_REGION = 'us-east-1';
   process.env.S3_ACCESS_KEY_ID = 'AKIAIOSFODNN7EXAMPLE';
@@ -162,6 +163,9 @@ process.env.STRIPE_SECRET_KEY ??= 'sk_test_contract_fixture_key';
 process.env.STRIPE_WEBHOOK_SECRET ??=
   'whsec_test_contract_fixture_secret_minimum_length_32_chars_xx';
 process.env.RESEND_API_KEY ??= 're_test_contract_fixture_key';
+// EMAIL_FROM_ADDRESS is required by env-schema whenever RESEND_API_KEY is set (no hardcoded
+// sender fallback in mail.service); provide a baseline so the parsed `env` validates in tests.
+process.env.EMAIL_FROM_ADDRESS ??= 'noreply@example.com';
 process.env.S3_BUCKET ??= 'contract-test-bucket';
 process.env.S3_REGION ??= 'us-east-1';
 process.env.S3_ACCESS_KEY_ID ??= 'AKIAIOSFODNN7EXAMPLE';

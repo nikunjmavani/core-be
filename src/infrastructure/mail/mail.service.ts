@@ -60,7 +60,13 @@ async function sendEmailViaResend(
   recipientCount: number,
   signal: AbortSignal,
 ): Promise<string> {
-  const fromAddress = env.EMAIL_FROM_ADDRESS ?? 'noreply@albetrios.com';
+  // No hardcoded sender fallback: env-schema requires EMAIL_FROM_ADDRESS whenever
+  // RESEND_API_KEY is set, so reaching here without it is a misconfiguration we surface
+  // rather than impersonating an arbitrary domain that Resend would silently reject.
+  const fromAddress = env.EMAIL_FROM_ADDRESS;
+  if (!fromAddress) {
+    throw new Error('EMAIL_FROM_ADDRESS is not configured');
+  }
   const fromName = env.EMAIL_FROM_NAME ?? 'Core';
   const client = getClient();
   const requestOptions: ResendEmailRequestOptions = omitUndefined({

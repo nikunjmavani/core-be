@@ -75,6 +75,38 @@ describe('env-schema', () => {
     }
   });
 
+  it('requires EMAIL_FROM_ADDRESS when RESEND_API_KEY is set', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      RESEND_API_KEY: 're_test_key',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path.includes('EMAIL_FROM_ADDRESS'))).toBe(
+        true,
+      );
+    }
+  });
+
+  it('accepts RESEND_API_KEY together with EMAIL_FROM_ADDRESS', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      RESEND_API_KEY: 're_test_key',
+      EMAIL_FROM_ADDRESS: 'noreply@example.com',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('allows EMAIL_FROM_ADDRESS to be absent when RESEND_API_KEY is unset', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it('rejects ALLOWED_ORIGINS containing a wildcard in any environment', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,

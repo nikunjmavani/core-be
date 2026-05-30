@@ -619,6 +619,21 @@ export const envSchema = envSchemaBase
         'ALLOWED_ORIGINS must not contain `*`; in production every entry must be an absolute https:// origin.',
       path: ['ALLOWED_ORIGINS'],
     },
+  )
+  .refine(
+    (data) => {
+      // When Resend is configured, EMAIL_FROM_ADDRESS must be set explicitly. There is no
+      // hardcoded sender fallback: a default `from` on an unverified domain is silently
+      // rejected by Resend, so auth mail (magic link, verification, invitations) never arrives.
+      if (!data.RESEND_API_KEY) {
+        return true;
+      }
+      return Boolean(data.EMAIL_FROM_ADDRESS);
+    },
+    {
+      message: 'EMAIL_FROM_ADDRESS is required when RESEND_API_KEY is set.',
+      path: ['EMAIL_FROM_ADDRESS'],
+    },
   );
 
 /** Ordered list of env var names from the schema (for .env.example sync and scripts). */
@@ -656,6 +671,10 @@ export const envSchemaConditionallyRequiredKeys: ReadonlyArray<{
     key: 'CAPTCHA_SECRET',
     condition:
       'CAPTCHA_PROVIDER=turnstile (schema default is `disabled`; required in NODE_ENV=production)',
+  },
+  {
+    key: 'EMAIL_FROM_ADDRESS',
+    condition: 'RESEND_API_KEY is set (no hardcoded sender fallback)',
   },
 ];
 
