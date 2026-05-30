@@ -189,18 +189,27 @@ export class MemberInvitationService {
       const row = await this.invitationRepository.findByPublicId(invitation_public_id);
       if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
       const tokenHash = hashInvitationToken(parsed.token);
-      if (row.token_hash !== tokenHash)
-        throw new ValidationError('errors:validation.invalidToken', undefined, {
-          token: ['Invalid or expired'],
-        });
+      const now = new Date();
       if (row.revoked_at)
         throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
       if (row.accepted_at)
         throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
-      if (new Date() > row.expires_at)
+      if (now > row.expires_at)
         throw new ValidationError('errors:validation.invitationExpired', undefined, {});
-      const updated = await this.invitationRepository.accept(invitation_public_id);
-      if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const updated = await this.invitationRepository.accept(invitation_public_id, tokenHash, now);
+      if (!updated) {
+        const current = await this.invitationRepository.findByPublicId(invitation_public_id);
+        if (!current) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+        if (current.revoked_at)
+          throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
+        if (current.accepted_at)
+          throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
+        if (now > current.expires_at)
+          throw new ValidationError('errors:validation.invitationExpired', undefined, {});
+        throw new ValidationError('errors:validation.invalidToken', undefined, {
+          token: ['Invalid or expired'],
+        });
+      }
       /**
        * Atomically activate the membership in the same transaction so accepting
        * the token actually grants access (permission resolution requires

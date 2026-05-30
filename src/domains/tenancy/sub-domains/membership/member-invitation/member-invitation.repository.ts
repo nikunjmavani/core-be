@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, gt, isNull, type SQL } from 'drizzle-orm';
 import { sql } from '@/infrastructure/database/connection.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
@@ -237,13 +237,19 @@ export class MemberInvitationRepository {
     });
   }
 
-  async accept(public_id: string): Promise<MemberInvitationRow | null> {
+  async accept(
+    public_id: string,
+    token_hash: string,
+    expires_after: Date,
+  ): Promise<MemberInvitationRow | null> {
     const rows = await getRequestDatabase()
       .update(member_invitations)
       .set({ accepted_at: new Date() })
       .where(
         and(
           eq(member_invitations.public_id, public_id),
+          eq(member_invitations.token_hash, token_hash),
+          gt(member_invitations.expires_at, expires_after),
           isNull(member_invitations.accepted_at),
           isNull(member_invitations.revoked_at),
         ),
