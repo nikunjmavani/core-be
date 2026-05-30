@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { gzipSync } from 'node:zlib';
 import { and, asc, eq, gt, gte, isNotNull, lt } from 'drizzle-orm';
 import { logs } from '@/domains/audit/audit.schema.js';
 import { headObject, putObjectBuffer } from '@/infrastructure/storage/storage.service.js';
+import { gzipBufferAsync } from '@/shared/utils/infrastructure/gzip.util.js';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -76,7 +76,8 @@ export function buildManifestKey(organizationId: number, dateLabel: string): str
  * 3. For each tenant, checks whether the manifest already exists; if so the
  *    tenant is treated as already exported (idempotent on retry).
  * 4. Streams rows in `AUDIT_EXPORT_BATCH_SIZE` chunks ordered by `id` (stable,
- *    monotonic), writes one gzipped NDJSON part, then writes the manifest.
+ *    monotonic), writes one gzipped NDJSON part (compressed off-thread via
+ *    {@link gzipBufferAsync} so job-lock renewal is not starved), then the manifest.
  *    The manifest is the LAST write so a crash mid-export leaves no manifest
  *    and the next run re-tries cleanly.
  * 5. Records sha256 of the gzipped body in S3 object metadata + manifest, so
@@ -153,7 +154,7 @@ export async function runAuditExportJob(databaseHandle: WorkerDatabaseHandle): P
       if (rows.length === 0) break;
 
       const lines = rows.map((row) => `${JSON.stringify(row)}\n`);
-      const body = gzipSync(Buffer.from(lines.join(''), 'utf8'));
+      const body = await gzipBufferAsync(Buffer.from(lines.join(''), 'utf8'));
       const sha256 = createHash('sha256').update(body).digest('hex');
       const batchPartId = randomUUID();
       const objectKey = buildExportKey(organizationId, dateLabel, batchPartId);
