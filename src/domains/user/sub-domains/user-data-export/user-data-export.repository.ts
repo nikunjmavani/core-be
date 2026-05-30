@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
@@ -56,6 +56,20 @@ export class UserDataExportRepository {
         and(
           eq(user_data_exports.public_id, export_public_id),
           eq(user_data_exports.user_id, user_id),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  async findPendingOrProcessingByUserId(user_id: number) {
+    const rows = await this.db()
+      .select()
+      .from(user_data_exports)
+      .where(
+        and(
+          eq(user_data_exports.user_id, user_id),
+          inArray(user_data_exports.status, ['pending', 'processing']),
         ),
       )
       .limit(1);
