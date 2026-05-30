@@ -4,9 +4,7 @@ import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
-import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { DUMMY_ARGON2_HASH, verifyPassword } from '@/shared/utils/security/password.util.js';
-import { env } from '@/shared/config/env.config.js';
 import {
   ACCOUNT_LOCKOUT_MINUTES,
   MAX_FAILED_LOGIN_ATTEMPTS,

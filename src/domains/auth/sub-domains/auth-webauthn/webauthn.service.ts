@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import {
   generateAuthenticationOptions,
