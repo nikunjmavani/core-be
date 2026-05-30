@@ -83,7 +83,7 @@ export function createOrganizationController(
         ...(request.query as Record<string, unknown>),
         organization_id: organizationId,
       };
-      const result = await auditService.list(query);
+      const result = await auditService.listForOrganization(organizationId, query);
       return paginatedResponse(result.items, getRequestIdentifier(request), {
         per_page: result.limit,
         next: result.next_cursor,
