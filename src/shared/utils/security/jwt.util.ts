@@ -87,6 +87,30 @@ async function getVerifyKey(): Promise<{ key: CryptoKey; algorithm: typeof JWT_A
   return { key: _verifyKey, algorithm: JWT_ALGORITHM };
 }
 
+/**
+ * Eagerly imports the configured RS256 key material — the signing key, the verification key,
+ * and the optional `JWT_PUBLIC_KEYS` rotation keyring — so a malformed or placeholder PEM fails
+ * fast at startup instead of at the first sign/verify (i.e. the first login after deploy).
+ *
+ * @remarks
+ * - **Algorithm:** delegates to the same lazy `importPKCS8`/`importSPKI` loaders used at runtime,
+ *   so the validation is byte-for-byte identical to actual signing/verification. Imported keys are
+ *   cached, making this safe and cheap to call repeatedly.
+ * - **Failure modes:** throws a wrapped `Error` describing which key material is invalid when a PEM
+ *   cannot be parsed or the keyring JSON is malformed.
+ * - **Side effects:** populates the module-level key caches.
+ */
+export async function assertJwtKeyMaterial(): Promise<void> {
+  try {
+    await getSigningKey();
+    await getVerifyKey();
+    await getVerifyKeyring();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`JWT key material is invalid or unparseable: ${detail}`);
+  }
+}
+
 /** Decoded access-token claims relevant to the application (subject + optional global role). */
 export interface TokenPayload {
   userId: string;

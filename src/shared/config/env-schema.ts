@@ -541,6 +541,23 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      // Reject placeholder / low-entropy keys (e.g. the all-zero .env.example template) that
+      // would silently defeat encryption-at-rest for MFA TOTP seeds and webhook signing secrets.
+      // A real `openssl rand -hex 32` key effectively always contains far more than 8 distinct
+      // hex digits, while all-zeros / single-character placeholders contain one.
+      return new Set(data.SECRETS_ENCRYPTION_KEY.toLowerCase()).size >= 8;
+    },
+    {
+      message:
+        'In production, SECRETS_ENCRYPTION_KEY must be a high-entropy 32-byte key (generate with `openssl rand -hex 32`); placeholder/low-entropy values are rejected',
+      path: ['SECRETS_ENCRYPTION_KEY'],
+    },
+  )
+  .refine(
+    (data) => {
       return validateProductionRedisTopology(data.REDIS_URL, data.REDIS_BULLMQ_URL);
     },
     {

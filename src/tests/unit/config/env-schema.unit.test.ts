@@ -16,7 +16,8 @@ const commonRequiredBase = {
   JWT_PUBLIC_KEY: 'public',
   ALLOWED_ORIGINS: 'http://localhost:3000',
   METRICS_SCRAPE_TOKEN: 'b'.repeat(32),
-  SECRETS_ENCRYPTION_KEY: 'a'.repeat(64),
+  // High-entropy 32-byte hex key — production rejects low-entropy placeholders (e.g. all-zeros).
+  SECRETS_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   AUDIT_RETENTION_DAYS: '30',
   AUTH_SESSION_RETENTION_DAYS: '30',
 };
@@ -308,6 +309,35 @@ describe('env-schema', () => {
 
     const withKey = envSchema.safeParse(productionRequiredBase);
     expect(withKey.success).toBe(true);
+  });
+
+  it('rejects a low-entropy / placeholder SECRETS_ENCRYPTION_KEY in production', () => {
+    const allZeros = envSchema.safeParse({
+      ...productionRequiredBase,
+      SECRETS_ENCRYPTION_KEY: '0'.repeat(64),
+    });
+    expect(allZeros.success).toBe(false);
+    if (!allZeros.success) {
+      expect(
+        allZeros.error.issues.some((issue) => issue.path[0] === 'SECRETS_ENCRYPTION_KEY'),
+      ).toBe(true);
+    }
+
+    // Single-character placeholder (e.g. the test default `'a'.repeat(64)`) is also rejected.
+    const singleChar = envSchema.safeParse({
+      ...productionRequiredBase,
+      SECRETS_ENCRYPTION_KEY: 'a'.repeat(64),
+    });
+    expect(singleChar.success).toBe(false);
+  });
+
+  it('allows a low-entropy SECRETS_ENCRYPTION_KEY outside production (ephemeral test/CI keys)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'test',
+      SECRETS_ENCRYPTION_KEY: '0'.repeat(64),
+    });
+    expect(parsed.success).toBe(true);
   });
 
   it('requires METRICS_SCRAPE_TOKEN whenever METRICS_ENABLED is true', () => {

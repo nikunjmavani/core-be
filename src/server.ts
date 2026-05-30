@@ -16,6 +16,7 @@ import { registerPostgresPoolMetrics } from '@/infrastructure/observability/metr
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { assertHostedTrustProxyConfigured } from '@/shared/utils/http/trust-proxy.util.js';
+import { assertJwtKeyMaterial } from '@/shared/utils/security/jwt.util.js';
 import { buildApp } from '@/app.js';
 
 // Initialize Sentry before anything else
@@ -50,6 +51,9 @@ async function main() {
   assertDatabaseTlsVerification();
   assertRedisTlsVerification();
   assertHostedTrustProxyConfigured();
+  // RS256 keys are mandatory in every runtime; parse them now so a malformed/placeholder PEM
+  // fails the boot instead of the first login.
+  await assertJwtKeyMaterial();
 
   /** Avoids a startup race where the first request that hits idempotency / rate-limit
    * issues a direct command on the shared `redisConnection` (lazyConnect +
