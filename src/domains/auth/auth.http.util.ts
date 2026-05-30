@@ -8,6 +8,7 @@ import {
 import { translateRequestMessage } from '@/shared/utils/i18n/translate-request.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { SECONDS_PER_DAY } from '@/shared/constants/index.js';
+import { OAUTH_STATE_TTL_SECONDS } from '@/shared/constants/ttl.constants.js';
 
 /** Name of the httpOnly cookie that carries the opaque session public id used for refresh and auth-route flows. */
 export const SESSION_COOKIE_NAME = 'session_id';
@@ -100,6 +101,40 @@ export function setSessionCookie(
 export function clearSessionCookie(reply: FastifyReply): void {
   reply.clearCookie(SESSION_COOKIE_NAME, { path: '/api/v1/auth' });
   clearCsrfCookie(reply);
+}
+
+/** Name of the short-lived httpOnly cookie that binds an OAuth callback to the browser that started the authorize flow. */
+export const OAUTH_NONCE_COOKIE_NAME = 'oauth_nonce';
+
+/**
+ * Builds cookie options for {@link OAUTH_NONCE_COOKIE_NAME}: httpOnly, `sameSite=lax` so the
+ * cookie survives the top-level navigation back from the provider, scoped to the OAuth callback
+ * path, and expiring with the Redis `state` TTL.
+ */
+function getOauthNonceCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: env.COOKIE_SECURE,
+    sameSite: 'lax' as const,
+    path: '/api/v1/auth/oauth',
+    maxAge: OAUTH_STATE_TTL_SECONDS,
+  };
+}
+
+/** Writes the OAuth nonce cookie on `reply` so the matching callback can prove same-browser origin. */
+export function setOauthNonceCookie(reply: FastifyReply, nonce: string): void {
+  reply.setCookie(OAUTH_NONCE_COOKIE_NAME, nonce, getOauthNonceCookieOptions());
+}
+
+/** Reads the OAuth nonce cookie from the request, returning `undefined` when absent. */
+export function readOauthNonceCookie(request: FastifyRequest): string | undefined {
+  const nonce = request.cookies?.[OAUTH_NONCE_COOKIE_NAME];
+  return typeof nonce === 'string' && nonce.length > 0 ? nonce : undefined;
+}
+
+/** Removes the OAuth nonce cookie (called after the callback consumes it). */
+export function clearOauthNonceCookie(reply: FastifyReply): void {
+  reply.clearCookie(OAUTH_NONCE_COOKIE_NAME, { path: '/api/v1/auth/oauth' });
 }
 
 /** Returns the request remote IP, falling back to `127.0.0.1` when Fastify has not populated `request.ip`. */

@@ -17,8 +17,8 @@ function getGitHubRedirectUri(): string {
   );
 }
 
-/** Builds the GitHub authorize URL (`https://github.com/login/oauth/authorize?...`) with the configured client id, callback URI, scopes (`read:user user:email`), and CSRF `state`. Throws `NotImplementedError` when `OAUTH_GITHUB_CLIENT_ID` is unset. */
-export function buildGitHubOAuthRedirectUrl(state: string): string {
+/** Builds the GitHub authorize URL (`https://github.com/login/oauth/authorize?...`) with the configured client id, callback URI, scopes (`read:user user:email`), CSRF `state`, and the PKCE S256 `code_challenge`. Throws `NotImplementedError` when `OAUTH_GITHUB_CLIENT_ID` is unset. */
+export function buildGitHubOAuthRedirectUrl(state: string, codeChallenge: string): string {
   const clientId = env.OAUTH_GITHUB_CLIENT_ID;
   if (!clientId) {
     throw new NotImplementedError('errors:githubOAuthNotConfigured');
@@ -29,14 +29,17 @@ export function buildGitHubOAuthRedirectUrl(state: string): string {
     redirect_uri: getGitHubRedirectUri(),
     scope: 'read:user user:email',
     state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
 
   return `${GITHUB_AUTH_URL}?${params.toString()}`;
 }
 
-/** Input for {@link exchangeGitHubOAuthCode}: the authorization `code` returned by GitHub plus an optional request id used for outbound observability. */
+/** Input for {@link exchangeGitHubOAuthCode}: the authorization `code` returned by GitHub, the PKCE `codeVerifier` bound to the original authorize request, plus an optional request id used for outbound observability. */
 export interface ExchangeGitHubOAuthCodeOptions {
   code: string;
+  codeVerifier: string;
   requestId?: string;
 }
 
@@ -68,6 +71,7 @@ export async function exchangeGitHubOAuthCode(
             client_id: clientId,
             client_secret: clientSecret,
             code: options.code,
+            code_verifier: options.codeVerifier,
           }),
         },
       }),
