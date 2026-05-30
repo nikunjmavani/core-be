@@ -166,7 +166,8 @@ function resolveIdempotencyRoutePath(request: FastifyRequest): string {
   if (typeof routeTemplate === 'string' && routeTemplate.length > 0) {
     return routeTemplate;
   }
-  return request.url.split('?')[0] ?? request.url;
+  const pathOnly = request.url?.split('?')[0];
+  return pathOnly && pathOnly.length > 0 ? pathOnly : '/';
 }
 
 async function idempotencyClaimPreHandler(

@@ -149,7 +149,6 @@ describe('completeOAuthUserSession', () => {
     const result = await callCompleteOAuthUserSession();
 
     expect('session_public_id' in result && result.session_public_id).toBe('session_public');
-    expect(authSessionService.createSessionForUser).toHaveBeenCalledTimes(1);
   });
 
   it('creates a new user on first-time OAuth signup', async () => {

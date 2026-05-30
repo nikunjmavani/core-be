@@ -52,6 +52,7 @@ function buildService() {
 
   const planService = {
     requirePlanRecordByPublicId: vi.fn().mockResolvedValue(plan),
+    requireActivePlanByPublicId: vi.fn().mockResolvedValue(plan),
     requirePlanRecordByInternalId: vi.fn().mockResolvedValue(plan),
   } as unknown as PlanService;
 

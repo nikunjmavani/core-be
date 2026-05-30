@@ -25,6 +25,7 @@ const IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES = new Set([
  * `/organizations/:id` and concrete ids hash consistently.
  */
 export function normalizeIdempotencyRoutePath(routePath: string): string {
+  if (routePath.length === 0) return '/';
   const withoutQuery = routePath.split('?')[0] ?? routePath;
   return withoutQuery.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 }
@@ -45,7 +46,7 @@ export function buildIdempotencyRequestFingerprint(parameters: {
       : typeof parameters.body === 'string'
         ? parameters.body
         : JSON.stringify(parameters.body);
-  const canonical = `${parameters.method.toUpperCase()}:${normalizedRoute}:${bodySegment}`;
+  const canonical = `${(parameters.method ?? 'GET').toUpperCase()}:${normalizedRoute}:${bodySegment}`;
   return createHash('sha256').update(canonical, 'utf8').digest('hex').slice(0, 16);
 }
 

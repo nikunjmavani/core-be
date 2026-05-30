@@ -36,7 +36,7 @@ export class PlanService {
 
   async requireActivePlanByPublicId(public_id: string): Promise<PlanRecord> {
     const row = await this.repository.findByPublicId(public_id);
-    if (!(row && row.is_active)) throw new NotFoundError('Plan');
+    if (!row?.is_active) throw new NotFoundError('Plan');
     return row;
   }
 
