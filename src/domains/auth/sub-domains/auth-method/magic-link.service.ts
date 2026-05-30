@@ -49,7 +49,8 @@ const MAGIC_LINK_EXPIRES_IN_MINUTES = 15;
  * - User suspended/locked between issue and verify → 401 `errors:accountNotActive`.
  *
  * Side effects:
- * - `send` emits a domain event whose handler enqueues an outbound email via
+ * - `send` invalidates prior MAGIC_LINK tokens for the user (single live link),
+ *   emits a domain event whose handler enqueues an outbound email via
  *   the mail outbox (`transactional-outbox` pattern).
  * - `verify` writes a single `auth_sessions` row.
  *
@@ -87,6 +88,8 @@ export class MagicLinkService {
         expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
       };
     }
+    await this.verificationTokenRepository.invalidateAllForUser(user.id, 'MAGIC_LINK');
+
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRES_IN_MINUTES * 60_000);
@@ -99,7 +102,7 @@ export class MagicLinkService {
       expiresAt,
     );
 
-    await eventBus.emit({
+    await eventBus.emitStrict({
       type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
       payload: {
         email: user.email,

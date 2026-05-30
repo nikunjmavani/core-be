@@ -16,6 +16,7 @@ Customer-configured outbound webhook endpoints + the entire delivery pipeline: p
 - **HMAC signature on every payload**: each delivery is signed with the per-webhook secret; customers verify signature in their handler.
 - **Exponential backoff**: BullMQ-managed; final failure → DLQ + Sentry. Attempts capped per the policy in [src/POLICIES.md](src/POLICIES.md).
 - **Tenant-scoped**: webhook configurations belong to organizations; deliveries fire only to URLs that organization owns.
+- **Secrets never logged in URLs**: structured logs and circuit-breaker events record origin, path, and a short hash of the full URL — never query strings, fragments, or embedded credentials.
 
 ## Lifecycle
 

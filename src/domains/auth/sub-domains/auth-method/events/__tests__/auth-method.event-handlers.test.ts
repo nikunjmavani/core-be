@@ -6,6 +6,8 @@ import { enterOnCommitScope, eventBus } from '@/core/events/event-bus.js';
 import { AUTH_EVENT } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { registerAuthMethodEventHandlers } from '../auth.event-handlers.js';
+import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
+import { ServiceUnavailableError } from '@/shared/errors/index.js';
 
 const recordOutboxEmailMock = vi.fn();
 const dispatchOutboxEmailMock = vi.fn();
@@ -16,7 +18,7 @@ vi.mock('@/infrastructure/mail/queues/mail.queue.js', () => ({
 }));
 
 vi.mock('@/infrastructure/mail/mail.service.js', () => ({
-  isMailConfigured: () => true,
+  isMailConfigured: vi.fn(() => true),
 }));
 
 describe('auth event handlers', () => {
@@ -37,6 +39,7 @@ describe('auth event handlers', () => {
     dispatchOutboxEmailMock.mockReset();
     recordOutboxEmailMock.mockResolvedValue(42);
     dispatchOutboxEmailMock.mockResolvedValue(undefined);
+    vi.mocked(isMailConfigured).mockReturnValue(true);
     registerAuthMethodEventHandlers();
   });
 
@@ -130,6 +133,25 @@ describe('auth event handlers', () => {
 
     await eventBus.flushOnCommit();
     expect(dispatchOutboxEmailMock).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      AUTH_EVENT.MAGIC_LINK_REQUESTED,
+      { email: 'user@example.com', magic_link_token: 'raw', expires_in_minutes: 15 },
+    ],
+    [
+      AUTH_EVENT.PASSWORD_RESET_REQUESTED,
+      { email: 'user@example.com', reset_token: 'reset', expires_in_minutes: 60 },
+    ],
+  ])('throws when mail is not configured for %s', async (eventType, payload) => {
+    vi.mocked(isMailConfigured).mockReturnValue(false);
+
+    enterOnCommitScope();
+    await expect(
+      eventBus.emitStrict({ type: eventType, payload, timestamp: new Date() }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableError);
+    expect(recordOutboxEmailMock).not.toHaveBeenCalled();
   });
 
   describe('when recordOutboxEmail rejects', () => {

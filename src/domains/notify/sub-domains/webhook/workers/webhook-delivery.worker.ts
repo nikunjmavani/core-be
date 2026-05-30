@@ -9,6 +9,7 @@ import {
   webhookDeliveryBackoffWithJitter,
 } from '@/domains/notify/sub-domains/webhook/workers/webhook-outbound-circuit.js';
 import { getWorkerConcurrencyWebhook } from '@/shared/config/worker-concurrency.util.js';
+import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { webhookDeliveryJobDataSchema } from '../queues/webhook-delivery.job.schema.js';
 import {
@@ -165,6 +166,8 @@ async function deliverClaimedWebhook(options: {
   const signingSecret = decryptFieldSecret(encryptedSecret);
   const signature = signPayload(signingSecret, payloadString, timestamp);
 
+  const webhookUrlLogFields = safeWebhookUrlForLogs(webhookUrl);
+
   logger.info(
     {
       jobId: jobContext.id,
@@ -172,7 +175,7 @@ async function deliverClaimedWebhook(options: {
       deliveryAttemptId,
       webhookId,
       eventType,
-      url: webhookUrl,
+      ...webhookUrlLogFields,
       attempt: jobContext.attemptsMade + 1,
     },
     'webhook.delivery.sending',
@@ -220,7 +223,7 @@ async function deliverClaimedWebhook(options: {
           requestId: jobContext.requestId,
           deliveryAttemptId,
           webhookId,
-          url: webhookUrl,
+          ...webhookUrlLogFields,
           parseError: parseError instanceof Error ? parseError.message : 'Unknown error',
         },
         'webhook.response.body.parse.failed',

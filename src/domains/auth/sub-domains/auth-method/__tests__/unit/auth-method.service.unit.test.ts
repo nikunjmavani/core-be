@@ -11,7 +11,10 @@ vi.mock('@/core/events/event-bus.js', async (importOriginal) => {
   const original = await importOriginal<typeof EventBusModule>();
   return {
     ...original,
-    eventBus: { emit: vi.fn().mockResolvedValue(undefined) },
+    eventBus: {
+      emit: vi.fn().mockResolvedValue(undefined),
+      emitStrict: vi.fn().mockResolvedValue(undefined),
+    },
   };
 });
 

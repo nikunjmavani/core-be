@@ -1,5 +1,6 @@
 import CircuitBreaker from 'opossum';
 import type { WebhookDeliveryFetch } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js';
+import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const WEBHOOK_FETCH_TIMEOUT_MS = 30_000;
@@ -35,16 +36,19 @@ function attachCircuitEventListeners(
   circuit: CircuitBreaker,
   logContext: { webhookId: string; webhookUrl: string },
 ): void {
+  const safeUrl = safeWebhookUrlForLogs(logContext.webhookUrl);
+  const redactedContext = { webhookId: logContext.webhookId, ...safeUrl };
+
   circuit.on('open', () => {
-    logger.warn(logContext, 'webhook.outbound.circuit.open');
+    logger.warn(redactedContext, 'webhook.outbound.circuit.open');
   });
 
   circuit.on('halfOpen', () => {
-    logger.info(logContext, 'webhook.outbound.circuit.half_open');
+    logger.info(redactedContext, 'webhook.outbound.circuit.half_open');
   });
 
   circuit.on('close', () => {
-    logger.info(logContext, 'webhook.outbound.circuit.closed');
+    logger.info(redactedContext, 'webhook.outbound.circuit.closed');
   });
 }
 

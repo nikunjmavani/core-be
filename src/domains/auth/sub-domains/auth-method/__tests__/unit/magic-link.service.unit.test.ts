@@ -14,7 +14,10 @@ import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session
 import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
 
 vi.mock('@/core/events/event-bus.js', () => ({
-  eventBus: { emit: vi.fn().mockResolvedValue(undefined) },
+  eventBus: {
+    emit: vi.fn().mockResolvedValue(undefined),
+    emitStrict: vi.fn().mockResolvedValue(undefined),
+  },
   buildDomainEvent: (
     type: string,
     payload: unknown,
@@ -82,6 +85,7 @@ describe('MagicLinkService', () => {
     consumeIfValid: vi.fn(),
     findValidByTokenHash: vi.fn(),
     markUsed: vi.fn().mockResolvedValue(undefined),
+    invalidateAllForUser: vi.fn().mockResolvedValue(undefined),
   } as unknown as VerificationTokenRepository;
 
   const service = new MagicLinkService(
@@ -106,11 +110,15 @@ describe('MagicLinkService', () => {
   it('send creates token and emits event for existing user', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
     const result = await service.send({ email: user.email });
+    expect(verificationTokenRepository.invalidateAllForUser).toHaveBeenCalledWith(
+      user.id,
+      'MAGIC_LINK',
+    );
     expect(verificationTokenRepository.create).toHaveBeenCalled();
     /** Raw token never leaves via the result — only via the event payload. */
     expect(result).not.toHaveProperty('token');
-    expect(vi.mocked(eventBus.emit)).toHaveBeenCalledTimes(1);
-    const emittedEvent = vi.mocked(eventBus.emit).mock.calls[0]?.[0];
+    expect(vi.mocked(eventBus.emitStrict)).toHaveBeenCalledTimes(1);
+    const emittedEvent = vi.mocked(eventBus.emitStrict).mock.calls[0]?.[0];
     expect(emittedEvent?.type).toBe(AUTH_EVENT.MAGIC_LINK_REQUESTED);
     const emittedPayload = emittedEvent?.payload as { magic_link_token: string };
     expect(emittedPayload.magic_link_token).toMatch(/^[0-9a-f]{64}$/);

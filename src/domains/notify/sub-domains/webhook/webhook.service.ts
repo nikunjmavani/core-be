@@ -16,6 +16,7 @@ import { createPinnedWebhookFetch } from '@/shared/utils/security/webhook-outbou
 import { buildWebhookSignatureHeader } from '@/shared/utils/security/webhook-signature.util.js';
 import { NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
@@ -311,7 +312,7 @@ export class WebhookService {
         logger.warn(
           {
             webhookId: webhook.public_id,
-            url: webhook.url,
+            ...safeWebhookUrlForLogs(webhook.url),
             parseError: parseError instanceof Error ? parseError.message : 'Unknown error',
           },
           'webhook.response.body.parse.failed',
@@ -323,7 +324,11 @@ export class WebhookService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       responseBody = errorMessage;
       logger.warn(
-        { webhookId: webhook.public_id, url: webhook.url, error: errorMessage },
+        {
+          webhookId: webhook.public_id,
+          ...safeWebhookUrlForLogs(webhook.url),
+          error: errorMessage,
+        },
         'webhook.test.delivery.failed',
       );
     }

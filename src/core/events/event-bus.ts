@@ -118,6 +118,31 @@ export class EventBus {
       }),
     );
   }
+
+  /**
+   * Like {@link emit} but propagates the first handler failure to the caller.
+   * Used for auth recovery/login email paths where a silent handler failure
+   * must not return success to the client.
+   */
+  async emitStrict(event: DomainEvent): Promise<void> {
+    const handlers = this.handlers.get(event.type) ?? [];
+    if (handlers.length === 0) return;
+
+    const errors: unknown[] = [];
+    await Promise.all(
+      handlers.map(async (handler) => {
+        try {
+          await handler(event);
+        } catch (error) {
+          errors.push(error);
+          logger.error({ eventType: event.type, error }, 'Domain event handler failed');
+        }
+      }),
+    );
+    if (errors.length > 0) {
+      throw errors[0];
+    }
+  }
 }
 
 /** Runs `callback` with an isolated onCommit task queue (HTTP request scope). */

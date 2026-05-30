@@ -118,6 +118,7 @@
   "stripeWebhookEventInFlight": "Stripe webhook event {{eventId}} is still being processed; retry shortly.",
   "subscriptionAlreadyExists": "An active subscription already exists for this organization",
   "paymentProviderUnavailable": "The payment provider is temporarily unavailable. Please try again.",
+  "mailNotConfigured": "Email delivery is temporarily unavailable. Please try again later.",
   "captchaRequired": "CAPTCHA verification is required",
   "captchaInvalid": "CAPTCHA verification failed",
   "captchaProviderUnavailable": "CAPTCHA verification is temporarily unavailable",

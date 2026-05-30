@@ -58,11 +58,8 @@ export function createNotificationController(service: NotificationService) {
     },
     markAllRead: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const notifications = await service.markAllRead(auth.userId);
-      return successResponse(
-        NotificationSerializer.many(notifications),
-        getRequestIdentifier(request),
-      );
+      const updatedCount = await service.markAllRead(auth.userId);
+      return successResponse({ updated_count: updatedCount }, getRequestIdentifier(request));
     },
     getUnreadCount: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);

@@ -17,7 +17,7 @@ The receiver is registered at two paths sharing the same handler:
 
 - **Raw body for signature verification**: the route disables JSON parsing on the body so the signature can be verified byte-for-byte.
 - **Idempotent on `event.id`**: `stripe_webhook_events.provider_event_id UNIQUE`. Stripe retries are no-ops once we've persisted an event.
-- **Stale-event protection**: the dispatch into `subscription.syncFromStripeProviderSubscription` rejects events older than the row's last update.
+- **Stale-event protection**: subscription sync uses strict `<` on `last_stripe_event_created_at` so same-second stale updates cannot overwrite newer state; cancellation still uses `<=` so a terminal delete at the same timestamp wins.
 - **Reclaim window**: rows in `processing` longer than `STRIPE_WEBHOOK_STUCK_PROCESSING_LEASE_MINUTES = 15` may be reclaimed for retry by the reclaim worker.
 - **Per-source DLQ**: `stripe-webhook-event-reclaim-dlq` and `stripe-webhook-event-retention-dlq` capture final-retry failures.
 
