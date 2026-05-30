@@ -589,6 +589,36 @@ export const envSchema = envSchemaBase
       message: 'FRONTEND_URL must be a valid http(s) URL.',
       path: ['FRONTEND_URL'],
     },
+  )
+  .refine(
+    (data) => {
+      const origins = data.ALLOWED_ORIGINS.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+      // A literal `*` would make CORS reflect any origin and silently defeat the
+      // session-cookie Origin/Referer checks — never allow it as an entry.
+      if (origins.includes('*')) {
+        return false;
+      }
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      // In production every origin must be an absolute https:// URL. Plaintext http
+      // origins would let cross-site requests ride over an unencrypted channel and
+      // weaken the cookie-origin defenses that compare against this allowlist.
+      return origins.every((origin) => {
+        try {
+          return new URL(origin).protocol === 'https:';
+        } catch {
+          return false;
+        }
+      });
+    },
+    {
+      message:
+        'ALLOWED_ORIGINS must not contain `*`; in production every entry must be an absolute https:// origin.',
+      path: ['ALLOWED_ORIGINS'],
+    },
   );
 
 /** Ordered list of env var names from the schema (for .env.example sync and scripts). */

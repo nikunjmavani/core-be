@@ -25,6 +25,8 @@ const commonRequiredBase = {
 const productionRequiredBase = {
   ...commonRequiredBase,
   NODE_ENV: 'production',
+  // Production requires absolute https origins (no plaintext http / wildcard).
+  ALLOWED_ORIGINS: 'https://app.example.com',
   CAPTCHA_PROVIDER: 'turnstile',
   CAPTCHA_SECRET: 'turnstile-secret',
   ...productionRedisTopology,
@@ -71,6 +73,40 @@ describe('env-schema', () => {
       expect(parsed.data.PORT).toBe(4000);
       expect(parsed.data.AUTH_SESSION_MAX_AGE_DAYS).toBe(7);
     }
+  });
+
+  it('rejects ALLOWED_ORIGINS containing a wildcard in any environment', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      ALLOWED_ORIGINS: 'https://app.example.com,*',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects plaintext http ALLOWED_ORIGINS in production', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      ALLOWED_ORIGINS: 'http://app.example.com',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('accepts https ALLOWED_ORIGINS in production', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      ALLOWED_ORIGINS: 'https://app.example.com,https://admin.example.com',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('allows http localhost ALLOWED_ORIGINS outside production', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      ALLOWED_ORIGINS: 'http://localhost:3000',
+    });
+    expect(parsed.success).toBe(true);
   });
 
   it('transforms TRUST_PROXY "1" to a hop count', () => {
