@@ -17,7 +17,9 @@ const MAX_REDACTION_DEPTH = 8;
 /**
  * Lower-cased substrings that mark a key as sensitive. Substring (not exact) matching catches
  * casing and nesting variants: `Authorization`, `X-Api-Key`, `set-cookie`, `raw_key`,
- * `body.refresh_token`, etc.
+ * `body.refresh_token`, etc. `email` is included to keep address PII out of logs and Sentry;
+ * this also redacts incidental flags such as `is_email_verified`, which is an acceptable
+ * fail-closed trade-off.
  */
 const SENSITIVE_KEY_FRAGMENTS = [
   'authorization',
@@ -37,6 +39,7 @@ const SENSITIVE_KEY_FRAGMENTS = [
   'session_id',
   'jwt',
   'credential',
+  'email',
 ] as const;
 
 interface RedactionContext {

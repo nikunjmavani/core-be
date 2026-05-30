@@ -34,6 +34,19 @@ describe('redactSensitive', () => {
     expect(result.raw_key).toBe(SENSITIVE_REDACTION_PLACEHOLDER);
   });
 
+  it('redacts email PII keys (object and query string)', () => {
+    const result = redactSensitive({
+      email: 'user@example.com',
+      body: { user_email: 'a@b.com', name: 'ok' },
+    });
+    expect(result.email).toBe(SENSITIVE_REDACTION_PLACEHOLDER);
+    expect(result.body.user_email).toBe(SENSITIVE_REDACTION_PLACEHOLDER);
+    expect(result.body.name).toBe('ok');
+    expect(redactSensitive('email=user%40example.com&page=1')).toBe(
+      `email=${SENSITIVE_REDACTION_PLACEHOLDER}&page=1`,
+    );
+  });
+
   it('redacts sensitive keys inside arrays', () => {
     const input = { items: [{ apiKey: 'a' }, { name: 'ok' }] };
     const result = redactSensitive(input);
