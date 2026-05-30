@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, isNull, lt, sql as drizzleSql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, inArray, isNull, lt, sql as drizzleSql } from 'drizzle-orm';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
@@ -157,6 +157,26 @@ export class UploadRepository {
       .select({ id: uploads.id, file_key: uploads.file_key })
       .from(uploads)
       .where(and(eq(uploads.user_id, user_id), isNull(uploads.deleted_at)));
+  }
+
+  /**
+   * Active uploads for a user with `id > after_id`, ascending by id, capped at
+   * `limit`. Used to stream a user's uploads in bounded keyset batches during
+   * offboarding so object deletion never loads an unbounded result set.
+   */
+  async findActiveByUserIdAfter(
+    user_id: number,
+    after_id: number,
+    limit: number,
+  ): Promise<Pick<UploadRow, 'id' | 'file_key'>[]> {
+    return getRequestDatabase()
+      .select({ id: uploads.id, file_key: uploads.file_key })
+      .from(uploads)
+      .where(
+        and(eq(uploads.user_id, user_id), gt(uploads.id, after_id), isNull(uploads.deleted_at)),
+      )
+      .orderBy(asc(uploads.id))
+      .limit(limit);
   }
 
   async findActiveByOrganizationId(

@@ -59,6 +59,7 @@ describe('UploadService', () => {
     create: vi.fn().mockResolvedValue(uploadRow),
     findByPublicIdForUser: vi.fn().mockResolvedValue(uploadRow),
     findActiveByUserId: vi.fn().mockResolvedValue([uploadRow]),
+    findActiveByUserIdAfter: vi.fn().mockResolvedValue([uploadRow]),
     markStatus: vi.fn().mockResolvedValue(uploadRow),
     softDelete: vi.fn().mockResolvedValue(uploadRow),
     softDeleteAllByUserId: vi.fn().mockResolvedValue(1),
@@ -211,7 +212,7 @@ describe('UploadService', () => {
   });
 
   it('tombstoneAllByUserId soft-deletes user uploads', async () => {
-    vi.mocked(repository.findActiveByUserId).mockResolvedValue([uploadRow] as never);
+    vi.mocked(repository.findActiveByUserIdAfter).mockResolvedValue([uploadRow] as never);
     vi.mocked(repository.softDeleteAllByUserId).mockResolvedValue(1);
     const count = await service.tombstoneAllByUserId(1);
     expect(count).toBe(1);

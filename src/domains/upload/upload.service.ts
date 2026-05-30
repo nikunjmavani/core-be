@@ -16,6 +16,8 @@ import {
   UPLOAD_PURPOSE_CONFIG,
   UPLOAD_PURPOSES,
   PRESIGNED_URL_EXPIRY_SECONDS,
+  UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE,
+  UPLOAD_OFFBOARDING_DELETE_CONCURRENCY,
   UPLOAD_STATUS,
   UPLOAD_TARGETS,
   buildOrganizationLogoKeyPrefix,
@@ -420,17 +422,50 @@ export class UploadService {
 
   /** Tombstones all active uploads for a user (offboarding) and removes S3 objects when possible. */
   async tombstoneAllByUserId(user_id: number): Promise<number> {
-    const rows = await this.repository.findActiveByUserId(user_id);
-    for (const row of rows) {
-      const objectDeleted = await this.objectStorage.deleteObject(row.file_key);
-      if (!objectDeleted) {
-        logger.warn(
-          { userId: user_id, fileKey: row.file_key },
-          'upload.offboarding.s3ObjectDeleteFailed',
-        );
+    // Stream the user's active uploads in bounded keyset batches and delete their S3 objects
+    // with bounded concurrency. This prevents a user with a large upload footprint from
+    // loading an unbounded result set into memory or serializing thousands of S3 round-trips
+    // in the offboarding path. Rows are not mutated during iteration, so keyset-by-id pages
+    // through the full set exactly once; the soft-delete at the end is the durable marker.
+    let afterId = 0;
+    for (;;) {
+      const rows = await this.repository.findActiveByUserIdAfter(
+        user_id,
+        afterId,
+        UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE,
+      );
+      if (rows.length === 0) {
+        break;
+      }
+      await this.deleteObjectsWithBoundedConcurrency({
+        fileKeys: rows.map((row) => row.file_key),
+        userId: user_id,
+      });
+      afterId = rows[rows.length - 1]!.id;
+      if (rows.length < UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE) {
+        break;
       }
     }
     return this.repository.softDeleteAllByUserId(user_id);
+  }
+
+  /** Deletes S3 objects in fixed-size concurrent chunks; failures are logged, never thrown. */
+  private async deleteObjectsWithBoundedConcurrency(options: {
+    fileKeys: readonly string[];
+    userId: number;
+  }): Promise<void> {
+    const { fileKeys, userId } = options;
+    for (let index = 0; index < fileKeys.length; index += UPLOAD_OFFBOARDING_DELETE_CONCURRENCY) {
+      const chunk = fileKeys.slice(index, index + UPLOAD_OFFBOARDING_DELETE_CONCURRENCY);
+      await Promise.all(
+        chunk.map(async (fileKey) => {
+          const objectDeleted = await this.objectStorage.deleteObject(fileKey);
+          if (!objectDeleted) {
+            logger.warn({ userId, fileKey }, 'upload.offboarding.s3ObjectDeleteFailed');
+          }
+        }),
+      );
+    }
   }
 
   /** Tombstones org-scoped uploads (DB only; S3 removed on retention purge or per-upload DELETE). */
