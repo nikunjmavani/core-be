@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
+import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import type { MagicLinkSendResult } from '@/domains/auth/auth.types.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -73,18 +74,29 @@ export class MagicLinkService {
    * that event via `captureNextMagicLinkToken` in `src/tests/helpers/magic-link.helper.ts`.
    */
   async send(body: unknown, _context?: { requestId?: string }): Promise<MagicLinkSendResult> {
+    const startedAtMillis = Date.now();
     const parsed = validateMagicLinkSend(body);
     if (isDisposableEmailBlocked(parsed.email)) {
       throw new ValidationError('errors:disposableEmail', undefined, undefined, [
         { field: 'email', messageKey: 'errors:disposableEmail' },
       ]);
     }
-    const user = await this.userService.findByEmail(parsed.email);
+    const result = await this.issueMagicLinkIfUserExists(parsed.email);
+    // Both the known- and unknown-account branches return the same body; hold them to a
+    // common minimum duration so the extra token-issuing writes on the known path do not
+    // leak account existence through response latency.
+    await enforceMinimumDuration(startedAtMillis);
+    return result;
+  }
+
+  private async issueMagicLinkIfUserExists(email: string): Promise<MagicLinkSendResult> {
+    const successResult: MagicLinkSendResult = {
+      messageKey: 'success:magicLinkEmailSent',
+      expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
+    };
+    const user = await this.userService.findByEmail(email);
     if (!user) {
-      return {
-        messageKey: 'success:magicLinkEmailSent',
-        expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
-      };
+      return successResult;
     }
     await this.verificationTokenRepository.invalidateAllForUser(user.id, 'MAGIC_LINK');
 
@@ -110,10 +122,7 @@ export class MagicLinkService {
       timestamp: new Date(),
     });
 
-    return {
-      messageKey: 'success:magicLinkEmailSent',
-      expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
-    };
+    return successResult;
   }
 
   /** Verify magic link token; returns MFA challenge or access token + session. */

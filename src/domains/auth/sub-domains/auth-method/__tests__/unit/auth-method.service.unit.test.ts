@@ -27,6 +27,10 @@ vi.mock('@/shared/utils/text/email.util.js', () => ({
   isDisposableEmailBlocked: vi.fn(() => false),
 }));
 
+vi.mock('@/shared/utils/security/anti-enumeration.util.js', () => ({
+  enforceMinimumDuration: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
     callback(),
@@ -149,6 +153,18 @@ describe('AuthMethodService', () => {
     vi.mocked(userService.findByEmail).mockResolvedValue(null);
     const result = await service.forgotPassword({ email: 'missing@example.com' });
     expect(result.messageKey).toBe('success:passwordResetEmailSent');
+    expect(verificationTokenRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('forgotPassword enforces a constant-time floor on both account-existence branches', async () => {
+    const { enforceMinimumDuration } = await import(
+      '@/shared/utils/security/anti-enumeration.util.js'
+    );
+    await service.forgotPassword({ email: user.email });
+    vi.mocked(userService.findByEmail).mockResolvedValue(null);
+    await service.forgotPassword({ email: 'missing@example.com' });
+    // The known- and unknown-account paths both run the floor so latency cannot be an oracle.
+    expect(vi.mocked(enforceMinimumDuration)).toHaveBeenCalledTimes(2);
   });
 
   it('resetPassword updates password for valid token', async () => {

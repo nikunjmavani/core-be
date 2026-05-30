@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
+import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
 import { hashPassword, verifyPassword } from '@/shared/utils/security/password.util.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -167,6 +168,7 @@ export class AuthMethodService {
     body: unknown,
     _context?: { requestId?: string },
   ): Promise<{ messageKey: string; messageParams?: Record<string, string | number> }> {
+    const startedAtMillis = Date.now();
     const parsed = validateForgotPassword(body);
     if (isDisposableEmailBlocked(parsed.email)) {
       throw new ValidationError('errors:disposableEmail', undefined, undefined, [
@@ -174,8 +176,16 @@ export class AuthMethodService {
       ]);
     }
 
-    const user = await this.userService.findByEmail(parsed.email);
-    if (!user) return { messageKey: 'success:passwordResetEmailSent' };
+    await this.issuePasswordResetIfUserExists(parsed.email);
+    // Both branches return the same body; hold them to a common minimum duration so the extra
+    // token-issuing writes on the known-account path cannot leak existence via response latency.
+    await enforceMinimumDuration(startedAtMillis);
+    return { messageKey: 'success:passwordResetEmailSent' };
+  }
+
+  private async issuePasswordResetIfUserExists(email: string): Promise<void> {
+    const user = await this.userService.findByEmail(email);
+    if (!user) return;
 
     // Invalidate any existing password reset tokens
     await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
@@ -202,8 +212,6 @@ export class AuthMethodService {
       } satisfies PasswordResetEmailPayload,
       timestamp: new Date(),
     });
-
-    return { messageKey: 'success:passwordResetEmailSent' };
   }
 
   async resetPassword(body: unknown): Promise<void> {
