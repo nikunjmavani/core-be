@@ -18,7 +18,10 @@ import {
   buildGitHubOAuthRedirectUrl,
   exchangeGitHubOAuthCode,
 } from './providers/github-oauth.provider.js';
+import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
+import type { MfaService } from '../../auth-mfa/mfa.service.js';
 import { completeOAuthUserSession } from './oauth-user-session.js';
+import type { FirstFactorAuthResult } from '@/domains/auth/shared/complete-first-factor-auth.js';
 
 export type { OAuthProvider } from './oauth.types.js';
 
@@ -47,6 +50,8 @@ export class OAuthService {
     private readonly authMethodService: AuthMethodService,
     private readonly authSessionService: AuthSessionService,
     private readonly redis: Redis,
+    private readonly organizationSettingsService: OrganizationSettingsService,
+    private readonly mfaService: MfaService,
   ) {}
 
   listProviders(): { providers: string[] } {
@@ -78,7 +83,7 @@ export class OAuthService {
     ipAddress?: string;
     userAgent?: string;
     requestId?: string;
-  }): Promise<{ access_token: string; session_public_id: string }> {
+  }): Promise<FirstFactorAuthResult> {
     const ipAddress = options.ipAddress ?? '127.0.0.1';
     const normalizedProvider = await consumeOAuthState(this.redis, options.provider, options.state);
 
@@ -91,17 +96,21 @@ export class OAuthService {
             omitUndefined({ code: options.code, requestId: options.requestId }),
           );
 
-    const session = await completeOAuthUserSession(
-      omitUndefined({
-        userService: this.userService,
-        authMethodService: this.authMethodService,
-        authSessionService: this.authSessionService,
-        provider: normalizedProvider,
-        profile,
-        ipAddress,
-        userAgent: options.userAgent,
-      }),
-    );
+    const session = await completeOAuthUserSession({
+      userService: this.userService,
+      authMethodService: this.authMethodService,
+      authSessionService: this.authSessionService,
+      organizationSettingsService: this.organizationSettingsService,
+      mfaService: this.mfaService,
+      provider: normalizedProvider,
+      profile,
+      ipAddress,
+      ...(options.userAgent !== undefined ? { userAgent: options.userAgent } : {}),
+    });
+
+    if ('mfa_required' in session) {
+      return session;
+    }
 
     return {
       access_token: session.access_token,

@@ -2,14 +2,13 @@ import { createHash, randomBytes } from 'node:crypto';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
-import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
-import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { MagicLinkSendResult } from '@/domains/auth/auth.types.js';
 import type { UserService } from '@/domains/user/user.service.js';
-import type { AuthSessionRepository } from '../auth-session/auth-session.repository.js';
+import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
+import type { AuthSessionService } from '../auth-session/auth-session.service.js';
+import type { MfaService } from '../auth-mfa/mfa.service.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import { validateMagicLinkSend, validateMagicLinkVerify } from '../../auth.validator.js';
@@ -17,6 +16,10 @@ import {
   AUTH_EVENT,
   type MagicLinkEmailPayload,
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
+import {
+  completeFirstFactorAuth,
+  type FirstFactorAuthResult,
+} from '@/domains/auth/shared/complete-first-factor-auth.js';
 
 const MAGIC_LINK_EXPIRES_IN_MINUTES = 15;
 
@@ -56,8 +59,10 @@ const MAGIC_LINK_EXPIRES_IN_MINUTES = 15;
 export class MagicLinkService {
   constructor(
     private readonly userService: UserService,
-    private readonly sessionRepository: AuthSessionRepository,
     private readonly verificationTokenRepository: VerificationTokenRepository,
+    private readonly organizationSettingsService: OrganizationSettingsService,
+    private readonly mfaService: MfaService,
+    private readonly authSessionService: AuthSessionService,
   ) {}
 
   /**
@@ -110,12 +115,12 @@ export class MagicLinkService {
     };
   }
 
-  /** Verify magic link token, create session, return JWT + session_public_id. */
+  /** Verify magic link token; returns MFA challenge or access token + session. */
   async verify(
     body: unknown,
     ipAddress: string,
     userAgent?: string,
-  ): Promise<{ access_token: string; session_public_id: string }> {
+  ): Promise<FirstFactorAuthResult> {
     const parsed = validateMagicLinkVerify(body);
     const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
     /** Atomic UPDATE prevents two concurrent verifies from both producing a session. */
@@ -127,32 +132,20 @@ export class MagicLinkService {
     if (!user) throw new UnauthorizedError('errors:userNotFound');
     assertUserAccountActive(user.status);
 
-    const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
-    const expiresAt = new Date(Date.now() + sessionMaxAgeDays * 86_400_000);
-
-    const jsonWebToken = await signAccessToken({
-      userId: user.public_id,
-      role: resolveAccessTokenRoleForUser({
+    return completeFirstFactorAuth({
+      user: {
+        id: user.id,
+        public_id: user.public_id,
         email: user.email,
         status: user.status,
-        isEmailVerified: user.is_email_verified,
-      }),
+        is_email_verified: user.is_email_verified,
+        is_mfa_enabled: user.is_mfa_enabled,
+      },
+      ipAddress,
+      userAgent,
+      organizationSettingsService: this.organizationSettingsService,
+      mfaService: this.mfaService,
+      authSessionService: this.authSessionService,
     });
-
-    const jsonWebTokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
-    // auth.sessions is FORCE RLS keyed on app.current_user_id; the verified token identifies the
-    // user, so insert the session inside that user's context.
-    const session = await withUserDatabaseContext(user.public_id, () =>
-      this.sessionRepository.create(
-        omitUndefined({
-          user_id: user.id,
-          token_hash: jsonWebTokenHash,
-          ip_address: ipAddress,
-          user_agent: userAgent,
-          expires_at: expiresAt,
-        }),
-      ),
-    );
-    return { access_token: jsonWebToken, session_public_id: session.public_id };
   }
 }

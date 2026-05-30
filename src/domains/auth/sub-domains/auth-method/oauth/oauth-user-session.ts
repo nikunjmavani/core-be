@@ -1,10 +1,6 @@
-import { createHash } from 'node:crypto';
 import { ForbiddenError } from '@/shared/errors/index.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
-import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
-import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
-import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withTransaction } from '@/infrastructure/database/transaction.js';
@@ -13,9 +9,15 @@ import {
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
-import { AUTH_METHOD_TYPE } from '../auth-method.constants.js';
 import type { AuthMethodService } from '../auth-method.service.js';
 import type { AuthSessionService } from '../../auth-session/auth-session.service.js';
+import type { MfaService } from '../../auth-mfa/mfa.service.js';
+import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
+import { AUTH_METHOD_TYPE } from '../auth-method.constants.js';
+import {
+  completeFirstFactorAuth,
+  type FirstFactorAuthResult,
+} from '@/domains/auth/shared/complete-first-factor-auth.js';
 import type { OAuthProfile, OAuthProvider } from './oauth.types.js';
 import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
@@ -24,12 +26,22 @@ export async function completeOAuthUserSession(parameters: {
   userService: UserService;
   authMethodService: AuthMethodService;
   authSessionService: AuthSessionService;
+  organizationSettingsService: OrganizationSettingsService;
+  mfaService: MfaService;
   provider: OAuthProvider;
   profile: OAuthProfile;
   ipAddress: string;
   userAgent?: string;
-}): Promise<{ access_token: string; session_public_id: string; user: UserAuthRecord }> {
-  const { userService, authMethodService, authSessionService, provider, profile } = parameters;
+}): Promise<FirstFactorAuthResult & { user: UserAuthRecord }> {
+  const {
+    userService,
+    authMethodService,
+    authSessionService,
+    organizationSettingsService,
+    mfaService,
+    provider,
+    profile,
+  } = parameters;
 
   // Wrap the whole signup flow in one transaction and pin its handle in ALS so
   // every repository call (user insert, auth-method link, session insert) shares
@@ -90,34 +102,23 @@ export async function completeOAuthUserSession(parameters: {
       // mint a session for it via the OAuth callback (freshly created users are ACTIVE).
       assertUserAccountActive(user.status);
 
-      const jsonWebToken = await signAccessToken({
-        userId: user.public_id,
-        role: resolveAccessTokenRoleForUser({
+      const authResult = await completeFirstFactorAuth({
+        user: {
+          id: user.id,
+          public_id: user.public_id,
           email: user.email,
           status: user.status,
-          isEmailVerified: user.is_email_verified,
-        }),
+          is_email_verified: user.is_email_verified,
+          is_mfa_enabled: user.is_mfa_enabled,
+        },
+        ipAddress: parameters.ipAddress,
+        userAgent: parameters.userAgent,
+        organizationSettingsService,
+        mfaService,
+        authSessionService,
       });
 
-      const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
-      const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
-      const expiresAt = new Date(Date.now() + sessionMaxAgeDays * 86_400_000);
-
-      const session = await authSessionService.createSessionForUser(
-        user.public_id,
-        omitUndefined({
-          token_hash: tokenHash,
-          ip_address: parameters.ipAddress,
-          user_agent: parameters.userAgent,
-          expires_at: expiresAt,
-        }),
-      );
-
-      return {
-        access_token: jsonWebToken,
-        session_public_id: session.public_id,
-        user,
-      };
+      return { ...authResult, user };
     }),
   );
 }

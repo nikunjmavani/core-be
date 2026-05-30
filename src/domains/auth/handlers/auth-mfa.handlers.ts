@@ -1,6 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { recordRecentStepUp } from '@/shared/utils/auth/recent-step-up.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { getIpAddress, getUserAgent, setSessionCookie } from '../auth.http.util.js';
 import { validateMfaMethodIdParam } from '../auth.validator.js';
@@ -22,6 +24,7 @@ export function createAuthMfaHandlers({ mfaService }: AuthMfaHandlersDependencie
     verifyMfa: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const data = await mfaService.verify(auth.userId, request.body);
+      await recordRecentStepUp(redisConnection, auth.userId);
       return successResponse(AuthSerializer.mfaVerified(data), getRequestIdentifier(request));
     },
     enrollMfa: async (request: FastifyRequest, _reply: FastifyReply) => {

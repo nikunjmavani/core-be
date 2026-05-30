@@ -17,6 +17,7 @@ import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/
 import type { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';
 import type { MfaService } from './sub-domains/auth-mfa/mfa.service.js';
 import { validateLogin } from './auth.validator.js';
+import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js';
 
 /**
  * Discriminated result of {@link AuthService.login}: either a fresh access token + session
@@ -113,37 +114,21 @@ export class AuthService {
       await this.userService.updatePassword(user.public_id, newHash);
     }
 
-    const organizationRequiresMfa =
-      await this.organizationSettingsService.userHasOrganizationRequiringMfa(user.id);
-    if (user.is_mfa_enabled || organizationRequiresMfa) {
-      const mfaSessionToken = await this.mfaService.createMfaSession(user.public_id);
-      return { mfa_required: true, mfa_session_token: mfaSessionToken };
-    }
-
-    const jsonWebToken = await signAccessToken({
-      userId: user.public_id,
-      role: resolveAccessTokenRoleForUser({
+    return completeFirstFactorAuth({
+      user: {
+        id: user.id,
+        public_id: user.public_id,
         email: user.email,
         status: user.status,
-        isEmailVerified: user.is_email_verified,
-      }),
+        is_email_verified: user.is_email_verified,
+        is_mfa_enabled: user.is_mfa_enabled,
+      },
+      ipAddress,
+      userAgent,
+      organizationSettingsService: this.organizationSettingsService,
+      mfaService: this.mfaService,
+      authSessionService: this.authSessionService,
     });
-
-    const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
-    const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
-    const expiresAt = new Date(Date.now() + sessionMaxAgeDays * 86_400_000);
-
-    const session = await this.authSessionService.createSessionForUser(
-      user.public_id,
-      omitUndefined({
-        token_hash: tokenHash,
-        ip_address: ipAddress,
-        user_agent: userAgent,
-        expires_at: expiresAt,
-      }),
-    );
-
-    return { access_token: jsonWebToken, session_public_id: session.public_id };
   }
 
   async logout(token: string): Promise<void> {

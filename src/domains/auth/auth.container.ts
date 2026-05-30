@@ -55,8 +55,10 @@ export function createAuthContainer(
   );
   const magicLinkService = new MagicLinkService(
     userService,
-    authSessionRepository,
     verificationTokenRepository,
+    organizationSettingsService,
+    mfaService,
+    authSessionService,
   );
   const webauthnCredentialRepository = new WebauthnCredentialRepository();
   const webauthnService = new WebauthnService(
@@ -64,12 +66,16 @@ export function createAuthContainer(
     authSessionService,
     webauthnCredentialRepository,
     redisConnection,
+    organizationSettingsService,
+    mfaService,
   );
   const oauthService = new OAuthService(
     userService,
     authMethodService,
     authSessionService,
     redisConnection,
+    organizationSettingsService,
+    mfaService,
   );
 
   return {
