@@ -20,7 +20,7 @@ What it does not own: invoicing UI, dunning emails (those flow through `notify`)
 - **Stripe is authoritative**: state transitions on `subscriptions.status` are gated by Stripe webhook events. We never optimistically write `active` → `past_due` from internal logic.
 - **Inbound idempotency on `event.id`**: Stripe retries are safe — a `UNIQUE (provider_event_id)` constraint on `stripe_webhook_events` rejects duplicates.
 - **Stale-event rejection**: if a webhook arrives with `event.created_at` older than the row's last update, we reject the change so out-of-order delivery doesn't roll state backwards.
-- **Network I/O outside RLS contexts**: Stripe API calls **must not** run inside `withOrganizationDatabaseContext` (would hold a pool checkout across a remote round trip). Enforced by an ESLint guardrail.
+- **Network I/O outside RLS contexts**: Stripe API calls **must not** run inside `withOrganizationDatabaseContext` (would hold a pool checkout across a remote round trip). Enforced by `pnpm test:global` (`rls-context-network-isolation.global.test.ts`).
 - **One subscription per organization**: enforced at the service layer; many concurrent attempts to create a second subscription resolve to a single Stripe subscription via `Idempotency-Key`.
 
 ## Sub-domains

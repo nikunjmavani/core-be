@@ -42,7 +42,7 @@ The same context is reused if a worker is already running inside one (no nested 
 ### How to apply
 
 - New tenant-scoped repository: extend `BaseRepository`, scope every query by `organization_id`. Any RLS-eligible table also needs an RLS policy in its migration.
-- New tenant-scoped service method: wrap database I/O in `withOrganizationDatabaseContext(organizationPublicId, fn)`. **Network I/O (Stripe, S3, Resend) MUST stay outside** the wrapper to avoid holding a pool checkout across remote round trips — enforced by an ESLint guardrail.
+- New tenant-scoped service method: wrap database I/O in `withOrganizationDatabaseContext(organizationPublicId, fn)`. **Network I/O (Stripe, S3, Resend) MUST stay outside** the wrapper to avoid holding a pool checkout across remote round trips — enforced by `pnpm test:global` (`rls-context-network-isolation.global.test.ts`).
 - New worker job: use `runTenantScopedWorkerJob`; never call `getRequestDatabase()` from a `*.worker.ts` / `*.processor.ts` (enforced by global tests).
 - New endpoint at `/organizations/:id/...`: nothing extra; the middleware infers `organizationId` from the path even if the client omits the header.
 
