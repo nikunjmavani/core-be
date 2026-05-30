@@ -43,3 +43,22 @@ export function getBullMQConnectionOptions(): {
     prefix: resolveRedisKeyPrefix(),
   });
 }
+
+/**
+ * BullMQ connection options for **queue producers** (the `*.queue.ts` enqueue helpers).
+ *
+ * @remarks
+ * Identical to {@link getBullMQConnectionOptions} but pins `enableOfflineQueue: false` so a
+ * producer fails fast during a Redis partition instead of buffering the `add()` in memory.
+ * Because `maxRetriesPerRequest` is `null`, a buffered command would otherwise never reject —
+ * an enqueue issued from an HTTP request or post-commit event handler would hang for the whole
+ * outage rather than surfacing an error the caller can log or convert to a 5xx. Every domain
+ * producer queue uses this so the fail-fast behavior is uniform (previously only the mail queue
+ * set it inline). Workers and the boot-time scheduler intentionally keep
+ * {@link getBullMQConnectionOptions} (blocking consumers / created-and-used-at-boot).
+ */
+export function getBullMQProducerConnectionOptions(): ReturnType<
+  typeof getBullMQConnectionOptions
+> & { enableOfflineQueue: false } {
+  return { ...getBullMQConnectionOptions(), enableOfflineQueue: false };
+}

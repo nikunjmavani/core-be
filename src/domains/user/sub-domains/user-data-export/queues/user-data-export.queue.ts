@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { getBullMQProducerConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
 import {
@@ -15,7 +15,7 @@ let userDataExportQueue: Queue<UserDataExportJobData> | null = null;
 function getUserDataExportQueue(): Queue<UserDataExportJobData> {
   if (userDataExportQueue) return userDataExportQueue;
   userDataExportQueue = new Queue<UserDataExportJobData>(USER_DATA_EXPORT_QUEUE_NAME, {
-    connection: getBullMQConnectionOptions(),
+    connection: getBullMQProducerConnectionOptions(),
     defaultJobOptions: {
       removeOnComplete: { count: 2000 },
       removeOnFail: { count: 5000 },
