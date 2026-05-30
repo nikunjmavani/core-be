@@ -194,7 +194,7 @@ export class WebauthnService {
   ): Promise<WebauthnAuthenticateOptionsResult> {
     const parsed = validateWebauthnAuthenticateOptions(body);
     if (!parsed.email) {
-      throw new ValidationError('errors:webauthnEmailRequired');
+      throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
     const user = await this.userService.findByEmail(parsed.email);
@@ -206,7 +206,7 @@ export class WebauthnService {
       this.credentialRepository.listActiveByUserId(user.id),
     );
     if (credentials.length === 0) {
-      throw new UnauthorizedError('errors:webauthnNoCredentials');
+      throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
     const options = await generateAuthenticationOptions({

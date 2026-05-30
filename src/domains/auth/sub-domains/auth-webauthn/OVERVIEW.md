@@ -14,7 +14,7 @@ WebAuthn / passkey enrolment and authentication ceremonies, backed by [@simplewe
 - **Credential ids are unique per user**: enrolling the same authenticator twice replaces the row (or is rejected, depending on UX policy).
 - **Counter regression detection**: WebAuthn responses include a usage counter; a counter that does not increase indicates a cloned credential and is rejected.
 - **Origin + RPID checked**: the relying-party id (`WEBAUTHN_RP_ID` env) and origin must match the values registered with the authenticator.
-- **Expected origin is server-trusted, never caller-controlled**: `resolveWebauthnExpectedOrigin` accepts a request `Origin` header only when it EXACTLY matches an entry in the canonical CORS allowlist (`ALLOWED_ORIGINS`, via `parseAllowedOriginsList`). A present-but-unlisted origin is rejected with `ForbiddenError` (`errors:originNotAllowed`) before any credential verification; a missing origin falls back to the configured allowlist (never the caller). Registration and authentication verification use the identical validated value.
+- **Authentication options are anti-enumerating**: missing email, unknown user, and user-without-passkeys all return the same `errors:invalidEmailOrPassword` response; the public options route also requires CAPTCHA and per-email rate limiting like password login.
 
 ## Lifecycle
 

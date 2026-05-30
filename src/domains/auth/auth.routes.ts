@@ -180,6 +180,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
   );
   zodApplication.post('/webauthn/authenticate/options', {
     ...STRICT_PUBLIC_RATE_LIMIT,
+    preHandler: [perEmailRateLimit, captchaPreHandler],
     schema: { body: webauthnAuthenticateOptionsDto },
     handler: controller.webauthnAuthenticateOptions,
   });
