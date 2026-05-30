@@ -271,6 +271,11 @@ const envSchemaBase = z.object({
    * `docs/deployment/runbooks/resource-limits.md` for the full rollout sequence.
    */
   DATABASE_RLS_SCOPED_CONTEXTS: z.coerce.boolean().default(true),
+  /**
+   * Break-glass acknowledgement to run legacy request-pinned RLS transactions in production
+   * (`DATABASE_RLS_SCOPED_CONTEXTS=false`). Must be explicitly `true`; only for emergency rollback.
+   */
+  DATABASE_RLS_LEGACY_PINNING_ACK: z.coerce.boolean().default(false),
   /** Per-connection idle_in_transaction_session_timeout (ms). Caps stuck transactions; 0 disables. Default: 30000. */
   DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
   /** Warn when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.8). */
@@ -516,6 +521,22 @@ export const envSchema = envSchemaBase
       message:
         'In production, CAPTCHA_PROVIDER=turnstile and CAPTCHA_SECRET are required on public auth routes',
       path: ['CAPTCHA_PROVIDER'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      if (data.DATABASE_RLS_SCOPED_CONTEXTS) {
+        return true;
+      }
+      return data.DATABASE_RLS_LEGACY_PINNING_ACK === true;
+    },
+    {
+      message:
+        'In production, DATABASE_RLS_SCOPED_CONTEXTS=false requires DATABASE_RLS_LEGACY_PINNING_ACK=true (break-glass rollback only)',
+      path: ['DATABASE_RLS_SCOPED_CONTEXTS'],
     },
   )
   .refine(

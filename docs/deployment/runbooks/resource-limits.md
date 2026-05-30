@@ -157,8 +157,9 @@ Org-scoped HTTP routes (`X-Organization-Id` set) hold **one pool checkout** for 
 | `DATABASE_HTTP_STATEMENT_TIMEOUT_MS` | `5000`  | `SET LOCAL statement_timeout` on org RLS and other pinned HTTP transactions (legacy mode); also the connection-level `statement_timeout` when scoped contexts are enabled                         |
 | `DATABASE_STATEMENT_TIMEOUT_MS`      | `30000` | Connection-level default for workers and unpinned queries                                                                                                                                         |
 | `DATABASE_RLS_SCOPED_CONTEXTS`       | `true`  | When `true` (default), the per-request transaction pin is bypassed and services wrap DB work in `withOrganizationDatabaseContext`. Set `false` to restore legacy request-pinned RLS transactions. |
+| `DATABASE_RLS_LEGACY_PINNING_ACK`    | `false` | Break-glass only: must be `true` to allow `DATABASE_RLS_SCOPED_CONTEXTS=false` in `NODE_ENV=production` (schema rejects boot otherwise). |
 
-When `DATABASE_RLS_SCOPED_CONTEXTS=false`, org-scoped routes hold a pool checkout for the **full** request. Slow outbound calls (Stripe, S3, Resend) inside that window still occupy the slot — keep external calls **outside** `withOrganizationDatabaseContext` blocks even in scoped mode.
+When `DATABASE_RLS_SCOPED_CONTEXTS=false`, org-scoped routes hold a pool checkout for the **full** request. Slow outbound calls (Stripe, S3, Resend) inside that window still occupy the slot — keep external calls **outside** `withOrganizationDatabaseContext` blocks even in scoped mode. **Production** deployments must keep scoped contexts enabled unless an emergency rollback explicitly sets both `DATABASE_RLS_SCOPED_CONTEXTS=false` and `DATABASE_RLS_LEGACY_PINNING_ACK=true`.
 
 Non-org routes (auth, user without `X-Organization-Id`) use `request-statement-timeout` middleware with the same `DATABASE_HTTP_STATEMENT_TIMEOUT_MS`. `/livez`, `/readyz`, and `/metrics` are excluded.
 
