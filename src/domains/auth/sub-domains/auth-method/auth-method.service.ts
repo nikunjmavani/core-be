@@ -251,6 +251,24 @@ export class AuthMethodService {
     }
   }
 
+  /**
+   * Re-verifies the caller's password for a step-up ("sudo") re-authentication, without
+   * mutating any state. Used by `POST /auth/step-up` so password users can open a short
+   * recent-step-up window before a sensitive credential mutation. Throws on a missing user,
+   * a passwordless account, or an incorrect password.
+   */
+  async verifyPasswordForStepUp(options: {
+    userPublicId: string;
+    password: string;
+  }): Promise<void> {
+    const { userPublicId, password } = options;
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new NotFoundError('User');
+    if (!user.password_hash) throw new UnauthorizedError('errors:passwordAuthNotEnabled');
+    const { valid } = await verifyPassword(password, user.password_hash);
+    if (!valid) throw new UnauthorizedError('errors:currentPasswordIncorrect');
+  }
+
   // ── Email Verification ────────────────────────────────────────
 
   async verifyEmail(

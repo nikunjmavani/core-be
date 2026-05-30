@@ -25,6 +25,7 @@ import {
   oauthProviderParamsDto,
   ResetPasswordDto,
   sessionIdParamsDto,
+  StepUpVerifyDto,
   VerifyEmailDto,
 } from './auth.dto.js';
 import {
@@ -219,6 +220,21 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       },
     },
     controller.changePassword,
+  );
+  zodApplication.post(
+    '/step-up',
+    {
+      onRequest: [app.authenticate],
+      ...STRICT_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Step-up (re-authenticate)',
+        description:
+          'Re-verifies the authenticated user\'s password to open a short "recent step-up" window required before sensitive credential mutations (MFA enrollment, passkey registration, auth-method changes). MFA users may instead complete an MFA verification. Returns 401 if the password is incorrect.',
+        tags: ['Auth'],
+        body: StepUpVerifyDto,
+      },
+    },
+    controller.stepUp,
   );
   zodApplication.post(
     '/email/resend-verification',

@@ -80,6 +80,15 @@ export const ChangePasswordDto = z
 /** Inferred input type of {@link ChangePasswordDto}. */
 export type ChangePasswordInput = z.infer<typeof ChangePasswordDto>;
 
+/** Zod schema for the `POST /api/v1/auth/step-up` request body (password re-authentication). */
+export const StepUpVerifyDto = z
+  .object({
+    password: trimmedStringMinMax(1, 128),
+  })
+  .strict();
+/** Inferred input type of {@link StepUpVerifyDto}. */
+export type StepUpVerifyInput = z.infer<typeof StepUpVerifyDto>;
+
 // Email verification
 /** Zod schema for the `POST /api/v1/auth/email/verify` request body. */
 export const VerifyEmailDto = z
