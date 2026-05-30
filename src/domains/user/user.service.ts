@@ -16,7 +16,6 @@ import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/a
 import type { UploadService } from '@/domains/upload/upload.service.js';
 import type { UserDataExportService } from '@/domains/user/sub-domains/user-data-export/user-data-export.service.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import { withTransaction } from '@/infrastructure/database/transaction.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -55,11 +54,13 @@ export type UserOffboardingDependencies = {
  *   change away from `ACTIVE`) revokes all of that user's sessions so an outstanding token cannot
  *   survive the deactivation. Account deletion runs
  *   `softDeleteUserWithOffboarding`: revoke all auth sessions, revoke all auth methods, then
- *   inside `withTransaction` tombstone uploads + purge data-export rows + soft-delete the user.
+ *   sequentially tombstone uploads + purge data-export rows + soft-delete the user (each step owns
+ *   its per-user RLS transaction; no wrapping transaction since the steps span S3 + multiple domains
+ *   and cannot be made atomic).
  * - **Failure modes:** missing user → {@link NotFoundError}; avatar key outside owner namespace
  *   or content type not in `ALLOWED_AVATAR_CONTENT_TYPES` → {@link ValidationError}; missing
  *   wired dependencies → fall back to plain soft-delete and warn-log; S3 delete failures during
- *   offboarding are warn-logged but do not abort the transaction.
+ *   offboarding are warn-logged but do not abort offboarding.
  * - **Side effects:** writes `auth.users`; deletes S3 avatar objects; revokes sessions /
  *   credentials via auth services; tombstones uploads; purges data-export rows + S3 objects.
  *   No domain events emitted (offboarding is synchronous; export completion uses direct mail).
@@ -127,7 +128,8 @@ export class UserService {
     // FORCE RLS soft-delete without entering the broader global-admin context from the self path.
     const user = await this.requireUserRecordByPublicId(public_id).catch(() => null);
     if (!user) throw new NotFoundError('User');
-    if (!this.offboardingDependencies) {
+    const offboarding = this.offboardingDependencies;
+    if (!offboarding) {
       const deleted = await withUserDatabaseContext(public_id, () =>
         this.repository.softDelete(public_id),
       );
@@ -135,19 +137,19 @@ export class UserService {
       return;
     }
     await this.clearAvatarStorage(public_id, user.avatar_url);
-    await this.offboardingDependencies.authSessionService.revokeAllSessions(public_id);
-    await this.offboardingDependencies.authMethodService.revokeAllForUser(public_id);
-    await withTransaction(async () => {
-      await this.offboardingDependencies!.uploadService.tombstoneAllByUserId(user.id);
-      await this.offboardingDependencies!.userDataExportService.deleteAllExportsForUser(
-        user.id,
-        public_id,
-      );
-      const deleted = await withUserDatabaseContext(public_id, () =>
-        this.repository.softDelete(public_id),
-      );
-      if (!deleted) throw new NotFoundError('User');
-    });
+    await offboarding.authSessionService.revokeAllSessions(public_id);
+    await offboarding.authMethodService.revokeAllForUser(public_id);
+    // Offboarding spans S3 object deletion plus writes across upload, data-export, and auth.users.
+    // Each sub-operation opens its own per-user RLS transaction (FORCE RLS keys writes on
+    // app.current_user_id), so a wrapping transaction cannot make them atomic — it would only pin an
+    // idle pooled connection across the S3 round-trips and starve the pool under load. Run them
+    // sequentially; the soft-delete is the durable completion marker.
+    await offboarding.uploadService.tombstoneAllByUserId(user.id);
+    await offboarding.userDataExportService.deleteAllExportsForUser(user.id, public_id);
+    const deleted = await withUserDatabaseContext(public_id, () =>
+      this.repository.softDelete(public_id),
+    );
+    if (!deleted) throw new NotFoundError('User');
   }
 
   // ── Cross-domain read/write (auth, audit, notify, tenancy) ───
