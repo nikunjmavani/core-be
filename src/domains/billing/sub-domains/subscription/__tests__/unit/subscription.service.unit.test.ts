@@ -61,6 +61,7 @@ describe('SubscriptionService', () => {
 
   const planService = {
     requirePlanRecordByPublicId: vi.fn().mockResolvedValue(plan),
+    requireActivePlanByPublicId: vi.fn().mockResolvedValue(plan),
     requirePlanRecordByInternalId: vi.fn().mockResolvedValue(plan),
   } as unknown as PlanService;
 
@@ -133,7 +134,7 @@ describe('SubscriptionService', () => {
 
   it('create maps a unique_violation to ConflictError and compensates Stripe', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_monthly_id: 'price_monthly',
     } as never);
@@ -194,7 +195,7 @@ describe('SubscriptionService', () => {
 
   it('create uses Stripe when configured and plan has price id', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_monthly_id: 'price_monthly',
     } as never);
@@ -238,7 +239,7 @@ describe('SubscriptionService', () => {
       ...subscriptionRow,
       provider_subscription_id: 'sub_stripe',
     } as never);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_monthly_id: 'price_monthly',
     } as never);
@@ -249,7 +250,7 @@ describe('SubscriptionService', () => {
 
   it('create compensates Stripe subscription when local create fails', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_monthly_id: 'price_monthly',
     } as never);
@@ -273,7 +274,7 @@ describe('SubscriptionService', () => {
       provider_subscription_id: 'sub_stripe',
       billing_cycle: 'MONTHLY',
     } as never);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_monthly_id: 'price_new',
     } as never);
@@ -295,7 +296,7 @@ describe('SubscriptionService', () => {
 
   it('create fails closed when Stripe create fails — no local subscription committed', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_monthly_id: 'price_monthly',
     } as never);
@@ -369,20 +370,20 @@ describe('SubscriptionService', () => {
     await expect(service.resume('org_public', 'sub_public')).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('create reuses existing Stripe customer and supports yearly price and trial end', async () => {
+  it('create reuses existing Stripe customer and supports yearly price', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
     vi.mocked(organizationService.requireOrganizationByPublicId).mockResolvedValue({
       ...organization,
       stripe_customer_id: 'cus_existing',
     } as never);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_yearly_id: 'price_yearly',
     } as never);
 
     await service.create(
       'org_public',
-      { plan_id: 'plan_public', billing_cycle: 'yearly', trial_end: '2026-12-31T00:00:00.000Z' },
+      { plan_id: 'plan_public', billing_cycle: 'yearly' },
       'user_public',
     );
 
@@ -391,14 +392,13 @@ describe('SubscriptionService', () => {
       expect.objectContaining({
         customerId: 'cus_existing',
         priceId: 'price_yearly',
-        trialEnd: expect.any(Number),
       }),
     );
   });
 
   it('create logs and continues when plan has no Stripe price id', async () => {
     stripeMocks.isStripeConfigured.mockReturnValue(true);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_monthly_id: null,
       stripe_price_yearly_id: null,
@@ -420,7 +420,7 @@ describe('SubscriptionService', () => {
       provider_subscription_id: 'sub_stripe',
       billing_cycle: 'YEARLY',
     } as never);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_yearly_id: 'price_new_yearly',
     } as never);
@@ -445,7 +445,7 @@ describe('SubscriptionService', () => {
       ...subscriptionRow,
       provider_subscription_id: 'sub_stripe',
     } as never);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_monthly_id: 'price_new',
     } as never);
@@ -483,7 +483,7 @@ describe('SubscriptionService', () => {
       ...subscriptionRow,
       provider_subscription_id: 'sub_stripe',
     } as never);
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_monthly_id: null,
       stripe_price_yearly_id: null,
@@ -492,7 +492,7 @@ describe('SubscriptionService', () => {
     await service.changePlan('org_public', 'sub_public', { plan_id: 'plan_public' });
     expect(stripeMocks.updateStripeSubscription).not.toHaveBeenCalled();
 
-    vi.mocked(planService.requirePlanRecordByPublicId).mockResolvedValue({
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
       ...plan,
       stripe_price_yearly_id: 'price_yearly',
     } as never);

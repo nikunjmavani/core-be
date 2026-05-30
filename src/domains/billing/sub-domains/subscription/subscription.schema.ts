@@ -71,7 +71,7 @@ export const subscriptions = billingSchema
         .where(sql`${table.provider_subscription_id} IS NOT NULL`),
       check(
         'chk_subs_status',
-        sql`${table.status} IN ('TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELED', 'PAUSED')`,
+        sql`${table.status} IN ('TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELED', 'PAUSED', 'UNPAID', 'INCOMPLETE', 'INCOMPLETE_EXPIRED')`,
       ),
       check('chk_subs_cycle', sql`${table.billing_cycle} IN ('MONTHLY', 'YEARLY')`),
       check('chk_subs_period', sql`${table.current_period_end} > ${table.current_period_start}`),

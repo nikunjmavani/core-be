@@ -6,7 +6,6 @@ export const CreateSubscriptionDto = z
   .object({
     plan_id: trimmedString().max(255),
     billing_cycle: z.enum(['monthly', 'yearly']),
-    trial_end: z.string().trim().datetime().optional(),
   })
   .strict();
 
