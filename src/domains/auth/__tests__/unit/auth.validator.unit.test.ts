@@ -31,11 +31,25 @@ describe('auth.validator', () => {
     );
   });
 
-  it('validateCreateAuthMethod accepts method_type', () => {
-    expect(validateCreateAuthMethod({ method_type: 'oauth' })).toMatchObject({
-      method_type: 'oauth',
+  it('validateCreateAuthMethod accepts a canonical method_type', () => {
+    expect(validateCreateAuthMethod({ method_type: 'MAGIC_LINK' })).toMatchObject({
+      method_type: 'MAGIC_LINK',
       is_primary: false,
     });
+  });
+
+  it('validateCreateAuthMethod rejects non-canonical method_type casing', () => {
+    expect(() => validateCreateAuthMethod({ method_type: 'oauth' })).toThrow(ValidationError);
+  });
+
+  it('validateCreateAuthMethod rejects manual provider identity binding', () => {
+    expect(() =>
+      validateCreateAuthMethod({
+        method_type: 'OAUTH',
+        provider: 'google',
+        provider_user_id: 'victim-sub',
+      }),
+    ).toThrow(ValidationError);
   });
 
   it('validateChangePassword rejects short new password', () => {

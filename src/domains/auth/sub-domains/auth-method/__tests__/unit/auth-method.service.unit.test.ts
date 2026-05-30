@@ -93,9 +93,7 @@ describe('AuthMethodService', () => {
     await expect(service.list('missing')).rejects.toBeInstanceOf(NotFoundError);
     await expect(
       service.create('missing', {
-        method_type: 'OAUTH',
-        provider: 'google',
-        provider_user_id: 'gid',
+        method_type: 'MAGIC_LINK',
         is_primary: true,
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -109,14 +107,36 @@ describe('AuthMethodService', () => {
   it('lists and mutates auth methods for user', async () => {
     await service.list('user_public');
     await service.create('user_public', {
-      method_type: 'OAUTH',
-      provider: 'google',
-      provider_user_id: 'gid',
+      method_type: 'MAGIC_LINK',
       is_primary: true,
     });
     await service.delete('user_public', 2);
     await service.revokeAllForUser('user_public');
     expect(authMethodRepository.create).toHaveBeenCalled();
+  });
+
+  it('does not persist user-supplied provider identity fields on manual create', async () => {
+    await service.create('user_public', { method_type: 'MAGIC_LINK' });
+    const createArgs = vi.mocked(authMethodRepository.create).mock.calls.at(-1)?.[0];
+    expect(createArgs).not.toHaveProperty('provider');
+    expect(createArgs).not.toHaveProperty('provider_user_id');
+  });
+
+  it('rejects manual OAUTH linking (account-takeover guard)', async () => {
+    await expect(service.create('user_public', { method_type: 'OAUTH' })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(authMethodRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects manual provider identity binding via strict DTO', async () => {
+    await expect(
+      service.create('user_public', {
+        method_type: 'OAUTH',
+        provider: 'google',
+        provider_user_id: 'victim-sub',
+      } as never),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('forgotPassword creates reset token when user exists', async () => {

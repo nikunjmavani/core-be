@@ -81,6 +81,7 @@
   "githubUserMissingVerifiedEmail": "A primary, verified GitHub email is required. Verify your email with GitHub and try again.",
   "oauthLinkRequiresVerifiedAccount": "An account already exists for this email. Sign in with your existing method, then link this provider from your account settings.",
   "oauthInvalidState": "Invalid or expired OAuth state. Please try again.",
+  "oauthLinkNotManual": "OAuth providers can only be linked by completing the provider sign-in flow, not added manually.",
   "mfaUserNotFound": "User not found",
   "mfaNotEnabled": "MFA is not enabled for this account",
   "mfaInvalidOrExpiredCode": "Invalid or expired code",

@@ -11,6 +11,7 @@ import {
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
+import { AUTH_METHOD_TYPE } from './auth-method.constants.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
@@ -71,6 +72,14 @@ export class AuthMethodService {
 
   async create(userPublicId: string, body: unknown) {
     const parsed = validateCreateAuthMethod(body);
+    // OAuth credentials prove possession of an external identity and may only be written by the
+    // verified OAuth callback (linkOAuthProviderIfMissing). Allowing a manual OAUTH link here would
+    // let a user bind an arbitrary provider account — and be logged in as its real owner.
+    if (parsed.method_type === AUTH_METHOD_TYPE.OAUTH) {
+      throw new ValidationError('errors:invalidInput', undefined, undefined, [
+        { field: 'method_type', messageKey: 'errors:oauthLinkNotManual' },
+      ]);
+    }
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
     return withUserDatabaseContext(userPublicId, () =>
@@ -78,8 +87,6 @@ export class AuthMethodService {
         omitUndefined({
           user_id: user.id,
           method_type: parsed.method_type,
-          provider: parsed.provider,
-          provider_user_id: parsed.provider_user_id,
           is_primary: parsed.is_primary,
           created_by_user_id: user.id,
         }),
