@@ -80,13 +80,13 @@ describe('Auth WebAuthn — Integration', () => {
   });
 
   describe('POST /api/v1/auth/webauthn/authenticate/options', () => {
-    it('should return 400 when email is omitted', async () => {
+    it('should return 401 when email is omitted (anti-enumeration)', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/webauthn/authenticate/options'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(401);
     });
   });
 
