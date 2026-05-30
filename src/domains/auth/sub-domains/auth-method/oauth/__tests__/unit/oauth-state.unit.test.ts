@@ -11,14 +11,12 @@ import {
 describe('oauth-state', () => {
   const redis = {
     set: vi.fn(),
-    get: vi.fn(),
-    del: vi.fn(),
+    getdel: vi.fn(),
   } as unknown as Redis;
 
   beforeEach(() => {
     vi.mocked(redis.set).mockReset();
-    vi.mocked(redis.get).mockReset();
-    vi.mocked(redis.del).mockReset();
+    vi.mocked(redis.getdel).mockReset();
   });
 
   it('assertOAuthProviderSupported rejects unknown providers', () => {
@@ -45,44 +43,62 @@ describe('oauth-state', () => {
   });
 
   it('consumeOAuthState rejects expired or missing Redis state', async () => {
-    vi.mocked(redis.get).mockResolvedValue(null);
+    vi.mocked(redis.getdel).mockResolvedValue(null);
     await expect(consumeOAuthState(redis, 'google', 'state-token')).rejects.toThrow(
       UnauthorizedError,
     );
-    expect(redis.del).not.toHaveBeenCalled();
   });
 
   it('consumeOAuthState rejects provider mismatch', async () => {
-    vi.mocked(redis.get).mockResolvedValue('github');
+    vi.mocked(redis.getdel).mockResolvedValue('github');
     await expect(consumeOAuthState(redis, 'google', 'state-token')).rejects.toThrow(
       UnauthorizedError,
     );
   });
 
-  it('consumeOAuthState deletes state after successful consume', async () => {
-    vi.mocked(redis.get).mockResolvedValue('google');
+  it('consumeOAuthState atomically reads-and-deletes state after successful consume', async () => {
+    vi.mocked(redis.getdel).mockResolvedValue('google');
     const provider = await consumeOAuthState(redis, 'google', 'state-token-123');
     expect(provider).toBe('google');
-    expect(redis.del).toHaveBeenCalledWith(`${OAUTH_STATE_KEY_PREFIX}state-token-123`);
+    expect(redis.getdel).toHaveBeenCalledWith(`${OAUTH_STATE_KEY_PREFIX}state-token-123`);
   });
 
   it('consumeOAuthState rejects replayed state after first successful consume', async () => {
-    vi.mocked(redis.get).mockResolvedValueOnce('google');
+    vi.mocked(redis.getdel).mockResolvedValueOnce('google');
     await expect(consumeOAuthState(redis, 'google', 'replay-state')).resolves.toBe('google');
 
-    // Replay: Redis no longer has the entry (state was deleted)
-    vi.mocked(redis.get).mockResolvedValueOnce(null);
+    // Replay: GETDEL already removed the entry (atomic consume)
+    vi.mocked(redis.getdel).mockResolvedValueOnce(null);
     await expect(consumeOAuthState(redis, 'google', 'replay-state')).rejects.toThrow(
       UnauthorizedError,
     );
   });
 
   it('consumeOAuthState deletes state before validating provider mismatch (prevents reuse of mismatched state)', async () => {
-    vi.mocked(redis.get).mockResolvedValue('google');
+    vi.mocked(redis.getdel).mockResolvedValue('google');
     await expect(consumeOAuthState(redis, 'github', 'cross-provider')).rejects.toThrow(
       UnauthorizedError,
     );
-    expect(redis.del).toHaveBeenCalledWith(`${OAUTH_STATE_KEY_PREFIX}cross-provider`);
+    expect(redis.getdel).toHaveBeenCalledWith(`${OAUTH_STATE_KEY_PREFIX}cross-provider`);
+  });
+
+  it('lets exactly one of two concurrent consumes succeed (atomic GETDEL)', async () => {
+    let consumed = false;
+    vi.mocked(redis.getdel).mockImplementation(async () => {
+      if (consumed) return null;
+      consumed = true;
+      return 'google';
+    });
+
+    const results = await Promise.allSettled([
+      consumeOAuthState(redis, 'google', 'race-state'),
+      consumeOAuthState(redis, 'google', 'race-state'),
+    ]);
+
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
   });
 
   it('createOAuthState generates unique state tokens across invocations', async () => {

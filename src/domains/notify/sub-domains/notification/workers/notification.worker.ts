@@ -2,6 +2,9 @@ import { Worker, type Job } from 'bullmq';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { getDefaultWorkerOptions } from '@/infrastructure/queue/worker-runtime/worker-options.js';
 import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-close.util.js';
+import { parseJobDataOrDeadLetter } from '@/infrastructure/queue/dlq/poison-job.util.js';
+import { runWithPropagatedTraceContext } from '@/infrastructure/observability/tracing/trace-context.util.js';
+import { notificationJobDataSchema } from '../queues/notification.job.schema.js';
 import { NOTIFICATION_QUEUE_NAME, type NotificationJobData } from '../queues/notification.queue.js';
 import { createWorkerNotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 import { dispatchOutboxEmail, recordOutboxEmail } from '@/infrastructure/mail/queues/mail.queue.js';
@@ -160,23 +163,30 @@ export function createNotificationWorker(): WorkerHandle {
   const worker = new Worker<NotificationJobData>(
     NOTIFICATION_QUEUE_NAME,
     async (job) => {
-      const { notificationId, organizationPublicId, requestId } = job.data;
+      const { notificationId, organizationPublicId, requestId, traceparent, tracestate } =
+        await parseJobDataOrDeadLetter({
+          schema: notificationJobDataSchema,
+          job,
+          queueName: NOTIFICATION_QUEUE_NAME,
+        });
 
-      if (organizationPublicId === null || organizationPublicId === undefined) {
-        return runGlobalRetentionWorkerJob((databaseHandle) =>
-          processNotificationDispatchJob(
-            notificationId,
-            organizationPublicId,
-            omitUndefined({ id: job.id, requestId }),
-            createWorkerNotificationRepository(databaseHandle),
-          ),
+      return runWithPropagatedTraceContext({ traceparent, tracestate }, job.name, () => {
+        if (organizationPublicId === null || organizationPublicId === undefined) {
+          return runGlobalRetentionWorkerJob((databaseHandle) =>
+            processNotificationDispatchJob(
+              notificationId,
+              organizationPublicId,
+              omitUndefined({ id: job.id, requestId }),
+              createWorkerNotificationRepository(databaseHandle),
+            ),
+          );
+        }
+
+        return runTenantScopedWorkerJob(
+          { organizationPublicId, notificationId, requestId },
+          (databaseHandle) => processTenantScopedNotificationJob(databaseHandle, job),
         );
-      }
-
-      return runTenantScopedWorkerJob(
-        { organizationPublicId, notificationId, requestId },
-        (databaseHandle) => processTenantScopedNotificationJob(databaseHandle, job),
-      );
+      });
     },
     {
       connection: getBullMQConnectionOptions(),

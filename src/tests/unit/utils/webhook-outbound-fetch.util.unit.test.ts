@@ -88,6 +88,41 @@ describe('webhook-outbound-fetch.util', () => {
     expect(mockedLookup).toHaveBeenCalledOnce();
   });
 
+  it('aborts and rejects when the response body exceeds the 64 KB ceiling', async () => {
+    mockDnsLookupAll([{ address: '93.184.216.34', family: 4 }]);
+
+    const destroy = vi.fn();
+    mockedHttpRequest.mockImplementation(((options, responseCallback) => {
+      void (options as RequestOptions);
+      const oversizedChunk = Buffer.alloc(65 * 1024, 0x61);
+      // Defer like real Node so `const request = httpRequest(...)` is assigned before the
+      // response callback (which references `request.destroy()`) runs.
+      setImmediate(() => {
+        const response = {
+          statusCode: 200,
+          statusMessage: 'OK',
+          headers: {},
+          on: (event: string, handler: (chunk?: Buffer) => void) => {
+            if (event === 'data') handler(oversizedChunk);
+            if (event === 'end') handler();
+          },
+        } as IncomingMessage;
+        (responseCallback as (response: IncomingMessage) => void)(response);
+      });
+      return { on: vi.fn(), end: vi.fn(), destroy } as unknown as ReturnType<typeof httpRequest>;
+    }) as typeof httpRequest);
+
+    const { createPinnedWebhookFetch } = await import(
+      '@/shared/utils/security/webhook-outbound-fetch.util.js'
+    );
+    const pinnedFetch = await createPinnedWebhookFetch('http://hooks.example.com/deliver');
+
+    await expect(
+      pinnedFetch('http://hooks.example.com/deliver', { method: 'POST', body: '{}' }),
+    ).rejects.toThrow(/response_too_large/);
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
   it('does not re-resolve DNS when lookup would return private IP on a second query', async () => {
     let lookupCount = 0;
     mockedLookup.mockImplementation(async () => {

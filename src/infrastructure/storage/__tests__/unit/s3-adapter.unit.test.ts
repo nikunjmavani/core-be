@@ -82,7 +82,7 @@ describe('S3ObjectStorageAdapter', () => {
     expect(getSignedUrlMock).toHaveBeenCalled();
   });
 
-  it('createPresignedUploadUrl returns a signed PUT URL', async () => {
+  it('createPresignedUploadUrl returns a signed PUT URL bound to an exact Content-Length', async () => {
     const url = await adapter.createPresignedUploadUrl({
       key: 'uploads/file.png',
       contentType: 'image/png',
@@ -92,6 +92,16 @@ describe('S3ObjectStorageAdapter', () => {
 
     expect(url).toBe('https://signed.example/put');
     expect(getSignedUrlMock).toHaveBeenCalledOnce();
+
+    const [, command, signingOptions] = getSignedUrlMock.mock.calls[0] as [
+      unknown,
+      { input: { ContentLength?: number } },
+      { signableHeaders?: Set<string> },
+    ];
+    // The signed command binds Content-Length so S3 rejects an oversized body.
+    expect(command.input.ContentLength).toBe(1024);
+    expect(signingOptions.signableHeaders).toBeInstanceOf(Set);
+    expect([...(signingOptions.signableHeaders ?? [])]).toContain('content-length');
   });
 
   it('headObject maps S3 metadata to port shape', async () => {

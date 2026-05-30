@@ -33,7 +33,12 @@ export const PINO_REDACT_PATHS = [
   'req.body.email',
 ] as const;
 
-function resolveTrustProxy(): boolean | number {
+/**
+ * Resolves the Fastify `trustProxy` value from the validated env. `TRUST_PROXY` is parsed
+ * by the schema into `false | number` (a hop count); this normalizes to the shape Fastify
+ * accepts and never trusts a bare boolean `true`.
+ */
+export function resolveTrustProxy(): boolean | number {
   const trustProxy = env.TRUST_PROXY;
   if (trustProxy === false) return false;
   if (typeof trustProxy === 'number') return trustProxy;

@@ -107,18 +107,21 @@ describe('idempotency middleware fail-closed behavior', () => {
     }
 
     const send = vi.fn();
+    const header = vi.fn().mockReturnThis();
     const reply = {
       sent: false,
       status: vi.fn().mockReturnThis(),
+      header,
       send,
     } as unknown as FastifyReply;
 
     await claimPreHandler!(request, reply);
 
     expect(reply.status).toHaveBeenCalledWith(503);
+    expect(header).toHaveBeenCalledWith('Retry-After', '2');
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
-        error: expect.objectContaining({ code: 'service_unavailable' }),
+        error: expect.objectContaining({ code: 'service_unavailable', retryable: true }),
       }),
     );
   });
@@ -697,6 +700,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const reply = {
       sent: false,
       status: vi.fn().mockReturnThis(),
+      header: vi.fn().mockReturnThis(),
       send,
     } as unknown as FastifyReply;
 

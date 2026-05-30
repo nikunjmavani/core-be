@@ -3,6 +3,7 @@ import { withOrganizationDatabaseContext } from '@/infrastructure/database/conte
 import type { OrganizationRepository } from '../../organization/organization.repository.js';
 import type { MemberRoleRepository } from '../member-role.repository.js';
 import type { MemberRolePermissionRepository } from './member-role-permission.repository.js';
+import { invalidateOrganizationPermissions } from '../../permission/permission-cache.service.js';
 import { validatePutMemberRolePermissions } from './member-role-permission.validator.js';
 
 /**
@@ -17,9 +18,10 @@ import { validatePutMemberRolePermissions } from './member-role-permission.valid
  *   exist (or has been soft-deleted); Zod `ValidationError` from
  *   {@link validatePutMemberRolePermissions} for malformed input.
  * - **Side effects:** {@link put} replaces the role's entire permission set
- *   (DELETE then INSERT) in a single repository call; permission cache
- *   invalidation for affected memberships is the responsibility of higher
- *   layers when roles are reassigned.
+ *   (DELETE then INSERT) in a single repository call, then calls
+ *   {@link invalidateOrganizationPermissions} so every member holding the role
+ *   re-resolves their permissions on the next request (a role's permission set
+ *   change can affect many users, so the whole org namespace is bumped).
  * - **Notes:** `listPermissionCodesForRole` is the read path consumed by
  *   {@link MembershipService.getPermissions}; it returns only `permission_code`
  *   strings and does not enforce org context (callers must already be inside
@@ -61,11 +63,13 @@ export class MemberRolePermissionService {
       if (!role) throw new NotFoundError('Role');
       const userId =
         await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id);
-      return this.memberRolePermissionRepository.replace(
+      const result = await this.memberRolePermissionRepository.replace(
         role.id,
         parsed.permission_codes,
         userId ?? null,
       );
+      await invalidateOrganizationPermissions(organization_public_id);
+      return result;
     });
   }
 }

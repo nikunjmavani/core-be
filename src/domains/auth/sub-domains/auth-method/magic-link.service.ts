@@ -1,10 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { MagicLinkSendResult } from '@/domains/auth/auth.types.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionRepository } from '../auth-session/auth-session.repository.js';
@@ -41,6 +43,7 @@ const MAGIC_LINK_EXPIRES_IN_MINUTES = 15;
  * - Token expired or already consumed → 401 `errors:invalidOrExpiredMagicLink`
  *   from `verify`.
  * - User soft-deleted between issue and verify → 401 `errors:userNotFound`.
+ * - User suspended/locked between issue and verify → 401 `errors:accountNotActive`.
  *
  * Side effects:
  * - `send` emits a domain event whose handler enqueues an outbound email via
@@ -122,24 +125,33 @@ export class MagicLinkService {
     }
     const user = await this.userService.findById(record.user_id);
     if (!user) throw new UnauthorizedError('errors:userNotFound');
+    assertUserAccountActive(user.status);
 
     const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
     const expiresAt = new Date(Date.now() + sessionMaxAgeDays * 86_400_000);
 
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
-      role: resolveAccessTokenRoleForUser(user.email, user.status),
+      role: resolveAccessTokenRoleForUser({
+        email: user.email,
+        status: user.status,
+        isEmailVerified: user.is_email_verified,
+      }),
     });
 
     const jsonWebTokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
-    const session = await this.sessionRepository.create(
-      omitUndefined({
-        user_id: user.id,
-        token_hash: jsonWebTokenHash,
-        ip_address: ipAddress,
-        user_agent: userAgent,
-        expires_at: expiresAt,
-      }),
+    // auth.sessions is FORCE RLS keyed on app.current_user_id; the verified token identifies the
+    // user, so insert the session inside that user's context.
+    const session = await withUserDatabaseContext(user.public_id, () =>
+      this.sessionRepository.create(
+        omitUndefined({
+          user_id: user.id,
+          token_hash: jsonWebTokenHash,
+          ip_address: ipAddress,
+          user_agent: userAgent,
+          expires_at: expiresAt,
+        }),
+      ),
     );
     return { access_token: jsonWebToken, session_public_id: session.public_id };
   }

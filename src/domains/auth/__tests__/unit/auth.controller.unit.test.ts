@@ -110,7 +110,9 @@ describe('createAuthController', () => {
   const mfaService = {
     verify: vi.fn().mockResolvedValue({ verified: true }),
     enroll: vi.fn().mockResolvedValue({ secret: 'secret', provisioning_uri: 'uri', method_id: 1 }),
-    challenge: vi.fn().mockResolvedValue({ access_token: 'token', session_public_id: 'session' }),
+    verifyLoginMfa: vi
+      .fn()
+      .mockResolvedValue({ access_token: 'token', session_public_id: 'session' }),
     listMfaMethods: vi.fn().mockResolvedValue([]),
     deleteMfa: vi.fn().mockResolvedValue(undefined),
   };
@@ -198,32 +200,32 @@ describe('createAuthController', () => {
   });
 
   it('MFA handlers delegate to mfa service', async () => {
-    const challengeReply = mockReply();
+    const loginReply = mockReply();
     await controller.enrollMfa(mockRequest({ body: { method_type: 'MFA_TOTP' } }), mockReply());
     await controller.verifyMfa(mockRequest({ body: { code: '123456' } }), mockReply());
-    await controller.challengeMfa(
-      mockRequest({ body: { user_id: generatePublicId(), code: '123456' } }),
-      challengeReply,
+    await controller.verifyMfaLogin(
+      mockRequest({ body: { mfa_session_token: 'session-token', totp_code: '123456' } }),
+      loginReply,
     );
     await controller.listMfaMethods(mockRequest(), mockReply());
     const deleteReply = mockReply();
     await controller.deleteMfa(mockRequest({ params: { mfaMethodId: '5' } }), deleteReply);
     expect(mfaService.enroll).toHaveBeenCalled();
-    expect(mfaService.challenge).toHaveBeenCalled();
+    expect(mfaService.verifyLoginMfa).toHaveBeenCalled();
     expect(deleteReply.code).toHaveBeenCalledWith(204);
   });
 
-  it('challengeMfa returns session_public_id and sets session cookie', async () => {
-    const challengeReply = mockReply();
-    const responsePayload = await controller.challengeMfa(
-      mockRequest({ body: { user_id: generatePublicId(), code: '123456' } }),
-      challengeReply,
+  it('verifyMfaLogin returns session_public_id and sets session cookie', async () => {
+    const loginReply = mockReply();
+    const responsePayload = await controller.verifyMfaLogin(
+      mockRequest({ body: { mfa_session_token: 'session-token', totp_code: '123456' } }),
+      loginReply,
     );
     expect(responsePayload.data).toMatchObject({
       access_token: 'token',
       session_public_id: 'session',
     });
-    expect(challengeReply.setCookie).toHaveBeenCalledWith(
+    expect(loginReply.setCookie).toHaveBeenCalledWith(
       'session_id',
       'session',
       expect.objectContaining({ httpOnly: true }),
@@ -334,16 +336,6 @@ describe('createAuthController', () => {
     } as never);
     const reply = mockReply();
     await controller.verifyMagicLink(mockRequest({ body: { token: 'magic' } }), reply);
-    expect(reply.setCookie).not.toHaveBeenCalled();
-  });
-
-  it('challengeMfa skips session cookie when session_public_id is absent', async () => {
-    vi.mocked(mfaService.challenge).mockResolvedValueOnce({ access_token: 'token-only' } as never);
-    const reply = mockReply();
-    await controller.challengeMfa(
-      mockRequest({ body: { user_id: generatePublicId(), code: '123456' } }),
-      reply,
-    );
     expect(reply.setCookie).not.toHaveBeenCalled();
   });
 

@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import {
+  getRequestIdentifier,
+  requireAuth,
+  requirePrincipal,
+} from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationService } from './organization.service.js';
 import type { AuditService } from '@/domains/audit/audit.service.js';
@@ -46,25 +50,25 @@ export function createOrganizationController(
       return successResponse(data, getRequestIdentifier(request));
     },
     updateOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
       const data = await service.update(id, request.body, auth.userId);
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteOrganization: async (request: FastifyRequest, reply: FastifyReply) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
       await service.delete(id);
       return reply.code(204).send();
     },
     uploadLogo: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
       const data = await service.uploadLogo(id, request.body, auth.userId);
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteLogo: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
       const data = await service.deleteLogo(id, auth.userId);
       return successResponse(data, getRequestIdentifier(request));

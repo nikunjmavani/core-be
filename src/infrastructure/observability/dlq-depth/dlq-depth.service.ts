@@ -7,7 +7,6 @@ import { NOTIFICATION_QUEUE_NAME } from '@/domains/notify/sub-domains/notificati
 import { AUDIT_EXPORT_QUEUE_NAME } from '@/domains/audit/workers/audit-export.constants.js';
 import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retention.constants.js';
 import { MAIL_OUTBOX_SWEEPER_QUEUE_NAME } from '@/infrastructure/mail/workers/mail-outbox-sweeper.constants.js';
-import { PARTITION_MAINTENANCE_QUEUE_NAME } from '@/infrastructure/queue/partition-maintenance/partition-maintenance.constants.js';
 import { NOTIFICATION_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/workers/notification-retention.constants.js';
 import { STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-retention.constants.js';
 import { STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-reclaim.constants.js';
@@ -34,7 +33,6 @@ const SOURCE_QUEUE_NAMES_FOR_DLQ_MONITORING = [
   NOTIFICATION_RETENTION_QUEUE_NAME,
   AUDIT_EXPORT_QUEUE_NAME,
   AUDIT_RETENTION_QUEUE_NAME,
-  PARTITION_MAINTENANCE_QUEUE_NAME,
   STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME,
   STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME,
   SESSION_CLEANUP_QUEUE_NAME,

@@ -45,6 +45,14 @@ function requireBucket(): string {
 
 /** Default S3 implementation of {@link ObjectStoragePort}. */
 export class S3ObjectStorageAdapter implements ObjectStoragePort {
+  /**
+   * Presigned PUT URL bound to an exact `Content-Length`. `content-length` is forced into
+   * the SigV4 signed headers so S3 rejects any request whose body length differs from the
+   * value declared (and validated `<= UPLOAD_PURPOSE_CONFIG.maxSize`) at create time — this
+   * is the strongest size constraint a presigned PUT supports. For an explicit min/max range
+   * prefer the presigned POST flow (`UPLOAD_USE_PRESIGNED_POST=true`, recommended for
+   * production); see {@link createPresignedUploadPost}.
+   */
   async createPresignedUploadUrl(options: {
     key: string;
     contentType: string;
@@ -59,7 +67,10 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
       ContentLength: options.contentLength,
     });
 
-    return getSignedUrl(getS3Client(), command, { expiresIn: options.expiresInSeconds });
+    return getSignedUrl(getS3Client(), command, {
+      expiresIn: options.expiresInSeconds,
+      signableHeaders: new Set(['content-length', 'content-type', 'host']),
+    });
   }
 
   async createPresignedUploadPost(options: {

@@ -75,6 +75,23 @@ describe('Resend outbound email contract (`mail.service.sendEmail`)', () => {
     expect(outboundResendMessageIdentifier).toBe(outboundResendEmailsSuccessEnvelope.id);
   });
 
+  test('sendEmail forwards the outbox idempotency key as the Idempotency-Key header', async () => {
+    nock(resendApiHostnameOutbound)
+      .post('/emails', () => true)
+      .matchHeader('authorization', /^Bearer /)
+      .matchHeader('idempotency-key', 'mail-outbox-99')
+      .reply(200, outboundResendEmailsSuccessEnvelope);
+
+    const outboundResendMessageIdentifier = await sendEmail({
+      to: outboundResendEmailsRequestExpectedEnvelope.to[0] ?? '',
+      subject: outboundResendEmailsRequestExpectedEnvelope.subject,
+      html: outboundResendEmailsRequestExpectedEnvelope.html,
+      idempotencyKey: 'mail-outbox-99',
+    });
+
+    expect(outboundResendMessageIdentifier).toBe(outboundResendEmailsSuccessEnvelope.id);
+  });
+
   test('sendEmail throws ResendApiError while logging Resend semantic error payloads', async () => {
     nock(resendApiHostnameOutbound)
       .post('/emails', () => true)

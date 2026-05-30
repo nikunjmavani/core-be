@@ -4,10 +4,14 @@
  * a cron registered for a queue tagged `scheduled: false`).
  *
  * Mismatches are usually one of:
- * - **Orphan worker**: registered with `scheduled: false` because no cron exists yet
- *   (e.g. `partition-maintenance`, `notification-retention`). Operationally inert until
- *   either enqueued from a service or wired into `scheduler.ts`.
+ * - **Orphan worker**: registered with `scheduled: false` because no cron exists yet.
+ *   Operationally inert until either enqueued from a service or wired into `scheduler.ts`.
  * - **Drift**: someone added a cron without flipping `scheduled: true`, or vice versa.
+ *
+ * A stronger, list-driven invariant — every `maintenance`-criticality worker MUST have a
+ * matching `scheduler.ts` entry (registry ⊆ scheduler) — is enforced by
+ * {@link findMaintenanceWorkersWithoutSchedule} so that a cron-less retention worker fails
+ * the build instead of silently never running.
  */
 
 import { getScheduledJobs } from '@/infrastructure/queue/scheduler.js';
@@ -51,6 +55,24 @@ export function detectSchedulerRegistryMismatches(): SchedulerRegistryMismatch[]
   }
 
   return mismatches;
+}
+
+/**
+ * Returns the queue names of every `maintenance`-criticality worker in the registry that
+ * has no matching cron in {@link getScheduledJobs} (registry ⊄ scheduler).
+ *
+ * Maintenance/retention workers are cron-driven by nature — they only run when the
+ * scheduler enqueues their repeatable job. A maintenance worker with no scheduler entry is
+ * an orphan that never runs, so its table grows unbounded (the exact failure mode that left
+ * `notification-retention` and `partition-maintenance` inert). This is asserted as `[]` by a
+ * unit test, so any current or future orphan fails the build rather than going unnoticed.
+ */
+export function findMaintenanceWorkersWithoutSchedule(): string[] {
+  const scheduledQueueNames = new Set(getScheduledJobs().map((job) => job.queueName));
+  return getWorkerQueueRegistrationDefinitions()
+    .filter((definition) => definition.criticality === 'maintenance')
+    .filter((definition) => !scheduledQueueNames.has(definition.queueName))
+    .map((definition) => definition.queueName);
 }
 
 /** Logs a single warning per mismatch found; no-op when registry and scheduler agree. */

@@ -50,8 +50,6 @@ import { createStripeWebhookEventReclaimWorker } from '@/domains/billing/sub-dom
 import { STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-reclaim.constants.js';
 import { createNotificationRetentionWorker } from '@/domains/notify/sub-domains/notification/workers/notification-retention.worker.js';
 import { NOTIFICATION_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/workers/notification-retention.constants.js';
-import { createPartitionMaintenanceWorker } from '@/infrastructure/queue/partition-maintenance/partition-maintenance.worker.js';
-import { PARTITION_MAINTENANCE_QUEUE_NAME } from '@/infrastructure/queue/partition-maintenance/partition-maintenance.constants.js';
 import {
   isStripeConfigured,
   isStripeWebhookIngressConfigured,
@@ -159,7 +157,9 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     usesPostgres: true,
     scheduled: false,
     criticality: 'throughput',
-    holdsConnectionDuringExternalIo: true,
+    // Claim + record run in separate short transactions; the outbound POST happens with no
+    // open Postgres checkout, so delivery no longer pins a connection during external IO.
+    holdsConnectionDuringExternalIo: false,
     resolvePostgresConcurrency: () => getWorkerConcurrencyWebhook(),
     create: () => createWebhookDeliveryWorker(),
   },
@@ -229,8 +229,6 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     queueName: NOTIFICATION_RETENTION_QUEUE_NAME,
     family: 'retention',
     logLabel: 'notification retention worker',
-    // Worker registered, no cron in scheduler.ts yet — orphan flagged by auditSchedulerRegistryConsistency.
-    scheduled: false,
     create: () => createNotificationRetentionWorker(),
   }),
   retentionDefinition({
@@ -244,14 +242,6 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     family: 'stripe',
     logLabel: 'stripe webhook event reclaim worker',
     create: () => createStripeWebhookEventReclaimWorker(),
-  }),
-  retentionDefinition({
-    queueName: PARTITION_MAINTENANCE_QUEUE_NAME,
-    family: 'retention',
-    logLabel: 'partition maintenance worker',
-    // Worker registered, no cron in scheduler.ts yet — orphan flagged by auditSchedulerRegistryConsistency.
-    scheduled: false,
-    create: () => createPartitionMaintenanceWorker(),
   }),
   retentionDefinition({
     queueName: WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME,

@@ -17,6 +17,7 @@ import {
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
+import { NOTIFY_PERMISSIONS } from '@/domains/notify/notify.permissions.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
 type ApiKeyCreateResponse = {
@@ -96,6 +97,45 @@ describe('Security: Organization API key authentication', () => {
       headers: { authorization: `ApiKey ${rawKey}` },
     });
     expect(response.statusCode).toBe(403);
+  });
+
+  it('authenticates an org API key end-to-end on a permission-guarded org route', async () => {
+    const { organization, rawKey, apiKeyPublicId } = await createApiKeyWithPermissions([
+      TENANCY_PERMISSIONS.API_KEY_READ,
+      TENANCY_PERMISSIONS.API_KEY_MANAGE,
+    ]);
+
+    // The key principal carries an empty userId; previously the webhook controller's
+    // requireAuth() rejected it after the permission preHandler passed. Grant the key
+    // the webhook:read scope and confirm the request now succeeds end-to-end.
+    await database
+      .update(api_keys)
+      .set({ scopes: [NOTIFY_PERMISSIONS.WEBHOOK_READ] })
+      .where(eq(api_keys.public_id, apiKeyPublicId));
+
+    const response = await injectRoute(app, {
+      method: 'GET',
+      url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+      headers: { authorization: `ApiKey ${rawKey}` },
+    });
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('rejects an org API key on a user-only route that requires a real user', async () => {
+    const { organization, rawKey } = await createApiKeyWithPermissions([
+      TENANCY_PERMISSIONS.API_KEY_READ,
+      TENANCY_PERMISSIONS.API_KEY_MANAGE,
+    ]);
+
+    // GET /organizations/:id resolves "my organizations" for the authenticated user and
+    // calls requireAuth (no org-permission preHandler), so an API-key principal must be
+    // rejected with 401 even though it could satisfy an org-permission check elsewhere.
+    const response = await injectRoute(app, {
+      method: 'GET',
+      url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+      headers: { authorization: `ApiKey ${rawKey}` },
+    });
+    expect(response.statusCode).toBe(401);
   });
 
   it('returns 401 when api key is expired', async () => {

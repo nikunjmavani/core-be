@@ -39,8 +39,8 @@ Non-negotiable for the non-transactional lane (all enforced by `pnpm db:migrate:
 - **Idempotent + index-only**: use `IF NOT EXISTS`; there is no rollback if a statement fails mid-file. Keep DML/constraint changes in a separate (default, transactional) migration.
 - On failure the runner detects the leftover `INVALID` index and refuses to record the migration — drop it (`DROP INDEX CONCURRENTLY IF EXISTS <schema>.<name>`) and re-run `pnpm db:migrate`.
 
-### Partitioned tables (`audit.logs`, `notify.notifications`) — no `CONCURRENTLY`
+### Append-heavy tables (`audit.logs`, `notify.notifications`)
 
-PostgreSQL forbids `CREATE INDEX CONCURRENTLY` on a partitioned parent, and the linter blocks it (`concurrent_index_on_partitioned_table`, non-overridable). The partitioned parents are listed in `src/infrastructure/database/partitioned-tables.constants.ts`. To index one, use a plain recursive `CREATE INDEX IF NOT EXISTS ON <parent>` with `-- migration-safety: allow create_index_without_concurrently reason="<parent> is partitioned"`; for large tables, build per-child indexes `CONCURRENTLY` + `ATTACH PARTITION` operationally (not in a migration). A single migration may mix both lanes' statements as long as the file is `migration-transaction: none` and each statement is its own breakpoint segment.
+These are plain (non-partitioned) tables; growth is bounded by row-level retention workers (`audit-retention`, `notification-retention`) that batch-`DELETE` old rows. There is no partition lifecycle. Index them like any other high-write table: prefer `CREATE INDEX CONCURRENTLY` in a `migration-transaction: none` file.
 
 See **`docs/reference/data/migrations.md` → Non-transactional migrations** for the full playbook (including expand/contract).

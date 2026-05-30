@@ -18,6 +18,22 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 const DEFAULT_MAIL_JOB_MAX_ATTEMPTS = MAIL_QUEUE_MAX_ATTEMPTS;
 
 /**
+ * Builds the deterministic Resend idempotency key for a mail_outbox row.
+ *
+ * @remarks
+ * - **Algorithm:** `mail-outbox-<id>` — stable across every BullMQ retry and
+ *   sweeper reclaim of the same row, so Resend collapses duplicate `emails.send`
+ *   calls into a single delivery (audit #20).
+ * - **Failure modes:** none — pure string builder.
+ * - **Side effects:** none.
+ * - **Notes:** the key is row-scoped (not attempt-scoped) on purpose; a worker
+ *   that sent then crashed before marking `sent` re-uses the same key on reclaim.
+ */
+export function buildMailOutboxIdempotencyKey(mailOutboxId: number): string {
+  return `mail-outbox-${String(mailOutboxId)}`;
+}
+
+/**
  * Options forwarded from the BullMQ wrapper to {@link processMailOutboxJob} —
  * job identity, propagated request id, and the attempt counters used to detect
  * the final retry for terminal `failed` state.
@@ -148,6 +164,8 @@ async function processMailOutboxJobInner(
         text: outboxRow.text_body ?? undefined,
         replyTo: outboxRow.reply_to ?? undefined,
         tags: (outboxRow.tags as { name: string; value: string }[] | null) ?? undefined,
+        idempotencyKey: buildMailOutboxIdempotencyKey(mailOutboxId),
+        requestId,
       }),
     );
 

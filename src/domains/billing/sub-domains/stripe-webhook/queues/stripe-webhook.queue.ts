@@ -1,6 +1,7 @@
 import { Queue } from 'bullmq';
 import type Stripe from 'stripe';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import {
@@ -52,6 +53,7 @@ export async function enqueueStripeWebhookByEventId(
     omitUndefined({
       stripeEventId,
       requestId,
+      ...captureTraceContextForPropagation(),
     }),
     STRIPE_WEBHOOK_QUEUE_NAME,
   );

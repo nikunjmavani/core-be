@@ -9,7 +9,8 @@ import {
 } from '@/infrastructure/mail/queues/mail.queue.js';
 import { mailBackoffStrategy } from '@/infrastructure/mail/queues/mail-backoff.util.js';
 import { mailJobDataSchema } from '@/infrastructure/mail/queues/mail.job.schema.js';
-import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
+import { parseJobDataOrDeadLetter } from '@/infrastructure/queue/dlq/poison-job.util.js';
+import { runWithPropagatedTraceContext } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-close.util.js';
@@ -36,15 +37,22 @@ export function createMailWorker(): WorkerHandle {
   const worker = new Worker<MailJobData>(
     MAIL_QUEUE_NAME,
     async (job) => {
-      const { requestId } = parseBullMQJobData(mailJobDataSchema, job.data, MAIL_QUEUE_NAME);
-      return processMailOutboxJob(
-        job.data,
-        omitUndefined({
-          jobId: job.id,
-          requestId,
-          jobAttemptNumber: job.attemptsMade,
-          maxJobAttempts: job.opts.attempts ?? MAIL_QUEUE_MAX_ATTEMPTS,
-        }),
+      const jobData = await parseJobDataOrDeadLetter({
+        schema: mailJobDataSchema,
+        job,
+        queueName: MAIL_QUEUE_NAME,
+      });
+      const { requestId, traceparent, tracestate } = jobData;
+      return runWithPropagatedTraceContext({ traceparent, tracestate }, job.name, () =>
+        processMailOutboxJob(
+          jobData,
+          omitUndefined({
+            jobId: job.id,
+            requestId,
+            jobAttemptNumber: job.attemptsMade,
+            maxJobAttempts: job.opts.attempts ?? MAIL_QUEUE_MAX_ATTEMPTS,
+          }),
+        ),
       );
     },
     {

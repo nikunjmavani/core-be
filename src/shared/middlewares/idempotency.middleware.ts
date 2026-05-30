@@ -16,6 +16,7 @@ import {
   IDEMPOTENCY_CACHED_BODY_BYTES,
   IDEMPOTENCY_PLACEHOLDER_TTL_SECONDS,
   IDEMPOTENCY_RESPONSE_CACHE_TTL_SECONDS,
+  IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS,
 } from '@/shared/constants/index.js';
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -205,8 +206,12 @@ async function idempotencyClaimPreHandler(
     );
   } catch (error) {
     /**
-     * Fail closed: with Redis degraded we cannot guarantee at-most-once execution.
-     * Better to surface a 503 than to silently allow concurrent duplicate writes.
+     * Degraded mode (fail closed, but cleanly retryable): with Redis degraded we cannot
+     * guarantee at-most-once execution, so we must not run the handler. Rather than a bare
+     * 503 that clients may treat as a hard failure, we advertise an explicit `Retry-After`
+     * and flag the error as retryable so well-behaved clients re-issue the same
+     * `Idempotency-Key` once the transient Redis blip clears — preserving correctness
+     * (no double-processing) while turning a write outage into a brief, self-healing retry.
      */
     logger.warn({ error, idempotencyKey }, 'idempotency.cache.unavailable');
     const detail = translateRequestMessage(
@@ -214,12 +219,15 @@ async function idempotencyClaimPreHandler(
       'errors:serviceUnavailable',
       'Idempotency store unavailable',
     );
+    reply.header('Retry-After', String(IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS));
     reply.status(503);
     reply.send({
       error: {
         type: 'service_error',
         code: 'service_unavailable',
         detail,
+        retryable: true,
+        retryAfterSeconds: IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS,
       },
     });
     return;

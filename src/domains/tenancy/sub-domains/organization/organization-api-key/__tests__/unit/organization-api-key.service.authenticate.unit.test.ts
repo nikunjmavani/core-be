@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OrganizationApiKeyService } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.service.js';
 
+vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
+  withOrganizationDatabaseContext: (_organizationPublicId: string, callback: () => unknown) =>
+    callback(),
+}));
+
 describe('OrganizationApiKeyService.authenticate', () => {
   const organizationRepository = {
     findById: vi.fn(),
@@ -16,11 +21,13 @@ describe('OrganizationApiKeyService.authenticate', () => {
     apiKeyRepository as never,
   );
 
-  const activeRow = {
+  // Shape returned by the tenancy.resolve_api_key_for_authentication SECURITY DEFINER resolver —
+  // the owning organization public id is included so authenticate never reads tenancy.organizations.
+  const candidate = {
     public_id: 'apikey_public_abc',
     organization_id: 1,
+    organization_public_id: 'org_public_abc',
     key_hash: 'stored-hash',
-    key_prefix: 'ak_prefix',
     scopes: ['read'],
     expires_at: null,
     status: 'ACTIVE',
@@ -28,14 +35,10 @@ describe('OrganizationApiKeyService.authenticate', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(organizationRepository.findById).mockResolvedValue({
-      id: 1,
-      public_id: 'org_public_abc',
-    } as never);
   });
 
   it('returns auth match for valid prefix + hash and touches last_used_at', async () => {
-    vi.mocked(apiKeyRepository.findActiveByKeyPrefix).mockResolvedValue([activeRow] as never);
+    vi.mocked(apiKeyRepository.findActiveByKeyPrefix).mockResolvedValue([candidate] as never);
     const hashCompare = vi.fn().mockReturnValue(true);
 
     const result = await service.authenticate('ak_prefix', 'candidate-hash', hashCompare);
@@ -47,10 +50,12 @@ describe('OrganizationApiKeyService.authenticate', () => {
     });
     expect(hashCompare).toHaveBeenCalledWith('stored-hash', 'candidate-hash');
     expect(apiKeyRepository.touchLastUsedAt).toHaveBeenCalledWith('apikey_public_abc');
+    // The resolver already returned the org public id, so we never read it back via the repo.
+    expect(organizationRepository.findById).not.toHaveBeenCalled();
   });
 
   it('returns null when hash does not match any candidate', async () => {
-    vi.mocked(apiKeyRepository.findActiveByKeyPrefix).mockResolvedValue([activeRow] as never);
+    vi.mocked(apiKeyRepository.findActiveByKeyPrefix).mockResolvedValue([candidate] as never);
     const result = await service.authenticate('ak_prefix', 'wrong-hash', () => false);
     expect(result).toBeNull();
     expect(apiKeyRepository.touchLastUsedAt).not.toHaveBeenCalled();
@@ -58,7 +63,7 @@ describe('OrganizationApiKeyService.authenticate', () => {
 
   it('returns null for expired api key even when hash matches', async () => {
     vi.mocked(apiKeyRepository.findActiveByKeyPrefix).mockResolvedValue([
-      { ...activeRow, expires_at: new Date(Date.now() - 60_000) },
+      { ...candidate, expires_at: new Date(Date.now() - 60_000) },
     ] as never);
     const result = await service.authenticate('ak_prefix', 'candidate-hash', () => true);
     expect(result).toBeNull();
@@ -68,13 +73,6 @@ describe('OrganizationApiKeyService.authenticate', () => {
   it('returns null when no active candidates exist for prefix', async () => {
     vi.mocked(apiKeyRepository.findActiveByKeyPrefix).mockResolvedValue([]);
     const result = await service.authenticate('ak_unknown', 'hash', () => true);
-    expect(result).toBeNull();
-  });
-
-  it('skips candidate when organization row is missing', async () => {
-    vi.mocked(apiKeyRepository.findActiveByKeyPrefix).mockResolvedValue([activeRow] as never);
-    vi.mocked(organizationRepository.findById).mockResolvedValue(null);
-    const result = await service.authenticate('ak_prefix', 'candidate-hash', () => true);
     expect(result).toBeNull();
   });
 });

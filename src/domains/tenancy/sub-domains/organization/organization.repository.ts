@@ -37,6 +37,15 @@ export class OrganizationRepository extends BaseRepository {
     return rows[0]?.id ?? null;
   }
 
+  async resolveUserPublicIdByInternalId(user_id: number): Promise<string | null> {
+    const rows = await getRequestDatabase()
+      .select({ public_id: authUsers.public_id })
+      .from(authUsers)
+      .where(and(eq(authUsers.id, user_id), isNull(authUsers.deleted_at)))
+      .limit(1);
+    return rows[0]?.public_id ?? null;
+  }
+
   async findById(identifier: number): Promise<Organization | null> {
     const rows = await getRequestDatabase()
       .select()

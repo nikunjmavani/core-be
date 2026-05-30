@@ -10,8 +10,8 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 
 /** W3C trace context fields stored on BullMQ job payloads for cross-process propagation. */
 export interface TraceContextCarrier {
-  traceparent?: string;
-  tracestate?: string;
+  traceparent?: string | undefined;
+  tracestate?: string | undefined;
 }
 
 /**

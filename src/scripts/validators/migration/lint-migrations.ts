@@ -14,7 +14,6 @@ import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseMigrationExecutionMode } from '@/infrastructure/database/migration/migration-execution-mode.js';
-import { isPartitionedTable } from '@/infrastructure/database/partitioned-tables.constants.js';
 
 /** Identifiers of every rule {@link lintMigrationFileContent} can report; used for header-comment allow-lists. */
 export const migrationSafetyRuleIds = [
@@ -23,7 +22,6 @@ export const migrationSafetyRuleIds = [
   'add_foreign_key_without_not_valid',
   'add_unique_constraint_inline',
   'alter_column_type',
-  'concurrent_index_on_partitioned_table',
   'concurrent_index_requires_non_transactional',
   'create_index_without_concurrently',
   'disable_row_security_guc',
@@ -51,8 +49,6 @@ const ruleFixHints: Record<MigrationSafetyRuleId, string> = {
     'Prefer CREATE UNIQUE INDEX CONCURRENTLY, then ADD CONSTRAINT ... UNIQUE USING INDEX (runner may need a non-transactional migration).',
   alter_column_type:
     'Add a new column with the target type, backfill, switch reads/writes, then drop the old column in a later migration.',
-  concurrent_index_on_partitioned_table:
-    'PostgreSQL cannot CREATE INDEX CONCURRENTLY on a partitioned parent (audit.logs, notify.notifications). Use a plain recursive CREATE INDEX for the parent, or build each child partition index CONCURRENTLY then ATTACH PARTITION operationally.',
   concurrent_index_requires_non_transactional:
     'CREATE INDEX CONCURRENTLY cannot run inside a transaction. Mark this migration non-transactional by adding `-- migration-transaction: none reason="..."` in the first 20 lines, and keep the index DDL idempotent (IF NOT EXISTS).',
   create_index_without_concurrently:
@@ -424,32 +420,6 @@ function parseCreateIndexPrefix(normalizedStatement: string): {
   };
 }
 
-/**
- * Extracts the `ON [ONLY] schema.table` target of a normalized CREATE INDEX
- * statement. Returns `schema: null` for an unqualified table. Used to detect
- * indexes targeting a partitioned parent.
- */
-function parseCreateIndexTargetTable(
-  normalizedStatement: string,
-): { schema: string | null; table: string } | null {
-  const match = /\bON\s+(?:ONLY\s+)?("?[\w$]+"?(?:\s*\.\s*"?[\w$]+"?)?)/iu.exec(
-    normalizedStatement,
-  );
-  if (!match?.[1]) return null;
-  const parts = match[1]
-    .replace(/"/gu, '')
-    .split('.')
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-  if (parts.length === 2 && parts[0] && parts[1]) {
-    return { schema: parts[0], table: parts[1] };
-  }
-  if (parts.length === 1 && parts[0]) {
-    return { schema: null, table: parts[0] };
-  }
-  return null;
-}
-
 function parseMigrationHeader(rawFileContent: string): ParsedHeader {
   const allows = new Map<MigrationSafetyRuleId, string>();
   const headerErrors: string[] = [];
@@ -690,17 +660,6 @@ export function lintMigrationFileContent(
 
     const createIndexInfo = parseCreateIndexPrefix(normalized);
     if (createIndexInfo.isCreateIndex) {
-      if (createIndexInfo.hasConcurrently) {
-        const target = parseCreateIndexTargetTable(normalized);
-        if (target && isPartitionedTable(target)) {
-          violations.push({
-            filename,
-            lineNumber,
-            ruleId: 'concurrent_index_on_partitioned_table',
-            message: ruleFixHints.concurrent_index_on_partitioned_table,
-          });
-        }
-      }
       if (createIndexInfo.hasConcurrently && executionMode.transactional) {
         violations.push({
           filename,

@@ -18,6 +18,7 @@ import { serializeOrganization } from './organization.serializer.js';
 import { buildOrganizationLogoKeyPrefix } from '@/domains/upload/upload.constants.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { UploadService } from '@/domains/upload/upload.service.js';
 
@@ -171,6 +172,24 @@ export class OrganizationService {
     return this.repository.resolveUserIdByPublicId(user_public_id);
   }
 
+  /**
+   * Resolve a user's public id from their internal numeric id.
+   *
+   * @remarks
+   * - **Algorithm:** delegates to
+   *   {@link OrganizationRepository.resolveUserPublicIdByInternalId}, which
+   *   reads the active `users` row by internal id.
+   * - **Failure modes:** returns `null` when no active user matches; never
+   *   throws on a miss.
+   * - **Side effects:** single read-only Postgres lookup.
+   * - **Notes:** the inverse of {@link resolveUserInternalIdByPublicId}; used by
+   *   tenancy services that hold a membership's internal `user_id` but need the
+   *   public id to invalidate the per-user permission cache.
+   */
+  async resolveUserPublicIdByInternalId(user_internal_id: number): Promise<string | null> {
+    return this.repository.resolveUserPublicIdByInternalId(user_internal_id);
+  }
+
   async updateStripeCustomerIdForOrganization(
     organization_public_id: string,
     stripe_customer_id: string,
@@ -272,13 +291,27 @@ export class OrganizationService {
           { slug: parsed.slug },
           `Organization with slug "${parsed.slug}" already exists`,
         );
-      const created = await this.repository.create({
-        name: parsed.name,
-        slug: parsed.slug,
-        owner_user_id: ownerId,
-        created_by_user_id: ownerId,
-      });
-      return serializeOrganization(created);
+      try {
+        const created = await this.repository.create({
+          name: parsed.name,
+          slug: parsed.slug,
+          owner_user_id: ownerId,
+          created_by_user_id: ownerId,
+        });
+        return serializeOrganization(created);
+      } catch (error) {
+        // Two concurrent creates can both pass the findBySlug pre-check; the
+        // loser hits the `idx_organizations_slug` unique index. Map the
+        // Postgres unique_violation to a 409 instead of a 500.
+        if (isPostgresUniqueViolation(error)) {
+          throw new ConflictError(
+            'errors:organizationSlugExists',
+            { slug: parsed.slug },
+            `Organization with slug "${parsed.slug}" already exists`,
+          );
+        }
+        throw error;
+      }
     });
   }
 

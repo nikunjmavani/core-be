@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import { getRequestIdentifier, requirePrincipal } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MemberRolePermissionService } from './member-role-permission.service.js';
 import { serializeMemberRolePermission } from './member-role-permission.serializer.js';
@@ -29,7 +29,7 @@ export function createMemberRolePermissionController(service: MemberRolePermissi
       });
     },
     putRolePermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const organizationId = validatePublicIdParam(
         (request.params as { id: string }).id ?? '',
         'id',

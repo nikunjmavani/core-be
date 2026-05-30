@@ -1,5 +1,6 @@
 import { Redis } from 'ioredis';
 import { resolveRedisKeyPrefix } from '@/infrastructure/cache/redis-prefix.util.js';
+import { buildRedisTlsOptions } from '@/infrastructure/cache/redis-url.parse.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
@@ -22,6 +23,8 @@ export const redisConnection = new Redis(env.REDIS_URL, {
    * which exposes services over IPv6-only `.railway.internal` hostnames.
    */
   family: 0,
+  /** Explicit TLS cert verification when REDIS_URL is rediss:// (no-op for plaintext redis://). */
+  ...buildRedisTlsOptions(env.REDIS_URL),
   retryStrategy(times: number) {
     const delay = Math.min(times * 200, 5_000);
     logger.warn({ attempt: times, delayMs: delay }, 'redis.reconnecting');

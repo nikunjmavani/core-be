@@ -24,7 +24,9 @@ import {
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { MemberInvitationRepository } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.repository.js';
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
+import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
 import { hashInvitationToken } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.token.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { FastifyInstance } from 'fastify';
 
 const MEMBERSHIP_PERMISSIONS = [
@@ -258,6 +260,78 @@ describe('Membership Sub-Domain — Integration', () => {
       expect(listResponse.statusCode).toBe(200);
       const listBody = listResponse.json() as { data: unknown[] };
       expect(listBody.data.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('POST /api/v1/invitations/:invitationId/accept (membership activation)', () => {
+    async function createPendingInvitation() {
+      const { organization, token, user: admin } = await createAuthorizedContext();
+      const invitee = await createTestUser({ email: `invitee-${randomUUID()}@test.com` });
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+      const [inviteeMembership] = await database
+        .insert(memberships)
+        .values({
+          public_id: generatePublicId(),
+          user_id: invitee.id,
+          organization_id: organization.id,
+          role_id: memberRole.id,
+          status: 'INVITED',
+        })
+        .returning();
+      const rawToken = `accept-token-${randomUUID()}`;
+      const invitationRepository = new MemberInvitationRepository();
+      const invitation = await invitationRepository.create({
+        membership_id: inviteeMembership!.id,
+        email: invitee.email,
+        token_hash: hashInvitationToken(rawToken),
+        invited_by_user_id: admin.id,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1_000),
+        created_by_user_id: admin.id,
+      });
+      return { organization, token, invitation, inviteeMembership: inviteeMembership!, rawToken };
+    }
+
+    it('atomically activates the linked membership when the invitation is accepted', async () => {
+      const { invitation, inviteeMembership, rawToken } = await createPendingInvitation();
+
+      const acceptResponse = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/invitations/${invitation.public_id}/accept`),
+        payload: { token: rawToken },
+      });
+      expect(acceptResponse.statusCode).toBe(200);
+
+      const [updated] = await database
+        .select()
+        .from(memberships)
+        .where(eq(memberships.id, inviteeMembership.id));
+      expect(updated!.status).toBe('ACTIVE');
+      expect(updated!.joined_at).not.toBeNull();
+    });
+
+    it('rejects a manager PATCH that tries to activate a never-joined membership', async () => {
+      const { organization, token, inviteeMembership } = await createPendingInvitation();
+
+      const patchResponse = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'PATCH',
+        url: testApiPath(
+          `/tenancy/organizations/${organization.public_id}/memberships/${inviteeMembership.public_id}`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+        payload: { status: 'ACTIVE' },
+      });
+      expect(patchResponse.statusCode).toBe(403);
+
+      const [stillInvited] = await database
+        .select()
+        .from(memberships)
+        .where(eq(memberships.id, inviteeMembership.id));
+      expect(stillInvited!.status).toBe('INVITED');
+      expect(stillInvited!.joined_at).toBeNull();
     });
   });
 });

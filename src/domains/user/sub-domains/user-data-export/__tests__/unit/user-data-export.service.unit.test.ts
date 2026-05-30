@@ -21,6 +21,11 @@ vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => 
   getRequestDatabase: () => ({ select: mockSelect }),
 }));
 
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: (_userPublicId: string, callback: (handle: unknown) => unknown) =>
+    callback({ select: mockSelect }),
+}));
+
 vi.mock('@/domains/user/sub-domains/user-data-export/queues/user-data-export.queue.js', () => ({
   enqueueUserDataExport: vi.fn().mockResolvedValue(undefined),
 }));
@@ -198,7 +203,7 @@ describe('UserDataExportService', () => {
     ]);
     exportRepository.deleteAllByUserId.mockResolvedValue(1);
 
-    await service.deleteAllExportsForUser(1);
+    await service.deleteAllExportsForUser(1, 'user_public');
 
     expect(objectStorage.deleteObject).toHaveBeenCalledWith('user-data-export/user/exp_1.json.gz');
     expect(exportRepository.deleteAllByUserId).toHaveBeenCalledWith(1);

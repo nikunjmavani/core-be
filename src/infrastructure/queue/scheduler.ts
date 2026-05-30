@@ -6,6 +6,7 @@
 import { Queue } from 'bullmq';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retention.constants.js';
+import { NOTIFICATION_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/workers/notification-retention.constants.js';
 import { SESSION_CLEANUP_QUEUE_NAME } from '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.constants.js';
 import { WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-tombstone-retention.constants.js';
 import { ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/workers/organization-notification-policy-tombstone-retention.constants.js';
@@ -51,6 +52,8 @@ export interface SchedulerHandle {
 }
 
 const DEFAULT_AUDIT_RETENTION_CRON = '0 3 * * *';
+/** In-app notification row retention purge (runs after audit cleanup). */
+const DEFAULT_NOTIFICATION_RETENTION_CRON = '30 3 * * *';
 const DEFAULT_SESSION_CLEANUP_CRON = '0 4 * * *';
 /** GDPR export artifact purge runs before upload tombstone retention. */
 const DEFAULT_USER_DATA_EXPORT_RETENTION_CRON = '44 5 * * *';
@@ -159,6 +162,12 @@ export function getScheduledJobs(): ScheduledJob[] {
       schedulerId: 'daily-audit-cleanup',
       jobName: 'cleanup-old-logs',
       cronPattern: env.AUDIT_RETENTION_CRON ?? DEFAULT_AUDIT_RETENTION_CRON,
+    }),
+    withSchedulerTimezone(timezone, {
+      queueName: NOTIFICATION_RETENTION_QUEUE_NAME,
+      schedulerId: 'daily-notification-retention',
+      jobName: 'purge-old-notifications',
+      cronPattern: env.NOTIFICATION_RETENTION_CRON ?? DEFAULT_NOTIFICATION_RETENTION_CRON,
     }),
     withSchedulerTimezone(timezone, {
       queueName: SESSION_CLEANUP_QUEUE_NAME,

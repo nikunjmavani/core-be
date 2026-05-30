@@ -1,4 +1,4 @@
-import { and, desc, eq, gt } from 'drizzle-orm';
+import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
 import { sessions } from '@/domains/auth/sub-domains/auth-session/auth-session.schema.js';
@@ -109,6 +109,20 @@ export class AuthSessionRepository {
       .update(sessions)
       .set({ is_revoked: true })
       .where(and(eq(sessions.user_id, userId), eq(sessions.is_revoked, false)))
+      .returning({ token_hash: sessions.token_hash });
+  }
+
+  async revokeAllByUserIdExcept(userId: number, exceptTokenHash: string) {
+    return getRequestDatabase()
+      .update(sessions)
+      .set({ is_revoked: true })
+      .where(
+        and(
+          eq(sessions.user_id, userId),
+          eq(sessions.is_revoked, false),
+          ne(sessions.token_hash, exceptTokenHash),
+        ),
+      )
       .returning({ token_hash: sessions.token_hash });
   }
 

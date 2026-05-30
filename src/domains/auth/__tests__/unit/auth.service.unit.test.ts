@@ -14,6 +14,7 @@ vi.mock('@/shared/utils/text/email.util.js', () => ({
 vi.mock('@/shared/utils/security/password.util.js', () => ({
   verifyPassword: vi.fn().mockResolvedValue({ valid: true, needsRehash: false }),
   hashPassword: vi.fn().mockResolvedValue('new-hash'),
+  DUMMY_ARGON2_HASH: '$argon2id$dummy',
 }));
 
 vi.mock('@/shared/utils/security/jwt.util.js', () => ({
@@ -132,6 +133,17 @@ describe('AuthService', () => {
     await expect(
       service.login({ email: 'x@y.com', password: 'WrongPassword1!' }, '127.0.0.1'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('runs a dummy password verification for unknown emails to equalize login timing (#23)', async () => {
+    const { verifyPassword, DUMMY_ARGON2_HASH } = await import(
+      '@/shared/utils/security/password.util.js'
+    );
+    vi.mocked(userService.findByEmail).mockResolvedValue(null);
+    await expect(
+      service.login({ email: 'unknown@example.com', password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(verifyPassword).toHaveBeenCalledWith('WrongPassword1!', DUMMY_ARGON2_HASH);
   });
 
   it('login rejects locked account', async () => {
@@ -260,6 +272,30 @@ describe('AuthService', () => {
     } as never);
     await service.login({ email: user.email, password: 'ValidPassword12!' }, '127.0.0.1');
     expect(userService.updateLoginAttempt).not.toHaveBeenCalled();
+  });
+
+  it('login rejects a suspended user before issuing any session (bug 31)', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue({
+      ...user,
+      status: 'SUSPENDED',
+    } as never);
+    await expect(
+      service.login({ email: user.email, password: 'ValidPassword12!' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(authSessionService.createSessionForUser).not.toHaveBeenCalled();
+    expect(mfaService.createMfaSession).not.toHaveBeenCalled();
+  });
+
+  it('login rejects a suspended user even when MFA would otherwise be required (bug 31)', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue({
+      ...user,
+      status: 'SUSPENDED',
+      is_mfa_enabled: true,
+    } as never);
+    await expect(
+      service.login({ email: user.email, password: 'ValidPassword12!' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(mfaService.createMfaSession).not.toHaveBeenCalled();
   });
 
   it('login rejects users without password authentication enabled', async () => {

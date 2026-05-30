@@ -13,6 +13,8 @@ What is **in place today** for production signals, and what is **deferred**. For
 | Liveness / readiness        | `GET /livez`, `GET /readyz`                             | See [health-checks.md](../../reference/reliability/health-checks.md); deploy probes and load tests               |
 | Idempotency cardinality     | Repeatable BullMQ job `idempotency-cardinality`                     | Bounded Redis SCAN + log / Sentry thresholds (`IDEMPOTENCY_CARDINALITY_*`)                           |
 | DB pool exhaustion          | API process poll (`db-pool-metrics.ts`)                             | Sentry `database.pool.exhaustion.*` — independent of `METRICS_ENABLED`; see [resource-limits.md](resource-limits.md) |
+| Redis memory saturation     | [`redis-saturation.service.ts`](../../../src/infrastructure/observability/redis-saturation/redis-saturation.service.ts) sampled by the dlq-depth worker | `used_memory`/`maxmemory` ratio; warn/critical via `REDIS_MEMORY_WARN_RATIO` / `REDIS_MEMORY_CRITICAL_RATIO` → log + Sentry. Leading indicator for the `noeviction` write-outage mode — see [redis-topology.md](redis-topology.md) |
+| BullMQ waiting depth        | [`redis-saturation.service.ts`](../../../src/infrastructure/observability/redis-saturation/redis-saturation.service.ts) sampled by the dlq-depth worker | `waiting`+`delayed` across source queues; warn via `QUEUE_WAITING_DEPTH_WARN_THRESHOLD` → log + Sentry. Surfaces a worker outage before the backlog fills Redis |
 | Queue inspection (optional) | Bull Board at `/admin/queues`                                       | `ENABLE_QUEUE_DASHBOARD=true` + super_admin JWT — see [bull-board.md](../../reference/runtime/bull-board.md) |
 | **Prometheus metrics** | `GET /metrics` on API + worker (`WORKER_HEALTH_PORT`)              | **On by default** (`METRICS_ENABLED` defaults true); bearer auth required — see [Prometheus](#prometheus-opt-in) below |
 
@@ -48,6 +50,7 @@ Dynamic gauges (pool, BullMQ depth, event loop) refresh on each scrape via [`ref
 | `database_rls_checkout_hold_seconds` | Histogram (`path`) | How long an org-RLS checkout pins a pooled connection (`scoped_context` unit of work vs legacy `request_transaction`) |
 | `http_request_duration_seconds` | Histogram | Per-route latency; p95 via `histogram_quantile` |
 | `bullmq_jobs_waiting` | Gauge (`queue`) | Queue backlog per BullMQ queue |
+| `process_unhandled_rejections_total` | Counter (`process`) | Non-fatal `unhandledRejection` events tolerated by the burst handler (`process="api"` / `"worker"`); alert on a sustained sub-threshold rate — it hides a persistent failing path that never trips the fatal burst exit |
 
 Also exported: `db_pool_connections{state}`, `bullmq_queue_*`, `http_requests_total`, default Node metrics (`nodejs_eventloop_lag_*`, heap), and domain gauges (e.g. `stripe_webhook_events_failed`). See [health-checks.md](../../reference/reliability/health-checks.md) and [workers-and-events.md](../../reference/runtime/workers-and-events.md).
 
@@ -78,7 +81,7 @@ curl -sS http://127.0.0.1:3000/metrics | head
 | Item | Status |
 | ---- | ------ |
 | Grafana / Prometheus server in-repo | Out of scope — configure scraper + dashboards in your platform |
-| Redis memory / eviction metrics | Not in app metrics yet |
+| Redis memory / eviction Prometheus gauges | Threshold log + Sentry alerting is in place (see "In place" above); not yet exported as a `/metrics` gauge |
 | Deploy workflow `METRICS_*` secret sync | Optional — set on Railway/GitHub Environment when enabling scrape |
 
 ---

@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import { getRequestIdentifier, requirePrincipal } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { WebhookService } from './webhook.service.js';
@@ -28,7 +28,7 @@ function buildCursorPaginationMetadata(result: CursorPaginationResult) {
 
 function createListWebhooksHandler(service: WebhookService) {
   return async (request: FastifyRequest<{ Params: { id: string } }>, _reply: FastifyReply) => {
-    requireAuth(request);
+    requirePrincipal(request);
     const parsed = validateListWebhooksQuery(request.query);
     const result = await service.list(
       omitUndefined({
@@ -51,7 +51,7 @@ function createListDeliveryAttemptsHandler(service: WebhookService) {
     request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
     _reply: FastifyReply,
   ) => {
-    requireAuth(request);
+    requirePrincipal(request);
     const parsed = validateListWebhookDeliveryAttemptsQuery(request.query);
     const result = await service.listDeliveryAttempts(
       omitUndefined({
@@ -82,7 +82,7 @@ export function createWebhookController(service: WebhookService) {
       request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
       _reply: FastifyReply,
     ) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const data = await service.get(
         validatePublicIdParam(request.params.id, 'id'),
         request.params.webhookId,
@@ -93,7 +93,7 @@ export function createWebhookController(service: WebhookService) {
       request: FastifyRequest<{ Params: { id: string } }>,
       _reply: FastifyReply,
     ) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const data = await service.create(
         validatePublicIdParam(request.params.id, 'id'),
         request.body,
@@ -105,7 +105,7 @@ export function createWebhookController(service: WebhookService) {
       request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
       _reply: FastifyReply,
     ) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const data = await service.update(
         validatePublicIdParam(request.params.id, 'id'),
         request.params.webhookId,
@@ -118,7 +118,7 @@ export function createWebhookController(service: WebhookService) {
       request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
       reply: FastifyReply,
     ) => {
-      requireAuth(request);
+      requirePrincipal(request);
       await service.delete(
         validatePublicIdParam(request.params.id, 'id'),
         request.params.webhookId,
@@ -130,7 +130,7 @@ export function createWebhookController(service: WebhookService) {
       request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
       _reply: FastifyReply,
     ) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const data = await service.testWebhook({
         organization_public_id: validatePublicIdParam(request.params.id, 'id'),
         webhook_public_id: request.params.webhookId,

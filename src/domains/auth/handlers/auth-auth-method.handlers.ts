@@ -60,7 +60,12 @@ export function createAuthAuthMethodHandlers({
     },
     changePassword: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
-      await authMethodService.changePassword(auth.userId, request.body);
+      const currentAccessToken = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      await authMethodService.changePassword(
+        auth.userId,
+        request.body,
+        currentAccessToken ? { currentAccessToken } : undefined,
+      );
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,
         action: 'auth.password.change',

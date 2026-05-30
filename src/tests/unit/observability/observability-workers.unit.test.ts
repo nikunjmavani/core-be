@@ -7,6 +7,8 @@ const workerState = vi.hoisted(() => ({
 
 const sampleIdempotencyCardinalityMock = vi.fn();
 const sampleDeadLetterQueueDepthsMock = vi.fn();
+const sampleBullMqSourceQueueWaitingDepthMock = vi.fn();
+const sampleRedisMemorySaturationMock = vi.fn();
 
 vi.mock('bullmq', () => ({
   Worker: vi.fn().mockImplementation(function WorkerMock(queueName, processor, options) {
@@ -44,6 +46,13 @@ vi.mock('@/infrastructure/observability/dlq-depth/dlq-depth.service.js', () => (
     sampleDeadLetterQueueDepthsMock(...parameters),
 }));
 
+vi.mock('@/infrastructure/observability/redis-saturation/redis-saturation.service.js', () => ({
+  sampleBullMqSourceQueueWaitingDepth: (...parameters: unknown[]) =>
+    sampleBullMqSourceQueueWaitingDepthMock(...parameters),
+  sampleRedisMemorySaturation: (...parameters: unknown[]) =>
+    sampleRedisMemorySaturationMock(...parameters),
+}));
+
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -54,6 +63,14 @@ describe('observability workers', () => {
     workerState.options.clear();
     sampleIdempotencyCardinalityMock.mockReset();
     sampleDeadLetterQueueDepthsMock.mockReset();
+    sampleBullMqSourceQueueWaitingDepthMock.mockReset();
+    sampleRedisMemorySaturationMock.mockReset();
+    sampleBullMqSourceQueueWaitingDepthMock.mockResolvedValue({ depths: [] });
+    sampleRedisMemorySaturationMock.mockResolvedValue({
+      usedMemory: 0,
+      maxMemory: 0,
+      ratio: null,
+    });
   });
 
   it('idempotency-cardinality worker samples Redis cardinality on its queue', async () => {
@@ -94,6 +111,8 @@ describe('observability workers', () => {
       expect.objectContaining({ concurrency: 1 }),
     );
     expect(sampleDeadLetterQueueDepthsMock).toHaveBeenCalledOnce();
+    expect(sampleBullMqSourceQueueWaitingDepthMock).toHaveBeenCalledOnce();
+    expect(sampleRedisMemorySaturationMock).toHaveBeenCalledOnce();
     expect(result).toBeUndefined();
   });
 });

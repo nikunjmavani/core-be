@@ -16,7 +16,8 @@ What it does not own: anti-virus / malware scanning (handled outside the platfor
 
 ## Key invariants
 
-- **Two-phase commit**: presigning a URL writes a `pending` row; the confirm call validates the upload landed in S3 (HEAD) and transitions the row to `uploaded`. A row stuck in `pending` past its presign TTL is GC-able by retention.
+- **Two-phase commit**: a create-upload request first **reserves** a `pending` row (atomically, see quota invariant) and only then mints the presigned URL; the confirm call validates the upload landed in S3 (HEAD) and transitions the row to `uploaded`. A row stuck in `pending` past its presign TTL is GC-able by retention.
+- **Atomic per-user PENDING quota**: the pending-count check and the row insert run in one transaction guarded by a per-user `pg_advisory_xact_lock`, before any presigned URL is issued. This makes the quota race-free — concurrent requests cannot all pass the count check and then over-mint presigned slots. If presigning fails after the row is reserved, the row is left `pending` for the sweep worker to reclaim.
 - **Owner-scoped**: every upload row is owned by the user who presigned it. Cross-user reads/deletes require explicit organization permissions (when wired) or global admin.
 - **Public-id only at the API boundary**: clients never see the internal numeric id; URLs use the URL-safe public id.
 - **No server-side body proxying**: the API never sees the upload bytes — they go directly from client to S3. This is what makes the domain horizontally scalable.

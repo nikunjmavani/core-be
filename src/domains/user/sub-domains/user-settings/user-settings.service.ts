@@ -1,5 +1,6 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '../../user.service.js';
 import type { UserSettingsRepository } from './user-settings.repository.js';
 import { serializeUserSettings } from './user-settings.serializer.js';
@@ -28,7 +29,10 @@ export class UserSettingsService {
   async get(user_public_id: string): Promise<UserSettingsOutput> {
     const user = await this.userService.findUserRecordByPublicId(user_public_id);
     if (!user) throw new NotFoundError('User');
-    const settings = await this.repository.getByUserId(user.id);
+    // auth.user_settings is FORCE RLS keyed on app.current_user_id — read inside the user context.
+    const settings = await withUserDatabaseContext(user_public_id, () =>
+      this.repository.getByUserId(user.id),
+    );
     return serializeUserSettings(settings);
   }
 
@@ -36,7 +40,10 @@ export class UserSettingsService {
     const parsed = validateUpdateUserSettings(body);
     const user = await this.userService.findUserRecordByPublicId(user_public_id);
     if (!user) throw new NotFoundError('User');
-    const result = await this.repository.upsert(user.id, omitUndefined(parsed));
+    // auth.user_settings is FORCE RLS keyed on app.current_user_id — upsert inside the user context.
+    const result = await withUserDatabaseContext(user_public_id, () =>
+      this.repository.upsert(user.id, omitUndefined(parsed)),
+    );
     return serializeUserSettings(result);
   }
 }

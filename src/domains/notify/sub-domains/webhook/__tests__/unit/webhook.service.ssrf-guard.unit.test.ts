@@ -58,6 +58,40 @@ describe('webhook service SSRF guard (validateWebhookUrl)', () => {
     );
   });
 
+  it('createWebhook rejects IPv4-mapped IPv6 pointing at cloud metadata (::ffff:169.254.169.254)', async () => {
+    mockResolvedAddresses([{ address: '::ffff:169.254.169.254', family: 6 }]);
+    await expect(validateWebhookUrl('https://mapped-metadata.example/hook')).rejects.toMatchObject({
+      messageKey: 'errors:webhookUrlNotAllowed',
+    });
+
+    mockResolvedAddresses([{ address: '::ffff:127.0.0.1', family: 6 }]);
+    await expect(validateWebhookUrl('https://mapped-loopback.example/hook')).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+
+    mockResolvedAddresses([{ address: '::ffff:10.0.0.1', family: 6 }]);
+    await expect(validateWebhookUrl('https://mapped-private.example/hook')).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+  });
+
+  it('createWebhook rejects CGNAT (100.64.0.0/10) and 0.0.0.0/8 resolved IPs', async () => {
+    mockResolvedAddresses([{ address: '100.64.0.1', family: 4 }]);
+    await expect(validateWebhookUrl('https://cgnat.example/hook')).rejects.toMatchObject({
+      messageKey: 'errors:webhookUrlNotAllowed',
+    });
+
+    mockResolvedAddresses([{ address: '0.0.0.5', family: 4 }]);
+    await expect(validateWebhookUrl('https://zero-net.example/hook')).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+  });
+
+  it('createWebhook still accepts an IPv4-mapped IPv6 pointing at a public IP', async () => {
+    mockResolvedAddresses([{ address: '::ffff:93.184.216.34', family: 6 }]);
+    await expect(validateWebhookUrl('https://mapped-public.example/hook')).resolves.toBeUndefined();
+  });
+
   it('createWebhook accepts public HTTPS URLs resolving to public IPv4', async () => {
     mockResolvedAddresses([{ address: '93.184.216.34', family: 4 }]);
     await expect(validateWebhookUrl('https://example.com/hook')).resolves.toBeUndefined();

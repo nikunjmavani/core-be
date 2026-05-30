@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import {
+  getRequestIdentifier,
+  requireAuth,
+  requirePrincipal,
+} from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MembershipService } from './membership.service.js';
 
@@ -34,7 +38,7 @@ export function createMembershipController(service: MembershipService) {
       return successResponse(data, getRequestIdentifier(request));
     },
     createMembership: async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const organizationId = validatePublicIdParam(
         (request.params as { id: string }).id ?? '',
         'id',
@@ -44,7 +48,7 @@ export function createMembershipController(service: MembershipService) {
       return successResponse(data, getRequestIdentifier(request));
     },
     updateMembership: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const { id: organizationId, membershipId } = (request.params as {
         id: string;
         membershipId: string;
@@ -53,7 +57,7 @@ export function createMembershipController(service: MembershipService) {
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteMembership: async (request: FastifyRequest, reply: FastifyReply) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const { id: organizationId, membershipId } = (request.params as {
         id: string;
         membershipId: string;

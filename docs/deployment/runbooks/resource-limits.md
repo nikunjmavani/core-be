@@ -131,6 +131,10 @@ Use **`DATABASE_MIGRATION_URL`** (owner) for migrations and **`DATABASE_URL`** a
 
 Size the connection budget against Neon `max_connections` (see formula above).
 
+**Enforcement:** `pnpm db:migrate` fails fast when `DATABASE_MIGRATION_URL` (or the `DATABASE_URL` fallback) resolves to a pooler endpoint — the migration advisory lock is meaningless through transaction-mode PgBouncer. Use the direct host for migrations only.
+
+**Transport security (TLS):** in hosted deployments a boot assertion ([`assert-database-tls-safety.ts`](../../../src/infrastructure/database/assert-database-tls-safety.ts)) refuses to start unless the Postgres client verifies the server certificate — set `?sslmode=verify-full` (preferred) or `?sslmode=verify-ca` in `DATABASE_URL`, or set `DATABASE_SSL_REJECT_UNAUTHORIZED=true`. Verification uses Node's system trust store; managed providers (Neon, Railway) present certificates chained to public CAs already in that store, so no custom CA file is needed. Neon's bare `sslmode=require` encrypts but does **not** validate the chain (MITM exposure) and will be rejected at boot. Local/CI only warns.
+
 **Backups:** enable automated backups and point-in-time recovery on your managed Postgres provider (Neon/Railway); test restore quarterly.
 
 ### Row-level security (RLS) and the connection pool

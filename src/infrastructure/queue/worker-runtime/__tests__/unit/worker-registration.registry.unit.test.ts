@@ -44,7 +44,7 @@ describe('worker-registration.registry', () => {
   it('keeps complete metadata for every registered worker', () => {
     const definitions = getWorkerQueueRegistrationDefinitions();
 
-    expect(definitions).toHaveLength(25);
+    expect(definitions).toHaveLength(24);
     for (const definition of definitions) {
       expect(definition.queueName).toBeTruthy();
       expect(definition.logLabel).toBeTruthy();
@@ -66,23 +66,23 @@ describe('worker-registration.registry', () => {
   it('keeps expected family, criticality, scheduler, and external-io counts', () => {
     const definitions = getWorkerQueueRegistrationDefinitions();
 
-    expect(definitions.filter((definition) => definition.usesPostgres)).toHaveLength(23);
-    expect(definitions.filter((definition) => definition.scheduled)).toHaveLength(18);
+    expect(definitions.filter((definition) => definition.usesPostgres)).toHaveLength(22);
+    expect(definitions.filter((definition) => definition.scheduled)).toHaveLength(19);
     expect(
       definitions.filter((definition) => definition.criticality === 'throughput'),
     ).toHaveLength(5);
     expect(
       definitions.filter((definition) => definition.criticality === 'maintenance'),
-    ).toHaveLength(18);
+    ).toHaveLength(17);
     expect(
       definitions.filter((definition) => definition.criticality === 'observability'),
     ).toHaveLength(2);
     expect(
       definitions.filter((definition) => definition.holdsConnectionDuringExternalIo === true),
-    ).toHaveLength(6);
+    ).toHaveLength(5);
   });
 
-  it('documents registered workers that intentionally have no scheduler yet', () => {
+  it('has no maintenance workers left unscheduled (every retention worker has a cron)', () => {
     const orphanQueueNames = getWorkerQueueRegistrationDefinitions()
       .filter(
         (definition) => definition.criticality === 'maintenance' && definition.scheduled === false,
@@ -90,6 +90,6 @@ describe('worker-registration.registry', () => {
       .map((definition) => definition.queueName)
       .sort();
 
-    expect(orphanQueueNames).toEqual(['notification-retention', 'partition-maintenance']);
+    expect(orphanQueueNames).toEqual([]);
   });
 });

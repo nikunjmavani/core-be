@@ -11,8 +11,11 @@ import { getWorkerConcurrencyStripe } from '@/shared/config/worker-concurrency.u
 import type { BillingContainer } from '@/domains/billing/billing.container.js';
 import type { StripeWebhookJobData } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
 import { stripeWebhookBackoffStrategy } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook-backoff.util.js';
+import { stripeWebhookJobDataSchema } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.job.schema.js';
 import { STRIPE_WEBHOOK_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
 import { processStripeWebhookJob } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook.processor.js';
+import { parseJobDataOrDeadLetter } from '@/infrastructure/queue/dlq/poison-job.util.js';
+import { runWithPropagatedTraceContext } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
@@ -52,7 +55,16 @@ export function createStripeWebhookWorker(
   const worker = new Worker<StripeWebhookJobData>(
     STRIPE_WEBHOOK_QUEUE_NAME,
     async (job) => {
-      await processStripeWebhookJob(job.data, stripeWebhookService, job.id);
+      const jobData = await parseJobDataOrDeadLetter({
+        schema: stripeWebhookJobDataSchema,
+        job,
+        queueName: STRIPE_WEBHOOK_QUEUE_NAME,
+      });
+      await runWithPropagatedTraceContext(
+        { traceparent: jobData.traceparent, tracestate: jobData.tracestate },
+        job.name,
+        () => processStripeWebhookJob(jobData, stripeWebhookService, job.id),
+      );
     },
     {
       connection: getBullMQConnectionOptions(),

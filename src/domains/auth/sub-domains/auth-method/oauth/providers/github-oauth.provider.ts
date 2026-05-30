@@ -40,7 +40,7 @@ export interface ExchangeGitHubOAuthCodeOptions {
   requestId?: string;
 }
 
-/** Trades the GitHub authorization code for an access token, then fetches the user profile (and primary verified email if absent) and returns a normalised {@link OAuthProfile}. Translates outbound failures to `UnauthorizedError` with provider-specific i18n keys. */
+/** Trades the GitHub authorization code for an access token, then fetches the user profile and requires a primary + verified email from the emails endpoint before returning a normalised {@link OAuthProfile}. Unverified or non-primary addresses are rejected to prevent find-or-link account takeover. Translates outbound failures to `UnauthorizedError` with provider-specific i18n keys. */
 export async function exchangeGitHubOAuthCode(
   options: ExchangeGitHubOAuthCodeOptions,
 ): Promise<OAuthProfile> {
@@ -118,44 +118,46 @@ export async function exchangeGitHubOAuthCode(
     id?: number;
     name?: string;
     avatar_url?: string;
-    email?: string;
   };
 
-  let email = userInfo.email;
-  if (!email) {
-    try {
-      const emailsResponse = await outboundFetch(
-        buildOutboundFetchOptions({
-          name: 'oauth-github',
-          url: GITHUB_EMAILS_URL,
-          requestId: options.requestId,
-          expectedStatus: 200,
-          init: {
-            headers: {
-              Authorization: `Bearer ${tokenData.access_token}`,
-              Accept: 'application/vnd.github+json',
-            },
+  // Always resolve the email from the dedicated emails endpoint and require a
+  // primary + verified address. The top-level `user.email` field and any
+  // unverified fallback are intentionally ignored: linking by an
+  // attacker-controlled unverified address would enable account takeover.
+  let primaryVerifiedEmail: string | undefined;
+  try {
+    const emailsResponse = await outboundFetch(
+      buildOutboundFetchOptions({
+        name: 'oauth-github',
+        url: GITHUB_EMAILS_URL,
+        requestId: options.requestId,
+        expectedStatus: 200,
+        init: {
+          headers: {
+            Authorization: `Bearer ${tokenData.access_token}`,
+            Accept: 'application/vnd.github+json',
           },
-        }),
-      );
+        },
+      }),
+    );
 
-      const emails = (await emailsResponse.json()) as {
-        email: string;
-        primary: boolean;
-        verified: boolean;
-      }[];
-      const primaryEmail = emails.find(
-        (emailRecord) => emailRecord.primary && emailRecord.verified,
-      );
-      email = primaryEmail?.email ?? emails[0]?.email;
-    } catch {
-      // Email list is optional; profile resolution continues below.
-    }
+    const emails = (await emailsResponse.json()) as {
+      email: string;
+      primary: boolean;
+      verified: boolean;
+    }[];
+    primaryVerifiedEmail = emails.find(
+      (emailRecord) => emailRecord.primary && emailRecord.verified,
+    )?.email;
+  } catch {
+    // Email list is optional; the missing/unverified guard below handles it.
   }
 
-  if (!(email && userInfo.id)) {
-    throw new UnauthorizedError('errors:githubUserMissingEmailOrId');
+  if (!(primaryVerifiedEmail && userInfo.id)) {
+    throw new UnauthorizedError('errors:githubUserMissingVerifiedEmail');
   }
+
+  const email = primaryVerifiedEmail;
 
   return omitUndefined({
     email,

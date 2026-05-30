@@ -3,6 +3,7 @@ import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier } from '@/shared/utils/http/request.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { getIpAddress, getUserAgent, setSessionCookie } from '../auth.http.util.js';
 import { AuthSerializer } from '../auth.serializer.js';
@@ -32,6 +33,17 @@ export function createAuthLoginHandlers({ authService }: AuthLoginHandlersDepend
           resource_type: 'session',
           metadata: { session_public_id: data.session_public_id },
         });
+        // Break-glass visibility: every platform super_admin token issued via the
+        // credential path is recorded as a high-severity audit event.
+        if (payload.role === GLOBAL_ROLES.SUPER_ADMIN) {
+          await recordScopedAuditEvent(request, {
+            actorUserPublicId: payload.userId,
+            action: 'auth.super_admin.token_issued',
+            resource_type: 'session',
+            severity: 'WARNING',
+            metadata: { session_public_id: data.session_public_id, source: 'password_login' },
+          });
+        }
       } catch (error) {
         logger.warn({ error }, 'audit.login.recording.failed');
       }

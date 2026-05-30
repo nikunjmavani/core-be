@@ -22,7 +22,6 @@ vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
 vi.mock('@/domains/auth/auth.validator.js', () => ({
   validateMfaVerify: (body: unknown) => body,
   validateMfaEnroll: (body: unknown) => body,
-  validateMfaChallenge: (body: unknown) => body,
   validateMfaLoginVerify: (body: unknown) => body,
 }));
 
@@ -40,7 +39,19 @@ vi.mock('@/shared/utils/security/field-secret-encryption.util.js', () => ({
   decryptFieldSecret: (value: string) => value,
 }));
 
-const user = { id: 1, public_id: 'user_public', email: 'user@example.com' };
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
+const user = {
+  id: 1,
+  public_id: 'user_public',
+  email: 'user@example.com',
+  status: 'ACTIVE',
+  is_email_verified: true,
+};
 
 describe('MfaService', () => {
   const userService = {
@@ -76,6 +87,7 @@ describe('MfaService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    redis.set.mockResolvedValue('OK');
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
     vi.mocked(authMethodService.findTotpByUserId).mockResolvedValue({
       id: 5,
@@ -147,15 +159,30 @@ describe('MfaService', () => {
     );
   });
 
-  it('challenge returns access token after valid code', async () => {
-    const result = await service.challenge(
-      { user_id: 'user_public', code: '123456' },
-      '127.0.0.1',
-      'vitest',
+  it('verifyLoginMfa rejects a replayed TOTP code within its window', async () => {
+    redis.set.mockResolvedValueOnce(null);
+    await expect(
+      service.verifyLoginMfa({ mfa_session_token: 'token', totp_code: '123456' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(authSessionService.createSessionForUser).not.toHaveBeenCalled();
+  });
+
+  it('verify rejects a replayed TOTP code within its window', async () => {
+    redis.set.mockResolvedValueOnce(null);
+    await expect(service.verify('user_public', { code: '123456' })).rejects.toBeInstanceOf(
+      UnauthorizedError,
     );
-    expect(result.access_token).toBe('access-token');
-    expect(result.session_public_id).toBe('session_public');
-    expect(authSessionService.createSessionForUser).toHaveBeenCalled();
+  });
+
+  it('verifyLoginMfa marks the consumed TOTP code in Redis with NX', async () => {
+    await service.verifyLoginMfa({ mfa_session_token: 'token', totp_code: '123456' }, '127.0.0.1');
+    expect(redis.set).toHaveBeenCalledWith(
+      expect.stringContaining('mfa:totp:consumed:'),
+      '1',
+      'EX',
+      expect.any(Number),
+      'NX',
+    );
   });
 
   it('deleteMfa revokes method and disables MFA when last method removed', async () => {
@@ -200,30 +227,6 @@ describe('MfaService', () => {
     expect(userService.updateMfaEnabled).not.toHaveBeenCalledWith('user_public', false);
   });
 
-  it('challenge rejects when user record is missing', async () => {
-    vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
-    await expect(
-      service.challenge({ user_id: 'missing', code: '123456' }, '127.0.0.1'),
-    ).rejects.toBeInstanceOf(UnauthorizedError);
-  });
-
-  it('challenge rejects when MFA is not enabled', async () => {
-    vi.mocked(authMethodService.findTotpByUserId).mockResolvedValue(null);
-    await expect(
-      service.challenge({ user_id: 'user_public', code: '123456' }, '127.0.0.1'),
-    ).rejects.toBeInstanceOf(UnauthorizedError);
-  });
-
-  it('challenge rejects when TOTP secret is missing', async () => {
-    vi.mocked(authMethodService.findTotpByUserId).mockResolvedValue({
-      id: 5,
-      encrypted_secret: null,
-    } as never);
-    await expect(
-      service.challenge({ user_id: 'user_public', code: '123456' }, '127.0.0.1'),
-    ).rejects.toBeInstanceOf(UnauthorizedError);
-  });
-
   it('deleteMfa rejects unknown or non-TOTP methods', async () => {
     vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue(null);
     await expect(service.deleteMfa('user_public', 99)).rejects.toBeInstanceOf(UnauthorizedError);
@@ -233,14 +236,6 @@ describe('MfaService', () => {
       method_type: 'OAUTH',
     } as never);
     await expect(service.deleteMfa('user_public', 5)).rejects.toBeInstanceOf(UnauthorizedError);
-  });
-
-  it('challenge rejects invalid TOTP codes', async () => {
-    const { verify } = await import('otplib');
-    vi.mocked(verify).mockResolvedValueOnce({ valid: false } as never);
-    await expect(
-      service.challenge({ user_id: 'user_public', code: '000000' }, '127.0.0.1'),
-    ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('deleteMfa rejects when user record is missing', async () => {

@@ -18,6 +18,9 @@ export const MILLISECONDS_PER_DAY = SECONDS_PER_DAY * MILLISECONDS_PER_SECOND;
 /** Five seconds in milliseconds (metrics poll, shutdown buffer). */
 export const FIVE_SECONDS_MS = 5_000;
 
+/** Ten seconds in milliseconds (outbound HTTP timeouts, webhook retry base delay). */
+export const TEN_SECONDS_MS = 10_000;
+
 /** Fifteen seconds in milliseconds (mail enqueue deadline, graceful shutdown). */
 export const FIFTEEN_SECONDS_MS = 15_000;
 
@@ -36,8 +39,23 @@ export const IDEMPOTENCY_PLACEHOLDER_TTL_SECONDS = SESSION_TOKEN_CACHE_TTL_SECON
 /** Cached idempotent HTTP response TTL (seconds). */
 export const IDEMPOTENCY_RESPONSE_CACHE_TTL_SECONDS = SECONDS_PER_DAY;
 
+/**
+ * `Retry-After` advertised on the idempotency-store-unavailable 503 (seconds). Kept short
+ * so well-behaved clients retry quickly once a transient Redis blip clears, instead of
+ * treating the degraded response as a hard failure.
+ */
+export const IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS = 2;
+
 /** MFA challenge session lifetime in Redis (seconds). */
 export const MFA_SESSION_TTL_SECONDS = 300;
+
+/**
+ * Window during which a successfully consumed TOTP code is remembered in Redis
+ * to reject replay (seconds). Covers the current 30-second step plus the
+ * ±1-step verification tolerance, so a captured code cannot be reused while it
+ * is still cryptographically valid.
+ */
+export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = 90;
 
 /** WebAuthn ceremony challenge lifetime in Redis (seconds). */
 export const WEBAUTHN_CHALLENGE_TTL_SECONDS = MFA_SESSION_TTL_SECONDS;

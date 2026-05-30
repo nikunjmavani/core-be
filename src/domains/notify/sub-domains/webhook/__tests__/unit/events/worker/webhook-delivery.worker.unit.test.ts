@@ -1,8 +1,9 @@
-import { describe, expect, it, vi, beforeEach, type Mock } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import {
   processWebhookDeliveryAttempt,
   type WebhookDeliveryFetch,
 } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js';
+import { resetWebhookOutboundCircuitsForTesting } from '@/domains/notify/sub-domains/webhook/workers/webhook-outbound-circuit.js';
 
 const { deliveryContextFixture } = vi.hoisted(() => ({
   deliveryContextFixture: {
@@ -59,6 +60,10 @@ describe('processWebhookDeliveryAttempt', () => {
       ok: true,
       text: vi.fn().mockResolvedValue('ok'),
     }) as Mock<WebhookDeliveryFetch>;
+  });
+
+  afterEach(() => {
+    resetWebhookOutboundCircuitsForTesting();
   });
 
   it('forwards X-Request-Id on outbound webhook delivery', async () => {

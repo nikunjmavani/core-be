@@ -6,17 +6,19 @@ import {
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
 import { UnauthorizedError } from '@/shared/errors/index.js';
+import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodService } from '../auth-method/auth-method.service.js';
 import type { AuthSessionService } from '../auth-session/auth-session.service.js';
+import { MFA_TOTP_CODE_REPLAY_TTL_SECONDS } from '@/shared/constants/index.js';
 import {
   validateMfaVerify,
   validateMfaEnroll,
-  validateMfaChallenge,
   validateMfaLoginVerify,
 } from '../../auth.validator.js';
 import { createMfaSession, verifyMfaSession } from './mfa-session.js';
@@ -24,6 +26,10 @@ import { consumeMfaRecoveryCode } from './mfa-recovery-code.repository.js';
 
 const TOTP_ISSUER = 'core-be';
 const ERROR_KEY_MFA_USER_NOT_FOUND = 'errors:mfaUserNotFound';
+const ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE = 'errors:mfaInvalidOrExpiredCode';
+
+/** Redis key prefix marking a TOTP code consumed by a user, used to reject replay within its validity window. */
+const MFA_TOTP_CONSUMED_KEY_PREFIX = 'mfa:totp:consumed:';
 
 /**
  * TOTP-based MFA and recovery-code orchestrator for the auth domain.
@@ -38,14 +44,18 @@ const ERROR_KEY_MFA_USER_NOT_FOUND = 'errors:mfaUserNotFound';
  * - **Failure modes:** unknown user / wrong code / expired MFA session all throw
  *   `UnauthorizedError` with i18n keys (`errors:mfaInvalidOrExpiredCode`,
  *   `errors:mfaInvalidOrExpiredSession`, `errors:mfaUserNotFound`,
- *   `errors:mfaInvalidOrExpiredRecoveryCode`).
+ *   `errors:mfaInvalidOrExpiredRecoveryCode`). A suspended/locked account is
+ *   rejected on the login-verify step with `errors:accountNotActive`.
  * - **Side effects:** writes to {@link auth_methods}, {@link mfa_recovery_codes},
  *   and `auth.sessions`; flips `users.is_mfa_enabled` on enroll and on the last
  *   method removal; refreshes `auth_methods.last_used_at` on every successful
- *   verification.
+ *   verification; records each consumed TOTP code in Redis for
+ *   {@link MFA_TOTP_CODE_REPLAY_TTL_SECONDS} to reject replay.
  * - **Notes:** secrets are encrypted at rest using the field-secret KMS path;
  *   recovery codes are stored only as SHA-256 hashes and consumed exactly once
- *   via an atomic `UPDATE … WHERE used_at IS NULL`.
+ *   via an atomic `UPDATE … WHERE used_at IS NULL`. The public login step is
+ *   reachable only with a valid `mfa_session_token` minted by `auth.login`
+ *   after first-factor (password) verification — there is no TOTP-only login.
  */
 export class MfaService {
   constructor(
@@ -75,10 +85,15 @@ export class MfaService {
     if (!user) {
       throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
     }
+    assertUserAccountActive(user.status);
 
     let verified = false;
     if (parsed.totp_code) {
-      const totpMethod = await this.authMethodService.findTotpByUserId(user.id);
+      // auth.auth_methods is FORCE RLS (audit #7); pin the owner context for every credential
+      // read/write — the MFA session already authenticated this user.
+      const totpMethod = await withUserDatabaseContext(user.public_id, () =>
+        this.authMethodService.findTotpByUserId(user.id),
+      );
       if (!totpMethod?.encrypted_secret) {
         throw new UnauthorizedError('errors:mfaNotEnabled');
       }
@@ -87,12 +102,20 @@ export class MfaService {
         token: parsed.totp_code,
       });
       if (!result.valid) {
-        throw new UnauthorizedError('errors:mfaInvalidOrExpiredCode');
+        throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
       }
-      await this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id);
+      await this.rejectReplayedTotpCode(user.id, parsed.totp_code);
+      await withUserDatabaseContext(user.public_id, () =>
+        this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id),
+      );
       verified = true;
     } else if (parsed.recovery_code) {
-      const consumed = await consumeMfaRecoveryCode(user.id, parsed.recovery_code);
+      // auth.mfa_recovery_codes is FORCE RLS keyed on app.current_user_id; the MFA session already
+      // identifies the user, so consume the single-use code inside that user's context.
+      const recoveryCode = parsed.recovery_code;
+      const consumed = await withUserDatabaseContext(user.public_id, () =>
+        consumeMfaRecoveryCode(user.id, recoveryCode),
+      );
       if (!consumed) {
         throw new UnauthorizedError('errors:mfaInvalidOrExpiredRecoveryCode');
       }
@@ -100,20 +123,39 @@ export class MfaService {
     }
 
     if (!verified) {
-      throw new UnauthorizedError('errors:mfaInvalidOrExpiredCode');
+      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
 
     return this.issueAccessTokenAndSession(user, ipAddress, userAgent);
   }
 
+  /**
+   * Marks a freshly-verified TOTP code as consumed in Redis and rejects it if it
+   * was already used. `SET NX` makes the check-and-set atomic so two concurrent
+   * requests carrying the same valid code cannot both succeed; a replay surfaces
+   * as the generic invalid-code error to avoid leaking that the code was valid.
+   */
+  private async rejectReplayedTotpCode(userId: number, totpCode: string): Promise<void> {
+    const codeHash = createHash('sha256').update(totpCode).digest('hex');
+    const key = `${MFA_TOTP_CONSUMED_KEY_PREFIX}${userId}:${codeHash}`;
+    const stored = await this.redis.set(key, '1', 'EX', MFA_TOTP_CODE_REPLAY_TTL_SECONDS, 'NX');
+    if (stored === null) {
+      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
+    }
+  }
+
   private async issueAccessTokenAndSession(
-    user: { public_id: string; email: string; status: string },
+    user: { public_id: string; email: string; status: string; is_email_verified: boolean },
     ipAddress: string,
     userAgent?: string,
   ): Promise<{ access_token: string; session_public_id: string }> {
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
-      role: resolveAccessTokenRoleForUser(user.email, user.status),
+      role: resolveAccessTokenRoleForUser({
+        email: user.email,
+        status: user.status,
+        isEmailVerified: user.is_email_verified,
+      }),
     });
     const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
     const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
@@ -135,7 +177,9 @@ export class MfaService {
     const parsed = validateMfaVerify(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
-    const totpMethod = await this.authMethodService.findTotpByUserId(user.id);
+    const totpMethod = await withUserDatabaseContext(user.public_id, () =>
+      this.authMethodService.findTotpByUserId(user.id),
+    );
     if (!totpMethod?.encrypted_secret) {
       throw new UnauthorizedError('errors:mfaNotEnabled');
     }
@@ -144,9 +188,12 @@ export class MfaService {
       token: parsed.code,
     });
     if (!result.valid) {
-      throw new UnauthorizedError('errors:mfaInvalidOrExpiredCode');
+      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
-    await this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id);
+    await this.rejectReplayedTotpCode(user.id, parsed.code);
+    await withUserDatabaseContext(user.public_id, () =>
+      this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id),
+    );
     return { verified: true };
   }
 
@@ -167,13 +214,15 @@ export class MfaService {
       label: user.email,
       secret,
     });
-    const record = await this.authMethodService.createAuthMethodRecord({
-      user_id: user.id,
-      method_type: 'MFA_TOTP',
-      encrypted_secret: encryptFieldSecret(secret),
-      is_primary: false,
-      created_by_user_id: user.id,
-    });
+    const record = await withUserDatabaseContext(user.public_id, () =>
+      this.authMethodService.createAuthMethodRecord({
+        user_id: user.id,
+        method_type: 'MFA_TOTP',
+        encrypted_secret: encryptFieldSecret(secret),
+        is_primary: false,
+        created_by_user_id: user.id,
+      }),
+    );
     await this.userService.updateMfaEnabled(user.public_id, true);
     return {
       secret,
@@ -182,41 +231,19 @@ export class MfaService {
     };
   }
 
-  /** Challenge MFA during login (public). Verifies code and returns access token. */
-  async challenge(
-    body: unknown,
-    ipAddress: string,
-    userAgent?: string,
-  ): Promise<{ access_token: string; session_public_id: string }> {
-    const parsed = validateMfaChallenge(body);
-    const user = await this.userService.requireUserRecordByPublicId(parsed.user_id);
-    if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
-    const totpMethod = await this.authMethodService.findTotpByUserId(user.id);
-    if (!totpMethod?.encrypted_secret) {
-      throw new UnauthorizedError('errors:mfaNotEnabled');
-    }
-    const result = await verify({
-      secret: decryptFieldSecret(totpMethod.encrypted_secret),
-      token: parsed.code,
-    });
-    if (!result.valid) {
-      throw new UnauthorizedError('errors:mfaInvalidOrExpiredCode');
-    }
-    await this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id);
-    return this.issueAccessTokenAndSession(user, ipAddress, userAgent);
-  }
-
   /** Delete (revoke) an MFA method for the current user. */
   async deleteMfa(userPublicId: string, mfaMethodId: number): Promise<void> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
-    const method = await this.authMethodService.findAuthMethodByIdForUser(mfaMethodId, user.id);
-    if (!method) throw new UnauthorizedError('errors:mfaMethodNotFound');
-    if (method.method_type !== 'MFA_TOTP') {
-      throw new UnauthorizedError('errors:mfaNotTotpMethod');
-    }
-    await this.authMethodService.revokeAuthMethod(mfaMethodId, user.id);
-    const remaining = await this.authMethodService.listMfaMethodsByUserId(user.id);
+    const remaining = await withUserDatabaseContext(user.public_id, async () => {
+      const found = await this.authMethodService.findAuthMethodByIdForUser(mfaMethodId, user.id);
+      if (!found) throw new UnauthorizedError('errors:mfaMethodNotFound');
+      if (found.method_type !== 'MFA_TOTP') {
+        throw new UnauthorizedError('errors:mfaNotTotpMethod');
+      }
+      await this.authMethodService.revokeAuthMethod(mfaMethodId, user.id);
+      return this.authMethodService.listMfaMethodsByUserId(user.id);
+    });
     if (remaining.length === 0) {
       await this.userService.updateMfaEnabled(user.public_id, false);
     }
@@ -226,7 +253,9 @@ export class MfaService {
   async listMfaMethods(userPublicId: string) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
-    const methods = await this.authMethodService.listMfaMethodsByUserId(user.id);
+    const methods = await withUserDatabaseContext(user.public_id, () =>
+      this.authMethodService.listMfaMethodsByUserId(user.id),
+    );
     return methods.map((method) => ({
       id: method.id,
       method_type: method.method_type,

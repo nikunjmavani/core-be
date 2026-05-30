@@ -1,6 +1,8 @@
 import { Queue } from 'bullmq';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import {
   notificationJobDataSchema,
   type NotificationJobDataValidated,
@@ -39,7 +41,12 @@ export async function enqueueNotification(
   const queue = getNotificationQueue();
   const jobData = parseBullMQJobData(
     notificationJobDataSchema,
-    { notificationId, organizationPublicId, requestId },
+    omitUndefined({
+      notificationId,
+      organizationPublicId,
+      requestId,
+      ...captureTraceContextForPropagation(),
+    }),
     NOTIFICATION_QUEUE_NAME,
   );
   await queue.add('dispatch-notification', jobData);

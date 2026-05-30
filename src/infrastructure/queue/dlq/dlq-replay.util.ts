@@ -51,11 +51,14 @@ export function resolveDeadLetterQueueNames(filter?: string): string[] {
 
 /**
  * Reconstructs the minimal job payload needed to re-enqueue a dead-lettered job onto its
- * original BullMQ queue. Mail, webhook delivery, and Stripe webhook jobs each pull a
- * different identifier out of {@link DeadLetterJobData.original_data_summary}; queues
- * without a known shape (notification, retention DLQs) return `null` so the caller skips
- * the replay. The resulting payload is tagged with {@link DlqReplayJobFields} markers so
- * the receiving worker can detect a replay.
+ * original BullMQ queue. Mail, webhook delivery, notification, and Stripe webhook jobs each
+ * pull their required identifiers out of {@link DeadLetterJobData.original_data_summary}:
+ * mail (`mail_outbox_id`), webhook (`delivery_attempt_id` + `organization_public_id`),
+ * notification (`notification_id` + nullable `organization_public_id`), Stripe
+ * (`stripe_event_id`). Queues without a known shape (retention/observability DLQs), or whose
+ * summary is missing a required key, return `null` so the caller skips the replay. The
+ * resulting payload is tagged with {@link DlqReplayJobFields} markers so the receiving worker
+ * can detect a replay.
  */
 export function buildReplayJobPayload(data: DeadLetterJobData): Record<string, unknown> | null {
   const summary = data.original_data_summary;
@@ -75,6 +78,19 @@ export function buildReplayJobPayload(data: DeadLetterJobData): Record<string, u
         return null;
       }
       basePayload = { deliveryAttemptId, organizationPublicId };
+      break;
+    }
+    case NOTIFICATION_QUEUE_NAME: {
+      const notificationId = summary.notification_id;
+      if (typeof notificationId !== 'number') return null;
+      // Notification jobs carry a nullable org scope; preserve null (global notifications)
+      // and only forward a concrete public id when present.
+      const organizationPublicId = summary.organization_public_id;
+      basePayload = {
+        notificationId,
+        organizationPublicId:
+          typeof organizationPublicId === 'string' ? organizationPublicId : null,
+      };
       break;
     }
     case STRIPE_WEBHOOK_QUEUE_NAME: {

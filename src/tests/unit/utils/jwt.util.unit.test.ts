@@ -109,6 +109,86 @@ describe('jwt.util', () => {
     });
   });
 
+  describe('kid-indexed verify keyring (JWT_PUBLIC_KEYS)', () => {
+    const keyPairA = generateRsaPemKeyPair();
+    const keyPairB = generateRsaPemKeyPair();
+
+    afterEach(() => {
+      delete process.env.JWT_PUBLIC_KEYS;
+      delete process.env.JWT_SIGNING_KID;
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+    });
+
+    it('verifies a token signed under kid A against the keyring', async () => {
+      process.env.JWT_PRIVATE_KEY = keyPairA.privateKey;
+      process.env.JWT_PUBLIC_KEY = keyPairA.publicKey;
+      process.env.JWT_SIGNING_KID = 'key-a';
+      process.env.JWT_PUBLIC_KEYS = JSON.stringify({
+        'key-a': keyPairA.publicKey,
+        'key-b': keyPairB.publicKey,
+      });
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+
+      const token = await signAccessToken({ userId: 'user-kid-a' });
+      expect(decodeProtectedHeader(token).kid).toBe('key-a');
+      const payload = await verifyAccessToken(token);
+      expect(payload.userId).toBe('user-kid-a');
+    });
+
+    it('still verifies old-kid tokens after rotating the signing kid (overlap window)', async () => {
+      process.env.JWT_PRIVATE_KEY = keyPairA.privateKey;
+      process.env.JWT_PUBLIC_KEY = keyPairA.publicKey;
+      process.env.JWT_SIGNING_KID = 'key-a';
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+      const oldToken = await signAccessToken({ userId: 'user-old' });
+
+      process.env.JWT_PRIVATE_KEY = keyPairB.privateKey;
+      process.env.JWT_PUBLIC_KEY = keyPairB.publicKey;
+      process.env.JWT_SIGNING_KID = 'key-b';
+      process.env.JWT_PUBLIC_KEYS = JSON.stringify({
+        'key-a': keyPairA.publicKey,
+        'key-b': keyPairB.publicKey,
+      });
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+
+      const newToken = await signAccessToken({ userId: 'user-new' });
+      expect(decodeProtectedHeader(newToken).kid).toBe('key-b');
+      expect((await verifyAccessToken(newToken)).userId).toBe('user-new');
+      expect((await verifyAccessToken(oldToken)).userId).toBe('user-old');
+    });
+
+    it('falls back to the single public key when the token kid is absent from the keyring', async () => {
+      process.env.JWT_PRIVATE_KEY = keyPairA.privateKey;
+      process.env.JWT_PUBLIC_KEY = keyPairA.publicKey;
+      process.env.JWT_SIGNING_KID = 'key-a';
+      process.env.JWT_PUBLIC_KEYS = JSON.stringify({ 'key-b': keyPairB.publicKey });
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+
+      const token = await signAccessToken({ userId: 'user-fallback' });
+      expect((await verifyAccessToken(token)).userId).toBe('user-fallback');
+    });
+
+    it('rejects a token whose kid maps to a non-matching keyring entry', async () => {
+      process.env.JWT_PRIVATE_KEY = keyPairA.privateKey;
+      process.env.JWT_PUBLIC_KEY = keyPairA.publicKey;
+      process.env.JWT_SIGNING_KID = 'key-b';
+      process.env.JWT_PUBLIC_KEYS = JSON.stringify({
+        'key-a': keyPairA.publicKey,
+        'key-b': keyPairB.publicKey,
+      });
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+
+      const token = await signAccessToken({ userId: 'user-wrong-kid' });
+      await expect(verifyAccessToken(token)).rejects.toThrow();
+    });
+  });
+
   describe('algorithm-confusion and claim validation', () => {
     const keyPair = generateRsaPemKeyPair();
     const now = Math.floor(Date.now() / 1000);

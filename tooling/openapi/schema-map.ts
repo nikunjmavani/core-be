@@ -20,7 +20,7 @@ import {
   ChangePasswordDto,
   VerifyEmailDto,
   MfaEnrollDto,
-  MfaChallengeDto,
+  MfaLoginVerifyDto,
 } from '@/domains/auth/auth.dto.js';
 
 // ─── User ──────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ export const routeSchemaMap: Record<string, ZodTypeAny> = {
   'POST /api/v1/auth/magic-link/verify': MagicLinkVerifyDto,
   'POST /api/v1/auth/mfa/verify': MfaVerifyDto,
   'POST /api/v1/auth/mfa/enroll': MfaEnrollDto,
-  'POST /api/v1/auth/mfa/challenge': MfaChallengeDto,
+  'POST /api/v1/auth/mfa/login': MfaLoginVerifyDto,
   'POST /api/v1/auth/password/forgot': ForgotPasswordDto,
   'POST /api/v1/auth/password/reset': ResetPasswordDto,
   'POST /api/v1/auth/password/change': ChangePasswordDto,

@@ -154,6 +154,32 @@ export class MembershipRepository extends BaseRepository {
     return (rows[0] ?? null) as MembershipRow | null;
   }
 
+  /**
+   * Activates a membership as part of accepting its invitation: flips the
+   * status to `ACTIVE` and stamps `joined_at` only when the row is still
+   * pending (`status <> 'ACTIVE'`). Scoped by internal membership id +
+   * organization id so it runs inside the invitation-accept transaction
+   * (shared `withOrganizationDatabaseContext` unit of work) and stays
+   * idempotent for a membership that is already active.
+   */
+  async activateForInvitationAccept(
+    membership_id: number,
+    organization_id: number,
+  ): Promise<MembershipRow | null> {
+    const rows = await getRequestDatabase()
+      .update(memberships)
+      .set({ status: 'ACTIVE', joined_at: new Date(), updated_at: databaseNowTimestamp })
+      .where(
+        and(
+          eq(memberships.id, membership_id),
+          eq(memberships.organization_id, organization_id),
+          isNull(memberships.deleted_at),
+        ),
+      )
+      .returning();
+    return (rows[0] ?? null) as MembershipRow | null;
+  }
+
   async softDelete(public_id: string, organization_id: number): Promise<MembershipRow | null> {
     const rows = await getRequestDatabase()
       .update(memberships)

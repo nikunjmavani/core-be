@@ -3,7 +3,7 @@
  * and emit one Sentry issue (grouped by queue + job name).
  */
 
-import { Queue, type Job, type Worker } from 'bullmq';
+import { Queue, UnrecoverableError, type Job, type Worker } from 'bullmq';
 import { isSentryInitialized, Sentry } from '@/infrastructure/observability/sentry/sentry.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { insertDeadLetterJob } from '@/infrastructure/queue/dlq/dead-letter.repository.js';
@@ -44,6 +44,16 @@ export interface DeadLetterJobData {
   failed_at: string;
 }
 
+/**
+ * Extracts the non-secret replay keys from a failed job's data into the DLQ summary.
+ *
+ * Each replayable queue type contributes the identifiers {@link buildReplayJobPayload} needs
+ * to reconstruct its job: mail (`mail_outbox_id`), webhook delivery (`delivery_attempt_id` +
+ * `organization_public_id`), notification (`notification_id` + `organization_public_id`), and
+ * Stripe webhook (`stripe_event_id`). These are public/internal identifiers only — full
+ * payloads, HTML bodies, signing secrets, and PII are deliberately left out so nothing
+ * sensitive sits in Redis or `audit.dead_letter_jobs` past the retention window.
+ */
 function summarizeJobDataForDeadLetter(data: unknown): Record<string, unknown> {
   if (typeof data !== 'object' || data === null) {
     return {};
@@ -57,6 +67,12 @@ function summarizeJobDataForDeadLetter(data: unknown): Record<string, unknown> {
   if (record.webhookId !== undefined) summary.webhook_id = record.webhookId;
   if (record.eventType !== undefined) summary.event_type = record.eventType;
   if (record.notificationId !== undefined) summary.notification_id = record.notificationId;
+  // Tenant scope for webhook + notification replay (notification jobs may carry an explicit null).
+  if (record.organizationPublicId !== undefined) {
+    summary.organization_public_id = record.organizationPublicId;
+  }
+  // Stripe event id is required to re-fetch and replay a Stripe webhook job.
+  if (record.stripeEventId !== undefined) summary.stripe_event_id = record.stripeEventId;
   return summary;
 }
 
@@ -227,11 +243,20 @@ async function mirrorDeadLetterToRedis(
 }
 
 /**
- * Writes the durable Postgres record first, then the best-effort Redis mirror. Resolves
- * without throwing in every branch so it is safe to `void` from the synchronous `failed`
- * listener.
+ * Writes the durable Postgres record first, then the best-effort Redis mirror.
+ *
+ * @remarks
+ * - **Algorithm:** awaits {@link persistDeadLetterFailureToPostgres} (the durable source of
+ *   truth) then {@link mirrorDeadLetterToRedis} (replay convenience). Each branch swallows its
+ *   own errors so this resolves without throwing.
+ * - **Failure modes:** never rejects — both sub-writes log + capture on failure, so it is safe
+ *   to `void` from the synchronous `failed` listener and safe to `await` from the poison-job
+ *   guard (`parseJobDataOrDeadLetter`) without a surrounding try/catch.
+ * - **Side effects:** one Postgres insert into `audit.dead_letter_jobs` plus one best-effort
+ *   `<source>-dlq` Redis enqueue; structured logs on both paths.
+ * - **Notes:** runs outside any request/worker DB context; identifiers are passed explicitly.
  */
-async function recordDeadLetterFailure(
+export async function recordDeadLetterFailure(
   queueName: string,
   job: Job,
   error: Error | unknown,
@@ -279,6 +304,11 @@ function captureDeadLetterPersistFailureInSentry(
 /**
  * Subscribes once to `failed`: warn on transient retries; on final failure, persist the
  * durable Postgres record + mirror to Redis + alert Sentry.
+ *
+ * @remarks
+ * - **Notes:** `UnrecoverableError` is treated as already-handled — the poison-job guard
+ *   (`parseJobDataOrDeadLetter`) records the dead-letter and skips BullMQ's retry path, so this
+ *   listener logs `queue.job.unrecoverable` and returns without recording a second time.
  */
 export function attachDeadLetterAndAlerting(worker: Worker, queueName: string): void {
   worker.on('failed', (job, error) => {
@@ -286,6 +316,14 @@ export function attachDeadLetterAndAlerting(worker: Worker, queueName: string): 
 
     if (!job) {
       logger.error({ queue: queueName, error: errorMessage }, 'queue.job.failed_without_job');
+      return;
+    }
+
+    if (error instanceof UnrecoverableError) {
+      logger.error(
+        { queue: queueName, jobId: job.id, jobName: job.name, error: errorMessage },
+        'queue.job.unrecoverable',
+      );
       return;
     }
 

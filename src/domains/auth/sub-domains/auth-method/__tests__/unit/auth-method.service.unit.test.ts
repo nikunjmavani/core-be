@@ -4,6 +4,7 @@ import { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-m
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodRepository } from '@/domains/auth/sub-domains/auth-method/auth-method.repository.js';
 import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type * as EventBusModule from '@/core/events/event-bus.js';
 
 vi.mock('@/core/events/event-bus.js', async (importOriginal) => {
@@ -23,12 +24,19 @@ vi.mock('@/shared/utils/text/email.util.js', () => ({
   isDisposableEmailBlocked: vi.fn(() => false),
 }));
 
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
 const user = {
   id: 1,
   public_id: 'user_public',
   email: 'user@example.com',
   password_hash: 'hash',
   is_email_verified: false,
+  status: 'ACTIVE',
 };
 
 describe('AuthMethodService', () => {
@@ -60,10 +68,16 @@ describe('AuthMethodService', () => {
     markUsed: vi.fn(),
   } as unknown as VerificationTokenRepository;
 
+  const authSessionService = {
+    revokeAllSessions: vi.fn().mockResolvedValue(undefined),
+    revokeAllSessionsExceptCurrent: vi.fn().mockResolvedValue(undefined),
+  } as unknown as AuthSessionService;
+
   const service = new AuthMethodService(
     userService,
     authMethodRepository,
     verificationTokenRepository,
+    authSessionService,
   );
 
   beforeEach(() => {
@@ -121,6 +135,7 @@ describe('AuthMethodService', () => {
     } as never);
     await service.resetPassword({ token: 'reset-token', password: 'NewPassword123!' });
     expect(userService.updatePassword).toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessions).toHaveBeenCalledWith(user.public_id);
   });
 
   it('resetPassword rejects invalid token', async () => {
@@ -130,12 +145,30 @@ describe('AuthMethodService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
-  it('changePassword verifies current password', async () => {
+  it('changePassword verifies current password and revokes other sessions', async () => {
+    await service.changePassword(
+      'user_public',
+      {
+        current_password: 'old',
+        new_password: 'NewPassword123!',
+      },
+      { currentAccessToken: 'current-bearer-token' },
+    );
+    expect(userService.updatePassword).toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessionsExceptCurrent).toHaveBeenCalledWith({
+      userPublicId: user.public_id,
+      currentAccessToken: 'current-bearer-token',
+    });
+    expect(authSessionService.revokeAllSessions).not.toHaveBeenCalled();
+  });
+
+  it('changePassword revokes all sessions when no current token is supplied', async () => {
     await service.changePassword('user_public', {
       current_password: 'old',
       new_password: 'NewPassword123!',
     });
-    expect(userService.updatePassword).toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessionsExceptCurrent).not.toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessions).toHaveBeenCalledWith(user.public_id);
   });
 
   it('changePassword rejects when password auth disabled', async () => {
@@ -277,16 +310,19 @@ describe('AuthMethodService', () => {
 
     vi.mocked(authMethodRepository.findByProviderUserId).mockResolvedValue(null);
     await service.findByProviderUserId('google', 'gid');
-    await service.linkOAuthProviderIfMissing(oauthData);
+    await service.linkOAuthProviderIfMissing({ ownerPublicId: user.public_id, data: oauthData });
     expect(authMethodRepository.create).toHaveBeenCalledWith(oauthData);
 
     vi.mocked(authMethodRepository.findByProviderUserId).mockResolvedValue({ id: 9 } as never);
-    await service.linkOAuthProviderIfMissing(oauthData);
+    await service.linkOAuthProviderIfMissing({ ownerPublicId: user.public_id, data: oauthData });
     expect(authMethodRepository.create).toHaveBeenCalledTimes(1);
 
     await service.linkOAuthProviderIfMissing({
-      user_id: user.id,
-      method_type: 'PASSWORD',
+      ownerPublicId: user.public_id,
+      data: {
+        user_id: user.id,
+        method_type: 'PASSWORD',
+      },
     });
     await service.findTotpByUserId(user.id);
     await service.createAuthMethodRecord(oauthData);

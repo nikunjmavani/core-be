@@ -169,12 +169,15 @@ export class OrganizationApiKeyService {
     for (const candidate of candidates) {
       if (!hashCompare(candidate.key_hash, key_hash)) continue;
       if (candidate.expires_at && candidate.expires_at <= now) continue;
-      const organization = await this.organizationRepository.findById(candidate.organization_id);
-      if (!organization) continue;
-      await this.apiKeyRepository.touchLastUsedAt(candidate.public_id);
+      // The resolver already returned the owning organization public id (FORCE RLS on
+      // tenancy.organizations means we cannot read it here without an org context). Establish that
+      // context so the last_used_at touch passes the api_keys tenant-isolation policy.
+      await withOrganizationDatabaseContext(candidate.organization_public_id, () =>
+        this.apiKeyRepository.touchLastUsedAt(candidate.public_id),
+      );
       return {
         public_id: candidate.public_id,
-        organization_public_id: organization.public_id,
+        organization_public_id: candidate.organization_public_id,
         scopes: candidate.scopes,
       };
     }

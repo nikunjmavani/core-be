@@ -26,14 +26,39 @@ describe('MFA Sub-Domain — Integration', () => {
     await cleanupDatabase();
   });
 
-  describe('POST /api/v1/auth/mfa/challenge', () => {
+  describe('POST /api/v1/auth/mfa/login', () => {
     it('should return 400 for missing body', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/auth/mfa/challenge'),
+        url: testApiPath('/auth/mfa/login'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
+    });
+
+    // Issue #1 regression: a TOTP code alone (without a valid mfa_session_token
+    // minted by POST /auth/login after password verification) must never mint a
+    // session. The session token is unforgeable, so an attacker who only knows a
+    // victim's user id and a 6-digit code cannot log in.
+    it('should return 401 for a TOTP code without a valid mfa_session_token', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/login'),
+        payload: {
+          mfa_session_token: 'forged-or-expired-token',
+          totp_code: '123456',
+        },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should no longer expose the removed public /auth/mfa/challenge route', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/challenge'),
+        payload: { user_id: 'any-user', code: '123456' },
+      });
+      expect(response.statusCode).toBe(404);
     });
   });
 

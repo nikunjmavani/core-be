@@ -1,4 +1,4 @@
-import { and, eq, isNull, lte, or } from 'drizzle-orm';
+import { and, eq, isNull, lte, ne, or } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
@@ -13,8 +13,11 @@ import type { SubscriptionCreateData, SubscriptionUpdateData } from './subscript
  * Drizzle access to the append-only `billing.subscriptions` ledger.
  *
  * @remarks
- * - **Algorithm:** Each organization is constrained to a single subscription row
- *   (unique on `organization_id`). Stripe-driven writes
+ * - **Algorithm:** Each organization is constrained to a single *non-terminal*
+ *   subscription row by the partial unique index `idx_subscriptions_org`
+ *   (`UNIQUE(organization_id) WHERE status <> 'CANCELED'`), so a fresh
+ *   subscription can be created once a prior one is canceled. Stripe-driven
+ *   writes
  *   ({@link syncFromStripeProviderSubscription},
  *   {@link markCanceledByProviderSubscriptionId}) gate the update on
  *   `last_stripe_event_created_at` being `NULL` or older than the incoming
@@ -43,6 +46,20 @@ export class SubscriptionRepository {
       .from(subscriptions)
       .where(eq(subscriptions.organization_id, organization_id))
       .limit(limit);
+  }
+
+  async findActiveByOrganization(organization_id: number) {
+    const rows = await this.db()
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.organization_id, organization_id),
+          ne(subscriptions.status, 'CANCELED'),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
   }
 
   async findByPublicId(public_id: string, organization_id: number) {

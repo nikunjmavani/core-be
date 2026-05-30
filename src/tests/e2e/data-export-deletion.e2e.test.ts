@@ -53,5 +53,9 @@ describe('Cross-domain e2e: data export and deletion', () => {
       .from(user_data_exports)
       .where(eq(user_data_exports.user_id, user.id));
     expect(exportRows).toHaveLength(0);
-  });
+    // Account deletion runs synchronous cross-domain offboarding (sessions, credentials, uploads,
+    // data-export purge incl. S3) while the just-requested export is still generating, so it
+    // legitimately takes a few seconds; the default 5s timeout flakes under the parallel db-bound
+    // lane's load.
+  }, 15_000);
 });

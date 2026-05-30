@@ -36,19 +36,25 @@ function getS3Client(): S3Client {
  * Generate a presigned PUT URL for direct client uploads to S3.
  *
  * @remarks
- * - **Algorithm:** Builds a `PutObjectCommand` with the target key and content type, then
- *   calls `getSignedUrl` with the caller-supplied expiry.
+ * - **Algorithm:** Builds a `PutObjectCommand` with the target key and content type. When
+ *   `maxContentLength` is supplied it is set as the command `ContentLength` and `content-length`
+ *   is forced into the SigV4 signed headers, so S3 rejects a body whose length differs.
+ *   `getSignedUrl` then signs with the caller-supplied expiry.
  * - **Failure modes:** Throws when `S3_BUCKET` is unconfigured; AWS SDK errors propagate to
  *   the caller (not wrapped via {@link outboundCall}).
  * - **Side effects:** None — signing is local and does not contact S3.
- * - **Notes:** Unlike the presigned-POST flow in `S3ObjectStorageAdapter`, this PUT signature
- *   does not enforce `content-length-range`; callers should rely on the upload domain's
- *   own size cap and run `headObject` to verify on confirm.
+ * - **Notes:** A presigned PUT can only bind a single exact `Content-Length`, not a min/max
+ *   range; for an enforced range (and the recommended production path) use the presigned POST
+ *   flow in `S3ObjectStorageAdapter` (`UPLOAD_USE_PRESIGNED_POST=true`). When no
+ *   `maxContentLength` is given the URL carries no size constraint, so callers must enforce
+ *   their own cap and `headObject`-verify on confirm. The live upload domain uses the
+ *   `S3ObjectStorageAdapter` PUT/POST flow, not this function.
  */
 export async function createPresignedUploadUrl(options: {
   key: string;
   contentType: string;
   expiresInSeconds: number;
+  maxContentLength?: number;
 }): Promise<string> {
   const client = getS3Client();
   const bucket = env.S3_BUCKET;
@@ -58,9 +64,15 @@ export async function createPresignedUploadUrl(options: {
     Bucket: bucket,
     Key: options.key,
     ContentType: options.contentType,
+    ...(options.maxContentLength !== undefined ? { ContentLength: options.maxContentLength } : {}),
   });
 
-  return getSignedUrl(client, command, { expiresIn: options.expiresInSeconds });
+  return getSignedUrl(client, command, {
+    expiresIn: options.expiresInSeconds,
+    ...(options.maxContentLength !== undefined
+      ? { signableHeaders: new Set(['content-length', 'content-type', 'host']) }
+      : {}),
+  });
 }
 
 /**

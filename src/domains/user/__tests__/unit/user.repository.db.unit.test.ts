@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { UserRepository } from '@/domains/user/user.repository.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 describe('UserRepository (database)', () => {
   const repository = new UserRepository();
@@ -66,12 +67,14 @@ describe('UserRepository (database)', () => {
     expect(afterDelete).toBeNull();
   });
 
-  it('createFromOAuth inserts oauth user', async () => {
-    const oauthUser = await repository.createFromOAuth({
+  it('insertOAuthUser inserts oauth user with the supplied public_id', async () => {
+    const publicId = generatePublicId();
+    const oauthUser = await repository.insertOAuthUser(publicId, {
       email: 'oauth-user@example.com',
       first_name: 'OAuth',
       is_email_verified: true,
     });
+    expect(oauthUser.public_id).toBe(publicId);
     expect(oauthUser.email).toBe('oauth-user@example.com');
     expect(oauthUser.is_email_verified).toBe(true);
   });

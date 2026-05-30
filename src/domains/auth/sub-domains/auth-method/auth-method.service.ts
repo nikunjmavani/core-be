@@ -10,9 +10,11 @@ import {
   type PasswordResetEmailPayload,
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
+import type { AuthSessionService } from '../auth-session/auth-session.service.js';
 import {
   validateCreateAuthMethod,
   validateForgotPassword,
@@ -41,7 +43,10 @@ const EMAIL_VERIFICATION_EXPIRES_IN_HOURS = 24;
  * - **Side effects:** invalidates outstanding tokens before issuing new ones;
  *   emits `AUTH_EVENT.PASSWORD_RESET_REQUESTED` and `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED`
  *   (mail enqueue happens in the auth-method event handlers); rehashes user
- *   passwords via {@link UserService.updatePassword}.
+ *   passwords via {@link UserService.updatePassword}. A password reset revokes
+ *   all of the user's sessions; an authenticated change revokes every session
+ *   except the caller's current one (or all sessions when no current token is
+ *   supplied) via {@link AuthSessionService}.
  * - **Notes:** the forgot-password flow always returns the same success message
  *   even when the email is unknown, to prevent account enumeration. OAuth
  *   linkage is idempotent via {@link AuthMethodService.linkOAuthProviderIfMissing}.
@@ -51,57 +56,76 @@ export class AuthMethodService {
     private readonly userService: UserService,
     private readonly authMethodRepository: AuthMethodRepository,
     private readonly verificationTokenRepository: VerificationTokenRepository,
+    private readonly authSessionService: AuthSessionService,
   ) {}
 
   async list(userPublicId: string) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    return this.authMethodRepository.listByUserId(user.id);
+    // auth.auth_methods is FORCE RLS (audit #7); pin the owner context so the owner policy authorizes
+    // the read for this user's own credentials.
+    return withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.listByUserId(user.id),
+    );
   }
 
   async create(userPublicId: string, body: unknown) {
     const parsed = validateCreateAuthMethod(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    return this.authMethodRepository.create(
-      omitUndefined({
-        user_id: user.id,
-        method_type: parsed.method_type,
-        provider: parsed.provider,
-        provider_user_id: parsed.provider_user_id,
-        is_primary: parsed.is_primary,
-        created_by_user_id: user.id,
-      }),
+    return withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.create(
+        omitUndefined({
+          user_id: user.id,
+          method_type: parsed.method_type,
+          provider: parsed.provider,
+          provider_user_id: parsed.provider_user_id,
+          is_primary: parsed.is_primary,
+          created_by_user_id: user.id,
+        }),
+      ),
     );
   }
 
   async delete(userPublicId: string, methodId: number) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    const revoked = await this.authMethodRepository.revoke(methodId, user.id);
+    const revoked = await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.revoke(methodId, user.id),
+    );
     if (!revoked) throw new NotFoundError('Auth method');
   }
 
   async revokeAllForUser(userPublicId: string): Promise<void> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    await this.authMethodRepository.revokeAllByUserId(user.id);
+    await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.revokeAllByUserId(user.id),
+    );
   }
 
   async findByProviderUserId(provider: string, provider_user_id: string) {
     return this.authMethodRepository.findByProviderUserId(provider, provider_user_id);
   }
 
-  async linkOAuthProviderIfMissing(data: AuthMethodCreateData): Promise<void> {
+  async linkOAuthProviderIfMissing({
+    ownerPublicId,
+    data,
+  }: {
+    ownerPublicId: string;
+    data: AuthMethodCreateData;
+  }): Promise<void> {
     if (!(data.provider && data.provider_user_id)) {
       return;
     }
+    // findByProviderUserId goes through the SECURITY DEFINER resolver (pre-session safe); the INSERT
+    // must satisfy the owner WITH CHECK, so pin the owner context for the linkage write.
     const existing = await this.authMethodRepository.findByProviderUserId(
       data.provider,
       data.provider_user_id,
     );
     if (!existing) {
-      await this.authMethodRepository.create(data);
+      await withUserDatabaseContext(ownerPublicId, () => this.authMethodRepository.create(data));
     }
   }
 
@@ -193,9 +217,17 @@ export class AuthMethodService {
     await this.userService.updatePassword(user.public_id, passwordHash);
 
     await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
+
+    // A reset is the recovery path for a potentially compromised account, so every
+    // existing session is revoked (cache invalidation makes revocation immediate).
+    await this.authSessionService.revokeAllSessions(user.public_id);
   }
 
-  async changePassword(userPublicId: string, body: unknown): Promise<void> {
+  async changePassword(
+    userPublicId: string,
+    body: unknown,
+    options?: { currentAccessToken?: string },
+  ): Promise<void> {
     const parsed = validateChangePassword(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
@@ -205,6 +237,18 @@ export class AuthMethodService {
     const passwordHash = await hashPassword(parsed.new_password);
     const updatedUser = await this.userService.updatePassword(user.public_id, passwordHash);
     if (!updatedUser) throw new NotFoundError('User');
+
+    // An authenticated change keeps the caller's current session and terminates
+    // every other device. Without a current token we cannot single one out, so
+    // fall back to revoking all sessions.
+    if (options?.currentAccessToken) {
+      await this.authSessionService.revokeAllSessionsExceptCurrent({
+        userPublicId: user.public_id,
+        currentAccessToken: options.currentAccessToken,
+      });
+    } else {
+      await this.authSessionService.revokeAllSessions(user.public_id);
+    }
   }
 
   // ── Email Verification ────────────────────────────────────────

@@ -1,5 +1,10 @@
 import { env } from '@/shared/config/env.config.js';
 import {
+  FIVE_SECONDS_MS,
+  TEN_SECONDS_MS,
+  THIRTY_SECONDS_MS,
+} from '@/shared/constants/ttl.constants.js';
+import {
   resendCircuit,
   s3Circuit,
   stripeCircuit,
@@ -28,12 +33,12 @@ export interface OutboundIntegrationDefaults {
   circuit?: CircuitBreaker;
 }
 
-const OAUTH_HTTP_TIMEOUT_MS = 10_000;
-const WEBHOOK_DELIVERY_TIMEOUT_MS = 30_000;
-const WEBHOOK_TEST_TIMEOUT_MS = 10_000;
-const TURNSTILE_HTTP_TIMEOUT_MS = 5_000;
+const OAUTH_HTTP_TIMEOUT_MS = TEN_SECONDS_MS;
+const WEBHOOK_DELIVERY_TIMEOUT_MS = THIRTY_SECONDS_MS;
+const WEBHOOK_TEST_TIMEOUT_MS = TEN_SECONDS_MS;
+const TURNSTILE_HTTP_TIMEOUT_MS = FIVE_SECONDS_MS;
 /** Wall-clock cap for S3 SDK calls (SDK also uses maxAttempts). */
-const S3_HTTP_TIMEOUT_MS = 30_000;
+const S3_HTTP_TIMEOUT_MS = THIRTY_SECONDS_MS;
 
 type OutboundDefaultsFactory = () => OutboundIntegrationDefaults;
 

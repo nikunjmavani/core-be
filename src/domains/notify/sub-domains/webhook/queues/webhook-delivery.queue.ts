@@ -1,6 +1,8 @@
 import { Queue } from 'bullmq';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import {
   webhookDeliveryJobDataSchema,
   type WebhookDeliveryJobDataValidated,
@@ -40,7 +42,12 @@ export async function enqueueWebhookDeliveryByAttemptId(
   const queue = getWebhookDeliveryQueue();
   const jobData = parseBullMQJobData(
     webhookDeliveryJobDataSchema,
-    { deliveryAttemptId, organizationPublicId, requestId },
+    omitUndefined({
+      deliveryAttemptId,
+      organizationPublicId,
+      requestId,
+      ...captureTraceContextForPropagation(),
+    }),
     WEBHOOK_DELIVERY_QUEUE_NAME,
   );
   await queue.add('deliver-webhook', jobData, {

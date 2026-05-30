@@ -62,7 +62,12 @@ const envSchemaBase = z.object({
 
   // Redis (managed service)
   REDIS_URL: z.string().min(1),
-  /** BullMQ queues — defaults to REDIS_URL when unset. */
+  /**
+   * Dedicated Redis endpoint for BullMQ queues. Recommended in production so a queue
+   * backlog (e.g. during a worker outage) cannot exhaust the write-critical cache /
+   * idempotency / rate-limit store on REDIS_URL. Defaults to REDIS_URL when unset
+   * (single-instance local development).
+   */
   REDIS_BULLMQ_URL: z.string().min(1).optional(),
   /**
    * Redis key prefix for cache, idempotency, rate limits, and BullMQ (default `core:<NODE_ENV>:`).
@@ -83,6 +88,13 @@ const envSchemaBase = z.object({
   JWT_PUBLIC_KEY: z.string().min(1),
   /** Key id in JWT header when signing with RS256 (default: `default`). */
   JWT_SIGNING_KID: z.string().min(1).optional().default('default'),
+  /**
+   * Optional `kid`→PEM verification keyring (JSON object) enabling zero-downtime RS256
+   * rotation. When set, a token is verified against the public key whose `kid` matches the
+   * token header (current + previous keys during an overlap window). Unset preserves the
+   * single `JWT_PUBLIC_KEY` path exactly. Public key material → GitHub Variable.
+   */
+  JWT_PUBLIC_KEYS: z.string().min(1).optional(),
   /** Comma-separated emails that receive super_admin in JWT on login/refresh (platform ops). */
   GLOBAL_ADMIN_EMAILS: z.string().optional(),
   /** Shorter access-token TTL (seconds) for GLOBAL_ADMIN_EMAILS super_admin JWTs. Default 300 (5 min). */
@@ -302,6 +314,7 @@ const envSchemaBase = z.object({
   /** Interpret cron patterns in this IANA timezone; omit for server default. */
   SCHEDULER_TIMEZONE: z.string().min(1).optional(),
   AUDIT_RETENTION_CRON: z.string().min(1).optional(),
+  NOTIFICATION_RETENTION_CRON: z.string().min(1).optional(),
   AUTH_SESSION_CLEANUP_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RETENTION_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
@@ -316,6 +329,13 @@ const envSchemaBase = z.object({
   AUDIT_EXPORT_BATCH_SIZE: z.coerce.number().int().min(100).max(50_000).default(5_000),
   AUDIT_EXPORT_CRON: z.string().min(1).optional(),
   MAIL_OUTBOX_SWEEP_PENDING_MINUTES: z.coerce.number().int().min(1).default(15),
+  /**
+   * Minimum age (minutes) before a row stuck in `sending` is reclaimed to
+   * `pending`. Must sit comfortably above worst-case Resend delivery time
+   * (BullMQ retry/backoff + circuit cooldown) so a still-in-flight send is not
+   * reclaimed prematurely; Resend idempotency keys de-duplicate any overlap.
+   */
+  MAIL_OUTBOX_RECLAIM_SENDING_MINUTES: z.coerce.number().int().min(1).default(30),
   MAIL_OUTBOX_SWEEP_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
   MAIL_OUTBOX_SWEEPER_CRON: z.string().min(1).optional(),
   WEBHOOK_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
@@ -344,6 +364,22 @@ const envSchemaBase = z.object({
   /** Alert when a dead-letter queue has at least this many waiting + failed jobs. */
   DLQ_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(10),
   DLQ_DEPTH_CRON: z.string().min(1).optional(),
+
+  /**
+   * Alert when a single BullMQ source queue's waiting + delayed backlog reaches this many
+   * jobs. A growing backlog (e.g. a worker outage) on a shared Redis can fill memory and,
+   * with `maxmemory-policy=noeviction`, reject the write-critical store — so the backlog is
+   * sampled alongside DLQ depth. See docs/deployment/runbooks/redis-topology.md.
+   */
+  QUEUE_WAITING_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(1000),
+  /**
+   * Warn / critical `used_memory / maxmemory` ratios for the cache Redis (0–1). The
+   * observability tick samples `INFO memory` + `CONFIG GET maxmemory`; a high ratio under
+   * `noeviction` means writes (idempotency/rate-limit) are about to start failing.
+   * Skipped when Redis reports `maxmemory=0` (unbounded).
+   */
+  REDIS_MEMORY_WARN_RATIO: z.coerce.number().min(0).max(1).default(0.85),
+  REDIS_MEMORY_CRITICAL_RATIO: z.coerce.number().min(0).max(1).default(0.95),
   ENABLE_QUEUE_DASHBOARD: z
     .string()
     .optional()
@@ -399,6 +435,17 @@ const envSchemaBase = z.object({
   SECRETS_ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-f]{64}$/i, 'SECRETS_ENCRYPTION_KEY must be 64 hex characters (32 bytes)'),
+  /**
+   * Optional version→hex keyring (JSON object, e.g. `{"v1":"<hex>","v2":"<hex>"}`) enabling
+   * zero-downtime rotation of field-secret encryption keys. Stored values decrypt by their own
+   * version prefix; unset preserves the single `SECRETS_ENCRYPTION_KEY` (`v1`) path exactly.
+   */
+  SECRETS_ENCRYPTION_KEYS: z.string().min(1).optional(),
+  /**
+   * Field-secret version used when ENCRYPTING new secrets (default `v1`). Decryption always uses
+   * the stored value's own version prefix, so this only selects the write key during rotation.
+   */
+  SECRETS_ENCRYPTION_CURRENT_VERSION: z.enum(['v1', 'v2']).optional().default('v1'),
 
   // Monthly database restore drill (GitHub Actions only — not loaded by API/worker at runtime)
   /** Neon API key for scheduled monthly PITR restore drill. GitHub Environment secret via `pnpm github:sync`. */
@@ -437,6 +484,10 @@ export const envSchema = envSchemaBase
       path: ['IDEMPOTENCY_CARDINALITY_CRITICAL_THRESHOLD'],
     },
   )
+  .refine((data) => data.REDIS_MEMORY_CRITICAL_RATIO >= data.REDIS_MEMORY_WARN_RATIO, {
+    message: 'REDIS_MEMORY_CRITICAL_RATIO must be >= REDIS_MEMORY_WARN_RATIO',
+    path: ['REDIS_MEMORY_CRITICAL_RATIO'],
+  })
   .refine(
     (data) => {
       if (data.METRICS_ENABLED) {
@@ -483,7 +534,7 @@ export const envSchema = envSchemaBase
     },
     {
       message:
-        'REDIS_BULLMQ_URL must be unset or point to the same Redis endpoint as REDIS_URL (see docs/deployment/runbooks/redis-topology.md)',
+        'REDIS_BULLMQ_URL, when set, must be a valid redis:// or rediss:// URL (a dedicated BullMQ endpoint is supported; see docs/deployment/runbooks/redis-topology.md)',
       path: ['REDIS_BULLMQ_URL'],
     },
   )

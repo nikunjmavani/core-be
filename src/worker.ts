@@ -4,6 +4,7 @@ import {
   captureException,
   flushSentry,
 } from '@/infrastructure/observability/sentry/sentry.js';
+import { createUnhandledRejectionHandler } from '@/infrastructure/observability/unhandled-rejection.handler.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { closeRedis, connectRedis } from '@/infrastructure/cache/redis.client.js';
 import {
@@ -14,6 +15,8 @@ import { warnWhenBullMqSharesCacheRedisHost } from '@/infrastructure/cache/redis
 import { closeDatabase } from '@/infrastructure/database/connection.js';
 import { assertPostgresConnectionBudget } from '@/infrastructure/database/assert-connection-budget.js';
 import { assertDatabaseRoleRlsSafety } from '@/infrastructure/database/assert-database-rls-safety.js';
+import { assertDatabaseTlsVerification } from '@/infrastructure/database/assert-database-tls-safety.js';
+import { assertRedisTlsVerification } from '@/infrastructure/cache/assert-redis-tls-safety.js';
 import { computeWorkerPostgresPoolDemand } from '@/infrastructure/queue/worker-runtime/worker-connection-budget.js';
 import { setWorkerPostgresPoolDemandContext } from '@/infrastructure/queue/worker-runtime/worker-pool-demand-context.js';
 import { registerPostgresPoolMetrics } from '@/infrastructure/observability/metrics/db-pool-metrics.js';
@@ -47,41 +50,24 @@ process.on('uncaughtException', (error) => {
 /**
  * Unhandled-rejection policy: a single un-awaited promise rejection (often from a
  * dependency) should NOT tear down the worker and abandon in-flight jobs, so we
- * capture + log at error level instead of exiting. We only escalate to a fatal exit
- * if rejections arrive in a sustained burst within a rolling window — a likely
- * systemic failure — letting the supervisor restart a genuinely broken process while
- * tolerating isolated strays. (`uncaughtException` keeps the stricter exit behavior.)
+ * meter (`process_unhandled_rejections_total`) + capture + log at error level instead
+ * of exiting. We only escalate to a fatal exit if rejections arrive in a sustained
+ * burst within a rolling window — a likely systemic failure — letting the supervisor
+ * restart a genuinely broken process while tolerating isolated strays. The metric
+ * exposes the sub-threshold rate so a persistent failing job path can page before it
+ * hides indefinitely. (`uncaughtException` keeps the stricter exit behavior.)
  */
-const UNHANDLED_REJECTION_BURST_WINDOW_MS = 60_000;
-const UNHANDLED_REJECTION_BURST_THRESHOLD = 20;
-let unhandledRejectionWindowStart = 0;
-let unhandledRejectionCountInWindow = 0;
-
-process.on('unhandledRejection', (reason) => {
-  captureException(reason, { tags: { source: 'worker_unhandledRejection' } });
-  logger.error({ reason }, 'unhandledRejection');
-
-  const now = Date.now();
-  if (now - unhandledRejectionWindowStart > UNHANDLED_REJECTION_BURST_WINDOW_MS) {
-    unhandledRejectionWindowStart = now;
-    unhandledRejectionCountInWindow = 0;
-  }
-  unhandledRejectionCountInWindow += 1;
-
-  if (unhandledRejectionCountInWindow >= UNHANDLED_REJECTION_BURST_THRESHOLD) {
-    logger.fatal(
-      {
-        unhandledRejectionCountInWindow,
-        windowMs: UNHANDLED_REJECTION_BURST_WINDOW_MS,
-      },
-      'Sustained unhandledRejection burst detected; exiting for supervisor restart',
-    );
-    void flushSentry().finally(() => process.exit(1));
-  }
-});
+process.on(
+  'unhandledRejection',
+  createUnhandledRejectionHandler({ process: 'worker', sentrySource: 'worker_unhandledRejection' }),
+);
 
 async function main() {
   process.env.CORE_BE_RUNTIME = 'worker';
+
+  /** Fail fast on insecure DB/Redis transport before opening connections. No-op outside hosted. */
+  assertDatabaseTlsVerification();
+  assertRedisTlsVerification();
 
   /** Avoids a startup race where the first scheduled job's direct command on the shared
    * `redisConnection` (lazyConnect + enableOfflineQueue:false) fails with

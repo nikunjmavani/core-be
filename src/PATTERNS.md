@@ -143,7 +143,7 @@ Postgres Row-Level Security is the **defense-in-depth** layer for tenant isolati
 
 - Context wrappers: [src/infrastructure/database/contexts/](src/infrastructure/database/contexts/) — `withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`.
 - Worker runtime: `runTenantScopedWorkerJob`, `runGlobalRetentionWorkerJob`, `runUserScopedWorkerJob` in [src/infrastructure/queue/worker-runtime/worker-processor.util.ts](src/infrastructure/queue/worker-runtime/worker-processor.util.ts).
-- Migration: `migrations/20260530000001_global_retention_cleanup_rls.sql` and other RLS-policy migrations under [migrations/](migrations/).
+- Migration: `migrations/00000000000000_init.sql` (consolidated baseline; defines the `app.global_retention_cleanup` RLS bypass policies) and other RLS-policy migrations under [migrations/](migrations/).
 
 ### Implementation
 

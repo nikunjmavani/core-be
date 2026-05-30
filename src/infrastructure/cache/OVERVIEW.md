@@ -15,7 +15,8 @@ Redis client management. Owns the singleton `ioredis` client used by domain-leve
 
 ## Operational concerns
 
-- **TLS in production**: managed providers issue TLS-only URLs (`rediss://`); the parser detects and configures.
+- **TLS in production**: managed providers issue TLS-only URLs (`rediss://`); the parser detects and configures, and [buildRedisTlsOptions](src/infrastructure/cache/redis-url.parse.util.ts) passes an explicit `tls: { rejectUnauthorized: true }` to ioredis for `rediss://` URLs so the server certificate is verified, not merely encrypted.
+- **TLS boot assertion**: [assert-redis-tls-safety.ts](src/infrastructure/cache/assert-redis-tls-safety.ts) refuses to boot a hosted deployment when `REDIS_URL` (or a `REDIS_BULLMQ_URL` override) is plaintext `redis://` to a public host. Plaintext is permitted only on trusted private networks (Railway `*.railway.internal`, Kubernetes `*.cluster.local`, RFC 1918, loopback) — the documented Railway private-networking topology stays valid. See [redis-topology runbook](docs/deployment/runbooks/redis-topology.md).
 - **Connection budget**: managed Redis tiers cap per-account connections; the worker / API processes should each open ≤ 2 connections (general + BullMQ).
 - **Latency budget**: cache reads are on the hot path of permission checks and idempotency; degraded Redis latency directly hits API p99.
 

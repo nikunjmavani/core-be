@@ -4,8 +4,11 @@ import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
- * Logs a warning when BullMQ uses a separate Redis endpoint while single-instance
- * Redis is the expected topology.
+ * Logs the resolved Redis topology at boot. When BullMQ runs on a dedicated endpoint
+ * (separate host or logical database from the cache `REDIS_URL`), this records that
+ * queue/cache isolation is active — the recommended production topology so a BullMQ
+ * backlog cannot starve the write-critical cache / idempotency / rate-limit store.
+ * No-op when BullMQ shares the cache endpoint (single-instance local development).
  */
 export function warnWhenBullMqSharesCacheRedisHost(): void {
   const bullMqRedisUrl = resolveBullMqRedisUrl();
@@ -13,11 +16,11 @@ export function warnWhenBullMqSharesCacheRedisHost(): void {
     return;
   }
 
-  logger.warn(
+  logger.info(
     {
       cacheRedisUrl: env.REDIS_URL.replace(/:[^@]+@/, ':***@'),
       bullMqRedisUrl: bullMqRedisUrl.replace(/:[^@]+@/, ':***@'),
     },
-    'redis.topology.separate_endpoint — BullMQ and cache use separate Redis endpoints; current deployment topology expects one shared Redis instance (see docs/deployment/runbooks/redis-topology.md)',
+    'redis.topology.dedicated_bullmq_endpoint — BullMQ uses a dedicated Redis endpoint; queue/cache isolation is active (see docs/deployment/runbooks/redis-topology.md)',
   );
 }

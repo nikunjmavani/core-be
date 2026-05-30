@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildRedisTlsOptions,
   deriveBullMqRedisUrlFromCacheUrl,
+  isPrivateOrInternalRedisHost,
   isRedisTlsUrl,
   parseRedisUrl,
   usesSeparateBullMqRedisEndpoint,
@@ -56,16 +58,44 @@ describe('redis-url.parse.util', () => {
     ).toBe(true);
   });
 
-  it('validateProductionRedisTopology allows a single shared Redis endpoint', () => {
+  it('isPrivateOrInternalRedisHost recognizes trusted private/internal hosts', () => {
+    expect(isPrivateOrInternalRedisHost('localhost')).toBe(true);
+    expect(isPrivateOrInternalRedisHost('core-redis.railway.internal')).toBe(true);
+    expect(isPrivateOrInternalRedisHost('redis.svc.cluster.local')).toBe(true);
+    expect(isPrivateOrInternalRedisHost('10.1.2.3')).toBe(true);
+    expect(isPrivateOrInternalRedisHost('192.168.0.5')).toBe(true);
+    expect(isPrivateOrInternalRedisHost('172.16.4.4')).toBe(true);
+  });
+
+  it('isPrivateOrInternalRedisHost rejects public hosts', () => {
+    expect(isPrivateOrInternalRedisHost('cache.example.com')).toBe(false);
+    expect(isPrivateOrInternalRedisHost('8.8.8.8')).toBe(false);
+    expect(isPrivateOrInternalRedisHost('172.32.0.1')).toBe(false);
+  });
+
+  it('buildRedisTlsOptions enables strict TLS for rediss:// only', () => {
+    expect(buildRedisTlsOptions('rediss://cache.example.com:6379')).toEqual({
+      tls: { rejectUnauthorized: true },
+    });
+    expect(buildRedisTlsOptions('redis://localhost:6379')).toEqual({});
+  });
+
+  it('validateProductionRedisTopology allows a dedicated BullMQ endpoint and a shared one', () => {
+    // Unset override -> BullMQ shares REDIS_URL (single-instance local dev).
     expect(validateProductionRedisTopology('redis://cache.example/0', undefined)).toBe(true);
+    // Separate logical database on the same host is allowed.
     expect(
       validateProductionRedisTopology('redis://shared.example/0', 'redis://shared.example/1'),
-    ).toBe(false);
+    ).toBe(true);
+    // Dedicated host is allowed (recommended production isolation).
     expect(
       validateProductionRedisTopology('redis://cache.example/0', 'redis://bullmq.example/0'),
-    ).toBe(false);
+    ).toBe(true);
+    // Identical endpoint is still valid.
     expect(
       validateProductionRedisTopology('redis://shared.example/0', 'redis://shared.example/0'),
     ).toBe(true);
+    // A non-parseable override is rejected.
+    expect(validateProductionRedisTopology('redis://cache.example/0', 'not a url')).toBe(false);
   });
 });

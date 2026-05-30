@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import {
+  getRequestIdentifier,
+  requireAuth,
+  requirePrincipal,
+} from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MemberInvitationService } from './member-invitation.service.js';
 
@@ -49,7 +53,7 @@ export function createMemberInvitationController(service: MemberInvitationServic
       return successResponse(data, getRequestIdentifier(request));
     },
     revokeMemberInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const organizationId = validatePublicIdParam(
         (request.params as { id: string }).id ?? '',
         'id',

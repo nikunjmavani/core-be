@@ -14,7 +14,7 @@ For tables **without** tenant RLS, see [system-tables-without-tenant-rls.md](../
 | HTTP | Org-scoped routes run inside `organizationRlsTransactionMiddleware` (single connection + `SET LOCAL` for the request) |
 | Workers / scripts | **Do not** rely on RLS alone — pass `organization_id` / `organizationPublicId` explicitly in queries |
 | FORCE RLS | Enabled on tenant tables ([`20260516000006_force_row_level_security.sql`](../../../migrations/00000000000000_init.sql)) |
-| Retention | Policies allow `app.global_retention_cleanup = 'true'` for purge workers ([`20260530000001_global_retention_cleanup_rls.sql`](../../../migrations/00000000000000_init.sql)) |
+| Retention | Policies allow `app.global_retention_cleanup = 'true'` for purge workers ([`00000000000000_init.sql`](../../../migrations/00000000000000_init.sql)) |
 
 ---
 
@@ -39,7 +39,7 @@ For tables **without** tenant RLS, see [system-tables-without-tenant-rls.md](../
 | **Primary key** | `id` (`bigserial`) |
 | **Public API id** | `public_id` (`varchar(21)`, unique) |
 | **Foreign keys** | `organization_id` → `tenancy.organizations(id)` **ON DELETE CASCADE**; `plan_id` → `billing.plans(id)` **ON DELETE RESTRICT**; optional audit FKs → `auth.users` |
-| **Uniqueness** | One subscription row per organization (`idx_subscriptions_org` unique on `organization_id`) |
+| **Uniqueness** | At most one **non-terminal** subscription per organization — partial unique index `idx_subscriptions_org` on `organization_id` `WHERE status <> 'CANCELED'`. `CANCELED` rows are excluded so re-subscription after cancel does not collide; a concurrent create that loses the race surfaces as `409 ConflictError` (`errors:subscriptionAlreadyExists`), not a 500 |
 | **RLS policy** | `subscriptions_tenant_isolation` — `organization_id` matches org resolved from `app.current_organization_id` (+ retention bypass) |
 | **Stripe** | `provider_subscription_id`, `provider_customer_id`, `last_stripe_event_created_at` (monotonic webhook guard) |
 | **Drizzle** | [`subscription.schema.ts`](../../../src/domains/billing/sub-domains/subscription/subscription.schema.ts) |

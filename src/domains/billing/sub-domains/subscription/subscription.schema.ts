@@ -57,7 +57,12 @@ export const subscriptions = billingSchema
     },
     (table) => [
       uniqueIndex('idx_subscriptions_public_id').on(table.public_id),
-      uniqueIndex('idx_subscriptions_org').on(table.organization_id),
+      // Partial unique index: an organization may hold at most one non-terminal
+      // subscription. CANCELED rows are excluded so re-subscription after cancel
+      // does not collide (Issue #10).
+      uniqueIndex('idx_subscriptions_org')
+        .on(table.organization_id)
+        .where(sql`${table.status} <> 'CANCELED'`),
       index('idx_subscriptions_org_status').on(table.organization_id, table.status),
       index('idx_subscriptions_plan').on(table.plan_id),
       index('idx_subscriptions_status_period').on(table.status, table.current_period_end),

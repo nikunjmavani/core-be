@@ -11,6 +11,13 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 /** A fetch-compatible function returned by {@link createPinnedWebhookFetch}. */
 export type PinnedWebhookFetch = typeof globalThis.fetch;
 
+/**
+ * Hard ceiling on the response body a webhook target may return (64 KB). Enforced while
+ * streaming so a hostile or buggy endpoint cannot exhaust worker memory; the connection is
+ * destroyed and the fetch rejected the moment the limit is crossed.
+ */
+export const WEBHOOK_RESPONSE_BODY_MAX_BYTES = 64 * 1024;
+
 /** The pinned target produced by {@link resolveAndPinWebhookUrl}: parsed URL, IP, and resolved port. */
 export type PinnedWebhookResolution = {
   parsed: URL;
@@ -95,8 +102,21 @@ async function pinnedNodeFetch(
       },
       (response) => {
         const chunks: Buffer[] = [];
-        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        let receivedBytes = 0;
+        let exceededLimit = false;
+        response.on('data', (chunk: Buffer) => {
+          if (exceededLimit) return;
+          receivedBytes += chunk.length;
+          if (receivedBytes > WEBHOOK_RESPONSE_BODY_MAX_BYTES) {
+            exceededLimit = true;
+            request.destroy();
+            reject(new Error('webhook.fetch.response_too_large'));
+            return;
+          }
+          chunks.push(chunk);
+        });
         response.on('end', () => {
+          if (exceededLimit) return;
           const responseHeaders = new Headers();
           for (const [key, value] of Object.entries(response.headers)) {
             if (value === undefined) continue;

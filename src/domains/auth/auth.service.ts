@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import { verifyPassword } from '@/shared/utils/security/password.util.js';
+import { DUMMY_ARGON2_HASH, verifyPassword } from '@/shared/utils/security/password.util.js';
 import { env } from '@/shared/config/env.config.js';
 import {
   ACCOUNT_LOCKOUT_MINUTES,
@@ -71,6 +72,10 @@ export class AuthService {
     }
     const user = await this.userService.findByEmail(parsed.email);
     if (!user?.password_hash) {
+      // Run a verification against a fixed dummy hash and discard the result so
+      // the "unknown email" path takes the same ~argon2 time as a wrong password,
+      // preventing user enumeration via response timing.
+      await verifyPassword(parsed.password, DUMMY_ARGON2_HASH);
       throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
@@ -94,6 +99,10 @@ export class AuthService {
       throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
+    // First factor verified — refuse to issue (or escalate to MFA for) a session
+    // for a suspended/locked account before any token is minted.
+    assertUserAccountActive(user.status);
+
     if (user.failed_login_count > 0) {
       await this.userService.updateLoginAttempt(user.public_id, 0, null);
     }
@@ -113,7 +122,11 @@ export class AuthService {
 
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
-      role: resolveAccessTokenRoleForUser(user.email, user.status),
+      role: resolveAccessTokenRoleForUser({
+        email: user.email,
+        status: user.status,
+        isEmailVerified: user.is_email_verified,
+      }),
     });
 
     const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
@@ -156,7 +169,11 @@ export class AuthService {
 
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
-      role: resolveAccessTokenRoleForUser(user.email, user.status),
+      role: resolveAccessTokenRoleForUser({
+        email: user.email,
+        status: user.status,
+        isEmailVerified: user.is_email_verified,
+      }),
     });
 
     const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');

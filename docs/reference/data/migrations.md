@@ -59,6 +59,10 @@ pnpm db:migrate:dry-run  # print SQL without applying (when debugging)
 
 CI and `pnpm verify:base` run migrate against ephemeral Postgres before API smoke tests.
 
+### Connection URL — direct (non-pooler) only
+
+The runner serializes the whole migration run behind a session-level `pg_advisory_lock` so two concurrent deploys cannot double-apply a file. That lock is only meaningful on a connection pinned to a single Postgres backend, so `pnpm db:migrate` **fails fast** when `DATABASE_MIGRATION_URL` (or the `DATABASE_URL` fallback) is a transaction-mode pooler — a `-pooler` host or `?pgbouncer=true`. Point `DATABASE_MIGRATION_URL` at the **direct** database host (Neon's non-pooler endpoint); only `DATABASE_URL` used by the API/worker runtime should use the pooled endpoint.
+
 ---
 
 ## Non-transactional migrations (`CREATE INDEX CONCURRENTLY`)
@@ -86,14 +90,9 @@ Rules and guardrails (enforced by `pnpm db:migrate:lint`):
 - **One concern per file.** Keep non-transactional migrations to index DDL only; put DML and constraint changes in separate (transactional) migrations.
 - After a non-transactional migration, the runner **checks for `INVALID` / unready indexes** (the signature of a concurrent build that aborted) and refuses to record the migration as applied. If this fires, drop the broken index (`DROP INDEX CONCURRENTLY IF EXISTS <schema>.<name>`) and re-run `pnpm db:migrate`.
 
-### Partitioned tables cannot use `CONCURRENTLY`
+### Append-heavy tables (`audit.logs`, `notify.notifications`)
 
-`audit.logs` and `notify.notifications` are RANGE-partitioned (see [`partitioned-tables.constants.ts`](../../../src/infrastructure/database/partitioned-tables.constants.ts)). PostgreSQL **rejects `CREATE INDEX CONCURRENTLY` on a partitioned parent** (`cannot create index on partitioned table ... concurrently`). The linter blocks it too (`concurrent_index_on_partitioned_table`, **non-overridable**).
-
-To index a partitioned parent:
-
-- **Small / base data**: use a plain recursive `CREATE INDEX IF NOT EXISTS ON <parent>` (allowed with `-- migration-safety: allow create_index_without_concurrently reason="<parent> is partitioned"`). This builds each child index under a lock — acceptable while tables are small.
-- **Large data (zero-downtime)**: operationally build each child partition's index `CONCURRENTLY`, then `ALTER INDEX <parent_index> ATTACH PARTITION <child_index>` until the parent index is valid. This is partition-aware and cannot be expressed as static idempotent SQL (partitions are created dynamically by the partition-maintenance worker), so it belongs in an operational runbook, not a migration file.
+These tables are **plain (non-partitioned)** tables. Growth is bounded by row-level retention workers (`audit-retention`, `notification-retention`) that batch-`DELETE` rows older than the configured window — there is no partition lifecycle to maintain. New indexes on these tables follow the same rules as any other high-write table: prefer `CREATE INDEX CONCURRENTLY` in a non-transactional migration. The composite keyset indexes added in [`20260520000006_keyset_pagination_indexes.sql`](../../../migrations/20260520000006_keyset_pagination_indexes.sql) were created with a plain `CREATE INDEX` only because the baseline seeds those tables empty (instant build, before any live traffic).
 
 ### Expand / contract (keep deploys backward-compatible)
 
@@ -175,7 +174,7 @@ Output: [`docs/database/core-be.dbml`](../../database/core-be.dbml) — import a
 
 The file includes:
 
-- **Primary keys** (`pk`, `increment`, composite `indexes { ... [pk] }` for partitioned tables)
+- **Primary keys** (`pk`, `increment`, and composite `indexes { ... [pk] }` where defined)
 - **Foreign keys** as `Ref:` lines with `delete: cascade | restrict | set null` where defined in SQL
 - **RLS** as per-table `Note` blocks (policies from `CREATE POLICY` migrations)
 - **TableGroup** per Postgres schema (`auth`, `tenancy`, `billing`, …)

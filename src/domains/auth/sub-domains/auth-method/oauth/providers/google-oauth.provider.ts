@@ -42,7 +42,7 @@ export interface ExchangeGoogleOAuthCodeOptions {
   requestId?: string;
 }
 
-/** Trades the Google authorization code for an access token, fetches the OIDC userinfo response, and returns a normalised {@link OAuthProfile}. Translates outbound failures to `UnauthorizedError` with provider-specific i18n keys. */
+/** Trades the Google authorization code for an access token, fetches the OIDC userinfo response, and returns a normalised {@link OAuthProfile}. Rejects responses whose `email_verified` is not strictly `true` to prevent find-or-link account takeover. Translates outbound failures to `UnauthorizedError` with provider-specific i18n keys. */
 export async function exchangeGoogleOAuthCode(
   options: ExchangeGoogleOAuthCodeOptions,
 ): Promise<OAuthProfile> {
@@ -108,12 +108,19 @@ export async function exchangeGoogleOAuthCode(
   const userInfo = (await userInfoResponse.json()) as {
     sub?: string;
     email?: string;
+    email_verified?: boolean;
     name?: string;
     picture?: string;
   };
 
   if (!(userInfo.email && userInfo.sub)) {
     throw new UnauthorizedError('errors:googleUserMissingEmailOrSub');
+  }
+
+  // Reject accounts whose email Google has not verified: linking by an
+  // attacker-controlled unverified address would enable account takeover.
+  if (userInfo.email_verified !== true) {
+    throw new UnauthorizedError('errors:googleEmailNotVerified');
   }
 
   return omitUndefined({

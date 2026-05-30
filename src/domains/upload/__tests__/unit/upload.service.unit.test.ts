@@ -63,6 +63,7 @@ describe('UploadService', () => {
     softDeleteAllByUserId: vi.fn().mockResolvedValue(1),
     softDeleteAllByOrganizationId: vi.fn().mockResolvedValue(2),
     countPendingByUserId: vi.fn().mockResolvedValue(0),
+    acquirePendingUploadQuotaLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as UploadRepository;
 
   const userService = {
@@ -293,7 +294,41 @@ describe('UploadService', () => {
         userPublicId,
       ),
     ).rejects.toBeInstanceOf(ValidationError);
+    // Reservation takes the per-user advisory lock before counting, and never inserts
+    // a row or mints a presigned URL once the cap is reached.
+    expect(repository.acquirePendingUploadQuotaLock).toHaveBeenCalledWith(user.id);
+    expect(repository.countPendingByUserId).toHaveBeenCalledWith(user.id);
     expect(repository.create).not.toHaveBeenCalled();
+    expect(objectStorage.createPresignedUploadUrl).not.toHaveBeenCalled();
+    expect(objectStorage.createPresignedUploadPost).not.toHaveBeenCalled();
+  });
+
+  it('createUpload reserves the pending slot before minting the presigned URL', async () => {
+    const callOrder: string[] = [];
+    vi.mocked(repository.acquirePendingUploadQuotaLock).mockImplementationOnce(async () => {
+      callOrder.push('lock');
+    });
+    vi.mocked(repository.create).mockImplementationOnce(async () => {
+      callOrder.push('create');
+      return uploadRow as never;
+    });
+    vi.mocked(objectStorage.createPresignedUploadUrl).mockImplementationOnce(async () => {
+      callOrder.push('presign');
+      return 'https://presigned.example/upload';
+    });
+
+    await service.createUpload(
+      {
+        purpose: 'avatar',
+        for: 'user',
+        contentType: 'image/png',
+        fileName: 'avatar.png',
+        fileSize: 1024,
+      },
+      userPublicId,
+    );
+
+    expect(callOrder).toEqual(['lock', 'create', 'presign']);
   });
 
   it('createUpload allows when pending count is just below the cap', async () => {

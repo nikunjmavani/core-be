@@ -28,17 +28,32 @@ import type { UploadRepository, UploadRow } from './upload.repository.js';
 import { serializeUploadCreate, serializeUploadDetail } from './upload.serializer.js';
 import { validateUploadPublicIdParam } from './upload.validator.js';
 
+/** Inputs for {@link UploadService}'s private atomic PENDING-slot reservation. */
+interface ReservePendingUploadSlotParams {
+  userInternalId: number;
+  userPublicId: string;
+  organizationInternalId: number | null;
+  fileName: string;
+  fileKey: string;
+  contentType: string;
+  fileSize: number;
+  bucket: string;
+}
+
 /**
  * Owns the upload lifecycle behind the public upload routes and the
  * cross-domain offboarding hooks.
  *
  * @remarks
- * - **Algorithm:** {@link UploadService.createUpload} validates the per-user
- *   PENDING quota, resolves owner/organization context, computes the S3 key
- *   from {@link UPLOAD_PURPOSE_CONFIG} + a canonical extension, requests a
- *   presigned URL (PUT or POST per `UPLOAD_USE_PRESIGNED_POST`) from the
- *   storage adapter, and inserts the row inside {@link withUserDatabaseContext}
- *   so the owner-access RLS policy authorizes the write.
+ * - **Algorithm:** {@link UploadService.createUpload} resolves owner/organization
+ *   context, computes the S3 key from {@link UPLOAD_PURPOSE_CONFIG} + a canonical
+ *   extension, then atomically reserves the PENDING row inside
+ *   {@link withUserDatabaseContext} (a per-user advisory lock guards the
+ *   pending-count check + insert in one transaction so the quota holds under
+ *   concurrency and the owner-access RLS policy authorizes the write) and only
+ *   AFTER the slot is committed requests a presigned URL (PUT or POST per
+ *   `UPLOAD_USE_PRESIGNED_POST`) from the storage adapter — concurrent callers
+ *   can never mint presigned slots beyond the quota.
  *   {@link UploadService.confirmUpload} HEADs the object, compares
  *   content-type/length against the declared values, and transitions
  *   `PENDING` → `UPLOADED` (idempotent for already-confirmed rows) or
@@ -48,7 +63,10 @@ import { validateUploadPublicIdParam } from './upload.validator.js';
  *   permission → `ForbiddenError`; unknown public id or owner mismatch →
  *   `NotFoundError`; S3 verification failure → row moved to `FAILED` and a
  *   `ValidationError` raised so the caller does not attach an unverified
- *   object; missing `S3_BUCKET` → `ConfigurationError`.
+ *   object; missing `S3_BUCKET` → `ConfigurationError`. A presign failure that
+ *   occurs AFTER a slot is reserved propagates to the caller and leaves the
+ *   PENDING row in place; it is never confirmed, so the pending-sweep worker
+ *   reclaims it once it ages past the sweep cutoff.
  * - **Side effects:** issues presigned S3 URLs, HEADs/DELETEs S3 objects,
  *   inserts/updates `upload.uploads`, and emits no in-process events.
  *   Storage access is abstracted behind {@link ObjectStoragePort} so tests
@@ -72,7 +90,6 @@ export class UploadService {
 
   async createUpload(input: CreateUploadInput, userPublicId: string): Promise<UploadCreateOutput> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
-    await this.assertPendingUploadQuota(user.id, userPublicId);
 
     const organizationInternalId = await this.resolveUploadOrganizationInternalId(
       input,
@@ -96,6 +113,21 @@ export class UploadService {
     if (!bucket) {
       throw new ConfigurationError('S3_BUCKET is not configured');
     }
+
+    // Reserve the PENDING row BEFORE presigning so the per-user quota is enforced atomically
+    // against concurrent requests (advisory lock + count + insert in one transaction). The
+    // presigned URL is minted only after a slot is committed — concurrent callers can never
+    // over-provision presigned slots beyond the quota.
+    const row = await this.reservePendingUploadSlot({
+      userInternalId: user.id,
+      userPublicId,
+      organizationInternalId,
+      fileName: input.fileName,
+      fileKey: key,
+      contentType: input.contentType,
+      fileSize: input.fileSize,
+      bucket,
+    });
 
     let uploadUrl: string;
     let uploadMethod: 'PUT' | 'POST';
@@ -130,23 +162,6 @@ export class UploadService {
 
     const expiresAt = new Date(Date.now() + PRESIGNED_URL_EXPIRY_SECONDS * 1000);
 
-    // Presigned URL generation (S3) is done above, outside the DB context; only the insert
-    // runs in the user-scoped context so the owner RLS policy authorizes the row.
-    const row = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.create({
-        user_id: user.id,
-        organization_id: organizationInternalId,
-        file_name: input.fileName,
-        file_key: key,
-        mime_type: input.contentType,
-        file_size: input.fileSize,
-        storage_provider: 's3',
-        bucket,
-        status: 'PENDING',
-        created_by_user_id: user.id,
-      }),
-    );
-
     return serializeUploadCreate({
       publicId: row.public_id,
       uploadUrl,
@@ -157,31 +172,60 @@ export class UploadService {
     });
   }
 
-  private async assertPendingUploadQuota(
-    userInternalId: number,
-    userPublicId: string,
-  ): Promise<void> {
-    // Enforce a per-user cap on in-flight PENDING uploads. Stops a single authed user from
-    // exhausting storage by repeatedly requesting presigned URLs without ever calling confirm.
-    // The PENDING sweeper eventually reconciles the rows, but the cap is the immediate guard.
+  /**
+   * Atomically reserves a PENDING upload row while enforcing the per-user quota.
+   *
+   * Runs the advisory lock, pending-count check, and insert inside a single
+   * `withUserDatabaseContext` transaction so concurrent create-upload requests are
+   * serialized per user: a request can only insert when the committed pending count is
+   * still below the cap. The advisory lock releases at COMMIT, after which the next waiter
+   * sees the freshly committed row. Stops storage/bandwidth cost abuse from a flood of
+   * presign requests that previously all passed a non-atomic count and then over-inserted.
+   */
+  private async reservePendingUploadSlot(
+    params: ReservePendingUploadSlotParams,
+  ): Promise<UploadRow> {
+    const {
+      userInternalId,
+      userPublicId,
+      organizationInternalId,
+      fileName,
+      fileKey,
+      contentType,
+      fileSize,
+      bucket,
+    } = params;
     const pendingCap = getEnv().UPLOAD_MAX_PENDING_PER_USER;
-    const pendingCount = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.countPendingByUserId(userInternalId),
-    );
-    if (pendingCount >= pendingCap) {
-      throw new ValidationError(
-        'errors:uploadPendingQuotaExceeded',
-        { limit: pendingCap, pending: pendingCount },
-        undefined,
-        [
-          {
-            field: 'fileSize',
-            messageKey: 'errors:uploadPendingQuotaExceeded',
-            messageParams: { limit: pendingCap, pending: pendingCount },
-          },
-        ],
-      );
-    }
+    return withUserDatabaseContext(userPublicId, async () => {
+      await this.repository.acquirePendingUploadQuotaLock(userInternalId);
+      const pendingCount = await this.repository.countPendingByUserId(userInternalId);
+      if (pendingCount >= pendingCap) {
+        throw new ValidationError(
+          'errors:uploadPendingQuotaExceeded',
+          { limit: pendingCap, pending: pendingCount },
+          undefined,
+          [
+            {
+              field: 'fileSize',
+              messageKey: 'errors:uploadPendingQuotaExceeded',
+              messageParams: { limit: pendingCap, pending: pendingCount },
+            },
+          ],
+        );
+      }
+      return this.repository.create({
+        user_id: userInternalId,
+        organization_id: organizationInternalId,
+        file_name: fileName,
+        file_key: fileKey,
+        mime_type: contentType,
+        file_size: fileSize,
+        storage_provider: 's3',
+        bucket,
+        status: 'PENDING',
+        created_by_user_id: userInternalId,
+      });
+    });
   }
 
   private async resolveUploadOrganizationInternalId(
