@@ -1,11 +1,12 @@
 import { getActiveOrganizationRlsCheckoutCount } from '@/infrastructure/database/organization-rls-checkout-counter.js';
+import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool.constants.js';
 import { isWorkerRuntime } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { getWorkerPostgresPoolDemandContext } from '@/infrastructure/queue/worker-runtime/worker-pool-demand-context.js';
 import { env } from '@/shared/config/env.config.js';
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
-const DEFAULT_POOL_MAX_CONNECTIONS = 10;
+const DEFAULT_POOL_MAX_CONNECTIONS = DEFAULT_DATABASE_POOL_MAX;
 
 /**
  * Pool-pressure severity returned by {@link evaluatePoolExhaustionAndAlert}.

@@ -3,6 +3,8 @@ import {
   buildPostgresOptions,
   isNeonPoolerConnection,
 } from '@/infrastructure/database/connection.js';
+import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool.constants.js';
+import { env } from '@/shared/config/env.config.js';
 
 describe('postgres connection options', () => {
   afterEach(() => {
@@ -47,6 +49,14 @@ describe('postgres connection options', () => {
         'postgresql://user:pass@reporting-pooler.aws.neon.tech/neondb?pgbouncer=true',
       );
       expect(options.prepare).toBe(false);
+    });
+
+    it('resolves the pool max from DATABASE_POOL_MAX or the shared default (alerter parity)', () => {
+      const options = buildPostgresOptions('postgresql://user:pass@localhost:5432/core');
+      // The pool-exhaustion alerter resolves its saturation thresholds from the same
+      // DEFAULT_DATABASE_POOL_MAX constant, so the live pool size and the alert math can never
+      // silently drift apart.
+      expect(options.max).toBe(env.DATABASE_POOL_MAX ?? DEFAULT_DATABASE_POOL_MAX);
     });
   });
 });
