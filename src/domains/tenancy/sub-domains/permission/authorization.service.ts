@@ -3,7 +3,6 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { ConfigurationError } from '@/shared/errors/index.js';
 import {
   getCachedPermissions,
-  setCachedPermissions,
   withPermissionCacheRecomputeLock,
 } from './permission-cache.service.js';
 import type { PermissionRepository } from './permission.repository.js';
@@ -51,18 +50,18 @@ async function resolvePermissionsWithRepository(
     return cached;
   }
 
-  return withPermissionCacheRecomputeLock(userPublicId, organizationPublicId, async () => {
-    const codes = await withOrganizationContext(organizationPublicId, async (databaseHandle) => {
-      return repository.findPermissionCodesForUserInOrganization(
+  // The recompute callback only computes; withPermissionCacheRecomputeLock owns the cache
+  // write and guards it on the lock nonce, so a racing invalidatePermissions cannot be
+  // clobbered by a stale write.
+  return withPermissionCacheRecomputeLock(userPublicId, organizationPublicId, async () =>
+    withOrganizationContext(organizationPublicId, async (databaseHandle) =>
+      repository.findPermissionCodesForUserInOrganization(
         userPublicId,
         organizationPublicId,
         databaseHandle as PostgresJsDatabase,
-      );
-    });
-
-    await setCachedPermissions(userPublicId, organizationPublicId, codes);
-    return codes;
-  });
+      ),
+    ),
+  );
 }
 
 /**
@@ -74,8 +73,8 @@ async function resolvePermissionsWithRepository(
  *   per-(user, organization) Redis recompute lock via
  *   {@link withPermissionCacheRecomputeLock}, then runs the 5-table join
  *   (`role_permissions → roles → memberships → users + organizations`) under
- *   {@link withOrganizationContext} so RLS is satisfied, and finally calls
- *   {@link setCachedPermissions} with TTL plus jitter.
+ *   {@link withOrganizationContext} so RLS is satisfied; the lock wrapper then
+ *   writes the result to the cache (TTL plus jitter) guarded on the lock nonce.
  * - **Failure modes:** `ConfigurationError` if {@link configureAuthorization}
  *   has not been invoked; Redis errors degrade to a direct database lookup
  *   (logged); database errors bubble up.
