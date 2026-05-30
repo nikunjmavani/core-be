@@ -19,6 +19,7 @@ export type ForceRlsTableRef = {
 export const EXPECTED_FORCE_RLS_TABLES: ForceRlsTableRef[] = [
   { schemaName: 'audit', tableName: 'dead_letter_jobs' },
   { schemaName: 'audit', tableName: 'logs' },
+  { schemaName: 'auth', tableName: 'auth_methods' },
   { schemaName: 'auth', tableName: 'mail_outbox' },
   { schemaName: 'auth', tableName: 'mfa_methods' },
   { schemaName: 'auth', tableName: 'mfa_recovery_codes' },
@@ -26,6 +27,7 @@ export const EXPECTED_FORCE_RLS_TABLES: ForceRlsTableRef[] = [
   { schemaName: 'auth', tableName: 'user_data_exports' },
   { schemaName: 'auth', tableName: 'user_notification_preferences' },
   { schemaName: 'auth', tableName: 'user_settings' },
+  { schemaName: 'auth', tableName: 'users' },
   { schemaName: 'auth', tableName: 'verification_tokens' },
   { schemaName: 'auth', tableName: 'webauthn_credentials' },
   { schemaName: 'billing', tableName: 'stripe_webhook_events' },

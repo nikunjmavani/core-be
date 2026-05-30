@@ -16,6 +16,7 @@ import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/w
 export type WorkerDatabaseContextKind =
   | 'organization'
   | 'global_retention_cleanup'
+  | 'global_admin'
   | 'user'
   | 'session_retention_cleanup'
   | 'system_table';
@@ -41,6 +42,7 @@ export const workerDatabaseContextStorage = new AsyncLocalStorage<WorkerDatabase
 const FORCE_RLS_ALLOWED_KINDS: ReadonlySet<WorkerDatabaseContextKind> = new Set([
   'organization',
   'global_retention_cleanup',
+  'global_admin',
   'user',
   'session_retention_cleanup',
 ]);
@@ -122,7 +124,7 @@ export function assertWorkerForceRlsTableAccess(tableRef: ForceRlsTableRef): voi
 
   if (!FORCE_RLS_ALLOWED_KINDS.has(context.kind)) {
     throw new WorkerDatabaseContextError(
-      `Worker context kind "${context.kind}" cannot access FORCE RLS table ${tableRef.schemaName}.${tableRef.tableName}. Use organization, global_retention_cleanup, user, or session_retention_cleanup context.`,
+      `Worker context kind "${context.kind}" cannot access FORCE RLS table ${tableRef.schemaName}.${tableRef.tableName}. Use organization, global_retention_cleanup, global_admin, user, or session_retention_cleanup context.`,
     );
   }
 }

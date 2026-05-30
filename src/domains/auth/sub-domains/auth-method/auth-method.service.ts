@@ -10,6 +10,7 @@ import {
   type PasswordResetEmailPayload,
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
@@ -61,52 +62,70 @@ export class AuthMethodService {
   async list(userPublicId: string) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    return this.authMethodRepository.listByUserId(user.id);
+    // auth.auth_methods is FORCE RLS (audit #7); pin the owner context so the owner policy authorizes
+    // the read for this user's own credentials.
+    return withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.listByUserId(user.id),
+    );
   }
 
   async create(userPublicId: string, body: unknown) {
     const parsed = validateCreateAuthMethod(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    return this.authMethodRepository.create(
-      omitUndefined({
-        user_id: user.id,
-        method_type: parsed.method_type,
-        provider: parsed.provider,
-        provider_user_id: parsed.provider_user_id,
-        is_primary: parsed.is_primary,
-        created_by_user_id: user.id,
-      }),
+    return withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.create(
+        omitUndefined({
+          user_id: user.id,
+          method_type: parsed.method_type,
+          provider: parsed.provider,
+          provider_user_id: parsed.provider_user_id,
+          is_primary: parsed.is_primary,
+          created_by_user_id: user.id,
+        }),
+      ),
     );
   }
 
   async delete(userPublicId: string, methodId: number) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    const revoked = await this.authMethodRepository.revoke(methodId, user.id);
+    const revoked = await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.revoke(methodId, user.id),
+    );
     if (!revoked) throw new NotFoundError('Auth method');
   }
 
   async revokeAllForUser(userPublicId: string): Promise<void> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    await this.authMethodRepository.revokeAllByUserId(user.id);
+    await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.revokeAllByUserId(user.id),
+    );
   }
 
   async findByProviderUserId(provider: string, provider_user_id: string) {
     return this.authMethodRepository.findByProviderUserId(provider, provider_user_id);
   }
 
-  async linkOAuthProviderIfMissing(data: AuthMethodCreateData): Promise<void> {
+  async linkOAuthProviderIfMissing({
+    ownerPublicId,
+    data,
+  }: {
+    ownerPublicId: string;
+    data: AuthMethodCreateData;
+  }): Promise<void> {
     if (!(data.provider && data.provider_user_id)) {
       return;
     }
+    // findByProviderUserId goes through the SECURITY DEFINER resolver (pre-session safe); the INSERT
+    // must satisfy the owner WITH CHECK, so pin the owner context for the linkage write.
     const existing = await this.authMethodRepository.findByProviderUserId(
       data.provider,
       data.provider_user_id,
     );
     if (!existing) {
-      await this.authMethodRepository.create(data);
+      await withUserDatabaseContext(ownerPublicId, () => this.authMethodRepository.create(data));
     }
   }
 

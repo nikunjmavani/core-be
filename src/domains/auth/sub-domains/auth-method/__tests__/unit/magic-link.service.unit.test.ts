@@ -37,6 +37,12 @@ vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
   resolveAccessTokenRoleForUser: vi.fn().mockResolvedValue('USER'),
 }));
 
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
 const user = {
   id: 1,
   public_id: 'abcdefghijklmnopqrstu',

@@ -89,7 +89,11 @@ export class MfaService {
 
     let verified = false;
     if (parsed.totp_code) {
-      const totpMethod = await this.authMethodService.findTotpByUserId(user.id);
+      // auth.auth_methods is FORCE RLS (audit #7); pin the owner context for every credential
+      // read/write — the MFA session already authenticated this user.
+      const totpMethod = await withUserDatabaseContext(user.public_id, () =>
+        this.authMethodService.findTotpByUserId(user.id),
+      );
       if (!totpMethod?.encrypted_secret) {
         throw new UnauthorizedError('errors:mfaNotEnabled');
       }
@@ -101,7 +105,9 @@ export class MfaService {
         throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
       }
       await this.rejectReplayedTotpCode(user.id, parsed.totp_code);
-      await this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id);
+      await withUserDatabaseContext(user.public_id, () =>
+        this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id),
+      );
       verified = true;
     } else if (parsed.recovery_code) {
       // auth.mfa_recovery_codes is FORCE RLS keyed on app.current_user_id; the MFA session already
@@ -171,7 +177,9 @@ export class MfaService {
     const parsed = validateMfaVerify(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
-    const totpMethod = await this.authMethodService.findTotpByUserId(user.id);
+    const totpMethod = await withUserDatabaseContext(user.public_id, () =>
+      this.authMethodService.findTotpByUserId(user.id),
+    );
     if (!totpMethod?.encrypted_secret) {
       throw new UnauthorizedError('errors:mfaNotEnabled');
     }
@@ -183,7 +191,9 @@ export class MfaService {
       throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
     await this.rejectReplayedTotpCode(user.id, parsed.code);
-    await this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id);
+    await withUserDatabaseContext(user.public_id, () =>
+      this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id),
+    );
     return { verified: true };
   }
 
@@ -204,13 +214,15 @@ export class MfaService {
       label: user.email,
       secret,
     });
-    const record = await this.authMethodService.createAuthMethodRecord({
-      user_id: user.id,
-      method_type: 'MFA_TOTP',
-      encrypted_secret: encryptFieldSecret(secret),
-      is_primary: false,
-      created_by_user_id: user.id,
-    });
+    const record = await withUserDatabaseContext(user.public_id, () =>
+      this.authMethodService.createAuthMethodRecord({
+        user_id: user.id,
+        method_type: 'MFA_TOTP',
+        encrypted_secret: encryptFieldSecret(secret),
+        is_primary: false,
+        created_by_user_id: user.id,
+      }),
+    );
     await this.userService.updateMfaEnabled(user.public_id, true);
     return {
       secret,
@@ -223,13 +235,15 @@ export class MfaService {
   async deleteMfa(userPublicId: string, mfaMethodId: number): Promise<void> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
-    const method = await this.authMethodService.findAuthMethodByIdForUser(mfaMethodId, user.id);
-    if (!method) throw new UnauthorizedError('errors:mfaMethodNotFound');
-    if (method.method_type !== 'MFA_TOTP') {
-      throw new UnauthorizedError('errors:mfaNotTotpMethod');
-    }
-    await this.authMethodService.revokeAuthMethod(mfaMethodId, user.id);
-    const remaining = await this.authMethodService.listMfaMethodsByUserId(user.id);
+    const remaining = await withUserDatabaseContext(user.public_id, async () => {
+      const found = await this.authMethodService.findAuthMethodByIdForUser(mfaMethodId, user.id);
+      if (!found) throw new UnauthorizedError('errors:mfaMethodNotFound');
+      if (found.method_type !== 'MFA_TOTP') {
+        throw new UnauthorizedError('errors:mfaNotTotpMethod');
+      }
+      await this.authMethodService.revokeAuthMethod(mfaMethodId, user.id);
+      return this.authMethodService.listMfaMethodsByUserId(user.id);
+    });
     if (remaining.length === 0) {
       await this.userService.updateMfaEnabled(user.public_id, false);
     }
@@ -239,7 +253,9 @@ export class MfaService {
   async listMfaMethods(userPublicId: string) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
-    const methods = await this.authMethodService.listMfaMethodsByUserId(user.id);
+    const methods = await withUserDatabaseContext(user.public_id, () =>
+      this.authMethodService.listMfaMethodsByUserId(user.id),
+    );
     return methods.map((method) => ({
       id: method.id,
       method_type: method.method_type,

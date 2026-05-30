@@ -112,7 +112,7 @@ Table auth.auth_methods {
 }
 
 Note auth.auth_methods {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: auth_methods_self_or_admin_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.mail_outbox {
@@ -256,7 +256,7 @@ Table auth.users {
 }
 
 Note auth.users {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: users_self_or_admin_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.verification_tokens {

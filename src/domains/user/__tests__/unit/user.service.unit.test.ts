@@ -19,6 +19,14 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
+vi.mock('@/infrastructure/database/contexts/global-admin-database.context.js', () => ({
+  withGlobalAdminDatabaseContext: vi.fn((callback: () => Promise<unknown>) => callback()),
+}));
+
+vi.mock('@/shared/utils/infrastructure/postgres-error.util.js', () => ({
+  runInsertWithPublicIdentifierRetry: async (operation: () => Promise<unknown>) => operation(),
+}));
+
 vi.mock('@/infrastructure/database/transaction.js', () => ({
   withTransaction: vi.fn((callback: (transaction: unknown) => Promise<unknown>) => callback({})),
 }));
@@ -50,7 +58,7 @@ describe('UserService', () => {
     updateLoginAttempt: vi.fn().mockResolvedValue(userRow),
     updateEmailVerified: vi.fn().mockResolvedValue(userRow),
     updateMfaEnabled: vi.fn().mockResolvedValue(userRow),
-    createFromOAuth: vi.fn().mockResolvedValue(userRow),
+    insertOAuthUser: vi.fn().mockResolvedValue(userRow),
     softDelete: vi.fn().mockResolvedValue(userRow),
     findMany: vi.fn().mockResolvedValue({
       items: [userRow],
@@ -265,7 +273,7 @@ describe('UserService', () => {
       email: 'oauth@example.com',
       is_email_verified: true,
     });
-    expect(repository.createFromOAuth).toHaveBeenCalled();
+    expect(repository.insertOAuthUser).toHaveBeenCalled();
     await service.updatePassword(userRow.public_id, 'new-hash');
     expect(repository.updatePassword).toHaveBeenCalledWith(userRow.public_id, 'new-hash');
     const internalId = await service.resolveInternalIdByPublicId(userRow.public_id);

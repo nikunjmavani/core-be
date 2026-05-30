@@ -75,12 +75,15 @@ export async function completeOAuthUserSession(parameters: {
       }
 
       await authMethodService.linkOAuthProviderIfMissing({
-        user_id: user.id,
-        method_type: AUTH_METHOD_TYPE.OAUTH,
-        provider,
-        provider_user_id: profile.provider_user_id,
-        is_primary: false,
-        created_by_user_id: user.id,
+        ownerPublicId: user.public_id,
+        data: {
+          user_id: user.id,
+          method_type: AUTH_METHOD_TYPE.OAUTH,
+          provider,
+          provider_user_id: profile.provider_user_id,
+          is_primary: false,
+          created_by_user_id: user.id,
+        },
       });
 
       // A pre-existing account may have been suspended/locked since signup; never

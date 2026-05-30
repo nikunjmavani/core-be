@@ -24,6 +24,12 @@ vi.mock('@/shared/utils/text/email.util.js', () => ({
   isDisposableEmailBlocked: vi.fn(() => false),
 }));
 
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
 const user = {
   id: 1,
   public_id: 'user_public',
@@ -304,16 +310,19 @@ describe('AuthMethodService', () => {
 
     vi.mocked(authMethodRepository.findByProviderUserId).mockResolvedValue(null);
     await service.findByProviderUserId('google', 'gid');
-    await service.linkOAuthProviderIfMissing(oauthData);
+    await service.linkOAuthProviderIfMissing({ ownerPublicId: user.public_id, data: oauthData });
     expect(authMethodRepository.create).toHaveBeenCalledWith(oauthData);
 
     vi.mocked(authMethodRepository.findByProviderUserId).mockResolvedValue({ id: 9 } as never);
-    await service.linkOAuthProviderIfMissing(oauthData);
+    await service.linkOAuthProviderIfMissing({ ownerPublicId: user.public_id, data: oauthData });
     expect(authMethodRepository.create).toHaveBeenCalledTimes(1);
 
     await service.linkOAuthProviderIfMissing({
-      user_id: user.id,
-      method_type: 'PASSWORD',
+      ownerPublicId: user.public_id,
+      data: {
+        user_id: user.id,
+        method_type: 'PASSWORD',
+      },
     });
     await service.findTotpByUserId(user.id);
     await service.createAuthMethodRecord(oauthData);

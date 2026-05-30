@@ -6,6 +6,7 @@ import {
   EXPECTED_FORCE_RLS_TABLES,
   RLS_MATRIX_SKIP_CRUD_TABLES,
   USER_SCOPED_FORCE_RLS_TABLES,
+  countRowsAsGlobalAdmin,
   countRowsAsTenant,
   countRowsAsUser,
   deleteRowAsTenant,
@@ -190,6 +191,86 @@ describe('Security: RLS matrix (all FORCE RLS tables)', () => {
           0,
         );
       });
+    });
+  });
+
+  describe('auth.users / auth.auth_methods under FORCE RLS (audit #7)', () => {
+    it('global-admin context sees every auth.users and auth.auth_methods row (admin path)', async () => {
+      await seedUserScopedRlsFixtures();
+      expect(await countRowsAsGlobalAdmin('auth', 'users')).toBe(2);
+      expect(await countRowsAsGlobalAdmin('auth', 'auth_methods')).toBe(2);
+    });
+
+    it('auth_methods owner policy composes with the auth.users subquery (owner reads own credential)', async () => {
+      const fixture = await seedUserScopedRlsFixtures();
+      // Counting auth_methods under userA forces the policy subquery SELECT id FROM auth.users to
+      // resolve under the auth.users owner policy — it returns A's id only when current_user_id = A.
+      const ownCredentials = await countRowsAsUser('auth', 'auth_methods', fixture.userAPublicId);
+      expect(ownCredentials).toBe(1);
+
+      const rowIds = fixture.rowIdsByTable.get(tableKey('auth', 'auth_methods'))!;
+      await executeAsCoreBeAppUser(fixture.userAPublicId, async (transaction) => {
+        const result = await transaction.execute(
+          drizzleSql.raw(
+            `SELECT count(*)::int AS count FROM auth.auth_methods WHERE id = ${rowIds.userB}`,
+          ),
+        );
+        const rows = Array.isArray(result)
+          ? result
+          : ((result as { rows?: { count: number }[] }).rows ?? []);
+        expect(Number(rows[0]?.count ?? 0)).toBe(0);
+      });
+    });
+
+    it('resolve_user_for_authentication_by_email returns the row with NO user context (pre-session login)', async () => {
+      const fixture = await seedUserScopedRlsFixtures();
+
+      const resolved = await executeAsCoreBeAppUser(null, async (transaction) => {
+        const result = await transaction.execute(
+          drizzleSql`SELECT * FROM auth.resolve_user_for_authentication_by_email(${fixture.userAEmail})`,
+        );
+        return Array.isArray(result)
+          ? result
+          : ((result as { rows?: Record<string, unknown>[] }).rows ?? []);
+      });
+
+      expect(resolved).toHaveLength(1);
+      expect(resolved[0]?.public_id).toBe(fixture.userAPublicId);
+    });
+
+    it('resolve_user_by_internal_id returns the row with NO user context (token-consume flows)', async () => {
+      const fixture = await seedUserScopedRlsFixtures();
+
+      const resolved = await executeAsCoreBeAppUser(null, async (transaction) => {
+        const result = await transaction.execute(
+          drizzleSql`SELECT * FROM auth.resolve_user_by_internal_id(${fixture.userAInternalId})`,
+        );
+        return Array.isArray(result)
+          ? result
+          : ((result as { rows?: Record<string, unknown>[] }).rows ?? []);
+      });
+
+      expect(resolved).toHaveLength(1);
+      expect(resolved[0]?.public_id).toBe(fixture.userAPublicId);
+    });
+
+    it('resolve_auth_method_by_provider returns the credential + owner public_id with NO context (OAuth callback)', async () => {
+      const fixture = await seedUserScopedRlsFixtures();
+
+      // The OAuth callback has no user context; the resolver bypasses RLS by ownership. Run it under
+      // the non-superuser core_be_app role with no context to prove EXECUTE + pre-session lookup work.
+      const resolved = await executeAsCoreBeAppUser(null, async (transaction) => {
+        const result = await transaction.execute(
+          drizzleSql`SELECT * FROM auth.resolve_auth_method_by_provider(${fixture.oauthProvider}, ${fixture.oauthProviderUserId})`,
+        );
+        return Array.isArray(result)
+          ? result
+          : ((result as { rows?: Record<string, unknown>[] }).rows ?? []);
+      });
+
+      expect(resolved).toHaveLength(1);
+      expect(resolved[0]?.user_public_id).toBe(fixture.userAPublicId);
+      expect(resolved[0]?.provider).toBe(fixture.oauthProvider);
     });
   });
 

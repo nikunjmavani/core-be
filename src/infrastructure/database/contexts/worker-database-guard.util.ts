@@ -20,6 +20,7 @@ const GUC_BY_CONTEXT_KIND: Record<
     key: 'app.global_retention_cleanup',
     label: 'global retention cleanup',
   },
+  global_admin: { key: 'app.global_admin', label: 'global admin' },
   user: { key: 'app.current_user_id', label: 'user' },
   session_retention_cleanup: {
     key: 'app.session_retention_cleanup',

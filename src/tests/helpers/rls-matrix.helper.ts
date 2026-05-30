@@ -22,6 +22,7 @@ import { user_data_exports } from '@/domains/user/sub-domains/user-data-export/u
 import { webauthn_credentials } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.schema.js';
 import { mfa_recovery_codes } from '@/domains/auth/sub-domains/auth-mfa/mfa-recovery-code.schema.js';
 import { mfa_methods } from '@/domains/auth/sub-domains/auth-mfa/mfa-method.schema.js';
+import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 
 import {
   EXPECTED_FORCE_RLS_TABLES,
@@ -43,6 +44,8 @@ export type RlsTenantFixture = {
  * `app.current_organization_id`. Asserted for cross-user denial in the RLS matrix.
  */
 export const USER_SCOPED_FORCE_RLS_TABLES: ForceRlsTableRef[] = [
+  { schemaName: 'auth', tableName: 'users' },
+  { schemaName: 'auth', tableName: 'auth_methods' },
   { schemaName: 'auth', tableName: 'user_settings' },
   { schemaName: 'auth', tableName: 'user_data_exports' },
   { schemaName: 'auth', tableName: 'webauthn_credentials' },
@@ -54,6 +57,12 @@ export const USER_SCOPED_FORCE_RLS_TABLES: ForceRlsTableRef[] = [
 export type RlsUserFixture = {
   userAPublicId: string;
   userBPublicId: string;
+  /** Internal ids and email of user A, for exercising the pre-session SECURITY DEFINER resolvers. */
+  userAInternalId: number;
+  userAEmail: string;
+  /** OAuth credential linked to user A for the `resolve_auth_method_by_provider` resolver test. */
+  oauthProvider: string;
+  oauthProviderUserId: string;
   rowIdsByTable: Map<string, { userA: number; userB: number }>;
 };
 
@@ -171,6 +180,32 @@ export async function countRowsAsUser(
   userPublicId: string | null,
 ): Promise<number> {
   return executeAsCoreBeAppUser(userPublicId, async (transaction) =>
+    queryCountInTransaction(transaction, schemaName, tableName),
+  );
+}
+
+/**
+ * Runs `callback` as the least-privilege `core_be_app` role with `app.global_admin = 'true'`, the
+ * admin escape hatch set in production by {@link withGlobalAdminDatabaseContext}. Used to prove the
+ * cross-user admin branch of the `auth.users` / `auth.auth_methods` policies (audit #7) under a
+ * non-superuser connection.
+ */
+export async function executeAsCoreBeAppGlobalAdmin<T>(
+  callback: (transaction: typeof database) => Promise<T>,
+): Promise<T> {
+  return database.transaction(async (transaction) => {
+    await transaction.execute(drizzleSql`SET LOCAL ROLE core_be_app`);
+    await transaction.execute(drizzleSql`SELECT set_config('app.global_admin', 'true', true)`);
+    return callback(transaction as unknown as typeof database);
+  });
+}
+
+/** Counts rows in a table under the `app.global_admin = 'true'` admin escape hatch. */
+export async function countRowsAsGlobalAdmin(
+  schemaName: string,
+  tableName: string,
+): Promise<number> {
+  return executeAsCoreBeAppGlobalAdmin(async (transaction) =>
     queryCountInTransaction(transaction, schemaName, tableName),
   );
 }
@@ -446,6 +481,31 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
   const userB = await createTestUser();
   const rowIdsByTable = new Map<string, { userA: number; userB: number }>();
 
+  // auth.users: the two seeded user rows are themselves the isolation subjects (audit #7). Keyed by
+  // public_id in the owner policy, but recorded by internal id so the generic matrix can probe by id.
+  rowIdsByTable.set(tableKey('auth', 'users'), { userA: userA.id, userB: userB.id });
+
+  const oauthProvider = 'google';
+  const oauthProviderUserId = `rls-google-${userA.id}`;
+  const [authMethodA] = await database
+    .insert(auth_methods)
+    .values({
+      user_id: userA.id,
+      method_type: 'OAUTH',
+      provider: oauthProvider,
+      provider_user_id: oauthProviderUserId,
+      is_primary: true,
+    })
+    .returning();
+  const [authMethodB] = await database
+    .insert(auth_methods)
+    .values({ user_id: userB.id, method_type: 'PASSWORD', is_primary: true })
+    .returning();
+  rowIdsByTable.set(tableKey('auth', 'auth_methods'), {
+    userA: authMethodA!.id,
+    userB: authMethodB!.id,
+  });
+
   await database.insert(user_settings).values({ user_id: userA.id });
   await database.insert(user_settings).values({ user_id: userB.id });
   // user_settings PK is user_id, so isolation is keyed by the user row id itself.
@@ -503,6 +563,10 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
   return {
     userAPublicId: userA.public_id,
     userBPublicId: userB.public_id,
+    userAInternalId: userA.id,
+    userAEmail: userA.email,
+    oauthProvider,
+    oauthProviderUserId,
     rowIdsByTable,
   };
 }

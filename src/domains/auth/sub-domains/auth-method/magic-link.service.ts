@@ -6,6 +6,7 @@ import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { MagicLinkSendResult } from '@/domains/auth/auth.types.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionRepository } from '../auth-session/auth-session.repository.js';
@@ -139,14 +140,18 @@ export class MagicLinkService {
     });
 
     const jsonWebTokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
-    const session = await this.sessionRepository.create(
-      omitUndefined({
-        user_id: user.id,
-        token_hash: jsonWebTokenHash,
-        ip_address: ipAddress,
-        user_agent: userAgent,
-        expires_at: expiresAt,
-      }),
+    // auth.sessions is FORCE RLS keyed on app.current_user_id; the verified token identifies the
+    // user, so insert the session inside that user's context.
+    const session = await withUserDatabaseContext(user.public_id, () =>
+      this.sessionRepository.create(
+        omitUndefined({
+          user_id: user.id,
+          token_hash: jsonWebTokenHash,
+          ip_address: ipAddress,
+          user_agent: userAgent,
+          expires_at: expiresAt,
+        }),
+      ),
     );
     return { access_token: jsonWebToken, session_public_id: session.public_id };
   }
