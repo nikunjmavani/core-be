@@ -273,6 +273,30 @@ export class UploadService {
     }
   }
 
+  private async assertUserCanAccessOrgScopedUpload(
+    row: UploadRow,
+    userPublicId: string,
+  ): Promise<void> {
+    if (row.organization_id === null) {
+      return;
+    }
+
+    const organization = await withUserDatabaseContext(userPublicId, () =>
+      this.organizationService.findOrganizationByInternalId(row.organization_id!),
+    );
+    if (!organization) {
+      throw new NotFoundError('Upload');
+    }
+
+    const permissions = await resolveUserOrganizationPermissions(
+      userPublicId,
+      organization.public_id,
+    );
+    if (!permissions.includes(UPLOAD_PERMISSIONS.UPLOAD_MANAGE)) {
+      throw new ForbiddenError('errors:insufficientUploadPermissions');
+    }
+  }
+
   async getUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
     const validatedPublicId = validateUploadPublicIdParam(public_id);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
@@ -280,6 +304,8 @@ export class UploadService {
       this.repository.findByPublicIdForUser(validatedPublicId, user.id),
     );
     if (!row) throw new NotFoundError('Upload');
+
+    await this.assertUserCanAccessOrgScopedUpload(row, userPublicId);
 
     return this.toUploadDetail(row, userPublicId);
   }
@@ -297,6 +323,8 @@ export class UploadService {
       this.repository.findByPublicIdForUser(validatedPublicId, user.id),
     );
     if (!row) throw new NotFoundError('Upload');
+
+    await this.assertUserCanAccessOrgScopedUpload(row, userPublicId);
 
     if (row.status === UPLOAD_STATUS.UPLOADED) {
       return this.toUploadDetail(row, userPublicId);
@@ -372,6 +400,8 @@ export class UploadService {
       this.repository.findByPublicIdForUser(validatedPublicId, user.id),
     );
     if (!row) throw new NotFoundError('Upload');
+
+    await this.assertUserCanAccessOrgScopedUpload(row, userPublicId);
 
     // S3 delete runs outside the DB context.
     const objectDeleted = await this.objectStorage.deleteObject(row.file_key);

@@ -7,6 +7,7 @@ import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 
 import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
+import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 
 vi.mock('@/domains/tenancy/sub-domains/permission/authorization.service.js', () => ({
   resolveUserOrganizationPermissions: vi.fn().mockResolvedValue(['upload:manage']),
@@ -72,7 +73,7 @@ describe('UploadService', () => {
 
   const organizationService = {
     requireOrganizationByPublicId: vi.fn().mockResolvedValue({ id: 10, public_id: 'org_public' }),
-    findOrganizationByInternalId: vi.fn().mockResolvedValue(null),
+    findOrganizationByInternalId: vi.fn().mockResolvedValue({ id: 10, public_id: 'org_public' }),
   } as unknown as OrganizationService;
 
   const objectStorage = createObjectStoragePortMock();
@@ -171,6 +172,20 @@ describe('UploadService', () => {
   it('deleteUpload removes upload for user', async () => {
     await service.deleteUpload(uploadPublicId, userPublicId);
     expect(repository.softDelete).toHaveBeenCalled();
+  });
+
+  it('deleteUpload rejects org-scoped upload when caller lacks upload:manage', async () => {
+    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+      ...uploadRow,
+      organization_id: 10,
+    } as never);
+    vi.mocked(resolveUserOrganizationPermissions).mockResolvedValueOnce([]);
+
+    await expect(service.deleteUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+    expect(objectStorage.deleteObject).not.toHaveBeenCalled();
+    expect(repository.softDelete).not.toHaveBeenCalled();
   });
 
   it('createUpload succeeds for organization logo with permission', async () => {
