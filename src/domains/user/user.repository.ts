@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
-import { and, asc, eq, isNull, like, or, count, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, like, or, count, sql, type SQL } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { users } from '@/domains/user/user.schema.js';
 import { escapeLikePattern } from '@/shared/utils/validation/validation.util.js';
@@ -256,11 +256,26 @@ export class UserRepository {
     return rows[0] ?? null;
   }
 
+  async markDeletionStarted(public_id: string) {
+    const rows = await getRequestDatabase()
+      .update(users)
+      .set({ deletion_started_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .where(and(eq(users.public_id, public_id), isNull(users.deleted_at)))
+      .returning();
+    return rows[0] ?? null;
+  }
+
   async softDelete(public_id: string) {
     const rows = await getRequestDatabase()
       .update(users)
       .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
-      .where(and(eq(users.public_id, public_id), isNull(users.deleted_at)))
+      .where(
+        and(
+          eq(users.public_id, public_id),
+          isNull(users.deleted_at),
+          isNotNull(users.deletion_started_at),
+        ),
+      )
       .returning();
     return rows[0] ?? null;
   }
