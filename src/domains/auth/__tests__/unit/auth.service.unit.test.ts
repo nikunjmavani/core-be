@@ -25,6 +25,10 @@ vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
   resolveAccessTokenRoleForUser: vi.fn().mockResolvedValue('USER'),
 }));
 
+vi.mock('@/shared/utils/auth/recent-step-up.util.js', () => ({
+  recordRecentStepUp: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
     callback(),
