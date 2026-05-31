@@ -1,4 +1,4 @@
-import { eventBus, type DomainEvent } from '@/core/events/event-bus.js';
+import { eventBus, runEnqueueAfterCommit, type DomainEvent } from '@/core/events/event-bus.js';
 import { enqueueWebhookDeliveryByAttemptId } from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
 import { findOrganizationPublicIdByDeliveryAttemptId } from '@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -23,7 +23,7 @@ async function onWebhookDeliveryRequestedEvent(event: DomainEvent): Promise<void
             organization_public_id,
             event.requestId,
           );
-    eventBus.onCommit(enqueueDelivery);
+    await runEnqueueAfterCommit(enqueueDelivery);
   } catch (error) {
     logger.warn(
       { error, eventType: event.type, deliveryAttemptId: payload.delivery_attempt_id },
