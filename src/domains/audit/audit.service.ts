@@ -127,14 +127,14 @@ export class AuditService {
    * 1. `validateListAuditLogsQuery` runs Zod validation and throws
    *    `ValidationError` on bad input.
    * 2. Translate optional public ids (`organization_id`, `actor_user_id`) to
-   *    internal ids; missing rows produce `undefined` filter so the query
-   *    yields no matches rather than 404.
+   *    internal ids; when a supplied public id cannot be resolved, return an
+   *    empty page immediately so the query never broadens to all visible rows.
    * 3. Repository runs the cursor-paginated query, optionally including the
    *    `total` count when `include_total === 'true'` (expensive on large
    *    histories — caller must opt in).
    *
    * Failure modes: invalid query → `ValidationError` → 400. Unknown public id
-   * → silently filters to empty result.
+   * in a supplied filter → empty page (no repository call).
    *
    * Side effects: read-only.
    *
@@ -179,12 +179,30 @@ export class AuditService {
       const organization = await this.organizationService.findOrganizationByPublicId(
         parsed.organization_id,
       );
-      organization_id = organization?.id;
+      if (!organization) {
+        return {
+          items: [],
+          total: 0,
+          limit: parsed.limit,
+          has_more: false,
+          next_cursor: null,
+        };
+      }
+      organization_id = organization.id;
     }
 
     if (parsed.actor_user_id) {
       const user = await this.userService.findUserRecordByPublicId(parsed.actor_user_id);
-      actor_user_id = user?.id;
+      if (!user) {
+        return {
+          items: [],
+          total: 0,
+          limit: parsed.limit,
+          has_more: false,
+          next_cursor: null,
+        };
+      }
+      actor_user_id = user.id;
     }
 
     const filters: AuditLogFilters = omitUndefined({
