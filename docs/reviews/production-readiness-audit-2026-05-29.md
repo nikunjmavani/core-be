@@ -97,7 +97,7 @@ const options: RateLimitPluginOptions = { /* … */ skipOnError: true };
 - **Category:** Security / Reliability
 - **Sources:** A
 
-**Evidence:** `src/shared/middlewares/rate-limit.middleware.ts`, `src/shared/middlewares/tenant.middleware.ts`
+**Evidence:** `src/shared/middlewares/rate-limit/rate-limit.middleware.ts`, `src/shared/middlewares/tenant/tenant.middleware.ts`
 
 ```ts
 keyGenerator: (request) => {
@@ -167,7 +167,7 @@ trustProxy: 1
 - **Category:** Scalability / Reliability
 - **Sources:** A
 
-**Evidence:** `src/shared/middlewares/organization-rls-transaction.middleware.ts`
+**Evidence:** `src/shared/middlewares/tenant/organization-rls-transaction.middleware.ts`
 
 ```ts
 organizationRlsCheckoutHeld.set(request, true);
@@ -374,7 +374,7 @@ Explicit revoke and rotate paths invalidate the cache, but natural expiry depend
 - **Category:** Scalability
 - **Sources:** A
 
-**Evidence:** `src/shared/middlewares/idempotency.middleware.ts`
+**Evidence:** `src/shared/middlewares/core/idempotency.middleware.ts`
 
 ```ts
 await redisConnection.incr(IDEMPOTENCY_CLAIM_COUNTER_LOGICAL_KEY);

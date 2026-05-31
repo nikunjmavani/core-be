@@ -7,7 +7,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestWebhook } from '@/tests/factories/webhook.factory.js';
-import { deleteInBatchesByCondition } from '@/infrastructure/database/batch-delete.util.js';
+import { deleteInBatchesByCondition } from '@/infrastructure/database/utils/batch-delete.util.js';
 import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
 import { webhooks } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import { grantCoreBeAppRoleForTests } from '@/tests/helpers/rls-matrix.helper.js';

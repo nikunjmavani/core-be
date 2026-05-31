@@ -15,7 +15,7 @@ vi.mock('@/shared/config/env.config.js', () => ({
   },
 }));
 
-import corsMiddleware from '@/shared/middlewares/cors.middleware.js';
+import corsMiddleware from '@/shared/middlewares/security/cors.middleware.js';
 
 describe('cors.middleware (required origins)', () => {
   afterEach(() => {

@@ -12,7 +12,7 @@ import {
 import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';
-import type { MfaService } from './sub-domains/auth-mfa/mfa.service.js';
+import type { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
 import { validateLogin } from './auth.validator.js';
 import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js';
 

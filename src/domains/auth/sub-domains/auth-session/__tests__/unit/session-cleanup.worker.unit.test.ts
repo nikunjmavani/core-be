@@ -32,7 +32,7 @@ vi.mock('@/infrastructure/queue/worker-runtime/worker-close.util.js', () => ({
   }),
 }));
 
-vi.mock('@/infrastructure/database/batch-delete.util.js', () => ({
+vi.mock('@/infrastructure/database/utils/batch-delete.util.js', () => ({
   deleteInBatchesByCondition: (...parameters: unknown[]) =>
     deleteInBatchesByConditionMock(...parameters),
 }));

@@ -1,26 +1,26 @@
 import type { FastifyInstance } from 'fastify';
-import requestLifecycleMiddleware from './request-lifecycle.middleware.js';
-import compressMiddleware from './compress.middleware.js';
-import cookieMiddleware from './cookie.middleware.js';
-import helmetMiddleware from './helmet.middleware.js';
-import corsMiddleware from './cors.middleware.js';
-import rateLimitMiddleware from './rate-limit.middleware.js';
-import errorHandlerMiddleware from './error-handler.middleware.js';
-import responseFormatMiddleware from './response-format.middleware.js';
-import apiVersioningMiddleware from './api-versioning.middleware.js';
-import requestContextMiddleware from './request-context.middleware.js';
-import i18nMiddleware from './i18n.middleware.js';
-import idempotencyMiddleware from './idempotency.middleware.js';
-import encryptionMiddleware from './encryption.middleware.js';
-import authMiddleware from './auth.middleware.js';
-import zodTypeProviderMiddleware from './zod-type-provider.middleware.js';
-import tenantMiddleware from './tenant.middleware.js';
-import organizationRlsTransactionMiddleware from './organization-rls-transaction.middleware.js';
-import requestStatementTimeoutMiddleware from './request-statement-timeout.middleware.js';
-import healthMiddleware from './health.middleware.js';
+import requestLifecycleMiddleware from './core/request-lifecycle.middleware.js';
+import compressMiddleware from './core/compress.middleware.js';
+import cookieMiddleware from './session/cookie.middleware.js';
+import helmetMiddleware from './security/helmet.middleware.js';
+import corsMiddleware from './security/cors.middleware.js';
+import rateLimitMiddleware from './rate-limit/rate-limit.middleware.js';
+import errorHandlerMiddleware from './core/error-handler.middleware.js';
+import responseFormatMiddleware from './core/response-format.middleware.js';
+import apiVersioningMiddleware from './core/api-versioning.middleware.js';
+import requestContextMiddleware from './core/request-context.middleware.js';
+import i18nMiddleware from './core/i18n.middleware.js';
+import idempotencyMiddleware from './core/idempotency.middleware.js';
+import encryptionMiddleware from './security/encryption.middleware.js';
+import authMiddleware from './core/auth.middleware.js';
+import zodTypeProviderMiddleware from './core/zod-type-provider.middleware.js';
+import tenantMiddleware from './tenant/tenant.middleware.js';
+import organizationRlsTransactionMiddleware from './tenant/organization-rls-transaction.middleware.js';
+import requestStatementTimeoutMiddleware from './core/request-statement-timeout.middleware.js';
+import healthMiddleware from './core/health.middleware.js';
 import httpMetricsPlugin from '@/infrastructure/observability/metrics/http-metrics.plugin.js';
-import metricsMiddleware from './metrics.middleware.js';
-import shutdownMiddleware from './shutdown.middleware.js';
+import metricsMiddleware from './core/metrics.middleware.js';
+import shutdownMiddleware from './core/shutdown.middleware.js';
 
 /**
  * Ordered Fastify plugin list registered by {@link registerMiddleware}. Order

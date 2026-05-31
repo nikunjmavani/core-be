@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { STRICT_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit-presets.constants.js';
+import { STRICT_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import type { OrganizationService } from './organization.service.js';
 import type { OrganizationSettingsService } from './organization-settings/organization-settings.service.js';
 import type { OrganizationNotificationPolicyService } from './organization-notification-policy/organization-notification-policy.service.js';

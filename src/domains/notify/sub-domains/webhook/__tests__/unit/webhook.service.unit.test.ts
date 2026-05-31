@@ -15,12 +15,15 @@ import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { WebhookService } from '@/domains/notify/sub-domains/webhook/webhook.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.repository.js';
-import type { WebhookDeliveryAttemptRepository } from '@/domains/notify/sub-domains/webhook/webhook-delivery-attempt.repository.js';
+import type { WebhookDeliveryAttemptRepository } from '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery-attempt.repository.js';
 import type * as FieldSecretEncryptionModule from '@/shared/utils/security/field-secret-encryption.util.js';
 
-vi.mock('@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js', () => ({
-  emitWebhookDeliveryRequested: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock(
+  '@/domains/notify/sub-domains/webhook/webhook-delivery/events/webhook-delivery-emit.js',
+  () => ({
+    emitWebhookDeliveryRequested: vi.fn().mockResolvedValue(undefined),
+  }),
+);
 
 vi.mock('@/shared/utils/security/webhook-outbound-fetch.util.js', () => ({
   createPinnedWebhookFetch: createPinnedWebhookFetchMock,
@@ -256,7 +259,7 @@ describe('WebhookService', () => {
 
   it('requestWebhookDelivery emits delivery event with webhook payload', async () => {
     const { emitWebhookDeliveryRequested } = await import(
-      '@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js'
+      '@/domains/notify/sub-domains/webhook/webhook-delivery/events/webhook-delivery-emit.js'
     );
     await service.requestWebhookDelivery({
       webhookId: 2,

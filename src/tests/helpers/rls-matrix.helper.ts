@@ -20,15 +20,15 @@ import { api_keys } from '@/domains/tenancy/sub-domains/organization/organizatio
 import { user_settings } from '@/domains/user/sub-domains/user-settings/user-settings.schema.js';
 import { user_data_exports } from '@/domains/user/sub-domains/user-data-export/user-data-export.schema.js';
 import { webauthn_credentials } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.schema.js';
-import { mfa_recovery_codes } from '@/domains/auth/sub-domains/auth-mfa/mfa-recovery-code.schema.js';
-import { mfa_methods } from '@/domains/auth/sub-domains/auth-mfa/mfa-method.schema.js';
+import { mfa_recovery_codes } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.schema.js';
+import { mfa_methods } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa-method.schema.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 
 import {
   EXPECTED_FORCE_RLS_TABLES,
   forceRlsTableKey as tableKey,
   type ForceRlsTableRef,
-} from '@/infrastructure/database/force-rls-tables.constants.js';
+} from '@/infrastructure/database/utils/force-rls-tables.constants.js';
 
 export type { ForceRlsTableRef };
 export { EXPECTED_FORCE_RLS_TABLES, tableKey };

@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import organizationRlsTransactionMiddleware, {
   settleAndAwaitOrganizationRlsTransaction,
   type OrganizationRlsTransactionSettlementOutcome,
-} from '@/shared/middlewares/organization-rls-transaction.middleware.js';
-import requestLifecycleMiddleware from '@/shared/middlewares/request-lifecycle.middleware.js';
+} from '@/shared/middlewares/tenant/organization-rls-transaction.middleware.js';
+import requestLifecycleMiddleware from '@/shared/middlewares/core/request-lifecycle.middleware.js';
 import {
   type OrganizationRlsCheckoutHoldSample,
   registerOrganizationRlsCheckoutHoldObserver,
-} from '@/infrastructure/database/organization-rls-checkout-counter.js';
+} from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 /**
@@ -58,7 +58,7 @@ vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => 
 
 // The lifecycle coordinator pulls in idempotency (→ redis) and the event bus. Stub them
 // out so this test stays focused on RLS commit/rollback behavior.
-vi.mock('@/shared/middlewares/idempotency.middleware.js', () => ({
+vi.mock('@/shared/middlewares/core/idempotency.middleware.js', () => ({
   default: async () => undefined,
   idempotencyOnResponse: vi.fn(async () => undefined),
 }));

@@ -1,6 +1,6 @@
 ---
 name: route-schema-doc-guard
-description: Ensures every Fastify route registration in src/**/*.routes.ts (plus the special non-routes files src/shared/middlewares/health.middleware.ts and src/infrastructure/mcp/mcp-server.ts) carries a schema block with summary, description, and tags. Use when adding, removing, or renaming any route, or when openapi/route-catalog generation reports a missing summary.
+description: Ensures every Fastify route registration in src/**/*.routes.ts (plus the special non-routes files src/shared/middlewares/core/health.middleware.ts and src/infrastructure/mcp/mcp-server.ts) carries a schema block with summary, description, and tags. Use when adding, removing, or renaming any route, or when openapi/route-catalog generation reports a missing summary.
 ---
 
 # Route schema doc guard (core-be)
@@ -14,7 +14,7 @@ Run this skill **every time** you:
 - Add a new route to any `*.routes.ts`.
 - Remove or rename a route.
 - Add a new public route to one of the **two non-routes files** that also register HTTP routes:
-  - `src/shared/middlewares/health.middleware.ts` (the `/livez` and `/readyz` endpoints)
+  - `src/shared/middlewares/core/health.middleware.ts` (the `/livez` and `/readyz` endpoints)
   - `src/infrastructure/mcp/mcp-server.ts` (the `/api/v1/mcp` GET + POST endpoints)
 - See a route in `docs/routes.txt` or `docs/openapi/openapi.json` with an empty / generic summary or description.
 

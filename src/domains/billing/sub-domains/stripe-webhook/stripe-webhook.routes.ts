@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { WEBHOOK_RATE_LIMIT } from '@/shared/middlewares/rate-limit-presets.constants.js';
+import { WEBHOOK_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { createStripeWebhookController } from './stripe-webhook.controller.js';
 import { stripeWebhookIngressPlugin } from './stripe-webhook-ingress.plugin.js';
 

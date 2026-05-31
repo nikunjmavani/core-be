@@ -67,25 +67,28 @@ Must include:
 
 Extension: `biomejs.biome` (see `.vscode/extensions.json`).
 
-## Layer 2: Pre-commit (`.husky/pre-commit`)
+## Layer 2: Pre-commit (`.husky/pre-commit` → `pnpm guard:pre-commit`)
 
-The hook runs sequential checks. If any fail, the commit is rejected. See **before-commit-guard** when the user reports a failed commit.
+The hook runs **`pnpm guard:pre-commit`** — labeled sequential checks. If any fail, the commit is rejected. See **before-commit-guard** when the user reports a failed commit. List steps: **`pnpm guard:pre-commit:list`**.
 
 Pre-commit mirrors a **subset** of the static checks in [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml). CI additionally runs `deps:audit`, full-repo `pnpm validate`, `validate:domain:coverage`, always-on `db:migrate:lint`, `test:contract`, Semgrep, and full-repo Gitleaks.
 
-| Step | Command                                                                                   | What it catches                                                                                                                                                      |
-| ---- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `pnpm lint-staged`                                                                        | Biome on staged `src/**/*.ts`, `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; markdownlint on `*.md`                                                  |
-| 2    | `pnpm typecheck`                                                                          | TypeScript type errors in `src/`                                                                                                                                     |
-| 3    | `pnpm validate:domain:strict`                                                             | Domain structure (canonical layout, routes; warnings fail)                                                                                                           |
-| 4a   | `pnpm routes:catalog` + stage `docs/routes.txt`                                          | Stale route catalog; local commits always regenerate and stage the checked-in catalog before push                                                                     |
-| 4b   | When routes or OpenAPI inputs staged: `pnpm docs:check`                                   | Stale gitignored `docs/openapi/*.json` or `docs/postman-collection.json` vs generator (`tooling/openapi/**`, locale openapi files, codegen scripts)                  |
-| 4c   | Always: `pnpm routes:catalog:check`                                                       | Route catalog/registry out of sync after regeneration                                                                                                                |
-| 5    | `pnpm db:migrate:lint` (only when staged `migrations/*.sql`)                              | Unsafe SQL DDL patterns (`NOT NULL` add without default, `RENAME`, locking indexes, FK/CHECK without `NOT VALID`, missing `IF NOT EXISTS`, destructive `DROP TABLE`) |
-| 6    | `pnpm tool:sync-env-example`                                                              | `.env.example` drift vs env schema (same as CI)                                                                                                                      |
-| 7    | `gitleaks protect --staged`                                                               | Secrets in staged files (skipped if gitleaks CLI not installed; CI always scans)                                                                                     |
-| 8    | grep for conflict markers                                                                 | Accidental `<<<<<<<` / `>>>>>>>` in staged files                                                                                                                     |
-| 9    | git cat-file size check (`--diff-filter=ACMRT`)                                           | Added/copied/modified/renamed files > 1MB in staged changes                                                                                                          |
+| Step | Command | What it catches |
+| ---- | ------- | --------------- |
+| 1 | `pnpm lint-staged` | Biome + markdownlint on staged files |
+| 2 | `pnpm typecheck` | TypeScript type errors |
+| 3 | `pnpm validate:domain:strict` | Domain structure (warnings fail) |
+| 4 | `pnpm validate:scripts-layout` | Scripts layout + MCP optional dep |
+| 5–6 | `pnpm routes:catalog` + `:check` | Route catalog drift |
+| 6b–6c | `tool:project-structure-tree` (+ `:check` when wired) | Src layout tree drift when `src/**` or `tooling/**` staged |
+| 7 | `pnpm docs:check` (conditional) | OpenAPI / Postman drift |
+| 8 | `pnpm tsdoc:check` | TSDoc coverage budget |
+| 9 | `pnpm validate:test-naming` (when wired) | Test filename suffixes |
+| 10–10b | `db:migrate:lint` + DBML regen (conditional) | Migration safety |
+| 11 | `pnpm tool:generate-project-identity:check` | Manifest / workflow drift |
+| 12 | `pnpm tool:sync-env-example` | `.env.example` drift |
+| 13 | `gitleaks protect --staged` | Secrets in staged files (**required** locally) |
+| 14–15 | Conflict markers + large files | Accidental merges / >1MB staged files |
 
 ### Pre-push (`.husky/pre-push`)
 

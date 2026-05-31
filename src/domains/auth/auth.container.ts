@@ -9,7 +9,7 @@ import { AuthService } from './auth.service.js';
 import { AuthMethodService } from './sub-domains/auth-method/auth-method.service.js';
 import { MagicLinkService } from './sub-domains/auth-method/magic-link.service.js';
 import { OAuthService } from './sub-domains/auth-method/oauth/oauth.service.js';
-import { MfaService } from './sub-domains/auth-mfa/mfa.service.js';
+import { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
 import { WebauthnService } from './sub-domains/auth-webauthn/webauthn.service.js';
 import { WebauthnCredentialRepository } from './sub-domains/auth-webauthn/webauthn-credential.repository.js';
 import { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';

@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import responseFormatMiddleware from '@/shared/middlewares/response-format.middleware.js';
+import responseFormatMiddleware from '@/shared/middlewares/core/response-format.middleware.js';
 
 describe('response-format.middleware (onSend hook)', () => {
   let application: ReturnType<typeof Fastify>;

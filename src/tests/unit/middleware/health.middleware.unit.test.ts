@@ -39,7 +39,7 @@ vi.mock('@/shared/utils/infrastructure/readiness-probes.util.js', () => ({
   }),
 }));
 
-import healthMiddleware from '@/shared/middlewares/health.middleware.js';
+import healthMiddleware from '@/shared/middlewares/core/health.middleware.js';
 import { isApplicationDraining } from '@/shared/utils/infrastructure/application-lifecycle.util.js';
 import { getCachedDependencyReadinessProbes } from '@/shared/utils/infrastructure/readiness-probes.util.js';
 

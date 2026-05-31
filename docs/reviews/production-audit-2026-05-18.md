@@ -178,7 +178,7 @@ Small
 
 - JWT RS256 required in production (`env-schema` refine); 15-minute access tokens ([`jwt.util.ts`](../../src/shared/utils/security/jwt.util.ts)).
 - MCP routes require JWT + `super_admin`/`admin` ([`mcp-server.ts`](../../src/infrastructure/mcp/mcp-server.ts) lines 291–311).
-- Idempotency keys scoped per org/user ([`idempotency.middleware.ts`](../../src/shared/middlewares/idempotency.middleware.ts) `resolveIdempotencyScope`).
+- Idempotency keys scoped per org/user ([`idempotency.middleware.ts`](../../src/shared/middlewares/core/idempotency.middleware.ts) `resolveIdempotencyScope`).
 - Stripe webhook signature + raw body ([`stripe-webhook-ingress.plugin.ts`](../../src/domains/billing/sub-domains/stripe-webhook/stripe-webhook-ingress.plugin.ts); controller enqueues only).
 - Session refresh Origin check when `ALLOWED_ORIGINS` set ([`cookie-session-origin.pre-handler.ts`](../../src/shared/middlewares/cookie-session-origin.pre-handler.ts)).
 
@@ -279,7 +279,7 @@ Scalability
 When `X-Organization-Id` is set, `organizationRlsTransactionMiddleware` pins one Postgres checkout for the **entire** request (BEGIN + SET LOCAL until response). Under high concurrency this exhausts `DATABASE_POOL_MAX` (default 10) faster than autocommit-per-query handlers.
 
 #### Evidence
-[`organization-rls-transaction.middleware.ts`](../../src/shared/middlewares/organization-rls-transaction.middleware.ts) lines 49–58 comment and implementation.
+[`organization-rls-transaction.middleware.ts`](../../src/shared/middlewares/tenant/organization-rls-transaction.middleware.ts) lines 49–58 comment and implementation.
 
 #### Production Risk
 503s / timeouts when pool saturated; slow handlers block slots for 30s statement timeout.
@@ -337,7 +337,7 @@ Legacy billing-document and payment-instrument tables were dropped during schema
 
 - Single public version prefix `/api/v1` ([`api-versioning.util.ts`](../../src/shared/utils/http/api-versioning.util.ts)).
 - Route catalog 135 routes, CI `routes:catalog:check`.
-- i18n keys in auth errors ([`auth.middleware.ts`](../../src/shared/middlewares/auth.middleware.ts)).
+- i18n keys in auth errors ([`auth.middleware.ts`](../../src/shared/middlewares/core/auth.middleware.ts)).
 - Global write idempotency middleware.
 
 ---
@@ -382,7 +382,7 @@ API
 Idempotency middleware applies to all POST/PUT/PATCH/DELETE when `Idempotency-Key` header present; route catalog does not document which routes **require** it for Stripe forwarding.
 
 #### Evidence
-[`idempotency.middleware.ts`](../../src/shared/middlewares/idempotency.middleware.ts) `WRITE_METHODS`.
+[`idempotency.middleware.ts`](../../src/shared/middlewares/core/idempotency.middleware.ts) `WRITE_METHODS`.
 
 #### Production Risk
 Client confusion; duplicate subscription creates if client omits key.
@@ -402,7 +402,7 @@ Small
 
 ### Satisfied strengths
 
-- API shutdown: queues → Redis → DB → Sentry ([`shutdown.middleware.ts`](../../src/shared/middlewares/shutdown.middleware.ts)).
+- API shutdown: queues → Redis → DB → Sentry ([`shutdown.middleware.ts`](../../src/shared/middlewares/core/shutdown.middleware.ts)).
 - Worker shutdown: workers → DLQ queues → Redis → DB ([`worker.ts`](../../src/worker.ts)).
 - Event bus swallows handler errors ([`event-bus.ts`](../../src/core/events/event-bus.ts) lines 24–31).
 - DLQ + Sentry on final failure ([`dead-letter.ts`](../../src/infrastructure/queue/dlq/dead-letter.ts)).

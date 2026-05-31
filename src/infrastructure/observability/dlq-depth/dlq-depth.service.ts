@@ -2,7 +2,7 @@ import { Queue } from 'bullmq';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { listDeadLetterQueueNames } from '@/infrastructure/queue/dlq/dead-letter.js';
 import { MAIL_QUEUE_NAME } from '@/infrastructure/mail/queues/mail.queue.js';
-import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
+import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
 import { NOTIFICATION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { AUDIT_EXPORT_QUEUE_NAME } from '@/domains/audit/workers/audit-export.constants.js';
 import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retention.constants.js';

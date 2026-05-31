@@ -5,7 +5,7 @@ import {
 } from '@/infrastructure/queue/dlq/dlq-replay.util.js';
 import type { DeadLetterJobData } from '@/infrastructure/queue/dlq/dead-letter.js';
 import { MAIL_QUEUE_NAME } from '@/infrastructure/mail/queues/mail.queue.js';
-import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
+import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
 import { NOTIFICATION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { STRIPE_WEBHOOK_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
 

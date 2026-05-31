@@ -126,7 +126,7 @@ app.get(
 | Domain test factories     | `<domain>/__tests__/factories/`                                                     | `tenancy/__tests__/factories/permission.factory.ts`                              |
 | Sub-domain unit           | `sub-domains/<r>/__tests__/unit/` or `sub-domains/<parent>/<child>/__tests__/unit/` | `plan.validator.test.ts`, `organization-api-key.validator.test.ts`               |
 | Sub-domain e2e (optional) | `sub-domains/<parent>/<child>/__tests__/<child>.test.ts`                            | `organization-api-key.test.ts`                                                   |
-| Event handlers / emit     | `sub-domains/<r>/events/__tests__/`                                                 | `auth-method.event-handlers.test.ts`, `member-invitation.event-handlers.test.ts` |
+| Event handlers / emit     | `sub-domains/<r>/__tests__/unit/events/`                                                 | `auth-method.event-handlers.unit.test.ts`, `member-invitation.event-handlers.unit.test.ts` |
 
 Do **not** add per-sub-domain `factories/` unless the helper is truly local; prefer `src/tests/factories/` or domain `__tests__/factories/`. Full pyramid and commands: **`.cursor/skills/test-generator/SKILL.md`** and **`.cursor/rules/testing-conventions.mdc`**.
 
@@ -253,7 +253,7 @@ Follow [Paddle Errors](https://developer.paddle.com/api-reference/about/errors):
 
 - **error.errors**: array of `{ field, message }` for each invalid field.
 
-**Implementation:** Update `src/shared/middlewares/error-handler.middleware.ts` and `src/shared/errors/index.ts` to emit this shape; map existing `AppError` codes to snake_case (`NOT_FOUND` → `not_found`, etc.) and add `type`, `documentation_url`, and `meta.request_id`. Ensure `request_id` is set on the request (e.g. Fastify `request.id` or middleware).
+**Implementation:** Update `src/shared/middlewares/core/error-handler.middleware.ts` and `src/shared/errors/index.ts` to emit this shape; map existing `AppError` codes to snake_case (`NOT_FOUND` → `not_found`, etc.) and add `type`, `documentation_url`, and `meta.request_id`. Ensure `request_id` is set on the request (e.g. Fastify `request.id` or middleware).
 
 ---
 
@@ -315,7 +315,7 @@ All `:id` params are **public_id**. Organization **slug** is unique; `getBySlug(
 ## 6. Implementation todos (original)
 
 - [x] **core-response-format** — Add Paddle-style response helpers in `src/shared/utils/http/response.util.ts`: single (`data` + `meta.request_id`), paginated (`data` + `meta.request_id` + `meta.pagination` with `per_page`, `next`, `has_more`, `estimated_total`). Ensure request has `request_id` (e.g. `request.id` or middleware).
-- [x] **core-error-format** — Update `src/shared/middlewares/error-handler.middleware.ts` and `src/shared/errors/index.ts` to Paddle error shape: `error.type`, `error.code` (snake_case), `error.detail`, `error.documentation_url`, `error.errors` (for validation); `meta.request_id`. Map existing codes to snake_case.
+- [x] **core-error-format** — Update `src/shared/middlewares/core/error-handler.middleware.ts` and `src/shared/errors/index.ts` to Paddle error shape: `error.type`, `error.code` (snake_case), `error.detail`, `error.documentation_url`, `error.errors` (for validation); `meta.request_id`. Map existing codes to snake_case.
 - [x] **db-migrations** — Add SQL migrations for OptimizedAuthTenantSchema: create schemas auth, tenancy, billing, notify, audit; create all tables with bigserial PKs, public_id (varchar 21), indexes, constraints, partial indexes as per DBML.
 - [x] **db-drizzle-schema** — Add Drizzle schema definitions (snake_case) for `auth.*`, `tenancy.*`, `billing.*`, `notify.*`, `audit.*` in `src/db/schema.ts` or split per schema.
 - [x] **domain-auth** — Scaffold `src/domains/auth/`: users (handlers, services, repos, types, routes). Wire auth routes (me). Register under `/api/v1/auth`.
@@ -377,7 +377,7 @@ All 19 phases from the Consolidated Master Plan (Domain API Upgrade + CI/CD + en
 
 ### Phase 5 — Test infrastructure foundations
 
-- **Convention:** Vitest under `src/tests/` (cross-cutting) and `src/domains/**/__tests__/**` (domain + sub-domain + nested sub-domain + `events/__tests__/`). k6: `src/tests/load/k6/`. See §1.5 and **test-generator** skill.
+- **Convention:** Vitest under `src/tests/` (cross-cutting) and `src/domains/**/__tests__/**` (domain + sub-domain + nested sub-domain + `__tests__/unit/events/`). k6: `src/tests/load/k6/`. See §1.5 and **test-generator** skill.
 - [x] `createTestApp()` helper (`src/tests/helpers/test-app.ts`)
 - [x] `createTestOrganization()` helper
 - [x] Factory functions: user, organization, plan, permission, role, membership

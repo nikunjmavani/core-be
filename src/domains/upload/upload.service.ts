@@ -23,8 +23,8 @@ import {
   buildOrganizationLogoKeyPrefix,
   buildUserAvatarKeyPrefix,
 } from './upload.constants.js';
-import { getCanonicalExtensionForContentType } from './upload-content-type.util.js';
-import { isSvgContentType, sanitizeSvgBuffer } from './upload-svg.util.js';
+import { getCanonicalExtensionForContentType } from './utils/upload-content-type.util.js';
+import { isSvgContentType, sanitizeSvgBuffer } from './utils/upload-svg.util.js';
 import {
   isMagicByteVerifiable,
   verifyFileMagicBytes,

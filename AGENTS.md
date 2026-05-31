@@ -9,17 +9,19 @@ Before changing this repository:
 5. Human contributors — see **[CONTRIBUTING.md](CONTRIBUTING.md)** (setup summary, branching, **`SECURITY.md`**, **`CODE_OF_CONDUCT.md`**, **[`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)**).
 6. Before opening a pull request, ensure these pass (pre-commit runs the same sync checks locally):
 
-   ```bash
-   pnpm ci:local
-   ```
+ ```bash
+ pnpm guard:pre-commit   # labeled pre-commit (same as git commit hook)
+ pnpm ci:local
+ ```
 
    Same checks individually: `pnpm validate`, `pnpm validate:domain`, `pnpm routes:catalog:check`, `pnpm tsdoc:check`, `pnpm db:migrate:lint`, `pnpm tool:sync-env-example`, `pnpm test`. Static CI quality slice (no tests): `pnpm ci:quality`.
 
    Optional local integration gate (Docker Postgres + Redis running): `pnpm verify:base` — migrate → seed (minimal + full) → live API smoke → validate. Local stack: `pnpm compose:up` then `pnpm compose:wait`.
 
-7. For **Cursor cloud agent** Linux environments (full dev dependencies, separate from production image), see **[docs/integrations/cursor-cloud-agent-environment.md](docs/integrations/cursor-cloud-agent-environment.md)**.
+## Additional resources
 
-8. For the full agent map (skills, rules, subagents, MCP), see **[docs/integrations/cursor-agent-system.md](docs/integrations/cursor-agent-system.md)**.
+- **Cursor cloud agent** — Linux environments with full dev dependencies (separate from production image): **[docs/integrations/cursor-cloud-agent-environment.md](docs/integrations/cursor-cloud-agent-environment.md)**
+- **Agent map** — skills, rules, subagents, MCP: **[docs/integrations/cursor-agent-system.md](docs/integrations/cursor-agent-system.md)**
 
 ## Custom subagents
 

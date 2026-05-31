@@ -1,13 +1,13 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { captchaPreHandler } from '@/shared/middlewares/captcha.middleware.js';
-import { requireRecentStepUpPreHandler } from '@/shared/middlewares/recent-step-up.middleware.js';
+import { captchaPreHandler } from '@/shared/middlewares/security/captcha.middleware.js';
+import { requireRecentStepUpPreHandler } from '@/shared/middlewares/core/recent-step-up.middleware.js';
 import {
   REFRESH_RATE_LIMIT,
   STRICT_AUTHED_RATE_LIMIT,
   STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS,
   STRICT_PUBLIC_RATE_LIMIT,
-} from '@/shared/middlewares/rate-limit-presets.constants.js';
+} from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { createAuthController } from './auth.controller.js';
 import {
   authMethodIdParamsDto,

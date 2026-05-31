@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
 import { UnauthorizedError } from '@/shared/errors/index.js';
-import { requireAllowedSourceOriginForCookieSessionRoute } from '@/shared/middlewares/cookie-session-origin.pre-handler.js';
+import { requireAllowedSourceOriginForCookieSessionRoute } from '@/shared/middlewares/session/cookie-session-origin.pre-handler.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
 import {

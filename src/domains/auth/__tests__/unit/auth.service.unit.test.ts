@@ -3,7 +3,7 @@ import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { AuthService } from '@/domains/auth/auth.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
-import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/mfa.service.js';
+import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 

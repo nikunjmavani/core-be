@@ -25,7 +25,7 @@ describe('rate-limit-presets', () => {
   it('STRICT_PUBLIC_RATE_LIMIT allows 5000 req/min in test NODE_ENV', async () => {
     mockEnv.NODE_ENV = 'test';
     const { STRICT_PUBLIC_RATE_LIMIT } = await import(
-      '@/shared/middlewares/rate-limit-presets.constants.js'
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
     expect(STRICT_PUBLIC_RATE_LIMIT.config.rateLimit.max).toBe(5000);
   });
@@ -33,7 +33,7 @@ describe('rate-limit-presets', () => {
   it('STRICT_PUBLIC_RATE_LIMIT caps public auth routes at 5 req/min outside test', async () => {
     mockEnv.NODE_ENV = 'production';
     const { STRICT_PUBLIC_RATE_LIMIT } = await import(
-      '@/shared/middlewares/rate-limit-presets.constants.js'
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
     expect(STRICT_PUBLIC_RATE_LIMIT.config.rateLimit.max).toBe(5);
     expect(STRICT_PUBLIC_RATE_LIMIT.config.rateLimit.timeWindow).toBe(60_000);
@@ -42,7 +42,7 @@ describe('rate-limit-presets', () => {
   it('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS caps per email at 5 / 15 min on preHandler outside test', async () => {
     mockEnv.NODE_ENV = 'production';
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
-      '@/shared/middlewares/rate-limit-presets.constants.js'
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
     expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.max).toBe(5);
     expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.timeWindow).toBe(15 * 60_000);
@@ -52,7 +52,7 @@ describe('rate-limit-presets', () => {
   it('STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS lifts the cap under test NODE_ENV', async () => {
     mockEnv.NODE_ENV = 'test';
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
-      '@/shared/middlewares/rate-limit-presets.constants.js'
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
     expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.max).toBe(5000);
   });
@@ -60,7 +60,7 @@ describe('rate-limit-presets', () => {
   it('per-email key generator normalizes the body email (trim + lowercase) and ignores IP', async () => {
     mockEnv.NODE_ENV = 'production';
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
-      '@/shared/middlewares/rate-limit-presets.constants.js'
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
     const keyGenerator = STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.keyGenerator;
     expect(keyGenerator).toBeDefined();
@@ -74,7 +74,7 @@ describe('rate-limit-presets', () => {
   it('per-email key generator falls back to IP when the body has no usable email', async () => {
     mockEnv.NODE_ENV = 'production';
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
-      '@/shared/middlewares/rate-limit-presets.constants.js'
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
     const keyGenerator = STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.keyGenerator;
     const key = await keyGenerator?.({ ip: '203.0.113.7', body: {} } as never);
@@ -83,7 +83,7 @@ describe('rate-limit-presets', () => {
 
   it('org-scoped key namespaces the organization by actor so victim buckets are isolated (audit #14)', async () => {
     const { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } = await import(
-      '@/shared/middlewares/rate-limit-presets.constants.js'
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
     const keyGenerator = ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config.rateLimit.keyGenerator;
     expect(keyGenerator).toBeDefined();
@@ -108,7 +108,7 @@ describe('rate-limit-presets', () => {
 
   it('org-scoped key namespaces API-key actors and falls back to actor, then IP', async () => {
     const { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } = await import(
-      '@/shared/middlewares/rate-limit-presets.constants.js'
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
     const keyGenerator = ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config.rateLimit.keyGenerator;
 

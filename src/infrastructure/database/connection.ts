@@ -6,9 +6,9 @@ import {
   isNeonPoolerConnection,
   isStrictDatabaseTlsVerification,
   parseSslMode,
-} from '@/infrastructure/database/connection-url.util.js';
+} from '@/infrastructure/database/utils/connection-url.util.js';
 
-import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool.constants.js';
+import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool/pool.constants.js';
 
 export { isNeonPoolerConnection };
 export { DEFAULT_DATABASE_POOL_MAX };

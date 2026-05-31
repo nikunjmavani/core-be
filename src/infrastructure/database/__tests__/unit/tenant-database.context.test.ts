@@ -6,7 +6,7 @@ import {
   type OrganizationRlsCheckoutHoldSample,
   registerOrganizationRlsCheckoutHoldObserver,
   resetOrganizationRlsCheckoutCountForTests,
-} from '@/infrastructure/database/organization-rls-checkout-counter.js';
+} from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
 
 const mockExecute = vi.fn().mockResolvedValue(undefined);
 const mockTransactionHandle = { execute: mockExecute, tag: 'transaction-handle' };

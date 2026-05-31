@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { MODERATE_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit-presets.constants.js';
+import { MODERATE_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { createUploadController } from './upload.controller.js';
 import { createUploadDto } from './upload.dto.js';
 

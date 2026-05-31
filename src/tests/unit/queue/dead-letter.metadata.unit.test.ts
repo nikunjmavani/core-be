@@ -166,7 +166,7 @@ describe('enqueueDeadLetter metadata', () => {
     const { enqueueDeadLetter } = await import('@/infrastructure/queue/dlq/dead-letter.js');
     const { buildReplayJobPayload } = await import('@/infrastructure/queue/dlq/dlq-replay.util.js');
     const { WEBHOOK_DELIVERY_QUEUE_NAME } = await import(
-      '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js'
+      '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js'
     );
     const { STRIPE_WEBHOOK_QUEUE_NAME } = await import(
       '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js'

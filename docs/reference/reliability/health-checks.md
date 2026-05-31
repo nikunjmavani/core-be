@@ -4,7 +4,7 @@ Health endpoints return **raw JSON** with no API response envelope. API and work
 
 Implementation:
 
-- API: [`health.middleware.ts`](../../../src/shared/middlewares/health.middleware.ts)
+- API: [`health.middleware.ts`](../../../src/shared/middlewares/core/health.middleware.ts)
 - Worker: [`worker-health.server.ts`](../../../src/infrastructure/queue/worker-runtime/worker-health.server.ts)
 
 The previous combined `GET /health` endpoint has been **removed** and replaced by an explicit split:

@@ -7,7 +7,7 @@ description: When a user-facing message is added or changed in the codebase, ens
 
 Run this skill when **any** of the following are created or modified:
 
-- **Error and validation**: `src/shared/errors/*.ts`, `src/shared/middlewares/error-handler.middleware.ts`, any `*.validator.ts` under `src/domains/`
+- **Error and validation**: `src/shared/errors/*.ts`, `src/shared/middlewares/core/error-handler.middleware.ts`, any `*.validator.ts` under `src/domains/`
 - **Services/controllers that can return messages**: `src/domains/**/*.service.ts`, `src/domains/**/*.controller.ts` when the change touches `throw` statements, return values with `message`, or response payloads
 - **Constants that hold user-facing text**: `src/shared/constants/*.ts` (e.g. message constants)
 - **Locale files**: `src/shared/locales/**/*.json` when keys are added or renamed

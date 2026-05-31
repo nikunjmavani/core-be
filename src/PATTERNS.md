@@ -14,7 +14,7 @@ Prevent cross-tenant data leaks. Every read and write performed under an organiz
 
 ### Where it lives
 
-- HTTP layer: [src/shared/middlewares/tenant.middleware.ts](src/shared/middlewares/tenant.middleware.ts) — reads `X-Organization-Id` (or parses `/organizations/:id/` from the URL) and decorates `request.organizationId`. Header and path are cross-checked; mismatch → `400`.
+- HTTP layer: [src/shared/middlewares/tenant/tenant.middleware.ts](src/shared/middlewares/tenant/tenant.middleware.ts) — reads `X-Organization-Id` (or parses `/organizations/:id/` from the URL) and decorates `request.organizationId`. Header and path are cross-checked; mismatch → `400`.
 - Database layer: [src/infrastructure/database/contexts/tenant-database.context.ts](src/infrastructure/database/contexts/tenant-database.context.ts) and [organization-database.context.ts](src/infrastructure/database/contexts/organization-database.context.ts) — open a Drizzle transaction and `SET LOCAL app.current_organization_id = $1`. RLS policies on org-scoped tables read that GUC.
 - Worker layer: [src/infrastructure/queue/worker-runtime/worker-processor.util.ts](src/infrastructure/queue/worker-runtime/worker-processor.util.ts) — `runTenantScopedWorkerJob` requires `organizationPublicId` in the job payload and wraps the processor body in `withOrganizationContext` so RLS sees the same GUC the HTTP layer would have set.
 
@@ -78,7 +78,7 @@ Mutating endpoints (`POST` / `PUT` / `PATCH` / `DELETE`) accept an `Idempotency-
 
 ### Where it lives
 
-- Middleware: [src/shared/middlewares/idempotency.middleware.ts](src/shared/middlewares/idempotency.middleware.ts).
+- Middleware: [src/shared/middlewares/core/idempotency.middleware.ts](src/shared/middlewares/core/idempotency.middleware.ts).
 - Redis: keys live under the `idempotency:` prefix; payload caps at `IDEMPOTENCY_CACHED_BODY_BYTES` (100 KiB); TTL = `IDEMPOTENCY_RESPONSE_CACHE_TTL_SECONDS` (24 h) for completed entries and `IDEMPOTENCY_PLACEHOLDER_TTL_SECONDS` (60 s) for in-flight placeholders.
 - Cardinality guard: [src/infrastructure/observability/idempotency-cardinality/](src/infrastructure/observability/idempotency-cardinality/) — bounded SCAN job that warns when the key set exceeds threshold.
 
@@ -165,7 +165,7 @@ Outbound side effects (email send, webhook delivery) must not be lost when the o
 ### Where it lives
 
 - Mail: [src/infrastructure/mail/mail-outbox.schema.ts](src/infrastructure/mail/mail-outbox.schema.ts), [mail-outbox.repository.ts](src/infrastructure/mail/mail-outbox.repository.ts), [workers/mail-outbox-sweeper.processor.ts](src/infrastructure/mail/workers/mail-outbox-sweeper.processor.ts), [workers/mail.processor.ts](src/infrastructure/mail/workers/mail.processor.ts).
-- Webhook delivery: [src/domains/notify/sub-domains/webhook/webhook-delivery.repository.ts](src/domains/notify/sub-domains/webhook/webhook-delivery.repository.ts), [webhook-delivery-attempt.repository.ts](src/domains/notify/sub-domains/webhook/webhook-delivery-attempt.repository.ts), [workers/webhook-delivery.worker.ts](src/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.ts).
+- Webhook delivery: [src/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.repository.ts](src/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.repository.ts), [webhook-delivery-attempt.repository.ts](src/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery-attempt.repository.ts), [workers/webhook-delivery.worker.ts](src/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.ts).
 - Stripe webhook events: [src/domains/billing/sub-domains/stripe-webhook/stripe-webhook-event.repository.ts](src/domains/billing/sub-domains/stripe-webhook/stripe-webhook-event.repository.ts) — inbound webhooks use the same idempotent-claim pattern as the outbox.
 
 ### Implementation

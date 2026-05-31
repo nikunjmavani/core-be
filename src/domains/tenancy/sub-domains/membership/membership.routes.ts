@@ -4,7 +4,7 @@ import {
   MODERATE_AUTHED_RATE_LIMIT,
   STRICT_AUTHED_RATE_LIMIT,
   STRICT_PUBLIC_RATE_LIMIT,
-} from '@/shared/middlewares/rate-limit-presets.constants.js';
+} from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
 import type { MembershipService } from './membership.service.js';
 import type { MemberInvitationService } from './member-invitation/member-invitation.service.js';

@@ -147,7 +147,7 @@ export function <domain>Routes(deps: <Domain>RoutesDeps): FastifyPluginAsync {
 5. **Add tests** (see **test-generator**):
    - Bundled routes: extend `<domain>/__tests__/<domain>.test.ts` OR add nested `__tests__/<resource>.test.ts`.
    - Validators/serializers: `__tests__/unit/` on the resource that owns the file.
-   - Event handlers: `events/__tests__/` — call leaf `register*EventHandlers()` only.
+   - Event handlers: `__tests__/unit/events/` — call leaf `register*EventHandlers()` only (never `events/__tests__/`).
 6. **Wire DI** via `<domain>.container.ts`.
 7. **Wire routes** in `<domain>.routes.ts` or sub-domain `*.routes.ts`; mount in `src/routes.ts`.
 8. **Author in-source docs** (required, gated by `pnpm tsdoc:check`):

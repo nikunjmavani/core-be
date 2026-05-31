@@ -4,7 +4,7 @@ import {
   parseRedisUrl,
 } from '@/infrastructure/cache/redis-url.parse.util.js';
 import { resolveBullMqRedisUrl } from '@/infrastructure/cache/redis-url.util.js';
-import { isHostedDeployment } from '@/infrastructure/database/hosted-deployment.util.js';
+import { isHostedDeployment } from '@/infrastructure/database/utils/hosted-deployment.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 

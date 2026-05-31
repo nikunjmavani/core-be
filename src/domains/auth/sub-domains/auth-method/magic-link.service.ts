@@ -7,7 +7,7 @@ import type { MagicLinkSendResult } from '@/domains/auth/auth.types.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
-import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/mfa.service.js';
+import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import { validateMagicLinkSend, validateMagicLinkVerify } from '@/domains/auth/auth.validator.js';

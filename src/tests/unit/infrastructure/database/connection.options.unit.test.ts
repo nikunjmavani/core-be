@@ -3,7 +3,7 @@ import {
   buildPostgresOptions,
   isNeonPoolerConnection,
 } from '@/infrastructure/database/connection.js';
-import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool.constants.js';
+import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool/pool.constants.js';
 import { env } from '@/shared/config/env.config.js';
 
 describe('postgres connection options', () => {

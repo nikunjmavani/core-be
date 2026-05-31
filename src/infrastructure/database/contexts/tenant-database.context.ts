@@ -13,7 +13,7 @@ import {
   decrementOrganizationRlsCheckoutCount,
   incrementOrganizationRlsCheckoutCount,
   observeOrganizationRlsCheckoutHold,
-} from '@/infrastructure/database/organization-rls-checkout-counter.js';
+} from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
 
 /**
  * Runs a callback inside a transaction with RLS organization context set via SET LOCAL.

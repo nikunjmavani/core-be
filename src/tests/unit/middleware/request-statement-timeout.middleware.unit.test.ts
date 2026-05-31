@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import requestStatementTimeoutMiddleware from '@/shared/middlewares/request-statement-timeout.middleware.js';
+import requestStatementTimeoutMiddleware from '@/shared/middlewares/core/request-statement-timeout.middleware.js';
 
 const mockExecute = vi.fn().mockResolvedValue(undefined);
 const mockTransaction = vi.fn();

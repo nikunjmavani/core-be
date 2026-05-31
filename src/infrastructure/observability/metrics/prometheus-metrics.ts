@@ -1,5 +1,5 @@
 import { Counter, Gauge, Histogram, type Registry } from 'prom-client';
-import type { OrganizationRlsCheckoutPath } from '@/infrastructure/database/organization-rls-checkout-counter.js';
+import type { OrganizationRlsCheckoutPath } from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
 import {
   getMetricsRegistry,
   isMetricsEnabled,

@@ -37,7 +37,7 @@ describe('Security: Auth public rate limit burst (429)', () => {
     mockEnv.NODE_ENV = 'production';
     vi.resetModules();
     const { STRICT_PUBLIC_RATE_LIMIT } = await import(
-      '@/shared/middlewares/rate-limit-presets.constants.js'
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
 
     const application = Fastify();
@@ -97,7 +97,7 @@ describe('Security: Auth public rate limit burst (429)', () => {
     mockEnv.NODE_ENV = 'production';
     vi.resetModules();
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
-      '@/shared/middlewares/rate-limit-presets.constants.js'
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
     );
 
     const application = Fastify();

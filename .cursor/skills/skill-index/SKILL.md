@@ -58,14 +58,14 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | Added/removed/updated a route in `*.routes.ts`                                                                                                                                                                  | **route-schema-doc-guard** + **route-catalog** + **openapi-multilingual** (tags) + **seed-maintainer**             | route-schema-doc-guard, route-catalog, seed-maintainer                |
 | Created a new domain or sub-domain                                                                                                                                                                              | **domain-generator**                                                                                               | `.cursor/skills/domain-generator/SKILL.md`                        |
 | Added event emission, queue, or worker                                                                                                                                                                          | **workers-events**                                                                                                 | `.cursor/skills/workers-events/SKILL.md`                          |
-| Changed Biome rules, pre-commit hooks, or CI security                                                                                                                                                           | **code-quality-guard**                                                                                             | `.cursor/skills/code-quality-guard/SKILL.md`                      |
+| Changed Biome rules, pre-commit hooks, guard orchestrator, or CI security | **code-quality-guard** + **before-commit-guard** | `.cursor/skills/code-quality-guard/SKILL.md` |
 | Changed `package.json`, `pnpm-lock.yaml`, or dependency versions                                                                                                                                                | **dependency-security**                                                                                            | `.cursor/skills/dependency-security/SKILL.md`                     |
 | Renamed/moved files, folders, or layers                                                                                                                                                                         | **structure-maintainer**                                                                                           | `.cursor/skills/structure-maintainer/SKILL.md`                    |
 | Porting code from Supabase Edge Functions                                                                                                                                                                       | **supabase-porting**                                                                                               | `.cursor/skills/supabase-porting/SKILL.md`                        |
 | Added/changed `migrations/*.sql` or schema needs SQL migration                                                                                                                                                  | **db-migration-maintainer**                                                                                        | `.cursor/skills/db-migration-maintainer/SKILL.md`                 |
 | New/updated feature: routes, validators, serializers, utils, services, workers, or tests                                                                                                                        | **test-generator**                                                                                                 | `.cursor/skills/test-generator/SKILL.md` — unit vs domain pyramid |
 | Added/modified domain tests or test factories only                                                                                                                                                              | **test-generator**                                                                                                 | `.cursor/skills/test-generator/SKILL.md`                          |
-| Moved or added domain/sub-domain tests (`sub-domains/*/ __tests__/unit`, `events/__tests__`, `tenancy/__tests__/factories/`)                                                                                    | **test-generator** (+ **structure-maintainer** if `CLAUDE.md` layout paths change)                                 | test-generator, structure-maintainer                              |
+| Moved or added domain/sub-domain tests (`sub-domains/*/__tests__/unit`, `__tests__/unit/events/`, `tenancy/__tests__/factories/`)                                                                                    | **test-generator** (+ **structure-maintainer** if `CLAUDE.md` layout paths change)                                 | test-generator, structure-maintainer                              |
 | Changed where tests live (test layout: Vitest under `src/`, root `tests/` only for k6)                                                                                                                          | **structure-maintainer**                                                                                           | `.cursor/skills/structure-maintainer/SKILL.md`                    |
 | Added/modified Drizzle schema files                                                                                                                                                                             | **schema-generator** + **sql-design-guard** + **db-migration-maintainer**                                          | schema-generator, sql-design-guard, db-migration-maintainer       |
 | Changed seed scripts or added new seeded data                                                                                                                                                                   | **seed-maintainer**                                                                                                | `.cursor/skills/seed-maintainer/SKILL.md`                         |
@@ -119,8 +119,8 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### Code quality and security pipeline
 
-- **Trigger**: changes to `biome.json`, `.biomeignore`, `.husky/pre-commit`, `lint-staged` in `package.json`, `.github/workflows/ci.yml`, `.gitleaks.toml`, `.semgrepignore`
-- **Action**: read and follow `code-quality-guard` checklist
+- **Trigger**: changes to `biome.json`, `.biomeignore`, `.husky/pre-commit`, `src/scripts/tooling/run-pre-commit-guard.ts`, `src/scripts/tooling/run-ci-local-guard.ts`, `tooling/ci/run-named-step.sh`, `lint-staged`, `guard:pre-commit`, `guard:ci-local`, `validate:domain:unit-matrix`, or `ci:local` / `ci:quality` in `package.json`, `.github/workflows/ci.yml`, `.gitleaks.toml`, `.semgrepignore`
+- **Action**: read and follow `code-quality-guard` + `before-commit-guard` checklists
 
 ### Dependency security
 
@@ -154,7 +154,7 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### i18n message guard
 
-- **Trigger**: added or edited user-facing message or translation key in `src/shared/errors/**`, `src/shared/middlewares/error-handler.middleware.ts`, `src/domains/**/*.validator.ts`, `src/domains/**/*.service.ts`, `src/domains/**/*.controller.ts`, `src/shared/constants/**`, or `src/shared/locales/**`
+- **Trigger**: added or edited user-facing message or translation key in `src/shared/errors/**`, `src/shared/middlewares/core/error-handler.middleware.ts`, `src/domains/**/*.validator.ts`, `src/domains/**/*.service.ts`, `src/domains/**/*.controller.ts`, `src/shared/constants/**`, or `src/shared/locales/**`
 - **Action**: read and follow `i18n-message-guard` — use translation keys in code, add/update keys in `src/shared/locales/en/` (and other locales), no raw user-facing strings in errors or success payloads
 
 ### Path to production gate
@@ -165,7 +165,7 @@ After completing any task, scan the changes and invoke matching skills:
 ### Before commit guard
 
 - **Trigger**: user runs `git commit` and the pre-commit hook fails; or user asks to fix commit errors, pre-commit failures, or make code commit-ready; or user edits `.husky/pre-commit` or `package.json` lint-staged
-- **Action**: read and follow `before-commit-guard` — run `pnpm validate`, `pnpm validate:domain`, fix the failing step (lint, typecheck, domain structure, gitleaks, conflicts, large files) per the skill
+- **Action**: read and follow `before-commit-guard` — run **`pnpm guard:pre-commit`**, fix the failing labeled step
 
 ### OpenAPI multilingual
 

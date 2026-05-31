@@ -77,7 +77,7 @@ Commits should follow **[Conventional Commits](https://www.conventionalcommits.o
 
 | Hook | Script | What runs |
 | --- | --- | --- |
-| **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | `lint-staged` (Biome on `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; markdownlint on `*.md`), `typecheck`, `validate:domain:strict`, route catalog / OpenAPI sync when relevant files change, env-example sync, optional Gitleaks on staged files, conflict-marker and large-file guards |
+| **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | **`pnpm guard:pre-commit`** — labeled steps (list with `pnpm guard:pre-commit:list`): lint-staged, typecheck, validate:domain:strict, validate:scripts-layout, route catalog, optional structure tree / OpenAPI / migration checks, tsdoc, project identity, env-example sync, gitleaks, conflict-marker and large-file guards. On failure, read the **`✗ FAILED at step N/M:`** line. |
 | **commit-msg** | [`.husky/commit-msg`](.husky/commit-msg) | [Conventional Commits](https://www.conventionalcommits.org/) via commitlint |
 | **pre-push** | [`.husky/pre-push`](.husky/pre-push) | `typecheck`, `build`, `build:check`, `test:unit` |
 

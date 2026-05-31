@@ -1,5 +1,5 @@
 import { and, count, desc, eq, isNull, type SQL } from 'drizzle-orm';
-import { countWithCap } from '@/infrastructure/database/capped-count.util.js';
+import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';

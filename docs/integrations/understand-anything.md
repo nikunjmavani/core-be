@@ -104,7 +104,7 @@ Save the generated guide to `docs/ONBOARDING.md` when prompted, then open a PR i
 Pick a file you will touch soon, for example:
 
 ```text
-/understand-explain src/shared/middlewares/organization-rls-transaction.middleware.ts
+/understand-explain src/shared/middlewares/tenant/organization-rls-transaction.middleware.ts
 ```
 
 ```text
@@ -173,7 +173,7 @@ CI does not run Understand Anything today; analysis is developer-local.
 | Topic | Starter prompt or path |
 | --- | --- |
 | Request + middleware | `/understand-explain src/app.ts` |
-| Tenant RLS | `/understand-explain src/shared/middlewares/organization-rls-transaction.middleware.ts` |
+| Tenant RLS | `/understand-explain src/shared/middlewares/tenant/organization-rls-transaction.middleware.ts` |
 | Domains layout | `/understand-chat What domains exist and how are routes registered?` |
 | Workers | `/understand-chat How do BullMQ workers get organization context?` |
 | Production risks | Read [production-readiness-audit-2026-05-29.md](../reviews/production-readiness-audit-2026-05-29.md), then `/understand-diff` on your branch |

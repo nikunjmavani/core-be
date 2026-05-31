@@ -3,7 +3,7 @@ import postgres from 'postgres';
 import { resolve } from 'node:path';
 import { readdir, readFile } from 'node:fs/promises';
 import { parseMigrationExecutionMode } from '@/infrastructure/database/migration/migration-execution-mode.js';
-import { isNeonPoolerConnection } from '@/infrastructure/database/connection-url.util.js';
+import { isNeonPoolerConnection } from '@/infrastructure/database/utils/connection-url.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
