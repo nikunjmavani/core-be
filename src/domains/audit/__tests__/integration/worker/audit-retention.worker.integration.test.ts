@@ -7,6 +7,7 @@ import { createAuditRetentionWorker } from '@/domains/audit/workers/audit-retent
 import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retention.constants.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { ensureAuditLogPartitionsForTimestamps } from '@/tests/helpers/audit-log-partition.helper.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { env } from '@/shared/config/env.config.js';
 import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
@@ -52,6 +53,8 @@ describe('audit-retention.worker — purge', () => {
     const staleCreatedAt = new Date();
     staleCreatedAt.setDate(staleCreatedAt.getDate() - retentionDays - 1);
     const recentCreatedAt = new Date();
+
+    await ensureAuditLogPartitionsForTimestamps([staleCreatedAt, recentCreatedAt]);
 
     await withGlobalRetentionCleanupDatabaseContext(async (databaseHandle) => {
       await databaseHandle.insert(logs).values([
