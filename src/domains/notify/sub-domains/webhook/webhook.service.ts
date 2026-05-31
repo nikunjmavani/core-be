@@ -9,7 +9,7 @@ import {
   decryptFieldSecret,
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
-import { validateWebhookUrl } from '@/shared/utils/security/webhook-url.util.js';
+import { resolveAndPinWebhookUrl } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
 import { invalidateWebhookOutboundCircuit } from '@/domains/notify/sub-domains/webhook/workers/webhook-outbound-circuit.js';
 import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
 import { createPinnedWebhookFetch } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
@@ -122,7 +122,7 @@ export class WebhookService {
 
   async create(organization_public_id: string, body: unknown, created_by_user_public_id: string) {
     const parsed = validateCreateWebhook(body);
-    await validateWebhookUrl(parsed.url);
+    await resolveAndPinWebhookUrl(parsed.url);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
@@ -150,7 +150,7 @@ export class WebhookService {
   ) {
     const parsed = validateUpdateWebhook(body);
     if (parsed.url !== undefined) {
-      await validateWebhookUrl(parsed.url);
+      await resolveAndPinWebhookUrl(parsed.url);
     }
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =

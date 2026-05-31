@@ -22,12 +22,13 @@ vi.mock('@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js', 
   emitWebhookDeliveryRequested: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/shared/utils/security/webhook-url.util.js', () => ({
-  validateWebhookUrl: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('@/shared/utils/security/webhook-outbound-fetch.util.js', () => ({
   createPinnedWebhookFetch: createPinnedWebhookFetchMock,
+  resolveAndPinWebhookUrl: vi.fn().mockResolvedValue({
+    parsed: new URL('https://example.com/hook'),
+    pinnedAddress: '93.184.216.34',
+    port: 443,
+  }),
 }));
 
 vi.mock('@/shared/utils/security/field-secret-encryption.util.js', async (importOriginal) => ({
