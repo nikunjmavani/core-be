@@ -23,6 +23,8 @@ import { uploads } from '@/domains/upload/upload.schema.js';
 import { UPLOAD_PURPOSES, UPLOAD_TARGETS } from '@/domains/upload/upload.constants.js';
 import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+
+const SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY = 'tenant-isolation-subscription-mutation-key';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 const TENANCY_READ_PERMISSIONS = [
@@ -206,6 +208,7 @@ describe('Security: Tenant isolation', () => {
         ),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationB.public_id,
+        headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: {},
       });
 
@@ -222,6 +225,7 @@ describe('Security: Tenant isolation', () => {
         ),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationB.public_id,
+        headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: { plan_id: fixture.plan.public_id },
       });
 
@@ -239,6 +243,7 @@ describe('Security: Tenant isolation', () => {
         ),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationB.public_id,
+        headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: {},
       });
 
