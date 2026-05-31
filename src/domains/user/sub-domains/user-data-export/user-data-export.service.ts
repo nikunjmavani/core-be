@@ -277,20 +277,12 @@ export class UserDataExportService {
     }
   }
 
-  async completeExportJob(
-    options: {
-      exportPublicId: string;
-      userInternalId: number;
-      userPublicId: string;
-      body: Buffer;
-    },
-    databaseHandle?: RequestScopedPostgresDatabase,
-  ): Promise<void> {
-    if (databaseHandle !== undefined) {
-      await this.completeExportJobInDatabaseContext(options, databaseHandle);
-      return;
-    }
-
+  async completeExportJob(options: {
+    exportPublicId: string;
+    userInternalId: number;
+    userPublicId: string;
+    body: Buffer;
+  }): Promise<void> {
     const s3Key = await withUserDatabaseContext(
       options.userPublicId,
       async (scopedDatabaseHandle) =>
@@ -314,64 +306,69 @@ export class UserDataExportService {
       },
     });
 
-    await withUserDatabaseContext(options.userPublicId, async (scopedDatabaseHandle) => {
-      const cancelled = await this.isExportJobCancelled({
+    try {
+      await withUserDatabaseContext(options.userPublicId, async (scopedDatabaseHandle) => {
+        await this.finalizeExportAfterUpload(
+          {
+            exportPublicId: options.exportPublicId,
+            userInternalId: options.userInternalId,
+            userPublicId: options.userPublicId,
+          },
+          scopedDatabaseHandle,
+        );
+      });
+    } catch (error) {
+      await this.bestEffortDeleteUploadedExportArtifact(s3Key, {
         exportPublicId: options.exportPublicId,
         userInternalId: options.userInternalId,
-        userPublicId: options.userPublicId,
-        databaseHandle: scopedDatabaseHandle,
       });
-      if (cancelled) {
-        throw new UserDataExportCancelledError();
-      }
-
-      const exportRepository = this.resolveExportRepository(scopedDatabaseHandle);
-      const completedAt = new Date();
-      await exportRepository.updateStatus(options.exportPublicId, options.userInternalId, {
-        status: USER_DATA_EXPORT_STATUSES.COMPLETED,
-        completed_at: completedAt,
-        failed_at: null,
-        error_code: null,
-      });
-    });
+      throw error;
+    }
   }
 
-  private async completeExportJobInDatabaseContext(
+  private async finalizeExportAfterUpload(
     options: {
       exportPublicId: string;
       userInternalId: number;
       userPublicId: string;
-      body: Buffer;
     },
     databaseHandle: RequestScopedPostgresDatabase,
   ): Promise<void> {
-    const s3Key = await this.resolveExportArtifactS3Key(
-      {
-        exportPublicId: options.exportPublicId,
-        userInternalId: options.userInternalId,
-        userPublicId: options.userPublicId,
-      },
+    const cancelled = await this.isExportJobCancelled({
+      exportPublicId: options.exportPublicId,
+      userInternalId: options.userInternalId,
+      userPublicId: options.userPublicId,
       databaseHandle,
-    );
-
-    await this.objectStorage.putObject({
-      key: s3Key,
-      body: options.body,
-      contentType: 'application/gzip',
-      metadata: {
-        format: 'json',
-        schema_version: '1',
-      },
     });
+    if (cancelled) {
+      throw new UserDataExportCancelledError();
+    }
 
     const exportRepository = this.resolveExportRepository(databaseHandle);
     const completedAt = new Date();
-    await exportRepository.updateStatus(options.exportPublicId, options.userInternalId, {
-      status: USER_DATA_EXPORT_STATUSES.COMPLETED,
-      completed_at: completedAt,
-      failed_at: null,
-      error_code: null,
-    });
+    const updated = await exportRepository.updateStatus(
+      options.exportPublicId,
+      options.userInternalId,
+      {
+        status: USER_DATA_EXPORT_STATUSES.COMPLETED,
+        completed_at: completedAt,
+        failed_at: null,
+        error_code: null,
+      },
+    );
+    if (!updated) {
+      throw new UserDataExportCancelledError();
+    }
+  }
+
+  private async bestEffortDeleteUploadedExportArtifact(
+    s3Key: string,
+    context: { exportPublicId: string; userInternalId: number },
+  ): Promise<void> {
+    const objectDeleted = await this.objectStorage.deleteObject(s3Key);
+    if (!objectDeleted) {
+      logger.warn({ ...context, s3Key }, 'user-data-export.complete.s3DeleteFailed');
+    }
   }
 
   private async resolveExportArtifactS3Key(

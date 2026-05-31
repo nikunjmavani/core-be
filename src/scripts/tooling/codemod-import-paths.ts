@@ -42,8 +42,8 @@ function rewriteFile(filePath: string): boolean {
   let changed = false;
 
   const updated = source.replace(
-    /(?:from\s+['"]|\bimport\s*\(['"])(\.(?:\.\/)+[^'"]+)(['"])/g,
-    (match, importPath: string, _quote: string) => {
+    /(?:from\s+['"]|\bimport\s*\(['"])(\.(?:\.\/)+[^'"]+)(?:['"])/g,
+    (match, importPath: string) => {
       if (!importPath.startsWith('../')) {
         return match;
       }

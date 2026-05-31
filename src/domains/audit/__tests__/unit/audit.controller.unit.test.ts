@@ -110,4 +110,16 @@ describe('createAuditController', () => {
       meta: { pagination: expect.objectContaining({ has_more: false, next: null }) },
     });
   });
+
+  it('listLogs omits estimated_total when service total is null', async () => {
+    vi.mocked(service.listForAdmin).mockResolvedValueOnce({
+      items: [],
+      total: null,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    } as never);
+    const response = await controller.listLogs(mockRequest(), mockReply());
+    expect(response.meta?.pagination).not.toHaveProperty('estimated_total');
+  });
 });
