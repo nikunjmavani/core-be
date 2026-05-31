@@ -24,6 +24,7 @@ What it does not own: user profile (lives in [user](src/domains/user/)), organiz
 - **Hashed-at-rest secrets**: passwords use argon2id; verification tokens, magic-link tokens, password-reset tokens, MFA backup codes, and session JWT hashes are stored as `sha256(raw)` (or argon2 for passwords). Raw secrets leave the platform only via outbound email or to the client at issuance time.
 - **Short JWT lifetime**: `ACCESS_TOKEN_EXPIRY_SECONDS = 900` (15 min). Refresh requires the Origin-checked session cookie.
 - **Lockout**: `MAX_FAILED_LOGIN_ATTEMPTS = 10` per account; locks for `ACCOUNT_LOCKOUT_MINUTES = 30`. The lock is checked after password verification, so a correct password always bypasses it (no victim-account DoS); it only rejects further wrong attempts. Online brute force is bounded by the per-IP + per-email rate limits and CAPTCHA on `/login`.
+- **No manual OAuth identity binding**: `POST` auth-method create rejects `provider: manual` with a client-supplied provider identity — only OAuth completion paths may attach provider subjects, preventing account takeover via forged provider linkage.
 
 ## Sub-domains
 

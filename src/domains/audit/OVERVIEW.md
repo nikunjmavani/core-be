@@ -10,7 +10,8 @@ What it owns:
 
 - The `audit_logs.audit_log` table, its schema, and its retention policy.
 - The single `AuditService.record()` write entry-point that all other domains call (directly or through `recordAuditEvent` helper).
-- The `GET /api/v1/audit/logs` cursor-paginated read endpoint (global-admin only).
+- `GET /api/v1/audit/logs` — cross-tenant cursor-paginated listing (global `SUPER_ADMIN` / `ADMIN` only).
+- Org-scoped listing is exposed from tenancy as `GET /api/v1/tenancy/organizations/:id/audit-logs` (`audit-log:read`); implemented by `AuditService.listForOrganization`.
 
 What it does not own: deciding **when** to emit an audit event — that's the responsibility of each calling domain. Audit only enforces the shape, the durability, and the read contract.
 
@@ -19,7 +20,8 @@ What it does not own: deciding **when** to emit an audit event — that's the re
 - **Append-only**: rows are never updated or deleted by the API. Hard-delete only happens via the retention worker after the retention window passes.
 - **Best-effort writes**: an audit failure must not fail the originating HTTP request. Callers go through `recordAuditEvent(auditService, input, log)` from `@/shared/utils/infrastructure/audit-record.util.ts`, which catches and logs failures.
 - **Actor-scoped RLS**: writes run inside `withUserDatabaseContext(actorUserPublicId, ...)` so RLS sees the actor's organization scope, not the caller's.
-- **Read-restricted**: read endpoints require global `admin` or `super_admin` role — never an organization-level permission. There is no per-tenant audit read path today.
+- **Two read paths, two RLS contexts**: org listing runs in `withOrganizationDatabaseContext` (`app.current_organization_id`); global admin listing runs in `withGlobalAdminDatabaseContext` (`app.global_admin = true`) so cross-tenant reads are explicit under FORCE RLS, not table-owner bypass.
+- **Global admin gate**: `GET /api/v1/audit/logs` requires global `SUPER_ADMIN` or `ADMIN`. Org path requires `audit-log:read` on the target organization.
 - **Severity is a fixed set**: `INFO` (default), `WARNING` (denied/failed actions still worth recording), `CRITICAL` (global-admin lifecycle and security-incident events).
 
 ## Sub-domains
