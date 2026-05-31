@@ -26,6 +26,7 @@ vi.mock('@/shared/utils/infrastructure/health-operational-metrics.util.js', () =
     dlq_depth: 0,
     draining: false,
     worker_queues: [],
+    worker_queue_manifest: [],
   }),
 }));
 

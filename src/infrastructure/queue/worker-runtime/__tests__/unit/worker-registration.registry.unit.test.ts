@@ -37,7 +37,10 @@ vi.mock('bullmq', () => ({
   Queue: vi.fn(),
 }));
 
-import { getWorkerQueueRegistrationDefinitions } from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
+import {
+  getWorkerQueueOperationalManifest,
+  getWorkerQueueRegistrationDefinitions,
+} from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
 import { WORKER_QUEUE_FAMILY_NAMES } from '@/infrastructure/queue/worker-runtime/worker-queue-family.constants.js';
 
 describe('worker-registration.registry', () => {
@@ -91,5 +94,15 @@ describe('worker-registration.registry', () => {
       .sort();
 
     expect(orphanQueueNames).toEqual([]);
+  });
+
+  it('exports a serializable operational manifest without factory functions', () => {
+    const manifest = getWorkerQueueOperationalManifest();
+    expect(manifest).toHaveLength(getWorkerQueueRegistrationDefinitions().length);
+    for (const entry of manifest) {
+      expect(entry).not.toHaveProperty('create');
+      expect(entry.queueName).toBeTruthy();
+      expect(entry.family).toBeTruthy();
+    }
   });
 });

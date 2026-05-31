@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
+import { getWorkerQueueOperationalManifest } from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
 import { isApplicationDraining } from '@/shared/utils/infrastructure/application-lifecycle.util.js';
 import { getCachedHealthOperationalMetrics } from '@/shared/utils/infrastructure/health-operational-metrics.util.js';
 import { getCachedDependencyReadinessProbes } from '@/shared/utils/infrastructure/readiness-probes.util.js';
@@ -15,6 +16,7 @@ async function getOperationalMetricsForReadiness() {
       dlq_depth: 0,
       draining: isApplicationDraining(),
       worker_queues: [],
+      worker_queue_manifest: getWorkerQueueOperationalManifest(),
     };
   }
 }

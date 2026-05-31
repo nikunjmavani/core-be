@@ -350,6 +350,43 @@ export function getWorkerQueueRegistrationDefinitions(): readonly WorkerQueueReg
   return WORKER_QUEUE_REGISTRATION_DEFINITIONS;
 }
 
+/** Serializable operational manifest row (no factory functions). */
+export type WorkerQueueOperationalManifestEntry = Pick<
+  WorkerQueueRegistrationDefinition,
+  | 'queueName'
+  | 'family'
+  | 'logLabel'
+  | 'usesPostgres'
+  | 'scheduled'
+  | 'criticality'
+  | 'holdsConnectionDuringExternalIo'
+>;
+
+/**
+ * Returns the declarative worker/queue manifest for ops dashboards and `/readyz`.
+ */
+export function getWorkerQueueOperationalManifest(): readonly WorkerQueueOperationalManifestEntry[] {
+  return WORKER_QUEUE_REGISTRATION_DEFINITIONS.map(
+    ({
+      queueName,
+      family,
+      logLabel,
+      usesPostgres,
+      scheduled,
+      criticality,
+      holdsConnectionDuringExternalIo,
+    }) => ({
+      queueName,
+      family,
+      logLabel,
+      usesPostgres,
+      scheduled,
+      criticality,
+      ...(holdsConnectionDuringExternalIo === undefined ? {} : { holdsConnectionDuringExternalIo }),
+    }),
+  );
+}
+
 /**
  * Filters the registry down to definitions whose `family` is in the selected set — used
  * by split worker services so `pnpm dev:worker` only starts the queues the local process
