@@ -6,6 +6,10 @@ import {
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
 import { runWithWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
+import {
+  brandWorkerContextDatabaseHandle,
+  type WorkerContextDatabaseHandle,
+} from '@/infrastructure/database/utils/database-handle.types.js';
 
 /** Options for {@link withGlobalRetentionCleanupDatabaseContext}. */
 export type GlobalRetentionCleanupDatabaseContextOptions = {
@@ -18,7 +22,7 @@ export type GlobalRetentionCleanupDatabaseContextOptions = {
  * so tombstone and cross-tenant retention workers can access FORCE RLS tables under `core_be_app`.
  */
 export async function withGlobalRetentionCleanupDatabaseContext<T>(
-  callback: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,
+  callback: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
   options?: GlobalRetentionCleanupDatabaseContextOptions,
 ): Promise<T> {
   return runWithWorkerDatabaseContext({ kind: 'global_retention_cleanup' }, () =>
@@ -28,7 +32,9 @@ export async function withGlobalRetentionCleanupDatabaseContext<T>(
         await databaseHandle.execute(drizzleSql`SET LOCAL ROLE core_be_app`);
       }
       await setLocalDatabaseConfig(databaseHandle, 'app.global_retention_cleanup', 'true');
-      return runWithPinnedDatabaseHandle(databaseHandle, () => callback(databaseHandle));
+      return runWithPinnedDatabaseHandle(databaseHandle, () =>
+        callback(brandWorkerContextDatabaseHandle(databaseHandle)),
+      );
     }),
   );
 }

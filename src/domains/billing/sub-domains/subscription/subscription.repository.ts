@@ -1,7 +1,8 @@
 import { and, eq, isNull, lt, lte, ne, or } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
-import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
+import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
 import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
@@ -179,7 +180,7 @@ export class SubscriptionRepository {
 
 /** Worker-only factory — requires an explicit handle from `withOrganizationContext`. */
 export function createWorkerSubscriptionRepository(
-  databaseHandle: RequestScopedPostgresDatabase,
+  databaseHandle: WorkerDatabaseHandle,
 ): SubscriptionRepository {
   assertWorkerDatabaseContext(['organization']);
   return new SubscriptionRepository(databaseHandle);

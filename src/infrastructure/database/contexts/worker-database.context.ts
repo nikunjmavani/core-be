@@ -1,6 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { database } from '@/infrastructure/database/connection.js';
 import {
+  brandWorkerContextDatabaseHandle,
+  type PostgresDatabaseHandle,
+  type WorkerContextDatabaseHandle,
+} from '@/infrastructure/database/utils/database-handle.types.js';
+import {
   isForceRlsTable,
   type ForceRlsTableRef,
 } from '@/infrastructure/database/utils/force-rls-tables.constants.js';
@@ -134,15 +139,15 @@ export function assertWorkerForceRlsTableAccess(tableRef: ForceRlsTableRef): voi
  * Pins ALS so getRequestDatabase() resolves in worker runtime without opening a transaction.
  */
 export async function withSystemTableWorkerContext<T>(
-  callback: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,
+  callback: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
 ): Promise<T> {
   if (!isWorkerRuntime()) {
-    return callback(database as RequestScopedPostgresDatabase);
+    return callback(brandWorkerContextDatabaseHandle(database as PostgresDatabaseHandle));
   }
 
   return runWithWorkerDatabaseContext({ kind: 'system_table' }, () =>
     runWithPinnedDatabaseHandle(database as RequestScopedPostgresDatabase, () =>
-      callback(database as RequestScopedPostgresDatabase),
+      callback(brandWorkerContextDatabaseHandle(database as PostgresDatabaseHandle)),
     ),
   );
 }

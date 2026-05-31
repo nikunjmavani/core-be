@@ -1,5 +1,6 @@
 import { Worker, type Job, type WorkerOptions } from 'bullmq';
-import type { PostgresDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
+import type { WorkerContextDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
+import { brandWorkerContextDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
 import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
 import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
@@ -7,7 +8,7 @@ import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 
 /** Explicit Drizzle handle passed from a worker context wrapper into processors/repositories. */
-export type WorkerDatabaseHandle = PostgresDatabaseHandle;
+export type WorkerDatabaseHandle = WorkerContextDatabaseHandle;
 
 /**
  * Decorates a per-queue job payload `TJob` with the `organizationPublicId` discriminator
@@ -44,7 +45,7 @@ export async function runTenantScopedWorkerJob<TJob, TResult>(
 ): Promise<TResult> {
   const { organizationPublicId, ...jobPayload } = job;
   return withOrganizationContext(organizationPublicId, (databaseHandle) =>
-    processor(databaseHandle, jobPayload as TJob),
+    processor(brandWorkerContextDatabaseHandle(databaseHandle), jobPayload as TJob),
   );
 }
 
@@ -54,7 +55,9 @@ export async function runTenantScopedWorkerJob<TJob, TResult>(
 export async function runGlobalRetentionWorkerJob<TResult>(
   processor: (databaseHandle: WorkerDatabaseHandle) => Promise<TResult>,
 ): Promise<TResult> {
-  return withGlobalRetentionCleanupDatabaseContext((databaseHandle) => processor(databaseHandle));
+  return withGlobalRetentionCleanupDatabaseContext((databaseHandle) =>
+    processor(brandWorkerContextDatabaseHandle(databaseHandle)),
+  );
 }
 
 /**
@@ -66,7 +69,7 @@ export async function runUserScopedWorkerJob<TJob, TResult>(
 ): Promise<TResult> {
   const { userPublicId, ...jobPayload } = job;
   return withUserDatabaseContext(userPublicId, (databaseHandle) =>
-    processor(databaseHandle, jobPayload as TJob),
+    processor(brandWorkerContextDatabaseHandle(databaseHandle), jobPayload as TJob),
   );
 }
 

@@ -836,6 +836,7 @@ src/
     │   │   │   ├── assert-database-rls-safety.unit.test.ts
     │   │   │   ├── assert-database-tls-safety.unit.test.ts
     │   │   │   ├── tenant-database.context.test.ts
+    │   │   │   ├── worker-context-database-handle.unit.test.ts
     │   │   │   └── worker-database.context.test.ts
     │   ├── contexts/
     │   │   ├── global-admin-database.context.ts

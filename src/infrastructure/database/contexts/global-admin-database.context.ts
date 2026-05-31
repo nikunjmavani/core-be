@@ -6,6 +6,10 @@ import {
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
 import { runWithWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
+import {
+  brandWorkerContextDatabaseHandle,
+  type WorkerContextDatabaseHandle,
+} from '@/infrastructure/database/utils/database-handle.types.js';
 
 /** Options for {@link withGlobalAdminDatabaseContext}. */
 export type GlobalAdminDatabaseContextOptions = {
@@ -36,7 +40,7 @@ export type GlobalAdminDatabaseContextOptions = {
  *   self-service request path.
  */
 export async function withGlobalAdminDatabaseContext<T>(
-  callback: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,
+  callback: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
   options?: GlobalAdminDatabaseContextOptions,
 ): Promise<T> {
   return runWithWorkerDatabaseContext({ kind: 'global_admin' }, () =>
@@ -46,7 +50,9 @@ export async function withGlobalAdminDatabaseContext<T>(
         await databaseHandle.execute(drizzleSql`SET LOCAL ROLE core_be_app`);
       }
       await setLocalDatabaseConfig(databaseHandle, 'app.global_admin', 'true');
-      return runWithPinnedDatabaseHandle(databaseHandle, () => callback(databaseHandle));
+      return runWithPinnedDatabaseHandle(databaseHandle, () =>
+        callback(brandWorkerContextDatabaseHandle(databaseHandle)),
+      );
     }),
   );
 }

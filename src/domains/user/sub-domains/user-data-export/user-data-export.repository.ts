@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
+import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { user_data_exports } from '@/domains/user/sub-domains/user-data-export/user-data-export.schema.js';
 import type { UserDataExportStatus } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
@@ -124,7 +125,7 @@ export class UserDataExportRepository {
 
 /** Worker-only factory — requires an explicit handle from `withUserDatabaseContext`. */
 export function createWorkerUserDataExportRepository(
-  databaseHandle: RequestScopedPostgresDatabase,
+  databaseHandle: WorkerDatabaseHandle,
 ): UserDataExportRepository {
   assertWorkerDatabaseContext(['user']);
   return new UserDataExportRepository(databaseHandle);

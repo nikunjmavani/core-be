@@ -1,6 +1,6 @@
 import { ConfigurationError, NotFoundError } from '@/shared/errors/index.js';
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
-import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { createWorkerUserDataExportRepository } from '@/domains/user/sub-domains/user-data-export/user-data-export.repository.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -229,7 +229,7 @@ export class UserDataExportService {
     exportPublicId: string;
     userInternalId: number;
     userPublicId: string;
-    databaseHandle?: RequestScopedPostgresDatabase;
+    databaseHandle?: WorkerDatabaseHandle;
   }): Promise<boolean> {
     const exportRepository = this.resolveExportRepository(options.databaseHandle);
     const row = await exportRepository.findByPublicIdAndUserId(
@@ -247,7 +247,7 @@ export class UserDataExportService {
   async markProcessing(
     exportPublicId: string,
     userInternalId: number,
-    databaseHandle?: RequestScopedPostgresDatabase,
+    databaseHandle?: WorkerDatabaseHandle,
     userPublicId?: string,
   ): Promise<void> {
     const exportRepository = this.resolveExportRepository(databaseHandle);
@@ -325,7 +325,7 @@ export class UserDataExportService {
       userInternalId: number;
       userPublicId: string;
     },
-    databaseHandle: RequestScopedPostgresDatabase,
+    databaseHandle: WorkerDatabaseHandle,
   ): Promise<void> {
     const cancelled = await this.isExportJobCancelled({
       exportPublicId: options.exportPublicId,
@@ -370,7 +370,7 @@ export class UserDataExportService {
       userInternalId: number;
       userPublicId: string;
     },
-    databaseHandle: RequestScopedPostgresDatabase,
+    databaseHandle: WorkerDatabaseHandle,
   ): Promise<string> {
     const cancelled = await this.isExportJobCancelled({
       exportPublicId: options.exportPublicId,
@@ -398,7 +398,7 @@ export class UserDataExportService {
     exportPublicId: string,
     userInternalId: number,
     errorCode: string,
-    databaseHandle?: RequestScopedPostgresDatabase,
+    databaseHandle?: WorkerDatabaseHandle,
   ): Promise<void> {
     const exportRepository = this.resolveExportRepository(databaseHandle);
     await exportRepository.updateStatus(exportPublicId, userInternalId, {
@@ -434,9 +434,7 @@ export class UserDataExportService {
     }
   }
 
-  private resolveExportRepository(
-    databaseHandle?: RequestScopedPostgresDatabase,
-  ): UserDataExportRepository {
+  private resolveExportRepository(databaseHandle?: WorkerDatabaseHandle): UserDataExportRepository {
     return databaseHandle !== undefined
       ? createWorkerUserDataExportRepository(databaseHandle)
       : this.exportRepository;
