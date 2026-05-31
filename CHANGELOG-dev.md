@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.4.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.3-dev.0...v3.4.4-dev.0) (2026-05-31)
+
+
+### Changed
+
+* complete src directory restructure program ([#209](https://github.com/nikunjmavani/core-be/issues/209)) ([d34be1d](https://github.com/nikunjmavani/core-be/commit/d34be1d123e9b1a8325433d8112c8307c8674ca2))
+
 ## [3.4.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.2-dev.0...v3.4.3-dev.0) (2026-05-31)
 
 
