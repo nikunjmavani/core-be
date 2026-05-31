@@ -1,6 +1,6 @@
 ---
 name: openapi-route-sync
-description: Keeps OpenAPI route metadata in sync when routes change. Use after adding, removing, or updating *.routes.ts — with route-catalog. Operation summary/description/tags live on the Fastify route schema (Zod) directly; locale tag dictionaries live in src/shared/locales/{en,es}/openapi.json. Note — for fresh authoring of route schemas, prefer the newer route-schema-doc-guard skill.
+description: Keeps OpenAPI tag locale workflows in sync when routes change. Legacy — for route schema authoring use route-schema-doc-guard instead. Do not add new references from sync rules or intake docs.
 ---
 
 # OpenAPI route sync (core-be)

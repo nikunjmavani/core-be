@@ -18,3 +18,17 @@ Before changing this repository:
    Optional local integration gate (Docker Postgres + Redis running): `pnpm verify:base` — migrate → seed (minimal + full) → live API smoke → validate. Local stack: `pnpm compose:up` then `pnpm compose:wait`.
 
 7. For **Cursor cloud agent** Linux environments (full dev dependencies, separate from production image), see **[docs/integrations/cursor-cloud-agent-environment.md](docs/integrations/cursor-cloud-agent-environment.md)**.
+
+8. For the full agent map (skills, rules, subagents, MCP), see **[docs/integrations/cursor-agent-system.md](docs/integrations/cursor-agent-system.md)**.
+
+## Custom subagents
+
+Project-defined subagents in [`.cursor/agents/`](.cursor/agents/) run in isolation (read-only) for heavy diagnostics:
+
+| Subagent | File | Use when |
+| -------- | ---- | -------- |
+| **production-reviewer** | [`.cursor/agents/production-reviewer.md`](.cursor/agents/production-reviewer.md) | Pre-release / deploy sign-off — full readiness plan |
+| **verifier** | [`.cursor/agents/verifier.md`](.cursor/agents/verifier.md) | After claiming work complete — scoped validate/tests |
+| **ci-investigator** | [`.cursor/agents/ci-investigator.md`](.cursor/agents/ci-investigator.md) | One failing CI check — root cause without log noise |
+
+To add a subagent, use global **create-subagent** (see [cursor-global-skills](.cursor/skills/cursor-global-skills/SKILL.md)).

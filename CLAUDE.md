@@ -15,23 +15,11 @@ For **any new requirement** (new domain, routes, worker, schema, etc.), use the 
 
 ## Naming Conventions (Non-Negotiable)
 
-### Full Names Only — No Short Names
+Detail and examples live in scoped Cursor rules (auto-attach when editing `src/**/*.ts`):
 
-- **Never use abbreviations** in variable names, file names, or identifiers.
-- Examples: `organization` not `org`, `repository` not `repo`, `identifier` not `id` when standalone, `request` not `req` (except Fastify framework convention), `database` not `db`.
-- Framework conventions (e.g. `req`, `reply` in Fastify handlers) may remain.
-
-### Sub-Domain Directory Names — Always Prefix with Domain
-
-- Sub-domain folder **must** include the domain/resource prefix to avoid ambiguity.
-- Examples: `user-settings` (under user), `organization-settings` (under organization), `member-role-permission` (under member-roles), `webhook-event` (under webhook).
-
-### Object Parameters Only — Outside Repositories
-
-- Any function or method authored in `src/**/*.ts` with **two or more inputs** must take a **single named options object** (interface/type + destructuring).
-- **Exempt files**: `*.repository.ts` and `*.repository.unit.test.ts` keep positional params (e.g. `findByUserAndOrganization(user_id, organization_id)`).
-- **Exempt signatures** (framework-mandated, stay positional): Fastify handlers `(request, reply)`, Fastify plugins `(app, options)`, BullMQ processors `(job)` / `(job, token)`, DI constructors in `*.container.ts`, event-bus subscribers, `Array.sort` comparators, Vitest callbacks (`describe(name, fn)`, `it(name, fn)`), Zod refine callbacks.
-- See `.cursor/rules/object-params.mdc` for the full guide and worked examples.
+- **[full-names-only.mdc](.cursor/rules/full-names-only.mdc)** — no abbreviations in identifiers (`organization` not `org`; Fastify `req`/`reply` exempt)
+- **[object-params.mdc](.cursor/rules/object-params.mdc)** — options objects for 2+ params; repos and framework callbacks exempt
+- Sub-domain folders **must** prefix with domain/resource name (`organization-settings`, `webhook-event`, …)
 
 ## Domain Structure
 
@@ -266,9 +254,7 @@ Billing event helpers and types live with the billing sub-domains that emit them
 
 ### Import paths
 
-- **`src/**/*.ts`**: cross-folder imports use `@/domains/...`, `@/shared/...`, `@/infrastructure/...`, or `@/core/...`. Same-folder co-located layers may use `./`. **Never** `../`.
-- **`tooling/**/*.ts`**: cross-folder imports use `@tooling/setup/...`, `@tooling/openapi/...`, etc. Same-folder `./` only.
-- Enforced by `pnpm test:global` → [`import-paths.global.test.ts`](src/tests/global/import-paths.global.test.ts). See `.cursor/rules/import-paths.mdc`.
+See **[import-paths.mdc](.cursor/rules/import-paths.mdc)** — `@/` in `src/`, `@tooling/` in tooling, same-folder `./` only, never `../`. Enforced by [`import-paths.global.test.ts`](src/tests/global/import-paths.global.test.ts).
 
 ## Drizzle ORM Conventions
 
