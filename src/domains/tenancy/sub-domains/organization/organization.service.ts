@@ -196,9 +196,13 @@ export class OrganizationService {
     organization_public_id: string,
     stripe_customer_id: string,
   ): Promise<void> {
-    const organization = await this.repository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    await this.repository.updateStripeCustomerId(organization.id, stripe_customer_id);
+    // tenancy.organizations is FORCE RLS — persist the Stripe customer id under the org GUC
+    // so the update is not silently dropped when called from the payment provider outside HTTP.
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.repository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      await this.repository.updateStripeCustomerId(organization.id, stripe_customer_id);
+    });
   }
 
   private isGlobalAdmin(global_role?: GlobalRole): boolean {
