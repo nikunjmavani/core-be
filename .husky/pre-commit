@@ -52,21 +52,24 @@ if [ -n "$STAGED_MIGRATION_SQL" ]; then
   git add docs/database/core-be.dbml
 fi
 
-# 6. Env example in sync with schema (same as CI; report-only, no --fix)
+# 6. Project identity artifacts + workflow literals (manifest → constants, CI env)
+pnpm tool:generate-project-identity:check
+
+# 7. Env example in sync with schema (same as CI; report-only, no --fix)
 pnpm scripts:sync-env-example || (
   echo "ERROR: .env.example is out of sync with env schema."
   echo "Run: pnpm scripts:sync-env-example --fix  (then add descriptions)"
   exit 1
 )
 
-# 7. Secret detection (staged files only; required — install via setup:infra or brew install gitleaks)
+# 8. Secret detection (staged files only; required — install via setup:infra or brew install gitleaks)
 if ! command -v gitleaks >/dev/null 2>&1; then
   echo "ERROR: gitleaks is not installed. Install it (e.g. brew install gitleaks) or run: pnpm setup:infra"
   exit 1
 fi
 gitleaks protect --staged --verbose --redact
 
-# 8. Reject merge conflict markers in staged files
+# 9. Reject merge conflict markers in staged files
 CONFLICT_FILES=$(git diff --cached --name-only -z | xargs -0 grep -lE '^<<<<<<<|^>>>>>>>|^=======$' 2>/dev/null || true)
 if [ -n "$CONFLICT_FILES" ]; then
   echo "ERROR: Merge conflict markers found in:"
@@ -74,7 +77,7 @@ if [ -n "$CONFLICT_FILES" ]; then
   exit 1
 fi
 
-# 9. Reject large files (>1MB) in staged files
+# 10. Reject large files (>1MB) in staged files
 LARGE_FILES=""
 for file in $(git diff --cached --name-only --diff-filter=d); do
   [ -z "$file" ] && continue

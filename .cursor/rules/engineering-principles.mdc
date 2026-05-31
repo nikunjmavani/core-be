@@ -15,6 +15,7 @@ Write production-grade, maintainable, scalable code. Preserve simplicity; avoid 
 2. For new requirements, use **[requirement-intake](../../docs/getting-started/requirement-intake.md)** and consult **[skill-index](../skills/skill-index/SKILL.md)** first.
 3. Reuse existing utilities, services, and patterns before creating new ones.
 4. Do not introduce duplicate abstractions.
+5. **Product slug, image names, branch/env mapping:** follow **[project-identity.mdc](project-identity.mdc)** — manifest `tooling/setup/setup.config.json` and imports from `project-identity.constants.ts`; do not hardcode `core-be` (or manifest-derived names) in `src/`, workflows, or tooling.
 
 ## Code quality
 
