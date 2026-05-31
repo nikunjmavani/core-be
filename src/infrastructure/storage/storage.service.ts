@@ -2,6 +2,7 @@ import {
   S3Client,
   PutObjectCommand,
   HeadObjectCommand,
+  GetObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -133,6 +134,55 @@ export async function headObject(
     });
   } catch (error) {
     logger.error({ error, key, bucket }, 's3.headObject.failed');
+    return null;
+  }
+}
+
+/** Default byte window for magic-byte verification of uploaded objects (512 B). */
+const GET_OBJECT_MAGIC_BYTE_PREFIX_LENGTH = 512;
+
+/**
+ * Fetches the leading bytes of an S3 object for content verification (magic bytes).
+ * Uses a ranged GET so large uploads are not fully buffered in the worker.
+ *
+ * @remarks
+ * - **Algorithm:** `GetObjectCommand` with `Range: bytes=0-(maxBytes-1)` via {@link outboundCall}.
+ * - **Failure modes:** returns `null` on S3 errors (logged); throws when `S3_BUCKET` is unset.
+ * - **Side effects:** single ranged GET to S3.
+ * - **Notes:** default window is 512 B — sufficient for {@link verifyFileMagicBytes}.
+ */
+export async function getObjectLeadingBytes(
+  key: string,
+  maxBytes: number = GET_OBJECT_MAGIC_BYTE_PREFIX_LENGTH,
+): Promise<{ body: Buffer; contentType: string | undefined } | null> {
+  const bucket = env.S3_BUCKET;
+  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
+
+  try {
+    return await outboundCall({
+      name: 's3',
+      operation: async (signal) => {
+        const client = getS3Client();
+        const response = await client.send(
+          new GetObjectCommand({
+            Bucket: bucket,
+            Key: key,
+            Range: `bytes=0-${maxBytes - 1}`,
+          }),
+          { abortSignal: signal },
+        );
+        const body = await response.Body?.transformToByteArray();
+        if (!body) {
+          throw new Error('s3.getObject.empty_body');
+        }
+        return {
+          body: Buffer.from(body),
+          contentType: response.ContentType,
+        };
+      },
+    });
+  } catch (error) {
+    logger.error({ error, key, bucket }, 's3.getObjectLeadingBytes.failed');
     return null;
   }
 }

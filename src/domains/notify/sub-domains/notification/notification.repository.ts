@@ -63,6 +63,11 @@ export class NotificationRepository {
     return rows[0]!.id;
   }
 
+  /** Removes a notification row when post-commit BullMQ enqueue fails (rollback side effect). */
+  async deleteByInternalId(notification_id: number): Promise<void> {
+    await this.db().delete(notifications).where(eq(notifications.id, notification_id));
+  }
+
   async findOrganizationPublicIdByNotificationId(notification_id: number): Promise<string | null> {
     const rows = await this.db()
       .select({ organizationPublicId: organizations.public_id })

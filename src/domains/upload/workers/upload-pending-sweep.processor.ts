@@ -5,10 +5,18 @@ import {
   setUploadStatusByInternalId,
   type PendingUploadSweepRow,
 } from '@/domains/upload/upload.repository.js';
-import { deleteObject, headObject } from '@/infrastructure/storage/storage.service.js';
+import {
+  deleteObject,
+  getObjectLeadingBytes,
+  headObject,
+} from '@/infrastructure/storage/storage.service.js';
 import { PRESIGNED_URL_EXPIRY_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import {
+  isMagicByteVerifiable,
+  verifyFileMagicBytes,
+} from '@/shared/utils/validation/file-magic.util.js';
 import { UPLOAD_PENDING_SWEEP_BATCH_SIZE } from './upload-pending-sweep.constants.js';
 
 /**
@@ -139,5 +147,22 @@ async function resolvePendingUploadVerdict(
   const lengthMatches = metadata.contentLength === row.file_size;
   // S3 may not echo a content-type; only fail on type when one is reported.
   const typeMatches = metadata.contentType === undefined || metadata.contentType === row.mime_type;
-  return lengthMatches && typeMatches ? 'auto_confirm' : 'fail';
+  if (!(lengthMatches && typeMatches)) {
+    return 'fail';
+  }
+  if (isMagicByteVerifiable(row.mime_type)) {
+    try {
+      const object = await getObjectLeadingBytes(row.file_key);
+      if (object === null || !verifyFileMagicBytes(object.body, row.mime_type)) {
+        return 'fail';
+      }
+    } catch (error) {
+      logger.warn(
+        { uploadId: row.id, fileKey: row.file_key, error },
+        'upload-pending-sweep.magicByteVerifyFailed',
+      );
+      return 'fail';
+    }
+  }
+  return 'auto_confirm';
 }

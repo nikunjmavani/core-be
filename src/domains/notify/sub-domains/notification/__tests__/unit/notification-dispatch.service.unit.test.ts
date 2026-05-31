@@ -13,6 +13,7 @@ describe('NotificationDispatch', () => {
   const notificationRepository = {
     create: vi.fn().mockResolvedValue(42),
     findOrganizationPublicIdByOrganizationId: vi.fn().mockResolvedValue('org_public'),
+    deleteByInternalId: vi.fn().mockResolvedValue(undefined),
   } as unknown as NotificationRepository;
 
   const dispatch = createNotificationDispatch(notificationRepository);
@@ -97,5 +98,23 @@ describe('NotificationDispatch', () => {
     ).rejects.toBe(lookupError);
 
     expect(notificationRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('deletes the notification row when post-commit enqueue fails', async () => {
+    const enqueueError = new Error('redis unavailable');
+    enqueueNotificationMock.mockRejectedValueOnce(enqueueError);
+
+    enterOnCommitScope();
+    await dispatch.createAndDispatchNotification({
+      user_id: 1,
+      organization_id: 2,
+      type: 'billing',
+      title: 'Test',
+      message: 'Body',
+    });
+
+    await eventBus.flushOnCommit();
+
+    expect(notificationRepository.deleteByInternalId).toHaveBeenCalledWith(42);
   });
 });
