@@ -18,9 +18,8 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
  *   `export_failed`, and re-throw so BullMQ applies the queue's retry/backoff and DLQ policy.
  * - **Side effects:** writes `auth.user_data_exports` status, uploads a gzip JSON object to the
  *   GDPR S3 prefix, and emits structured logs for observability.
- * - **Notes:** runs inside the user-scoped DB context; cross-domain selects in
- *   {@link UserDataExportService.buildExportPayload} are the documented exception to the
- *   no-cross-domain-schema-read rule.
+ * - **Notes:** runs inside the user-scoped DB context; cross-domain reads delegate to each
+ *   owning domain's service (see dependency rules).
  */
 export async function runUserDataExportJob(
   jobData: UserDataExportJobData,
@@ -32,33 +31,37 @@ export async function runUserDataExportJob(
     { userPublicId, exportPublicId, userInternalId },
     async (databaseHandle) => {
       try {
-        const cancelledBeforeStart = await userDataExportService.isExportJobCancelled(
+        const cancelledBeforeStart = await userDataExportService.isExportJobCancelled({
           exportPublicId,
           userInternalId,
+          userPublicId,
           databaseHandle,
-        );
+        });
         if (cancelledBeforeStart) {
           logger.info({ exportPublicId, userPublicId }, 'user-data-export.worker.cancelled');
           return;
         }
 
-        await userDataExportService.markProcessing(exportPublicId, userInternalId, databaseHandle);
+        await userDataExportService.markProcessing(
+          exportPublicId,
+          userInternalId,
+          databaseHandle,
+          userPublicId,
+        );
 
         if (
-          await userDataExportService.isExportJobCancelled(
+          await userDataExportService.isExportJobCancelled({
             exportPublicId,
             userInternalId,
+            userPublicId,
             databaseHandle,
-          )
+          })
         ) {
           logger.info({ exportPublicId, userPublicId }, 'user-data-export.worker.cancelled');
           return;
         }
 
-        const payload = await userDataExportService.buildExportPayload(
-          userPublicId,
-          databaseHandle,
-        );
+        const payload = await userDataExportService.buildExportPayload(userPublicId);
         const jsonBody = JSON.stringify(payload);
         const compressedBody = await gzipBufferAsync(Buffer.from(jsonBody, 'utf8'));
 
@@ -66,6 +69,7 @@ export async function runUserDataExportJob(
           {
             exportPublicId,
             userInternalId,
+            userPublicId,
             body: compressedBody,
           },
           databaseHandle,

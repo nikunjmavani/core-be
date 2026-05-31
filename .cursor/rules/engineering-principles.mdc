@@ -33,6 +33,7 @@ Write production-grade, maintainable, scalable code. Preserve simplicity; avoid 
 - **Controllers** coordinate only — thin handlers, no DB queries.
 - **Services** express intent — business logic, validators, events; no transaction management in services.
 - **Repositories** own DB access (Drizzle).
+- **Services** express intent; they use **same-domain repositories** and other domains' **services** for cross-domain reads/writes — never another domain's repository or schema.
 - **Postgres** is the only source of truth; workers are pull-based (BullMQ).
 
 For layout, layers, routes, events, and Drizzle conventions, follow **[core-be-src-architecture.mdc](core-be-src-architecture.mdc)** when editing `src/**/*.ts`. For naming, follow **[full-names-only.mdc](full-names-only.mdc)**.

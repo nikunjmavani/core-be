@@ -6,7 +6,7 @@
 
 `core-be` is a multi-tenant SaaS backend: a Node.js + Fastify HTTP API plus a separate BullMQ worker process, both speaking to a single Postgres database and a Redis instance. It is the platform's single source of truth for authentication, organization-scoped tenancy, billing (Stripe-backed), notifications (in-app + email + outbound webhooks), audit, and file uploads.
 
-The codebase is organized by **domain** (bounded context) rather than by layer. Each domain owns its routes, services, repositories, schemas, events, and workers. Cross-domain coordination happens at the service layer (services may import other domain services for reads/writes); cross-domain repository imports are forbidden. Postgres is the only source of truth — workers are pull-based, idempotent, and may be restarted without coordination.
+The codebase is organized by **domain** (bounded context) rather than by layer. Each domain owns its routes, services, repositories, schemas, events, and workers. Cross-domain coordination happens at the service layer: a service uses its own domain's repository and calls other domains' **services** only — never another domain's repository or schema. Postgres is the only source of truth — workers are pull-based, idempotent, and may be restarted without coordination.
 
 This document is the **system entry point**. New contributors should read it first, then descend into the domain `OVERVIEW.md` files for the area they're working in. Cross-cutting rules live in [src/PATTERNS.md](src/PATTERNS.md), end-to-end user journeys in [src/FLOWS.md](src/FLOWS.md), and the deliberate business/security trade-offs encoded as constants in [src/POLICIES.md](src/POLICIES.md).
 

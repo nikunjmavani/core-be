@@ -20,7 +20,7 @@ What it does not own: credentials (lives in [auth](src/domains/auth/)), organiza
 - **One email = one user**: `users.email` is unique; case-insensitive lookups.
 - **Soft delete preserves history**: setting `deleted_at` removes the user from API queries; foreign-key references in audit, billing, and tenancy remain intact for forensic value.
 - **GDPR export caps**: `GDPR_EXPORT_MAX_ROWS_PER_TABLE = 1 000` per table per export. Exceeding the cap truncates with a metadata note rather than failing.
-- **Cross-domain reads in `user-data-export` are documented exceptions**: the export pipeline reads schemas across domains directly (this is the only place the dependency rules permit it). See [CLAUDE.md "Dependency Rules"](CLAUDE.md).
+- **GDPR export uses cross-domain services**: `user-data-export` calls `list*ForUserDataExport` on auth, tenancy, notify, and audit services (wired post-construction). See [Dependency Rules in CLAUDE.md](CLAUDE.md).
 - **Settings / preferences default-on**: a missing row implies the platform default (server returns the default in serialization), not "feature disabled".
 
 ## Sub-domains

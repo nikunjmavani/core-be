@@ -10,7 +10,7 @@ GDPR data export pipeline. A user requests an export; a BullMQ worker bundles ev
 
 ## Key invariants
 
-- **Documented dependency-rule exception**: this is the **only** sub-domain permitted to read other domains' Drizzle schemas directly (CLAUDE.md "Dependency Rules"). The exception exists because GDPR exports are inherently cross-domain.
+- **Cross-domain reads via services only**: {@link UserDataExportService} calls `list*ForUserDataExport` on auth-session, membership, notification, and audit services (wired in `domain-containers.plugin.ts` / `worker-containers.ts`). It uses its own `UserDataExportRepository` for export job rows only.
 - **Per-table row cap**: `GDPR_EXPORT_MAX_ROWS_PER_TABLE = 1 000`. Exceeding the cap truncates with a metadata note rather than failing the export.
 - **24 h download URL TTL**: `USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS = 86 400`. AWS SigV4 caps presigned URLs at 7 days; we run at 24 h to match published privacy posture.
 - **One export per request**: the worker writes a single `user_data_export` row tracking job state; concurrent requests by the same user create a new row each time.

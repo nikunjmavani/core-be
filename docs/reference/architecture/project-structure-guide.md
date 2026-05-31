@@ -84,7 +84,7 @@ System-level narratives sit at the `src/` root only: `src/OVERVIEW.md`, `src/PAT
 **Inconsistencies**
 
 - **Sub-domain has controller but no routes file:** Many sub-domains are exposed only via the parent domain routes (e.g. member-invitation, organization-settings, organization-api-key, organization-notification-policy, webhook-event). Their controllers are used by the parent `billing.routes.ts` or `tenancy.routes.ts` or `notify.routes.ts`; the sub-domain does not have its own `.routes.ts` that is mounted.
-- **`user-data-export`:** intentional cross-schema GDPR reads in `UserDataExportService` (documented exception; not refactored in layer-cleanup pass).
+- **`user-data-export`:** aggregates GDPR export data by calling `list*ForUserDataExport` on auth, tenancy, notify, and audit services (see `wireCrossDomainServices`).
 
 ---
 
@@ -192,7 +192,7 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 | notify/notification.service                                                                                        | user/user.service.js                                                                            | UserService                                      | READ              |
 | notify/webhook.service                                                                                             | tenancy/organization/organization.service.js                                                    | OrganizationService                              | READ              |
 | upload/upload.service                                                                                              | user/user.service.js, organization/organization.service.js, permission/authorization.service.js | UserService, OrganizationService, permissions    | READ              |
-| user/user-data-export/user-data-export.service (exception)                                                         | multiple domain schemas via direct DB                                                           | GDPR export                                      | READ              |
+| user/user-data-export/user-data-export.service                                                                 | auth/auth-session, tenancy/membership, notify/notification, audit/audit services (via `wireCrossDomainServices`) | GDPR export                                      | READ              |
 | tenancy sub-services (membership, member-role, organization-settings, etc.)                                        | organization.repository (same domain)                                                           | Within-tenancy only                              | READ              |
 
 ### Queues and email
@@ -209,7 +209,7 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 
 ### Violations and follow-up
 
-- **None (layer cleanup pass):** No controller imports another controller. Cross-domain access uses services only (except documented `user-data-export`).
+- **None (layer cleanup pass):** No controller imports another controller. Cross-domain access uses other domains' services only; each service uses its own domain's repository.
 - **Follow-up (separate PRs):** Optional `WebhookDeliveryService` extraction for `webhook-delivery.worker.ts` (worker already uses `createWorker*Repository(databaseHandle)` and `createTenantScopedBullMQWorker` — no `getRequestDatabase()`). New domain events/jobs only when product needs them. Tenancy sub-services using `organization.repository` within the tenancy domain is **intentional** — do not “fix” by injecting `OrganizationService` everywhere.
 
 ---
@@ -259,7 +259,7 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 | audit   | audit.schema.ts                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | upload  | upload.schema.ts (`upload.uploads` table)                                                                                                                                                                                                                                                                                                                                                                                                 |
 
-**Schemas with no matching repository:** `user-data-export` has no schema (uses cross-domain reads). Mail outbox schema is infrastructure-owned.
+**Schemas with no matching repository:** `user-data-export` owns `user_data_exports` via `user-data-export.schema.ts`. Mail outbox schema is infrastructure-owned.
 
 **Repositories with no matching schema in same folder:**
 

@@ -51,23 +51,31 @@ describe('user-data-export.processor', () => {
     await runUserDataExportJob(jobData, service as never);
 
     expect(service.isExportJobCancelled).toHaveBeenCalledTimes(2);
+    expect(service.isExportJobCancelled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exportPublicId: jobData.exportPublicId,
+        userInternalId: jobData.userInternalId,
+        userPublicId: jobData.userPublicId,
+        databaseHandle: fakeDatabaseHandle,
+      }),
+    );
     expect(service.markProcessing).toHaveBeenCalledWith(
       jobData.exportPublicId,
       jobData.userInternalId,
       fakeDatabaseHandle,
-    );
-    expect(service.buildExportPayload).toHaveBeenCalledWith(
       jobData.userPublicId,
-      fakeDatabaseHandle,
     );
+    expect(service.buildExportPayload).toHaveBeenCalledWith(jobData.userPublicId);
     expect(service.completeExportJob).toHaveBeenCalledOnce();
     const completeArguments = service.completeExportJob.mock.calls[0]?.[0] as {
       exportPublicId: string;
       userInternalId: number;
+      userPublicId: string;
       body: Buffer;
     };
     expect(completeArguments.exportPublicId).toBe(jobData.exportPublicId);
     expect(completeArguments.userInternalId).toBe(jobData.userInternalId);
+    expect(completeArguments.userPublicId).toBe(jobData.userPublicId);
     expect(Buffer.isBuffer(completeArguments.body)).toBe(true);
     expect(service.failExportJob).not.toHaveBeenCalled();
   });

@@ -2,13 +2,6 @@ import { ConfigurationError, NotFoundError } from '@/shared/errors/index.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { createWorkerUserDataExportRepository } from '@/domains/user/sub-domains/user-data-export/user-data-export.repository.js';
-import { users } from '@/domains/user/user.schema.js';
-import { sessions } from '@/domains/auth/sub-domains/auth-session/auth-session.schema.js';
-import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
-import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
-import { notifications } from '@/domains/notify/sub-domains/notification/notification.schema.js';
-import { logs } from '@/domains/audit/audit.schema.js';
-import { eq, and, isNull, desc } from 'drizzle-orm';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { GDPR_EXPORT_MAX_ROWS_PER_TABLE } from '@/shared/constants/query-limits.constants.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -30,6 +23,10 @@ import { eventBus } from '@/core/events/event-bus.js';
 import { enqueueUserDataExport } from '@/domains/user/sub-domains/user-data-export/queues/user-data-export.queue.js';
 import { USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { env } from '@/shared/config/env.config.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+import type { MembershipService } from '@/domains/tenancy/sub-domains/membership/membership.service.js';
+import type { NotificationService } from '@/domains/notify/sub-domains/notification/notification.service.js';
+import type { AuditService } from '@/domains/audit/audit.service.js';
 
 function buildExportS3Key(userPublicId: string, exportPublicId: string): string {
   return `${USER_DATA_EXPORT_S3_PREFIX}/${userPublicId}/${exportPublicId}.json.gz`;
@@ -40,6 +37,25 @@ function computeArtifactExpiresAt(): Date {
   expiresAt.setDate(expiresAt.getDate() + USER_DATA_EXPORT_ARTIFACT_TTL_DAYS);
   return expiresAt;
 }
+
+/**
+ * Cross-domain services injected lazily into {@link UserDataExportService} so the user container
+ * can be built before auth, tenancy, notify, and audit containers exist.
+ *
+ * @remarks
+ * - **Algorithm:** wired post-construction by {@link UserDataExportService.wireCrossDomainServices}.
+ * - **Failure modes:** {@link UserDataExportService.buildExportPayload} throws
+ *   {@link ConfigurationError} when this bag is unset.
+ * - **Side effects:** none — delegates reads to the hosted services.
+ * - **Notes:** mirrors the {@link UserOffboardingDependencies} lazy-wiring pattern on
+ *   {@link UserService}.
+ */
+export type UserDataExportCrossDomainServices = {
+  authSessionService: AuthSessionService;
+  membershipService: MembershipService;
+  notificationService: NotificationService;
+  auditService: AuditService;
+};
 
 /**
  * Caps a fetched-with-`cap + 1` export category to {@link GDPR_EXPORT_MAX_ROWS_PER_TABLE},
@@ -71,28 +87,41 @@ export function capExportCategory<Row>(
  * @remarks
  * - **Algorithm:** request → persist a `pending` row → enqueue BullMQ job on commit; worker calls
  *   {@link UserDataExportService.markProcessing}, then {@link UserDataExportService.buildExportPayload}
- *   to aggregate cross-domain rows (users, memberships+orgs, sessions, notifications, audit logs)
- *   under {@link GDPR_EXPORT_MAX_ROWS_PER_TABLE}, gzips the JSON, uploads to S3, and flips status to
+ *   to aggregate cross-domain rows via each owning domain's service under
+ *   {@link GDPR_EXPORT_MAX_ROWS_PER_TABLE}, gzips the JSON, uploads to S3, and flips status to
  *   `completed`. On status reads, a presigned download URL is minted only when COMPLETED and
  *   `expires_at` is in the future.
  * - **Failure modes:** missing user → {@link NotFoundError}; missing S3 bucket config →
- *   {@link ConfigurationError}; concurrent user soft-delete or row removal → throws
+ *   {@link ConfigurationError}; cross-domain services not wired → {@link ConfigurationError};
+ *   concurrent user soft-delete or row removal → throws
  *   {@link UserDataExportCancelledError} so the worker exits without retry; unexpected errors are
  *   recorded via {@link UserDataExportService.failExportJob}.
  * - **Side effects:** writes `auth.user_data_exports`, uploads/deletes objects in the GDPR S3
  *   prefix, enqueues `user-data-export` BullMQ jobs, and emits info-level audit logs. Used by
  *   `UserService` offboarding to purge every export row + S3 object on account deletion.
- * - **Notes:** documented cross-domain schema-read exception — this service reads `users`,
- *   `sessions`, `memberships`, `organizations`, `notifications`, and `logs` directly via the worker
- *   database handle (forbidden elsewhere; see CLAUDE.md "Dependency Rules"). Self-service only — no
- *   organization context required.
+ * - **Notes:** cross-domain reads go through other domains' services only (see dependency rules).
+ *   Self-service only — no organization context required.
  */
 export class UserDataExportService {
+  private crossDomainServices: UserDataExportCrossDomainServices | undefined;
+
   constructor(
     private readonly userService: UserService,
     private readonly exportRepository: UserDataExportRepository,
     private readonly objectStorage: ObjectStoragePort,
   ) {}
+
+  /** Wire auth, tenancy, notify, and audit services after the composition root finishes. */
+  wireCrossDomainServices(services: UserDataExportCrossDomainServices): void {
+    this.crossDomainServices = services;
+  }
+
+  private requireCrossDomainServices(): UserDataExportCrossDomainServices {
+    if (this.crossDomainServices === undefined) {
+      throw new ConfigurationError('UserDataExportService cross-domain services are not wired');
+    }
+    return this.crossDomainServices;
+  }
 
   async requestExport(userPublicId: string): Promise<UserDataExportOutput> {
     const user = await this.userService.findUserRecordByPublicId(userPublicId);
@@ -184,38 +213,39 @@ export class UserDataExportService {
    * Returns false when the export row was removed (offboarding) or the user was soft-deleted.
    * Worker jobs should exit without retry when this returns false.
    */
-  async isExportJobCancelled(
-    exportPublicId: string,
-    userInternalId: number,
-    databaseHandle: RequestScopedPostgresDatabase,
-  ): Promise<boolean> {
-    const exportRepository = createWorkerUserDataExportRepository(databaseHandle);
-    const row = await exportRepository.findByPublicIdAndUserId(exportPublicId, userInternalId);
+  async isExportJobCancelled(options: {
+    exportPublicId: string;
+    userInternalId: number;
+    userPublicId: string;
+    databaseHandle?: RequestScopedPostgresDatabase;
+  }): Promise<boolean> {
+    const exportRepository = this.resolveExportRepository(options.databaseHandle);
+    const row = await exportRepository.findByPublicIdAndUserId(
+      options.exportPublicId,
+      options.userInternalId,
+    );
     if (!row) {
       return true;
     }
 
-    const userRows = await databaseHandle
-      .select({ deleted_at: users.deleted_at })
-      .from(users)
-      .where(eq(users.id, userInternalId))
-      .limit(1);
-    const user = userRows[0];
-    return user === undefined || user.deleted_at !== null;
+    const user = await this.userService.findUserRecordByPublicId(options.userPublicId);
+    return user === null || user.deleted_at !== null;
   }
 
   async markProcessing(
     exportPublicId: string,
     userInternalId: number,
     databaseHandle?: RequestScopedPostgresDatabase,
+    userPublicId?: string,
   ): Promise<void> {
     const exportRepository = this.resolveExportRepository(databaseHandle);
-    if (databaseHandle !== undefined) {
-      const cancelled = await this.isExportJobCancelled(
+    if (databaseHandle !== undefined && userPublicId !== undefined) {
+      const cancelled = await this.isExportJobCancelled({
         exportPublicId,
         userInternalId,
+        userPublicId,
         databaseHandle,
-      );
+      });
       if (cancelled) {
         throw new UserDataExportCancelledError();
       }
@@ -232,17 +262,19 @@ export class UserDataExportService {
     options: {
       exportPublicId: string;
       userInternalId: number;
+      userPublicId: string;
       body: Buffer;
     },
     databaseHandle?: RequestScopedPostgresDatabase,
   ): Promise<void> {
     const exportRepository = this.resolveExportRepository(databaseHandle);
     if (databaseHandle !== undefined) {
-      const cancelled = await this.isExportJobCancelled(
-        options.exportPublicId,
-        options.userInternalId,
+      const cancelled = await this.isExportJobCancelled({
+        exportPublicId: options.exportPublicId,
+        userInternalId: options.userInternalId,
+        userPublicId: options.userPublicId,
         databaseHandle,
-      );
+      });
       if (cancelled) {
         throw new UserDataExportCancelledError();
       }
@@ -323,24 +355,22 @@ export class UserDataExportService {
       : this.exportRepository;
   }
 
-  async buildExportPayload(
-    userPublicId: string,
-    databaseHandle: RequestScopedPostgresDatabase,
-  ): Promise<UserDataExport> {
-    const userRows = await databaseHandle
-      .select()
-      .from(users)
-      .where(and(eq(users.public_id, userPublicId), isNull(users.deleted_at)))
-      .limit(1);
-    const user = userRows[0];
-    if (!user) throw new NotFoundError('User');
+  async buildExportPayload(userPublicId: string): Promise<UserDataExport> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    const crossDomain = this.requireCrossDomainServices();
+    const fetchLimit = GDPR_EXPORT_MAX_ROWS_PER_TABLE + 1;
 
     const {
       memberships: userMembershipsRaw,
       sessions: userSessionsRaw,
       notifications: userNotificationsRaw,
       auditLogs: userAuditLogsRaw,
-    } = await this.fetchExportCategoryRows(user.id, databaseHandle);
+    } = await this.fetchExportCategoryRows({
+      userPublicId,
+      userInternalId: user.id,
+      fetchLimit,
+      crossDomain,
+    });
 
     const truncatedCategories: string[] = [];
     const userMemberships = capExportCategory(
@@ -409,67 +439,33 @@ export class UserDataExportService {
   }
 
   /**
-   * Loads each export category for `userInternalId`, fetching one row beyond
-   * {@link GDPR_EXPORT_MAX_ROWS_PER_TABLE} so the caller can detect and disclose
-   * truncation instead of silently dropping rows.
+   * Loads each export category via the owning domain's service, fetching one row beyond
+   * {@link GDPR_EXPORT_MAX_ROWS_PER_TABLE} so the caller can detect and disclose truncation.
    */
-  private async fetchExportCategoryRows(
-    userInternalId: number,
-    databaseHandle: RequestScopedPostgresDatabase,
-  ) {
-    const fetchLimit = GDPR_EXPORT_MAX_ROWS_PER_TABLE + 1;
+  private async fetchExportCategoryRows(options: {
+    userPublicId: string;
+    userInternalId: number;
+    fetchLimit: number;
+    crossDomain: UserDataExportCrossDomainServices;
+  }) {
     const [memberships_, sessions_, notifications_, auditLogs_] = await Promise.all([
-      databaseHandle
-        .select({
-          name: organizations.name,
-          slug: organizations.slug,
-          status: memberships.status,
-          created_at: memberships.created_at,
-        })
-        .from(memberships)
-        .innerJoin(organizations, eq(memberships.organization_id, organizations.id))
-        .where(
-          and(
-            eq(memberships.user_id, userInternalId),
-            isNull(memberships.deleted_at),
-            isNull(organizations.deleted_at),
-          ),
-        )
-        .limit(fetchLimit),
-
-      databaseHandle
-        .select({
-          ip_address: sessions.ip_address,
-          last_active_at: sessions.last_active_at,
-          created_at: sessions.created_at,
-        })
-        .from(sessions)
-        .where(eq(sessions.user_id, userInternalId))
-        .orderBy(desc(sessions.created_at))
-        .limit(fetchLimit),
-
-      databaseHandle
-        .select({
-          type: notifications.type,
-          title: notifications.title,
-          message: notifications.message,
-          created_at: notifications.created_at,
-        })
-        .from(notifications)
-        .where(eq(notifications.user_id, userInternalId))
-        .orderBy(desc(notifications.created_at))
-        .limit(fetchLimit),
-
-      databaseHandle
-        .select({
-          action: logs.action,
-          resource_type: logs.resource_type,
-          created_at: logs.created_at,
-        })
-        .from(logs)
-        .where(eq(logs.actor_user_id, userInternalId))
-        .orderBy(desc(logs.created_at))
-        .limit(fetchLimit),
+      options.crossDomain.membershipService.listOrganizationsForUserDataExport({
+        userPublicId: options.userPublicId,
+        userInternalId: options.userInternalId,
+        limit: options.fetchLimit,
+      }),
+      options.crossDomain.authSessionService.listForUserDataExport({
+        userPublicId: options.userPublicId,
+        limit: options.fetchLimit,
+      }),
+      options.crossDomain.notificationService.listForUserDataExport({
+        userPublicId: options.userPublicId,
+        limit: options.fetchLimit,
+      }),
+      options.crossDomain.auditService.listActivityForUserDataExport({
+        userPublicId: options.userPublicId,
+        limit: options.fetchLimit,
+      }),
     ]);
 
     return {

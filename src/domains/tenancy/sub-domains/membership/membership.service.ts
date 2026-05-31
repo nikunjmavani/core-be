@@ -1,6 +1,7 @@
 import { ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserSettingsService } from '@/domains/user/sub-domains/user-settings/user-settings.service.js';
 import {
   isFactoryDefaultUserLocaleSettings,
@@ -325,5 +326,22 @@ export class MembershipService {
       );
       return serializeMembership(newOwnerMembership, organization_public_id);
     });
+  }
+
+  /**
+   * Lists organization memberships for a GDPR data-export bundle under the requesting user's RLS
+   * context (cross-organization read scoped to the owner).
+   */
+  async listOrganizationsForUserDataExport(options: {
+    userPublicId: string;
+    userInternalId: number;
+    limit: number;
+  }) {
+    return withUserDatabaseContext(options.userPublicId, (_databaseHandle) =>
+      this.membershipRepository.listOrganizationsForUserDataExport(
+        options.userInternalId,
+        options.limit,
+      ),
+    );
   }
 }

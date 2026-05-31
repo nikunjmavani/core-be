@@ -72,6 +72,14 @@ export class NotificationService {
     );
   }
 
+  /** Lists notification metadata for a GDPR data-export bundle (capped by caller). */
+  async listForUserDataExport(options: { userPublicId: string; limit: number }) {
+    const userId = await this.resolveUserId(options.userPublicId);
+    return withUserDatabaseContext(options.userPublicId, () =>
+      this.repository.listForUserDataExport(userId, options.limit),
+    );
+  }
+
   async get(public_id: string, user_public_id: string) {
     const userId = await this.resolveUserId(user_public_id);
     return withUserDatabaseContext(user_public_id, () =>

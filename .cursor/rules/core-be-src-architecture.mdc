@@ -14,10 +14,9 @@ alwaysApply: false
 - **Validators**: `<resource>.validator.ts` exporting function-based validators (e.g. `validateCreate<Resource>(data)`) using `.safeParse()` + throwing `ValidationError`. Do NOT use object-based validators or `.parse()`.
 - **DTOs**: `<resource>.dto.ts` containing Zod schemas for input validation. Sub-domains must have their own `.dto.ts` files — never define DTOs inline in services.
 - **Serializers**: `<resource>.serializer.ts` for response shaping. Use function-based serializers (e.g. `serialize<Resource>(row)`). Do NOT use pass-through generic serializers.
-- **Services**: express intent, use validators, call own repositories, may emit events.
-- **Services may import** other domains’ **services** for cross-domain reads/writes. Cross-domain **repository** imports from services are forbidden.
-- **Repositories**: DB access only (Drizzle queries). Import from `@/infrastructure/database/connection.js` (`database`) and domain schema files (e.g. `@/domains/<domain>/<sub-domain>/<sub-domain>.schema.js`). May extend `@/infrastructure/database/base-repository.ts`. Repositories may import other domains’ **schemas** for joins only.
-- **Documented exception**: `user-data-export` may use direct DB + cross-domain schema reads for GDPR export.
+- **Services**: express intent, use validators, call **same-domain** repositories, may emit events. Cross-domain coordination imports the other domain's **service** only.
+- **Services may import** other domains' **services** for cross-domain reads/writes. Services must **not** import another domain's **repository** or **schema** (use the owning domain's service instead).
+- **Repositories**: DB access only (Drizzle queries). Import from `@/infrastructure/database/connection.js` (`database`) and domain schema files (e.g. `@/domains/<domain>/<sub-domain>/<sub-domain>.schema.js`). May extend `@/infrastructure/database/base-repository.ts`. Repositories may import other domains' **schemas** for joins only.
 - **No orchestrator layer**: Multi-sub-domain domains use `<domain>.container.ts` to export services; controllers call the appropriate sub-domain service directly (see auth, user, billing, tenancy). Do not add `<domain>.orchestrator.ts`.
 - **Containers**: `<domain>.container.ts` at domain root handles dependency injection (instantiates repositories, services). Export services for route registration. Cross-domain deps are passed as constructor parameters.
 - **Cross-domain reads/writes** are handled via service imports (no separate use-cases layer).
