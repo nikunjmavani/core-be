@@ -195,22 +195,30 @@ export async function createStripeSubscription(options: {
 export async function cancelStripeSubscription(
   subscriptionId: string,
   cancelAtPeriodEnd = true,
-  requestId?: string,
+  options?: { requestId?: string; idempotencyKey?: string },
 ): Promise<Stripe.Subscription> {
   return outboundCall(
     buildOutboundCallOptions({
       name: 'stripe',
-      requestId,
+      requestId: options?.requestId,
       enforceAbortTimeout: false,
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
       operation: async () => {
         const stripe = getStripeClient();
         if (cancelAtPeriodEnd) {
-          return stripe.subscriptions.update(subscriptionId, {
-            cancel_at_period_end: true,
-          });
+          return stripe.subscriptions.update(
+            subscriptionId,
+            {
+              cancel_at_period_end: true,
+            },
+            options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+          );
         }
-        return stripe.subscriptions.cancel(subscriptionId);
+        return stripe.subscriptions.cancel(
+          subscriptionId,
+          {},
+          options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+        );
       },
     }),
   );
@@ -222,19 +230,23 @@ export async function cancelStripeSubscription(
  */
 export async function resumeStripeSubscription(
   subscriptionId: string,
-  requestId?: string,
+  options?: { requestId?: string; idempotencyKey?: string },
 ): Promise<Stripe.Subscription> {
   return outboundCall(
     buildOutboundCallOptions({
       name: 'stripe',
-      requestId,
+      requestId: options?.requestId,
       enforceAbortTimeout: false,
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
       operation: async () => {
         const stripe = getStripeClient();
-        return stripe.subscriptions.update(subscriptionId, {
-          cancel_at_period_end: false,
-        });
+        return stripe.subscriptions.update(
+          subscriptionId,
+          {
+            cancel_at_period_end: false,
+          },
+          options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+        );
       },
     }),
   );
@@ -251,6 +263,7 @@ export async function updateStripeSubscription(
     priceId?: string;
     metadata?: Record<string, string>;
     requestId?: string;
+    idempotencyKey?: string;
   },
 ): Promise<Stripe.Subscription> {
   return outboundCall(
@@ -275,7 +288,11 @@ export async function updateStripeSubscription(
           params.metadata = options.metadata;
         }
 
-        return stripe.subscriptions.update(subscriptionId, params);
+        return stripe.subscriptions.update(
+          subscriptionId,
+          params,
+          options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
+        );
       },
     }),
   );

@@ -27,11 +27,18 @@ export interface PaymentProvider {
     idempotencyKey?: string;
   }): Promise<PaymentProviderCreateResult>;
 
-  cancelSubscriptionAtPeriodEnd(providerSubscriptionId: string): Promise<void>;
+  cancelSubscriptionAtPeriodEnd(
+    providerSubscriptionId: string,
+    idempotencyKey?: string,
+  ): Promise<void>;
 
-  resumeSubscription(providerSubscriptionId: string): Promise<void>;
+  resumeSubscription(providerSubscriptionId: string, idempotencyKey?: string): Promise<void>;
 
-  updateSubscriptionPrice(providerSubscriptionId: string, providerPriceId: string): Promise<void>;
+  updateSubscriptionPrice(
+    providerSubscriptionId: string,
+    providerPriceId: string,
+    idempotencyKey?: string,
+  ): Promise<void>;
 
   compensateFailedCreate(providerSubscriptionId: string): Promise<void>;
 
