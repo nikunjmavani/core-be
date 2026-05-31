@@ -41,6 +41,8 @@ import { createIdempotencyCardinalityWorker } from '@/infrastructure/observabili
 import { IDEMPOTENCY_CARDINALITY_QUEUE_NAME } from '@/infrastructure/observability/idempotency-cardinality/idempotency-cardinality.constants.js';
 import { createDlqDepthWorker } from '@/infrastructure/observability/dlq-depth/dlq-depth.worker.js';
 import { DLQ_DEPTH_QUEUE_NAME } from '@/infrastructure/observability/dlq-depth/dlq-depth.constants.js';
+import { createDlqAutoRetryWorker } from '@/infrastructure/queue/dlq/dlq-auto-retry.worker.js';
+import { DLQ_AUTO_RETRY_QUEUE_NAME } from '@/infrastructure/queue/dlq/dlq-auto-retry.constants.js';
 import {
   createStripeWebhookWorkerIfConfigured,
   type StripeWebhookWorkerBillingContainer,
@@ -335,6 +337,12 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     criticality: 'observability',
     create: () => createDlqDepthWorker(),
   },
+  retentionDefinition({
+    queueName: DLQ_AUTO_RETRY_QUEUE_NAME,
+    family: 'observability',
+    logLabel: 'DLQ auto-retry worker',
+    create: () => createDlqAutoRetryWorker(),
+  }),
 ];
 
 /** Returns the full registry (every queue family) — used by the scheduler audit and pool-budget calculations. */

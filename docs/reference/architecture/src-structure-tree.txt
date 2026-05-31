@@ -962,6 +962,8 @@ src/
     │   │   └── unit/
     │   │   │   ├── commit-dispatch.executor.unit.test.ts
     │   │   │   ├── commit-dispatch.store.unit.test.ts
+    │   │   │   ├── dlq-auto-retry-circuit.util.unit.test.ts
+    │   │   │   ├── dlq-auto-retry.store.unit.test.ts
     │   │   │   ├── dlq-replay.util.unit.test.ts
     │   │   │   ├── poison-job.util.unit.test.ts
     │   │   │   ├── worker-close.util.unit.test.ts
@@ -978,6 +980,11 @@ src/
     │   │   ├── dead-letter.repository.ts
     │   │   ├── dead-letter.schema.ts
     │   │   ├── dead-letter.ts
+    │   │   ├── dlq-auto-retry-circuit.util.ts
+    │   │   ├── dlq-auto-retry.constants.ts
+    │   │   ├── dlq-auto-retry.processor.ts
+    │   │   ├── dlq-auto-retry.store.ts
+    │   │   ├── dlq-auto-retry.worker.ts
     │   │   ├── dlq-replay-job-fields.schema.ts
     │   │   ├── dlq-replay.util.ts
     │   │   └── poison-job.util.ts

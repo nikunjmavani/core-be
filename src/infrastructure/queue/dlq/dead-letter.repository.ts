@@ -1,3 +1,4 @@
+import { and, asc, inArray, lte } from 'drizzle-orm';
 import { database } from '@/infrastructure/database/connection.js';
 import { dead_letter_jobs } from '@/infrastructure/queue/dlq/dead-letter.schema.js';
 
@@ -48,4 +49,60 @@ export async function insertDeadLetterJob(record: DeadLetterJobInsert): Promise<
     max_attempts: record.max_attempts,
     failed_at: record.failed_at,
   });
+}
+
+/** One row from `audit.dead_letter_jobs` returned for automated replay scanning. */
+export type DeadLetterJobLedgerRow = {
+  id: number;
+  source_queue: string;
+  dead_letter_queue: string;
+  job_id: string | null;
+  job_name: string;
+  payload_summary: Record<string, unknown>;
+  failed_at: Date;
+};
+
+/**
+ * Lists ledger rows eligible for age-based auto-replay scanning (cooldown and retry budget
+ * are applied in application code via Redis).
+ *
+ * @remarks
+ * - **Algorithm:** filters by replayable `source_queue` values and `failed_at <= failedBefore`,
+ *   oldest first, capped by `limit`.
+ * - **Failure modes:** propagates Postgres errors to the caller.
+ * - **Side effects:** read-only.
+ * - **Notes:** uses the base database connection (system table, no RLS session).
+ */
+export async function findDeadLetterJobsForAutoRetry(input: {
+  sourceQueues: readonly string[];
+  failedBefore: Date;
+  limit: number;
+}): Promise<DeadLetterJobLedgerRow[]> {
+  if (input.sourceQueues.length === 0 || input.limit <= 0) return [];
+
+  return database
+    .select({
+      id: dead_letter_jobs.id,
+      source_queue: dead_letter_jobs.source_queue,
+      dead_letter_queue: dead_letter_jobs.dead_letter_queue,
+      job_id: dead_letter_jobs.job_id,
+      job_name: dead_letter_jobs.job_name,
+      payload_summary: dead_letter_jobs.payload_summary,
+      failed_at: dead_letter_jobs.failed_at,
+    })
+    .from(dead_letter_jobs)
+    .where(
+      and(
+        inArray(dead_letter_jobs.source_queue, [...input.sourceQueues]),
+        lte(dead_letter_jobs.failed_at, input.failedBefore),
+      ),
+    )
+    .orderBy(asc(dead_letter_jobs.failed_at))
+    .limit(input.limit)
+    .then((rows) =>
+      rows.map((row) => ({
+        ...row,
+        payload_summary: row.payload_summary as Record<string, unknown>,
+      })),
+    );
 }

@@ -370,6 +370,16 @@ const envSchemaBase = z.object({
   DLQ_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(10),
   DLQ_DEPTH_CRON: z.string().min(1).optional(),
 
+  /** When true, the `dlq-auto-retry` sweeper re-enqueues replayable ledger rows after cooldown. */
+  DLQ_AUTO_RETRY_ENABLED: z.coerce.boolean().default(true),
+  /** Maximum automated replays per `audit.dead_letter_jobs` row (Redis counter). */
+  DLQ_AUTO_RETRY_MAX_COUNT: z.coerce.number().int().min(0).default(3),
+  /** Minimum minutes between failure (or last auto-retry) and the next automated replay. */
+  DLQ_AUTO_RETRY_COOLDOWN_MINUTES: z.coerce.number().int().min(1).default(30),
+  /** Maximum ledger rows inspected per sweeper tick. */
+  DLQ_AUTO_RETRY_BATCH_SIZE: z.coerce.number().int().min(1).default(20),
+  DLQ_AUTO_RETRY_CRON: z.string().min(1).optional(),
+
   /**
    * Alert when a single BullMQ source queue's waiting + delayed backlog reaches this many
    * jobs. A growing backlog (e.g. a worker outage) on a shared Redis can fill memory and,

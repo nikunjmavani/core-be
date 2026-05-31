@@ -22,6 +22,10 @@ import { IDEMPOTENCY_CARDINALITY_QUEUE_NAME } from '@/infrastructure/observabili
 import { DLQ_DEPTH_QUEUE_NAME } from '@/infrastructure/observability/dlq-depth/dlq-depth.constants.js';
 import { MAIL_OUTBOX_SWEEPER_QUEUE_NAME } from '@/infrastructure/mail/workers/mail-outbox-sweeper.constants.js';
 import { COMMIT_DISPATCH_RECOVERY_QUEUE_NAME } from '@/infrastructure/queue/commit-dispatch/commit-dispatch-recovery.constants.js';
+import {
+  DLQ_AUTO_RETRY_QUEUE_NAME,
+  DEFAULT_DLQ_AUTO_RETRY_CRON,
+} from '@/infrastructure/queue/dlq/dlq-auto-retry.constants.js';
 import { STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-reclaim.constants.js';
 import { STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-retention.constants.js';
 import { AUDIT_EXPORT_QUEUE_NAME } from '@/domains/audit/workers/audit-export.constants.js';
@@ -202,6 +206,12 @@ export function getScheduledJobs(): ScheduledJob[] {
       schedulerId: 'dlq-depth-quarter-hourly',
       jobName: 'sample-dlq-depth',
       cronPattern: env.DLQ_DEPTH_CRON ?? DEFAULT_DLQ_DEPTH_CRON,
+    }),
+    withSchedulerTimezone(timezone, {
+      queueName: DLQ_AUTO_RETRY_QUEUE_NAME,
+      schedulerId: 'dlq-auto-retry',
+      jobName: 'auto-retry-dead-letter-jobs',
+      cronPattern: env.DLQ_AUTO_RETRY_CRON ?? DEFAULT_DLQ_AUTO_RETRY_CRON,
     }),
     withSchedulerTimezone(timezone, {
       queueName: COMMIT_DISPATCH_RECOVERY_QUEUE_NAME,

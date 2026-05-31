@@ -44,7 +44,7 @@ describe('worker-registration.registry', () => {
   it('keeps complete metadata for every registered worker', () => {
     const definitions = getWorkerQueueRegistrationDefinitions();
 
-    expect(definitions).toHaveLength(25);
+    expect(definitions).toHaveLength(26);
     for (const definition of definitions) {
       expect(definition.queueName).toBeTruthy();
       expect(definition.logLabel).toBeTruthy();
@@ -66,14 +66,14 @@ describe('worker-registration.registry', () => {
   it('keeps expected family, criticality, scheduler, and external-io counts', () => {
     const definitions = getWorkerQueueRegistrationDefinitions();
 
-    expect(definitions.filter((definition) => definition.usesPostgres)).toHaveLength(22);
-    expect(definitions.filter((definition) => definition.scheduled)).toHaveLength(20);
+    expect(definitions.filter((definition) => definition.usesPostgres)).toHaveLength(23);
+    expect(definitions.filter((definition) => definition.scheduled)).toHaveLength(21);
     expect(
       definitions.filter((definition) => definition.criticality === 'throughput'),
     ).toHaveLength(5);
     expect(
       definitions.filter((definition) => definition.criticality === 'maintenance'),
-    ).toHaveLength(18);
+    ).toHaveLength(19);
     expect(
       definitions.filter((definition) => definition.criticality === 'observability'),
     ).toHaveLength(2);
