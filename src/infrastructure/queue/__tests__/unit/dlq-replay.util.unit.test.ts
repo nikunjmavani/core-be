@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildReplayJobPayload,
+  buildReplayJobPayloadFromLedger,
   resolveDeadLetterQueueNames,
 } from '@/infrastructure/queue/dlq/dlq-replay.util.js';
 import type { DeadLetterJobData } from '@/infrastructure/queue/dlq/dead-letter.js';
@@ -152,5 +153,21 @@ describe('dlq-replay.util', () => {
         original_data_summary: { organization_public_id: 'org_public_abc' },
       }),
     ).toBeNull();
+  });
+
+  it('buildReplayJobPayloadFromLedger maps ledger columns to replay payload', () => {
+    expect(
+      buildReplayJobPayloadFromLedger({
+        source_queue: MAIL_QUEUE_NAME,
+        job_id: 'job-ledger-1',
+        job_name: 'send-mail',
+        payload_summary: { mail_outbox_id: 99 },
+        auto_retry_count: 2,
+      }),
+    ).toEqual({
+      mailOutboxId: 99,
+      replayFromDlq: true,
+      dlqReplayAttempt: 2,
+    });
   });
 });

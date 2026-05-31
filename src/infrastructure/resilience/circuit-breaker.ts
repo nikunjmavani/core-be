@@ -346,3 +346,14 @@ export const STRIPE_CIRCUIT_RESET_TIMEOUT_MS = 30_000;
 export const S3_CIRCUIT_RESET_TIMEOUT_MS = 15_000;
 /** Reset window (ms) for {@link resendCircuit}; exported for mail-queue backoff alignment. */
 export const RESEND_CIRCUIT_RESET_TIMEOUT_MS = 60_000;
+
+/** Named circuit breakers exposed to ops admin endpoints. */
+export const MANAGED_CIRCUIT_BREAKERS = {
+  stripe: stripeCircuit,
+  s3: s3Circuit,
+  resend: resendCircuit,
+  turnstile: turnstileCircuit,
+} as const;
+
+/** Union of circuit breaker names exposed on ops admin endpoints. */
+export type ManagedCircuitBreakerName = keyof typeof MANAGED_CIRCUIT_BREAKERS;

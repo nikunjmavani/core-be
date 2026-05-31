@@ -1,6 +1,8 @@
 import { createMailWorker } from '@/infrastructure/mail/workers/mail.worker.js';
 import { createMailOutboxSweeperWorker } from '@/infrastructure/mail/workers/mail-outbox-sweeper.worker.js';
 import { MAIL_OUTBOX_SWEEPER_QUEUE_NAME } from '@/infrastructure/mail/workers/mail-outbox-sweeper.constants.js';
+import { createCommitDispatchRecoveryWorker } from '@/infrastructure/queue/commit-dispatch/commit-dispatch-recovery.worker.js';
+import { COMMIT_DISPATCH_RECOVERY_QUEUE_NAME } from '@/infrastructure/queue/commit-dispatch/commit-dispatch-recovery.constants.js';
 import { MAIL_QUEUE_NAME } from '@/infrastructure/mail/queues/mail.queue.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { createWebhookDeliveryWorker } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
@@ -39,6 +41,8 @@ import { createIdempotencyCardinalityWorker } from '@/infrastructure/observabili
 import { IDEMPOTENCY_CARDINALITY_QUEUE_NAME } from '@/infrastructure/observability/idempotency-cardinality/idempotency-cardinality.constants.js';
 import { createDlqDepthWorker } from '@/infrastructure/observability/dlq-depth/dlq-depth.worker.js';
 import { DLQ_DEPTH_QUEUE_NAME } from '@/infrastructure/observability/dlq-depth/dlq-depth.constants.js';
+import { createDlqAutoRetryWorker } from '@/infrastructure/queue/dlq/dlq-auto-retry.worker.js';
+import { DLQ_AUTO_RETRY_QUEUE_NAME } from '@/infrastructure/queue/dlq/dlq-auto-retry.constants.js';
 import {
   createStripeWebhookWorkerIfConfigured,
   type StripeWebhookWorkerBillingContainer,
@@ -132,6 +136,15 @@ function retentionDefinition(
 }
 
 const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[] = [
+  {
+    queueName: COMMIT_DISPATCH_RECOVERY_QUEUE_NAME,
+    family: 'mail',
+    logLabel: 'commit dispatch recovery worker',
+    usesPostgres: false,
+    scheduled: true,
+    criticality: 'maintenance',
+    create: () => createCommitDispatchRecoveryWorker(),
+  },
   retentionDefinition({
     queueName: MAIL_OUTBOX_SWEEPER_QUEUE_NAME,
     family: 'mail',
@@ -324,11 +337,54 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     criticality: 'observability',
     create: () => createDlqDepthWorker(),
   },
+  retentionDefinition({
+    queueName: DLQ_AUTO_RETRY_QUEUE_NAME,
+    family: 'observability',
+    logLabel: 'DLQ auto-retry worker',
+    create: () => createDlqAutoRetryWorker(),
+  }),
 ];
 
 /** Returns the full registry (every queue family) — used by the scheduler audit and pool-budget calculations. */
 export function getWorkerQueueRegistrationDefinitions(): readonly WorkerQueueRegistrationDefinition[] {
   return WORKER_QUEUE_REGISTRATION_DEFINITIONS;
+}
+
+/** Serializable operational manifest row (no factory functions). */
+export type WorkerQueueOperationalManifestEntry = Pick<
+  WorkerQueueRegistrationDefinition,
+  | 'queueName'
+  | 'family'
+  | 'logLabel'
+  | 'usesPostgres'
+  | 'scheduled'
+  | 'criticality'
+  | 'holdsConnectionDuringExternalIo'
+>;
+
+/**
+ * Returns the declarative worker/queue manifest for ops dashboards and `/readyz`.
+ */
+export function getWorkerQueueOperationalManifest(): readonly WorkerQueueOperationalManifestEntry[] {
+  return WORKER_QUEUE_REGISTRATION_DEFINITIONS.map(
+    ({
+      queueName,
+      family,
+      logLabel,
+      usesPostgres,
+      scheduled,
+      criticality,
+      holdsConnectionDuringExternalIo,
+    }) => ({
+      queueName,
+      family,
+      logLabel,
+      usesPostgres,
+      scheduled,
+      criticality,
+      ...(holdsConnectionDuringExternalIo === undefined ? {} : { holdsConnectionDuringExternalIo }),
+    }),
+  );
 }
 
 /**

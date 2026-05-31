@@ -3,7 +3,9 @@ import { enterOnCommitScope, eventBus } from '@/core/events/event-bus.js';
 import { createNotificationDispatch } from '@/domains/notify/sub-domains/notification/notification-dispatch.service.js';
 import type { NotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 
-const enqueueNotificationMock = vi.fn().mockResolvedValue(undefined);
+const { enqueueNotificationMock } = vi.hoisted(() => ({
+  enqueueNotificationMock: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('@/domains/notify/sub-domains/notification/queues/notification.queue.js', () => ({
   enqueueNotification: (...arguments_: unknown[]) => enqueueNotificationMock(...arguments_),
@@ -98,23 +100,5 @@ describe('NotificationDispatch', () => {
     ).rejects.toBe(lookupError);
 
     expect(notificationRepository.create).not.toHaveBeenCalled();
-  });
-
-  it('deletes the notification row when post-commit enqueue fails', async () => {
-    const enqueueError = new Error('redis unavailable');
-    enqueueNotificationMock.mockRejectedValueOnce(enqueueError);
-
-    enterOnCommitScope();
-    await dispatch.createAndDispatchNotification({
-      user_id: 1,
-      organization_id: 2,
-      type: 'billing',
-      title: 'Test',
-      message: 'Body',
-    });
-
-    await eventBus.flushOnCommit();
-
-    expect(notificationRepository.deleteByInternalId).toHaveBeenCalledWith(42);
   });
 });

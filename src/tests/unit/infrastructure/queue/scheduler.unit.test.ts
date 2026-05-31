@@ -37,7 +37,7 @@ describe('infrastructure queue scheduler', () => {
   it('getScheduledJobs returns audit, session, stripe retention, audit export, tombstone retention, idempotency, dlq depth, mail sweeper, upload pending sweep, and stripe reclaim jobs', async () => {
     const { getScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
     const scheduledJobs = getScheduledJobs();
-    expect(scheduledJobs).toHaveLength(19);
+    expect(scheduledJobs).toHaveLength(21);
     expect(scheduledJobs.map((job) => job.queueName)).toEqual([
       'audit-retention',
       'notification-retention',
@@ -48,6 +48,8 @@ describe('infrastructure queue scheduler', () => {
       ...TOMBSTONE_QUEUE_ORDER,
       'idempotency-cardinality',
       'dlq-depth',
+      'dlq-auto-retry',
+      'commit-dispatch-recovery',
       'mail-outbox-sweeper',
       'upload-pending-sweep',
       'stripe-webhook-event-reclaim',
@@ -102,9 +104,9 @@ describe('infrastructure queue scheduler', () => {
   it('registerScheduledJobs registers one repeatable job per cleanup queue when enabled', async () => {
     const { registerScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
     const schedulerHandle = await registerScheduledJobs();
-    expect(upsertJobSchedulerMock).toHaveBeenCalledTimes(19);
+    expect(upsertJobSchedulerMock).toHaveBeenCalledTimes(21);
     await schedulerHandle.close();
-    expect(queueCloseMock).toHaveBeenCalledTimes(19);
+    expect(queueCloseMock).toHaveBeenCalledTimes(21);
   });
 
   it('registerScheduledJobs does not instantiate queues when SCHEDULER_ENABLED is false', async () => {

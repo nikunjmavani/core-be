@@ -18,7 +18,6 @@ process.env.DATABASE_SSL_ENABLED = 'false';
  * mode (inline `withOrganizationDatabaseContext` commits) makes local runs deterministic and
  * match CI, the source of truth.
  */
-process.env.DATABASE_RLS_SCOPED_CONTEXTS = 'true';
 /**
  * Feature flags asserted by route registration and auth tests. `.env.development` sets
  * several of these to `'false'` for local dev ergonomics, but the test harness needs the

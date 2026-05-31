@@ -9,6 +9,10 @@ import {
   runWithWorkerDatabaseContext,
   workerDatabaseContextForUser,
 } from '@/infrastructure/database/contexts/worker-database.context.js';
+import {
+  brandWorkerContextDatabaseHandle,
+  type WorkerContextDatabaseHandle,
+} from '@/infrastructure/database/utils/database-handle.types.js';
 
 /**
  * Sets `app.current_user_id` (auth.users public_id) for user-scoped RLS policies.
@@ -26,7 +30,7 @@ import {
  */
 export async function withUserDatabaseContext<T>(
   userPublicId: string,
-  callback: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,
+  callback: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
 ): Promise<T> {
   return runWithWorkerDatabaseContext(workerDatabaseContextForUser(userPublicId), async () => {
     const pinnedSession = getOrganizationRequestDatabaseSession();
@@ -36,13 +40,15 @@ export async function withUserDatabaseContext<T>(
         'app.current_user_id',
         userPublicId,
       );
-      return callback(pinnedSession.databaseHandle);
+      return callback(brandWorkerContextDatabaseHandle(pinnedSession.databaseHandle));
     }
 
     return database.transaction(async (transaction) => {
       const databaseHandle = transaction as unknown as RequestScopedPostgresDatabase;
       await setLocalDatabaseConfig(databaseHandle, 'app.current_user_id', userPublicId);
-      return runWithPinnedDatabaseHandle(databaseHandle, () => callback(databaseHandle));
+      return runWithPinnedDatabaseHandle(databaseHandle, () =>
+        callback(brandWorkerContextDatabaseHandle(databaseHandle)),
+      );
     });
   });
 }
@@ -79,13 +85,15 @@ export async function withSessionTokenHashDatabaseContext<T>(
  * Allows cross-user session retention deletes from the cleanup worker.
  */
 export async function withSessionRetentionCleanupDatabaseContext<T>(
-  callback: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,
+  callback: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
 ): Promise<T> {
   return runWithWorkerDatabaseContext({ kind: 'session_retention_cleanup' }, () =>
     database.transaction(async (transaction) => {
       const databaseHandle = transaction as unknown as RequestScopedPostgresDatabase;
       await setLocalDatabaseConfig(databaseHandle, 'app.session_retention_cleanup', 'true');
-      return runWithPinnedDatabaseHandle(databaseHandle, () => callback(databaseHandle));
+      return runWithPinnedDatabaseHandle(databaseHandle, () =>
+        callback(brandWorkerContextDatabaseHandle(databaseHandle)),
+      );
     }),
   );
 }
