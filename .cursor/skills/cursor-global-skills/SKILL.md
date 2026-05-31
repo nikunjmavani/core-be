@@ -16,6 +16,7 @@ These skills ship with **Cursor** under `~/.cursor/skills-cursor/`. They are **n
 | Diagnose one failing CI check on a PR              | **ci-investigator** (project)                                                      |
 | Split branch into multiple PRs                     | **split-to-prs** (project) — domain-aware slices                                   |
 | Create/edit project `.cursor/skills` or rules      | **create-skill**, **create-rule** (global)                                         |
+| Edit `.cursor/agents/` subagent definitions        | **create-subagent** (global)                                                       |
 | Cursor hooks (`hooks.json`)                        | **create-hook**                                                                    |
 | Cursor IDE settings / extensions.json              | **update-cursor-settings** (user); **ide-productivity-guard** (project `.vscode/`) |
 | Programmatic Cursor agents (`@cursor/sdk`)         | **sdk**                                                                            |
@@ -28,12 +29,14 @@ These skills ship with **Cursor** under `~/.cursor/skills-cursor/`. They are **n
 
 | Skill                      | Purpose                                                    |
 | -------------------------- | ---------------------------------------------------------- |
+| **automate**               | Create Cursor Automations (usually not needed for core-be) |
 | **babysit**                | Keep a PR merge-ready: triage comments, conflicts, CI      |
 | **canvas**                 | Standalone React canvas for visual/analytical deliverables |
 | **create-hook**            | Author Cursor hook scripts and `hooks.json`                |
 | **create-rule**            | Author `.cursor/rules/*.mdc`                               |
 | **create-skill**           | Author `SKILL.md` files (project or user)                  |
 | **create-subagent**        | Define custom subagent types                               |
+| **loop**                   | Recurring prompt intervals (usually not needed for core-be) |
 | **migrate-to-skills**      | Convert rules/commands to Agent Skills format              |
 | **sdk**                    | Cursor TypeScript SDK for external automation              |
 | **shell**                  | Shell/command specialist (subagent)                        |
@@ -46,8 +49,11 @@ These skills ship with **Cursor** under `~/.cursor/skills-cursor/`. They are **n
 
 - **migrate-to-skills** — unless actively converting legacy rules
 - **create-subagent** / **shell** — unless building custom agent workflows outside core-be conventions
+- **automate** / **loop** — automation outside normal PR/feature workflow
 
-## core-be project skills (32)
+## core-be project skills (36)
+
+**36 total** — 34 actionable skills plus **skill-index** (meta) and **cursor-global-skills** (this reference). **lint-warnings-handler** is a detail skill invoked via **code-smells-and-best-practices**, not counted separately.
 
 For the full list and triggers, read **`.cursor/skills/skill-index/SKILL.md`**.
 

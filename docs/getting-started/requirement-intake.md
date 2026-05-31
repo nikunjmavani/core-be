@@ -316,7 +316,7 @@ The AI fills these unless your message says otherwise. List overrides in your fi
 
 - **Always:** Consult **skill-index** first, then run any skill whose trigger matches your changes.
 - **Always:** **code-smells-and-best-practices** after editing `src/**/*.ts` (fix touched files; pre-commit/CI run full validate).
-- **If routes change:** **route-catalog**, **openapi-route-sync**, **seed-maintainer**.
+- **If routes change:** **route-schema-doc-guard**, **route-catalog**, **openapi-multilingual** (new tags), **seed-maintainer**.
 - **If domain/structure changes:** **structure-maintainer**, **domain-generator** (if new scaffold).
 
 **Rules that will apply:**  
@@ -369,7 +369,7 @@ flowchart LR
 | **skill-index**                | `.cursor/skills/skill-index/SKILL.md`                    | **First** — full catalog and triggers (36 project skills) |
 | domain-generator               | `.cursor/skills/domain-generator/SKILL.md`               | New domain/sub-domain scaffold                            |
 | route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                  | Any change to `*.routes.ts`                               |
-| openapi-route-sync             | `.cursor/skills/openapi-route-sync/SKILL.md`             | After route-catalog — OpenAPI metadata                    |
+| route-schema-doc-guard         | `.cursor/skills/route-schema-doc-guard/SKILL.md`         | Route `schema: { summary, description, tags }`          |
 | workers-events                 | `.cursor/skills/workers-events/SKILL.md`                 | Events, queues, workers                                   |
 | schema-generator               | `.cursor/skills/schema-generator/SKILL.md`               | New/changed Drizzle schema                                |
 | sql-design-guard               | `.cursor/skills/sql-design-guard/SKILL.md`               | Schema design review                                      |
@@ -405,27 +405,11 @@ flowchart LR
 
 ---
 
-## Quick reference: all rules (auto-invoke by file)
+## Quick reference: rules
 
-| Rule                                    | Globs                                                                                                | Invokes / purpose                                              |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| core-be-src-architecture.mdc            | (always apply for src/)                                                                              | Architecture and layer rules                                   |
-| domain-generator-sync.mdc               | `src/domains/**/*.container.ts`, `*.routes.ts`, `src/routes.ts`                                      | domain-generator + route-catalog + openapi-route-sync (routes) |
-| testing-conventions.mdc                 | tests, validators, serializers                                                                       | test-generator                                                 |
-| workers-events-sync.mdc                 | `**/events/**`, `**/queues/**`, `**/workers/**`, `src/infrastructure/queue/**`, `src/core/events/**` | workers-events                                                 |
-| code-quality-guard-sync.mdc             | `biome.json`, `.biomeignore`, `.husky/pre-commit`, `.github/workflows/**`, `.gitleaks.toml`, `.semgrepignore` | code-quality-guard                                             |
-| structure-maintainer-sync.mdc           | `CLAUDE.md`, `README.md`, `.cursor/rules/**`, `.cursor/skills/**`                                    | structure-maintainer                                           |
-| code-smells-and-best-practices-sync.mdc | `src/**/*.ts`                                                                                        | code-smells-and-best-practices (single quality owner)          |
-| sql-design-guard-sync.mdc               | `src/domains/**/*.schema.ts`                                                                         | sql-design-guard + schema conventions                          |
-| production-hardening.mdc                | `src/infrastructure/**`, middleware, config                                                          | production-hardening-guard                                     |
-| no-placeholder-files.mdc                | `src/domains/**/*.dto.ts`, `*.validator.ts`, `*.serializer.ts`                                       | No empty placeholder files                                     |
-| testing-conventions.mdc                 | (test files)                                                                                         | test-generator conventions                                     |
-| context7-backend.mdc                    | `src/**/*.ts`                                                                                        | Use Context7 for Fastify, Drizzle, BullMQ, etc.                |
-| db-migration-maintainer-sync.mdc        | `migrations/*.sql`, `src/domains/**/*.schema.ts`                                                     | db-migration-maintainer                                        |
-| seed-maintainer-sync.mdc                | `src/domains/**/*.seed.ts`, `src/scripts/seed/**/*.ts`                                               | seed-maintainer                                                |
-| openapi-multilingual-sync.mdc           | `src/shared/locales/*/openapi.json`, OpenAPI generator scripts                                       | openapi-multilingual                                           |
-| contract-test-maintainer-sync.mdc       | `src/tests/contract/**`, payment/mail/storage infra                                                  | contract-test-maintainer                                       |
-| chaos-test-maintainer-sync.mdc          | `src/tests/chaos/**`, chaos Vitest config, `docker-compose.yml`                                      | chaos-test-maintainer                                          |
+**Canonical inventory:** [skill-index → Always-applied rules, Policy rules, and Auto-trigger rules](../../.cursor/skills/skill-index/SKILL.md#auto-trigger-rules).
+
+Rules auto-attach by file glob when you edit matching paths. Always-on: **engineering-principles.mdc**, **project-identity.mdc**. All others are scoped — see skill-index for the full table (37 rules).
 
 ---
 

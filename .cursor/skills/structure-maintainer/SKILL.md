@@ -23,7 +23,8 @@ Whenever you change code structure (e.g. add a domain, rename layers, add infras
   - `.cursor/skills/overview-doc-maintainer/SKILL.md` (if a new folder role appears that needs a new `OVERVIEW.md` template)
   - `.cursor/skills/tsdoc-export-guard/SKILL.md` (if the TSDoc coverage gate inputs changed)
   - Any other `.cursor/skills/*/SKILL.md` that references paths or layer names
-- **Docs:** `CLAUDE.md` (architecture and domain layout), `README.md` (project structure and diagrams).
+- **Docs:** `CLAUDE.md` (architecture and domain layout), `README.md` (project structure and diagrams), `AGENTS.md` (agent entry + custom subagents).
+- **Agents:** `.cursor/agents/*.md` — keep in sync with **AGENTS.md** custom subagents table when adding or renaming subagents.
 - **System narratives**: when a new domain folder appears under `src/domains/`, also invoke **system-narrative-maintainer** to add the row to `src/OVERVIEW.md` Domains table.
 
 Then run the **Checklist** below and verify with `pnpm typecheck` (and tests if applicable).
