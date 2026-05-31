@@ -44,7 +44,7 @@ describe('worker-registration.registry', () => {
   it('keeps complete metadata for every registered worker', () => {
     const definitions = getWorkerQueueRegistrationDefinitions();
 
-    expect(definitions).toHaveLength(24);
+    expect(definitions).toHaveLength(25);
     for (const definition of definitions) {
       expect(definition.queueName).toBeTruthy();
       expect(definition.logLabel).toBeTruthy();
@@ -67,13 +67,13 @@ describe('worker-registration.registry', () => {
     const definitions = getWorkerQueueRegistrationDefinitions();
 
     expect(definitions.filter((definition) => definition.usesPostgres)).toHaveLength(22);
-    expect(definitions.filter((definition) => definition.scheduled)).toHaveLength(19);
+    expect(definitions.filter((definition) => definition.scheduled)).toHaveLength(20);
     expect(
       definitions.filter((definition) => definition.criticality === 'throughput'),
     ).toHaveLength(5);
     expect(
       definitions.filter((definition) => definition.criticality === 'maintenance'),
-    ).toHaveLength(17);
+    ).toHaveLength(18);
     expect(
       definitions.filter((definition) => definition.criticality === 'observability'),
     ).toHaveLength(2);

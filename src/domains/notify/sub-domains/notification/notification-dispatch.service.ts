@@ -1,11 +1,9 @@
-import { eventBus } from '@/core/events/event-bus.js';
-import { enqueueNotification } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
+import { scheduleCommitDispatch } from '@/core/events/event-bus.js';
 import type {
   NotificationRepository,
   CreateNotificationInput,
 } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 import { ConfigurationError } from '@/shared/errors/index.js';
-import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
  * Composition-root collaborator that hides the persist-then-enqueue choreography from event
@@ -22,7 +20,10 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
  *   never invoke this contract before the container has wired the singleton.
  */
 export type NotificationDispatch = {
-  createAndDispatchNotification(input: CreateNotificationInput): Promise<void>;
+  createAndDispatchNotification(
+    input: CreateNotificationInput,
+    options?: { requestId?: string },
+  ): Promise<void>;
 };
 
 /**
@@ -42,7 +43,10 @@ export function createNotificationDispatch(
   notificationRepository: NotificationRepository,
 ): NotificationDispatch {
   return {
-    async createAndDispatchNotification(input: CreateNotificationInput): Promise<void> {
+    async createAndDispatchNotification(
+      input: CreateNotificationInput,
+      options?: { requestId?: string },
+    ): Promise<void> {
       // Resolve organization public id BEFORE the insert so failure of either step
       // leaves no orphan notification row: a lookup failure short-circuits before
       // any write, and an insert failure means there is nothing to enqueue.
@@ -53,14 +57,14 @@ export function createNotificationDispatch(
               input.organization_id,
             );
       const notification_id = await notificationRepository.create(input);
-      eventBus.onCommit(async () => {
-        try {
-          await enqueueNotification(notification_id, organization_public_id);
-        } catch (error) {
-          logger.error({ error, notification_id }, 'notification.enqueue.failed');
-          await notificationRepository.deleteByInternalId(notification_id);
-        }
-      });
+      await scheduleCommitDispatch(
+        {
+          type: 'notification',
+          notificationId: notification_id,
+          organizationPublicId: organization_public_id,
+        },
+        options?.requestId !== undefined ? { requestId: options.requestId } : undefined,
+      );
     },
   };
 }
@@ -93,11 +97,14 @@ export function configureNotificationDispatch(dispatch: NotificationDispatch): v
  * - **Side effects:** writes a notification row and enqueues a BullMQ job on commit.
  * - **Notes:** keeps the call site free of DI plumbing so domain event handlers stay simple.
  */
-export async function createAndDispatchNotification(input: CreateNotificationInput): Promise<void> {
+export async function createAndDispatchNotification(
+  input: CreateNotificationInput,
+  options?: { requestId?: string },
+): Promise<void> {
   if (!notificationDispatch) {
     throw new ConfigurationError(
       'Notification dispatch is not configured. Call configureNotificationDispatch from notify.container.',
     );
   }
-  await notificationDispatch.createAndDispatchNotification(input);
+  await notificationDispatch.createAndDispatchNotification(input, options);
 }

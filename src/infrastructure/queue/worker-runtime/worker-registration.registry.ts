@@ -1,6 +1,8 @@
 import { createMailWorker } from '@/infrastructure/mail/workers/mail.worker.js';
 import { createMailOutboxSweeperWorker } from '@/infrastructure/mail/workers/mail-outbox-sweeper.worker.js';
 import { MAIL_OUTBOX_SWEEPER_QUEUE_NAME } from '@/infrastructure/mail/workers/mail-outbox-sweeper.constants.js';
+import { createCommitDispatchRecoveryWorker } from '@/infrastructure/queue/commit-dispatch/commit-dispatch-recovery.worker.js';
+import { COMMIT_DISPATCH_RECOVERY_QUEUE_NAME } from '@/infrastructure/queue/commit-dispatch/commit-dispatch-recovery.constants.js';
 import { MAIL_QUEUE_NAME } from '@/infrastructure/mail/queues/mail.queue.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { createWebhookDeliveryWorker } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
@@ -132,6 +134,15 @@ function retentionDefinition(
 }
 
 const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[] = [
+  {
+    queueName: COMMIT_DISPATCH_RECOVERY_QUEUE_NAME,
+    family: 'mail',
+    logLabel: 'commit dispatch recovery worker',
+    usesPostgres: false,
+    scheduled: true,
+    criticality: 'maintenance',
+    create: () => createCommitDispatchRecoveryWorker(),
+  },
   retentionDefinition({
     queueName: MAIL_OUTBOX_SWEEPER_QUEUE_NAME,
     family: 'mail',

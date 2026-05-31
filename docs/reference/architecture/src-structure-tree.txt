@@ -960,11 +960,20 @@ src/
     ├── queue/
     │   ├── __tests__/
     │   │   └── unit/
+    │   │   │   ├── commit-dispatch.executor.unit.test.ts
+    │   │   │   ├── commit-dispatch.store.unit.test.ts
     │   │   │   ├── dlq-replay.util.unit.test.ts
     │   │   │   ├── poison-job.util.unit.test.ts
     │   │   │   ├── worker-close.util.unit.test.ts
     │   │   │   ├── worker-health.server.unit.test.ts
     │   │   │   └── worker-queue-heartbeat.unit.test.ts
+    │   ├── commit-dispatch/
+    │   │   ├── commit-dispatch-recovery.constants.ts
+    │   │   ├── commit-dispatch-recovery.processor.ts
+    │   │   ├── commit-dispatch-recovery.worker.ts
+    │   │   ├── commit-dispatch.executor.ts
+    │   │   ├── commit-dispatch.store.ts
+    │   │   └── commit-dispatch.types.ts
     │   ├── dlq/
     │   │   ├── dead-letter.repository.ts
     │   │   ├── dead-letter.schema.ts

@@ -20,8 +20,7 @@ import {
   type UserDataExportOutput,
 } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
 import type { UserDataExport } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
-import { eventBus } from '@/core/events/event-bus.js';
-import { enqueueUserDataExport } from '@/domains/user/sub-domains/user-data-export/queues/user-data-export.queue.js';
+import { scheduleCommitDispatch } from '@/core/events/event-bus.js';
 import { USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { env } from '@/shared/config/env.config.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
@@ -124,7 +123,10 @@ export class UserDataExportService {
     return this.crossDomainServices;
   }
 
-  async requestExport(userPublicId: string): Promise<UserDataExportOutput> {
+  async requestExport(
+    userPublicId: string,
+    options?: { requestId?: string },
+  ): Promise<UserDataExportOutput> {
     const user = await this.userService.findUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
 
@@ -173,24 +175,15 @@ export class UserDataExportService {
       throw error;
     }
 
-    eventBus.onCommit(async () => {
-      try {
-        await enqueueUserDataExport({
-          exportPublicId,
-          userPublicId,
-          userInternalId: user.id,
-        });
-      } catch (error) {
-        logger.error({ error, userPublicId, exportPublicId }, 'user-data-export.enqueue.failed');
-        await withUserDatabaseContext(userPublicId, () =>
-          this.exportRepository.updateStatus(exportPublicId, user.id, {
-            status: USER_DATA_EXPORT_STATUSES.FAILED,
-            failed_at: new Date(),
-            error_code: 'enqueue_failed',
-          }),
-        );
-      }
-    });
+    await scheduleCommitDispatch(
+      {
+        type: 'user_data_export',
+        exportPublicId,
+        userPublicId,
+        userInternalId: user.id,
+      },
+      options?.requestId !== undefined ? { requestId: options.requestId } : undefined,
+    );
 
     logger.info({ userPublicId, exportPublicId }, 'user-data-export.requested');
 
