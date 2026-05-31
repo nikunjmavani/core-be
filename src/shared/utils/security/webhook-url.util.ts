@@ -62,11 +62,13 @@ function isUnsafeIpLiteral(address: string): boolean {
 }
 
 function assertWebhookScheme(parsed: URL): void {
-  const scheme = parsed.protocol.slice(0, -1);
-  if (scheme !== 'http' && scheme !== 'https') {
-    throw new ValidationError('errors:webhookUrlInvalidScheme', { scheme }, undefined, [
-      { field: 'url', messageKey: 'errors:webhookUrlInvalidScheme' },
-    ]);
+  if (parsed.protocol !== 'https:') {
+    throw new ValidationError(
+      'errors:webhookUrlInvalidScheme',
+      { scheme: parsed.protocol.slice(0, -1) },
+      undefined,
+      [{ field: 'url', messageKey: 'errors:webhookUrlInvalidScheme' }],
+    );
   }
 }
 

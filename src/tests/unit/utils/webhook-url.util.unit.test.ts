@@ -23,9 +23,12 @@ describe('webhook-url.util', () => {
     await expect(validateWebhookUrl('https://example.com/webhook')).resolves.toBeUndefined();
   });
 
-  it('accepts public HTTP URL when DNS resolves to public IPv4', async () => {
+  it('rejects HTTP URLs even when DNS resolves to public IPv4', async () => {
     mockDnsLookupAll([{ address: '93.184.216.34', family: 4 }]);
-    await expect(validateWebhookUrl('http://example.com/webhook')).resolves.toBeUndefined();
+    await expect(validateWebhookUrl('http://example.com/webhook')).rejects.toThrow(ValidationError);
+    await expect(validateWebhookUrl('http://example.com/webhook')).rejects.toMatchObject({
+      messageKey: 'errors:webhookUrlInvalidScheme',
+    });
   });
 
   it('rejects 127.0.0.1 hostname without DNS lookup', async () => {
