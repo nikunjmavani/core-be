@@ -31,9 +31,12 @@ vi.mock('@/domains/notify/sub-domains/notification/queues/notification.queue.js'
   closeNotificationQueue: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js', () => ({
-  closeWebhookDeliveryQueue: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock(
+  '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js',
+  () => ({
+    closeWebhookDeliveryQueue: vi.fn().mockResolvedValue(undefined),
+  }),
+);
 
 vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   flushSentry: vi.fn().mockResolvedValue(undefined),
@@ -54,7 +57,7 @@ const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
 
 import shutdownMiddleware, {
   SHUTDOWN_DRAIN_DELAY_MS,
-} from '@/shared/middlewares/shutdown.middleware.js';
+} from '@/shared/middlewares/core/shutdown.middleware.js';
 
 describe('shutdown.middleware', () => {
   let processExitSpy: ReturnType<typeof vi.spyOn>;

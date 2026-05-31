@@ -3,7 +3,7 @@ import {
   isNeonPoolerConnection,
   isStrictDatabaseTlsVerification,
   parseSslMode,
-} from '@/infrastructure/database/connection-url.util.js';
+} from '@/infrastructure/database/utils/connection-url.util.js';
 
 describe('connection-url.util', () => {
   describe('parseSslMode', () => {

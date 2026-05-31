@@ -42,12 +42,12 @@ Generated from the full codebase review plan (security, performance, quality, re
 | ------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------- |
 | JWT (RS256 prod, 15-min expiry, issuer/audience)  | Satisfied | `src/shared/utils/security/jwt.util.ts`; env refine for JWT keys in production                          |
 | Account lockout (10 attempts, 30 min)             | Satisfied | `src/domains/auth/auth.service.ts`                                                             |
-| Helmet CSP                                        | Satisfied | `src/shared/middlewares/helmet.middleware.ts`                                                   |
-| CORS (ALLOWED_ORIGINS in prod)                    | Satisfied | `src/shared/middlewares/cors.middleware.ts` throws if empty in production                       |
-| Rate limiting                                     | Satisfied | Global + Redis in prod; `src/shared/middlewares/rate-limit.middleware.ts`                       |
-| Idempotency                                       | Satisfied | `src/shared/middlewares/idempotency.middleware.ts`; Stripe forwarding to be confirmed per route |
-| X-Organization-Id validation                      | Satisfied | `PUBLIC_ID_REGEX` in `src/shared/middlewares/tenant.middleware.ts`                              |
-| Error handler (5xx -> Sentry, no stack to client) | Satisfied | `src/shared/middlewares/error-handler.middleware.ts`                                            |
+| Helmet CSP                                        | Satisfied | `src/shared/middlewares/security/helmet.middleware.ts`                                                   |
+| CORS (ALLOWED_ORIGINS in prod)                    | Satisfied | `src/shared/middlewares/security/cors.middleware.ts` throws if empty in production                       |
+| Rate limiting                                     | Satisfied | Global + Redis in prod; `src/shared/middlewares/rate-limit/rate-limit.middleware.ts`                       |
+| Idempotency                                       | Satisfied | `src/shared/middlewares/core/idempotency.middleware.ts`; Stripe forwarding to be confirmed per route |
+| X-Organization-Id validation                      | Satisfied | `PUBLIC_ID_REGEX` in `src/shared/middlewares/tenant/tenant.middleware.ts`                              |
+| Error handler (5xx -> Sentry, no stack to client) | Satisfied | `src/shared/middlewares/core/error-handler.middleware.ts`                                            |
 | Logger redaction                                  | Satisfied | `src/shared/utils/infrastructure/logger.util.ts`                                                              |
 | No raw SQL in domains                             | Satisfied | Grep found no raw SQL usage in `src/domains`                                                   |
 | CI security (Gitleaks, Semgrep, audit)            | Satisfied | `.github/workflows/ci.yml`                                                                     |

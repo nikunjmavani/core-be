@@ -136,7 +136,7 @@ Long-lived branches: **`dev`** → **`main`**. Short-lived branches use `feature
 
 ## 3. Testing (when to run each)
 
-**Where tests live:** Cross-cutting Vitest under `src/tests/`; domain tests under `src/domains/<domain>/__tests__/` (bundled e2e, unit, factories); sub-domain and **nested** sub-domain tests under `src/domains/<domain>/sub-domains/.../__tests__/` and `events/__tests__/`. See **CLAUDE.md** § Testing and `docs/reference/architecture/domains-and-public-api-design.md` §1.5. k6: `src/tests/load/k6/` — `pnpm load:*`.
+**Where tests live:** Cross-cutting Vitest under `src/tests/`; domain tests under `src/domains/<domain>/__tests__/` (bundled e2e, unit, factories); sub-domain and **nested** sub-domain tests under `src/domains/<domain>/sub-domains/.../__tests__/` and `__tests__/unit/events/`. See **CLAUDE.md** § Testing and `docs/reference/architecture/domains-and-public-api-design.md` §1.5. k6: `src/tests/load/k6/` — `pnpm load:*`.
 
 | Category                 | Command                                 | When to run                                                                                                                                          |
 | ------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |

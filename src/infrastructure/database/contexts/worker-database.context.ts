@@ -3,7 +3,7 @@ import { database } from '@/infrastructure/database/connection.js';
 import {
   isForceRlsTable,
   type ForceRlsTableRef,
-} from '@/infrastructure/database/force-rls-tables.constants.js';
+} from '@/infrastructure/database/utils/force-rls-tables.constants.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { runWithPinnedDatabaseHandle } from '@/infrastructure/database/contexts/request-database.context.js';
 import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database.context.error.js';

@@ -41,7 +41,7 @@ describe('assertDatabaseTlsVerification', () => {
     });
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertDatabaseTlsVerification } = await import(
-      '@/infrastructure/database/assert-database-tls-safety.js'
+      '@/infrastructure/database/safety/assert-database-tls-safety.js'
     );
 
     expect(() => assertDatabaseTlsVerification()).not.toThrow();
@@ -58,7 +58,7 @@ describe('assertDatabaseTlsVerification', () => {
       DATABASE_SSL_REJECT_UNAUTHORIZED: true,
     });
     const { assertDatabaseTlsVerification } = await import(
-      '@/infrastructure/database/assert-database-tls-safety.js'
+      '@/infrastructure/database/safety/assert-database-tls-safety.js'
     );
     expect(() => assertDatabaseTlsVerification()).not.toThrow();
   });
@@ -69,7 +69,7 @@ describe('assertDatabaseTlsVerification', () => {
       DATABASE_URL: 'postgresql://u:p@host/db?sslmode=require',
     });
     const { assertDatabaseTlsVerification } = await import(
-      '@/infrastructure/database/assert-database-tls-safety.js'
+      '@/infrastructure/database/safety/assert-database-tls-safety.js'
     );
     expect(() => assertDatabaseTlsVerification()).toThrow(/database\.tls_safety\.unverified/);
   });
@@ -81,7 +81,7 @@ describe('assertDatabaseTlsVerification', () => {
       DATABASE_URL: 'postgresql://u:p@host/db?sslmode=require',
     });
     const { assertDatabaseTlsVerification } = await import(
-      '@/infrastructure/database/assert-database-tls-safety.js'
+      '@/infrastructure/database/safety/assert-database-tls-safety.js'
     );
     expect(() => assertDatabaseTlsVerification()).toThrow(/database\.tls_safety\.unverified/);
   });
@@ -93,7 +93,7 @@ describe('assertDatabaseTlsVerification', () => {
     });
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertDatabaseTlsVerification } = await import(
-      '@/infrastructure/database/assert-database-tls-safety.js'
+      '@/infrastructure/database/safety/assert-database-tls-safety.js'
     );
 
     expect(() => assertDatabaseTlsVerification()).not.toThrow();

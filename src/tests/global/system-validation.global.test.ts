@@ -61,27 +61,27 @@ describe('System Validation', () => {
     const middlewareDir = resolve(ROOT, 'src/shared/middlewares');
 
     it('should have auth middleware', () => {
-      expect(existsSync(join(middlewareDir, 'auth.middleware.ts'))).toBe(true);
+      expect(existsSync(join(middlewareDir, 'core/auth.middleware.ts'))).toBe(true);
     });
 
     it('should have helmet middleware', () => {
-      expect(existsSync(join(middlewareDir, 'helmet.middleware.ts'))).toBe(true);
+      expect(existsSync(join(middlewareDir, 'security/helmet.middleware.ts'))).toBe(true);
     });
 
     it('should have CORS middleware', () => {
-      expect(existsSync(join(middlewareDir, 'cors.middleware.ts'))).toBe(true);
+      expect(existsSync(join(middlewareDir, 'security/cors.middleware.ts'))).toBe(true);
     });
 
     it('should have rate limit middleware', () => {
-      expect(existsSync(join(middlewareDir, 'rate-limit.middleware.ts'))).toBe(true);
+      expect(existsSync(join(middlewareDir, 'rate-limit/rate-limit.middleware.ts'))).toBe(true);
     });
 
     it('should have idempotency middleware', () => {
-      expect(existsSync(join(middlewareDir, 'idempotency.middleware.ts'))).toBe(true);
+      expect(existsSync(join(middlewareDir, 'core/idempotency.middleware.ts'))).toBe(true);
     });
 
     it('should have error handler middleware', () => {
-      expect(existsSync(join(middlewareDir, 'error-handler.middleware.ts'))).toBe(true);
+      expect(existsSync(join(middlewareDir, 'core/error-handler.middleware.ts'))).toBe(true);
     });
   });
 

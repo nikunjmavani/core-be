@@ -166,7 +166,7 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 | `idempotency/` | `idempotency-key.util` |
 | `text/` | `email.util`, `html-escape.util` |
 
-**Middleware** (Fastify plugins) lives in `src/shared/middlewares/` — registered via `registerMiddleware()` from `@/shared/middlewares/index.js`.
+**Middleware** (Fastify plugins) lives in `src/shared/middlewares/` — grouped by concern (`core/`, `security/`, `session/`, `tenant/`, `rate-limit/`) and registered via `registerMiddleware()` from `@/shared/middlewares/index.js`.
 
 ### Import path conventions
 
@@ -260,7 +260,7 @@ Always use `.js` extensions in import specifiers. CI gate: `src/tests/global/imp
 
 | Domain  | Schema files                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| auth    | auth-method/auth-method.schema.ts, auth-method/verification-token/verification-token.schema.ts, auth-session/auth-session.schema.ts, auth-mfa/mfa-method.schema.ts, auth-mfa/mfa-recovery-code.schema.ts, auth-webauthn/webauthn-credential.schema.ts                                                                                                                                                                                                         |
+| auth    | auth-method/auth-method.schema.ts, auth-method/verification-token/verification-token.schema.ts, auth-session/auth-session.schema.ts, auth-mfa/auth-mfa-method.schema.ts, auth-mfa/auth-mfa-recovery-code.schema.ts, auth-webauthn/webauthn-credential.schema.ts                                                                                                                                                                                                         |
 | user    | user.schema.ts, user-settings/user-settings.schema.ts, user-notification-preferences/user-notification-preferences.schema.ts                                                                                                                                                                                                                                                                                                              |
 | tenancy | organization/organization.schema.ts, organization-settings/organization-settings.schema.ts, organization-notification-policy/organization-notification-policy.schema.ts, organization-api-key/organization-api-key.schema.ts, membership/membership.schema.ts, member-invitation/member-invitation.schema.ts, member-role/member-role.schema.ts, member-role-permission/member-role-permission.schema.ts, permission/permission.schema.ts |
 | billing | plan/plan.schema.ts, subscription/subscription.schema.ts, stripe-webhook/stripe-webhook.schema.ts                                                                                                                                                                                                                                                                                                    |
@@ -273,7 +273,6 @@ Always use `.js` extensions in import specifiers. CI gate: `src/tests/global/imp
 **Repositories with no matching schema in same folder:**
 
 - **webhook-event:** has `webhook-event.repository.ts` but no `webhook-event.schema.ts`; likely uses webhook schema or shared table.
-- **auth-mfa:** repository is `mfa.repository.ts`, schema is `mfa-method.schema.ts` (naming mismatch).
 
 ---
 
@@ -291,7 +290,6 @@ Always use `.js` extensions in import specifiers. CI gate: `src/tests/global/imp
 
 **Inconsistencies:**
 
-- **auth-mfa** schema file is `mfa-method.schema.ts` while service/repository are `mfa.service.ts` / `mfa.repository.ts` (file-name mismatch within the sub-domain; folder uses the required `auth-` prefix).
 - **plan**, **subscription** do not use a `billing-` prefix (standalone names under billing).
 
 ---
@@ -299,8 +297,9 @@ Always use `.js` extensions in import specifiers. CI gate: `src/tests/global/imp
 ## 10. Missing / Inconsistent Items Report
 
 - **webhook-event:** repository exists, no `webhook-event.schema.ts`.
-- **auth-mfa:** schema file is `mfa-method.schema.ts`; service/repository are `mfa.*` (file-name mismatch within the sub-domain).
+- **notify/webhook-delivery:** nested implementation folder under `webhook/` (repos, queues, workers, events) — not a separate API resource.
+- **auth-mfa-session:** Redis ticket store (no HTTP routes); exempt from standard layer matrix.
 - **CLAUDE.md / domains-and-public-api-design.md:** Domain mapping tables include `user-data-export` and nested `organization-api-key` under `organization` (keep in sync when adding sub-domains).
 - **No orchestrator layer:** Multi-sub-domain domains (**auth**, **user**, **billing**, **tenancy**, **notify**) wire sub-domain services via `<domain>.container.ts`; controllers call the appropriate service directly.
 - **Sub-domains missing standard files:** Several sub-domains lack .dto, .validator, .serializer, or .types as documented in Section 5 (e.g. user-data-export, stripe-webhook, webhook-event, plan, notification, auth-method, auth-session, auth-mfa, user-settings, user-notification-preferences).
-- **Test layout:** Domain e2e at `<domain>/__tests__/`; sub-domain and **nested** sub-domain unit/e2e under `sub-domains/.../__tests__/`; event tests under `events/__tests__/`; shared tenancy helpers at `tenancy/__tests__/factories/permission.factory.ts`. See **CLAUDE.md** § Testing and **domains-and-public-api-design.md** §1.5. `src/tests/node_modules/` is gitignored Vite cache (do not commit).
+- **Test layout:** Domain e2e at `<domain>/__tests__/`; sub-domain and **nested** sub-domain unit/e2e under `sub-domains/.../__tests__/`; event handler tests under `__tests__/unit/events/` (not `events/__tests__/`); shared tenancy helpers at `tenancy/__tests__/factories/permission.factory.ts`. See **CLAUDE.md** § Testing and **domains-and-public-api-design.md** §1.5. `src/tests/node_modules/` is gitignored Vite cache (do not commit).

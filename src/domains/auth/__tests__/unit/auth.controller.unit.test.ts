@@ -4,7 +4,7 @@ import { NotImplementedError, UnauthorizedError, ValidationError } from '@/share
 import { createAuthController } from '@/domains/auth/auth.controller.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
-vi.mock('@/shared/middlewares/cookie-session-origin.pre-handler.js', () => ({
+vi.mock('@/shared/middlewares/session/cookie-session-origin.pre-handler.js', () => ({
   requireAllowedSourceOriginForCookieSessionRoute: vi.fn(),
 }));
 

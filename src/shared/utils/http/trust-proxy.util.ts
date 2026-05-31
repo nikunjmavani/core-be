@@ -1,4 +1,4 @@
-import { isHostedDeployment } from '@/infrastructure/database/hosted-deployment.util.js';
+import { isHostedDeployment } from '@/infrastructure/database/utils/hosted-deployment.util.js';
 import { resolveTrustProxy } from '@/shared/utils/http/fastify-server.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 

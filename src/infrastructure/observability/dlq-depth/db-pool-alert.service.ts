@@ -1,5 +1,5 @@
-import { getActiveOrganizationRlsCheckoutCount } from '@/infrastructure/database/organization-rls-checkout-counter.js';
-import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool.constants.js';
+import { getActiveOrganizationRlsCheckoutCount } from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
+import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool/pool.constants.js';
 import { isWorkerRuntime } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { getWorkerPostgresPoolDemandContext } from '@/infrastructure/queue/worker-runtime/worker-pool-demand-context.js';
 import { env } from '@/shared/config/env.config.js';

@@ -21,7 +21,14 @@ const DOMAINS_DIR = resolve(process.cwd(), 'src/domains');
 const FLAT_DOMAINS = new Set(['audit', 'upload']);
 
 /** Allowed top-level directories under multi-resource domains. */
-const RESERVED_DOMAIN_ROOT_DIRS = new Set(['sub-domains', 'events', '__tests__', 'workers']);
+const RESERVED_DOMAIN_ROOT_DIRS = new Set([
+  'sub-domains',
+  'events',
+  '__tests__',
+  'workers',
+  'handlers', // auth-only: route handler factories
+  'shared', // auth-only: cross-handler helpers
+]);
 
 /** Allowed subdirectories directly under `__tests__/`. */
 const ALLOWED_TESTS_SUBDIRS = new Set(['unit', 'integration', 'e2e', 'factories']);

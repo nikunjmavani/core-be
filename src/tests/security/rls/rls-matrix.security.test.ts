@@ -20,7 +20,7 @@ import {
   tableKey,
   updateRowAsTenant,
 } from '@/tests/helpers/rls-matrix.helper.js';
-import { diffForceRlsTables } from '@/infrastructure/database/force-rls-tables.constants.js';
+import { diffForceRlsTables } from '@/infrastructure/database/utils/force-rls-tables.constants.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';

@@ -1,6 +1,6 @@
 ---
 description: When adding or changing Fastify route registrations, run route-schema-doc-guard so every route has schema summary, description, and tags.
-globs: src/domains/**/*.routes.ts, src/shared/middlewares/health.middleware.ts, src/infrastructure/mcp/mcp-server.ts
+globs: src/domains/**/*.routes.ts, src/shared/middlewares/core/health.middleware.ts, src/infrastructure/mcp/mcp-server.ts
 alwaysApply: false
 ---
 

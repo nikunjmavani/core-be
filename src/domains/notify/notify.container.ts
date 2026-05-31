@@ -8,7 +8,7 @@ import {
 } from './sub-domains/notification/notification-dispatch.service.js';
 import { NotificationRepository } from './sub-domains/notification/notification.repository.js';
 import { WebhookRepository } from './sub-domains/webhook/webhook.repository.js';
-import { WebhookDeliveryAttemptRepository } from './sub-domains/webhook/webhook-delivery-attempt.repository.js';
+import { WebhookDeliveryAttemptRepository } from './sub-domains/webhook/webhook-delivery/webhook-delivery-attempt.repository.js';
 import { WebhookEventRepository } from './sub-domains/webhook/webhook-event/webhook-event.repository.js';
 import { NotificationService } from './sub-domains/notification/notification.service.js';
 import { WebhookService } from './sub-domains/webhook/webhook.service.js';

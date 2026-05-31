@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { countWithCap } from '@/infrastructure/database/capped-count.util.js';
+import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { NotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 import { notifications } from '@/domains/notify/sub-domains/notification/notification.schema.js';

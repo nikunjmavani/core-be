@@ -13,9 +13,9 @@ import {
 } from '@/infrastructure/cache/bullmq-redis.client.js';
 import { warnWhenBullMqSharesCacheRedisHost } from '@/infrastructure/cache/redis-topology-warn.util.js';
 import { closeDatabase } from '@/infrastructure/database/connection.js';
-import { assertPostgresConnectionBudget } from '@/infrastructure/database/assert-connection-budget.js';
-import { assertDatabaseRoleRlsSafety } from '@/infrastructure/database/assert-database-rls-safety.js';
-import { assertDatabaseTlsVerification } from '@/infrastructure/database/assert-database-tls-safety.js';
+import { assertPostgresConnectionBudget } from '@/infrastructure/database/safety/assert-connection-budget.js';
+import { assertDatabaseRoleRlsSafety } from '@/infrastructure/database/safety/assert-database-rls-safety.js';
+import { assertDatabaseTlsVerification } from '@/infrastructure/database/safety/assert-database-tls-safety.js';
 import { assertRedisTlsVerification } from '@/infrastructure/cache/assert-redis-tls-safety.js';
 import { computeWorkerPostgresPoolDemand } from '@/infrastructure/queue/worker-runtime/worker-connection-budget.js';
 import { setWorkerPostgresPoolDemandContext } from '@/infrastructure/queue/worker-runtime/worker-pool-demand-context.js';
@@ -36,7 +36,7 @@ import { getShutdownWatchdogMs } from '@/infrastructure/queue/worker-runtime/shu
 import { closeStripeWebhookQueue } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
 import { closeMailQueue } from '@/infrastructure/mail/queues/mail.queue.js';
 import { closeNotificationQueue } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
-import { closeWebhookDeliveryQueue } from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
+import { closeWebhookDeliveryQueue } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
 
 // Initialize Sentry before anything else
 initSentry();

@@ -6,7 +6,7 @@ const ROOT = process.cwd();
 
 describe('Worker readiness (global)', () => {
   it('registers GET /livez and GET /readyz on the API process', () => {
-    const healthMiddlewarePath = resolve(ROOT, 'src/shared/middlewares/health.middleware.ts');
+    const healthMiddlewarePath = resolve(ROOT, 'src/shared/middlewares/core/health.middleware.ts');
     const content = readFileSync(healthMiddlewarePath, 'utf8');
     // Tolerate Biome line-wrapping when the route options object grows
     // large enough to force multi-line formatting (e.g. with a `schema:` block).

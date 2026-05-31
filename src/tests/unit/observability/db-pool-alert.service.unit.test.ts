@@ -6,7 +6,7 @@ import {
 import {
   incrementOrganizationRlsCheckoutCount,
   resetOrganizationRlsCheckoutCountForTests,
-} from '@/infrastructure/database/organization-rls-checkout-counter.js';
+} from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
 
 const captureMessage = vi.fn();
 

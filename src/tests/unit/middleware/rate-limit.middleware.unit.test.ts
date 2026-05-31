@@ -32,7 +32,7 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   Sentry: { addBreadcrumb: vi.fn() },
 }));
 
-import rateLimitMiddleware from '@/shared/middlewares/rate-limit.middleware.js';
+import rateLimitMiddleware from '@/shared/middlewares/rate-limit/rate-limit.middleware.js';
 
 describe('rate-limit.middleware', () => {
   let application: ReturnType<typeof Fastify>;
@@ -57,7 +57,7 @@ describe('rate-limit.middleware', () => {
       },
     }));
     const { default: redisRateLimitMiddleware } = await import(
-      '@/shared/middlewares/rate-limit.middleware.js'
+      '@/shared/middlewares/rate-limit/rate-limit.middleware.js'
     );
     application = Fastify();
     await application.register(redisRateLimitMiddleware);
@@ -111,7 +111,7 @@ describe('rate-limit.middleware', () => {
       },
     }));
     const { default: developmentRateLimitMiddleware } = await import(
-      '@/shared/middlewares/rate-limit.middleware.js'
+      '@/shared/middlewares/rate-limit/rate-limit.middleware.js'
     );
     application = Fastify();
     await application.register(developmentRateLimitMiddleware);
@@ -137,7 +137,7 @@ describe('rate-limit.middleware', () => {
       },
     }));
     const { default: productionRateLimitMiddleware } = await import(
-      '@/shared/middlewares/rate-limit.middleware.js'
+      '@/shared/middlewares/rate-limit/rate-limit.middleware.js'
     );
     application = Fastify();
     await application.register(productionRateLimitMiddleware);
@@ -172,7 +172,7 @@ describe('rate-limit.middleware', () => {
       },
     }));
     const { default: productionRateLimitMiddleware } = await import(
-      '@/shared/middlewares/rate-limit.middleware.js'
+      '@/shared/middlewares/rate-limit/rate-limit.middleware.js'
     );
     application = Fastify();
     await application.register(productionRateLimitMiddleware);
@@ -197,7 +197,7 @@ describe('rate-limit.middleware', () => {
       },
     }));
     const { default: testRateLimitMiddleware } = await import(
-      '@/shared/middlewares/rate-limit.middleware.js'
+      '@/shared/middlewares/rate-limit/rate-limit.middleware.js'
     );
     application = Fastify();
     await application.register(testRateLimitMiddleware);
@@ -222,7 +222,7 @@ describe('rate-limit.middleware', () => {
       },
     }));
     const { default: developmentRateLimitMiddleware } = await import(
-      '@/shared/middlewares/rate-limit.middleware.js'
+      '@/shared/middlewares/rate-limit/rate-limit.middleware.js'
     );
     application = Fastify();
     await application.register(developmentRateLimitMiddleware);

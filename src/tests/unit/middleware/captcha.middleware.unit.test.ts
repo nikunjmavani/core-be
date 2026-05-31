@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { resetEnvCacheForTests } from '@/shared/config/env.config.js';
 import { UnauthorizedError } from '@/shared/errors/index.js';
-import { captchaPreHandler } from '@/shared/middlewares/captcha.middleware.js';
+import { captchaPreHandler } from '@/shared/middlewares/security/captcha.middleware.js';
 
 const verifyTurnstileTokenMock = vi.hoisted(() => vi.fn());
 

@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, lte, type SQL } from 'drizzle-orm';
-import { countWithCap } from '@/infrastructure/database/capped-count.util.js';
+import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { logs } from '@/domains/audit/audit.schema.js';
 import {

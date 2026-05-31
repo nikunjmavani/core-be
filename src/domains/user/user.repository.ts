@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { and, asc, eq, isNotNull, isNull, like, or, sql, type SQL } from 'drizzle-orm';
-import { countWithCap } from '@/infrastructure/database/capped-count.util.js';
+import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { users } from '@/domains/user/user.schema.js';
 import { escapeLikePattern } from '@/shared/utils/validation/validation.util.js';

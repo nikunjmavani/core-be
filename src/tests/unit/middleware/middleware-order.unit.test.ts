@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { middlewarePlugins } from '@/shared/middlewares/index.js';
-import tenantMiddleware from '@/shared/middlewares/tenant.middleware.js';
-import rateLimitMiddleware from '@/shared/middlewares/rate-limit.middleware.js';
-import organizationRlsTransactionMiddleware from '@/shared/middlewares/organization-rls-transaction.middleware.js';
-import i18nMiddleware from '@/shared/middlewares/i18n.middleware.js';
+import tenantMiddleware from '@/shared/middlewares/tenant/tenant.middleware.js';
+import rateLimitMiddleware from '@/shared/middlewares/rate-limit/rate-limit.middleware.js';
+import organizationRlsTransactionMiddleware from '@/shared/middlewares/tenant/organization-rls-transaction.middleware.js';
+import i18nMiddleware from '@/shared/middlewares/core/i18n.middleware.js';
 
 /**
  * Regression test for middleware ordering. The global limiter is keyed strictly on

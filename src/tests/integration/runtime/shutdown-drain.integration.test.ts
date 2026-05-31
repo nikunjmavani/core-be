@@ -42,7 +42,7 @@ describe('graceful shutdown drain', () => {
 
     it('returns 503 draining when the drain flag is set before the server closes', async () => {
       const { default: healthMiddleware } = await import(
-        '@/shared/middlewares/health.middleware.js'
+        '@/shared/middlewares/core/health.middleware.js'
       );
       const { setApplicationDraining } = await import(
         '@/shared/utils/infrastructure/application-lifecycle.util.js'
@@ -92,7 +92,7 @@ describe('graceful shutdown drain', () => {
       vi.spyOn(process, 'exit').mockImplementation((() => {}) as typeof process.exit);
 
       const { default: shutdownMiddleware } = await import(
-        '@/shared/middlewares/shutdown.middleware.js'
+        '@/shared/middlewares/core/shutdown.middleware.js'
       );
 
       const applicationListeningForDrainObservation = Fastify({ logger: false });
@@ -128,7 +128,7 @@ describe('graceful shutdown drain', () => {
       vi.spyOn(redisClient, 'closeRedis').mockResolvedValue(undefined);
 
       const { default: shutdownMiddleware } = await import(
-        '@/shared/middlewares/shutdown.middleware.js'
+        '@/shared/middlewares/core/shutdown.middleware.js'
       );
 
       const applicationListeningForDrainObservation = Fastify({ logger: false });

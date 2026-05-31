@@ -8,7 +8,7 @@ import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-
 import { SESSION_CLEANUP_QUEUE_NAME } from '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.constants.js';
 import { sessions } from '@/domains/auth/sub-domains/auth-session/auth-session.schema.js';
 import { lt, or, eq, and } from 'drizzle-orm';
-import { deleteInBatchesByCondition } from '@/infrastructure/database/batch-delete.util.js';
+import { deleteInBatchesByCondition } from '@/infrastructure/database/utils/batch-delete.util.js';
 import { withSessionRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env } from '@/shared/config/env.config.js';

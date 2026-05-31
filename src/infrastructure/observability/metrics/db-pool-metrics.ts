@@ -1,6 +1,6 @@
 import { sql } from '@/infrastructure/database/connection.js';
-import { resolvePostgresAllowedApplicationConnections } from '@/infrastructure/database/assert-connection-budget.js';
-import { registerOrganizationRlsCheckoutHoldObserver } from '@/infrastructure/database/organization-rls-checkout-counter.js';
+import { resolvePostgresAllowedApplicationConnections } from '@/infrastructure/database/safety/assert-connection-budget.js';
+import { registerOrganizationRlsCheckoutHoldObserver } from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import { isMetricsEnabled } from '@/infrastructure/observability/metrics/metrics-registry.js';
 import {

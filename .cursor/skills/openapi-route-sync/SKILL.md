@@ -27,7 +27,7 @@ Also invoke **openapi-multilingual** when adding new tags or response keys in lo
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Per-route summary/description/tags** | `schema: { summary, description, tags }` on the Fastify route registration in `*.routes.ts` (Zod type provider). Read by `tooling/openapi/extractors/route-schema-metadata.ts`. |
 | **Tag display names**          | `src/shared/locales/{en,es}/openapi.json` → `tags` object (e.g. `"Auth": { "name": "Auth", "description": "..." }`).                                                    |
-| **Supplemental routes**        | `/livez`, `/readyz`, `/api/v1/mcp` carry their schema literal directly on the registration in `src/shared/middlewares/health.middleware.ts` and `src/infrastructure/mcp/mcp-server.ts`. |
+| **Supplemental routes**        | `/livez`, `/readyz`, `/api/v1/mcp` carry their schema literal directly on the registration in `src/shared/middlewares/core/health.middleware.ts` and `src/infrastructure/mcp/mcp-server.ts`. |
 
 ## Steps
 

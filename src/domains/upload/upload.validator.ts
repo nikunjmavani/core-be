@@ -6,7 +6,7 @@ import { UPLOAD_PURPOSE_CONFIG, UPLOAD_TARGETS } from './upload.constants.js';
 import {
   getAllowedContentTypesForPurpose,
   getAllowedExtensionsForContentType,
-} from './upload-content-type.util.js';
+} from './utils/upload-content-type.util.js';
 import type { CreateUploadInput } from './upload.types.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 

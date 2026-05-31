@@ -20,7 +20,7 @@ import {
   exchangeGitHubOAuthCode,
 } from './providers/github-oauth.provider.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
-import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/mfa.service.js';
+import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import { completeOAuthUserSession } from './oauth-user-session.js';
 import type { FirstFactorAuthResult } from '@/domains/auth/shared/complete-first-factor-auth.js';
 

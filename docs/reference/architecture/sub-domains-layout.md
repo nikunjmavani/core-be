@@ -15,7 +15,7 @@ Examples: `organization/organization-api-key/`, `membership/member-invitation/`,
 
 ## Event handler tests
 
-Co-locate under `events/__tests__/` on the resource that owns the handlers (see `testing-conventions.mdc`).
+Co-locate under `__tests__/unit/events/` on the resource that owns the handlers (never `events/__tests__/` — see `testing-conventions.mdc`).
 
 ## DTO rule
 

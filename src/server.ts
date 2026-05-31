@@ -8,9 +8,9 @@ import { createUnhandledRejectionHandler } from '@/infrastructure/observability/
 import { connectRedis } from '@/infrastructure/cache/redis.client.js';
 import { connectBullMqRedis } from '@/infrastructure/cache/bullmq-redis.client.js';
 import { warnWhenBullMqSharesCacheRedisHost } from '@/infrastructure/cache/redis-topology-warn.util.js';
-import { assertPostgresConnectionBudget } from '@/infrastructure/database/assert-connection-budget.js';
-import { assertDatabaseRoleRlsSafety } from '@/infrastructure/database/assert-database-rls-safety.js';
-import { assertDatabaseTlsVerification } from '@/infrastructure/database/assert-database-tls-safety.js';
+import { assertPostgresConnectionBudget } from '@/infrastructure/database/safety/assert-connection-budget.js';
+import { assertDatabaseRoleRlsSafety } from '@/infrastructure/database/safety/assert-database-rls-safety.js';
+import { assertDatabaseTlsVerification } from '@/infrastructure/database/safety/assert-database-tls-safety.js';
 import { assertRedisTlsVerification } from '@/infrastructure/cache/assert-redis-tls-safety.js';
 import { registerPostgresPoolMetrics } from '@/infrastructure/observability/metrics/db-pool-metrics.js';
 import { env } from '@/shared/config/env.config.js';

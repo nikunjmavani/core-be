@@ -52,7 +52,7 @@ describe('assertDatabaseRoleRlsSafety', () => {
 
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertDatabaseRoleRlsSafety } = await import(
-      '@/infrastructure/database/assert-database-rls-safety.js'
+      '@/infrastructure/database/safety/assert-database-rls-safety.js'
     );
 
     await expect(assertDatabaseRoleRlsSafety()).resolves.toBeUndefined();
@@ -71,7 +71,7 @@ describe('assertDatabaseRoleRlsSafety', () => {
     getEnvMock.mockReturnValue({ NODE_ENV: 'production' });
 
     const { assertDatabaseRoleRlsSafety } = await import(
-      '@/infrastructure/database/assert-database-rls-safety.js'
+      '@/infrastructure/database/safety/assert-database-rls-safety.js'
     );
 
     await expect(assertDatabaseRoleRlsSafety()).rejects.toThrow(
@@ -86,7 +86,7 @@ describe('assertDatabaseRoleRlsSafety', () => {
     getEnvMock.mockReturnValue({ NODE_ENV: 'production' });
 
     const { assertDatabaseRoleRlsSafety } = await import(
-      '@/infrastructure/database/assert-database-rls-safety.js'
+      '@/infrastructure/database/safety/assert-database-rls-safety.js'
     );
 
     await expect(assertDatabaseRoleRlsSafety()).rejects.toThrow(/rolbypassrls=true/);
@@ -100,7 +100,7 @@ describe('assertDatabaseRoleRlsSafety', () => {
     });
 
     const { assertDatabaseRoleRlsSafety } = await import(
-      '@/infrastructure/database/assert-database-rls-safety.js'
+      '@/infrastructure/database/safety/assert-database-rls-safety.js'
     );
 
     await expect(assertDatabaseRoleRlsSafety()).rejects.toThrow(
@@ -114,7 +114,7 @@ describe('assertDatabaseRoleRlsSafety', () => {
     getEnvMock.mockReturnValue({ NODE_ENV: 'staging' });
 
     const { assertDatabaseRoleRlsSafety } = await import(
-      '@/infrastructure/database/assert-database-rls-safety.js'
+      '@/infrastructure/database/safety/assert-database-rls-safety.js'
     );
 
     await expect(assertDatabaseRoleRlsSafety()).rejects.toThrow(
@@ -128,7 +128,7 @@ describe('assertDatabaseRoleRlsSafety', () => {
 
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertDatabaseRoleRlsSafety } = await import(
-      '@/infrastructure/database/assert-database-rls-safety.js'
+      '@/infrastructure/database/safety/assert-database-rls-safety.js'
     );
 
     await expect(assertDatabaseRoleRlsSafety()).resolves.toBeUndefined();
@@ -144,7 +144,7 @@ describe('assertDatabaseRoleRlsSafety', () => {
 
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertDatabaseRoleRlsSafety } = await import(
-      '@/infrastructure/database/assert-database-rls-safety.js'
+      '@/infrastructure/database/safety/assert-database-rls-safety.js'
     );
 
     await expect(assertDatabaseRoleRlsSafety()).resolves.toBeUndefined();
@@ -156,7 +156,7 @@ describe('assertDatabaseRoleRlsSafety', () => {
     getEnvMock.mockReturnValue({ NODE_ENV: 'test' });
 
     const { assertDatabaseRoleRlsSafety } = await import(
-      '@/infrastructure/database/assert-database-rls-safety.js'
+      '@/infrastructure/database/safety/assert-database-rls-safety.js'
     );
 
     await expect(assertDatabaseRoleRlsSafety()).rejects.toThrow(

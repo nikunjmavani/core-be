@@ -53,7 +53,7 @@ describe('idempotency middleware fail-closed behavior', () => {
 
   it('returns 503 when Redis is unavailable during claim', async () => {
     const { default: idempotencyPlugin } = await import(
-      '@/shared/middlewares/idempotency.middleware.js'
+      '@/shared/middlewares/core/idempotency.middleware.js'
     );
 
     let claimPreHandler: ((request: FastifyRequest, reply: FastifyReply) => Promise<void>) | null =
@@ -128,7 +128,7 @@ describe('idempotency middleware fail-closed behavior', () => {
 });
 
 async function registerIdempotencyHooks() {
-  const idempotencyModule = await import('@/shared/middlewares/idempotency.middleware.js');
+  const idempotencyModule = await import('@/shared/middlewares/core/idempotency.middleware.js');
   const idempotencyPlugin = idempotencyModule.default;
   // `idempotencyOnResponse` is no longer registered as an onResponse hook by the plugin
   // itself — the request lifecycle coordinator invokes it post-RLS-commit. Tests reach
@@ -658,7 +658,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
 
   it('onRoute skips non-write methods and appends claim handler for write routes', async () => {
     const { default: idempotencyPlugin } = await import(
-      '@/shared/middlewares/idempotency.middleware.js'
+      '@/shared/middlewares/core/idempotency.middleware.js'
     );
     const mockApp = { addHook: vi.fn() };
     await idempotencyPlugin(mockApp as never, {} as never);

@@ -1,8 +1,8 @@
 import i18next from 'i18next';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
-import { emitWebhookDeliveryRequested } from '@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js';
+import { emitWebhookDeliveryRequested } from '@/domains/notify/sub-domains/webhook/webhook-delivery/events/webhook-delivery-emit.js';
 import type { WebhookRepository } from './webhook.repository.js';
-import type { WebhookDeliveryAttemptRepository } from './webhook-delivery-attempt.repository.js';
+import type { WebhookDeliveryAttemptRepository } from './webhook-delivery/webhook-delivery-attempt.repository.js';
 import { WebhookSerializer } from './webhook.serializer.js';
 import { validateCreateWebhook, validateUpdateWebhook } from './webhook.validator.js';
 import {
@@ -10,7 +10,7 @@ import {
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
 import { resolveAndPinWebhookUrl } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
-import { invalidateWebhookOutboundCircuit } from '@/domains/notify/sub-domains/webhook/workers/webhook-outbound-circuit.js';
+import { invalidateWebhookOutboundCircuit } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-outbound-circuit.js';
 import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
 import { createPinnedWebhookFetch } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
 import { buildWebhookSignatureHeader } from '@/shared/utils/security/webhook-signature.util.js';
@@ -19,7 +19,7 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import { WEBHOOK_ORGANIZATION_FANOUT_CONCURRENCY } from '@/domains/notify/sub-domains/webhook/webhook-delivery.constants.js';
+import { WEBHOOK_ORGANIZATION_FANOUT_CONCURRENCY } from '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.constants.js';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
 
 /** Maximum response body length returned to client (prevents leaking sensitive data from target) */

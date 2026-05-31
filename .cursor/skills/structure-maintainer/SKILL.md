@@ -71,7 +71,10 @@ src/infrastructure/
     base-repository.ts        # Pagination helper
     transaction.ts            # withTransaction()
     migrate.ts                # Migration runner
-    pg-schemas.ts             # Shared pgSchema definitions (auth, tenancy, billing, notify, audit)
+    pg-schemas.ts             # Shared pgSchema definitions
+    pool/                     # Pool tuning helpers
+    safety/                   # Statement timeout, RLS helpers
+    utils/                    # Shared DB utilities
   cache/
     redis.client.ts           # Redis connection
   queue/
@@ -95,8 +98,14 @@ src/shared/
   errors/{app,validation,auth}.error.ts, index.ts
   types/index.ts
   constants/index.ts
-  utils/{logger,response,request,pagination,public-id,uuid}.util.ts
-  middleware/{auth,tenant,cors,helmet,rate-limit,error-handler,response-format,request-context,health,shutdown}.middleware.ts, index.ts
+  utils/                      # grouped by concern (http/, security/, infrastructure/, …)
+  middlewares/
+    core/                     # auth, error-handler, health, request-context, …
+    security/                 # cors, helmet, captcha, …
+    session/                  # cookie session helpers
+    tenant/                   # X-Organization-Id + RLS transaction
+    rate-limit/               # global + route presets
+    index.ts                  # registerMiddleware()
 ```
 
 ### Repo root tooling (`tooling/`)
@@ -127,8 +136,8 @@ src/scripts/    # e.g. generate-openapi.ts → docs/openapi/openapi.json for Api
   - **Domain factories**: `src/domains/<domain>/__tests__/factories/` (e.g. tenancy `permission.factory.ts`).
   - **Sub-domain unit**: `sub-domains/<r>/__tests__/unit/` or `sub-domains/<parent>/<child>/__tests__/unit/`.
   - **Sub-domain e2e** (optional): `sub-domains/<parent>/<child>/__tests__/<child>.test.ts`.
-  - **Event handlers / emit**: `sub-domains/<r>/events/__tests__/`.
-- **Commands**: `pnpm test:unit` (unit + `events/__tests__`); `pnpm test:e2e` excludes `__tests__/unit/` and `events/__tests__`; `pnpm test` runs all.
+  - **Event handlers / emit**: `sub-domains/<r>/__tests__/unit/events/` (never `events/__tests__/`)
+- **Commands**: `pnpm test:unit` (unit + `__tests__/unit/events/`); `pnpm test:e2e` (excludes `__tests__/unit/`); `pnpm test` runs all.
 - **k6 load**: `src/tests/load/k6/` (not Vitest).
 - **Detail**: `.cursor/skills/test-generator/SKILL.md`, `.cursor/rules/testing-conventions.mdc`.
 

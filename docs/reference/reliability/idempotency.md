@@ -18,7 +18,7 @@ core-be deduplicates mutating HTTP requests when clients send an **`Idempotency-
 | **Duplicate after completion** | Cached response replayed with `x-idempotency-replay: true` |
 | **Commit safety** | Completed cache is written in the `onResponse` Fastify hook **only** when `statusCode < 400`, so a rolled-back request never leaves a successful replay entry behind |
 
-Implementation: [`src/shared/middlewares/idempotency.middleware.ts`](../../../src/shared/middlewares/idempotency.middleware.ts).
+Implementation: [`src/shared/middlewares/core/idempotency.middleware.ts`](../../../src/shared/middlewares/core/idempotency.middleware.ts).
 
 ### Redis entry shape (state machine)
 
@@ -57,5 +57,5 @@ The generated route catalog (`docs/routes.txt`) lists this under **IDEMPOTENCY**
 
 - [`src/PATTERNS.md`](../../../src/PATTERNS.md) § Idempotency — cross-cutting pattern overview (HTTP layer + Stripe webhook layer)
 - [`src/POLICIES.md`](../../../src/POLICIES.md) — `IDEMPOTENCY_*` constants (TTL, in-flight grace window, max key length)
-- [`src/shared/middlewares/idempotency.middleware.ts`](../../../src/shared/middlewares/idempotency.middleware.ts) — middleware implementation
+- [`src/shared/middlewares/core/idempotency.middleware.ts`](../../../src/shared/middlewares/core/idempotency.middleware.ts) — middleware implementation
 - [`src/shared/utils/idempotency/`](../../../src/shared/utils/idempotency/) — key parser and policy helpers

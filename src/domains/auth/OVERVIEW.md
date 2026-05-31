@@ -34,7 +34,7 @@ What it does not own: user profile (lives in [user](src/domains/user/)), organiz
 | [auth-session](src/domains/auth/sub-domains/auth-session/) | Session lifecycle: create on successful auth, revoke on logout, list active sessions. Owns the `auth_sessions` table and session retention worker. |
 | [auth-mfa](src/domains/auth/sub-domains/auth-mfa/) | TOTP MFA enrolment, challenge, and backup codes. |
 | [auth-webauthn](src/domains/auth/sub-domains/auth-webauthn/) | WebAuthn / passkey enrolment and authentication ceremonies via `@simplewebauthn/server`. |
-| [mfa](src/domains/auth/sub-domains/mfa/) | MFA-challenge ticket store (Redis). Bridges primary auth and second-factor verification. |
+| [auth-mfa-session](src/domains/auth/sub-domains/auth-mfa-session/) | MFA-challenge ticket store (Redis). Bridges primary auth and second-factor verification. |
 
 ## Patterns used
 

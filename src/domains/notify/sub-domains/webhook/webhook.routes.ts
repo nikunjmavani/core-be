@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
   STRICT_AUTHED_RATE_LIMIT,
-} from '@/shared/middlewares/rate-limit-presets.constants.js';
+} from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
 import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
 import { NOTIFY_PERMISSIONS } from '@/domains/notify/notify.permissions.js';
