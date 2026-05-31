@@ -20,6 +20,7 @@ import requestStatementTimeoutMiddleware from './core/request-statement-timeout.
 import healthMiddleware from './core/health.middleware.js';
 import httpMetricsPlugin from '@/infrastructure/observability/metrics/http-metrics.plugin.js';
 import metricsMiddleware from './core/metrics.middleware.js';
+import opsMiddleware from './core/ops.middleware.js';
 import shutdownMiddleware from './core/shutdown.middleware.js';
 
 /**
@@ -58,6 +59,7 @@ export const middlewarePlugins = [
   healthMiddleware,
   httpMetricsPlugin,
   metricsMiddleware,
+  opsMiddleware,
   shutdownMiddleware,
 ] as const;
 
