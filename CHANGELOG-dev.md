@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.4.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.1-dev.0...v3.4.2-dev.0) (2026-05-31)
+
+
+### Fixed
+
+* reduce agent system drift in skills, rules, and docs ([#205](https://github.com/nikunjmavani/core-be/issues/205)) ([2f570a0](https://github.com/nikunjmavani/core-be/commit/2f570a028946e3664e5794bf9cd79b306bd82f74))
+
 ## [3.4.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.0-dev.0...v3.4.1-dev.0) (2026-05-31)
 
 
