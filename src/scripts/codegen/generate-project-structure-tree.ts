@@ -5,7 +5,7 @@
  * Stdout (legacy, skips __tests__): pnpm tool:project-structure-tree --stdout
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   SKIP_DIRS_STDOUT,
   SKIP_DIRS_WRITE,
