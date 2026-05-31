@@ -106,18 +106,30 @@ describe('AuditService', () => {
     expect(result.next_cursor).toBeNull();
   });
 
-  it('list omits organization id when organization not found', async () => {
+  it('list returns empty page when organization public id is unknown', async () => {
     vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
-    await service.list({ limit: 20, organization_id: generatePublicId() });
-    const [filters] = vi.mocked(repository.findWithFilters).mock.calls[0] ?? [];
-    expect(filters).not.toHaveProperty('organization_id');
+    const result = await service.list({ limit: 20, organization_id: generatePublicId() });
+    expect(repository.findWithFilters).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      items: [],
+      total: 0,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    });
   });
 
-  it('list omits actor id when user not found', async () => {
+  it('list returns empty page when actor public id is unknown', async () => {
     vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
-    await service.list({ limit: 20, actor_user_id: generatePublicId() });
-    const [filters] = vi.mocked(repository.findWithFilters).mock.calls[0] ?? [];
-    expect(filters).not.toHaveProperty('actor_user_id');
+    const result = await service.list({ limit: 20, actor_user_id: generatePublicId() });
+    expect(repository.findWithFilters).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      items: [],
+      total: 0,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    });
   });
 
   it('list returns empty page when no rows', async () => {

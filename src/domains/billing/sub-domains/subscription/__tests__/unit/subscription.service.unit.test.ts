@@ -219,7 +219,11 @@ describe('SubscriptionService', () => {
     } as never);
 
     await service.cancel('org_public', 'sub_public');
-    expect(stripeMocks.cancelStripeSubscription).toHaveBeenCalledWith('sub_stripe', true);
+    expect(stripeMocks.cancelStripeSubscription).toHaveBeenCalledWith(
+      'sub_stripe',
+      true,
+      undefined,
+    );
   });
 
   it('resume calls Stripe when provider subscription id exists', async () => {
@@ -230,7 +234,7 @@ describe('SubscriptionService', () => {
     } as never);
 
     await service.resume('org_public', 'sub_public');
-    expect(stripeMocks.resumeStripeSubscription).toHaveBeenCalledWith('sub_stripe');
+    expect(stripeMocks.resumeStripeSubscription).toHaveBeenCalledWith('sub_stripe', undefined);
   });
 
   it('changePlan updates Stripe subscription when configured', async () => {

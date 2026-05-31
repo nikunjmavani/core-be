@@ -96,20 +96,30 @@ export class StripePaymentProvider implements PaymentProvider {
     }
   }
 
-  async cancelSubscriptionAtPeriodEnd(providerSubscriptionId: string): Promise<void> {
+  async cancelSubscriptionAtPeriodEnd(
+    providerSubscriptionId: string,
+    idempotencyKey?: string,
+  ): Promise<void> {
     if (!isStripeConfigured()) return;
     try {
-      await cancelStripeSubscription(providerSubscriptionId, true);
+      await cancelStripeSubscription(
+        providerSubscriptionId,
+        true,
+        idempotencyKey !== undefined ? { idempotencyKey } : undefined,
+      );
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.cancel.failed');
       throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
     }
   }
 
-  async resumeSubscription(providerSubscriptionId: string): Promise<void> {
+  async resumeSubscription(providerSubscriptionId: string, idempotencyKey?: string): Promise<void> {
     if (!isStripeConfigured()) return;
     try {
-      await resumeStripeSubscription(providerSubscriptionId);
+      await resumeStripeSubscription(
+        providerSubscriptionId,
+        idempotencyKey !== undefined ? { idempotencyKey } : undefined,
+      );
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.resume.failed');
       throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
@@ -119,10 +129,17 @@ export class StripePaymentProvider implements PaymentProvider {
   async updateSubscriptionPrice(
     providerSubscriptionId: string,
     providerPriceId: string,
+    idempotencyKey?: string,
   ): Promise<void> {
     if (!isStripeConfigured()) return;
     try {
-      await updateStripeSubscription(providerSubscriptionId, { priceId: providerPriceId });
+      await updateStripeSubscription(
+        providerSubscriptionId,
+        omitUndefined({
+          priceId: providerPriceId,
+          idempotencyKey,
+        }),
+      );
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.change_plan.failed');
       throw new ServiceUnavailableError('errors:paymentProviderUnavailable');

@@ -10,7 +10,8 @@ import { ChangePlanDto, CreateSubscriptionDto, UpdateSubscriptionDto } from './s
  * Fastify plugin factory that mounts the organization-scoped subscription
  * endpoints (CRUD + change-plan / cancel / resume). All routes require auth
  * and a {@link BILLING_PERMISSIONS} permission; create additionally enforces
- * the `Idempotency-Key` header (`idempotencyRequired: true`).
+ * the `Idempotency-Key` header (`idempotencyRequired: true`) on externally
+ * mutating billing routes.
  */
 export function subscriptionRoutes(service: SubscriptionService): FastifyPluginAsync {
   const controller = createSubscriptionController(service);
@@ -79,10 +80,11 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
     zodApplication.post<{ Params: { id: string; subscriptionId: string } }>(
       '/organizations/:id/subscriptions/:subscriptionId/change-plan',
       {
+        config: { idempotencyRequired: true },
         schema: {
           summary: 'Change subscription plan',
           description:
-            'Upgrades or downgrades the subscription to a different plan. Proration is applied automatically. Requires SUBSCRIPTION_MANAGE permission.',
+            'Upgrades or downgrades the subscription to a different plan. Proration is applied automatically. Requires SUBSCRIPTION_MANAGE permission. Send an `Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
           tags: ['Billing', 'Subscription'],
           body: ChangePlanDto,
         },
@@ -94,12 +96,13 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
     zodApplication.post<{ Params: { id: string; subscriptionId: string } }>(
       '/organizations/:id/subscriptions/:subscriptionId/cancel',
       {
+        config: { idempotencyRequired: true },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
         schema: {
           summary: 'Cancel subscription',
           description:
-            'Cancels the subscription. By default, access continues until the end of the current billing period. Requires SUBSCRIPTION_MANAGE permission.',
+            'Cancels the subscription. By default, access continues until the end of the current billing period. Requires SUBSCRIPTION_MANAGE permission. Send an `Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
           tags: ['Billing', 'Subscription'],
         },
       },
@@ -108,12 +111,13 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
     zodApplication.post<{ Params: { id: string; subscriptionId: string } }>(
       '/organizations/:id/subscriptions/:subscriptionId/resume',
       {
+        config: { idempotencyRequired: true },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
         schema: {
           summary: 'Resume cancelled subscription',
           description:
-            'Resumes a subscription that was previously cancelled but has not yet expired. Requires SUBSCRIPTION_MANAGE permission.',
+            'Resumes a subscription that was previously cancelled but has not yet expired. Requires SUBSCRIPTION_MANAGE permission. Send an `Idempotency-Key` header (min 16 characters) on this write — the key is forwarded to Stripe when billing is configured. See docs/reference/reliability/idempotency.md.',
           tags: ['Billing', 'Subscription'],
         },
       },

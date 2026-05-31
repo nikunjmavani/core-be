@@ -98,7 +98,10 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
 
     await service.cancel('org_public', 'sub_public');
 
-    expect(paymentProvider.cancelSubscriptionAtPeriodEnd).toHaveBeenCalledWith('sub_provider');
+    expect(paymentProvider.cancelSubscriptionAtPeriodEnd).toHaveBeenCalledWith(
+      'sub_provider',
+      undefined,
+    );
     expect(repository.update).toHaveBeenCalledWith(
       'sub_public',
       organization.id,
@@ -120,7 +123,7 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
 
     await service.resume('org_public', 'sub_public');
 
-    expect(paymentProvider.resumeSubscription).toHaveBeenCalledWith('sub_provider');
+    expect(paymentProvider.resumeSubscription).toHaveBeenCalledWith('sub_provider', undefined);
     expect(repository.update).toHaveBeenCalledWith(
       'sub_public',
       organization.id,

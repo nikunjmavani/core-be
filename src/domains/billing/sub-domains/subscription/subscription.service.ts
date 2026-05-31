@@ -185,7 +185,12 @@ export class SubscriptionService {
     });
   }
 
-  async changePlan(organization_public_id: string, subscription_public_id: string, body: unknown) {
+  async changePlan(
+    organization_public_id: string,
+    subscription_public_id: string,
+    body: unknown,
+    idempotencyKey?: string,
+  ) {
     const parsed = validateChangePlan(body);
     const { organization, plan, subscription, previousPlan } =
       await withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -217,6 +222,7 @@ export class SubscriptionService {
       await this.paymentProvider.updateSubscriptionPrice(
         subscription.provider_subscription_id,
         providerPriceId,
+        idempotencyKey,
       );
       providerPlanUpdated = true;
     }
@@ -250,7 +256,11 @@ export class SubscriptionService {
     }
   }
 
-  async cancel(organization_public_id: string, subscription_public_id: string) {
+  async cancel(
+    organization_public_id: string,
+    subscription_public_id: string,
+    idempotencyKey?: string,
+  ) {
     const { organization, subscription } = await withOrganizationDatabaseContext(
       organization_public_id,
       async () => {
@@ -269,6 +279,7 @@ export class SubscriptionService {
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.cancelSubscriptionAtPeriodEnd(
         subscription.provider_subscription_id,
+        idempotencyKey,
       );
     }
 
@@ -281,7 +292,11 @@ export class SubscriptionService {
     return updated;
   }
 
-  async resume(organization_public_id: string, subscription_public_id: string) {
+  async resume(
+    organization_public_id: string,
+    subscription_public_id: string,
+    idempotencyKey?: string,
+  ) {
     const { organization, subscription } = await withOrganizationDatabaseContext(
       organization_public_id,
       async () => {
@@ -298,7 +313,10 @@ export class SubscriptionService {
 
     // Stripe network call — outside any database context.
     if (subscription.provider_subscription_id) {
-      await this.paymentProvider.resumeSubscription(subscription.provider_subscription_id);
+      await this.paymentProvider.resumeSubscription(
+        subscription.provider_subscription_id,
+        idempotencyKey,
+      );
     }
 
     const updated = await withOrganizationDatabaseContext(organization_public_id, async () =>

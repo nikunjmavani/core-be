@@ -124,18 +124,12 @@ describe('processWebhookDeliveryAttempt', () => {
     ).rejects.toThrow(/HTTP 500/);
 
     expect(repository.tryMarkSending).toHaveBeenCalledExactlyOnceWith(77, 2);
-    expect(repository.recordOutcome).toHaveBeenCalledTimes(2);
-    const httpFailureCall = repository.recordOutcome.mock.calls[0]![1] as {
-      status: string;
-      http_status_code: number;
-    };
-    expect(httpFailureCall).toMatchObject({ status: 'FAILED', http_status_code: 500 });
-    const rethrowCall = repository.recordOutcome.mock.calls[1]![1] as {
-      status: string;
-      next_retry_at: Date | null;
-    };
-    expect(rethrowCall.status).toBe('FAILED');
-    expect(rethrowCall.next_retry_at).toBeInstanceOf(Date);
+    expect(repository.recordOutcome).toHaveBeenCalledExactlyOnceWith(77, {
+      status: 'FAILED',
+      http_status_code: 500,
+      response_body: 'server error',
+      next_retry_at: expect.any(Date),
+    });
   });
 
   it('schedules no retry on the final attempt (attemptsMade >= 4)', async () => {

@@ -233,33 +233,47 @@ async function deliverClaimedWebhook(options: {
     const httpStatus = response.status;
     const isSuccess = httpStatus >= 200 && httpStatus < 300;
 
-    await recordWebhookDeliveryOutcome({
-      deliveryAttemptId,
-      organizationPublicId,
-      deliveryAttemptRepository,
-      outcome: {
-        status: isSuccess ? 'SENT' : 'FAILED',
-        http_status_code: httpStatus,
-        response_body: responseBody.slice(0, WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH),
-      },
-    });
-
-    if (!isSuccess) {
-      throw new Error(`Webhook delivery failed with HTTP ${String(httpStatus)}`);
+    if (isSuccess) {
+      await recordWebhookDeliveryOutcome({
+        deliveryAttemptId,
+        organizationPublicId,
+        deliveryAttemptRepository,
+        outcome: {
+          status: 'SENT',
+          http_status_code: httpStatus,
+          response_body: responseBody.slice(0, WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH),
+        },
+      });
+      return { httpStatus, success: true };
     }
 
-    return { httpStatus, success: true };
-  } catch (error) {
     await recordWebhookDeliveryOutcome({
       deliveryAttemptId,
       organizationPublicId,
       deliveryAttemptRepository,
       outcome: {
         status: 'FAILED',
-        response_body: error instanceof Error ? error.message : 'Unknown error',
+        http_status_code: httpStatus,
+        response_body: responseBody.slice(0, WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH),
         next_retry_at: computeNextRetryAt(jobContext.attemptsMade),
       },
     });
+    throw new Error(`Webhook delivery failed with HTTP ${String(httpStatus)}`);
+  } catch (error) {
+    const isRecordedHttpFailure =
+      error instanceof Error && error.message.startsWith('Webhook delivery failed with HTTP');
+    if (!isRecordedHttpFailure) {
+      await recordWebhookDeliveryOutcome({
+        deliveryAttemptId,
+        organizationPublicId,
+        deliveryAttemptRepository,
+        outcome: {
+          status: 'FAILED',
+          response_body: error instanceof Error ? error.message : 'Unknown error',
+          next_retry_at: computeNextRetryAt(jobContext.attemptsMade),
+        },
+      });
+    }
 
     throw error;
   }
