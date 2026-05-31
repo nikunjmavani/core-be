@@ -53,7 +53,7 @@ describe('Resend outbound email contract (`mail.service.sendEmail`)', () => {
           coerceOutboundResendRequestBodyUtf8Outbound(rawOutboundUtf8PayloadUnknown),
         );
         ResendEmailsOutgoingJsonContractSchema.parse(parsedResendEmailsOutboundJsonEnvelope);
-        const outboundResendFromHeaderExpectedEnvelope = `${env.EMAIL_FROM_NAME ?? 'Core'} <${env.EMAIL_FROM_ADDRESS ?? 'noreply@albetrios.com'}>`;
+        const outboundResendFromHeaderExpectedEnvelope = `${env.EMAIL_FROM_NAME ?? 'Core'} <${env.EMAIL_FROM_ADDRESS}>`;
         expect(parsedResendEmailsOutboundJsonEnvelope).toMatchObject({
           from: outboundResendFromHeaderExpectedEnvelope,
           to: outboundResendEmailsRequestExpectedEnvelope.to,

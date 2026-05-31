@@ -106,6 +106,7 @@
   "uploadNotPending": "La carga no está pendiente de confirmación",
   "uploadVerificationFailed": "No se pudo verificar el objeto cargado con su tipo y tamaño declarados",
   "oauthInvalidState": "Estado OAuth no válido o caducado. Inténtalo de nuevo.",
+  "oauthLinkNotManual": "Los proveedores OAuth solo pueden vincularse completando el flujo de inicio de sesión del proveedor, no agregándose manualmente.",
   "webhookUrlInvalid": "Formato de URL de webhook no válido",
   "webhookUrlInvalidScheme": "La URL del webhook debe usar HTTP o HTTPS (obtuvo {{scheme}})",
   "webhookUrlNotAllowed": "La URL del webhook no está permitida. No debe apuntar a localhost ni redes privadas.",

@@ -4,6 +4,7 @@ import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/co
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
+import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
 import { subscriptions } from '@/domains/billing/sub-domains/subscription/subscription.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
@@ -42,11 +43,18 @@ export class SubscriptionRepository {
   }
 
   async listByOrganization(organization_id: number, limit = DEFAULT_REPOSITORY_LIST_LIMIT) {
-    return this.db()
+    // Fetch one extra row so a hit on the cap is observable instead of a silent truncation.
+    const rows = await this.db()
       .select()
       .from(subscriptions)
       .where(eq(subscriptions.organization_id, organization_id))
-      .limit(limit);
+      .limit(limit + 1);
+    return capListWithWarning({
+      rows,
+      limit,
+      resource: 'billing.subscriptions',
+      context: { organizationId: organization_id },
+    });
   }
 
   async findActiveByOrganization(organization_id: number) {

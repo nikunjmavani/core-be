@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UnauthorizedError } from '@/shared/errors/index.js';
-import { exchangeGitHubOAuthCode } from '@/domains/auth/sub-domains/auth-method/oauth/providers/github-oauth.provider.js';
+import {
+  buildGitHubOAuthRedirectUrl,
+  exchangeGitHubOAuthCode,
+} from '@/domains/auth/sub-domains/auth-method/oauth/providers/github-oauth.provider.js';
 
 vi.mock('@/shared/config/env.config.js', async () => {
   const actual = await vi.importActual<typeof import('@/shared/config/env.config.js')>(
@@ -33,6 +36,13 @@ describe('exchangeGitHubOAuthCode', () => {
     vi.clearAllMocks();
   });
 
+  it('builds an authorize URL carrying the PKCE S256 code_challenge', () => {
+    const url = new URL(buildGitHubOAuthRedirectUrl('state-token', 'the-code-challenge'));
+    expect(url.searchParams.get('state')).toBe('state-token');
+    expect(url.searchParams.get('code_challenge')).toBe('the-code-challenge');
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+  });
+
   it('returns a normalised profile using the primary verified email', async () => {
     outboundFetch
       .mockResolvedValueOnce(jsonResponse({ access_token: 'github-access-token' }))
@@ -46,7 +56,7 @@ describe('exchangeGitHubOAuthCode', () => {
         ]),
       );
 
-    const profile = await exchangeGitHubOAuthCode({ code: 'auth-code' });
+    const profile = await exchangeGitHubOAuthCode({ code: 'auth-code', codeVerifier: 'verifier' });
 
     expect(profile).toEqual({
       email: 'octo@example.com',
@@ -54,6 +64,9 @@ describe('exchangeGitHubOAuthCode', () => {
       avatar_url: 'https://github.example/a.png',
       provider_user_id: '4242',
     });
+
+    const tokenRequest = outboundFetch.mock.calls[0]?.[0] as { init: { body: string } };
+    expect(JSON.parse(tokenRequest.init.body).code_verifier).toBe('verifier');
   });
 
   it('rejects when the primary email is not verified (no unverified fallback)', async () => {
@@ -64,9 +77,10 @@ describe('exchangeGitHubOAuthCode', () => {
         jsonResponse([{ email: 'victim@example.com', primary: true, verified: false }]),
       );
 
-    const error = await exchangeGitHubOAuthCode({ code: 'auth-code' }).catch(
-      (caught: unknown) => caught,
-    );
+    const error = await exchangeGitHubOAuthCode({
+      code: 'auth-code',
+      codeVerifier: 'verifier',
+    }).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(UnauthorizedError);
     expect(error).toMatchObject({ messageKey: 'errors:githubUserMissingVerifiedEmail' });
@@ -80,7 +94,9 @@ describe('exchangeGitHubOAuthCode', () => {
         jsonResponse([{ email: 'victim@example.com', primary: false, verified: false }]),
       );
 
-    await expect(exchangeGitHubOAuthCode({ code: 'auth-code' })).rejects.toMatchObject({
+    await expect(
+      exchangeGitHubOAuthCode({ code: 'auth-code', codeVerifier: 'verifier' }),
+    ).rejects.toMatchObject({
       messageKey: 'errors:githubUserMissingVerifiedEmail',
     });
   });

@@ -3,10 +3,13 @@ import { successResponse } from '@/shared/utils/http/response.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { getRequestIdentifier } from '@/shared/utils/http/request.util.js';
 import {
+  clearOauthNonceCookie,
   getIpAddress,
   getUserAgent,
   isOauthProviderNotImplementedError,
+  readOauthNonceCookie,
   sendOauthProviderNotImplementedResponse,
+  setOauthNonceCookie,
   setSessionCookie,
 } from '../auth.http.util.js';
 import type { OauthCallbackQueryInput } from '../auth.dto.js';
@@ -23,9 +26,13 @@ export function createAuthOauthHandlers({ oauthService }: AuthOauthHandlersDepen
       reply: FastifyReply,
     ) => {
       try {
-        const data = await Promise.resolve().then(() =>
+        const { nonce, ...data } = await Promise.resolve().then(() =>
           oauthService.getRedirectUrl(request.params.provider),
         );
+        // Bind the upcoming callback to this browser: the nonce is stored (hashed) with the
+        // Redis state and echoed back via this httpOnly cookie so a forged state+code from a
+        // different browser cannot complete the flow (login-CSRF defence).
+        setOauthNonceCookie(reply, nonce);
         return successResponse(data, getRequestIdentifier(request));
       } catch (error) {
         if (isOauthProviderNotImplementedError(error)) {
@@ -48,11 +55,16 @@ export function createAuthOauthHandlers({ oauthService }: AuthOauthHandlersDepen
       const query = request.query;
       const ipAddress = getIpAddress(request);
       const userAgent = getUserAgent(request) ?? undefined;
+      const nonce = readOauthNonceCookie(request);
+      // The nonce cookie is single-use: clear it regardless of outcome so a stale value
+      // cannot be replayed against a future forged state.
+      clearOauthNonceCookie(reply);
       const data = await oauthService.handleCallback(
         omitUndefined({
           provider: request.params.provider,
           code: query.code,
           state: query.state,
+          nonce,
           ipAddress,
           userAgent,
           requestId: getRequestIdentifier(request),

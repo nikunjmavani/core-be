@@ -23,6 +23,7 @@ vi.mock('bullmq', () => ({
 
 vi.mock('@/infrastructure/queue/connection.js', () => ({
   getBullMQConnectionOptions: () => ({ host: 'redis.test' }),
+  getBullMQProducerConnectionOptions: () => ({ host: 'redis.test', enableOfflineQueue: false }),
 }));
 
 vi.mock('@/infrastructure/queue/worker-runtime/worker-close.util.js', () => ({

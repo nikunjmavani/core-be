@@ -72,6 +72,13 @@ export const PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS = 15;
 /** Worker queue last-job heartbeat key TTL in Redis (seconds). */
 export const WORKER_QUEUE_HEARTBEAT_TTL_SECONDS = SECONDS_PER_DAY;
 
+/**
+ * Lifetime of the per-notification email-dispatch idempotency marker in Redis (seconds).
+ * Must comfortably exceed the notification queue's retry/backoff window so a retried job
+ * never re-sends an email that a prior attempt already enqueued.
+ */
+export const NOTIFICATION_EMAIL_DISPATCH_IDEMPOTENCY_TTL_SECONDS = SECONDS_PER_DAY;
+
 /** Browser CORS preflight cache max-age (seconds). */
 export const CORS_PREFLIGHT_MAX_AGE_SECONDS = SECONDS_PER_DAY;
 

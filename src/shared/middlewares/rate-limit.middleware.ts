@@ -6,6 +6,7 @@ import { env } from '@/shared/config/env.config.js';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { Sentry } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { createRedisFallbackRateLimitStore } from '@/shared/middlewares/rate-limit-fallback-store.js';
 
 /**
  * Observes a request that is about to be throttled by the global limiter: emits a structured
@@ -56,17 +57,21 @@ const RATE_LIMIT_ALLOWLISTED_PATHS = new Set(['/livez', '/readyz']);
  * where `request.auth` and route authorization gate access before the key is derived.
  *
  * @remarks
- * **Fail-open on Redis store error (`skipOnError: true`).** The shared Redis client uses
- * `enableOfflineQueue: false`, so during a Redis blip (failover, maintenance, brief network
- * partition) `store.incr` rejects immediately. Without `skipOnError`, `@fastify/rate-limit`
- * rethrows that error from the `onRequest` hook, turning every single request — including
- * `/livez` / `/readyz` allow-list bypasses below the hook chain — into a 5xx and taking the API down.
+ * **Fail-over to per-process limiting on Redis error (not full fail-open).** The shared Redis
+ * client uses `enableOfflineQueue: false`, so during a Redis blip (failover, maintenance, brief
+ * network partition) a raw Redis store's `incr` rejects immediately. Rather than `skipOnError`
+ * alone — which would leave the API completely unmetered during the outage — the limiter uses
+ * {@link createRedisFallbackRateLimitStore}: Redis errors transparently degrade to an in-process
+ * fixed-window counter, so a per-instance cap still applies while Redis is down. `skipOnError`
+ * remains set as a last-resort guard (the fallback store does not throw, so a Redis blip can
+ * never turn `/livez` / `/readyz` and every other request into a 5xx).
  *
- * The deliberate trade-off is **availability over rate-limit enforcement during partial
- * outages**: a few seconds of unmetered traffic is preferable to a blanket outage. Defense
- * in depth is preserved by (1) the per-route auth-gated presets, (2) the Redis client's
- * `error` event handler which logs `redis.connection.error` for alerting, and (3) the
- * idempotency middleware which intentionally fail-closes for write safety.
+ * The trade-off is **reduced precision over availability**: the local fallback caps throughput
+ * per process (not cluster-wide), which is preferable to either a blanket outage or unmetered
+ * traffic. Defense in depth is preserved by (1) the per-route auth-gated presets, (2) the Redis
+ * client's `error` event handler which logs `redis.connection.error` for alerting, the
+ * `rate_limit.redis_failover.local` warning emitted while degraded, and (3) the idempotency
+ * middleware which intentionally fail-closes for write safety.
  *
  * Wrapped with `fastify-plugin` so `@fastify/rate-limit` decorates the root app rather than an
  * encapsulated child context. This is required for two reasons: (1) the `global: true` limiter's
@@ -86,16 +91,22 @@ const rateLimitMiddleware: FastifyPluginAsync = async (app) => {
     // smuggled via a prefix collision like `/healthxyz` (the old `startsWith('/health')`).
     allowList: (request) => RATE_LIMIT_ALLOWLISTED_PATHS.has(request.url.split('?', 1)[0] ?? ''),
     keyGenerator: (request) => request.ip,
-    // Fail-open on store unavailability — see @remarks above. The Redis client's `error`
-    // event handler still surfaces the underlying issue for on-call.
+    // Last-resort guard only — the fallback store below already degrades to in-process limiting
+    // on Redis errors, so this should never actually skip. See @remarks above.
     skipOnError: true,
     // Observe-only: surface every throttled request as a structured log + Sentry breadcrumb.
     onExceeding: recordGlobalRateLimitExceeded,
   };
 
-  // Use Redis when configured; chaos suite sets RUN_REDIS_TESTS=0 for in-memory limiting.
-  if (env.REDIS_URL && process.env.RUN_REDIS_TESTS !== '0') {
-    options.redis = redisConnection as unknown as RateLimitPluginOptions['redis'];
+  // Use Redis when configured; the chaos suite sets RUN_REDIS_TESTS=0 to force in-memory
+  // limiting. That switch is honored only outside production — a stray RUN_REDIS_TESTS=0 in a
+  // prod env must never silently downgrade the cluster-wide Redis limiter to per-process counting.
+  // The fallback store keeps counting in-process if Redis becomes unavailable at runtime.
+  const redisTestsForcedOff = env.NODE_ENV !== 'production' && process.env.RUN_REDIS_TESTS === '0';
+  if (env.REDIS_URL && !redisTestsForcedOff) {
+    options.store = createRedisFallbackRateLimitStore(redisConnection) as unknown as NonNullable<
+      RateLimitPluginOptions['store']
+    >;
   }
 
   await app.register(plugin, options);

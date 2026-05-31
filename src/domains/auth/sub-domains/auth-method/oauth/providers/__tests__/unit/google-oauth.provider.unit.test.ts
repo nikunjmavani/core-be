@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UnauthorizedError } from '@/shared/errors/index.js';
-import { exchangeGoogleOAuthCode } from '@/domains/auth/sub-domains/auth-method/oauth/providers/google-oauth.provider.js';
+import {
+  buildGoogleOAuthRedirectUrl,
+  exchangeGoogleOAuthCode,
+} from '@/domains/auth/sub-domains/auth-method/oauth/providers/google-oauth.provider.js';
 
 vi.mock('@/shared/config/env.config.js', async () => {
   const actual = await vi.importActual<typeof import('@/shared/config/env.config.js')>(
@@ -33,6 +36,13 @@ describe('exchangeGoogleOAuthCode', () => {
     vi.clearAllMocks();
   });
 
+  it('builds an authorize URL carrying the PKCE S256 code_challenge', () => {
+    const url = new URL(buildGoogleOAuthRedirectUrl('state-token', 'the-code-challenge'));
+    expect(url.searchParams.get('state')).toBe('state-token');
+    expect(url.searchParams.get('code_challenge')).toBe('the-code-challenge');
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+  });
+
   it('returns a normalised profile when Google reports a verified email', async () => {
     outboundFetch
       .mockResolvedValueOnce(jsonResponse({ access_token: 'google-access-token' }))
@@ -46,7 +56,7 @@ describe('exchangeGoogleOAuthCode', () => {
         }),
       );
 
-    const profile = await exchangeGoogleOAuthCode({ code: 'auth-code' });
+    const profile = await exchangeGoogleOAuthCode({ code: 'auth-code', codeVerifier: 'verifier' });
 
     expect(profile).toEqual({
       email: 'user@example.com',
@@ -54,6 +64,9 @@ describe('exchangeGoogleOAuthCode', () => {
       avatar_url: 'https://example.com/avatar.png',
       provider_user_id: 'google-sub-123',
     });
+
+    const tokenRequest = outboundFetch.mock.calls[0]?.[0] as { init: { body: URLSearchParams } };
+    expect(tokenRequest.init.body.get('code_verifier')).toBe('verifier');
   });
 
   it('rejects when email_verified is false (account-takeover guard)', async () => {
@@ -68,9 +81,10 @@ describe('exchangeGoogleOAuthCode', () => {
         }),
       );
 
-    const error = await exchangeGoogleOAuthCode({ code: 'auth-code' }).catch(
-      (caught: unknown) => caught,
-    );
+    const error = await exchangeGoogleOAuthCode({
+      code: 'auth-code',
+      codeVerifier: 'verifier',
+    }).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(UnauthorizedError);
     expect(error).toMatchObject({ messageKey: 'errors:googleEmailNotVerified' });
@@ -81,7 +95,9 @@ describe('exchangeGoogleOAuthCode', () => {
       .mockResolvedValueOnce(jsonResponse({ access_token: 'google-access-token' }))
       .mockResolvedValueOnce(jsonResponse({ sub: 'google-sub-456', email: 'victim@example.com' }));
 
-    await expect(exchangeGoogleOAuthCode({ code: 'auth-code' })).rejects.toMatchObject({
+    await expect(
+      exchangeGoogleOAuthCode({ code: 'auth-code', codeVerifier: 'verifier' }),
+    ).rejects.toMatchObject({
       messageKey: 'errors:googleEmailNotVerified',
     });
   });

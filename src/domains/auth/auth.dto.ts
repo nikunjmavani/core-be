@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { trimmedEmail, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
+import {
+  AUTH_METHOD_TYPES,
+  type AuthMethodType,
+} from '@/domains/auth/sub-domains/auth-method/auth-method.constants.js';
 
 /** Zod schema for the `POST /api/v1/auth/login` request body (email + password). */
 export const LoginDto = z
@@ -38,12 +42,19 @@ export const MfaVerifyDto = z
 /** Inferred input type of {@link MfaVerifyDto}. */
 export type MfaVerifyInput = z.infer<typeof MfaVerifyDto>;
 
-/** Zod schema for the `POST /api/v1/auth/me/auth-methods` request body that links a new auth method to the current user. */
+/**
+ * Zod schema for the `POST /api/v1/auth/me/auth-methods` request body that links a new auth method
+ * to the current user.
+ *
+ * `method_type` is constrained to the canonical {@link AUTH_METHOD_TYPES} (matching the DB CHECK),
+ * and the externally-verified identity fields (`provider` / `provider_user_id`) are intentionally
+ * NOT accepted here: an authenticated user must not be able to assert ownership of an arbitrary
+ * OAuth identity, which would let them bind (and later log in as) another user's provider account.
+ * OAuth linkage is written only by the verified OAuth callback.
+ */
 export const CreateAuthMethodDto = z
   .object({
-    method_type: z.string().trim().max(20),
-    provider: z.string().trim().max(50).optional(),
-    provider_user_id: z.string().trim().max(255).optional(),
+    method_type: z.enum(AUTH_METHOD_TYPES as [AuthMethodType, ...AuthMethodType[]]),
     is_primary: z.boolean().optional().default(false),
   })
   .strict();
@@ -79,6 +90,15 @@ export const ChangePasswordDto = z
   .strict();
 /** Inferred input type of {@link ChangePasswordDto}. */
 export type ChangePasswordInput = z.infer<typeof ChangePasswordDto>;
+
+/** Zod schema for the `POST /api/v1/auth/step-up` request body (password re-authentication). */
+export const StepUpVerifyDto = z
+  .object({
+    password: trimmedStringMinMax(1, 128),
+  })
+  .strict();
+/** Inferred input type of {@link StepUpVerifyDto}. */
+export type StepUpVerifyInput = z.infer<typeof StepUpVerifyDto>;
 
 // Email verification
 /** Zod schema for the `POST /api/v1/auth/email/verify` request body. */

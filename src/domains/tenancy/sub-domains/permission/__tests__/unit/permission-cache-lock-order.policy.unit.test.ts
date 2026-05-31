@@ -26,16 +26,19 @@ function extractWithPermissionCacheRecomputeLockBody(source: string): string {
 }
 
 describe('permission-cache lock ordering policy', () => {
-  it('awaits setCachedPermissions before releasing recompute lock in finally', () => {
+  it('commits the cache write before releasing the recompute lock in finally', () => {
     const source = readFileSync(permissionCacheServicePath, 'utf8');
     const functionBody = extractWithPermissionCacheRecomputeLockBody(source);
 
-    const setCachedIndex = functionBody.indexOf('await setCachedPermissions');
+    const commitIndex = functionBody.indexOf('await commitCachedPermissionsIfLockHeld');
     const finallyIndex = functionBody.indexOf('} finally {');
-    const lockDelIndex = functionBody.indexOf('redisConnection.del(lockKey)', finallyIndex);
+    const lockReleaseIndex = functionBody.indexOf(
+      'PERMISSION_CACHE_RELEASE_LOCK_IF_HELD_LUA',
+      finallyIndex,
+    );
 
-    expect(setCachedIndex).toBeGreaterThanOrEqual(0);
-    expect(finallyIndex).toBeGreaterThan(setCachedIndex);
-    expect(lockDelIndex).toBeGreaterThan(finallyIndex);
+    expect(commitIndex).toBeGreaterThanOrEqual(0);
+    expect(finallyIndex).toBeGreaterThan(commitIndex);
+    expect(lockReleaseIndex).toBeGreaterThan(finallyIndex);
   });
 });

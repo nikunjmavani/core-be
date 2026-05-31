@@ -1,6 +1,7 @@
 import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
+import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
 import { sessions } from '@/domains/auth/sub-domains/auth-session/auth-session.schema.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -10,12 +11,14 @@ import type { AuthSessionCreateData } from './auth-session.types.js';
 /** Drizzle repository for the {@link sessions} table; uses {@link generatePublicId} + {@link runInsertWithPublicIdentifierRetry} for collision-safe inserts and operates under request-scoped RLS contexts so users only see their own sessions. */
 export class AuthSessionRepository {
   async listByUserId(userId: number, limit = DEFAULT_REPOSITORY_LIST_LIMIT) {
-    return getRequestDatabase()
+    // Fetch one extra row so a hit on the cap is observable instead of a silent truncation.
+    const rows = await getRequestDatabase()
       .select()
       .from(sessions)
       .where(and(eq(sessions.user_id, userId), eq(sessions.is_revoked, false)))
       .orderBy(desc(sessions.last_active_at))
-      .limit(limit);
+      .limit(limit + 1);
+    return capListWithWarning({ rows, limit, resource: 'auth.sessions', context: { userId } });
   }
 
   async findByPublicId(publicId: string) {

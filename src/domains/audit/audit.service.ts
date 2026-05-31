@@ -5,6 +5,7 @@ import type { OrganizationService } from '@/domains/tenancy/sub-domains/organiza
 import type { UserService } from '@/domains/user/user.service.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
+import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
@@ -142,6 +143,30 @@ export class AuditService {
    */
   async listForOrganization(organization_public_id: string, query: Record<string, unknown>) {
     return withOrganizationDatabaseContext(organization_public_id, () => this.list(query));
+  }
+
+  /**
+   * Lists audit log rows for the global admin console under an explicit
+   * cross-tenant RLS context.
+   *
+   * @remarks
+   * Algorithm: wraps {@link AuditService.list} in `withGlobalAdminDatabaseContext`
+   * so the read runs inside a transaction with `SET LOCAL app.global_admin = true`.
+   * The `audit_logs_tenant_isolation` policy honours this escape hatch, so the
+   * cross-tenant listing is RLS-correct even under FORCE RLS / least-privilege
+   * roles instead of silently depending on the table-owner bypass.
+   *
+   * Failure modes: invalid query → `ValidationError` → 400 (raised inside the
+   * wrapped `list`).
+   *
+   * Side effects: read-only; opens one pinned transaction for the listing.
+   *
+   * Notes: callers must already hold a global admin role (enforced at the route
+   * level via `requireRole(SUPER_ADMIN, ADMIN)`); this context bypasses tenant
+   * isolation and must never be reachable without that gate.
+   */
+  async listForAdmin(query: Record<string, unknown>) {
+    return withGlobalAdminDatabaseContext(() => this.list(query));
   }
 
   async list(query: Record<string, unknown>) {

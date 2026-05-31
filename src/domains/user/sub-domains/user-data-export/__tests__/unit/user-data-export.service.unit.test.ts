@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { enterOnCommitScope, eventBus } from '@/core/events/event-bus.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { NotFoundError } from '@/shared/errors/index.js';
-import { UserDataExportService } from '@/domains/user/sub-domains/user-data-export/user-data-export.service.js';
+import {
+  capExportCategory,
+  UserDataExportService,
+} from '@/domains/user/sub-domains/user-data-export/user-data-export.service.js';
+import { GDPR_EXPORT_MAX_ROWS_PER_TABLE } from '@/shared/constants/query-limits.constants.js';
 import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
 import {
   USER_DATA_EXPORT_STATUSES,
@@ -208,5 +212,27 @@ describe('UserDataExportService', () => {
 
     expect(objectStorage.deleteObject).toHaveBeenCalledWith('user-data-export/user/exp_1.json.gz');
     expect(exportRepository.deleteAllByUserId).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('capExportCategory', () => {
+  it('returns rows untouched and records no truncation when under the cap', () => {
+    const truncated: string[] = [];
+    const rows = Array.from({ length: GDPR_EXPORT_MAX_ROWS_PER_TABLE }, (_, index) => index);
+
+    const result = capExportCategory(rows, 'sessions', truncated);
+
+    expect(result).toHaveLength(GDPR_EXPORT_MAX_ROWS_PER_TABLE);
+    expect(truncated).toEqual([]);
+  });
+
+  it('slices to the cap and records the category when the cap is exceeded', () => {
+    const truncated: string[] = [];
+    const rows = Array.from({ length: GDPR_EXPORT_MAX_ROWS_PER_TABLE + 5 }, (_, index) => index);
+
+    const result = capExportCategory(rows, 'audit_activity', truncated);
+
+    expect(result).toHaveLength(GDPR_EXPORT_MAX_ROWS_PER_TABLE);
+    expect(truncated).toEqual(['audit_activity']);
   });
 });

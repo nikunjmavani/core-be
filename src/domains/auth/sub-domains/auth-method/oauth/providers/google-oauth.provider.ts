@@ -16,8 +16,8 @@ function getGoogleRedirectUri(): string {
   );
 }
 
-/** Builds the Google authorize URL (`https://accounts.google.com/o/oauth2/v2/auth?...`) with the configured client id, callback URI, OIDC scopes, CSRF `state`, and offline + consent prompts. Throws `NotImplementedError` when `OAUTH_GOOGLE_CLIENT_ID` is unset. */
-export function buildGoogleOAuthRedirectUrl(state: string): string {
+/** Builds the Google authorize URL (`https://accounts.google.com/o/oauth2/v2/auth?...`) with the configured client id, callback URI, OIDC scopes, CSRF `state`, the PKCE S256 `code_challenge`, and offline + consent prompts. Throws `NotImplementedError` when `OAUTH_GOOGLE_CLIENT_ID` is unset. */
+export function buildGoogleOAuthRedirectUrl(state: string, codeChallenge: string): string {
   const clientId = env.OAUTH_GOOGLE_CLIENT_ID;
   if (!clientId) {
     throw new NotImplementedError('errors:googleOAuthNotConfigured');
@@ -31,14 +31,17 @@ export function buildGoogleOAuthRedirectUrl(state: string): string {
     state,
     access_type: 'offline',
     prompt: 'consent',
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
 
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }
 
-/** Input for {@link exchangeGoogleOAuthCode}: the authorization `code` returned by Google plus an optional request id used for outbound observability. */
+/** Input for {@link exchangeGoogleOAuthCode}: the authorization `code` returned by Google, the PKCE `codeVerifier` bound to the original authorize request, plus an optional request id used for outbound observability. */
 export interface ExchangeGoogleOAuthCodeOptions {
   code: string;
+  codeVerifier: string;
   requestId?: string;
 }
 
@@ -69,6 +72,7 @@ export async function exchangeGoogleOAuthCode(
             client_secret: clientSecret,
             redirect_uri: getGoogleRedirectUri(),
             grant_type: 'authorization_code',
+            code_verifier: options.codeVerifier,
           }),
         },
       }),

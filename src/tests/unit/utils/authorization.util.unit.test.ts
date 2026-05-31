@@ -87,5 +87,43 @@ describe('authorization.util', () => {
         UnauthorizedError,
       );
     });
+
+    it('allows an API key scoped to the matching organization', async () => {
+      const handler = requireOrganizationPermission('membership:read');
+      const request = mockRequest({
+        auth: {
+          userId: '',
+          apiKeyPublicId: 'key-1',
+          apiKeyScopes: ['membership:read'],
+          organizationPublicId: 'org-public',
+        },
+      } as Partial<FastifyRequest>);
+      await expect(handler(request, mockReply)).resolves.toBeUndefined();
+    });
+
+    it('rejects an API key bound to a different organization', async () => {
+      const handler = requireOrganizationPermission('membership:read');
+      const request = mockRequest({
+        auth: {
+          userId: '',
+          apiKeyPublicId: 'key-1',
+          apiKeyScopes: ['membership:read'],
+          organizationPublicId: 'other-org',
+        },
+      } as Partial<FastifyRequest>);
+      await expect(handler(request, mockReply)).rejects.toThrow(ForbiddenError);
+    });
+
+    it('fails closed when an API-key principal carries no organization (no truthiness short-circuit)', async () => {
+      const handler = requireOrganizationPermission('membership:read');
+      const request = mockRequest({
+        auth: {
+          userId: '',
+          apiKeyPublicId: 'key-1',
+          apiKeyScopes: ['membership:read'],
+        },
+      } as Partial<FastifyRequest>);
+      await expect(handler(request, mockReply)).rejects.toThrow(ForbiddenError);
+    });
   });
 });

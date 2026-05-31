@@ -593,6 +593,62 @@ describe('Auth Domain — Integration', () => {
     });
   });
 
+  // ─── Step-up (sudo) ───────────────────────────────────────────
+
+  describe('POST /api/v1/auth/step-up', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/step-up'),
+        payload: { password: 'whatever' },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 401 for an incorrect password', async () => {
+      const { user } = await createTestUserWithPassword();
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/step-up'),
+        token,
+        payload: { password: 'WrongPassword999!' },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('grants a step-up window for a gated route after correct password', async () => {
+      const { user, password } = await createTestUserWithPassword();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      // Fresh login / token must NOT carry a step-up window: a gated mutation is rejected.
+      const beforeStepUp = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/enroll'),
+        token,
+        payload: { method_type: 'MFA_TOTP' },
+      });
+      expect(beforeStepUp.statusCode).toBe(403);
+
+      const stepUp = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/step-up'),
+        token,
+        payload: { password },
+      });
+      expect(stepUp.statusCode).toBe(200);
+
+      // After an explicit step-up the same gated route is reachable.
+      const afterStepUp = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/enroll'),
+        token,
+        payload: { method_type: 'MFA_TOTP' },
+      });
+      expect(afterStepUp.statusCode).not.toBe(403);
+    });
+  });
+
   // ─── Email Verification ───────────────────────────────────────
 
   describe('POST /api/v1/auth/email/verify', () => {

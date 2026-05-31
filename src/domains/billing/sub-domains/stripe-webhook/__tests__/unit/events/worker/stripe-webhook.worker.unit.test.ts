@@ -22,6 +22,7 @@ vi.mock('bullmq', () => ({
 
 vi.mock('@/infrastructure/queue/connection.js', () => ({
   getBullMQConnectionOptions: () => ({}),
+  getBullMQProducerConnectionOptions: () => ({ enableOfflineQueue: false }),
 }));
 
 vi.mock('@/infrastructure/queue/worker-runtime/worker-options.js', () => ({

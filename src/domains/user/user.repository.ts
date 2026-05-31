@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
-import { and, asc, eq, isNotNull, isNull, like, or, count, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, like, or, sql, type SQL } from 'drizzle-orm';
+import { countWithCap } from '@/infrastructure/database/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { users } from '@/domains/user/user.schema.js';
 import { escapeLikePattern } from '@/shared/utils/validation/validation.util.js';
@@ -209,11 +210,7 @@ export class UserRepository {
       .limit(limit + 1);
 
     const countPromise = includeTotal
-      ? getRequestDatabase()
-          .select({ count: count() })
-          .from(users)
-          .where(countWhere)
-          .then((rows) => rows[0]?.count ?? 0)
+      ? countWithCap({ database: getRequestDatabase(), table: users, where: countWhere })
       : Promise.resolve(null);
 
     const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);

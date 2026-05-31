@@ -1,5 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import type { RateLimitOptions } from '@fastify/rate-limit';
+import { env } from '@/shared/config/env.config.js';
 import { Sentry } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
@@ -90,7 +91,9 @@ function buildRateLimitKeyFromOrganizationActorOrIpAddress(request: FastifyReque
   return `ip:${request.ip}`;
 }
 
-const NODE_ENV_FOR_RATE_LIMIT_CAPS = process.env.NODE_ENV;
+// Read from the validated env config (not raw process.env) so the cap derivation uses the
+// same schema-coerced NODE_ENV as the rest of the app.
+const NODE_ENV_FOR_RATE_LIMIT_CAPS = env.NODE_ENV;
 
 /**
  * Sensitive public endpoints use a tight cap in production/staging so credentials cannot be brute-forced

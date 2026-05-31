@@ -10,6 +10,7 @@ import {
   consumeOAuthState,
   createOAuthState,
 } from './oauth-state.js';
+import { derivePkceCodeChallengeS256 } from './oauth-pkce.js';
 import {
   buildGoogleOAuthRedirectUrl,
   exchangeGoogleOAuthCode,
@@ -29,20 +30,24 @@ export type { OAuthProvider } from './oauth.types.js';
  * Coordinates the OAuth authorize-and-callback dance for supported providers.
  *
  * @remarks
- * - **Algorithm:** `getRedirectUrl` mints a CSRF `state` in Redis via
- *   {@link createOAuthState} and returns the provider authorize URL.
- *   `handleCallback` consumes the `state` exactly once via
- *   {@link consumeOAuthState}, exchanges the authorization code with the
- *   provider, then delegates to {@link completeOAuthUserSession} to find-or-create
- *   the user, link the auth method, and issue an access token + session.
+ * - **Algorithm:** `getRedirectUrl` mints a CSRF `state` plus an RFC 7636 PKCE
+ *   verifier and a browser nonce via {@link createOAuthState}, returns the provider
+ *   authorize URL (carrying the S256 `code_challenge`) and the `nonce` the handler
+ *   sets as a cookie. `handleCallback` consumes the `state` exactly once via
+ *   {@link consumeOAuthState} — which also enforces the browser nonce — sends the
+ *   PKCE `code_verifier` at token exchange, then delegates to
+ *   {@link completeOAuthUserSession} to find-or-create the user, link the auth
+ *   method, and issue an access token + session.
  * - **Failure modes:** unsupported providers throw `NotImplementedError`;
- *   missing or mismatched `state` throws `UnauthorizedError`; provider code
- *   exchange surfaces network/parse errors to the caller.
+ *   missing/mismatched `state`, a missing/mismatched browser nonce, or a tampered
+ *   payload throw `UnauthorizedError`; provider code exchange surfaces
+ *   network/parse errors to the caller.
  * - **Side effects:** writes to Redis (`oauth:state:*`), the {@link auth_methods}
  *   and `auth.sessions` tables, and signs a JWT. No event-bus emit — the user
  *   creation path inside `completeOAuthUserSession` calls into {@link UserService}.
- * - **Notes:** the `state` token is single-use (deleted on `consumeOAuthState`)
- *   to prevent replay and provider-mismatch attacks.
+ * - **Notes:** the `state` token is single-use (deleted on `consumeOAuthState`) to
+ *   prevent replay; PKCE defeats authorization-code interception and the nonce
+ *   binds the callback to the browser that began the flow (login-CSRF defence).
  */
 export class OAuthService {
   constructor(
@@ -58,15 +63,16 @@ export class OAuthService {
     return { providers: [...SUPPORTED_OAUTH_PROVIDERS] };
   }
 
-  async getRedirectUrl(provider: string): Promise<{ redirect_url: string }> {
+  async getRedirectUrl(provider: string): Promise<{ redirect_url: string; nonce: string }> {
     const normalizedProvider = assertOAuthProviderSupported(provider);
-    const state = await createOAuthState(this.redis, normalizedProvider);
+    const { state, codeVerifier, nonce } = await createOAuthState(this.redis, normalizedProvider);
+    const codeChallenge = derivePkceCodeChallengeS256(codeVerifier);
 
     if (normalizedProvider === 'google') {
-      return { redirect_url: buildGoogleOAuthRedirectUrl(state) };
+      return { redirect_url: buildGoogleOAuthRedirectUrl(state, codeChallenge), nonce };
     }
     if (normalizedProvider === 'github') {
-      return { redirect_url: buildGitHubOAuthRedirectUrl(state) };
+      return { redirect_url: buildGitHubOAuthRedirectUrl(state, codeChallenge), nonce };
     }
 
     throw new NotImplementedError(
@@ -80,20 +86,26 @@ export class OAuthService {
     provider: string;
     code: string;
     state: string | undefined;
+    nonce?: string | undefined;
     ipAddress?: string;
     userAgent?: string;
     requestId?: string;
   }): Promise<FirstFactorAuthResult> {
     const ipAddress = options.ipAddress ?? '127.0.0.1';
-    const normalizedProvider = await consumeOAuthState(this.redis, options.provider, options.state);
+    const { provider: normalizedProvider, codeVerifier } = await consumeOAuthState(
+      this.redis,
+      options.provider,
+      options.state,
+      options.nonce,
+    );
 
     const profile =
       normalizedProvider === 'google'
         ? await exchangeGoogleOAuthCode(
-            omitUndefined({ code: options.code, requestId: options.requestId }),
+            omitUndefined({ code: options.code, codeVerifier, requestId: options.requestId }),
           )
         : await exchangeGitHubOAuthCode(
-            omitUndefined({ code: options.code, requestId: options.requestId }),
+            omitUndefined({ code: options.code, codeVerifier, requestId: options.requestId }),
           );
 
     const session = await completeOAuthUserSession({

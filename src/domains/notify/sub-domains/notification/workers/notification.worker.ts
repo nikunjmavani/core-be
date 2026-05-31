@@ -11,6 +11,10 @@ import { dispatchOutboxEmail, recordOutboxEmail } from '@/infrastructure/mail/qu
 import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { buildNotificationEmailHtml } from './notification-email-content.js';
+import {
+  claimNotificationEmailDispatch,
+  releaseNotificationEmailDispatch,
+} from './notification-email-idempotency.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { getWorkerConcurrencyNotify } from '@/shared/config/worker-concurrency.util.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
@@ -38,7 +42,8 @@ type NotificationDispatchData = {
  *   scope when `organizationPublicId` is set, global retention scope otherwise), then iterate
  *   `data.channels ?? ['in_app']`; for each channel, look up the recipient and send. The email
  *   channel renders the shared transactional template and persists/dispatches via the mail
- *   outbox under `withSystemTableWorkerContext`.
+ *   outbox under `withSystemTableWorkerContext`, guarded by a one-time Redis dispatch marker
+ *   so retries of the same notification job never enqueue a duplicate email.
  * - **Failure modes:** missing notification row → throws `notification.not_found:<id>`; absent
  *   mail configuration or recipient logs `notification.worker.channel_skipped` and continues;
  *   outbox write/dispatch errors propagate so BullMQ can retry.
@@ -93,20 +98,37 @@ export async function processNotificationDispatchJob(
           break;
         }
 
+        // Idempotency across BullMQ retries: a job that re-runs (transient failure, stall, or
+        // crash after a prior attempt already enqueued the email) must not enqueue a second
+        // email. Claim a one-time per-notification+recipient marker; if a prior attempt already
+        // claimed it, skip. The marker is released on dispatch failure so a genuine retry can
+        // re-claim and actually send.
+        const claimed = await claimNotificationEmailDispatch({ notificationId, recipient: email });
+        if (!claimed) {
+          logger.info({ notificationId, type }, 'notification.worker.email_already_dispatched');
+          results.push('email:deduplicated');
+          break;
+        }
+
         const { subject, html } = buildNotificationEmailHtml({ title, message, actionUrl });
 
-        await withSystemTableWorkerContext(async () => {
-          const mailOutboxId = await recordOutboxEmail({
-            to: email,
-            subject,
-            html,
-            tags: [{ name: 'category', value: `notification-${type}` }],
+        try {
+          await withSystemTableWorkerContext(async () => {
+            const mailOutboxId = await recordOutboxEmail({
+              to: email,
+              subject,
+              html,
+              tags: [{ name: 'category', value: `notification-${type}` }],
+            });
+            await dispatchOutboxEmail(
+              mailOutboxId,
+              jobContext.requestId ? { requestId: jobContext.requestId } : undefined,
+            );
           });
-          await dispatchOutboxEmail(
-            mailOutboxId,
-            jobContext.requestId ? { requestId: jobContext.requestId } : undefined,
-          );
-        });
+        } catch (error) {
+          await releaseNotificationEmailDispatch({ notificationId, recipient: email });
+          throw error;
+        }
 
         results.push('email:queued');
         break;

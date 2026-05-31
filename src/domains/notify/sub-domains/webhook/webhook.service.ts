@@ -19,6 +19,7 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
+import { WEBHOOK_ORGANIZATION_FANOUT_CONCURRENCY } from '@/domains/notify/sub-domains/webhook/webhook-delivery.constants.js';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
 
 /** Maximum response body length returned to client (prevents leaking sensitive data from target) */
@@ -201,6 +202,16 @@ export class WebhookService {
 
   /**
    * Deliver an organization-scoped billing event to all subscribed enabled webhooks.
+   *
+   * @remarks
+   * - **Algorithm:** load subscribed enabled endpoints, then fan delivery requests
+   *   out in bounded-concurrency batches of {@link WEBHOOK_ORGANIZATION_FANOUT_CONCURRENCY}
+   *   so a large subscriber list cannot serialize into N sequential round-trips.
+   * - **Failure modes:** per-webhook failures are isolated (best-effort) and logged;
+   *   if every dispatch in the fan-out fails, the first error is rethrown so the
+   *   caller (event handler / worker) can retry the whole event.
+   * - **Side effects:** persists one PENDING delivery attempt per webhook and emits
+   *   `WEBHOOK_DELIVERY_REQUESTED` for each (enqueued post-commit).
    */
   async dispatchOrganizationWebhooks(
     organization_id: number,
@@ -212,12 +223,37 @@ export class WebhookService {
       organization_id,
       event_type,
     );
-    for (const webhook of webhooks) {
-      await this.requestWebhookDelivery({
-        webhookId: webhook.id,
-        eventType: event_type,
-        payload,
-      });
+    if (webhooks.length === 0) return;
+
+    let firstError: unknown;
+    let failureCount = 0;
+    for (let index = 0; index < webhooks.length; index += WEBHOOK_ORGANIZATION_FANOUT_CONCURRENCY) {
+      const batch = webhooks.slice(index, index + WEBHOOK_ORGANIZATION_FANOUT_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map((webhook) =>
+          this.requestWebhookDelivery({
+            webhookId: webhook.id,
+            eventType: event_type,
+            payload,
+          }),
+        ),
+      );
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          failureCount += 1;
+          if (firstError === undefined) firstError = result.reason;
+          logger.warn(
+            { error: result.reason, organizationId: organization_id, eventType: event_type },
+            'notify.webhook.fanout.deliveryRequestFailed',
+          );
+        }
+      }
+    }
+
+    // Only surface an error when every endpoint failed — a single bad endpoint must
+    // not block delivery to the others, but a total failure should be retryable.
+    if (failureCount === webhooks.length && firstError !== undefined) {
+      throw firstError;
     }
   }
 

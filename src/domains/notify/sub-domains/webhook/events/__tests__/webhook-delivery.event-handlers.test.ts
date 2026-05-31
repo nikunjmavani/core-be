@@ -38,4 +38,15 @@ describe('webhook delivery event handlers', () => {
     expect(enqueueWebhookDeliveryByAttemptIdMock).toHaveBeenCalledOnce();
     expect(enqueueWebhookDeliveryByAttemptIdMock).toHaveBeenCalledWith(99, 'org_public_test_99');
   });
+
+  it('enqueues webhook delivery immediately when no HTTP onCommit scope is active', async () => {
+    await eventBus.emit({
+      type: NOTIFY_EVENT.WEBHOOK_DELIVERY_REQUESTED,
+      payload: { delivery_attempt_id: 42 },
+      timestamp: new Date(),
+    });
+
+    expect(enqueueWebhookDeliveryByAttemptIdMock).toHaveBeenCalledOnce();
+    expect(enqueueWebhookDeliveryByAttemptIdMock).toHaveBeenCalledWith(42, 'org_public_test_99');
+  });
 });

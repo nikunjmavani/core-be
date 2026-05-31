@@ -2,8 +2,10 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
+import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { recordRecentStepUp } from '@/shared/utils/auth/recent-step-up.util.js';
 import { resolveAuthMessageKeyResponse } from '../auth.http.util.js';
-import { validateAuthMethodIdParam } from '../auth.validator.js';
+import { validateAuthMethodIdParam, validateStepUpVerify } from '../auth.validator.js';
 import { AuthSerializer } from '../auth.serializer.js';
 import type { AuthContainer } from '../auth.container.js';
 
@@ -57,6 +59,18 @@ export function createAuthAuthMethodHandlers({
     resetPassword: async (request: FastifyRequest, reply: FastifyReply) => {
       await authMethodService.resetPassword(request.body);
       return reply.code(204).send();
+    },
+    stepUp: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const { password } = validateStepUpVerify(request.body);
+      await authMethodService.verifyPasswordForStepUp({ userPublicId: auth.userId, password });
+      await recordRecentStepUp(redisConnection, auth.userId);
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'auth.step_up',
+        resource_type: 'user',
+      });
+      return successResponse({ stepped_up: true }, getRequestIdentifier(request));
     },
     changePassword: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);

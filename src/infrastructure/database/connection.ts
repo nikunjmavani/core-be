@@ -8,7 +8,10 @@ import {
   parseSslMode,
 } from '@/infrastructure/database/connection-url.util.js';
 
+import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool.constants.js';
+
 export { isNeonPoolerConnection };
+export { DEFAULT_DATABASE_POOL_MAX };
 
 /**
  * Builds the postgres.js client options from `DATABASE_URL` + env: SSL mode parsed from
@@ -48,7 +51,7 @@ export function buildPostgresOptions(databaseUrl: string) {
   };
 
   return {
-    max: env.DATABASE_POOL_MAX ?? 10,
+    max: env.DATABASE_POOL_MAX ?? DEFAULT_DATABASE_POOL_MAX,
     idle_timeout: env.DATABASE_POOL_IDLE_TIMEOUT_SECONDS ?? 30,
     connect_timeout: env.DATABASE_POOL_CONNECT_TIMEOUT_SECONDS ?? 10,
     max_lifetime: env.DATABASE_POOL_MAX_LIFETIME_SECONDS ?? 1800,

@@ -42,6 +42,30 @@ function computeArtifactExpiresAt(): Date {
 }
 
 /**
+ * Caps a fetched-with-`cap + 1` export category to {@link GDPR_EXPORT_MAX_ROWS_PER_TABLE},
+ * recording `category` in `truncatedCategories` when the cap was exceeded so the truncation
+ * can be disclosed in the export payload rather than applied silently.
+ *
+ * @remarks
+ * - **Algorithm:** if `rows.length` exceeds the cap, push `category` and return the first
+ *   `cap` rows; otherwise return the input unchanged.
+ * - **Failure modes:** none — pure function over the provided array.
+ * - **Side effects:** mutates the passed `truncatedCategories` accumulator.
+ * - **Notes:** callers must fetch `cap + 1` rows for the overflow signal to be reliable.
+ */
+export function capExportCategory<Row>(
+  rows: Row[],
+  category: string,
+  truncatedCategories: string[],
+): Row[] {
+  if (rows.length > GDPR_EXPORT_MAX_ROWS_PER_TABLE) {
+    truncatedCategories.push(category);
+    return rows.slice(0, GDPR_EXPORT_MAX_ROWS_PER_TABLE);
+  }
+  return rows;
+}
+
+/**
  * Orchestrates the GDPR "right to data portability" export pipeline end-to-end.
  *
  * @remarks
@@ -311,59 +335,41 @@ export class UserDataExportService {
     const user = userRows[0];
     if (!user) throw new NotFoundError('User');
 
-    const [userMemberships, userSessions, userNotifications, userAuditLogs] = await Promise.all([
-      databaseHandle
-        .select({
-          name: organizations.name,
-          slug: organizations.slug,
-          status: memberships.status,
-          created_at: memberships.created_at,
-        })
-        .from(memberships)
-        .innerJoin(organizations, eq(memberships.organization_id, organizations.id))
-        .where(
-          and(
-            eq(memberships.user_id, user.id),
-            isNull(memberships.deleted_at),
-            isNull(organizations.deleted_at),
-          ),
-        )
-        .limit(GDPR_EXPORT_MAX_ROWS_PER_TABLE),
+    const {
+      memberships: userMembershipsRaw,
+      sessions: userSessionsRaw,
+      notifications: userNotificationsRaw,
+      auditLogs: userAuditLogsRaw,
+    } = await this.fetchExportCategoryRows(user.id, databaseHandle);
 
-      databaseHandle
-        .select({
-          ip_address: sessions.ip_address,
-          last_active_at: sessions.last_active_at,
-          created_at: sessions.created_at,
-        })
-        .from(sessions)
-        .where(eq(sessions.user_id, user.id))
-        .orderBy(desc(sessions.created_at))
-        .limit(GDPR_EXPORT_MAX_ROWS_PER_TABLE),
+    const truncatedCategories: string[] = [];
+    const userMemberships = capExportCategory(
+      userMembershipsRaw,
+      'organizations',
+      truncatedCategories,
+    );
+    const userSessions = capExportCategory(userSessionsRaw, 'sessions', truncatedCategories);
+    const userNotifications = capExportCategory(
+      userNotificationsRaw,
+      'notifications',
+      truncatedCategories,
+    );
+    const userAuditLogs = capExportCategory(
+      userAuditLogsRaw,
+      'audit_activity',
+      truncatedCategories,
+    );
 
-      databaseHandle
-        .select({
-          type: notifications.type,
-          title: notifications.title,
-          message: notifications.message,
-          created_at: notifications.created_at,
-        })
-        .from(notifications)
-        .where(eq(notifications.user_id, user.id))
-        .orderBy(desc(notifications.created_at))
-        .limit(GDPR_EXPORT_MAX_ROWS_PER_TABLE),
-
-      databaseHandle
-        .select({
-          action: logs.action,
-          resource_type: logs.resource_type,
-          created_at: logs.created_at,
-        })
-        .from(logs)
-        .where(eq(logs.actor_user_id, user.id))
-        .orderBy(desc(logs.created_at))
-        .limit(GDPR_EXPORT_MAX_ROWS_PER_TABLE),
-    ]);
+    if (truncatedCategories.length > 0) {
+      logger.warn(
+        {
+          userPublicId,
+          rowCap: GDPR_EXPORT_MAX_ROWS_PER_TABLE,
+          truncatedCategories,
+        },
+        'user-data-export.payload.truncated',
+      );
+    }
 
     return {
       user: {
@@ -394,7 +400,83 @@ export class UserDataExportService {
         resource_type: log.resource_type,
         created_at: log.created_at.toISOString(),
       })),
+      truncation: {
+        row_cap: GDPR_EXPORT_MAX_ROWS_PER_TABLE,
+        truncated_categories: truncatedCategories,
+      },
       exported_at: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Loads each export category for `userInternalId`, fetching one row beyond
+   * {@link GDPR_EXPORT_MAX_ROWS_PER_TABLE} so the caller can detect and disclose
+   * truncation instead of silently dropping rows.
+   */
+  private async fetchExportCategoryRows(
+    userInternalId: number,
+    databaseHandle: RequestScopedPostgresDatabase,
+  ) {
+    const fetchLimit = GDPR_EXPORT_MAX_ROWS_PER_TABLE + 1;
+    const [memberships_, sessions_, notifications_, auditLogs_] = await Promise.all([
+      databaseHandle
+        .select({
+          name: organizations.name,
+          slug: organizations.slug,
+          status: memberships.status,
+          created_at: memberships.created_at,
+        })
+        .from(memberships)
+        .innerJoin(organizations, eq(memberships.organization_id, organizations.id))
+        .where(
+          and(
+            eq(memberships.user_id, userInternalId),
+            isNull(memberships.deleted_at),
+            isNull(organizations.deleted_at),
+          ),
+        )
+        .limit(fetchLimit),
+
+      databaseHandle
+        .select({
+          ip_address: sessions.ip_address,
+          last_active_at: sessions.last_active_at,
+          created_at: sessions.created_at,
+        })
+        .from(sessions)
+        .where(eq(sessions.user_id, userInternalId))
+        .orderBy(desc(sessions.created_at))
+        .limit(fetchLimit),
+
+      databaseHandle
+        .select({
+          type: notifications.type,
+          title: notifications.title,
+          message: notifications.message,
+          created_at: notifications.created_at,
+        })
+        .from(notifications)
+        .where(eq(notifications.user_id, userInternalId))
+        .orderBy(desc(notifications.created_at))
+        .limit(fetchLimit),
+
+      databaseHandle
+        .select({
+          action: logs.action,
+          resource_type: logs.resource_type,
+          created_at: logs.created_at,
+        })
+        .from(logs)
+        .where(eq(logs.actor_user_id, userInternalId))
+        .orderBy(desc(logs.created_at))
+        .limit(fetchLimit),
+    ]);
+
+    return {
+      memberships: memberships_,
+      sessions: sessions_,
+      notifications: notifications_,
+      auditLogs: auditLogs_,
     };
   }
 }

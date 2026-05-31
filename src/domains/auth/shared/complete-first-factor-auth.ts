@@ -1,7 +1,5 @@
 import { createHash } from 'node:crypto';
-import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
-import { recordRecentStepUp } from '@/shared/utils/auth/recent-step-up.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -69,8 +67,10 @@ export async function completeFirstFactorAuth(options: {
     }),
   );
 
-  await recordRecentStepUp(redisConnection, options.user.public_id);
-
+  // First-factor login deliberately does NOT grant a step-up window: a sensitive
+  // credential mutation must be preceded by an explicit re-authentication (MFA verify
+  // for MFA users, or `POST /auth/step-up` with the password for password users) so a
+  // stolen bearer token alone cannot mutate credentials. See `requireRecentStepUpPreHandler`.
   return {
     access_token: jsonWebToken,
     session_public_id: session.public_id,

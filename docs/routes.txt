@@ -1,6 +1,6 @@
 ================================================================================
   ROUTE CATALOG — core-be
-  Total routes: 123
+  Total routes: 124
 ================================================================================
 
 Legend:
@@ -18,7 +18,7 @@ Legend:
 
 ================================================================================
   DOMAIN: AUTH (/api/v1/auth)
-  Routes: 28
+  Routes: 29
 ================================================================================
 
   POST  /api/v1/auth/email/resend-verification                 AUTH
@@ -45,6 +45,7 @@ Legend:
   POST  /api/v1/auth/password/forgot                           PUBLIC
   POST  /api/v1/auth/password/reset                            PUBLIC
   POST  /api/v1/auth/refresh                                   PUBLIC
+  POST  /api/v1/auth/step-up                                   AUTH
   POST  /api/v1/auth/webauthn/authenticate/options             PUBLIC
   POST  /api/v1/auth/webauthn/authenticate/verify              PUBLIC
   POST  /api/v1/auth/webauthn/register/options                 AUTH
@@ -193,9 +194,9 @@ Legend:
   SUMMARY
 ================================================================================
 
-  Total routes    : 123
+  Total routes    : 124
   Public          : 20
-  Authenticated   : 46
+  Authenticated   : 47
   Role-guarded    : 7
   Perm-guarded    : 50
 

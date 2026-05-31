@@ -38,6 +38,7 @@ describe('BullMQ trace-context propagation (API enqueue → worker processing)',
     }));
     vi.doMock('@/infrastructure/queue/connection.js', () => ({
       getBullMQConnectionOptions: () => ({}),
+      getBullMQProducerConnectionOptions: () => ({ enableOfflineQueue: false }),
     }));
 
     const tracer = trace.getTracer('test');

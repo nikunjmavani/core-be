@@ -16,7 +16,8 @@ const commonRequiredBase = {
   JWT_PUBLIC_KEY: 'public',
   ALLOWED_ORIGINS: 'http://localhost:3000',
   METRICS_SCRAPE_TOKEN: 'b'.repeat(32),
-  SECRETS_ENCRYPTION_KEY: 'a'.repeat(64),
+  // High-entropy 32-byte hex key — production rejects low-entropy placeholders (e.g. all-zeros).
+  SECRETS_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   AUDIT_RETENTION_DAYS: '30',
   AUTH_SESSION_RETENTION_DAYS: '30',
 };
@@ -24,6 +25,8 @@ const commonRequiredBase = {
 const productionRequiredBase = {
   ...commonRequiredBase,
   NODE_ENV: 'production',
+  // Production requires absolute https origins (no plaintext http / wildcard).
+  ALLOWED_ORIGINS: 'https://app.example.com',
   CAPTCHA_PROVIDER: 'turnstile',
   CAPTCHA_SECRET: 'turnstile-secret',
   ...productionRedisTopology,
@@ -70,6 +73,72 @@ describe('env-schema', () => {
       expect(parsed.data.PORT).toBe(4000);
       expect(parsed.data.AUTH_SESSION_MAX_AGE_DAYS).toBe(7);
     }
+  });
+
+  it('requires EMAIL_FROM_ADDRESS when RESEND_API_KEY is set', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      RESEND_API_KEY: 're_test_key',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path.includes('EMAIL_FROM_ADDRESS'))).toBe(
+        true,
+      );
+    }
+  });
+
+  it('accepts RESEND_API_KEY together with EMAIL_FROM_ADDRESS', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      RESEND_API_KEY: 're_test_key',
+      EMAIL_FROM_ADDRESS: 'noreply@example.com',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('allows EMAIL_FROM_ADDRESS to be absent when RESEND_API_KEY is unset', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects ALLOWED_ORIGINS containing a wildcard in any environment', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      ALLOWED_ORIGINS: 'https://app.example.com,*',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects plaintext http ALLOWED_ORIGINS in production', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      ALLOWED_ORIGINS: 'http://app.example.com',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('accepts https ALLOWED_ORIGINS in production', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      ALLOWED_ORIGINS: 'https://app.example.com,https://admin.example.com',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('allows http localhost ALLOWED_ORIGINS outside production', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      ALLOWED_ORIGINS: 'http://localhost:3000',
+    });
+    expect(parsed.success).toBe(true);
   });
 
   it('transforms TRUST_PROXY "1" to a hop count', () => {
@@ -310,6 +379,35 @@ describe('env-schema', () => {
     expect(withKey.success).toBe(true);
   });
 
+  it('rejects a low-entropy / placeholder SECRETS_ENCRYPTION_KEY in production', () => {
+    const allZeros = envSchema.safeParse({
+      ...productionRequiredBase,
+      SECRETS_ENCRYPTION_KEY: '0'.repeat(64),
+    });
+    expect(allZeros.success).toBe(false);
+    if (!allZeros.success) {
+      expect(
+        allZeros.error.issues.some((issue) => issue.path[0] === 'SECRETS_ENCRYPTION_KEY'),
+      ).toBe(true);
+    }
+
+    // Single-character placeholder (e.g. the test default `'a'.repeat(64)`) is also rejected.
+    const singleChar = envSchema.safeParse({
+      ...productionRequiredBase,
+      SECRETS_ENCRYPTION_KEY: 'a'.repeat(64),
+    });
+    expect(singleChar.success).toBe(false);
+  });
+
+  it('allows a low-entropy SECRETS_ENCRYPTION_KEY outside production (ephemeral test/CI keys)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'test',
+      SECRETS_ENCRYPTION_KEY: '0'.repeat(64),
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it('requires METRICS_SCRAPE_TOKEN whenever METRICS_ENABLED is true', () => {
     const productionWithMetrics = {
       ...productionRequiredBase,
@@ -403,6 +501,34 @@ describe('env-schema', () => {
       CAPTCHA_PROVIDER: 'disabled',
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it('rejects production boot when COOKIE_SECURE is disabled', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      COOKIE_SECURE: 'false',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path[0] === 'COOKIE_SECURE')).toBe(true);
+    }
+  });
+
+  it('allows COOKIE_SECURE=false outside production (local plaintext loops)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      COOKIE_SECURE: 'false',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('defaults COOKIE_SECURE to true and accepts it in production', () => {
+    const parsed = envSchema.safeParse(productionRequiredBase);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.COOKIE_SECURE).toBe(true);
+    }
   });
 
   it('rejects production boot when legacy RLS pinning is enabled without break-glass ack', () => {

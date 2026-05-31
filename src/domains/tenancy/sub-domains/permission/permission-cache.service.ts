@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import {
   PERMISSION_CACHE_DEFAULT_TTL_SECONDS,
@@ -9,6 +10,20 @@ const PERMISSION_CACHE_PREFIX = 'perm';
 const PERMISSION_CACHE_ORGANIZATION_VERSION_PREFIX = 'perm:org';
 const STAMPEDE_POLL_MS = 50;
 const STAMPEDE_POLL_ATTEMPTS = 40;
+
+/**
+ * Atomic "commit cache write only if we still own the recompute lock". Closes the
+ * read-then-write invalidation race: a concurrent `invalidatePermissions` deletes the
+ * lock key (single `DEL`), so a stale in-flight recompute that already read the old DB
+ * rows finds `GET lock != nonce` and skips the write. Redis runs this script and the
+ * invalidation `DEL` serially, so there is no interleaving window.
+ */
+const PERMISSION_CACHE_COMMIT_IF_LOCK_HELD_LUA =
+  "if redis.call('GET', KEYS[1]) == ARGV[1] then redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3]); return 1 end; return 0";
+
+/** Releases the recompute lock only when its value still matches our nonce (compare-and-del). */
+const PERMISSION_CACHE_RELEASE_LOCK_IF_HELD_LUA =
+  "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end; return 0";
 
 function buildOrganizationVersionKey(organizationId: string): string {
   return `${PERMISSION_CACHE_ORGANIZATION_VERSION_PREFIX}:${organizationId}:v`;
@@ -107,26 +122,76 @@ export async function setCachedPermissions(
   }
 }
 
+interface CommitCachedPermissionsOptions {
+  userId: string;
+  organizationId: string;
+  lockKey: string;
+  lockNonce: string;
+  codes: string[];
+}
+
+/**
+ * Writes freshly recomputed permission codes to the cache only if the recompute lock is
+ * still held by this caller, atomically (see {@link PERMISSION_CACHE_COMMIT_IF_LOCK_HELD_LUA}).
+ *
+ * @remarks
+ * - **Algorithm:** reads the org cache version, builds the versioned key, and runs the
+ *   compare-and-set Lua so the `SET ... EX` only lands when `GET lockKey == lockNonce`.
+ *   TTL is `default + jitter (0..60s)` to smear expirations.
+ * - **Failure modes:** Redis errors are caught and logged (`permission-cache.commit.failed`);
+ *   the call resolves so a cache write failure never blocks the request.
+ * - **Side effects:** at most one Redis `SET` under `perm:<version>:...`.
+ * - **Notes:** the guard makes the write a no-op when a concurrent `invalidatePermissions`
+ *   already deleted the lock, preventing stale permissions from being re-cached.
+ */
+async function commitCachedPermissionsIfLockHeld(
+  options: CommitCachedPermissionsOptions,
+): Promise<void> {
+  const { userId, organizationId, lockKey, lockNonce, codes } = options;
+  try {
+    const version = await getOrganizationCacheVersion(organizationId);
+    /** Small jitter so many users do not expire and recompute in the same second. */
+    const jitterSeconds = Math.floor(Math.random() * 61);
+    await redisConnection.eval(
+      PERMISSION_CACHE_COMMIT_IF_LOCK_HELD_LUA,
+      2,
+      lockKey,
+      buildKey(version, userId, organizationId),
+      lockNonce,
+      JSON.stringify(codes),
+      String(PERMISSION_CACHE_DEFAULT_TTL_SECONDS + jitterSeconds),
+    );
+  } catch (error) {
+    logger.warn({ error }, 'permission-cache.commit.failed');
+  }
+}
+
 /**
  * Runs a cache-miss recompute under a short Redis lock. Waiters poll for the cached value
  * so only one request per (user, organization) hits the database during a stampede.
  *
  * @remarks
- * - **Algorithm:** `SET key 1 EX <ttl> NX` to claim the lock; on success
- *   runs `recompute()`, then calls {@link setCachedPermissions} and returns.
- *   Waiters poll up to `STAMPEDE_POLL_ATTEMPTS` × `STAMPEDE_POLL_MS` (≈2s)
- *   for the cache to populate; if still empty, they fall through to a fresh
- *   recompute as a safety net.
+ * - **Algorithm:** `SET key <nonce> EX <ttl> NX` to claim the lock with a unique
+ *   per-call nonce; on success runs `recompute()`, then commits the result via
+ *   {@link commitCachedPermissionsIfLockHeld} (a compare-and-set guarded on the
+ *   nonce) and returns. Waiters poll up to `STAMPEDE_POLL_ATTEMPTS` ×
+ *   `STAMPEDE_POLL_MS` (≈2s) for the cache to populate; if still empty, they fall
+ *   through to a fresh recompute as a safety net (without caching, since they do
+ *   not own the lock).
  * - **Failure modes:** Redis `SET` failure is logged
  *   (`permission-cache.lock.acquire.failed`) and the caller falls back to a
  *   direct `recompute()` without locking — the database carries the load.
  *   `recompute()` errors propagate to the caller.
  * - **Side effects:** Redis SET/DEL on `perm:lock:<user>:<org>`; one
  *   Postgres-hitting `recompute()` per stampede on the happy path; cache
- *   write through {@link setCachedPermissions}.
+ *   write through {@link commitCachedPermissionsIfLockHeld}.
  * - **Notes:** the lock TTL is
- *   {@link PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS}; the lock is
- *   released in a `finally` block so an uncaught exception never strands it.
+ *   {@link PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS}; the lock is released in a
+ *   `finally` block via compare-and-del so an uncaught exception never strands it
+ *   and we never delete a lock re-acquired by another recompute. Holding the lock
+ *   nonce closes the read-then-write invalidation race: a concurrent
+ *   {@link invalidatePermissions} deletes the lock key, so this caller's commit
+ *   becomes a no-op instead of re-caching stale permissions.
  */
 export async function withPermissionCacheRecomputeLock(
   userId: string,
@@ -134,13 +199,14 @@ export async function withPermissionCacheRecomputeLock(
   recompute: () => Promise<string[]>,
 ): Promise<string[]> {
   const lockKey = buildRecomputeLockKey(userId, organizationId);
+  const lockNonce = randomUUID();
   let acquiredLock = false;
   try {
     let lockResult: string | null;
     try {
       lockResult = await redisConnection.set(
         lockKey,
-        '1',
+        lockNonce,
         'EX',
         PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS,
         'NX',
@@ -167,12 +233,23 @@ export async function withPermissionCacheRecomputeLock(
     }
 
     const fresh = await recompute();
-    await setCachedPermissions(userId, organizationId, fresh);
+    await commitCachedPermissionsIfLockHeld({
+      userId,
+      organizationId,
+      lockKey,
+      lockNonce,
+      codes: fresh,
+    });
     return fresh;
   } finally {
     if (acquiredLock) {
       try {
-        await redisConnection.del(lockKey);
+        await redisConnection.eval(
+          PERMISSION_CACHE_RELEASE_LOCK_IF_HELD_LUA,
+          1,
+          lockKey,
+          lockNonce,
+        );
       } catch (error) {
         logger.warn({ error }, 'permission-cache.lock.release.failed');
       }

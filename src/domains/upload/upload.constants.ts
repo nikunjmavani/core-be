@@ -83,6 +83,20 @@ export const UPLOAD_PURPOSE_CONFIG: Record<UploadPurpose, UploadPurposeConfig> =
  */
 export const UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE = 0x55_50_4c_44;
 
+/**
+ * Page size for streaming a user's active uploads during offboarding. Bounds the
+ * number of rows (and S3 keys) held in memory per iteration so an account with a
+ * large upload footprint cannot materialize an unbounded result set.
+ */
+export const UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE = 500;
+
+/**
+ * Maximum concurrent S3 object deletes performed per offboarding batch. Caps the
+ * blocking window and outbound S3 pressure while still parallelizing deletes
+ * instead of issuing them one-at-a-time.
+ */
+export const UPLOAD_OFFBOARDING_DELETE_CONCURRENCY = 10;
+
 export { PRESIGNED_URL_EXPIRY_SECONDS } from '@/shared/constants/ttl.constants.js';
 
 /** S3 key prefix for a user's avatar uploads (`avatars/{userPublicId}/...`). */

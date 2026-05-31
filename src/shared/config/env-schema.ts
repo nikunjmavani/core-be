@@ -541,6 +541,23 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      // Reject placeholder / low-entropy keys (e.g. the all-zero .env.example template) that
+      // would silently defeat encryption-at-rest for MFA TOTP seeds and webhook signing secrets.
+      // A real `openssl rand -hex 32` key effectively always contains far more than 8 distinct
+      // hex digits, while all-zeros / single-character placeholders contain one.
+      return new Set(data.SECRETS_ENCRYPTION_KEY.toLowerCase()).size >= 8;
+    },
+    {
+      message:
+        'In production, SECRETS_ENCRYPTION_KEY must be a high-entropy 32-byte key (generate with `openssl rand -hex 32`); placeholder/low-entropy values are rejected',
+      path: ['SECRETS_ENCRYPTION_KEY'],
+    },
+  )
+  .refine(
+    (data) => {
       return validateProductionRedisTopology(data.REDIS_URL, data.REDIS_BULLMQ_URL);
     },
     {
@@ -571,6 +588,67 @@ export const envSchema = envSchemaBase
     {
       message: 'FRONTEND_URL must be a valid http(s) URL.',
       path: ['FRONTEND_URL'],
+    },
+  )
+  .refine(
+    (data) => {
+      const origins = data.ALLOWED_ORIGINS.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+      // A literal `*` would make CORS reflect any origin and silently defeat the
+      // session-cookie Origin/Referer checks — never allow it as an entry.
+      if (origins.includes('*')) {
+        return false;
+      }
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      // In production every origin must be an absolute https:// URL. Plaintext http
+      // origins would let cross-site requests ride over an unencrypted channel and
+      // weaken the cookie-origin defenses that compare against this allowlist.
+      return origins.every((origin) => {
+        try {
+          return new URL(origin).protocol === 'https:';
+        } catch {
+          return false;
+        }
+      });
+    },
+    {
+      message:
+        'ALLOWED_ORIGINS must not contain `*`; in production every entry must be an absolute https:// origin.',
+      path: ['ALLOWED_ORIGINS'],
+    },
+  )
+  .refine(
+    (data) => {
+      // When Resend is configured, EMAIL_FROM_ADDRESS must be set explicitly. There is no
+      // hardcoded sender fallback: a default `from` on an unverified domain is silently
+      // rejected by Resend, so auth mail (magic link, verification, invitations) never arrives.
+      if (!data.RESEND_API_KEY) {
+        return true;
+      }
+      return Boolean(data.EMAIL_FROM_ADDRESS);
+    },
+    {
+      message: 'EMAIL_FROM_ADDRESS is required when RESEND_API_KEY is set.',
+      path: ['EMAIL_FROM_ADDRESS'],
+    },
+  )
+  .refine(
+    (data) => {
+      // In production, session + CSRF cookies must carry the Secure attribute so they are
+      // never transmitted over plaintext HTTP. COOKIE_SECURE=false is only valid for local
+      // plaintext loops (non-production); allowing it in production would expose the session
+      // cookie to network interception.
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      return data.COOKIE_SECURE === true;
+    },
+    {
+      message: 'COOKIE_SECURE must be true in production (cookies sent over HTTPS only).',
+      path: ['COOKIE_SECURE'],
     },
   );
 
@@ -609,6 +687,10 @@ export const envSchemaConditionallyRequiredKeys: ReadonlyArray<{
     key: 'CAPTCHA_SECRET',
     condition:
       'CAPTCHA_PROVIDER=turnstile (schema default is `disabled`; required in NODE_ENV=production)',
+  },
+  {
+    key: 'EMAIL_FROM_ADDRESS',
+    condition: 'RESEND_API_KEY is set (no hardcoded sender fallback)',
   },
 ];
 

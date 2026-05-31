@@ -1,4 +1,5 @@
-import { and, count, desc, eq, isNull, lt, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, type SQL } from 'drizzle-orm';
+import { countWithCap } from '@/infrastructure/database/capped-count.util.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
@@ -63,11 +64,11 @@ export class WebhookDeliveryAttemptRepository {
       .limit(limit + 1);
 
     const countPromise = includeTotal
-      ? this.db()
-          .select({ count: count() })
-          .from(webhook_delivery_attempts)
-          .where(countWhere)
-          .then((rows) => rows[0]?.count ?? 0)
+      ? countWithCap({
+          database: this.db(),
+          table: webhook_delivery_attempts,
+          where: countWhere,
+        })
       : Promise.resolve(null);
 
     const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);

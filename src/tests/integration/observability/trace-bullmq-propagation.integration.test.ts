@@ -12,6 +12,7 @@ vi.mock('bullmq', () => ({
 
 vi.mock('@/infrastructure/queue/connection.js', () => ({
   getBullMQConnectionOptions: () => ({}),
+  getBullMQProducerConnectionOptions: () => ({ enableOfflineQueue: false }),
 }));
 
 describe('Integration: trace context propagation to BullMQ', () => {

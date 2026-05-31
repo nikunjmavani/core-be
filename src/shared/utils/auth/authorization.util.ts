@@ -83,7 +83,10 @@ export function requireOrganizationPermission(
     }
 
     if (auth.apiKeyPublicId) {
-      if (auth.organizationPublicId && auth.organizationPublicId !== organizationId) {
+      // Fail closed: an API-key principal MUST carry its owning organization and it must equal
+      // the route's organization. The previous truthiness guard skipped the check entirely when
+      // organizationPublicId was falsy, which would accept an org-less key against any :id.
+      if (!auth.organizationPublicId || auth.organizationPublicId !== organizationId) {
         throw new ForbiddenError('errors:insufficientOrganizationPermissions');
       }
       const scopes = auth.apiKeyScopes ?? [];

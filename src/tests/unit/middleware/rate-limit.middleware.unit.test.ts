@@ -63,8 +63,11 @@ describe('rate-limit.middleware', () => {
     await application.register(redisRateLimitMiddleware);
     await application.ready();
 
-    const options = rateLimitPlugin.mock.calls.at(-1)![1] as { redis?: unknown };
-    expect(options.redis).toBeDefined();
+    // The Redis-backed config now uses a fallback store (Redis with in-process failover)
+    // rather than passing `redis` directly, so a Redis blip degrades instead of skipping.
+    const options = rateLimitPlugin.mock.calls.at(-1)![1] as { store?: unknown; redis?: unknown };
+    expect(options.store).toBeDefined();
+    expect(options.redis).toBeUndefined();
     process.env.RUN_REDIS_TESTS = previousFlag;
     vi.resetModules();
   });
@@ -114,7 +117,8 @@ describe('rate-limit.middleware', () => {
     await application.register(developmentRateLimitMiddleware);
     await application.ready();
 
-    const options = rateLimitPlugin.mock.calls.at(-1)![1] as { redis?: unknown };
+    const options = rateLimitPlugin.mock.calls.at(-1)![1] as { store?: unknown; redis?: unknown };
+    expect(options.store).toBeUndefined();
     expect(options.redis).toBeUndefined();
     process.env.RUN_REDIS_TESTS = previousFlag;
     vi.resetModules();
@@ -140,12 +144,67 @@ describe('rate-limit.middleware', () => {
     await application.ready();
 
     const options = rateLimitPlugin.mock.calls.at(-1)![1] as {
+      store?: unknown;
       redis?: unknown;
       skipOnError: boolean;
     };
-    expect(options.redis).toBeDefined();
-    // Fail-open must also be set in production so a Redis blip cannot blanket-5xx the API.
+    // Production uses the Redis fallback store (Redis + in-process failover), not raw `redis`.
+    expect(options.store).toBeDefined();
+    expect(options.redis).toBeUndefined();
+    // skipOnError remains as a last-resort guard even though the fallback store never throws.
     expect(options.skipOnError).toBe(true);
+    process.env.RUN_REDIS_TESTS = previousFlag;
+    vi.resetModules();
+  });
+
+  it('ignores RUN_REDIS_TESTS=0 in production and keeps the Redis-backed store', async () => {
+    const previousFlag = process.env.RUN_REDIS_TESTS;
+    // A stray chaos-suite switch leaking into a prod env must NOT downgrade the cluster-wide
+    // Redis limiter to per-process counting — RUN_REDIS_TESTS is honored only outside production.
+    process.env.RUN_REDIS_TESTS = '0';
+    vi.resetModules();
+    vi.doMock('@/shared/config/env.config.js', () => ({
+      env: {
+        NODE_ENV: 'production',
+        RATE_LIMIT_MAX: 50,
+        RATE_LIMIT_WINDOW_MS: 30_000,
+        REDIS_URL: 'redis://127.0.0.1:6379',
+      },
+    }));
+    const { default: productionRateLimitMiddleware } = await import(
+      '@/shared/middlewares/rate-limit.middleware.js'
+    );
+    application = Fastify();
+    await application.register(productionRateLimitMiddleware);
+    await application.ready();
+
+    const options = rateLimitPlugin.mock.calls.at(-1)![1] as { store?: unknown };
+    expect(options.store).toBeDefined();
+    process.env.RUN_REDIS_TESTS = previousFlag;
+    vi.resetModules();
+  });
+
+  it('honors RUN_REDIS_TESTS=0 only outside production (in-memory store)', async () => {
+    const previousFlag = process.env.RUN_REDIS_TESTS;
+    process.env.RUN_REDIS_TESTS = '0';
+    vi.resetModules();
+    vi.doMock('@/shared/config/env.config.js', () => ({
+      env: {
+        NODE_ENV: 'test',
+        RATE_LIMIT_MAX: 100,
+        RATE_LIMIT_WINDOW_MS: 60_000,
+        REDIS_URL: 'redis://127.0.0.1:6379',
+      },
+    }));
+    const { default: testRateLimitMiddleware } = await import(
+      '@/shared/middlewares/rate-limit.middleware.js'
+    );
+    application = Fastify();
+    await application.register(testRateLimitMiddleware);
+    await application.ready();
+
+    const options = rateLimitPlugin.mock.calls.at(-1)![1] as { store?: unknown };
+    expect(options.store).toBeUndefined();
     process.env.RUN_REDIS_TESTS = previousFlag;
     vi.resetModules();
   });

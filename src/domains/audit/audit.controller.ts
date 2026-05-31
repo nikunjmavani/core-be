@@ -6,12 +6,13 @@ import { AuditSerializer } from './audit.serializer.js';
 
 /**
  * HTTP handlers for the admin audit-log routes. Thin layer that delegates to
- * {@link AuditService.list} and applies cursor-pagination response shaping.
+ * {@link AuditService.listForAdmin} (cross-tenant read under an explicit
+ * `app.global_admin` RLS context) and applies cursor-pagination response shaping.
  */
 export function createAuditController(service: AuditService) {
   return {
     listLogs: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const result = await service.list(request.query as Record<string, unknown>);
+      const result = await service.listForAdmin(request.query as Record<string, unknown>);
       return paginatedResponse(AuditSerializer.many(result.items), getRequestIdentifier(request), {
         per_page: result.limit,
         next: result.next_cursor,

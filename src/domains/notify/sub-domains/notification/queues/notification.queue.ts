@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { getBullMQProducerConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -19,7 +19,7 @@ let notificationQueue: Queue<NotificationJobData> | null = null;
 function getNotificationQueue(): Queue<NotificationJobData> {
   if (notificationQueue) return notificationQueue;
   notificationQueue = new Queue<NotificationJobData>(NOTIFICATION_QUEUE_NAME, {
-    connection: getBullMQConnectionOptions(),
+    connection: getBullMQProducerConnectionOptions(),
     defaultJobOptions: {
       removeOnComplete: { count: 2000 },
       removeOnFail: { count: 5000 },

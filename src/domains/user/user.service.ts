@@ -151,20 +151,19 @@ export class UserService {
         throw new NotFoundError('User');
       }
     }
-    await this.clearAvatarStorage(public_id, user.avatar_url);
-    await offboarding.authSessionService.revokeAllSessions(public_id);
-    await offboarding.authMethodService.revokeAllForUser(public_id);
-    // Offboarding spans S3 object deletion plus writes across upload, data-export, and auth.users.
-    // Each sub-operation opens its own per-user RLS transaction (FORCE RLS keys writes on
-    // app.current_user_id), so a wrapping transaction cannot make them atomic — it would only pin an
-    // idle pooled connection across the S3 round-trips and starve the pool under load. Run them
-    // sequentially; the soft-delete is the durable completion marker.
+    // Persist offboarding DB effects before external cleanup. Each step uses its own per-user RLS
+    // transaction (FORCE RLS keys writes on app.current_user_id), so a single wrapping transaction
+    // is not feasible — but ordering still matters: if an early DB step fails, sessions and avatar
+    // must remain intact. S3 avatar deletion runs only after soft-delete succeeds.
     await offboarding.uploadService.tombstoneAllByUserId(user.id);
     await offboarding.userDataExportService.deleteAllExportsForUser(user.id, public_id);
+    await offboarding.authSessionService.revokeAllSessions(public_id);
+    await offboarding.authMethodService.revokeAllForUser(public_id);
     const deleted = await withUserDatabaseContext(public_id, () =>
       this.repository.softDelete(public_id),
     );
     if (!deleted) throw new NotFoundError('User');
+    await this.clearAvatarStorage(public_id, user.avatar_url);
   }
 
   // ── Cross-domain read/write (auth, audit, notify, tenancy) ───

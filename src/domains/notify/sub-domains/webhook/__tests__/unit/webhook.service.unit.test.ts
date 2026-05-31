@@ -283,6 +283,35 @@ describe('WebhookService', () => {
     expect(requestWebhookDeliverySpy).toHaveBeenCalledTimes(2);
   });
 
+  it('dispatchOrganizationWebhooks isolates a single failing endpoint (best-effort)', async () => {
+    vi.mocked(webhookRepository.listEnabledSubscribedToEvent).mockResolvedValue([
+      { id: 2, is_enabled: true, events: ['subscription.updated'] },
+      { id: 3, is_enabled: true, events: ['subscription.updated'] },
+    ] as never);
+    const requestWebhookDeliverySpy = vi
+      .spyOn(service, 'requestWebhookDelivery')
+      .mockImplementation(async ({ webhookId }) => {
+        if (webhookId === 2) throw new Error('attempt insert failed');
+      });
+
+    await expect(
+      service.dispatchOrganizationWebhooks(1, 'subscription.updated', { subscription_id: 'sub_1' }),
+    ).resolves.toBeUndefined();
+    expect(requestWebhookDeliverySpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('dispatchOrganizationWebhooks rethrows when every endpoint fails (retryable)', async () => {
+    vi.mocked(webhookRepository.listEnabledSubscribedToEvent).mockResolvedValue([
+      { id: 2, is_enabled: true, events: ['subscription.updated'] },
+      { id: 3, is_enabled: true, events: ['subscription.updated'] },
+    ] as never);
+    vi.spyOn(service, 'requestWebhookDelivery').mockRejectedValue(new Error('redis down'));
+
+    await expect(
+      service.dispatchOrganizationWebhooks(1, 'subscription.updated', { subscription_id: 'sub_1' }),
+    ).rejects.toThrow('redis down');
+  });
+
   it('update encrypts secret when provided in body', async () => {
     await service.update(
       'org_public',

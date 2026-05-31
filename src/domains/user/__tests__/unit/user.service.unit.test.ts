@@ -171,6 +171,33 @@ describe('UserService', () => {
     expect(repository.softDelete).toHaveBeenCalledWith(userRow.public_id);
   });
 
+  it('deleteMe soft-deletes before avatar storage cleanup', async () => {
+    const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...userRow,
+      avatar_url: avatarKey,
+    } as never);
+    const callOrder: string[] = [];
+    vi.mocked(repository.softDelete).mockImplementation(async () => {
+      callOrder.push('softDelete');
+      return userRow as never;
+    });
+    vi.mocked(objectStorage.deleteObject).mockImplementation(async () => {
+      callOrder.push('avatarDelete');
+      return true;
+    });
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions: vi.fn().mockResolvedValue(undefined) } as never,
+      authMethodService: { revokeAllForUser: vi.fn().mockResolvedValue(undefined) } as never,
+      uploadService: { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) } as never,
+      userDataExportService: {
+        deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
+    await service.deleteMe(userRow.public_id);
+    expect(callOrder).toEqual(['softDelete', 'avatarDelete']);
+  });
+
   it('listUsers, getUser, adminUpdateUser, suspend and unsuspend', async () => {
     const listed = await service.listUsers({ limit: 20 });
     expect(listed.items).toHaveLength(1);

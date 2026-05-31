@@ -2,6 +2,14 @@ import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const mockEnv = vi.hoisted(() => ({
+  NODE_ENV: 'production' as string,
+}));
+
+vi.mock('@/shared/config/env.config.js', () => ({
+  env: mockEnv,
+}));
+
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -26,7 +34,7 @@ describe('Security: Auth public rate limit burst (429)', () => {
   });
 
   async function createAuthStylePublicRouteApp() {
-    vi.stubEnv('NODE_ENV', 'production');
+    mockEnv.NODE_ENV = 'production';
     vi.resetModules();
     const { STRICT_PUBLIC_RATE_LIMIT } = await import(
       '@/shared/middlewares/rate-limit-presets.constants.js'
@@ -86,7 +94,7 @@ describe('Security: Auth public rate limit burst (429)', () => {
   });
 
   async function createPerEmailRouteApp() {
-    vi.stubEnv('NODE_ENV', 'production');
+    mockEnv.NODE_ENV = 'production';
     vi.resetModules();
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit-presets.constants.js'

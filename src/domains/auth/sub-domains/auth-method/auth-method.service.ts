@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
+import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
 import { hashPassword, verifyPassword } from '@/shared/utils/security/password.util.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -11,6 +12,7 @@ import {
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
+import { AUTH_METHOD_TYPE } from './auth-method.constants.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
@@ -71,6 +73,14 @@ export class AuthMethodService {
 
   async create(userPublicId: string, body: unknown) {
     const parsed = validateCreateAuthMethod(body);
+    // OAuth credentials prove possession of an external identity and may only be written by the
+    // verified OAuth callback (linkOAuthProviderIfMissing). Allowing a manual OAUTH link here would
+    // let a user bind an arbitrary provider account — and be logged in as its real owner.
+    if (parsed.method_type === AUTH_METHOD_TYPE.OAUTH) {
+      throw new ValidationError('errors:invalidInput', undefined, undefined, [
+        { field: 'method_type', messageKey: 'errors:oauthLinkNotManual' },
+      ]);
+    }
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
     return withUserDatabaseContext(userPublicId, () =>
@@ -78,8 +88,6 @@ export class AuthMethodService {
         omitUndefined({
           user_id: user.id,
           method_type: parsed.method_type,
-          provider: parsed.provider,
-          provider_user_id: parsed.provider_user_id,
           is_primary: parsed.is_primary,
           created_by_user_id: user.id,
         }),
@@ -160,6 +168,7 @@ export class AuthMethodService {
     body: unknown,
     _context?: { requestId?: string },
   ): Promise<{ messageKey: string; messageParams?: Record<string, string | number> }> {
+    const startedAtMillis = Date.now();
     const parsed = validateForgotPassword(body);
     if (isDisposableEmailBlocked(parsed.email)) {
       throw new ValidationError('errors:disposableEmail', undefined, undefined, [
@@ -167,8 +176,16 @@ export class AuthMethodService {
       ]);
     }
 
-    const user = await this.userService.findByEmail(parsed.email);
-    if (!user) return { messageKey: 'success:passwordResetEmailSent' };
+    await this.issuePasswordResetIfUserExists(parsed.email);
+    // Both branches return the same body; hold them to a common minimum duration so the extra
+    // token-issuing writes on the known-account path cannot leak existence via response latency.
+    await enforceMinimumDuration(startedAtMillis);
+    return { messageKey: 'success:passwordResetEmailSent' };
+  }
+
+  private async issuePasswordResetIfUserExists(email: string): Promise<void> {
+    const user = await this.userService.findByEmail(email);
+    if (!user) return;
 
     // Invalidate any existing password reset tokens
     await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
@@ -195,8 +212,6 @@ export class AuthMethodService {
       } satisfies PasswordResetEmailPayload,
       timestamp: new Date(),
     });
-
-    return { messageKey: 'success:passwordResetEmailSent' };
   }
 
   async resetPassword(body: unknown): Promise<void> {
@@ -249,6 +264,24 @@ export class AuthMethodService {
     } else {
       await this.authSessionService.revokeAllSessions(user.public_id);
     }
+  }
+
+  /**
+   * Re-verifies the caller's password for a step-up ("sudo") re-authentication, without
+   * mutating any state. Used by `POST /auth/step-up` so password users can open a short
+   * recent-step-up window before a sensitive credential mutation. Throws on a missing user,
+   * a passwordless account, or an incorrect password.
+   */
+  async verifyPasswordForStepUp(options: {
+    userPublicId: string;
+    password: string;
+  }): Promise<void> {
+    const { userPublicId, password } = options;
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new NotFoundError('User');
+    if (!user.password_hash) throw new UnauthorizedError('errors:passwordAuthNotEnabled');
+    const { valid } = await verifyPassword(password, user.password_hash);
+    if (!valid) throw new UnauthorizedError('errors:currentPasswordIncorrect');
   }
 
   // ── Email Verification ────────────────────────────────────────

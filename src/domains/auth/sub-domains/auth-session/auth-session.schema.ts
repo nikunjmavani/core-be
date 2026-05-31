@@ -41,6 +41,12 @@ export const sessions = authSchema
     (table) => [
       index('idx_sessions_user_status').on(table.user_id, table.is_revoked, table.expires_at),
       index('idx_sessions_expires').on(table.expires_at),
+      // Rotating refresh credential: indexed so refresh rotation and the refresh-token
+      // RLS predicate resolve by index instead of scanning the table. Partial — sessions
+      // that never refreshed (NULL) are excluded to keep the index small.
+      index('idx_sessions_refresh_token_hash')
+        .on(table.refresh_token_hash)
+        .where(sql`${table.refresh_token_hash} IS NOT NULL`),
       check('chk_sessions_expires', sql`${table.expires_at} > ${table.created_at}`),
       check('chk_sessions_last_active', sql`${table.last_active_at} >= ${table.created_at}`),
       pgPolicy('sessions_user_access', {

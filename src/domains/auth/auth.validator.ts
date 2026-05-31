@@ -8,6 +8,7 @@ import type {
   ForgotPasswordInput,
   ResetPasswordInput,
   ChangePasswordInput,
+  StepUpVerifyInput,
   VerifyEmailInput,
   MfaEnrollInput,
   MfaLoginVerifyInput,
@@ -22,6 +23,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   ChangePasswordDto,
+  StepUpVerifyDto,
   VerifyEmailDto,
   MfaEnrollDto,
   MfaLoginVerifyDto,
@@ -124,6 +126,19 @@ export function validateResetPassword(body: unknown): ResetPasswordInput {
 /** Validates the authenticated `POST /api/v1/auth/password/change` request body against {@link ChangePasswordDto}. */
 export function validateChangePassword(body: unknown): ChangePasswordInput {
   const result = ChangePasswordDto.safeParse(body);
+  if (!result.success) {
+    throw new ValidationError(
+      ERROR_KEY_INVALID_INPUT,
+      undefined,
+      result.error.flatten().fieldErrors,
+    );
+  }
+  return result.data;
+}
+
+/** Validates the authenticated `POST /api/v1/auth/step-up` request body against {@link StepUpVerifyDto}. */
+export function validateStepUpVerify(body: unknown): StepUpVerifyInput {
+  const result = StepUpVerifyDto.safeParse(body);
   if (!result.success) {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,

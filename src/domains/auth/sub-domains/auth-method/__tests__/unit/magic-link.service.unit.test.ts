@@ -37,6 +37,10 @@ vi.mock('@/shared/utils/text/email.util.js', () => ({
   isDisposableEmailBlocked: vi.fn(() => false),
 }));
 
+vi.mock('@/shared/utils/security/anti-enumeration.util.js', () => ({
+  enforceMinimumDuration: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/shared/config/env.config.js', () => ({
   env: { NODE_ENV: 'test', AUTH_SESSION_MAX_AGE_DAYS: 7 },
 }));
@@ -105,6 +109,18 @@ describe('MagicLinkService', () => {
     const result = await service.send({ email: 'missing@example.com' });
     expect(result.messageKey).toBe('success:magicLinkEmailSent');
     expect(verificationTokenRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('send enforces a constant-time floor on both account-existence branches', async () => {
+    const { enforceMinimumDuration } = await import(
+      '@/shared/utils/security/anti-enumeration.util.js'
+    );
+    vi.mocked(userService.findByEmail).mockResolvedValue(null);
+    await service.send({ email: 'missing@example.com' });
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+    await service.send({ email: user.email });
+    // Both the unknown- and known-account paths run the floor so latency cannot be an oracle.
+    expect(vi.mocked(enforceMinimumDuration)).toHaveBeenCalledTimes(2);
   });
 
   it('send creates token and emits event for existing user', async () => {

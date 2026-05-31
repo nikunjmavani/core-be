@@ -20,6 +20,19 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
+const globalAdminContextMock = vi.hoisted(() =>
+  vi.fn((callback: () => Promise<unknown>) => callback()),
+);
+
+/**
+ * `listForAdmin` wraps the read in `withGlobalAdminDatabaseContext`, which opens a real
+ * transaction with `SET LOCAL app.global_admin = true`. Run the callback directly so the
+ * unit test exercises service intent (and asserts the wrapper is used) without Postgres.
+ */
+vi.mock('@/infrastructure/database/contexts/global-admin-database.context.js', () => ({
+  withGlobalAdminDatabaseContext: globalAdminContextMock,
+}));
+
 describe('AuditService', () => {
   const repository = {
     insert: vi.fn().mockResolvedValue(undefined),
@@ -117,6 +130,19 @@ describe('AuditService', () => {
     const result = await service.list({ limit: 20 });
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
+  });
+
+  it('listForAdmin runs the listing inside the global-admin RLS context', async () => {
+    vi.mocked(repository.findWithFilters).mockResolvedValue({
+      items: [{ action: 'user.login' }],
+      total: 1,
+      hasMore: false,
+      nextCursor: null,
+    } as never);
+    const result = await service.listForAdmin({ limit: 20 });
+    expect(globalAdminContextMock).toHaveBeenCalledTimes(1);
+    expect(repository.findWithFilters).toHaveBeenCalled();
+    expect(result.total).toBe(1);
   });
 
   it('list skips the total when include_total=false and derives has_more', async () => {
