@@ -5,6 +5,7 @@ import type {
   CreateNotificationInput,
 } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 import { ConfigurationError } from '@/shared/errors/index.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
  * Composition-root collaborator that hides the persist-then-enqueue choreography from event
@@ -52,7 +53,14 @@ export function createNotificationDispatch(
               input.organization_id,
             );
       const notification_id = await notificationRepository.create(input);
-      eventBus.onCommit(() => enqueueNotification(notification_id, organization_public_id));
+      eventBus.onCommit(async () => {
+        try {
+          await enqueueNotification(notification_id, organization_public_id);
+        } catch (error) {
+          logger.error({ error, notification_id }, 'notification.enqueue.failed');
+          await notificationRepository.deleteByInternalId(notification_id);
+        }
+      });
     },
   };
 }

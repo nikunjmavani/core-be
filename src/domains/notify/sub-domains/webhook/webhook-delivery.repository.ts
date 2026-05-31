@@ -69,6 +69,25 @@ export async function findOrganizationPublicIdByDeliveryAttemptId(
 }
 
 /**
+ * Marks a delivery attempt as failed when the post-commit BullMQ enqueue fails, so the row
+ * does not remain stuck in `PENDING` without a worker job.
+ */
+export async function markDeliveryAttemptEnqueueFailed(
+  delivery_attempt_id: number,
+  databaseHandle?: RequestScopedPostgresDatabase,
+): Promise<void> {
+  await resolveDatabase(databaseHandle)
+    .update(webhook_delivery_attempts)
+    .set({
+      status: 'FAILED',
+      response_body: 'enqueue_failed',
+      http_status_code: null,
+      next_retry_at: null,
+    })
+    .where(eq(webhook_delivery_attempts.id, delivery_attempt_id));
+}
+
+/**
  * Worker-side fetch that returns the full {@link WebhookDeliveryAttemptWithWebhook} projection
  * for a given attempt within an organization scope, or `null` if the attempt does not belong
  * to that organization.

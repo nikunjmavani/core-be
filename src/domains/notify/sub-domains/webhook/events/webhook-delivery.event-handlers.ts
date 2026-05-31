@@ -1,6 +1,9 @@
 import { eventBus, runEnqueueAfterCommit, type DomainEvent } from '@/core/events/event-bus.js';
 import { enqueueWebhookDeliveryByAttemptId } from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
-import { findOrganizationPublicIdByDeliveryAttemptId } from '@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js';
+import {
+  findOrganizationPublicIdByDeliveryAttemptId,
+  markDeliveryAttemptEnqueueFailed,
+} from '@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { NOTIFY_EVENT, type WebhookDeliveryRequestedPayload } from './notify.events.js';
 
@@ -15,15 +18,28 @@ async function onWebhookDeliveryRequestedEvent(event: DomainEvent): Promise<void
         `webhook.delivery.organization_not_found:${String(payload.delivery_attempt_id)}`,
       );
     }
-    const enqueueDelivery = () =>
-      event.requestId === undefined
-        ? enqueueWebhookDeliveryByAttemptId(payload.delivery_attempt_id, organization_public_id)
-        : enqueueWebhookDeliveryByAttemptId(
+    await runEnqueueAfterCommit(async () => {
+      try {
+        if (event.requestId === undefined) {
+          await enqueueWebhookDeliveryByAttemptId(
             payload.delivery_attempt_id,
             organization_public_id,
-            event.requestId,
           );
-    await runEnqueueAfterCommit(enqueueDelivery);
+          return;
+        }
+        await enqueueWebhookDeliveryByAttemptId(
+          payload.delivery_attempt_id,
+          organization_public_id,
+          event.requestId,
+        );
+      } catch (error) {
+        logger.error(
+          { error, deliveryAttemptId: payload.delivery_attempt_id },
+          'notify.webhook_delivery.enqueue.failed',
+        );
+        await markDeliveryAttemptEnqueueFailed(payload.delivery_attempt_id);
+      }
+    });
   } catch (error) {
     logger.warn(
       { error, eventType: event.type, deliveryAttemptId: payload.delivery_attempt_id },
