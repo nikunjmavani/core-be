@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.4.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.2-dev.0...v3.4.3-dev.0) (2026-05-31)
+
+
+### Fixed
+
+* production readiness findings 1–6 (audit, export, billing, webhooks) ([#207](https://github.com/nikunjmavani/core-be/issues/207)) ([7a3094b](https://github.com/nikunjmavani/core-be/commit/7a3094bc85004e51be9d90422df3d1cf124182b4))
+
 ## [3.4.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.1-dev.0...v3.4.2-dev.0) (2026-05-31)
 
 
