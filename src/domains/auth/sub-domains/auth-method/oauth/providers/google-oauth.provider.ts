@@ -3,7 +3,7 @@ import { env } from '@/shared/config/env.config.js';
 import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
 import { ExternalServiceError } from '@/infrastructure/outbound/outbound-error.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import type { OAuthProfile } from '../oauth.types.js';
+import type { OAuthProfile } from '@/domains/auth/sub-domains/auth-method/oauth/oauth.types.js';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';

@@ -1,12 +1,16 @@
 import { createInterface } from 'node:readline';
-import * as logger from '../common/logger.js';
-import { loadConfig, getEnvironmentNames, getConfigPath } from '../common/config.js';
-import { loadSecrets, getSecretsPath, ensureEnvSetupTemplate } from '../common/secrets.js';
-import { hasAnyEnvSecret } from '../common/secrets.js';
-import { loadState, saveState, stateFileExists } from '../common/state.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { loadConfig, getEnvironmentNames, getConfigPath } from '@tooling/setup/common/config.js';
+import {
+  loadSecrets,
+  getSecretsPath,
+  ensureEnvSetupTemplate,
+} from '@tooling/setup/common/secrets.js';
+import { hasAnyEnvSecret } from '@tooling/setup/common/secrets.js';
+import { loadState, saveState, stateFileExists } from '@tooling/setup/common/state.js';
 import { checkPrerequisites } from './prerequisites.js';
 import { runGuide } from './guide.js';
-import { exportEnvFiles } from '../envs/export-env-files.js';
+import { exportEnvFiles } from '@tooling/setup/envs/export-env-files.js';
 import { INFRA_PROVIDERS } from './providers/index.js';
 import {
   syncGithubFoundations,
@@ -17,7 +21,7 @@ import {
   summarizeOutcomes,
   type StepDescriptor,
   type StepOutcome,
-} from '../common/interactive-step.js';
+} from '@tooling/setup/common/interactive-step.js';
 import {
   formatSetupServiceName,
   formatSetupServiceNames,
@@ -30,7 +34,7 @@ import type {
   SetupState,
   InfraProviderContext,
   InfraProvider,
-} from '../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 export interface ProvisionOptions {
   assumeYes?: boolean;
@@ -126,7 +130,7 @@ function getEnvironmentBranchEntries(config: SetupConfig): logger.EnvironmentBra
     label: environment.label,
     branch: environment.branch,
     services: SETUP_SERVICE_NAMES.map(formatSetupServiceName),
-    isDefault: environment.isDefault,
+    ...(environment.isDefault !== undefined ? { isDefault: environment.isDefault } : {}),
   }));
 }
 
@@ -408,7 +412,9 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
   const outcomes: StepOutcome<unknown>[] = [];
 
   for (let index = 0; index < steps.length; index += 1) {
-    const outcome = await runInteractiveStep(index + 1, totalSteps, steps[index], {
+    const step = steps[index];
+    if (step === undefined) continue;
+    const outcome = await runInteractiveStep(index + 1, totalSteps, step, {
       assumeYes: isAssumeYes(options),
     });
     outcomes.push(outcome);
@@ -528,7 +534,9 @@ function buildGitHubSyncStep(context: InfraProviderContext): StepDescriptor<unkn
       'Uses GITHUB_TOKEN from .env.setup. Secrets are encrypted; variables are diffed.',
     ],
     execute: async () => {
-      const { syncEnvironmentToGitHub } = await import('../github/sync-github-environments.js');
+      const { syncEnvironmentToGitHub } = await import(
+        '@tooling/setup/github/sync-github-environments.js'
+      );
       let totalPushed = 0;
       let totalSkipped = 0;
       let totalDeleted = 0;
@@ -808,12 +816,12 @@ export function runDeleteInstructions(
   showProviderSelection(providers);
   logger.blank();
 
-  const blocks = providers.flatMap((provider) =>
+  const blocks: logger.DeleteInstructionsBlock[] = providers.flatMap((provider) =>
     (provider.deleteInstructions?.(context) ?? []).map((block) => ({
       provider: block.provider,
       dashboardUrl: block.dashboardUrl,
-      steps: block.steps,
       resources: block.resources,
+      ...(block.steps !== undefined ? { steps: block.steps } : {}),
     })),
   );
 

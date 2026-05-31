@@ -1,6 +1,6 @@
 import { execSync, spawnSync } from 'node:child_process';
-import * as logger from '../../../common/logger.js';
-import { runGithubInit } from '../../../github/init.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { runGithubInit } from '@tooling/setup/github/init.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -8,7 +8,7 @@ import type {
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 function formatGitHubEnvironmentPlan(config: SetupConfig): string {
   return config.environments

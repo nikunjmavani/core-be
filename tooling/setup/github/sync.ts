@@ -33,8 +33,8 @@ import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
-import { loadConfig } from '../common/config.js';
-import type { SetupConfig } from '../common/types.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 import { runGithubInit } from './init.js';
 import {
   printGithubSyncConsistencyReport,

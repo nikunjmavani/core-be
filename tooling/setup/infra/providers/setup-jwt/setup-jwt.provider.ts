@@ -1,11 +1,11 @@
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
-import * as logger from '../../../common/logger.js';
+import * as logger from '@tooling/setup/common/logger.js';
 import type {
   SetupState,
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 interface JwtEnvironmentState {
   jwtSecret: string;
@@ -71,7 +71,7 @@ export function provision(state: SetupState, environments: string[]): ProviderRe
 
   for (const environmentName of environments) {
     const { entry, created, upgraded } = ensureJwtEntry(
-      jwtSecrets[environmentName],
+      jwtSecrets[environmentName] as JwtEnvironmentState | string | undefined,
       environmentName,
     );
     jwtSecrets[environmentName] = entry;

@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
-import { BILLING_PERMISSIONS } from '../../billing.permissions.js';
+import { BILLING_PERMISSIONS } from '@/domains/billing/billing.permissions.js';
 import type { SubscriptionService } from './subscription.service.js';
 import { createSubscriptionController } from './subscription.controller.js';
 import { ChangePlanDto, CreateSubscriptionDto, UpdateSubscriptionDto } from './subscription.dto.js';

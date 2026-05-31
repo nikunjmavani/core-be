@@ -107,7 +107,12 @@ function reportStep(
   detail?: string,
 ): void {
   const elapsedMs = Math.round(performance.now() - startedAtMs);
-  reports.push({ phase, status, detail, elapsedMs });
+  reports.push({
+    phase,
+    status,
+    elapsedMs,
+    ...(detail !== undefined ? { detail } : {}),
+  });
   const elapsedLabel = elapsedMs < 100 ? '' : `${ANSI.dim}(${elapsedMs}ms)${ANSI.reset}`;
   const detailLabel = detail ? ` ${ANSI.dim}— ${detail}${ANSI.reset}` : '';
   process.stdout.write(`  ${symbolForStatus(status)} ${phase}${detailLabel} ${elapsedLabel}\n`);

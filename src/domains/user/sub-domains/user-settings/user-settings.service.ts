@@ -1,7 +1,7 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
-import type { UserService } from '../../user.service.js';
+import type { UserService } from '@/domains/user/user.service.js';
 import type { UserSettingsRepository } from './user-settings.repository.js';
 import { serializeUserSettings } from './user-settings.serializer.js';
 import type { UserSettingsOutput } from './user-settings.types.js';

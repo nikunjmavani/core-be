@@ -66,7 +66,7 @@
  *   1   Any validation, GraphQL, polling, or terminal-failure error.
  */
 import { parseArgs } from 'node:util';
-import * as logger from '../common/logger.js';
+import * as logger from '@tooling/setup/common/logger.js';
 
 const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
 const RAILWAY_GRAPHQL_TIMEOUT_MS = 20_000;
@@ -221,7 +221,12 @@ async function railwayGraphQLWithFallback<T>({
   const errors: string[] = [];
   for (const authMode of authModes) {
     try {
-      const data = await railwayGraphQL<T>({ token, authMode, query, variables });
+      const data = await railwayGraphQL<T>({
+        token,
+        authMode,
+        query,
+        ...(variables !== undefined ? { variables } : {}),
+      });
       return { data, authMode };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

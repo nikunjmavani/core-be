@@ -12,9 +12,9 @@
  *   4. On edit, walk through prompts (each pre-filled with the current value).
  *   5. Persist back to setup.config.json.
  */
-import * as logger from '../common/logger.js';
-import { loadConfigIfExists, saveConfig } from '../common/config.js';
-import { createReadline, questionWithDefault } from '../common/prompts.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { loadConfigIfExists, saveConfig } from '@tooling/setup/common/config.js';
+import { createReadline, questionWithDefault } from '@tooling/setup/common/prompts.js';
 import {
   DEFAULT_DISPLAY_NAME,
   DEFAULT_ENVIRONMENTS,
@@ -27,7 +27,7 @@ import {
   isProductionEnvironmentName,
   labelForEnvironmentName,
 } from './init-wizard.js';
-import type { SetupConfig } from '../common/types.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 /**
  * State keys for Railway services expected in each environment after setup.

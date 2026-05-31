@@ -13,7 +13,7 @@ import { createOrganizationSettingsController } from './organization-settings/or
 import { createOrganizationNotificationPolicyController } from './organization-notification-policy/organization-notification-policy.controller.js';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
 import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
-import { TENANCY_PERMISSIONS } from '../../tenancy.permissions.js';
+import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { AUDIT_PERMISSIONS } from '@/domains/audit/audit.permissions.js';
 import {
   createOrganizationDto,

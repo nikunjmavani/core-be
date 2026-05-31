@@ -52,6 +52,15 @@ src/domains/<domain>/
 
 Import: `@/domains/<domain>/sub-domains/<sub-domain>/...` or `@/domains/<domain>/sub-domains/<parent>/<nested>/...`.
 
+### Import path conventions
+
+| Tree | Allowed | Forbidden |
+| ---- | ------- | --------- |
+| `src/**/*.ts` | `@/domains/...`, `@/shared/...`, `@/infrastructure/...`, `@/core/...`; same-folder `./` | Parent-relative `../` |
+| `tooling/**/*.ts` | `@tooling/setup/...`, `@tooling/openapi/...`, etc.; same-folder `./` | Parent-relative `../` |
+
+Enforced by `src/tests/global/import-paths.global.test.ts`. Rule: `.cursor/rules/import-paths.mdc`.
+
 ### Infrastructure layout
 
 ```text

@@ -4,7 +4,7 @@ import {
   resolveGitHubEnvironment,
   shouldReportMissingConditional,
   validateDeploymentProcessCountSecrets,
-} from '../../../../tooling/setup/github/validate.js';
+} from '@tooling/setup/github/validate.js';
 
 describe('resolveGitHubEnvironment', () => {
   it('maps deploy aliases to canonical GitHub Environment names', () => {

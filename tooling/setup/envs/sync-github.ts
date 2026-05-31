@@ -19,9 +19,9 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 
-import { loadConfig, getEnvironmentNames } from '../common/config.js';
-import { syncEnvironmentToGitHub } from '../github/sync-github-environments.js';
-import * as logger from '../common/logger.js';
+import { loadConfig, getEnvironmentNames } from '@tooling/setup/common/config.js';
+import { syncEnvironmentToGitHub } from '@tooling/setup/github/sync-github-environments.js';
+import * as logger from '@tooling/setup/common/logger.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../../');
 

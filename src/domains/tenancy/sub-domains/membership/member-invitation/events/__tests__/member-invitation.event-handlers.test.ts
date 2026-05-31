@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { enterOnCommitScope, eventBus } from '@/core/events/event-bus.js';
 import { MEMBER_INVITATION_EVENT } from '@/domains/tenancy/sub-domains/membership/member-invitation/events/member-invitation.events.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import { registerMemberInvitationEventHandlers } from '../member-invitation.event-handlers.js';
+import { registerMemberInvitationEventHandlers } from '@/domains/tenancy/sub-domains/membership/member-invitation/events/member-invitation.event-handlers.js';
 
 const recordOutboxEmailMock = vi.fn();
 const dispatchOutboxEmailMock = vi.fn();

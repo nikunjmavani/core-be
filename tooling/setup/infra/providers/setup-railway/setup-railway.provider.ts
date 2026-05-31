@@ -1,12 +1,12 @@
-import * as logger from '../../../common/logger.js';
-import { isSecretFilled } from '../../../common/secrets.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import type {
   SetupConfig,
   SetupState,
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
 
@@ -232,15 +232,10 @@ export async function provision(
 
   try {
     let projectId = state.railway?.projectId;
-    const services: Record<string, { serviceId: string; environmentId?: string; url?: string }> =
-      state.railway?.services ? { ...state.railway.services } : {};
-    const railwayEnvironments: Record<
-      string,
-      {
-        environmentId: string;
-        services: Record<string, { serviceId: string; environmentId: string }>;
-      }
-    > = state.railway?.environments ? { ...state.railway.environments } : {};
+    const services = state.railway?.services ? { ...state.railway.services } : {};
+    const railwayEnvironments = state.railway?.environments
+      ? { ...state.railway.environments }
+      : {};
 
     // Adopt remote project by name when local state is missing the project ID.
     if (!projectId) {

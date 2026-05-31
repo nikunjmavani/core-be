@@ -4,7 +4,7 @@ import type {
   SetupSecrets,
   SetupState,
   EnvironmentVariables,
-} from '../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 /** Defaults match .env.example (required at app runtime). */
 const DEFAULT_AUDIT_RETENTION_DAYS = '90';

@@ -4,7 +4,7 @@ import {
   envSchemaConditionallyRequiredKeys,
   envSchemaRequiredKeys,
 } from '@/shared/config/env-schema.js';
-import { loadConfigIfExists } from '../common/config.js';
+import { loadConfigIfExists } from '@tooling/setup/common/config.js';
 import { driftResultsHaveIssues, validateGitHubEnvironmentsDrift } from './environments.js';
 
 /**

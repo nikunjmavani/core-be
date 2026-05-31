@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateFieldExample } from '../../../../../tooling/openapi/enrichers/field-examples.js';
+import { generateFieldExample } from '@tooling/openapi/enrichers/field-examples.js';
 
 describe('field-examples', () => {
   it('generateFieldExample returns email-shaped examples for email fields', () => {

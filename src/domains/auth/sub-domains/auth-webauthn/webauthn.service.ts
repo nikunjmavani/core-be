@@ -17,10 +17,10 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
-import type { AuthSessionService } from '../auth-session/auth-session.service.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type { WebauthnCredentialRepository } from './webauthn-credential.repository.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
-import type { MfaService } from '../auth-mfa/mfa.service.js';
+import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/mfa.service.js';
 import {
   completeFirstFactorAuth,
   type FirstFactorAuthResult,

@@ -1,6 +1,6 @@
 import postgres from 'postgres';
-import * as logger from '../../../common/logger.js';
-import { isSecretFilled } from '../../../common/secrets.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -8,7 +8,7 @@ import type {
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 const NEON_API_BASE = 'https://console.neon.tech/api/v2';
 
@@ -73,7 +73,7 @@ async function neonRequest<T>(
   const response = await fetch(url.toString(), {
     method,
     headers: neonHeaders(apiKey),
-    body: body ? JSON.stringify(body) : undefined,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
 
   if (!response.ok) {
@@ -108,20 +108,20 @@ async function resolveNeonOrgId(
       'No Neon organization found. Create one at https://console.neon.tech/app/settings or use an organization API key.',
     );
   }
-  const match =
-    preferredOrganizationName &&
-    organizations.find(
-      (org) =>
-        org.name?.toLowerCase() === preferredOrganizationName.toLowerCase() ||
-        org.id === preferredOrganizationName,
-    );
+  const match = preferredOrganizationName
+    ? organizations.find(
+        (org) =>
+          org.name?.toLowerCase() === preferredOrganizationName.toLowerCase() ||
+          org.id === preferredOrganizationName,
+      )
+    : undefined;
   const organization = match ?? organizations[0];
-  const orgId = organization?.id;
-  if (!orgId) {
+  if (!organization) {
     throw new Error(
-      `Neon organization has no id. Response: ${JSON.stringify(organization)}. Check https://console.neon.tech/app/settings.`,
+      'No Neon organization found. Create one at https://console.neon.tech/app/settings or use an organization API key.',
     );
   }
+  const orgId = organization.id;
   return orgId;
 }
 
@@ -447,7 +447,7 @@ export async function provision(
   try {
     let projectId = state.neon?.projectId;
     const branches: Record<string, NeonBranchEntry> = state.neon?.branches
-      ? { ...state.neon.branches }
+      ? ({ ...state.neon.branches } as Record<string, NeonBranchEntry>)
       : {};
 
     // Adopt remote project by name when local state is missing the project ID.

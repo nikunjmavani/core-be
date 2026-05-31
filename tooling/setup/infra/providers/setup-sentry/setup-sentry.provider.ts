@@ -1,5 +1,5 @@
-import * as logger from '../../../common/logger.js';
-import { isSecretFilled } from '../../../common/secrets.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -7,7 +7,7 @@ import type {
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 const SENTRY_API_BASE = 'https://sentry.io/api/0';
 
@@ -28,7 +28,7 @@ async function sentryRequest<T>(
   const response = await fetch(`${SENTRY_API_BASE}${path}`, {
     method,
     headers: sentryHeaders(authToken),
-    body: body ? JSON.stringify(body) : undefined,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
 
   if (!response.ok) {

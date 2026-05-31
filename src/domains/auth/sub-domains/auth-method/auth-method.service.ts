@@ -16,14 +16,14 @@ import { AUTH_METHOD_TYPE } from './auth-method.constants.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
-import type { AuthSessionService } from '../auth-session/auth-session.service.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import {
   validateCreateAuthMethod,
   validateForgotPassword,
   validateResetPassword,
   validateChangePassword,
   validateVerifyEmail,
-} from '../../auth.validator.js';
+} from '@/domains/auth/auth.validator.js';
 
 const PASSWORD_RESET_EXPIRES_IN_MINUTES = 60;
 const EMAIL_VERIFICATION_EXPIRES_IN_HOURS = 24;

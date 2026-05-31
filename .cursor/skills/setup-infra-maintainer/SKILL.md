@@ -70,7 +70,7 @@ Work through each section. Do not skip; missing any item will break init, previe
 
 ### 6. Provider module (provision / check / deleteInstructions)
 
-- **`tooling/setup/infra/providers/setup-<name>/setup-<name>.provider.ts`** — Create (or update) the provider module. Export at least:
+- **`tooling/setup/infra/providers/setup-<name>/setup-<name>.provider.ts`** — Create (or update) the provider module. Use `@tooling/setup/...` imports (no parent-relative `../`). Export at least:
   - `provision(config, secrets, state, environments): Promise<ProviderResult>`.
   - `check(state, secrets?, ...): Promise<boolean>` if the provider is health-checked.
   - On the exported `InfraProvider`: implement `deleteInstructions(context)` whenever the provider writes to `.setup-state.json`, returning the dashboard URL plus the identifiers the user must delete by hand. Never add `destroy` / `destroyEnvironment` — `setup:infra` does not delete resources.

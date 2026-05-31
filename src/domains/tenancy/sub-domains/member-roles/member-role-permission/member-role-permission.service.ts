@@ -1,13 +1,13 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import type { OrganizationRepository } from '../../organization/organization.repository.js';
-import type { MemberRoleRepository } from '../member-role.repository.js';
+import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
+import type { MemberRoleRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role.repository.js';
 import type { MemberRolePermissionRepository } from './member-role-permission.repository.js';
-import { invalidateOrganizationPermissions } from '../../permission/permission-cache.service.js';
+import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { validatePutMemberRolePermissions } from './member-role-permission.validator.js';
-import type { AuthorizationService } from '../../permission/authorization.service.js';
-import type { PermissionRepository } from '../../permission/permission.repository.js';
-import { assertCallerCanGrantPermissionCodes } from '../../permission/assert-grantable-permissions.util.js';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
+import type { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
+import { assertCallerCanGrantPermissionCodes } from '@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.util.js';
 
 /**
  * Manages the set of permission codes assigned to a member role within an

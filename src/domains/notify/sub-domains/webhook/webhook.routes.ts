@@ -5,7 +5,7 @@ import {
 } from '@/shared/middlewares/rate-limit-presets.constants.js';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
 import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
-import { NOTIFY_PERMISSIONS } from '../../notify.permissions.js';
+import { NOTIFY_PERMISSIONS } from '@/domains/notify/notify.permissions.js';
 import type { WebhookService } from './webhook.service.js';
 import type { WebhookEventService } from './webhook-event/webhook-event.service.js';
 import { createWebhookController } from './webhook.controller.js';

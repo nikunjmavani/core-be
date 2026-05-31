@@ -15,7 +15,7 @@ import {
   validateUploadLogo,
 } from './organization.validator.js';
 import { serializeOrganization } from './organization.serializer.js';
-import { invalidateOrganizationPermissions } from '../permission/permission-cache.service.js';
+import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { buildOrganizationLogoKeyPrefix } from '@/domains/upload/upload.constants.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';

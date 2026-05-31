@@ -170,7 +170,7 @@ async function requestGitHub<T>(
         'Content-Type': 'application/json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
     });
     recordRateLimitHeaders(response.headers);
 
@@ -187,8 +187,11 @@ async function requestGitHub<T>(
       );
     }
     const retryAfterMs = rateLimitState.retryAfterMs;
-    const waitMs =
-      retryAfterMs !== null && retryAfterMs > 0 ? retryAfterMs : RATE_LIMIT_BACKOFF_MS[attempt];
+    const fallbackBackoffMs =
+      RATE_LIMIT_BACKOFF_MS[attempt] ??
+      RATE_LIMIT_BACKOFF_MS[RATE_LIMIT_BACKOFF_MS.length - 1] ??
+      1000;
+    const waitMs = retryAfterMs !== null && retryAfterMs > 0 ? retryAfterMs : fallbackBackoffMs;
     console.warn(
       `  ! GitHub API throttled "${label}" — backing off ${formatDuration(waitMs)} ` +
         `(retry ${attempt + 1}/${RATE_LIMIT_BACKOFF_MS.length})`,

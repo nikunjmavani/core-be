@@ -264,6 +264,12 @@ Billing event helpers and types live with the billing sub-domains that emit them
 - Containers may import: own domain repositories, services. Accept cross-domain deps as parameters. Export services for route registration.
 - Routes may import: own domain controllers, container types. Must use `FastifyPluginAsync` pattern.
 
+### Import paths
+
+- **`src/**/*.ts`**: cross-folder imports use `@/domains/...`, `@/shared/...`, `@/infrastructure/...`, or `@/core/...`. Same-folder co-located layers may use `./`. **Never** `../`.
+- **`tooling/**/*.ts`**: cross-folder imports use `@tooling/setup/...`, `@tooling/openapi/...`, etc. Same-folder `./` only.
+- Enforced by `pnpm test:global` → [`import-paths.global.test.ts`](src/tests/global/import-paths.global.test.ts). See `.cursor/rules/import-paths.mdc`.
+
 ## Drizzle ORM Conventions
 
 - **Always use `snake_case`** for column property names in Drizzle schema definitions

@@ -5,6 +5,7 @@ import {
   PutBucketCorsCommand,
   PutBucketLifecycleConfigurationCommand,
   HeadBucketCommand,
+  type BucketLocationConstraint,
 } from '@aws-sdk/client-s3';
 import {
   IAMClient,
@@ -13,8 +14,8 @@ import {
   CreateAccessKeyCommand,
   GetUserCommand,
 } from '@aws-sdk/client-iam';
-import * as logger from '../../../common/logger.js';
-import { isSecretFilled } from '../../../common/secrets.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -22,7 +23,7 @@ import type {
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 function createS3Client(secrets: SetupSecrets, region: string): S3Client {
   return new S3Client({
@@ -147,7 +148,11 @@ export async function provision(
             new CreateBucketCommand({
               Bucket: bucketName,
               ...(awsConfig.region !== 'us-east-1'
-                ? { CreateBucketConfiguration: { LocationConstraint: awsConfig.region } }
+                ? {
+                    CreateBucketConfiguration: {
+                      LocationConstraint: awsConfig.region as BucketLocationConstraint,
+                    },
+                  }
                 : {}),
             }),
           );

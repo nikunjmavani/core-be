@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { webhookSubscribesToEvent } from '../../webhook-subscription.util.js';
+import { webhookSubscribesToEvent } from '@/domains/notify/sub-domains/webhook/webhook-subscription.util.js';
 
 describe('webhookSubscribesToEvent', () => {
   it('returns true when event type is in the list', () => {

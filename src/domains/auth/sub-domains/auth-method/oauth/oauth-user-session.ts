@@ -9,11 +9,11 @@ import {
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
-import type { AuthMethodService } from '../auth-method.service.js';
-import type { AuthSessionService } from '../../auth-session/auth-session.service.js';
-import type { MfaService } from '../../auth-mfa/mfa.service.js';
+import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/mfa.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
-import { AUTH_METHOD_TYPE } from '../auth-method.constants.js';
+import { AUTH_METHOD_TYPE } from '@/domains/auth/sub-domains/auth-method/auth-method.constants.js';
 import {
   completeFirstFactorAuth,
   type FirstFactorAuthResult,

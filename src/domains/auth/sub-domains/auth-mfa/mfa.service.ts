@@ -13,15 +13,15 @@ import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
-import type { AuthMethodService } from '../auth-method/auth-method.service.js';
-import type { AuthSessionService } from '../auth-session/auth-session.service.js';
+import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import { MFA_TOTP_CODE_REPLAY_TTL_SECONDS } from '@/shared/constants/index.js';
 import { TOTP_ISSUER } from '@/shared/constants/project-identity.constants.js';
 import {
   validateMfaVerify,
   validateMfaEnroll,
   validateMfaLoginVerify,
-} from '../../auth.validator.js';
+} from '@/domains/auth/auth.validator.js';
 import { createMfaSession, verifyMfaSession } from './mfa-session.js';
 import { consumeMfaRecoveryCode } from './mfa-recovery-code.repository.js';
 

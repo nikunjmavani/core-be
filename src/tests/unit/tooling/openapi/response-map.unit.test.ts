@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { routeResponseMap } from '../../../../../tooling/openapi/response-map/index.js';
-import { wrapSuccess } from '../../../../../tooling/openapi/response-map/building-blocks.js';
+import { routeResponseMap } from '@tooling/openapi/response-map/index.js';
+import { wrapSuccess } from '@tooling/openapi/response-map/building-blocks.js';
 
 describe('response-map', () => {
   it('routeResponseMap includes health and auth login responses', () => {

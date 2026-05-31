@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { buildProjectIdentitySnapshot } from '../codegen/project-identity.util.js';
-import { loadConfig, getEnvironmentNames } from '../common/config.js';
-import type { SetupConfig } from '../common/types.js';
+import { buildProjectIdentitySnapshot } from '@tooling/setup/codegen/project-identity.util.js';
+import { loadConfig, getEnvironmentNames } from '@tooling/setup/common/config.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 const projectRoot = resolve(import.meta.dirname, '../../..');
 const environmentExamplePath = resolve(projectRoot, '.env.example');

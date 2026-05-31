@@ -1,5 +1,5 @@
-import * as logger from '../../../common/logger.js';
-import { isSecretFilled } from '../../../common/secrets.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import type {
   InfraProvider,
   InfraProviderContext,
@@ -7,7 +7,7 @@ import type {
   SetupConfig,
   SetupSecrets,
   SetupState,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
 const REDIS_TEMPLATE_CODE = 'redis';
@@ -430,13 +430,14 @@ export async function provision(
   }
 
   const token = secrets.railway.token;
-  const projectId = state.railway.projectId;
+  const railwayState = state.railway;
+  const projectId = railwayState.projectId;
 
   const databases: NonNullable<SetupState['redis']>['databases'] = {
     ...(state.redis?.databases ?? {}),
   };
   const railwayEnvironments: NonNullable<NonNullable<SetupState['railway']>['environments']> = {
-    ...(state.railway.environments ?? {}),
+    ...(railwayState.environments ?? {}),
   };
 
   const recordEnvironmentState = (
@@ -462,7 +463,11 @@ export async function provision(
     };
     applyStateUpdates?.({
       redis: { subscriptionId: 0, databases },
-      railway: { ...state.railway, environments: railwayEnvironments },
+      railway: {
+        projectId,
+        services: railwayState.services ?? {},
+        environments: railwayEnvironments,
+      },
     });
   };
 
@@ -534,7 +539,7 @@ export async function provision(
         template,
         projectId,
         environmentId: environmentState.environmentId,
-        workspaceId,
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
       });
       await waitForWorkflow(token, workflowId);
 

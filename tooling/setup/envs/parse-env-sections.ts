@@ -123,7 +123,12 @@ export function parseEnvExampleSections(filePath: string): ParsedEnvExample {
             `Sub-section "${titleMatch[1]}" appears before any top-level header in ${filePath}.`,
           );
         }
-        const subSection: EnvExampleSubSection = { title: titleMatch[1]?.trim(), keys: [] };
+        const title = titleMatch[1]?.trim();
+        if (title === undefined) {
+          index += 2;
+          continue;
+        }
+        const subSection: EnvExampleSubSection = { title, keys: [] };
         halves[currentHalf].subSections.push(subSection);
         currentSubSection = subSection;
         index += 2;

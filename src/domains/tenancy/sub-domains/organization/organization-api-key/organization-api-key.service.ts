@@ -2,11 +2,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import { NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import type { OrganizationRepository } from '../organization.repository.js';
+import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import type { OrganizationApiKeyRepository } from './organization-api-key.repository.js';
-import type { AuthorizationService } from '../../permission/authorization.service.js';
-import type { PermissionRepository } from '../../permission/permission.repository.js';
-import { assertCallerCanGrantPermissionCodes } from '../../permission/assert-grantable-permissions.util.js';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
+import type { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
+import { assertCallerCanGrantPermissionCodes } from '@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.util.js';
 import type {
   OrganizationApiKeyOutput,
   CreateOrganizationApiKeyResult,

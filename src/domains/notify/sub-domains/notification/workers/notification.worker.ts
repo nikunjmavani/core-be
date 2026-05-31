@@ -4,8 +4,11 @@ import { getDefaultWorkerOptions } from '@/infrastructure/queue/worker-runtime/w
 import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-close.util.js';
 import { parseJobDataOrDeadLetter } from '@/infrastructure/queue/dlq/poison-job.util.js';
 import { runWithPropagatedTraceContext } from '@/infrastructure/observability/tracing/trace-context.util.js';
-import { notificationJobDataSchema } from '../queues/notification.job.schema.js';
-import { NOTIFICATION_QUEUE_NAME, type NotificationJobData } from '../queues/notification.queue.js';
+import { notificationJobDataSchema } from '@/domains/notify/sub-domains/notification/queues/notification.job.schema.js';
+import {
+  NOTIFICATION_QUEUE_NAME,
+  type NotificationJobData,
+} from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { createWorkerNotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 import { dispatchOutboxEmail, recordOutboxEmail } from '@/infrastructure/mail/queues/mail.queue.js';
 import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';

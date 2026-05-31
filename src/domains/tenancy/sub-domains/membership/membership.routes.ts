@@ -12,7 +12,7 @@ import { listMemberInvitationsQueryDto } from './member-invitation/member-invita
 import { createMembershipController } from './membership.controller.js';
 import { createMemberInvitationController } from './member-invitation/member-invitation.controller.js';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
-import { TENANCY_PERMISSIONS } from '../../tenancy.permissions.js';
+import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 
 /** Services required to wire the membership and member-invitation routes. */
 export interface MembershipRoutesDeps {

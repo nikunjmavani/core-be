@@ -197,3 +197,26 @@ sequenceDiagram
 
 - New outbound side effect: write the row inside the originating transaction, never enqueue from inside the transaction (Redis is not transactional with Postgres). The event-bus emission outside the transaction is the cue for the BullMQ enqueue.
 - Inbound webhook receiver (Stripe-shaped): persist the inbound event with `status=processing` keyed on the provider's `event.id`, then run the work; if the same event arrives twice, the unique constraint rejects it. Reclaim leases via `STRIPE_WEBHOOK_STUCK_PROCESSING_LEASE_MINUTES`.
+
+## import-paths
+
+### Purpose
+
+Keep imports stable when files move. Path aliases (`@/`, `@tooling/`) make cross-folder dependencies explicit and grep-friendly; parent-relative paths (`../`) break when folders are reorganized.
+
+### Where it lives
+
+- Rule: [`.cursor/rules/import-paths.mdc`](../.cursor/rules/import-paths.mdc)
+- Aliases: [`tsconfig.json`](../tsconfig.json) — `@/*` → `src/*`, `@tooling/*` → `tooling/*`
+- CI gate: [`src/tests/global/import-paths.global.test.ts`](tests/global/import-paths.global.test.ts)
+
+### Implementation
+
+- **`src/`**: cross-folder → `@/domains/...`, `@/shared/...`, `@/infrastructure/...`, `@/core/...`. Co-located layers in the same folder may use `./` (e.g. service → `./repository.js`).
+- **`tooling/`**: cross-folder → `@tooling/setup/...`, `@tooling/openapi/...`, etc. Same-folder `./` only.
+- Always use `.js` extensions in import specifiers (NodeNext).
+
+### How to apply
+
+- New file under `src/` or `tooling/`: import siblings with `./`; import anything outside the folder with the appropriate alias. Never `../`.
+- IDE: `.vscode/settings.json` sets `typescript.preferences.importModuleSpecifier: "non-relative"` to match this policy.

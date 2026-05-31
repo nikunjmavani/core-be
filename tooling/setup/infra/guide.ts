@@ -1,14 +1,14 @@
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import * as logger from '../common/logger.js';
+import * as logger from '@tooling/setup/common/logger.js';
 import {
   ensureEnvSetupTemplate,
   reloadSecrets,
   isSecretFilled,
   getSecretsPath,
-} from '../common/secrets.js';
-import { hasGithubToken } from '../common/secrets.js';
-import type { SetupConfig } from '../common/types.js';
+} from '@tooling/setup/common/secrets.js';
+import { hasGithubToken } from '@tooling/setup/common/secrets.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 function openBrowser(url: string): void {
   const platform = process.platform;

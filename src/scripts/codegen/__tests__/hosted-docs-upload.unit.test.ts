@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkHostedUploadCredentials,
   shouldSkipHostedUpload,
-} from '../hosted-docs-upload.util.js';
+} from '@/scripts/codegen/hosted-docs-upload.util.js';
 
 describe('hosted-docs-upload.util', () => {
   it('skips when any required credential is missing or blank', () => {

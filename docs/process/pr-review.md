@@ -47,6 +47,7 @@ Check only what the PR touches. Skip categories marked **none** in the PR **Revi
 | Controller thin | No Drizzle/DB in `*.controller.ts`; uses service + `requireAuth` / `getRequestIdentifier` | Blocker |
 | Service intent | Business logic in service; no `withTransaction` ownership in service (repos/infra coordinate transactions) | Major |
 | Repository boundary | DB only in `*.repository.ts`; services use same-domain repositories and other domains' services only | Blocker |
+| Import paths | No parent-relative `../` in `src/` or `tooling/` TypeScript; use `@/` / `@tooling/` aliases | Blocker |
 | Queue processors | Processors under `src/domains/**/workers/`, not `infrastructure/queue/processors/` | Blocker |
 | Pass-through facades | No controller → thin wrapper → service with no added value | Nit |
 
