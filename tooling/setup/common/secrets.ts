@@ -20,16 +20,16 @@ const TOKEN_URLS: Record<string, string> = {
 };
 
 const SIMPLE_VARS: Array<[string, string]> = [
-  ['NEON_API_KEY', TOKEN_URLS.NEON_API_KEY],
-  ['NEON_ORG_ID', TOKEN_URLS.NEON_ORG_ID],
-  ['AWS_ACCESS_KEY_ID', TOKEN_URLS.AWS_ACCESS_KEY_ID],
-  ['AWS_SECRET_ACCESS_KEY', TOKEN_URLS.AWS_SECRET_ACCESS_KEY],
-  ['SENTRY_AUTH_TOKEN', TOKEN_URLS.SENTRY_AUTH_TOKEN],
-  ['RESEND_API_KEY', TOKEN_URLS.RESEND_API_KEY],
-  ['GITHUB_TOKEN', TOKEN_URLS.GITHUB_TOKEN],
-  ['RAILWAY_TOKEN', TOKEN_URLS.RAILWAY_TOKEN],
-  ['POSTMAN_API_KEY', TOKEN_URLS.POSTMAN_API_KEY],
-  ['POSTMAN_WORKSPACE_ID', TOKEN_URLS.POSTMAN_WORKSPACE_ID],
+  ['NEON_API_KEY', TOKEN_URLS.NEON_API_KEY ?? ''],
+  ['NEON_ORG_ID', TOKEN_URLS.NEON_ORG_ID ?? ''],
+  ['AWS_ACCESS_KEY_ID', TOKEN_URLS.AWS_ACCESS_KEY_ID ?? ''],
+  ['AWS_SECRET_ACCESS_KEY', TOKEN_URLS.AWS_SECRET_ACCESS_KEY ?? ''],
+  ['SENTRY_AUTH_TOKEN', TOKEN_URLS.SENTRY_AUTH_TOKEN ?? ''],
+  ['RESEND_API_KEY', TOKEN_URLS.RESEND_API_KEY ?? ''],
+  ['GITHUB_TOKEN', TOKEN_URLS.GITHUB_TOKEN ?? ''],
+  ['RAILWAY_TOKEN', TOKEN_URLS.RAILWAY_TOKEN ?? ''],
+  ['POSTMAN_API_KEY', TOKEN_URLS.POSTMAN_API_KEY ?? ''],
+  ['POSTMAN_WORKSPACE_ID', TOKEN_URLS.POSTMAN_WORKSPACE_ID ?? ''],
 ];
 
 // ─── Zod schemas ────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ export const setupSecretsSchema = z.object({
       github: z.record(z.string(), oauthEnvironmentSchema).optional().default({}),
     })
     .optional()
-    .default({}),
+    .default({ google: {}, github: {} }),
   railway: z.object({
     token: z.string(),
   }),
@@ -112,7 +112,13 @@ function getEnvSource(): Record<string, string> {
       // ignore read errors
     }
   }
-  return { ...fromFile, ...process.env };
+  const merged: Record<string, string> = { ...fromFile };
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === 'string') {
+      merged[key] = value;
+    }
+  }
+  return merged;
 }
 
 function get(source: Record<string, string>, key: string): string {

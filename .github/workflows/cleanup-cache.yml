@@ -90,12 +90,14 @@ jobs:
                 fi
               elif [ -n "${WF_RUN_BRANCH:-}" ]; then
                 ref="refs/heads/${WF_RUN_BRANCH}"
-                if [ "$WF_RUN_BRANCH" = "dev" ] || [ "$WF_RUN_BRANCH" = "main" ]; then
-                  mode="lru"
-                  if [ "$WF_RUN_CONCLUSION" = "failure" ]; then
-                    keep_count="${KEEP_FAILED_RUNS}"
-                  fi
-                fi
+                case "$WF_RUN_BRANCH" in
+                  dev|main)
+                    mode="lru"
+                    if [ "$WF_RUN_CONCLUSION" = "failure" ]; then
+                      keep_count="${KEEP_FAILED_RUNS}"
+                    fi
+                    ;;
+                esac
               fi
               ;;
             schedule)

@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { loadConfig } from '../../../../tooling/setup/common/config.js';
+import { resolveGitMetadata } from '../../../../tooling/setup/codegen/project-identity.util.js';
 
 const ROOT = process.cwd();
 const POST_MERGE_WORKFLOW = join(ROOT, '.github/workflows/post-merge-ci.yml');
@@ -8,8 +10,9 @@ const POST_MERGE_WORKFLOW = join(ROOT, '.github/workflows/post-merge-ci.yml');
 describe('post-merge CI trigger policy', () => {
   it('runs only on pushes to dev/main (plus manual dispatch)', () => {
     const workflow = readFileSync(POST_MERGE_WORKFLOW, 'utf8');
+    const protectedBranches = resolveGitMetadata(loadConfig()).protectedBranches.join(', ');
     expect(workflow).toContain('push:');
-    expect(workflow).toContain('branches: [main, dev]');
+    expect(workflow).toContain(`branches: [${protectedBranches}]`);
     expect(workflow).toContain('workflow_dispatch:');
     expect(workflow).not.toContain('pull_request:');
   });

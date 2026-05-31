@@ -12,12 +12,12 @@ invariant. This runbook covers the **per-key lifecycle**.
 
 | What                                 | Command                                       |
 | ------------------------------------ | --------------------------------------------- |
-| Bootstrap local env files            | `pnpm github:sync` (from `.github/sync.config.json`) |
+| Bootstrap local env files            | `pnpm github:sync` (from `tooling/setup/setup.config.json` → generated `.github/sync.config.json`) |
 | Edit values                          | open `.env.<environment>` (gitignored)        |
 | Full GitHub sync (branches + rulesets + env values) | `pnpm github:sync`              |
 | Sync one environment                 | `pnpm github:sync <environment>`              |
 | Preview without pushing              | `pnpm github:sync <environment> --dry-run`    |
-| Add a hosted environment             | edit `.github/sync.config.json`, then `pnpm github:sync` |
+| Add a hosted environment             | edit `tooling/setup/setup.config.json`, then `pnpm tool:generate-project-identity` and `pnpm github:sync` |
 | Verify schema ↔ template parity      | `pnpm tool:sync-env-example`                  |
 | Verify branch/env/NODE_ENV invariant | `pnpm github:sync --check`                    |
 | Verify required keys exist in GitHub | `CONFIG=<env> pnpm validate:github-env`       |

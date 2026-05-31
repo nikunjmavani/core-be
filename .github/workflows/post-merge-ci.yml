@@ -19,7 +19,7 @@ name: Post-merge CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [dev, main]
   workflow_dispatch:
     inputs:
       skip_tests:

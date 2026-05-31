@@ -33,9 +33,11 @@ PORT=3000
 ```
 
 Every key sits under exactly one half. Sub-sections (`# --- Title ---`) group
-related keys for readability. `pnpm github:sync` creates missing `.env.<environment>`
-files from `.github/sync.config.json` and reads the same structure when pushing to
-GitHub. The structure IS the classification.
+related keys for readability. Hosted environments are listed in
+`tooling/setup/setup.config.json` (canonical); `pnpm tool:generate-project-identity`
+regenerates `.github/sync.config.json`. `pnpm github:sync` creates missing
+`.env.<environment>` files from that generated config and reads the same structure
+when pushing to GitHub. The structure IS the classification.
 
 ## Decision tree — Secret or Variable
 
@@ -100,7 +102,7 @@ Apply in order; the first rule that matches wins.
    commented placeholders, then move them into the right half/sub-section by
    hand and add descriptions.
 
-4. **Ensure hosted environments are listed in `.github/sync.config.json`.**
+4. **Ensure hosted environments are listed in `tooling/setup/setup.config.json`**, then run `pnpm tool:generate-project-identity`.
 
    `pnpm github:sync` scaffolds missing `.env.<environment>` files from that
    config. Existing local env files are not overwritten; update them manually
@@ -159,7 +161,7 @@ A rename is a delete + add, atomic in the same PR:
 - [ ] Description comment above the key explains what it controls and what
       a sensible value looks like.
 - [ ] `pnpm tool:sync-env-example` exits 0 (and reports both halves present).
-- [ ] `.github/sync.config.json` lists every hosted environment (new hosted env: edit config after updating `NODE_ENV`, then `pnpm github:sync`).
+- [ ] `tooling/setup/setup.config.json` lists every hosted environment; `pnpm tool:generate-project-identity:check` passes (new hosted env: update `NODE_ENV`, manifest, regenerate, then `pnpm github:sync`).
 - [ ] Local `.env.<environment>` files were updated manually without discarding real values.
 - [ ] `pnpm github:sync <env> --dry-run` shows the new key listed under the right
       `[secret]` or `[variable]` column for every hosted environment.
@@ -173,11 +175,11 @@ A rename is a delete + add, atomic in the same PR:
 - **Per-provider credential acquisition:** [`docs/integrations/credentials-and-env.md`](../../../docs/integrations/credentials-and-env.md).
 - **Schema:** `src/shared/config/env-schema.ts`
 - **Template:** `.env.example` (committed; two-half + sub-section structure)
-- **GitHub sync config:** `.github/sync.config.json`
+- **Setup manifest:** `tooling/setup/setup.config.json` (generates `.github/sync.config.json`)
 - **GitHub sync:** `tooling/setup/github/sync.ts`
 - **Environment value sync helper:** `tooling/setup/envs/sync-github.ts`
 - **Section parser shared by both:** `tooling/setup/envs/parse-env-sections.ts`
 - **Schema ↔ template validator:** `src/scripts/validators/env/sync-env-example.ts` (`pnpm tool:sync-env-example`)
 - **Cross-dimension consistency (in github:sync):** `tooling/setup/github/sync-config.ts` — run `pnpm github:sync --check` before pushing
-- **Add hosted environment:** edit `.github/sync.config.json` and run `pnpm github:sync` (no env:add script)
+- **Add hosted environment:** edit `tooling/setup/setup.config.json`, run `pnpm tool:generate-project-identity`, then `pnpm github:sync` (no env:add script)
 - **Deploy-required keys assertion:** `tooling/setup/github/validate.ts` (`pnpm validate:github-env`)

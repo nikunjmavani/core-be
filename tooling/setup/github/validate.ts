@@ -4,6 +4,7 @@ import {
   envSchemaConditionallyRequiredKeys,
   envSchemaRequiredKeys,
 } from '@/shared/config/env-schema.js';
+import { loadConfigIfExists } from '../common/config.js';
 import { driftResultsHaveIssues, validateGitHubEnvironmentsDrift } from './environments.js';
 
 /**
@@ -147,14 +148,29 @@ function getGitHubEnvironmentVariableEntries(
   });
 }
 
+/** Resolves CLI shorthand or branch aliases to the hosted environment name from setup.config.json. */
 export function resolveGitHubEnvironment(config: string): string {
-  const ghEnvMap: Record<string, string> = {
-    dev: 'development',
-    development: 'development',
-    prod: 'production',
-    production: 'production',
+  const setupConfig = loadConfigIfExists();
+  if (!setupConfig) {
+    const fallback: Record<string, string> = {
+      dev: 'development',
+      development: 'development',
+      prod: 'production',
+      production: 'production',
+    };
+    return fallback[config] ?? config;
+  }
+
+  const byBranch: Record<string, string> = {};
+  const byName: Record<string, string> = {};
+  for (const environment of setupConfig.environments) {
+    byBranch[environment.branch] = environment.name;
+    byName[environment.name] = environment.name;
+  }
+  const shorthand: Record<string, string> = {
+    prod: byName.production ?? 'production',
   };
-  return ghEnvMap[config] ?? config;
+  return byBranch[config] ?? byName[config] ?? shorthand[config] ?? config;
 }
 
 function validateGitHubEnvironmentProtectionDrift(environment: string): boolean {

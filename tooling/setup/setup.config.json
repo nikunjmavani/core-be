@@ -2,7 +2,18 @@
   "project": {
     "name": "core-be",
     "displayName": "core-be",
-    "organization": "albetrios"
+    "organization": "albetrios",
+    "artifacts": {
+      "apiImage": "core-be-api",
+      "workerImage": "core-be-worker",
+      "dockerLocalApiTag": "core-be",
+      "ghcrCacheScopeApi": "core-be-api",
+      "ghcrCacheScopeWorker": "core-be-worker"
+    }
+  },
+  "git": {
+    "protectedBranches": ["dev", "main"],
+    "defaultBranch": "dev"
   },
   "environments": [
     {

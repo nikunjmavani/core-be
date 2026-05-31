@@ -1,5 +1,6 @@
 import { env } from '@/shared/config/env.config.js';
 import { ForbiddenError } from '@/shared/errors/index.js';
+import { WEBAUTHN_RP_NAME_DEFAULT } from '@/shared/constants/project-identity.constants.js';
 import { parseAllowedOriginsList } from '@/shared/utils/security/allowed-origins.util.js';
 
 /** Resolves the WebAuthn Relying Party ID: prefers `WEBAUTHN_RP_ID`, falls back to the first parseable hostname in `ALLOWED_ORIGINS`, then `localhost`. */
@@ -23,7 +24,9 @@ export function resolveWebauthnRelyingPartyId(): string {
 
 /** Resolves the user-visible Relying Party name shown by the authenticator: `WEBAUTHN_RP_NAME` when set, otherwise the literal `'core-be'`. */
 export function resolveWebauthnRelyingPartyName(): string {
-  return env.WEBAUTHN_RP_NAME && env.WEBAUTHN_RP_NAME.length > 0 ? env.WEBAUTHN_RP_NAME : 'core-be';
+  return env.WEBAUTHN_RP_NAME && env.WEBAUTHN_RP_NAME.length > 0
+    ? env.WEBAUTHN_RP_NAME
+    : WEBAUTHN_RP_NAME_DEFAULT;
 }
 
 /**

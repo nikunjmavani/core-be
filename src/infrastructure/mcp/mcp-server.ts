@@ -14,16 +14,20 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Response as LightMyRequestResponse } from 'light-my-request';
-import { z } from 'zod';
 import type { FastifyInstance, InjectOptions } from 'fastify';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { GLOBAL_ROLES } from '@/shared/constants/index.js';
+import {
+  MCP_OPENAPI_RESOURCE_URI,
+  MCP_RESOURCES,
+  MCP_ROUTES_RESOURCE_URI,
+  MCP_TOOLS,
+  callApiInputSchema,
+} from '@/infrastructure/mcp/mcp-capabilities.js';
 import { requireRole } from '@/shared/utils/auth/authorization.util.js';
 
-const ROUTES_RESOURCE_URI = 'core-be://routes';
 const ROUTES_CATALOG_PATH = join(process.cwd(), 'docs', 'routes.txt');
-const OPENAPI_RESOURCE_URI = 'core-be://openapi';
 const OPENAPI_SPEC_PATH = join(process.cwd(), 'docs', 'openapi', 'openapi.json');
 
 type McpSdk = {
@@ -68,16 +72,6 @@ function loadOpenApiSpec(): string {
   }
 }
 
-const callApiInputSchema = z.object({
-  method: z.enum(['GET', 'POST', 'PATCH', 'PUT', 'DELETE']).describe('HTTP method'),
-  path: z.string().describe('API path (must start with /api/v1/)'),
-  body: z.record(z.string(), z.unknown()).optional().describe('Request body for POST/PATCH/PUT'),
-  headers: z
-    .record(z.string(), z.string())
-    .optional()
-    .describe('Optional headers (e.g. Authorization, X-Organization-Id)'),
-});
-
 /**
  * Construction parameters for {@link createMcpServer}. `inject` is the in-process HTTP
  * back-channel (Fastify `app.inject`) the `call_api` tool uses to invoke real route
@@ -119,19 +113,27 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
     },
   );
 
+  const openApiResource = MCP_RESOURCES.find(
+    (resource) => resource.uri === MCP_OPENAPI_RESOURCE_URI,
+  );
+  const routesResource = MCP_RESOURCES.find((resource) => resource.uri === MCP_ROUTES_RESOURCE_URI);
+  const callApiTool = MCP_TOOLS.find((tool) => tool.name === 'call_api');
+  if (!(openApiResource && routesResource && callApiTool)) {
+    throw new Error('MCP resource/tool catalog is incomplete');
+  }
+
   server.registerResource(
-    'core-be-openapi',
-    OPENAPI_RESOURCE_URI,
+    openApiResource.name,
+    MCP_OPENAPI_RESOURCE_URI,
     {
-      title: 'core-be OpenAPI spec',
-      description:
-        'OpenAPI 3.0 spec (paths, schemas, request/response). Use this to discover and validate API calls. Generate with pnpm docs:generate.',
-      mimeType: 'application/json',
+      title: openApiResource.title,
+      description: openApiResource.description,
+      mimeType: openApiResource.mimeType,
     },
     async () => ({
       contents: [
         {
-          uri: OPENAPI_RESOURCE_URI,
+          uri: MCP_OPENAPI_RESOURCE_URI,
           mimeType: 'application/json',
           text: openApiSpec,
         },
@@ -140,18 +142,17 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
   );
 
   server.registerResource(
-    'core-be-routes',
-    ROUTES_RESOURCE_URI,
+    routesResource.name,
+    MCP_ROUTES_RESOURCE_URI,
     {
-      title: 'core-be API routes',
-      description:
-        'List of all API routes (method, path, access). Use with core-be://openapi to discover endpoints before calling call_api.',
-      mimeType: 'text/plain',
+      title: routesResource.title,
+      description: routesResource.description,
+      mimeType: routesResource.mimeType,
     },
     async () => ({
       contents: [
         {
-          uri: ROUTES_RESOURCE_URI,
+          uri: MCP_ROUTES_RESOURCE_URI,
           mimeType: 'text/plain',
           text: routesCatalog,
         },
@@ -160,11 +161,10 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
   );
 
   server.registerTool(
-    'call_api',
+    callApiTool.name,
     {
-      title: 'Call core-be API',
-      description:
-        'Call any core-be REST API endpoint. Path must start with /api/v1/. Pass Authorization and X-Organization-Id in headers for authenticated/tenant-scoped calls. Use core-be://openapi or core-be://routes to discover available endpoints.',
+      title: callApiTool.title,
+      description: callApiTool.description,
       inputSchema: callApiInputSchema,
     },
     async (args) => {

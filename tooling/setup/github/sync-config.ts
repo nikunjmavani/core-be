@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { buildProjectIdentitySnapshot } from '../codegen/project-identity.util.js';
 import { loadConfig, getEnvironmentNames } from '../common/config.js';
 import type { SetupConfig } from '../common/types.js';
 
@@ -153,6 +154,28 @@ export function validateGithubSyncConsistency(config: SetupConfig): GitHubSyncCo
       issues.push({
         dimension: 'setup.config.json ↔ reusable-railway-deploy.yml',
         detail: `Configured branch "${env.branch}" must map to environment "${env.name}" in reusable-railway-deploy.yml.`,
+      });
+    }
+  }
+
+  const syncConfigPath = resolve(projectRoot, '.github/sync.config.json');
+  if (existsSync(syncConfigPath)) {
+    const snapshot = buildProjectIdentitySnapshot(config);
+    const expectedSyncConfig = `${JSON.stringify(
+      {
+        environments: snapshot.environments.map((environment) => ({
+          name: environment.name,
+          branch: environment.branch,
+        })),
+      },
+      null,
+      2,
+    )}\n`;
+    const actualSyncConfig = readFileSync(syncConfigPath, 'utf-8');
+    if (actualSyncConfig !== expectedSyncConfig) {
+      issues.push({
+        dimension: 'setup.config.json ↔ .github/sync.config.json',
+        detail: 'Generated sync.config.json is stale. Run: pnpm tool:generate-project-identity',
       });
     }
   }
