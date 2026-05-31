@@ -182,7 +182,7 @@ export class AuditService {
       if (!organization) {
         return {
           items: [],
-          total: 0,
+          total: parsed.include_total === 'true' ? 0 : null,
           limit: parsed.limit,
           has_more: false,
           next_cursor: null,
@@ -196,7 +196,7 @@ export class AuditService {
       if (!user) {
         return {
           items: [],
-          total: 0,
+          total: parsed.include_total === 'true' ? 0 : null,
           limit: parsed.limit,
           has_more: false,
           next_cursor: null,

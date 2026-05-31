@@ -106,9 +106,26 @@ describe('AuditService', () => {
     expect(result.next_cursor).toBeNull();
   });
 
-  it('list returns empty page when organization public id is unknown', async () => {
+  it('list returns empty page when organization public id is unknown without total by default', async () => {
     vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
     const result = await service.list({ limit: 20, organization_id: generatePublicId() });
+    expect(repository.findWithFilters).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      items: [],
+      total: null,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    });
+  });
+
+  it('list returns empty page with total zero when organization public id is unknown and include_total=true', async () => {
+    vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
+    const result = await service.list({
+      limit: 20,
+      organization_id: generatePublicId(),
+      include_total: 'true',
+    });
     expect(repository.findWithFilters).not.toHaveBeenCalled();
     expect(result).toEqual({
       items: [],
@@ -119,9 +136,26 @@ describe('AuditService', () => {
     });
   });
 
-  it('list returns empty page when actor public id is unknown', async () => {
+  it('list returns empty page when actor public id is unknown without total by default', async () => {
     vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
     const result = await service.list({ limit: 20, actor_user_id: generatePublicId() });
+    expect(repository.findWithFilters).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      items: [],
+      total: null,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    });
+  });
+
+  it('list returns empty page with total zero when actor public id is unknown and include_total=true', async () => {
+    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
+    const result = await service.list({
+      limit: 20,
+      actor_user_id: generatePublicId(),
+      include_total: 'true',
+    });
     expect(repository.findWithFilters).not.toHaveBeenCalled();
     expect(result).toEqual({
       items: [],
