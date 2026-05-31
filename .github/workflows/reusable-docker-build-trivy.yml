@@ -367,7 +367,7 @@ jobs:
             -e AUTH_SESSION_RETENTION_DAYS="$AUTH_SESSION_RETENTION_DAYS" \
             -e METRICS_SCRAPE_TOKEN="$METRICS_SCRAPE_TOKEN" \
             -e SECRETS_ENCRYPTION_KEY="$SECRETS_ENCRYPTION_KEY" \
-            core-be:ci
+            ${{ env.DOCKER_LOCAL_API_TAG }}:ci
           if ! timeout 90 bash -c 'until curl -sf http://localhost:3000/readyz; do sleep 2; done'; then
             docker logs ${{ env.DOCKER_LOCAL_API_TAG }}-health --tail 200 || true
             docker rm -f ${{ env.DOCKER_LOCAL_API_TAG }}-health || true

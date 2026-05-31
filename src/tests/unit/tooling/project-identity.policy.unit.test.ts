@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../../tooling/setup/common/config.js';
 import { buildProjectIdentitySnapshot } from '../../../../tooling/setup/codegen/project-identity.util.js';
+import { validateWorkflowLiteralsAgainstManifest } from '../../../../tooling/setup/codegen/validate-project-identity-workflows.js';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../../..');
 
@@ -33,6 +34,16 @@ describe('project identity policy', () => {
       2,
     )}\n`;
     expect(readFileSync(syncConfigPath, 'utf-8')).toBe(expected);
+  });
+
+  it('workflows have no branch or image literals outside the manifest', () => {
+    const config = loadConfig();
+    const snapshot = buildProjectIdentitySnapshot(config);
+    const violations = validateWorkflowLiteralsAgainstManifest({
+      snapshot,
+      projectRoot: repositoryRoot,
+    });
+    expect(violations).toEqual([]);
   });
 
   it('reusable-railway-deploy maps branches from manifest', () => {

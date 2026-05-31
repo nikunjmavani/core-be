@@ -21,7 +21,22 @@ function filterMarkdown(paths) {
   return paths.filter((path) => !MARKDOWN_EXCLUDE_PATTERNS.some((pattern) => pattern.test(path)));
 }
 
+const PROJECT_IDENTITY_GENERATED_PATHS = [
+  'src/shared/constants/project-identity.constants.ts',
+  '.github/sync.config.json',
+  '.github/project-identity.env',
+  '.github/generated/branch-environment-map.sh',
+  'docker-bake.hcl',
+  'src/shared/locales/en/openapi.json',
+  'src/shared/locales/es/openapi.json',
+  '.github/workflows',
+].join(' ');
+
 export default {
+  'tooling/setup/setup.config.json': [
+    'pnpm tool:generate-project-identity',
+    `git add ${PROJECT_IDENTITY_GENERATED_PATHS}`,
+  ],
   'src/**/*.ts': ['biome check --write --no-errors-on-unmatched'],
   'tooling/**/*.{ts,mjs}': ['biome check --write --no-errors-on-unmatched'],
   '*.{json,yaml,yml}': ['biome format --write --no-errors-on-unmatched'],

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from '../common/config.js';
 import { buildProjectIdentitySnapshot } from './project-identity.util.js';
+import { validateWorkflowLiteralsAgainstManifest } from './validate-project-identity-workflows.js';
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -26,6 +27,8 @@ const OUTPUT_PATHS = {
   projectIdentityEnv: resolve(REPOSITORY_ROOT, '.github/project-identity.env'),
   branchMapShell: resolve(REPOSITORY_ROOT, '.github/generated/branch-environment-map.sh'),
   dockerBake: resolve(REPOSITORY_ROOT, 'docker-bake.hcl'),
+  openApiLocaleEn: resolve(REPOSITORY_ROOT, 'src/shared/locales/en/openapi.json'),
+  openApiLocaleEs: resolve(REPOSITORY_ROOT, 'src/shared/locales/es/openapi.json'),
 } as const;
 
 const WORKFLOW_FILES_TO_PATCH = [
@@ -178,6 +181,21 @@ ${cases}
   esac
 }
 `;
+}
+
+function renderOpenApiLocale(localePath: string, openApiTitle: string): string | undefined {
+  if (!existsSync(localePath)) {
+    return undefined;
+  }
+  const parsed = JSON.parse(readFileSync(localePath, 'utf-8')) as {
+    info?: { title?: string; description?: string };
+    [key: string]: unknown;
+  };
+  if (!parsed.info) {
+    return undefined;
+  }
+  parsed.info.title = openApiTitle;
+  return `${JSON.stringify(parsed, null, 2)}\n`;
 }
 
 function renderDockerBake(snapshot: ReturnType<typeof buildProjectIdentitySnapshot>): string {
@@ -349,6 +367,7 @@ function patchWorkflowDockerArtifacts(
       `ghcr.io/\${REPOSITORY}/${workerImage}`,
       'ghcr.io/${REPOSITORY}/${{ env.WORKER_IMAGE }}',
     )
+    .replaceAll(`${apiTag}:ci`, '${{ env.DOCKER_LOCAL_API_TAG }}:ci')
     .replaceAll(`${apiTag}:ci node`, '${{ env.DOCKER_LOCAL_API_TAG }}:ci node')
     .replaceAll(`--name ${apiTag}-health`, '--name ${{ env.DOCKER_LOCAL_API_TAG }}-health')
     .replaceAll(
@@ -439,6 +458,12 @@ function patchWorkflowFile(
   if (relativePath === 'post-release-backmerge.yml') {
     contents = contents.replace(/\bref: dev\b/g, `ref: ${snapshot.git.nonProductionBranch}`);
   }
+  if (relativePath === 'scheduled-monthly-restore-rto.yml') {
+    contents = contents.replace(
+      /ensure Neon project core-be and branch names match git refs \(main\/dev\)/g,
+      `ensure Neon project ${snapshot.slug} and branch names match git refs (${snapshot.git.protectedBranches.join('/')})`,
+    );
+  }
   if (relativePath === 'cleanup-ghcr.yml') {
     contents = contents
       .replaceAll(`- ${snapshot.artifacts.apiImage}`, '- ${{ env.API_IMAGE }}')
@@ -475,6 +500,7 @@ export function generateAllProjectIdentityArtifacts(options?: { checkOnly?: bool
   const config = loadConfig();
   const snapshot = buildProjectIdentitySnapshot(config);
 
+  const openApiTitle = `${snapshot.displayName} API`;
   const outputs: Array<{ path: string; contents: string }> = [
     { path: OUTPUT_PATHS.constants, contents: renderConstants(snapshot) },
     { path: OUTPUT_PATHS.syncConfig, contents: renderSyncConfig(snapshot) },
@@ -482,6 +508,14 @@ export function generateAllProjectIdentityArtifacts(options?: { checkOnly?: bool
     { path: OUTPUT_PATHS.branchMapShell, contents: renderBranchMapShell(snapshot) },
     { path: OUTPUT_PATHS.dockerBake, contents: renderDockerBake(snapshot) },
   ];
+  const openApiLocaleEn = renderOpenApiLocale(OUTPUT_PATHS.openApiLocaleEn, openApiTitle);
+  const openApiLocaleEs = renderOpenApiLocale(OUTPUT_PATHS.openApiLocaleEs, openApiTitle);
+  if (openApiLocaleEn) {
+    outputs.push({ path: OUTPUT_PATHS.openApiLocaleEn, contents: openApiLocaleEn });
+  }
+  if (openApiLocaleEs) {
+    outputs.push({ path: OUTPUT_PATHS.openApiLocaleEs, contents: openApiLocaleEs });
+  }
 
   let stale = false;
   for (const output of outputs) {
@@ -506,6 +540,18 @@ export function generateAllProjectIdentityArtifacts(options?: { checkOnly?: bool
         console.log(`Patched .github/workflows/${workflowFile}`);
       }
     }
+  }
+
+  const workflowViolations = validateWorkflowLiteralsAgainstManifest({
+    snapshot,
+    projectRoot: REPOSITORY_ROOT,
+  });
+  if (workflowViolations.length > 0) {
+    console.error('Workflow project-identity literal violations:');
+    for (const violation of workflowViolations) {
+      console.error(`  ${violation.file}: ${violation.detail}`);
+    }
+    return false;
   }
 
   if (checkOnly) {

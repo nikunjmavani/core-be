@@ -4,6 +4,17 @@ Single reference for what runs in CI, how deployment to Railway works, and **whi
 
 > **Prerequisite:** Infrastructure must be set up before auto-deploy works. Use [setup-automation.md](../setup/setup-automation.md) (`pnpm setup:infra`) to provision Neon, Redis, Railway, GitHub secrets first.
 
+### Project identity (branches, images, slug)
+
+Git branch names, GitHub Environment names, Docker/GHCR image names, and the product slug (`core-be` today) are declared in **`tooling/setup/setup.config.json`**. Run **`pnpm tool:generate-project-identity`** after editing that manifest; it writes:
+
+- `src/shared/constants/project-identity.constants.ts` (runtime + OpenAPI defaults)
+- `.github/sync.config.json` (slim list for `pnpm github:sync`)
+- `.github/project-identity.env` (reference for local scripts — not loaded by Actions)
+- Job-level `# BEGIN GENERATED project-identity` `env:` blocks in key workflows
+
+CI enforces drift with **`pnpm tool:generate-project-identity:check`** (in `pnpm ci:quality`) and workflow literal scans. See [add-new-environment.md](../runbooks/add-new-environment.md) when adding a hosted environment.
+
 ---
 
 ## 1. Overview

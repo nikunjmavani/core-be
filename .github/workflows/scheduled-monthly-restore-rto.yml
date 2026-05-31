@@ -186,7 +186,7 @@ jobs:
       - name: Fail when automated restore did not complete
         if: needs.restore-integration.result != 'success'
         run: |
-          echo "::error title=Restore drill not measured::Configure MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY, ensure Neon project core-be and branch names match git refs (main/dev), and verify migrate + integration smoke pass."
+          echo "::error title=Restore drill not measured::Configure MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY, ensure Neon project core-be and branch names match git refs (dev/main), and verify migrate + integration smoke pass."
           exit 1
 
       - name: Download automated RTO report
