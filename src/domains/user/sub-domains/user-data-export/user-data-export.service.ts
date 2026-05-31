@@ -277,20 +277,12 @@ export class UserDataExportService {
     }
   }
 
-  async completeExportJob(
-    options: {
-      exportPublicId: string;
-      userInternalId: number;
-      userPublicId: string;
-      body: Buffer;
-    },
-    databaseHandle?: RequestScopedPostgresDatabase,
-  ): Promise<void> {
-    if (databaseHandle !== undefined) {
-      await this.completeExportJobInDatabaseContext(options, databaseHandle);
-      return;
-    }
-
+  async completeExportJob(options: {
+    exportPublicId: string;
+    userInternalId: number;
+    userPublicId: string;
+    body: Buffer;
+  }): Promise<void> {
     const s3Key = await withUserDatabaseContext(
       options.userPublicId,
       async (scopedDatabaseHandle) =>
@@ -325,52 +317,6 @@ export class UserDataExportService {
           scopedDatabaseHandle,
         );
       });
-    } catch (error) {
-      await this.bestEffortDeleteUploadedExportArtifact(s3Key, {
-        exportPublicId: options.exportPublicId,
-        userInternalId: options.userInternalId,
-      });
-      throw error;
-    }
-  }
-
-  private async completeExportJobInDatabaseContext(
-    options: {
-      exportPublicId: string;
-      userInternalId: number;
-      userPublicId: string;
-      body: Buffer;
-    },
-    databaseHandle: RequestScopedPostgresDatabase,
-  ): Promise<void> {
-    const s3Key = await this.resolveExportArtifactS3Key(
-      {
-        exportPublicId: options.exportPublicId,
-        userInternalId: options.userInternalId,
-        userPublicId: options.userPublicId,
-      },
-      databaseHandle,
-    );
-
-    await this.objectStorage.putObject({
-      key: s3Key,
-      body: options.body,
-      contentType: 'application/gzip',
-      metadata: {
-        format: 'json',
-        schema_version: '1',
-      },
-    });
-
-    try {
-      await this.finalizeExportAfterUpload(
-        {
-          exportPublicId: options.exportPublicId,
-          userInternalId: options.userInternalId,
-          userPublicId: options.userPublicId,
-        },
-        databaseHandle,
-      );
     } catch (error) {
       await this.bestEffortDeleteUploadedExportArtifact(s3Key, {
         exportPublicId: options.exportPublicId,

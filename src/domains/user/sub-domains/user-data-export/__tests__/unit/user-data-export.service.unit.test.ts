@@ -195,18 +195,15 @@ describe('UserDataExportService', () => {
   });
 
   it('completeExportJob skips S3 when export row was removed', async () => {
-    workerExportRepository.findByPublicIdAndUserId.mockResolvedValue(null);
+    exportRepository.findByPublicIdAndUserId.mockResolvedValue(null);
 
     await expect(
-      service.completeExportJob(
-        {
-          exportPublicId: 'exp_gone',
-          userInternalId: 1,
-          userPublicId: 'user_public',
-          body: Buffer.from('x'),
-        },
-        {} as never,
-      ),
+      service.completeExportJob({
+        exportPublicId: 'exp_gone',
+        userInternalId: 1,
+        userPublicId: 'user_public',
+        body: Buffer.from('x'),
+      }),
     ).rejects.toBeInstanceOf(UserDataExportCancelledError);
 
     expect(objectStorage.putObject).not.toHaveBeenCalled();
