@@ -1,5 +1,46 @@
+autoInstallPeers: true
+engineStrict: true
+
 allowBuilds:
-  '@sentry-internal/node-cpu-profiler': set this to true or false
-  argon2: set this to true or false
-  esbuild: set this to true or false
-  msgpackr-extract: set this to true or false
+  '@sentry-internal/node-cpu-profiler': true
+  argon2: true
+  cpu-features: true
+  esbuild: true
+  msgpackr-extract: true
+  protobufjs: true
+  ssh2: true
+
+packageExtensions:
+  openapi-to-postmanv2:
+    dependencies:
+      lodash: 4.17.24
+      js-yaml: ^4.1.1
+  postman-collection:
+    dependencies:
+      lodash: 4.17.24
+  '@esbuild-kit/core-utils':
+    dependencies:
+      esbuild: ^0.25.0
+
+overrides:
+  ioredis: 5.10.1
+  esbuild: '>=0.25.0'
+  '@esbuild-kit/core-utils>esbuild': '>=0.25.0'
+  lodash: '>=4.17.24'
+  js-yaml: '>=4.1.1'
+  fast-xml-parser: '>=5.7.0'
+  hono: '>=4.12.18'
+  markdown-it: '>=14.1.1'
+  minimatch: 10.2.5
+  micromatch>picomatch: 4.0.4
+  rollup: '>=4.59.0'
+  vite: '>=7.3.2'
+  fastify: '>=5.8.5'
+  '@fastify/static': '>=9.1.1'
+  drizzle-orm: '>=0.45.2'
+  i18next-fs-backend: '>=2.6.4'
+  i18next-http-middleware: '>=3.9.3'
+  qs: '>=6.15.2'
+  tmp: '>=0.2.6'
+  uuid: '>=11.1.1'
+  yaml@1.10.2: 1.10.3

@@ -158,3 +158,9 @@ Batch deletes use `deleteInBatchesByCondition` with per-row FK fallback (`blocke
 After pulling schema changes (for example **`notify.webhooks.deleted_at`**), apply **`pnpm db:migrate`** so the database matches Drizzle definitions.
 
 When you change any `*.schema.ts` or `migrations/*.sql`, follow **db-migration-maintainer** and **sql-design-guard**.
+
+## Related
+
+- [`src/PATTERNS.md`](../../../src/PATTERNS.md) § Soft Delete, § Tenant Isolation, § Audit Emission — cross-cutting patterns referenced by every lifecycle decision
+- [`src/POLICIES.md`](../../../src/POLICIES.md) — `*_RETENTION_DAYS`, `TOMBSTONE_RETENTION_DAYS`, audit retention, GDPR export caps
+- [`src/infrastructure/database/OVERVIEW.md`](../../../src/infrastructure/database/OVERVIEW.md) — RLS context family used by retention workers (`withGlobalRetentionCleanupDatabaseContext`)

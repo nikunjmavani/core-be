@@ -14,6 +14,14 @@ import { tenancySchema } from '@/infrastructure/database/pg-schemas.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { users } from '@/domains/user/user.schema.js';
 
+/**
+ * Drizzle table for `tenancy.api_keys` — stores SHA-256 `key_hash`,
+ * indexable `key_prefix` (first N chars used for lookup), JSONB `scopes`,
+ * `ACTIVE`/`REVOKED` status, optional expiry, and soft-delete. Tenant
+ * isolation is enforced by the `api_keys_tenant_isolation` RLS policy that
+ * resolves `app.current_organization_id` to a tenancy.organizations.id, with
+ * an escape hatch for global retention cleanup.
+ */
 export const api_keys = tenancySchema
   .table(
     'api_keys',

@@ -4,11 +4,11 @@ import { UserDataExportCancelledError } from '@/domains/user/sub-domains/user-da
 
 const fakeDatabaseHandle = { __fake: true } as const;
 
-vi.mock('@/infrastructure/queue/worker-runtime/worker-processor.util.js', () => ({
-  runUserScopedWorkerJob: async (
-    _job: unknown,
-    processor: (databaseHandle: unknown) => Promise<unknown>,
-  ) => processor(fakeDatabaseHandle),
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: async (
+    _userPublicId: string,
+    callback: (databaseHandle: unknown) => Promise<unknown>,
+  ) => callback(fakeDatabaseHandle),
 }));
 
 const { loggerInfoMock, loggerErrorMock } = vi.hoisted(() => ({
@@ -51,24 +51,33 @@ describe('user-data-export.processor', () => {
     await runUserDataExportJob(jobData, service as never);
 
     expect(service.isExportJobCancelled).toHaveBeenCalledTimes(2);
+    expect(service.isExportJobCancelled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exportPublicId: jobData.exportPublicId,
+        userInternalId: jobData.userInternalId,
+        userPublicId: jobData.userPublicId,
+        databaseHandle: fakeDatabaseHandle,
+      }),
+    );
     expect(service.markProcessing).toHaveBeenCalledWith(
       jobData.exportPublicId,
       jobData.userInternalId,
       fakeDatabaseHandle,
-    );
-    expect(service.buildExportPayload).toHaveBeenCalledWith(
       jobData.userPublicId,
-      fakeDatabaseHandle,
     );
+    expect(service.buildExportPayload).toHaveBeenCalledWith(jobData.userPublicId);
     expect(service.completeExportJob).toHaveBeenCalledOnce();
     const completeArguments = service.completeExportJob.mock.calls[0]?.[0] as {
       exportPublicId: string;
       userInternalId: number;
+      userPublicId: string;
       body: Buffer;
     };
     expect(completeArguments.exportPublicId).toBe(jobData.exportPublicId);
     expect(completeArguments.userInternalId).toBe(jobData.userInternalId);
+    expect(completeArguments.userPublicId).toBe(jobData.userPublicId);
     expect(Buffer.isBuffer(completeArguments.body)).toBe(true);
+    expect(service.completeExportJob.mock.calls[0]?.[1]).toBeUndefined();
     expect(service.failExportJob).not.toHaveBeenCalled();
   });
 

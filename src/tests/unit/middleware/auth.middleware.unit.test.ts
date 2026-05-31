@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnauthorizedError } from '@/shared/errors/index.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
-import authMiddleware from '@/shared/middlewares/auth.middleware.js';
+import authMiddleware from '@/shared/middlewares/core/auth.middleware.js';
 
 async function createAuthMiddlewareApplication() {
   const application = Fastify();

@@ -1,16 +1,17 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createReadline, questionWithDefault } from '../common/prompts.js';
+import { createReadline, questionWithDefault } from '@tooling/setup/common/prompts.js';
 import {
   writeEnvSetupTemplateIfMissing,
   updateEnvSetupHeader,
   appendMissingEnvSetupVariables,
   getEnvSetupValue,
   setEnvSetupVariable,
-} from '../common/secrets.js';
-import { loadConfigIfExists } from '../common/config.js';
-import * as logger from '../common/logger.js';
-import type { SetupConfig } from '../common/types.js';
+} from '@tooling/setup/common/secrets.js';
+import { loadConfigIfExists } from '@tooling/setup/common/config.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { buildDefaultArtifacts } from '@tooling/setup/codegen/project-identity.util.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 const SETUP_CONFIG_PATH = resolve(import.meta.dirname, '../setup.config.json');
 
@@ -98,11 +99,21 @@ export function buildConfig(
         : { traces: 0.5, profile: 0.5 };
   }
 
+  const artifacts = buildDefaultArtifacts(projectName);
+  const protectedBranches = environments.map((environment) => environment.branch);
+  const defaultBranch =
+    environments.find((environment) => environment.isDefault)?.branch ?? protectedBranches[0];
+
   return {
     project: {
       name: projectName,
       displayName,
       organization,
+      artifacts,
+    },
+    git: {
+      protectedBranches,
+      defaultBranch,
     },
     environments,
     providers: {
@@ -112,8 +123,11 @@ export function buildConfig(
         pgVersion: 17,
         computeSize: { min: 0.25, max: 1 },
       },
-      upstash: {
+      railwayRedis: {
         enabled: true,
+        region: 'asia-southeast1-eqsg3a',
+        cpuLimit: 1,
+        memoryLimitMb: 512,
       },
       aws: {
         enabled: true,
@@ -215,7 +229,7 @@ export async function runInitWizard(): Promise<void> {
 
   const config = buildConfig(organization, projectName, displayName, environmentNames);
 
-  writeFileSync(SETUP_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  writeFileSync(SETUP_CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
   logger.success(`Wrote ${SETUP_CONFIG_PATH}`);
   logger.info(`  Project: ${config.project.displayName} (${config.project.name})`);
   logger.info(`  Organization: ${config.project.organization}`);

@@ -1,3 +1,7 @@
+/**
+ * Public response shape for plan endpoints. Uses the plan's `public_id` as `id`
+ * and emits ISO-string timestamps so the type is JSON-safe over the wire.
+ */
 export interface PlanOutput {
   id: string;
   name: string;

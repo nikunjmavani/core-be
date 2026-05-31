@@ -5,6 +5,13 @@ import { getRequestDatabase } from '@/infrastructure/database/contexts/request-d
 import { organization_notification_policies } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/organization-notification-policy.schema.js';
 import type { OrganizationNotificationPolicyRow } from './organization-notification-policy.types.js';
 
+/**
+ * Drizzle data-access for `tenancy.organization_notification_policies`.
+ * Supports per-org list (ordered by `notification_type` then `channel`),
+ * primary-key lookup scoped to the organization, soft-delete-aware upsert
+ * keyed on `(organization_id, notification_type, channel)`, partial update,
+ * and soft-delete.
+ */
 export class OrganizationNotificationPolicyRepository {
   async findByOrganizationId(organization_id: number) {
     const rows = await getRequestDatabase()

@@ -1,11 +1,14 @@
 import { Queue } from 'bullmq';
-import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { getBullMQProducerConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
+import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import {
   notificationJobDataSchema,
   type NotificationJobDataValidated,
 } from './notification.job.schema.js';
 
+/** BullMQ queue name for asynchronous notification dispatch (in-app + email fan-out). */
 export const NOTIFICATION_QUEUE_NAME = 'notification';
 
 /** Only ids are stored in Redis; content is loaded in the worker from Postgres with org scoping. */
@@ -16,7 +19,7 @@ let notificationQueue: Queue<NotificationJobData> | null = null;
 function getNotificationQueue(): Queue<NotificationJobData> {
   if (notificationQueue) return notificationQueue;
   notificationQueue = new Queue<NotificationJobData>(NOTIFICATION_QUEUE_NAME, {
-    connection: getBullMQConnectionOptions(),
+    connection: getBullMQProducerConnectionOptions(),
     defaultJobOptions: {
       removeOnComplete: { count: 2000 },
       removeOnFail: { count: 5000 },
@@ -38,12 +41,18 @@ export async function enqueueNotification(
   const queue = getNotificationQueue();
   const jobData = parseBullMQJobData(
     notificationJobDataSchema,
-    { notificationId, organizationPublicId, requestId },
+    omitUndefined({
+      notificationId,
+      organizationPublicId,
+      requestId,
+      ...captureTraceContextForPropagation(),
+    }),
     NOTIFICATION_QUEUE_NAME,
   );
   await queue.add('dispatch-notification', jobData);
 }
 
+/** Close the lazily-initialised notification queue (graceful-shutdown hook for tests/runtime). */
 export async function closeNotificationQueue(): Promise<void> {
   if (notificationQueue) {
     await notificationQueue.close();

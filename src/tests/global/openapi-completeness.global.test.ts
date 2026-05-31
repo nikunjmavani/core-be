@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ROUTES_WITHOUT_JSON_BODY } from '../../../tooling/openapi/routes-without-json-body.js';
+import { ROUTES_WITHOUT_JSON_BODY } from '@tooling/openapi/routes-without-json-body.js';
 import {
   getRouteCount,
   loadRouteRegistryFromCatalog,

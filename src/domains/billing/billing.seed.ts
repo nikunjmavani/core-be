@@ -7,6 +7,10 @@ import { getRequestDatabase } from '@/infrastructure/database/contexts/request-d
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { subscriptions } from '@/domains/billing/sub-domains/subscription/subscription.schema.js';
 
+/**
+ * Input for {@link seedSubscription} / {@link findOrSeedSubscription}; identifiers
+ * are internal numeric IDs because the seed runs inside the orchestration script.
+ */
 export interface SeedSubscriptionPayload {
   organization_id: number;
   plan_id: number;
@@ -14,6 +18,10 @@ export interface SeedSubscriptionPayload {
   status?: string;
 }
 
+/**
+ * Inserts a fake monthly Stripe subscription row for demo data, defaulting to
+ * `ACTIVE` and a one-month current period starting at insert time.
+ */
 export async function seedSubscription(payload: SeedSubscriptionPayload) {
   const now = new Date();
   const periodEnd = new Date(now);
@@ -37,6 +45,11 @@ export async function seedSubscription(payload: SeedSubscriptionPayload) {
   return row ?? null;
 }
 
+/**
+ * Returns the most recent subscription for the organization or, if none exists,
+ * seeds one via {@link seedSubscription} — used by the orchestration script to
+ * keep `pnpm db:seed:full` idempotent.
+ */
 export async function findOrSeedSubscription(payload: SeedSubscriptionPayload) {
   const database = getRequestDatabase();
   const [existing] = await database

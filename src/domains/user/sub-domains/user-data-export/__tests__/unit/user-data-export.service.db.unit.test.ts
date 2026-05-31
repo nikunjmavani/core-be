@@ -8,10 +8,6 @@ import {
   seedPermissions,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
-import { UserDataExportService } from '@/domains/user/sub-domains/user-data-export/user-data-export.service.js';
-import { UserRepository } from '@/domains/user/user.repository.js';
-import { UserService } from '@/domains/user/user.service.js';
-import { UserDataExportRepository } from '@/domains/user/sub-domains/user-data-export/user-data-export.repository.js';
 import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
 import { NotFoundError } from '@/shared/errors/index.js';
 import { NotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
@@ -20,14 +16,11 @@ import { database } from '@/infrastructure/database/connection.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { sessions } from '@/domains/auth/sub-domains/auth-session/auth-session.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { createDomainContainers } from '@/worker-containers.js';
 
 describe('UserDataExportService (database)', () => {
-  const userRepository = new UserRepository();
-  const service = new UserDataExportService(
-    new UserService(userRepository, createObjectStoragePortMock()),
-    new UserDataExportRepository(),
-    createObjectStoragePortMock(),
-  );
+  const service = createDomainContainers(createObjectStoragePortMock()).userDomain
+    .userDataExportService;
 
   beforeEach(async () => {
     await cleanupDatabase();
@@ -72,8 +65,8 @@ describe('UserDataExportService (database)', () => {
       resource_id: user.id,
     });
 
-    const exported = await withUserDatabaseContext(user.public_id, (databaseHandle) =>
-      service.buildExportPayload(user.public_id, databaseHandle),
+    const exported = await withUserDatabaseContext(user.public_id, () =>
+      service.buildExportPayload(user.public_id),
     );
 
     expect(exported.user.email).toBe('export@example.com');
@@ -91,8 +84,8 @@ describe('UserDataExportService (database)', () => {
 
   it('buildExportPayload throws when user is missing', async () => {
     await expect(
-      withUserDatabaseContext('missing_public_id', (databaseHandle) =>
-        service.buildExportPayload('missing_public_id', databaseHandle),
+      withUserDatabaseContext('missing_public_id', () =>
+        service.buildExportPayload('missing_public_id'),
       ),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
@@ -107,8 +100,8 @@ describe('UserDataExportService (database)', () => {
       expires_at: new Date(Date.now() + 60_000),
     });
 
-    const exported = await withUserDatabaseContext(user.public_id, (databaseHandle) =>
-      service.buildExportPayload(user.public_id, databaseHandle),
+    const exported = await withUserDatabaseContext(user.public_id, () =>
+      service.buildExportPayload(user.public_id),
     );
 
     expect(exported.sessions).toHaveLength(1);
@@ -122,8 +115,8 @@ describe('UserDataExportService (database)', () => {
       lastName: '',
     });
 
-    const exported = await withUserDatabaseContext(user.public_id, (databaseHandle) =>
-      service.buildExportPayload(user.public_id, databaseHandle),
+    const exported = await withUserDatabaseContext(user.public_id, () =>
+      service.buildExportPayload(user.public_id),
     );
 
     expect(exported.user.full_name).toBeNull();

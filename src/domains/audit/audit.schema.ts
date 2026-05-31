@@ -14,6 +14,13 @@ import { auditSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * Drizzle definition for `audit.logs` — the append-only ledger of actor/resource
+ * actions. RLS tenant-isolation policy scopes rows to the current organization
+ * (or to retention-cleanup workers that set `app.global_retention_cleanup`, or
+ * the cross-tenant admin escape hatch `app.global_admin` used by the admin
+ * audit-log listing via `withGlobalAdminDatabaseContext`).
+ */
 export const logs = auditSchema
   .table(
     'logs',
@@ -61,10 +68,22 @@ export const logs = auditSchema
             SELECT id FROM tenancy.organizations
             WHERE public_id = current_setting('app.current_organization_id', true)
           )
-          OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+          OR current_setting('app.global_retention_cleanup', true) = 'true'
+          OR current_setting('app.global_admin', true) = 'true'`,
+      }),
+      pgPolicy('audit_logs_user_export_select', {
+        as: 'permissive',
+        for: 'select',
+        to: 'public',
+        using: sql`${table.actor_user_id} = (
+            SELECT id FROM auth.users
+            WHERE public_id = current_setting('app.current_user_id', true)
+              AND deleted_at IS NULL
+          )`,
       }),
     ],
   )
   .enableRLS();
 
+/** Drizzle-inferred insert row shape for {@link logs}. */
 export type AuditLogInsert = typeof logs.$inferInsert;

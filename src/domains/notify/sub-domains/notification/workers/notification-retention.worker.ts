@@ -14,6 +14,16 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 /**
  * Hard-deletes in-app notifications older than NOTIFICATION_RETENTION_DAYS.
  * Repeatable schedule is registered in `src/infrastructure/queue/scheduler.ts`.
+ *
+ * @remarks
+ * - **Algorithm:** wraps {@link runNotificationRetentionJob} in
+ *   `withGlobalRetentionCleanupDatabaseContext` so the BullMQ processor sees cross-tenant rows.
+ * - **Failure modes:** stalled jobs are logged via the `stalled` listener; processor errors
+ *   propagate through BullMQ retries and the queue DLQ.
+ * - **Side effects:** registers a `Worker` against Redis with retention-tuned options
+ *   (`RETENTION_WORKER_CONCURRENCY`, `getRetentionWorkerOptions`).
+ * - **Notes:** the repeatable schedule lives in `infrastructure/queue/scheduler.ts`; this
+ *   factory just returns the worker handle for graceful shutdown.
  */
 export function createNotificationRetentionWorker(): WorkerHandle {
   const worker = new Worker(

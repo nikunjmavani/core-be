@@ -1,4 +1,5 @@
-import { NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
 import type { PaymentProvider } from './payment-provider.port.js';
@@ -16,9 +17,35 @@ import { withOrganizationDatabaseContext } from '@/infrastructure/database/conte
  * Coordinates plan lookups, payment-provider calls, and subscription updates
  * for a single organization.
  *
- * Under DATABASE_RLS_SCOPED_CONTEXTS, database reads/writes run inside
- * `withOrganizationDatabaseContext` so RLS sees the org GUC. Stripe (paymentProvider)
- * calls are network I/O and MUST stay OUTSIDE those contexts.
+ * @remarks
+ * - **Algorithm:** Each public method runs the database portion inside
+ *   {@link withOrganizationDatabaseContext} so Postgres sees the org GUC for
+ *   RLS, then performs the Stripe API call (create / change-plan / cancel /
+ *   resume) outside that context, then re-opens an organization context to
+ *   write back the resulting row. Webhook-triggered methods
+ *   (`syncFromStripeProviderSubscription`, `markCanceledByStripeProviderSubscriptionId`)
+ *   accept a repository override so the webhook worker can pass its own
+ *   worker-scoped handle.
+ * - **Failure modes:** Throws {@link NotFoundError} when the organization,
+ *   plan, or subscription cannot be loaded. On `create`, throws
+ *   {@link ConflictError} (`errors:subscriptionAlreadyExists`) when the
+ *   organization already has a non-terminal subscription (checked before the
+ *   Stripe call) or when a concurrent create loses the partial-unique-index
+ *   race (Postgres `unique_violation`, `23505`). The payment provider is
+ *   **fail-closed**: a Stripe failure on `create` / `cancel` / `resume` /
+ *   `changePlan` surfaces as `ServiceUnavailableError` from the provider, which
+ *   runs *before* any local write, so no local subscription row is created or
+ *   mutated when the provider call fails — the Stripe webhook stays the
+ *   reconciliation source of truth. If persistence fails *after* the Stripe
+ *   create succeeded, the provider is rolled back via `compensateFailedCreate`.
+ *   On `changePlan`, a successful provider price update followed by a local
+ *   write failure triggers `compensatePlanChange` back to the previous price.
+ * - **Side effects:** External Stripe API calls (create / update / cancel /
+ *   resume / compensations) and writes to `billing.subscriptions`.
+ * - **Notes:** Stripe network calls MUST stay outside the database context to
+ *   avoid blocking a Postgres connection on remote I/O. Idempotency for
+ *   `create` is forwarded to Stripe via `idempotencyKey` (the
+ *   `Idempotency-Key` HTTP header).
  */
 export class SubscriptionService {
   constructor(
@@ -87,7 +114,13 @@ export class SubscriptionService {
       async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-        const plan = await this.planService.requirePlanRecordByPublicId(parsed.plan_id);
+        // Reject before the Stripe call when a non-terminal subscription already
+        // exists, so a duplicate request never churns the payment provider.
+        const existingActive = await this.repository.findActiveByOrganization(organization.id);
+        if (existingActive) {
+          throw new ConflictError('errors:subscriptionAlreadyExists');
+        }
+        const plan = await this.planService.requireActivePlanByPublicId(parsed.plan_id);
         const createdByUserInternalId =
           await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
         return { organization, plan, createdByUserInternalId };
@@ -104,7 +137,6 @@ export class SubscriptionService {
         organization,
         plan,
         billingCycle: parsed.billing_cycle,
-        trialEnd: parsed.trial_end,
         idempotencyKey,
       }),
     );
@@ -118,7 +150,6 @@ export class SubscriptionService {
             billing_cycle: parsed.billing_cycle.toUpperCase() as 'MONTHLY' | 'YEARLY',
             current_period_start: now,
             current_period_end: periodEnd,
-            trial_end: parsed.trial_end ? new Date(parsed.trial_end) : undefined,
             created_by_user_id: createdByUserInternalId ?? undefined,
             provider: paymentResult.providerSubscriptionId ? 'stripe' : undefined,
             provider_subscription_id: paymentResult.providerSubscriptionId,
@@ -129,6 +160,11 @@ export class SubscriptionService {
     } catch (error) {
       if (paymentResult.providerSubscriptionId) {
         await this.paymentProvider.compensateFailedCreate(paymentResult.providerSubscriptionId);
+      }
+      // A concurrent create that lost the race to the partial unique index
+      // surfaces as a 409 instead of a 500 (the Stripe sub is already rolled back above).
+      if (isPostgresUniqueViolation(error)) {
+        throw new ConflictError('errors:subscriptionAlreadyExists');
       }
       throw error;
     }
@@ -149,13 +185,18 @@ export class SubscriptionService {
     });
   }
 
-  async changePlan(organization_public_id: string, subscription_public_id: string, body: unknown) {
+  async changePlan(
+    organization_public_id: string,
+    subscription_public_id: string,
+    body: unknown,
+    idempotencyKey?: string,
+  ) {
     const parsed = validateChangePlan(body);
     const { organization, plan, subscription, previousPlan } =
       await withOrganizationDatabaseContext(organization_public_id, async () => {
         const organization =
           await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-        const plan = await this.planService.requirePlanRecordByPublicId(parsed.plan_id);
+        const plan = await this.planService.requireActivePlanByPublicId(parsed.plan_id);
         const subscription = await this.repository.findByPublicId(
           subscription_public_id,
           organization.id,
@@ -173,12 +214,17 @@ export class SubscriptionService {
     );
     let providerPlanUpdated = false;
 
-    // Stripe network call — outside any database context.
+    // Stripe network call — outside any database context. Fail-closed: a provider
+    // failure throws ServiceUnavailableError here (before any local write), so the
+    // local plan never silently diverges from Stripe. Local-only subscriptions
+    // (no provider_subscription_id or no mapped price) skip the call and proceed.
     if (subscription.provider_subscription_id && providerPriceId) {
-      providerPlanUpdated = await this.paymentProvider.updateSubscriptionPrice(
+      await this.paymentProvider.updateSubscriptionPrice(
         subscription.provider_subscription_id,
         providerPriceId,
+        idempotencyKey,
       );
+      providerPlanUpdated = true;
     }
 
     const periodStart = new Date(subscription.current_period_start);
@@ -210,7 +256,11 @@ export class SubscriptionService {
     }
   }
 
-  async cancel(organization_public_id: string, subscription_public_id: string) {
+  async cancel(
+    organization_public_id: string,
+    subscription_public_id: string,
+    idempotencyKey?: string,
+  ) {
     const { organization, subscription } = await withOrganizationDatabaseContext(
       organization_public_id,
       async () => {
@@ -229,6 +279,7 @@ export class SubscriptionService {
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.cancelSubscriptionAtPeriodEnd(
         subscription.provider_subscription_id,
+        idempotencyKey,
       );
     }
 
@@ -241,7 +292,11 @@ export class SubscriptionService {
     return updated;
   }
 
-  async resume(organization_public_id: string, subscription_public_id: string) {
+  async resume(
+    organization_public_id: string,
+    subscription_public_id: string,
+    idempotencyKey?: string,
+  ) {
     const { organization, subscription } = await withOrganizationDatabaseContext(
       organization_public_id,
       async () => {
@@ -258,7 +313,10 @@ export class SubscriptionService {
 
     // Stripe network call — outside any database context.
     if (subscription.provider_subscription_id) {
-      await this.paymentProvider.resumeSubscription(subscription.provider_subscription_id);
+      await this.paymentProvider.resumeSubscription(
+        subscription.provider_subscription_id,
+        idempotencyKey,
+      );
     }
 
     const updated = await withOrganizationDatabaseContext(organization_public_id, async () =>

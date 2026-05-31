@@ -53,7 +53,7 @@ describe('idempotency middleware fail-closed behavior', () => {
 
   it('returns 503 when Redis is unavailable during claim', async () => {
     const { default: idempotencyPlugin } = await import(
-      '@/shared/middlewares/idempotency.middleware.js'
+      '@/shared/middlewares/core/idempotency.middleware.js'
     );
 
     let claimPreHandler: ((request: FastifyRequest, reply: FastifyReply) => Promise<void>) | null =
@@ -107,25 +107,28 @@ describe('idempotency middleware fail-closed behavior', () => {
     }
 
     const send = vi.fn();
+    const header = vi.fn().mockReturnThis();
     const reply = {
       sent: false,
       status: vi.fn().mockReturnThis(),
+      header,
       send,
     } as unknown as FastifyReply;
 
     await claimPreHandler!(request, reply);
 
     expect(reply.status).toHaveBeenCalledWith(503);
+    expect(header).toHaveBeenCalledWith('Retry-After', '2');
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
-        error: expect.objectContaining({ code: 'service_unavailable' }),
+        error: expect.objectContaining({ code: 'service_unavailable', retryable: true }),
       }),
     );
   });
 });
 
 async function registerIdempotencyHooks() {
-  const idempotencyModule = await import('@/shared/middlewares/idempotency.middleware.js');
+  const idempotencyModule = await import('@/shared/middlewares/core/idempotency.middleware.js');
   const idempotencyPlugin = idempotencyModule.default;
   // `idempotencyOnResponse` is no longer registered as an onResponse hook by the plugin
   // itself — the request lifecycle coordinator invokes it post-RLS-commit. Tests reach
@@ -256,6 +259,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const { claimPreHandler } = await registerIdempotencyHooks();
     const request = {
       headers: {},
+      auth: { userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
       t: (key: string) => `translated:${key}`,
     } as unknown as FastifyRequest;
@@ -654,7 +658,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
 
   it('onRoute skips non-write methods and appends claim handler for write routes', async () => {
     const { default: idempotencyPlugin } = await import(
-      '@/shared/middlewares/idempotency.middleware.js'
+      '@/shared/middlewares/core/idempotency.middleware.js'
     );
     const mockApp = { addHook: vi.fn() };
     await idempotencyPlugin(mockApp as never, {} as never);
@@ -688,6 +692,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const { claimPreHandler } = await registerIdempotencyHooks();
     const request = {
       headers: {},
+      auth: { userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
       t: (key: string) => `translated:${key}`,
     } as unknown as FastifyRequest;
@@ -695,6 +700,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const reply = {
       sent: false,
       status: vi.fn().mockReturnThis(),
+      header: vi.fn().mockReturnThis(),
       send,
     } as unknown as FastifyReply;
 
@@ -705,6 +711,44 @@ describe('idempotency middleware happy paths and conflicts', () => {
         error: expect.objectContaining({ detail: 'translated:errors:serviceUnavailable' }),
       }),
     );
+  });
+
+  it('skips claim and cache entirely for unauthenticated callers (no cross-caller replay)', async () => {
+    const { claimPreHandler } = await registerIdempotencyHooks();
+    const request = {
+      method: 'POST',
+      headers: {
+        [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY,
+        'x-organization-id': 'unverified-org',
+      },
+      _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+    } as unknown as FastifyRequest & { _idempotencyClaimed?: boolean };
+
+    const reply = { sent: false } as unknown as FastifyReply;
+
+    await claimPreHandler(request, reply);
+
+    expect(mockRedisGet).not.toHaveBeenCalled();
+    expect(mockRedisSet).not.toHaveBeenCalled();
+    expect(mockRedisIncr).not.toHaveBeenCalled();
+    expect(request._idempotencyClaimed).toBeUndefined();
+  });
+
+  it('increments a sharded claim counter key after a successful claim (no global hot key)', async () => {
+    mockRedisSet.mockResolvedValue('OK');
+    const { claimPreHandler } = await registerIdempotencyHooks();
+    const request = {
+      method: 'POST',
+      headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
+      auth: { userId: TEST_USER_PUBLIC_ID },
+      _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+    } as unknown as FastifyRequest;
+
+    await claimPreHandler(request, { sent: false } as FastifyReply);
+
+    expect(mockRedisIncr).toHaveBeenCalledTimes(1);
+    const [counterKey] = mockRedisIncr.mock.calls.at(-1) as [string];
+    expect(counterKey).toMatch(/^idempotency-claim-counter:shard:\d+$/);
   });
 
   it('onResponse releases unclaimed placeholders when handler throws (no pending completion, statusCode 500)', async () => {

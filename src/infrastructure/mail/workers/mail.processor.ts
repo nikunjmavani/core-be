@@ -1,4 +1,4 @@
-import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database-context.js';
+import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
 import { sendEmail } from '@/infrastructure/mail/mail.service.js';
 import { MAIL_QUEUE_MAX_ATTEMPTS } from '@/infrastructure/mail/queues/mail.queue.js';
@@ -17,6 +17,36 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const DEFAULT_MAIL_JOB_MAX_ATTEMPTS = MAIL_QUEUE_MAX_ATTEMPTS;
 
+/**
+ * Builds the deterministic Resend idempotency key for a mail_outbox row.
+ *
+ * @remarks
+ * - **Algorithm:** `mail-outbox-<id>` — stable across every BullMQ retry and
+ *   sweeper reclaim of the same row, so Resend collapses duplicate `emails.send`
+ *   calls into a single delivery (audit #20).
+ * - **Failure modes:** none — pure string builder.
+ * - **Side effects:** none.
+ * - **Notes:** the key is row-scoped (not attempt-scoped) on purpose; a worker
+ *   that sent then crashed before marking `sent` re-uses the same key on reclaim.
+ */
+export function buildMailOutboxIdempotencyKey(mailOutboxId: number): string {
+  return `mail-outbox-${String(mailOutboxId)}`;
+}
+
+/**
+ * Options forwarded from the BullMQ wrapper to {@link processMailOutboxJob} —
+ * job identity, propagated request id, and the attempt counters used to detect
+ * the final retry for terminal `failed` state.
+ *
+ * @remarks
+ * - **Algorithm:** `jobAttemptNumber + 1 >= maxJobAttempts` flips the processor
+ *   into "final attempt" behaviour (`markMailOutboxFailed` instead of release).
+ * - **Failure modes:** undefined attempt fields default to `0` / `MAIL_QUEUE_MAX_ATTEMPTS`
+ *   — pass the real BullMQ `attemptsMade` and `job.opts.attempts` from the worker.
+ * - **Side effects:** none — pure data carrier.
+ * - **Notes:** `requestId` is also re-parsed from the job payload so tests can
+ *   omit options entirely.
+ */
 export type ProcessMailOutboxJobOptions = {
   jobId?: string;
   requestId?: string;
@@ -26,13 +56,42 @@ export type ProcessMailOutboxJobOptions = {
   maxJobAttempts?: number;
 };
 
+/**
+ * Result of {@link processMailOutboxJob}: Resend message id on success, or
+ * `skipped: true` when the row was already `sent` / in flight from a sibling
+ * worker.
+ *
+ * @remarks
+ * - **Algorithm:** `skipped` is set whenever the claim transition returned
+ *   `already_sent` or `in_flight`; `messageId` is the Resend id either from the
+ *   fresh send or the prior `sent` row.
+ * - **Failure modes:** never returned on hard error — those throw to BullMQ.
+ * - **Side effects:** none from the type itself.
+ * - **Notes:** consumed by tests and observability assertions.
+ */
 export type ProcessMailOutboxJobResult = {
   messageId?: string;
   skipped?: boolean;
 };
 
 /**
- * Processes a single mail outbox job (idempotent when status is already `sent`).
+ * Processes one `mail/send-email` job: claims the outbox row, calls Resend via
+ * {@link sendEmail}, and finalises status.
+ *
+ * @remarks
+ * - **Algorithm:** atomic `pending → sending` claim, send through Resend, then
+ *   `markMailOutboxSent` on success. On error, releases the claim back to
+ *   `pending` for retry — except on the final attempt where the row is marked
+ *   `failed` so the DLQ hook fires.
+ * - **Failure modes:** missing outbox row throws (unrecoverable); already-sent /
+ *   in-flight short-circuit to a `skipped` result; `CircuitBreakerOpenError` is
+ *   never terminal — the claim is released so BullMQ can retry past cooldown.
+ * - **Side effects:** updates `auth.mail_outbox.status` / `sent_at` /
+ *   `resend_message_id`; sends one HTTP request to Resend per claimed attempt;
+ *   emits `mail.worker.*` structured logs.
+ * - **Notes:** idempotent — duplicate jobs for the same `mailOutboxId` resolve
+ *   to `skipped` once status is `sent`. Runs inside a `system_table` worker
+ *   context (no tenant RLS) because `auth.mail_outbox` is not tenant-scoped.
  */
 export async function processMailOutboxJob(
   jobData: MailJobData,
@@ -105,6 +164,8 @@ async function processMailOutboxJobInner(
         text: outboxRow.text_body ?? undefined,
         replyTo: outboxRow.reply_to ?? undefined,
         tags: (outboxRow.tags as { name: string; value: string }[] | null) ?? undefined,
+        idempotencyKey: buildMailOutboxIdempotencyKey(mailOutboxId),
+        requestId,
       }),
     );
 

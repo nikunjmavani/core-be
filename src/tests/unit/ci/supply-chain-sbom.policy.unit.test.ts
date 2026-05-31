@@ -26,11 +26,11 @@ describe('supply chain SBOM policy (#94 p3-sbom-syft)', () => {
 
   it('generates CycloneDX SBOM post-merge and attaches it when release-please publishes', () => {
     const postMergeWorkflow = readWorkflow('.github/workflows/post-merge-ci.yml');
-    expect(postMergeWorkflow).toContain('anchore/sbom-action@v0.24.0');
+    expect(postMergeWorkflow).toMatch(/anchore\/sbom-action@[0-9a-f]{40}/);
     expect(postMergeWorkflow).toContain('cyclonedx-json');
     expect(postMergeWorkflow).toContain('sbom.cyclonedx.json');
     expect(postMergeWorkflow).toContain('release-sbom');
-    expect(postMergeWorkflow).toContain('softprops/action-gh-release@v3');
+    expect(postMergeWorkflow).toMatch(/softprops\/action-gh-release@[0-9a-f]{40}/);
     expect(postMergeWorkflow).toContain('Release SBOM');
   });
 });

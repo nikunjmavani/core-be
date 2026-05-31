@@ -3,8 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import organizationRlsTransactionMiddleware, {
   settleAndAwaitOrganizationRlsTransaction,
   type OrganizationRlsTransactionSettlementOutcome,
-} from '@/shared/middlewares/organization-rls-transaction.middleware.js';
-import requestLifecycleMiddleware from '@/shared/middlewares/request-lifecycle.middleware.js';
+} from '@/shared/middlewares/tenant/organization-rls-transaction.middleware.js';
+import requestLifecycleMiddleware from '@/shared/middlewares/core/request-lifecycle.middleware.js';
+import {
+  type OrganizationRlsCheckoutHoldSample,
+  registerOrganizationRlsCheckoutHoldObserver,
+} from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 /**
@@ -54,7 +58,7 @@ vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => 
 
 // The lifecycle coordinator pulls in idempotency (→ redis) and the event bus. Stub them
 // out so this test stays focused on RLS commit/rollback behavior.
-vi.mock('@/shared/middlewares/idempotency.middleware.js', () => ({
+vi.mock('@/shared/middlewares/core/idempotency.middleware.js', () => ({
   default: async () => undefined,
   idempotencyOnResponse: vi.fn(async () => undefined),
 }));
@@ -460,5 +464,35 @@ describe('organization-rls-transaction.middleware', () => {
     );
     warnSpy.mockRestore();
     await scopedApplication.close();
+  });
+
+  it('records a request_transaction checkout hold-time sample after settlement', async () => {
+    const samples: OrganizationRlsCheckoutHoldSample[] = [];
+    registerOrganizationRlsCheckoutHoldObserver((sample) => {
+      samples.push(sample);
+    });
+
+    try {
+      const organizationPublicId = generatePublicId();
+      const capture: { outcome?: OrganizationRlsTransactionSettlementOutcome } = {};
+      const scopedApplication = Fastify({ logger: false });
+      scopedApplication.addHook('onRequest', (request, _reply, done) => {
+        (request as { organizationId?: string }).organizationId = organizationPublicId;
+        done();
+      });
+      await registerOrganizationRlsWithSettlementCapture(scopedApplication, capture);
+      scopedApplication.get('/probe', async () => ({ ok: true }));
+      await scopedApplication.ready();
+
+      const response = await scopedApplication.inject({ method: 'GET', url: '/probe' });
+      expect(response.statusCode).toBe(200);
+      expect(capture.outcome).toBe('committed');
+      expect(samples).toHaveLength(1);
+      expect(samples[0]?.path).toBe('request_transaction');
+      expect(samples[0]?.durationSeconds).toBeGreaterThanOrEqual(0);
+      await scopedApplication.close();
+    } finally {
+      registerOrganizationRlsCheckoutHoldObserver(null);
+    }
   });
 });

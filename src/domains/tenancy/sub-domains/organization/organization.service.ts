@@ -1,5 +1,5 @@
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
-import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.js';
+import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.constants.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { OrganizationRepository } from './organization.repository.js';
@@ -15,16 +15,59 @@ import {
   validateUploadLogo,
 } from './organization.validator.js';
 import { serializeOrganization } from './organization.serializer.js';
+import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { buildOrganizationLogoKeyPrefix } from '@/domains/upload/upload.constants.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { UploadService } from '@/domains/upload/upload.service.js';
 
+/**
+ * Optional collaborators wired into {@link OrganizationService} after the
+ * upload domain has booted, used to tombstone tenant uploads and confirm S3
+ * keys during logo attachment.
+ *
+ * @remarks
+ * - **Algorithm:** populated lazily by `wireOffboardingUploadService` so the
+ *   tenancy container can be constructed before the upload container exists.
+ * - **Failure modes:** until wired, `uploadLogo` and `delete` either throw
+ *   (logo confirmation requires the upload service) or silently skip the
+ *   upload-tombstone step.
+ * - **Side effects:** none on construction; downstream calls invoke
+ *   `UploadService.tombstoneAllByOrganizationId` and `assertKeyConfirmed`.
+ * - **Notes:** the public {@link OrganizationService.offboardingUploadService}
+ *   reference exists for composition-root assertions only.
+ */
 export type OrganizationOffboardingDependencies = {
   uploadService: UploadService;
 };
 
+/**
+ * Authoritative tenancy service for the organization aggregate — list / get /
+ * create / update / soft-delete plus logo lifecycle.
+ *
+ * @remarks
+ * - **Algorithm:** every mutation runs inside `withOrganizationDatabaseContext`
+ *   (sets `app.current_organization_id` for RLS) and reads use
+ *   `withUserDatabaseContext` to satisfy the `organizations_user_discovery`
+ *   policy. Slug uniqueness is enforced explicitly; access checks short-
+ *   circuit for global admins and otherwise require ownership or an active
+ *   membership via {@link OrganizationRepository.userCanAccessOrganization}.
+ * - **Failure modes:** `NotFoundError` for missing organizations, members,
+ *   logos, or callers; `ConflictError('errors:organizationSlugExists')` on
+ *   slug collision; `ValidationError` for bad logo keys, missing S3 objects,
+ *   or disallowed `image/svg+xml` content.
+ * - **Side effects:** S3 deletes and head-object calls via the injected
+ *   {@link ObjectStoragePort}; tombstones uploads and clears the logo URL on
+ *   organization deletion (cross-domain wiring through
+ *   {@link OrganizationOffboardingDependencies}); purges the org's permission
+ *   cache on soft-delete via {@link invalidateOrganizationPermissions}; does not
+ *   emit domain events or write audit logs directly.
+ * - **Notes:** soft-delete only — the row remains until the tombstone
+ *   retention worker hard-deletes it; offboarding S3/upload-service work runs
+ *   outside the DB context to avoid holding a transaction across HTTP.
+ */
 export class OrganizationService {
   private offboardingDependencies: OrganizationOffboardingDependencies | null = null;
   /** Public reference for composition-root assertions; populated at boot via wireOffboardingUploadService. */
@@ -131,13 +174,35 @@ export class OrganizationService {
     return this.repository.resolveUserIdByPublicId(user_public_id);
   }
 
+  /**
+   * Resolve a user's public id from their internal numeric id.
+   *
+   * @remarks
+   * - **Algorithm:** delegates to
+   *   {@link OrganizationRepository.resolveUserPublicIdByInternalId}, which
+   *   reads the active `users` row by internal id.
+   * - **Failure modes:** returns `null` when no active user matches; never
+   *   throws on a miss.
+   * - **Side effects:** single read-only Postgres lookup.
+   * - **Notes:** the inverse of {@link resolveUserInternalIdByPublicId}; used by
+   *   tenancy services that hold a membership's internal `user_id` but need the
+   *   public id to invalidate the per-user permission cache.
+   */
+  async resolveUserPublicIdByInternalId(user_internal_id: number): Promise<string | null> {
+    return this.repository.resolveUserPublicIdByInternalId(user_internal_id);
+  }
+
   async updateStripeCustomerIdForOrganization(
     organization_public_id: string,
     stripe_customer_id: string,
   ): Promise<void> {
-    const organization = await this.repository.findByPublicId(organization_public_id);
-    if (!organization) throw new NotFoundError('Organization');
-    await this.repository.updateStripeCustomerId(organization.id, stripe_customer_id);
+    // tenancy.organizations is FORCE RLS — persist the Stripe customer id under the org GUC
+    // so the update is not silently dropped when called from the payment provider outside HTTP.
+    return withOrganizationDatabaseContext(organization_public_id, async () => {
+      const organization = await this.repository.findByPublicId(organization_public_id);
+      if (!organization) throw new NotFoundError('Organization');
+      await this.repository.updateStripeCustomerId(organization.id, stripe_customer_id);
+    });
   }
 
   private isGlobalAdmin(global_role?: GlobalRole): boolean {
@@ -232,13 +297,27 @@ export class OrganizationService {
           { slug: parsed.slug },
           `Organization with slug "${parsed.slug}" already exists`,
         );
-      const created = await this.repository.create({
-        name: parsed.name,
-        slug: parsed.slug,
-        owner_user_id: ownerId,
-        created_by_user_id: ownerId,
-      });
-      return serializeOrganization(created);
+      try {
+        const created = await this.repository.create({
+          name: parsed.name,
+          slug: parsed.slug,
+          owner_user_id: ownerId,
+          created_by_user_id: ownerId,
+        });
+        return serializeOrganization(created);
+      } catch (error) {
+        // Two concurrent creates can both pass the findBySlug pre-check; the
+        // loser hits the `idx_organizations_slug` unique index. Map the
+        // Postgres unique_violation to a 409 instead of a 500.
+        if (isPostgresUniqueViolation(error)) {
+          throw new ConflictError(
+            'errors:organizationSlugExists',
+            { slug: parsed.slug },
+            `Organization with slug "${parsed.slug}" already exists`,
+          );
+        }
+        throw error;
+      }
     });
   }
 
@@ -276,6 +355,10 @@ export class OrganizationService {
     const organization = await withOrganizationDatabaseContext(public_id, async () => {
       const found = await this.repository.findByPublicId(public_id);
       if (!found) throw new NotFoundError('Organization');
+      const marked = await this.repository.markDeletionStarted(public_id);
+      if (!(marked || found.deletion_started_at)) {
+        throw new NotFoundError('Organization');
+      }
       return found;
     });
     // External I/O (S3) and the upload-service tombstone run outside the DB context.
@@ -289,6 +372,9 @@ export class OrganizationService {
       this.repository.softDelete(public_id),
     );
     if (!deleted) throw new NotFoundError('Organization');
+    // Purge every member's cached permissions for this org so access stops
+    // immediately on soft-delete rather than lingering until the cache TTL.
+    await invalidateOrganizationPermissions(public_id);
   }
 
   async uploadLogo(

@@ -74,6 +74,37 @@ describe('WebhookRepository (database)', () => {
     expect(subscribed[0]?.url).toBe('https://example.com/subscribed');
   });
 
+  it('listEnabledSubscribedToEvent paginates past the first page of webhooks', async () => {
+    const user = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+    const baseCreatedAt = Date.now();
+
+    for (let index = 0; index < 501; index += 1) {
+      const created = await repository.create({
+        organization_id: organization.id,
+        url: `https://example.com/hook-${index}-${baseCreatedAt}`,
+        encrypted_secret: 'secret',
+        events: index === 500 ? ['subscription.updated'] : ['user.created'],
+        is_enabled: index !== 0,
+        created_by_user_id: user.id,
+      });
+      const orderedCreatedAt = new Date(baseCreatedAt + index * 1_000);
+      await database
+        .update(webhooks)
+        .set({ created_at: orderedCreatedAt, updated_at: orderedCreatedAt })
+        .where(eq(webhooks.id, created.id));
+    }
+
+    const subscribed = await repository.listEnabledSubscribedToEvent(
+      organization.id,
+      'subscription.updated',
+      100,
+    );
+
+    expect(subscribed).toHaveLength(1);
+    expect(subscribed[0]?.url).toContain('hook-500-');
+  });
+
   describe('listByOrganization (keyset cursor pagination)', () => {
     async function createWebhooks(organizationId: number, userId: number, count: number) {
       const baseCreatedAt = Date.now();

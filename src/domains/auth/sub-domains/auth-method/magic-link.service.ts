@@ -1,28 +1,68 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
+import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
-import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
-import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
-import { env } from '@/shared/config/env.config.js';
-import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { MagicLinkSendResult } from '@/domains/auth/auth.types.js';
 import type { UserService } from '@/domains/user/user.service.js';
-import type { AuthSessionRepository } from '../auth-session/auth-session.repository.js';
-import type { VerificationTokenRepository } from './verification-token.repository.js';
+import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
+import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
 import { eventBus } from '@/core/events/event-bus.js';
-import { validateMagicLinkSend, validateMagicLinkVerify } from '../../auth.validator.js';
+import { validateMagicLinkSend, validateMagicLinkVerify } from '@/domains/auth/auth.validator.js';
 import {
   AUTH_EVENT,
   type MagicLinkEmailPayload,
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
+import {
+  completeFirstFactorAuth,
+  type FirstFactorAuthResult,
+} from '@/domains/auth/shared/complete-first-factor-auth.js';
 
 const MAGIC_LINK_EXPIRES_IN_MINUTES = 15;
 
+/**
+ * Issues and verifies one-shot magic-link tokens used by the signup and
+ * password-less login flows.
+ *
+ * @remarks
+ * Algorithm:
+ * - {@link MagicLinkService.send} validates the email, blocks disposable
+ *   domains, looks up the user. If the user does not exist the response is
+ *   a silent success (anti-enumeration). Otherwise it generates a 32-byte
+ *   random token, persists `sha256(token)` with a 15-min expiry, and emits
+ *   `AUTH_EVENT.MAGIC_LINK_REQUESTED` with the raw token in the payload.
+ * - {@link MagicLinkService.verify} hashes the incoming token, atomically
+ *   consumes the verification row (`UPDATE ... RETURNING` so two concurrent
+ *   verifies cannot both produce a session), looks up the user, signs a
+ *   short-lived JWT, and inserts a session row with `sha256(jwt)` as
+ *   `token_hash`.
+ *
+ * Failure modes:
+ * - Disposable email → 400 `errors:disposableEmail` from `send`.
+ * - Unknown email → silent success from `send` (no row, no event, no email).
+ * - Token expired or already consumed → 401 `errors:invalidOrExpiredMagicLink`
+ *   from `verify`.
+ * - User soft-deleted between issue and verify → 401 `errors:userNotFound`.
+ * - User suspended/locked between issue and verify → 401 `errors:accountNotActive`.
+ *
+ * Side effects:
+ * - `send` invalidates prior MAGIC_LINK tokens for the user (single live link),
+ *   emits a domain event whose handler enqueues an outbound email via
+ *   the mail outbox (`transactional-outbox` pattern).
+ * - `verify` writes a single `auth_sessions` row.
+ *
+ * Notes: raw tokens never flow back to HTTP callers — the only egress is
+ * through the email handler. Tests capture them via the event bus helper.
+ */
 export class MagicLinkService {
   constructor(
     private readonly userService: UserService,
-    private readonly sessionRepository: AuthSessionRepository,
     private readonly verificationTokenRepository: VerificationTokenRepository,
+    private readonly organizationSettingsService: OrganizationSettingsService,
+    private readonly mfaService: MfaService,
+    private readonly authSessionService: AuthSessionService,
   ) {}
 
   /**
@@ -34,19 +74,32 @@ export class MagicLinkService {
    * that event via `captureNextMagicLinkToken` in `src/tests/helpers/magic-link.helper.ts`.
    */
   async send(body: unknown, _context?: { requestId?: string }): Promise<MagicLinkSendResult> {
+    const startedAtMillis = Date.now();
     const parsed = validateMagicLinkSend(body);
     if (isDisposableEmailBlocked(parsed.email)) {
       throw new ValidationError('errors:disposableEmail', undefined, undefined, [
         { field: 'email', messageKey: 'errors:disposableEmail' },
       ]);
     }
-    const user = await this.userService.findByEmail(parsed.email);
+    const result = await this.issueMagicLinkIfUserExists(parsed.email);
+    // Both the known- and unknown-account branches return the same body; hold them to a
+    // common minimum duration so the extra token-issuing writes on the known path do not
+    // leak account existence through response latency.
+    await enforceMinimumDuration(startedAtMillis);
+    return result;
+  }
+
+  private async issueMagicLinkIfUserExists(email: string): Promise<MagicLinkSendResult> {
+    const successResult: MagicLinkSendResult = {
+      messageKey: 'success:magicLinkEmailSent',
+      expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
+    };
+    const user = await this.userService.findByEmail(email);
     if (!user) {
-      return {
-        messageKey: 'success:magicLinkEmailSent',
-        expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
-      };
+      return successResult;
     }
+    await this.verificationTokenRepository.invalidateAllForUser(user.id, 'MAGIC_LINK');
+
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRES_IN_MINUTES * 60_000);
@@ -59,7 +112,7 @@ export class MagicLinkService {
       expiresAt,
     );
 
-    await eventBus.emit({
+    await eventBus.emitStrict({
       type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
       payload: {
         email: user.email,
@@ -69,18 +122,15 @@ export class MagicLinkService {
       timestamp: new Date(),
     });
 
-    return {
-      messageKey: 'success:magicLinkEmailSent',
-      expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
-    };
+    return successResult;
   }
 
-  /** Verify magic link token, create session, return JWT + session_public_id. */
+  /** Verify magic link token; returns MFA challenge or access token + session. */
   async verify(
     body: unknown,
     ipAddress: string,
     userAgent?: string,
-  ): Promise<{ access_token: string; session_public_id: string }> {
+  ): Promise<FirstFactorAuthResult> {
     const parsed = validateMagicLinkVerify(body);
     const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
     /** Atomic UPDATE prevents two concurrent verifies from both producing a session. */
@@ -90,25 +140,22 @@ export class MagicLinkService {
     }
     const user = await this.userService.findById(record.user_id);
     if (!user) throw new UnauthorizedError('errors:userNotFound');
+    assertUserAccountActive(user.status);
 
-    const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;
-    const expiresAt = new Date(Date.now() + sessionMaxAgeDays * 86_400_000);
-
-    const jsonWebToken = await signAccessToken({
-      userId: user.public_id,
-      role: resolveAccessTokenRoleForUser(user.email, user.status),
+    return completeFirstFactorAuth({
+      user: {
+        id: user.id,
+        public_id: user.public_id,
+        email: user.email,
+        status: user.status,
+        is_email_verified: user.is_email_verified,
+        is_mfa_enabled: user.is_mfa_enabled,
+      },
+      ipAddress,
+      userAgent,
+      organizationSettingsService: this.organizationSettingsService,
+      mfaService: this.mfaService,
+      authSessionService: this.authSessionService,
     });
-
-    const jsonWebTokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
-    const session = await this.sessionRepository.create(
-      omitUndefined({
-        user_id: user.id,
-        token_hash: jsonWebTokenHash,
-        ip_address: ipAddress,
-        user_agent: userAgent,
-        expires_at: expiresAt,
-      }),
-    );
-    return { access_token: jsonWebToken, session_public_id: session.public_id };
   }
 }

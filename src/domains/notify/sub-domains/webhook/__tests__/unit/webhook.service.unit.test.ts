@@ -15,19 +15,23 @@ import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { WebhookService } from '@/domains/notify/sub-domains/webhook/webhook.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.repository.js';
-import type { WebhookDeliveryAttemptRepository } from '@/domains/notify/sub-domains/webhook/webhook-delivery-attempt.repository.js';
+import type { WebhookDeliveryAttemptRepository } from '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery-attempt.repository.js';
 import type * as FieldSecretEncryptionModule from '@/shared/utils/security/field-secret-encryption.util.js';
 
-vi.mock('@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js', () => ({
-  emitWebhookDeliveryRequested: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('@/shared/utils/security/webhook-url.util.js', () => ({
-  validateWebhookUrl: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock(
+  '@/domains/notify/sub-domains/webhook/webhook-delivery/events/webhook-delivery-emit.js',
+  () => ({
+    emitWebhookDeliveryRequested: vi.fn().mockResolvedValue(undefined),
+  }),
+);
 
 vi.mock('@/shared/utils/security/webhook-outbound-fetch.util.js', () => ({
   createPinnedWebhookFetch: createPinnedWebhookFetchMock,
+  resolveAndPinWebhookUrl: vi.fn().mockResolvedValue({
+    parsed: new URL('https://example.com/hook'),
+    pinnedAddress: '93.184.216.34',
+    port: 443,
+  }),
 }));
 
 vi.mock('@/shared/utils/security/field-secret-encryption.util.js', async (importOriginal) => ({
@@ -255,7 +259,7 @@ describe('WebhookService', () => {
 
   it('requestWebhookDelivery emits delivery event with webhook payload', async () => {
     const { emitWebhookDeliveryRequested } = await import(
-      '@/domains/notify/sub-domains/webhook/events/webhook-delivery-emit.js'
+      '@/domains/notify/sub-domains/webhook/webhook-delivery/events/webhook-delivery-emit.js'
     );
     await service.requestWebhookDelivery({
       webhookId: 2,
@@ -281,6 +285,35 @@ describe('WebhookService', () => {
     });
 
     expect(requestWebhookDeliverySpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('dispatchOrganizationWebhooks isolates a single failing endpoint (best-effort)', async () => {
+    vi.mocked(webhookRepository.listEnabledSubscribedToEvent).mockResolvedValue([
+      { id: 2, is_enabled: true, events: ['subscription.updated'] },
+      { id: 3, is_enabled: true, events: ['subscription.updated'] },
+    ] as never);
+    const requestWebhookDeliverySpy = vi
+      .spyOn(service, 'requestWebhookDelivery')
+      .mockImplementation(async ({ webhookId }) => {
+        if (webhookId === 2) throw new Error('attempt insert failed');
+      });
+
+    await expect(
+      service.dispatchOrganizationWebhooks(1, 'subscription.updated', { subscription_id: 'sub_1' }),
+    ).resolves.toBeUndefined();
+    expect(requestWebhookDeliverySpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('dispatchOrganizationWebhooks rethrows when every endpoint fails (retryable)', async () => {
+    vi.mocked(webhookRepository.listEnabledSubscribedToEvent).mockResolvedValue([
+      { id: 2, is_enabled: true, events: ['subscription.updated'] },
+      { id: 3, is_enabled: true, events: ['subscription.updated'] },
+    ] as never);
+    vi.spyOn(service, 'requestWebhookDelivery').mockRejectedValue(new Error('redis down'));
+
+    await expect(
+      service.dispatchOrganizationWebhooks(1, 'subscription.updated', { subscription_id: 'sub_1' }),
+    ).rejects.toThrow('redis down');
   });
 
   it('update encrypts secret when provided in body', async () => {

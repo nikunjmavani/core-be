@@ -1,14 +1,14 @@
 import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import * as logger from '../common/logger.js';
+import * as logger from '@tooling/setup/common/logger.js';
 import {
   ensureEnvSetupTemplate,
   reloadSecrets,
   isSecretFilled,
   getSecretsPath,
-} from '../common/secrets.js';
-import { hasGithubToken } from '../common/secrets.js';
-import type { SetupConfig } from '../common/types.js';
+} from '@tooling/setup/common/secrets.js';
+import { hasGithubToken } from '@tooling/setup/common/secrets.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 function openBrowser(url: string): void {
   const platform = process.platform;
@@ -62,22 +62,6 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
         `6. In ${secretsPath} set: NEON_API_KEY=<paste-here>`,
         '',
         '7. Save the file',
-      ],
-    },
-    {
-      providerName: 'Upstash Redis',
-      enabledCheck: (configuration) => configuration.providers.upstash.enabled,
-      secretsCheck: (secrets) =>
-        isSecretFilled(secrets.upstash.email) && isSecretFilled(secrets.upstash.apiKey),
-      browserUrls: ['https://console.upstash.com/account/api'],
-      instructions: [
-        '1. Log in to Upstash (or sign up at upstash.com)',
-        '2. Open Account → Management API and click "Create API key"',
-        '3. Copy your account email and the new API key',
-        `4. In ${secretsPath} set: UPSTASH_EMAIL=<email>  UPSTASH_API_KEY=<key>`,
-        '5. setup will create one Redis database per environment and store its URL in state',
-        '',
-        '6. Save the file',
       ],
     },
     {

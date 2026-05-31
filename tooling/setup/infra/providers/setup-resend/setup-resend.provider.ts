@@ -1,11 +1,11 @@
-import * as logger from '../../../common/logger.js';
-import { isSecretFilled } from '../../../common/secrets.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import type {
   SetupSecrets,
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 export async function provision(secrets: SetupSecrets): Promise<ProviderResult> {
   const apiKey = secrets.resend.apiKey;

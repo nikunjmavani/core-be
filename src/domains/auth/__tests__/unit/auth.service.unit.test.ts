@@ -3,7 +3,7 @@ import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { AuthService } from '@/domains/auth/auth.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
-import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/mfa.service.js';
+import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
@@ -14,6 +14,7 @@ vi.mock('@/shared/utils/text/email.util.js', () => ({
 vi.mock('@/shared/utils/security/password.util.js', () => ({
   verifyPassword: vi.fn().mockResolvedValue({ valid: true, needsRehash: false }),
   hashPassword: vi.fn().mockResolvedValue('new-hash'),
+  DUMMY_ARGON2_HASH: '$argon2id$dummy',
 }));
 
 vi.mock('@/shared/utils/security/jwt.util.js', () => ({
@@ -22,6 +23,10 @@ vi.mock('@/shared/utils/security/jwt.util.js', () => ({
 
 vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
   resolveAccessTokenRoleForUser: vi.fn().mockResolvedValue('USER'),
+}));
+
+vi.mock('@/shared/utils/auth/recent-step-up.util.js', () => ({
+  recordRecentStepUp: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
@@ -56,7 +61,10 @@ describe('AuthService', () => {
   } as unknown as UserService;
 
   const authSessionService = {
-    createSessionForUser: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
+    createSessionForUser: vi.fn().mockResolvedValue({
+      public_id: 'session_public',
+      refresh_secret: 'refresh-secret',
+    }),
     revokeSessionByAccessToken: vi.fn().mockResolvedValue(undefined),
     findActiveSessionByPublicId: vi.fn().mockResolvedValue({
       public_id: 'session_public',
@@ -65,6 +73,7 @@ describe('AuthService', () => {
       revoked_at: null,
     }),
     rotateSessionTokenHash: vi.fn().mockResolvedValue(undefined),
+    refreshSessionCredentials: vi.fn().mockResolvedValue({ refresh_secret: 'new-refresh-secret' }),
   } as unknown as AuthSessionService;
 
   const mfaService = {
@@ -134,14 +143,42 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
-  it('login rejects locked account', async () => {
+  it('runs a dummy password verification for unknown emails to equalize login timing (#23)', async () => {
+    const { verifyPassword, DUMMY_ARGON2_HASH } = await import(
+      '@/shared/utils/security/password.util.js'
+    );
+    vi.mocked(userService.findByEmail).mockResolvedValue(null);
+    await expect(
+      service.login({ email: 'unknown@example.com', password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(verifyPassword).toHaveBeenCalledWith('WrongPassword1!', DUMMY_ARGON2_HASH);
+  });
+
+  it('login rejects a locked account only when the password is also wrong', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue({
       ...user,
       account_locked_until: new Date(Date.now() + 60_000),
     } as never);
+    const { verifyPassword } = await import('@/shared/utils/security/password.util.js');
+    vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
     await expect(
       service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('login lets a correct password bypass an active lockout (no victim-account DoS)', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue({
+      ...user,
+      failed_login_count: 10,
+      account_locked_until: new Date(Date.now() + 60_000),
+    } as never);
+    const result = await service.login(
+      { email: user.email, password: 'ValidPassword12!' },
+      '127.0.0.1',
+    );
+    expect('access_token' in result && result.access_token).toBe('jwt-access-token');
+    // The successful login lifts the lock and clears the failure counter for the owner.
+    expect(userService.updateLoginAttempt).toHaveBeenCalledWith(user.public_id, 0, null);
   });
 
   it('allows login when account lock has expired', async () => {
@@ -162,8 +199,13 @@ describe('AuthService', () => {
   });
 
   it('refreshToken issues new jwt for valid session', async () => {
-    const result = await service.refreshToken('session_public');
+    const result = await service.refreshToken({
+      sessionPublicId: 'session_public',
+      refreshSecret: 'refresh-secret',
+    });
     expect(result.access_token).toBe('jwt-access-token');
+    expect(result.refresh_secret).toBe('new-refresh-secret');
+    expect(authSessionService.refreshSessionCredentials).toHaveBeenCalled();
   });
 
   it('increments failed attempts without lockout below the maximum threshold', async () => {
@@ -191,7 +233,9 @@ describe('AuthService', () => {
 
   it('refreshToken rejects missing session', async () => {
     vi.mocked(authSessionService.findActiveSessionByPublicId).mockResolvedValue(null);
-    await expect(service.refreshToken('missing')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(
+      service.refreshToken({ sessionPublicId: 'missing', refreshSecret: 'refresh-secret' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('refreshToken rejects expired sessions and inactive users', async () => {
@@ -201,7 +245,9 @@ describe('AuthService', () => {
       expires_at: new Date(Date.now() - 1000),
       revoked_at: null,
     } as never);
-    await expect(service.refreshToken('session_public')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(
+      service.refreshToken({ sessionPublicId: 'session_public', refreshSecret: 'refresh-secret' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
 
     vi.mocked(authSessionService.findActiveSessionByPublicId).mockResolvedValue({
       public_id: 'session_public',
@@ -210,7 +256,9 @@ describe('AuthService', () => {
       revoked_at: null,
     } as never);
     vi.mocked(userService.findById).mockResolvedValue({ ...user, status: 'SUSPENDED' } as never);
-    await expect(service.refreshToken('session_public')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(
+      service.refreshToken({ sessionPublicId: 'session_public', refreshSecret: 'refresh-secret' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('login rehashes password when verifyPassword reports needsRehash', async () => {
@@ -262,6 +310,30 @@ describe('AuthService', () => {
     expect(userService.updateLoginAttempt).not.toHaveBeenCalled();
   });
 
+  it('login rejects a suspended user before issuing any session (bug 31)', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue({
+      ...user,
+      status: 'SUSPENDED',
+    } as never);
+    await expect(
+      service.login({ email: user.email, password: 'ValidPassword12!' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(authSessionService.createSessionForUser).not.toHaveBeenCalled();
+    expect(mfaService.createMfaSession).not.toHaveBeenCalled();
+  });
+
+  it('login rejects a suspended user even when MFA would otherwise be required (bug 31)', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue({
+      ...user,
+      status: 'SUSPENDED',
+      is_mfa_enabled: true,
+    } as never);
+    await expect(
+      service.login({ email: user.email, password: 'ValidPassword12!' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(mfaService.createMfaSession).not.toHaveBeenCalled();
+  });
+
   it('login rejects users without password authentication enabled', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue({
       ...user,
@@ -274,7 +346,9 @@ describe('AuthService', () => {
 
   it('refreshToken rejects when user record is missing', async () => {
     vi.mocked(userService.findById).mockResolvedValue(null);
-    await expect(service.refreshToken('session_public')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(
+      service.refreshToken({ sessionPublicId: 'session_public', refreshSecret: 'refresh-secret' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('login resets failed login count after successful authentication', async () => {

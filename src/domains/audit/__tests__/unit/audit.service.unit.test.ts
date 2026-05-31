@@ -20,6 +20,19 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
+const globalAdminContextMock = vi.hoisted(() =>
+  vi.fn((callback: () => Promise<unknown>) => callback()),
+);
+
+/**
+ * `listForAdmin` wraps the read in `withGlobalAdminDatabaseContext`, which opens a real
+ * transaction with `SET LOCAL app.global_admin = true`. Run the callback directly so the
+ * unit test exercises service intent (and asserts the wrapper is used) without Postgres.
+ */
+vi.mock('@/infrastructure/database/contexts/global-admin-database.context.js', () => ({
+  withGlobalAdminDatabaseContext: globalAdminContextMock,
+}));
+
 describe('AuditService', () => {
   const repository = {
     insert: vi.fn().mockResolvedValue(undefined),
@@ -93,18 +106,64 @@ describe('AuditService', () => {
     expect(result.next_cursor).toBeNull();
   });
 
-  it('list omits organization id when organization not found', async () => {
+  it('list returns empty page when organization public id is unknown without total by default', async () => {
     vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
-    await service.list({ limit: 20, organization_id: generatePublicId() });
-    const [filters] = vi.mocked(repository.findWithFilters).mock.calls[0] ?? [];
-    expect(filters).not.toHaveProperty('organization_id');
+    const result = await service.list({ limit: 20, organization_id: generatePublicId() });
+    expect(repository.findWithFilters).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      items: [],
+      total: null,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    });
   });
 
-  it('list omits actor id when user not found', async () => {
+  it('list returns empty page with total zero when organization public id is unknown and include_total=true', async () => {
+    vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
+    const result = await service.list({
+      limit: 20,
+      organization_id: generatePublicId(),
+      include_total: 'true',
+    });
+    expect(repository.findWithFilters).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      items: [],
+      total: 0,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    });
+  });
+
+  it('list returns empty page when actor public id is unknown without total by default', async () => {
     vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
-    await service.list({ limit: 20, actor_user_id: generatePublicId() });
-    const [filters] = vi.mocked(repository.findWithFilters).mock.calls[0] ?? [];
-    expect(filters).not.toHaveProperty('actor_user_id');
+    const result = await service.list({ limit: 20, actor_user_id: generatePublicId() });
+    expect(repository.findWithFilters).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      items: [],
+      total: null,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    });
+  });
+
+  it('list returns empty page with total zero when actor public id is unknown and include_total=true', async () => {
+    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
+    const result = await service.list({
+      limit: 20,
+      actor_user_id: generatePublicId(),
+      include_total: 'true',
+    });
+    expect(repository.findWithFilters).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      items: [],
+      total: 0,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    });
   });
 
   it('list returns empty page when no rows', async () => {
@@ -117,6 +176,19 @@ describe('AuditService', () => {
     const result = await service.list({ limit: 20 });
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
+  });
+
+  it('listForAdmin runs the listing inside the global-admin RLS context', async () => {
+    vi.mocked(repository.findWithFilters).mockResolvedValue({
+      items: [{ action: 'user.login' }],
+      total: 1,
+      hasMore: false,
+      nextCursor: null,
+    } as never);
+    const result = await service.listForAdmin({ limit: 20 });
+    expect(globalAdminContextMock).toHaveBeenCalledTimes(1);
+    expect(repository.findWithFilters).toHaveBeenCalled();
+    expect(result.total).toBe(1);
   });
 
   it('list skips the total when include_total=false and derives has_more', async () => {

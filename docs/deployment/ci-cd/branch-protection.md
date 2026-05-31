@@ -43,16 +43,19 @@ GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `n
 | ------------- | ---------------- | ----------- | --------------------- |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Lint` | `PR CI / Lint` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Typecheck` | `PR CI / Typecheck` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Static sync` | `PR CI / Static sync` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Unit + global (pull_request)` | `PR CI / Unit + global (pull_request)` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Migration lint` | `PR CI / Migration lint` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Build verify` | `PR CI / Build verify` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security scan` | `PR CI / Security scan` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security audit` | `PR CI / Security audit` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security secrets` | `PR CI / Security secrets` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security SAST` | `PR CI / Security SAST` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Contract + property` | `PR CI / Contract + property` |
 | [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR Governance` | `Checks` | `PR Governance / Checks` |
 
 ### Same checks on both branches
 
-Require **all eight** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks). Full DB integration and chaos suites are **local-only** (`pnpm test:integration`, `pnpm test:chaos`).
+Require **all eleven** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks). Full DB integration and chaos suites are **local-only** (`pnpm test:integration`, `pnpm test:chaos`).
 
 ### Skipped PR CI jobs on docs-only pull requests
 
@@ -65,7 +68,7 @@ When the PR touches **src** but not only docs, these jobs may still skip individ
 | `Unit + global (pull_request)` | No `src-code` or `ci-config` paths |
 | `Build verify` | No `src-code`, `docker`, or `ci-config` paths |
 
-`Lint`, `Typecheck`, `Migration lint`, `Security scan`, and `Contract + property` run on every non-docs-only PR.
+`Lint`, `Typecheck`, `Static sync`, `Migration lint`, `Security audit`, `Security secrets`, `Security SAST`, and `Contract + property` run on every non-docs-only PR.
 
 ### Advisory PR jobs (not in rulesets)
 
@@ -126,7 +129,7 @@ Requires [`gh`](https://cli.github.com/) authenticated with **`repo`** scope (an
 
 ### One-step init (recommended)
 
-Use [`tooling/setup/github-init.ts`](../../../tooling/setup/github-init.ts). It derives the target branches from the committed rulesets (`refs/heads/<branch>` entries in `conditions.ref_name.include`), ensures each branch exists on the remote (creating missing branches from the default branch's SHA via `POST /repos/{repo}/git/refs`), `POST`s / `PUT`s every ruleset, and idempotently creates the GitHub Environments declared in [`.github/environments/*.json`](../../../.github/environments/). Safe to run repeatedly.
+Use [`tooling/setup/github/init.ts`](../../../tooling/setup/github/init.ts). It derives the target branches from the committed rulesets (`refs/heads/<branch>` entries in `conditions.ref_name.include`), ensures each branch exists on the remote (creating missing branches from the default branch's SHA via `POST /repos/{repo}/git/refs`), `POST`s / `PUT`s every ruleset, and idempotently creates the GitHub Environments declared in [`.github/environments/*.json`](../../../.github/environments/). Safe to run repeatedly.
 
 ```bash
 pnpm github:sync --check   # read-only: consistency + drift (missing branches, rulesets, environments)

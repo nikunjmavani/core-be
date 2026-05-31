@@ -45,8 +45,8 @@ Services and validators throw typed errors with a **messageKey** (for example `e
 
 ## Middleware and request
 
-- **i18n middleware** (`src/shared/middlewares/i18n.middleware.ts`): Runs on every request (`onRequest`), sets `request.t`, `request.language`, and prefers `Accept-Language` when present.
-- **Ignored routes**: `/health`, `/health`, `/api/v1/mcp` (no translation; fallback messages used when needed).
+- **i18n middleware** (`src/shared/middlewares/core/i18n.middleware.ts`): Runs on every request (`onRequest`), sets `request.t`, `request.language`, and prefers `Accept-Language` when present.
+- **Ignored routes**: `/livez`, `/readyz`, `/api/v1/mcp` (no translation; fallback messages used when needed).
 
 ## Locale key parity
 

@@ -15,23 +15,11 @@ For **any new requirement** (new domain, routes, worker, schema, etc.), use the 
 
 ## Naming Conventions (Non-Negotiable)
 
-### Full Names Only — No Short Names
+Detail and examples live in scoped Cursor rules (auto-attach when editing `src/**/*.ts`):
 
-- **Never use abbreviations** in variable names, file names, or identifiers.
-- Examples: `organization` not `org`, `repository` not `repo`, `identifier` not `id` when standalone, `request` not `req` (except Fastify framework convention), `database` not `db`.
-- Framework conventions (e.g. `req`, `reply` in Fastify handlers) may remain.
-
-### Sub-Domain Directory Names — Always Prefix with Domain
-
-- Sub-domain folder **must** include the domain/resource prefix to avoid ambiguity.
-- Examples: `user-settings` (under user), `organization-settings` (under organization), `member-role-permission` (under member-roles), `webhook-event` (under webhook).
-
-### Object Parameters Only — Outside Repositories
-
-- Any function or method authored in `src/**/*.ts` with **two or more inputs** must take a **single named options object** (interface/type + destructuring).
-- **Exempt files**: `*.repository.ts` and `*.repository.unit.test.ts` keep positional params (e.g. `findByUserAndOrganization(user_id, organization_id)`).
-- **Exempt signatures** (framework-mandated, stay positional): Fastify handlers `(request, reply)`, Fastify plugins `(app, options)`, BullMQ processors `(job)` / `(job, token)`, DI constructors in `*.container.ts`, event-bus subscribers, `Array.sort` comparators, Vitest callbacks (`describe(name, fn)`, `it(name, fn)`), Zod refine callbacks.
-- See `.cursor/rules/object-params.mdc` for the full guide and worked examples.
+- **[full-names-only.mdc](.cursor/rules/full-names-only.mdc)** — no abbreviations in identifiers (`organization` not `org`; Fastify `req`/`reply` exempt)
+- **[object-params.mdc](.cursor/rules/object-params.mdc)** — options objects for 2+ params; repos and framework callbacks exempt
+- Sub-domain folders **must** prefix with domain/resource name (`organization-settings`, `webhook-event`, …)
 
 ## Domain Structure
 
@@ -155,6 +143,7 @@ src/infrastructure/
     idempotency-cardinality.constants.ts  # BullMQ queue name for idempotency Redis cardinality sampling
     idempotency-cardinality.service.ts    # Bounded SCAN + threshold log / Sentry
     idempotency-cardinality.worker.ts     # Worker processor (repeatable schedule in queue/scheduler.ts)
+    redis-saturation/                     # Redis used_memory/maxmemory ratio + BullMQ waiting-depth sampling (log + Sentry; sampled by dlq-depth worker)
   mcp/
     mcp-server.ts             # MCP (ENABLE_MCP_SERVER, dynamic import; @modelcontextprotocol/sdk optionalDependency): POST /api/v1/mcp
 ```
@@ -246,24 +235,26 @@ Billing event helpers and types live with the billing sub-domains that emit them
 - **Serializer**: Function-based response shaping in `.serializer.ts` (e.g. `serializeOrganization(row)`)
 - **Containers**: `<domain>.container.ts` handles DI; export services for routes/controllers. Multi-sub-domain domains (auth, user, billing, tenancy) wire sub-domain services via the container — controllers call the appropriate service directly.
 - **Errors**: Typed errors from `src/shared/errors/index.ts`
-- **Responses**: Helpers from `src/shared/utils/http/response.util.ts` (`successResponse`, `paginatedResponse`) + global formatting in `src/shared/middlewares/error-handler.middleware.ts`
+- **Responses**: Helpers from `src/shared/utils/http/response.util.ts` (`successResponse`, `paginatedResponse`) + global formatting in `src/shared/middlewares/core/error-handler.middleware.ts`
 - **i18n**: All user-facing response messages (error `detail`, validation `errors[].message`, success `message`) go through i18next. Use translation keys in errors and success payloads; error handler and controllers translate with `request.t()`. English is the default locale; add new keys to `src/shared/locales/en/` first, then other locales. See **`docs/reference/runtime/internationalization.md`**.
 - **Request helpers**: `src/shared/utils/http/request.util.ts` exports `getRequestIdentifier(request)` and `requireAuth(request)` — use these in ALL controllers.
-- **Auth**: Fastify auth plugin in `src/shared/middlewares/auth.middleware.ts`, decorates `request.auth` (JWT RS256 via `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`). Session cookie (`session_id`) CSRF model and Origin checks for refresh: **`docs/reference/security/csrf-and-session-cookies.md`**
-- **Tenant**: `X-Organization-Id` header → `request.organizationId` via `src/shared/middlewares/tenant.middleware.ts`
-- **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call or import `getRequestDatabase()` (enforced by global tests and code review; do not import `request-database.context` under `*.worker.ts` / `*.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/retention-database.context.ts` and migration `20260530000001_global_retention_cleanup_rls.sql`.
+- **Auth**: Fastify auth plugin in `src/shared/middlewares/core/auth.middleware.ts`, decorates `request.auth` (JWT RS256 via `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`). Session cookie (`session_id`) CSRF model and Origin checks for refresh: **`docs/reference/security/csrf-and-session-cookies.md`**
+- **Tenant**: `X-Organization-Id` header → `request.organizationId` via `src/shared/middlewares/tenant/tenant.middleware.ts`
+- **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call or import `getRequestDatabase()` (enforced by global tests and code review; do not import `request-database.context` under `*.worker.ts` / `*.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/contexts/retention-database.context.ts`; the `app.global_retention_cleanup` RLS bypass clauses are defined in the consolidated baseline migration `migrations/00000000000000_init.sql`.
 - **DB**: `src/infrastructure/database/connection.ts` singleton + Drizzle queries in repositories; repositories may extend `src/infrastructure/database/base-repository.ts` for `paginate()`
-- **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) are gitignored. Hosted environment mapping lives in `.github/sync.config.json` (edit by hand when adding/removing environments). Scaffold and push with `pnpm github:sync`. Consistency and remote drift: `pnpm github:sync --check`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'development'}`.
+- **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) and `.env.local` are gitignored. Hosted environment mapping lives in `tooling/setup/setup.config.json` (canonical); `.github/sync.config.json` is generated via `pnpm tool:generate-project-identity`. Scaffold and push with `pnpm github:sync`. Consistency and remote drift: `pnpm github:sync --check`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'development'}` then applies `.env.local` as an override (non-production only, gitignored, machine-specific — point `DATABASE_URL` / `REDIS_URL` at your local Docker Compose stack without editing `.env.development`).
 
 ## Dependency Rules
 
 - HTTP controllers may import: services (or container deps), `@/shared/utils/http/request.util.js`, `@/shared/utils/http/response.util.js`, shared errors
-- Services may import: own domain repositories, own domain validators, own domain types, shared errors, `src/core/events/event-bus.ts`, `src/shared/utils/infrastructure/logger.util.ts`
-- Services may import other domains’ **services** for cross-domain reads/writes. Cross-domain **repository** imports from services are forbidden.
-- Repositories may import: DB connection, schema, own domain types; may extend BaseRepository. Repositories may import other domains’ **schemas** for joins only (same bounded context or documented exception).
-- **Documented exception**: `user-data-export` may use direct DB + cross-domain schema reads for GDPR export until refactored.
+- Services may import: **same-domain** repositories, own validators/types, shared errors, `eventBus`, `logger`. For **cross-domain** reads/writes, import the other domain's **service** only — never its repository or schema.
+- Repositories may import: DB connection, schema, own domain types; may extend BaseRepository. Repositories may import other domains' **schemas** for joins only (same bounded context or documented exception).
 - Containers may import: own domain repositories, services. Accept cross-domain deps as parameters. Export services for route registration.
 - Routes may import: own domain controllers, container types. Must use `FastifyPluginAsync` pattern.
+
+### Import paths
+
+See **[import-paths.mdc](.cursor/rules/import-paths.mdc)** — `@/` in `src/`, `@tooling/` in tooling, same-folder `./` only, never `../`. Enforced by [`import-paths.global.test.ts`](src/tests/global/import-paths.global.test.ts).
 
 ## Drizzle ORM Conventions
 
@@ -287,11 +278,26 @@ This repo uses **Context7 MCP** for up-to-date, version-specific documentation. 
 
 When **code or architecture changes**, consult **`.cursor/skills/skill-index/SKILL.md` first** — it maps what changed to which skill(s) to run (no duplicate invocations).
 
-**Enforcement:** Agent skills generate/fix artifacts once → pre-commit (`lint-staged`, `typecheck`, `validate:domain`) → CI (`pnpm validate`, `routes:catalog:check`, env-example sync).
+**Enforcement:** Agent skills generate/fix artifacts once → pre-commit (`lint-staged`, `typecheck`, `validate:domain`, `tsdoc:check`) → CI (`pnpm validate`, `routes:catalog:check`, `tsdoc:check`, env-example sync).
 
 **Human docs** (when layout changes): `CLAUDE.md`, `README.md`, `.cursor/rules/`, skills — via **structure-maintainer**. Hand-written `docs/**/*.md` — via **docs-maintainer**.
 
 All skills live under `.cursor/skills/`; the skill-index trigger map and auto-trigger rules table are the canonical list.
+
+### In-source documentation system
+
+Every directory under `src/` participates in the in-source documentation system. There are four layers, each with a single source of truth — there is intentionally no auto-generated `DOCS.md` aggregator.
+
+| Layer | File | Owner skill |
+| --- | --- | --- |
+| System narratives | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | **system-narrative-maintainer** |
+| Per-folder overviews (hand-written) | `src/<folder>/OVERVIEW.md` at meaningful boundaries | **overview-doc-maintainer** |
+| TSDoc on exports (canonical) | every `*.ts` file's `export <kind> <name>` declaration | **tsdoc-export-guard** |
+| Route schema (drives OpenAPI) | `schema: { summary, description, tags }` on Fastify route registrations | **route-schema-doc-guard** |
+
+The hard gate is `pnpm tsdoc:check` — a **budget-driven ratchet** at [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json). Counts of `MISSING_DESCRIPTION` and `MISSING_REMARKS` may decrease but may not increase; the eventual target is 0/0. Runs on pre-commit (step 4d) and CI (`ci:local`, `ci:quality`).
+
+See [docs/reference/architecture/documentation-system.md](docs/reference/architecture/documentation-system.md) for the full system, including why the auto-generated DOCS.md aggregator was retired.
 
 ## Testing
 
@@ -303,8 +309,8 @@ All skills live under `.cursor/skills/`; the skill-index trigger map and auto-tr
   - **Domain factories**: `src/domains/<domain>/__tests__/factories/` when helpers span sub-domains (e.g. `tenancy/__tests__/factories/permission.factory.ts`)
   - **Sub-domain unit**: `sub-domains/<resource>/__tests__/unit/*.validator.test.ts` (or nested: `sub-domains/<parent>/<child>/__tests__/unit/`)
   - **Sub-domain e2e** (when split from monolith): `sub-domains/<parent>/<child>/__tests__/<child>.test.ts` (e.g. organization-api-key)
-  - **Event handlers / emit**: `sub-domains/<resource>/events/__tests__/` (register leaf handlers only in tests)
-- **Commands**: `pnpm test:unit` (unit + `events/__tests__`), `pnpm test:e2e` (excludes `__tests__/unit/` and `events/__tests__`), `pnpm test` (all)
+  - **Event handlers / emit**: `sub-domains/<resource>/__tests__/unit/events/` (register leaf handlers only in tests; never `events/__tests__/`)
+- **Commands**: `pnpm test:unit` (unit + `__tests__/unit/events/`), `pnpm test:e2e` (excludes `__tests__/unit/`), `pnpm test` (all)
 - **Detail**: `.cursor/skills/test-generator/SKILL.md`, `.cursor/rules/testing-conventions.mdc`
 - **Chaos suite**: `src/tests/chaos/**/*.chaos.test.ts` — see **`docs/reference/reliability/chaos-testing.md`**
 - **Contract tests**: `src/tests/contract/**` — see **`docs/reference/testing/contract-tests.md`**

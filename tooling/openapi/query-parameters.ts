@@ -1,6 +1,6 @@
 import type { ZodTypeAny } from 'zod';
 import { toJSONSchema } from 'zod';
-import { enrichSchema } from '@tooling/openapi/enricher.js';
+import { enrichSchema } from '@tooling/openapi/enrichers/index.js';
 
 /**
  * Converts a Zod object query DTO to OpenAPI 3 query parameters.

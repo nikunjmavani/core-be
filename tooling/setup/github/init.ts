@@ -31,7 +31,7 @@
 
 import { execSync } from 'node:child_process';
 
-import { loadConfig } from '../common/config.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
 import { runGhAuthPreflight } from './auth-preflight.js';
 import {
   getGithubSyncBranches,
@@ -313,15 +313,15 @@ export interface RunGithubInitResult {
 }
 
 /**
- * Run the init pipeline. Exported so `github-sync.ts` can compose it without
- * spawning a subprocess.
+ * Run the init pipeline. Exported so `tooling/setup/github/sync.ts` can compose
+ * it without spawning a subprocess.
  */
 export async function runGithubInit(args: {
   readonly mode: SyncMode;
   readonly purpose?: string;
   /** Skip gh auth preflight (e.g. setup:infra with GITHUB_TOKEN only). */
   readonly skipPreflight?: boolean;
-  /** When true, scaffold local IaC on sync mode (default). github-sync.ts passes false — it scaffolds first. */
+  /** When true, scaffold local IaC on sync mode (default). github/sync.ts passes false — it scaffolds first. */
   readonly scaffoldOnSync?: boolean;
 }): Promise<RunGithubInitResult> {
   const config = loadConfig();

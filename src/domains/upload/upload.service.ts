@@ -16,18 +16,77 @@ import {
   UPLOAD_PURPOSE_CONFIG,
   UPLOAD_PURPOSES,
   PRESIGNED_URL_EXPIRY_SECONDS,
+  UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE,
+  UPLOAD_OFFBOARDING_DELETE_CONCURRENCY,
   UPLOAD_STATUS,
   UPLOAD_TARGETS,
   buildOrganizationLogoKeyPrefix,
   buildUserAvatarKeyPrefix,
 } from './upload.constants.js';
-import { getCanonicalExtensionForContentType } from './upload-content-type.util.js';
+import { getCanonicalExtensionForContentType } from './utils/upload-content-type.util.js';
+import { isSvgContentType, sanitizeSvgBuffer } from './utils/upload-svg.util.js';
+import {
+  isMagicByteVerifiable,
+  verifyFileMagicBytes,
+} from '@/shared/utils/validation/file-magic.util.js';
 import { UPLOAD_PERMISSIONS } from './upload.permissions.js';
 import type { CreateUploadInput, UploadCreateOutput, UploadDetailOutput } from './upload.types.js';
 import type { UploadRepository, UploadRow } from './upload.repository.js';
 import { serializeUploadCreate, serializeUploadDetail } from './upload.serializer.js';
 import { validateUploadPublicIdParam } from './upload.validator.js';
 
+/** Inputs for {@link UploadService}'s private atomic PENDING-slot reservation. */
+interface ReservePendingUploadSlotParams {
+  userInternalId: number;
+  userPublicId: string;
+  organizationInternalId: number | null;
+  fileName: string;
+  fileKey: string;
+  contentType: string;
+  fileSize: number;
+  bucket: string;
+}
+
+/**
+ * Owns the upload lifecycle behind the public upload routes and the
+ * cross-domain offboarding hooks.
+ *
+ * @remarks
+ * - **Algorithm:** {@link UploadService.createUpload} resolves owner/organization
+ *   context, computes the S3 key from {@link UPLOAD_PURPOSE_CONFIG} + a canonical
+ *   extension, then atomically reserves the PENDING row inside
+ *   {@link withUserDatabaseContext} (a per-user advisory lock guards the
+ *   pending-count check + insert in one transaction so the quota holds under
+ *   concurrency and the owner-access RLS policy authorizes the write) and only
+ *   AFTER the slot is committed requests a presigned URL (PUT or POST per
+ *   `UPLOAD_USE_PRESIGNED_POST`) from the storage adapter — concurrent callers
+ *   can never mint presigned slots beyond the quota.
+ *   {@link UploadService.confirmUpload} HEADs the object, compares
+ *   content-type/length against the declared values, and transitions
+ *   `PENDING` → `UPLOADED` (idempotent for already-confirmed rows) or
+ *   `FAILED` on mismatch. {@link UploadService.deleteUpload} performs a
+ *   best-effort S3 delete then soft-deletes the row.
+ * - **Failure modes:** quota exceeded → `ValidationError`; missing org
+ *   permission → `ForbiddenError`; unknown public id or owner mismatch →
+ *   `NotFoundError`; S3 verification failure → row moved to `FAILED` and a
+ *   `ValidationError` raised so the caller does not attach an unverified
+ *   object; missing `S3_BUCKET` → `ConfigurationError`. A presign failure that
+ *   occurs AFTER a slot is reserved propagates to the caller and leaves the
+ *   PENDING row in place; it is never confirmed, so the pending-sweep worker
+ *   reclaims it once it ages past the sweep cutoff.
+ * - **Side effects:** issues presigned S3 URLs, HEADs/DELETEs S3 objects,
+ *   inserts/updates `upload.uploads`, and emits no in-process events.
+ *   Storage access is abstracted behind {@link ObjectStoragePort} so tests
+ *   can substitute an in-memory adapter.
+ * - **Notes:** offboarding hooks
+ *   ({@link UploadService.tombstoneAllByUserId} /
+ *   {@link UploadService.tombstoneAllByOrganizationId}) only soft-delete rows;
+ *   user offboarding additionally attempts per-object S3 deletes, while
+ *   organization tombstones defer object removal to the retention worker.
+ *   `assertKeyConfirmed` is the gate cross-domain consumers (avatar/logo
+ *   attach) call before linking an upload — it never authorizes ownership,
+ *   which the caller enforces by key prefix.
+ */
 export class UploadService {
   constructor(
     private readonly repository: UploadRepository,
@@ -38,7 +97,6 @@ export class UploadService {
 
   async createUpload(input: CreateUploadInput, userPublicId: string): Promise<UploadCreateOutput> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
-    await this.assertPendingUploadQuota(user.id, userPublicId);
 
     const organizationInternalId = await this.resolveUploadOrganizationInternalId(
       input,
@@ -62,6 +120,21 @@ export class UploadService {
     if (!bucket) {
       throw new ConfigurationError('S3_BUCKET is not configured');
     }
+
+    // Reserve the PENDING row BEFORE presigning so the per-user quota is enforced atomically
+    // against concurrent requests (advisory lock + count + insert in one transaction). The
+    // presigned URL is minted only after a slot is committed — concurrent callers can never
+    // over-provision presigned slots beyond the quota.
+    const row = await this.reservePendingUploadSlot({
+      userInternalId: user.id,
+      userPublicId,
+      organizationInternalId,
+      fileName: input.fileName,
+      fileKey: key,
+      contentType: input.contentType,
+      fileSize: input.fileSize,
+      bucket,
+    });
 
     let uploadUrl: string;
     let uploadMethod: 'PUT' | 'POST';
@@ -96,23 +169,6 @@ export class UploadService {
 
     const expiresAt = new Date(Date.now() + PRESIGNED_URL_EXPIRY_SECONDS * 1000);
 
-    // Presigned URL generation (S3) is done above, outside the DB context; only the insert
-    // runs in the user-scoped context so the owner RLS policy authorizes the row.
-    const row = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.create({
-        user_id: user.id,
-        organization_id: organizationInternalId,
-        file_name: input.fileName,
-        file_key: key,
-        mime_type: input.contentType,
-        file_size: input.fileSize,
-        storage_provider: 's3',
-        bucket,
-        status: 'PENDING',
-        created_by_user_id: user.id,
-      }),
-    );
-
     return serializeUploadCreate({
       publicId: row.public_id,
       uploadUrl,
@@ -123,31 +179,60 @@ export class UploadService {
     });
   }
 
-  private async assertPendingUploadQuota(
-    userInternalId: number,
-    userPublicId: string,
-  ): Promise<void> {
-    // Enforce a per-user cap on in-flight PENDING uploads. Stops a single authed user from
-    // exhausting storage by repeatedly requesting presigned URLs without ever calling confirm.
-    // The PENDING sweeper eventually reconciles the rows, but the cap is the immediate guard.
+  /**
+   * Atomically reserves a PENDING upload row while enforcing the per-user quota.
+   *
+   * Runs the advisory lock, pending-count check, and insert inside a single
+   * `withUserDatabaseContext` transaction so concurrent create-upload requests are
+   * serialized per user: a request can only insert when the committed pending count is
+   * still below the cap. The advisory lock releases at COMMIT, after which the next waiter
+   * sees the freshly committed row. Stops storage/bandwidth cost abuse from a flood of
+   * presign requests that previously all passed a non-atomic count and then over-inserted.
+   */
+  private async reservePendingUploadSlot(
+    params: ReservePendingUploadSlotParams,
+  ): Promise<UploadRow> {
+    const {
+      userInternalId,
+      userPublicId,
+      organizationInternalId,
+      fileName,
+      fileKey,
+      contentType,
+      fileSize,
+      bucket,
+    } = params;
     const pendingCap = getEnv().UPLOAD_MAX_PENDING_PER_USER;
-    const pendingCount = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.countPendingByUserId(userInternalId),
-    );
-    if (pendingCount >= pendingCap) {
-      throw new ValidationError(
-        'errors:uploadPendingQuotaExceeded',
-        { limit: pendingCap, pending: pendingCount },
-        undefined,
-        [
-          {
-            field: 'fileSize',
-            messageKey: 'errors:uploadPendingQuotaExceeded',
-            messageParams: { limit: pendingCap, pending: pendingCount },
-          },
-        ],
-      );
-    }
+    return withUserDatabaseContext(userPublicId, async () => {
+      await this.repository.acquirePendingUploadQuotaLock(userInternalId);
+      const pendingCount = await this.repository.countPendingByUserId(userInternalId);
+      if (pendingCount >= pendingCap) {
+        throw new ValidationError(
+          'errors:uploadPendingQuotaExceeded',
+          { limit: pendingCap, pending: pendingCount },
+          undefined,
+          [
+            {
+              field: 'fileSize',
+              messageKey: 'errors:uploadPendingQuotaExceeded',
+              messageParams: { limit: pendingCap, pending: pendingCount },
+            },
+          ],
+        );
+      }
+      return this.repository.create({
+        user_id: userInternalId,
+        organization_id: organizationInternalId,
+        file_name: fileName,
+        file_key: fileKey,
+        mime_type: contentType,
+        file_size: fileSize,
+        storage_provider: 's3',
+        bucket,
+        status: 'PENDING',
+        created_by_user_id: userInternalId,
+      });
+    });
   }
 
   private async resolveUploadOrganizationInternalId(
@@ -195,6 +280,30 @@ export class UploadService {
     }
   }
 
+  private async assertUserCanAccessOrgScopedUpload(
+    row: UploadRow,
+    userPublicId: string,
+  ): Promise<void> {
+    if (row.organization_id === null) {
+      return;
+    }
+
+    const organization = await withUserDatabaseContext(userPublicId, () =>
+      this.organizationService.findOrganizationByInternalId(row.organization_id!),
+    );
+    if (!organization) {
+      throw new NotFoundError('Upload');
+    }
+
+    const permissions = await resolveUserOrganizationPermissions(
+      userPublicId,
+      organization.public_id,
+    );
+    if (!permissions.includes(UPLOAD_PERMISSIONS.UPLOAD_MANAGE)) {
+      throw new ForbiddenError('errors:insufficientUploadPermissions');
+    }
+  }
+
   async getUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
     const validatedPublicId = validateUploadPublicIdParam(public_id);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
@@ -203,14 +312,18 @@ export class UploadService {
     );
     if (!row) throw new NotFoundError('Upload');
 
+    await this.assertUserCanAccessOrgScopedUpload(row, userPublicId);
+
     return this.toUploadDetail(row, userPublicId);
   }
 
   /**
    * Server-side finalization: HEAD the uploaded object and compare its content type/length
    * against the values declared at create time. On success the row moves PENDING → UPLOADED;
-   * on mismatch/missing it moves to FAILED and a validation error is surfaced. Consumers must
-   * require UPLOADED before attaching the object. Idempotent for already-UPLOADED rows.
+   * on mismatch/missing it moves to FAILED and a validation error is surfaced. SVG objects are
+   * sanitized in place (scripts/event handlers stripped) before being marked UPLOADED so the
+   * served bytes can never execute as stored XSS. Consumers must require UPLOADED before
+   * attaching the object. Idempotent for already-UPLOADED rows.
    */
   async confirmUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
     const validatedPublicId = validateUploadPublicIdParam(public_id);
@@ -219,6 +332,8 @@ export class UploadService {
       this.repository.findByPublicIdForUser(validatedPublicId, user.id),
     );
     if (!row) throw new NotFoundError('Upload');
+
+    await this.assertUserCanAccessOrgScopedUpload(row, userPublicId);
 
     if (row.status === UPLOAD_STATUS.UPLOADED) {
       return this.toUploadDetail(row, userPublicId);
@@ -241,6 +356,18 @@ export class UploadService {
       const typeMatches =
         metadata.contentType === undefined || metadata.contentType === row.mime_type;
       verified = objectExists && lengthMatches && typeMatches;
+      // SVGs are active content: an uploaded <svg onload=…> served from S3/CDN with an
+      // image/svg+xml type executes as stored XSS. Neutralise the bytes in place before the
+      // object is ever marked UPLOADED (and therefore servable). Hostile/empty SVGs throw and
+      // fail verification below.
+      if (verified && isSvgContentType(row.mime_type)) {
+        await this.sanitizeStoredSvg(row.file_key, row.mime_type);
+      } else if (verified && isMagicByteVerifiable(row.mime_type)) {
+        // HEAD only echoes the client-declared content-type, which is trivially spoofable
+        // (e.g. an HTML/script payload uploaded as image/png). Verify the actual leading
+        // bytes match the declared type before the object becomes servable.
+        verified = await this.verifyStoredObjectMagicBytes(row.file_key, row.mime_type);
+      }
     } catch (error) {
       logger.warn(
         { publicId: validatedPublicId, fileKey: row.file_key, error },
@@ -265,6 +392,38 @@ export class UploadService {
     }
 
     return this.toUploadDetail(updated, userPublicId);
+  }
+
+  /**
+   * Fetches a stored SVG object, strips XSS vectors (scripts, event handlers, hostile filters)
+   * via {@link sanitizeSvgBuffer}, and re-writes the sanitized bytes to the same key when they
+   * differ from the original. Throws when sanitization yields an empty document so the caller
+   * fails verification for hostile or zero-byte SVGs.
+   */
+  private async sanitizeStoredSvg(fileKey: string, contentType: string): Promise<void> {
+    const object = await this.objectStorage.getObject(fileKey);
+    const sanitized = sanitizeSvgBuffer(object.body);
+    if (!sanitized.equals(object.body)) {
+      await this.objectStorage.putObject({
+        key: fileKey,
+        body: sanitized,
+        contentType,
+      });
+    }
+  }
+
+  /**
+   * Fetches the stored object and confirms its leading magic bytes match `contentType`.
+   * Returns false (so the caller fails verification and marks the row FAILED) when the
+   * content does not match the declared type — closing the spoofed-content-type vector
+   * where, e.g., an HTML/script payload is uploaded under an image MIME type.
+   */
+  private async verifyStoredObjectMagicBytes(
+    fileKey: string,
+    contentType: string,
+  ): Promise<boolean> {
+    const object = await this.objectStorage.getObject(fileKey);
+    return verifyFileMagicBytes(object.body, contentType);
   }
 
   private async toUploadDetail(row: UploadRow, userPublicId?: string): Promise<UploadDetailOutput> {
@@ -295,6 +454,8 @@ export class UploadService {
     );
     if (!row) throw new NotFoundError('Upload');
 
+    await this.assertUserCanAccessOrgScopedUpload(row, userPublicId);
+
     // S3 delete runs outside the DB context.
     const objectDeleted = await this.objectStorage.deleteObject(row.file_key);
     if (!objectDeleted) {
@@ -312,17 +473,50 @@ export class UploadService {
 
   /** Tombstones all active uploads for a user (offboarding) and removes S3 objects when possible. */
   async tombstoneAllByUserId(user_id: number): Promise<number> {
-    const rows = await this.repository.findActiveByUserId(user_id);
-    for (const row of rows) {
-      const objectDeleted = await this.objectStorage.deleteObject(row.file_key);
-      if (!objectDeleted) {
-        logger.warn(
-          { userId: user_id, fileKey: row.file_key },
-          'upload.offboarding.s3ObjectDeleteFailed',
-        );
+    // Stream the user's active uploads in bounded keyset batches and delete their S3 objects
+    // with bounded concurrency. This prevents a user with a large upload footprint from
+    // loading an unbounded result set into memory or serializing thousands of S3 round-trips
+    // in the offboarding path. Rows are not mutated during iteration, so keyset-by-id pages
+    // through the full set exactly once; the soft-delete at the end is the durable marker.
+    let afterId = 0;
+    for (;;) {
+      const rows = await this.repository.findActiveByUserIdAfter(
+        user_id,
+        afterId,
+        UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE,
+      );
+      if (rows.length === 0) {
+        break;
+      }
+      await this.deleteObjectsWithBoundedConcurrency({
+        fileKeys: rows.map((row) => row.file_key),
+        userId: user_id,
+      });
+      afterId = rows[rows.length - 1]!.id;
+      if (rows.length < UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE) {
+        break;
       }
     }
     return this.repository.softDeleteAllByUserId(user_id);
+  }
+
+  /** Deletes S3 objects in fixed-size concurrent chunks; failures are logged, never thrown. */
+  private async deleteObjectsWithBoundedConcurrency(options: {
+    fileKeys: readonly string[];
+    userId: number;
+  }): Promise<void> {
+    const { fileKeys, userId } = options;
+    for (let index = 0; index < fileKeys.length; index += UPLOAD_OFFBOARDING_DELETE_CONCURRENCY) {
+      const chunk = fileKeys.slice(index, index + UPLOAD_OFFBOARDING_DELETE_CONCURRENCY);
+      await Promise.all(
+        chunk.map(async (fileKey) => {
+          const objectDeleted = await this.objectStorage.deleteObject(fileKey);
+          if (!objectDeleted) {
+            logger.warn({ userId, fileKey }, 'upload.offboarding.s3ObjectDeleteFailed');
+          }
+        }),
+      );
+    }
   }
 
   /** Tombstones org-scoped uploads (DB only; S3 removed on retention purge or per-upload DELETE). */

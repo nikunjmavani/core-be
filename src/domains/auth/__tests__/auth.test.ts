@@ -9,9 +9,11 @@ import {
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser, createTestUserWithPassword } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import { database } from '@/infrastructure/database/connection.js';
-import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token.schema.js';
+import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.schema.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
  * Extracts the `session_id=<value>` pair from a Set-Cookie header so that
@@ -55,7 +57,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 400 for missing credentials', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -64,7 +66,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 for invalid credentials', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: 'nonexistent@test.com',
           password: 'wrong-password',
@@ -76,7 +78,7 @@ describe('Auth Domain — Integration', () => {
     it('when BLOCK_DISPOSABLE_EMAIL is off, login with disposable email returns 401 (invalid creds) not 400', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: 'test@yopmail.com',
           password: 'wrong-password',
@@ -92,7 +94,7 @@ describe('Auth Domain — Integration', () => {
       });
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: user.email,
           password,
@@ -107,7 +109,7 @@ describe('Auth Domain — Integration', () => {
       const { user, password } = await createTestUserWithPassword();
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: user.email,
           password,
@@ -137,12 +139,12 @@ describe('Auth Domain — Integration', () => {
       const [firstLogin, secondLogin] = await Promise.all([
         injectUnauthenticated(app, {
           method: 'POST',
-          url: '/api/v1/auth/login',
+          url: testApiPath('/auth/login'),
           payload: credentials,
         }),
         injectUnauthenticated(app, {
           method: 'POST',
-          url: '/api/v1/auth/login',
+          url: testApiPath('/auth/login'),
           payload: credentials,
         }),
       ]);
@@ -153,6 +155,45 @@ describe('Auth Domain — Integration', () => {
       const secondBody = secondLogin.json() as { data: { access_token: string } };
       expect(firstBody.data.access_token).not.toBe(secondBody.data.access_token);
     });
+
+    it('rejects login for a suspended user and revokes existing sessions on suspend (bug 31)', async () => {
+      const { user, password } = await createTestUserWithPassword();
+
+      // Establish an active session and prime the positive token-validity cache.
+      const loginResponse = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/login'),
+        payload: { email: user.email, password },
+      });
+      expect(loginResponse.statusCode).toBe(200);
+      const accessToken = (loginResponse.json() as { data: { access_token: string } }).data
+        .access_token;
+      const beforeSuspend = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token: accessToken,
+      });
+      expect(beforeSuspend.statusCode).toBe(200);
+
+      // Suspend the user out-of-band, exercising UserService.suspendUser revocation.
+      await app.userDomain.userService.suspendUser(user.public_id);
+
+      // The previously-valid bearer token is rejected immediately (cache invalidated).
+      const afterSuspend = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token: accessToken,
+      });
+      expect(afterSuspend.statusCode).toBe(401);
+
+      // A suspended user cannot mint a fresh session via password login.
+      const reLogin = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/login'),
+        payload: { email: user.email, password },
+      });
+      expect(reLogin.statusCode).toBe(401);
+    });
   });
 
   // ─── Logout ───────────────────────────────────────────────────
@@ -161,7 +202,7 @@ describe('Auth Domain — Integration', () => {
     it('should accept logout request', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/logout',
+        url: testApiPath('/auth/logout'),
         payload: {},
       });
       // Logout may succeed even without a valid token (idempotent)
@@ -172,7 +213,7 @@ describe('Auth Domain — Integration', () => {
       const { user, password } = await createTestUserWithPassword();
       const loginResponse = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: user.email,
           password,
@@ -184,7 +225,7 @@ describe('Auth Domain — Integration', () => {
 
       const logoutResponse = await injectAuthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/logout',
+        url: testApiPath('/auth/logout'),
         token: accessToken,
       });
       expect([200, 204]).toContain(logoutResponse.statusCode);
@@ -197,7 +238,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 for missing session cookie', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/refresh',
+        url: testApiPath('/auth/refresh'),
         headers: { referer: 'http://localhost:3000/' },
         payload: {},
       });
@@ -209,7 +250,7 @@ describe('Auth Domain — Integration', () => {
 
       const loginResponse = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: user.email,
           password,
@@ -221,7 +262,7 @@ describe('Auth Domain — Integration', () => {
 
       const refreshResponse = await injectWithCookies(app, {
         method: 'POST',
-        url: '/api/v1/auth/refresh',
+        url: testApiPath('/auth/refresh'),
         cookies: { session_id: sessionId },
         headers: { referer: 'http://localhost:3000/' },
         payload: {},
@@ -238,7 +279,7 @@ describe('Auth Domain — Integration', () => {
       const { user, password } = await createTestUserWithPassword();
       const loginResponse = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: user.email,
           password,
@@ -250,7 +291,7 @@ describe('Auth Domain — Integration', () => {
 
       const refreshResponse = await injectWithCookies(app, {
         method: 'POST',
-        url: '/api/v1/auth/refresh',
+        url: testApiPath('/auth/refresh'),
         cookies: { session_id: sessionId },
         headers: { origin: 'https://untrusted.example.com' },
         payload: {},
@@ -262,7 +303,7 @@ describe('Auth Domain — Integration', () => {
       const { user, password } = await createTestUserWithPassword();
       const loginResponse = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: user.email,
           password,
@@ -274,7 +315,7 @@ describe('Auth Domain — Integration', () => {
 
       const refreshResponse = await injectWithCookies(app, {
         method: 'POST',
-        url: '/api/v1/auth/refresh',
+        url: testApiPath('/auth/refresh'),
         cookies: { session_id: sessionId },
         headers: { origin: 'http://localhost:3000' },
         payload: {},
@@ -291,7 +332,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 400 for missing email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/send',
+        url: testApiPath('/auth/magic-link/send'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -300,7 +341,7 @@ describe('Auth Domain — Integration', () => {
     it('should accept valid email format', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/send',
+        url: testApiPath('/auth/magic-link/send'),
         payload: { email: 'test@example.com' },
       });
       // May return 200 (sent) or 404 (user not found) depending on config
@@ -310,7 +351,7 @@ describe('Auth Domain — Integration', () => {
     it('when BLOCK_DISPOSABLE_EMAIL is off, magic-link send accepts disposable email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/send',
+        url: testApiPath('/auth/magic-link/send'),
         payload: { email: 'test@yopmail.com' },
       });
       expect(response.statusCode).toBe(200);
@@ -321,7 +362,7 @@ describe('Auth Domain — Integration', () => {
     it('returns translated success message for magic-link send with Accept-Language: es', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/send',
+        url: testApiPath('/auth/magic-link/send'),
         headers: { 'accept-language': 'es' },
         payload: { email: 'unknown-magic-link-user@example.com' },
       });
@@ -339,7 +380,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 400 for missing token', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/verify',
+        url: testApiPath('/auth/magic-link/verify'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -348,7 +389,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 for invalid token', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/magic-link/verify',
+        url: testApiPath('/auth/magic-link/verify'),
         payload: { token: 'invalid-token' },
       });
       expect([401, 404]).toContain(response.statusCode);
@@ -360,7 +401,7 @@ describe('Auth Domain — Integration', () => {
   describe('GET /api/v1/auth/oauth/providers', () => {
     it('should list OAuth providers', async () => {
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/auth/oauth/providers',
+        url: testApiPath('/auth/oauth/providers'),
       });
       expect(response.statusCode).toBe(200);
       const body = response.json() as { data: { providers: string[] } };
@@ -374,7 +415,7 @@ describe('Auth Domain — Integration', () => {
   describe('GET /api/v1/auth/oauth/:provider', () => {
     it('should return 501 for unsupported provider', async () => {
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/auth/oauth/twitter',
+        url: testApiPath('/auth/oauth/twitter'),
       });
       // Server returns 501 NotImplementedError; accept 501 or 200 (redirect URL) depending on error handling
       expect([200, 501]).toContain(response.statusCode);
@@ -383,7 +424,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 501 when provider not configured (no client ID)', async () => {
       // Without OAUTH_GOOGLE_CLIENT_ID set, returns NotImplementedError
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/auth/oauth/google',
+        url: testApiPath('/auth/oauth/google'),
       });
       expect([200, 501]).toContain(response.statusCode);
     });
@@ -395,7 +436,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 400 for missing email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/forgot',
+        url: testApiPath('/auth/password/forgot'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -405,7 +446,7 @@ describe('Auth Domain — Integration', () => {
       const { user } = await createTestUserWithPassword();
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/forgot',
+        url: testApiPath('/auth/password/forgot'),
         payload: { email: user.email },
       });
       expect(response.statusCode).toBe(200);
@@ -416,7 +457,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 200 with same message for non-existent email (anti-enumeration)', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/forgot',
+        url: testApiPath('/auth/password/forgot'),
         payload: { email: 'nobody@nonexistent.com' },
       });
       expect(response.statusCode).toBe(200);
@@ -427,7 +468,7 @@ describe('Auth Domain — Integration', () => {
     it('when BLOCK_DISPOSABLE_EMAIL is off, password forgot accepts disposable email', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/forgot',
+        url: testApiPath('/auth/password/forgot'),
         payload: { email: 'test@yopmail.com' },
       });
       expect(response.statusCode).toBe(200);
@@ -440,7 +481,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 400 for missing token/password', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/reset',
+        url: testApiPath('/auth/password/reset'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -449,7 +490,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 for invalid reset token', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/reset',
+        url: testApiPath('/auth/password/reset'),
         payload: {
           token: 'invalid-token-value',
           password: 'NewSecurePassword123!',
@@ -478,7 +519,7 @@ describe('Auth Domain — Integration', () => {
       const newPassword = 'BrandNewPassword456!';
       const resetResponse = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/reset',
+        url: testApiPath('/auth/password/reset'),
         payload: {
           token: rawToken,
           password: newPassword,
@@ -489,7 +530,7 @@ describe('Auth Domain — Integration', () => {
       // Login with new password
       const loginResponse = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: user.email,
           password: newPassword,
@@ -505,7 +546,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/change',
+        url: testApiPath('/auth/password/change'),
         payload: {},
       });
       expect(response.statusCode).toBe(401);
@@ -516,7 +557,7 @@ describe('Auth Domain — Integration', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/change',
+        url: testApiPath('/auth/password/change'),
         token,
         payload: {},
       });
@@ -525,11 +566,12 @@ describe('Auth Domain — Integration', () => {
 
     it('should change password for authenticated user with valid current password', async () => {
       const { user, password } = await createTestUserWithPassword();
+      await seedRecentStepUpForTestUser(user.public_id);
       const token = await generateTestToken({ userId: user.public_id });
       const newPassword = 'ChangedPassword789!';
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/password/change',
+        url: testApiPath('/auth/password/change'),
         token,
         payload: {
           current_password: password,
@@ -541,7 +583,7 @@ describe('Auth Domain — Integration', () => {
       // Verify login works with new password
       const loginResponse = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/login',
+        url: testApiPath('/auth/login'),
         payload: {
           email: user.email,
           password: newPassword,
@@ -551,13 +593,69 @@ describe('Auth Domain — Integration', () => {
     });
   });
 
+  // ─── Step-up (sudo) ───────────────────────────────────────────
+
+  describe('POST /api/v1/auth/step-up', () => {
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/step-up'),
+        payload: { password: 'whatever' },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 401 for an incorrect password', async () => {
+      const { user } = await createTestUserWithPassword();
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/step-up'),
+        token,
+        payload: { password: 'WrongPassword999!' },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('grants a step-up window for a gated route after correct password', async () => {
+      const { user, password } = await createTestUserWithPassword();
+      const token = await generateTestToken({ userId: user.public_id });
+
+      // Fresh login / token must NOT carry a step-up window: a gated mutation is rejected.
+      const beforeStepUp = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/enroll'),
+        token,
+        payload: { method_type: 'MFA_TOTP' },
+      });
+      expect(beforeStepUp.statusCode).toBe(403);
+
+      const stepUp = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/step-up'),
+        token,
+        payload: { password },
+      });
+      expect(stepUp.statusCode).toBe(200);
+
+      // After an explicit step-up the same gated route is reachable.
+      const afterStepUp = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/enroll'),
+        token,
+        payload: { method_type: 'MFA_TOTP' },
+      });
+      expect(afterStepUp.statusCode).not.toBe(403);
+    });
+  });
+
   // ─── Email Verification ───────────────────────────────────────
 
   describe('POST /api/v1/auth/email/verify', () => {
     it('should return 400 for missing token', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/email/verify',
+        url: testApiPath('/auth/email/verify'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -566,7 +664,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 for invalid verification token', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/email/verify',
+        url: testApiPath('/auth/email/verify'),
         payload: { token: 'invalid-verification-token' },
       });
       expect(response.statusCode).toBe(401);
@@ -590,7 +688,7 @@ describe('Auth Domain — Integration', () => {
 
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/email/verify',
+        url: testApiPath('/auth/email/verify'),
         payload: { token: rawToken },
       });
       expect(response.statusCode).toBe(200);
@@ -604,7 +702,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/email/resend-verification',
+        url: testApiPath('/auth/email/resend-verification'),
         payload: {},
       });
       expect(response.statusCode).toBe(401);
@@ -615,7 +713,7 @@ describe('Auth Domain — Integration', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/email/resend-verification',
+        url: testApiPath('/auth/email/resend-verification'),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -628,7 +726,7 @@ describe('Auth Domain — Integration', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/email/resend-verification',
+        url: testApiPath('/auth/email/resend-verification'),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -642,7 +740,7 @@ describe('Auth Domain — Integration', () => {
   describe('i18n response messages', () => {
     it('returns 404 error detail in English with Accept-Language: en', async () => {
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/auth/nonexistent-route-for-i18n-test',
+        url: testApiPath('/auth/nonexistent-route-for-i18n-test'),
         headers: { 'accept-language': 'en' },
       });
       expect(response.statusCode).toBe(404);
@@ -652,7 +750,7 @@ describe('Auth Domain — Integration', () => {
 
     it('returns 404 error with translated detail (Accept-Language respected when supported)', async () => {
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/auth/nonexistent-route-for-i18n-test',
+        url: testApiPath('/auth/nonexistent-route-for-i18n-test'),
         headers: { 'accept-language': 'es' },
       });
       expect(response.statusCode).toBe(404);
@@ -669,7 +767,7 @@ describe('Auth Domain — Integration', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/email/resend-verification',
+        url: testApiPath('/auth/email/resend-verification'),
         token,
         headers: { 'accept-language': 'es' },
       });
@@ -682,14 +780,23 @@ describe('Auth Domain — Integration', () => {
 
   // ─── MFA ──────────────────────────────────────────────────────
 
-  describe('POST /api/v1/auth/mfa/challenge', () => {
+  describe('POST /api/v1/auth/mfa/login', () => {
     it('should return 400 for missing body', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/mfa/challenge',
+        url: testApiPath('/auth/mfa/login'),
         payload: {},
       });
       expect([400, 422]).toContain(response.statusCode);
+    });
+
+    it('should return 401 for a TOTP code without a valid mfa_session_token', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/login'),
+        payload: { mfa_session_token: 'forged-or-expired-token', totp_code: '123456' },
+      });
+      expect(response.statusCode).toBe(401);
     });
   });
 
@@ -697,7 +804,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/mfa/enroll',
+        url: testApiPath('/auth/mfa/enroll'),
         payload: {},
       });
       expect(response.statusCode).toBe(401);
@@ -706,7 +813,7 @@ describe('Auth Domain — Integration', () => {
 
   describe('GET /api/v1/auth/mfa', () => {
     it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, { url: '/api/v1/auth/mfa' });
+      const response = await injectUnauthenticated(app, { url: testApiPath('/auth/mfa') });
       expect(response.statusCode).toBe(401);
     });
 
@@ -714,7 +821,7 @@ describe('Auth Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
-        url: '/api/v1/auth/mfa',
+        url: testApiPath('/auth/mfa'),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -725,7 +832,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/mfa/verify',
+        url: testApiPath('/auth/mfa/verify'),
         payload: {},
       });
       expect(response.statusCode).toBe(401);
@@ -736,7 +843,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: '/api/v1/auth/mfa/test-id',
+        url: testApiPath('/auth/mfa/test-id'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -746,7 +853,7 @@ describe('Auth Domain — Integration', () => {
 
   describe('GET /api/v1/auth/me/sessions', () => {
     it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, { url: '/api/v1/auth/me/sessions' });
+      const response = await injectUnauthenticated(app, { url: testApiPath('/auth/me/sessions') });
       expect(response.statusCode).toBe(401);
     });
 
@@ -754,7 +861,7 @@ describe('Auth Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
-        url: '/api/v1/auth/me/sessions',
+        url: testApiPath('/auth/me/sessions'),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -765,7 +872,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: '/api/v1/auth/me/sessions/test-id',
+        url: testApiPath('/auth/me/sessions/test-id'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -775,7 +882,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: '/api/v1/auth/me/sessions',
+        url: testApiPath('/auth/me/sessions'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -785,7 +892,9 @@ describe('Auth Domain — Integration', () => {
 
   describe('GET /api/v1/auth/me/auth-methods', () => {
     it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, { url: '/api/v1/auth/me/auth-methods' });
+      const response = await injectUnauthenticated(app, {
+        url: testApiPath('/auth/me/auth-methods'),
+      });
       expect(response.statusCode).toBe(401);
     });
 
@@ -793,7 +902,7 @@ describe('Auth Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
-        url: '/api/v1/auth/me/auth-methods',
+        url: testApiPath('/auth/me/auth-methods'),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -804,7 +913,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/auth/me/auth-methods',
+        url: testApiPath('/auth/me/auth-methods'),
         payload: {},
       });
       expect(response.statusCode).toBe(401);
@@ -815,7 +924,7 @@ describe('Auth Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: '/api/v1/auth/me/auth-methods/test-id',
+        url: testApiPath('/auth/me/auth-methods/test-id'),
       });
       expect(response.statusCode).toBe(401);
     });

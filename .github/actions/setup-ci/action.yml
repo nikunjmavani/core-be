@@ -1,0 +1,38 @@
+name: Setup CI
+description: Checkout, setup Node/pnpm, install dependencies, and restore Vitest cache
+
+inputs:
+  fetch-depth:
+    description: Git fetch depth for checkout
+    required: false
+    default: '1'
+  vitest-cache-key:
+    description: Optional Vitest cache key suffix (e.g. unit or integration shard id)
+    required: false
+    default: ''
+  install:
+    description: Run pnpm install --frozen-lockfile
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        fetch-depth: ${{ inputs.fetch-depth }}
+
+    - name: Setup Node and pnpm
+      uses: ./.github/actions/setup-node-pnpm
+      with:
+        install: ${{ inputs.install }}
+
+    - name: Cache Vitest
+      if: inputs.vitest-cache-key != ''
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: node_modules/.vitest
+        key: vitest-${{ inputs.vitest-cache-key }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'tooling/vitest/**') }}
+        restore-keys: |
+          vitest-${{ inputs.vitest-cache-key }}-${{ runner.os }}-

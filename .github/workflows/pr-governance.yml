@@ -13,15 +13,16 @@ permissions:
   pull-requests: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   pr-quality:
     name: Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
@@ -32,7 +33,7 @@ jobs:
       # only place a `Merge ...` title is rejected.
       - name: Validate PR title (conventional commits)
         if: ${{ !startsWith(github.event.pull_request.title, 'Merge ') }}
-        uses: amannn/action-semantic-pull-request@v6
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -50,7 +51,7 @@ jobs:
             revert
 
       - name: Sync PR size label
-        uses: actions/github-script@v7
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         with:
           script: |
             const SIZE_PREFIX = 'size/';
@@ -99,7 +100,7 @@ jobs:
           fi
 
       - name: Apply path labels
-        uses: actions/labeler@v5
+        uses: actions/labeler@f27b608878404679385c85cfa523b85ccb86e213 # v6
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           configuration-path: .github/labeler.yml

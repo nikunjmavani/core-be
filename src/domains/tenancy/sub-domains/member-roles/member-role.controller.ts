@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import { getRequestIdentifier, requirePrincipal } from '@/shared/utils/http/request.util.js';
 import {
   cursorPaginationSchema,
   ensureCursorOnlyPagination,
@@ -9,6 +9,12 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import type { MemberRoleService } from './member-role.service.js';
 
+/**
+ * Builds the HTTP handler map for the organization role CRUD endpoints under
+ * `/organizations/:id/roles`. Mutating handlers also record a scoped audit
+ * event via {@link recordScopedAuditEvent} so role lifecycle changes appear in
+ * the audit log.
+ */
 export function createMemberRoleController(service: MemberRoleService) {
   return {
     listRoles: async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -35,7 +41,7 @@ export function createMemberRoleController(service: MemberRoleService) {
       return successResponse(data, getRequestIdentifier(request));
     },
     createRole: async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const organizationId = validatePublicIdParam(
         (request.params as { id: string }).id ?? '',
         'id',
@@ -52,7 +58,7 @@ export function createMemberRoleController(service: MemberRoleService) {
       return successResponse(data, getRequestIdentifier(request));
     },
     updateRole: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const { id: organizationId, roleId } = (request.params as {
         id: string;
         roleId: string;
@@ -68,7 +74,7 @@ export function createMemberRoleController(service: MemberRoleService) {
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteRole: async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const { id: organizationId, roleId } = (request.params as {
         id: string;
         roleId: string;

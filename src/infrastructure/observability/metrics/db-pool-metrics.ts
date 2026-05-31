@@ -1,5 +1,6 @@
 import { sql } from '@/infrastructure/database/connection.js';
-import { resolvePostgresAllowedApplicationConnections } from '@/infrastructure/database/assert-connection-budget.js';
+import { resolvePostgresAllowedApplicationConnections } from '@/infrastructure/database/safety/assert-connection-budget.js';
+import { registerOrganizationRlsCheckoutHoldObserver } from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import { isMetricsEnabled } from '@/infrastructure/observability/metrics/metrics-registry.js';
 import {
@@ -7,6 +8,8 @@ import {
   resetPoolExhaustionAlertStateForTests,
 } from '@/infrastructure/observability/dlq-depth/db-pool-alert.service.js';
 import {
+  recordOrganizationRlsCheckoutHold,
+  setOrganizationRlsActiveCheckouts,
   setPostgresPoolConfigMetrics,
   setPostgresPoolConnectionCounts,
 } from '@/infrastructure/observability/metrics/prometheus-metrics.js';
@@ -83,6 +86,12 @@ export function resolvePostgresPoolPollIntervalMs(): number {
 
 let poolMonitoringInterval: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Polls `pg_stat_activity` for connection-state counts, updates the
+ * `db_pool_connections` / `pg_pool_*` / `postgres_pool_*` gauges, and feeds the
+ * sample into {@link evaluatePoolExhaustionAndAlert}. Sampling errors fall back
+ * to all-zero counts so the alerter still runs (and may flip to `ok`).
+ */
 export async function refreshPostgresPoolMetrics(): Promise<void> {
   const maxConnections = getEnv().DATABASE_POOL_MAX ?? 10;
   let samples: PoolCountRow[] = [];
@@ -106,13 +115,25 @@ export async function refreshPostgresPoolMetrics(): Promise<void> {
 
   const allowedApplicationConnections = await resolveAllowedApplicationConnectionsCached();
   const clusterActiveConnections = sumClusterActiveConnections(samples);
-  evaluatePoolExhaustionAndAlert({
+  const pressureSample = evaluatePoolExhaustionAndAlert({
     clusterActiveConnections,
     allowedApplicationConnections,
   });
+
+  if (isMetricsEnabled()) {
+    setOrganizationRlsActiveCheckouts(pressureSample.activeOrganizationRlsCheckouts);
+  }
 }
 
+/**
+ * Schedules the recurring {@link refreshPostgresPoolMetrics} timer used by the
+ * metrics scrape path. Idempotent — repeat calls do not stack intervals.
+ */
 export function registerPostgresPoolMetrics(): void {
+  registerOrganizationRlsCheckoutHoldObserver((sample) => {
+    recordOrganizationRlsCheckoutHold(sample);
+  });
+
   if (poolMonitoringInterval) {
     return;
   }
@@ -123,6 +144,7 @@ export function registerPostgresPoolMetrics(): void {
   }, resolvePostgresPoolPollIntervalMs());
 }
 
+/** Cancels the polling timer started by {@link registerPostgresPoolMetrics} (used on shutdown and in tests). */
 export function stopPostgresPoolMetricsPolling(): void {
   if (poolMonitoringInterval) {
     clearInterval(poolMonitoringInterval);
@@ -134,5 +156,6 @@ export function stopPostgresPoolMetricsPolling(): void {
 export function resetPostgresPoolMonitoringForTests(): void {
   stopPostgresPoolMetricsPolling();
   resetPoolExhaustionAlertStateForTests();
+  registerOrganizationRlsCheckoutHoldObserver(null);
   cachedAllowedApplicationConnections = null;
 }

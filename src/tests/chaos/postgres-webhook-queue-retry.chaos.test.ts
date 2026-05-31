@@ -3,10 +3,10 @@ import { afterAll, describe, it, vi } from 'vitest';
 
 import { Queue, QueueEvents, type Worker } from 'bullmq';
 
-import { createWebhookDeliveryWorker } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js';
+import { createWebhookDeliveryWorker } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
 import { database } from '@/infrastructure/database/connection.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
-import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
+import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
 import { webhook_delivery_attempts } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { CHAOS_POSTGRES_PROXY_NAME } from '@/tests/chaos/chaos.constants.js';

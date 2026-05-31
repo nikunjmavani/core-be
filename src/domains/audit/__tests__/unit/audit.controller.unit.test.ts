@@ -47,7 +47,7 @@ function auditLogRow(overrides: Record<string, unknown> = {}) {
 
 describe('createAuditController', () => {
   const service = {
-    list: vi.fn().mockResolvedValue({
+    listForAdmin: vi.fn().mockResolvedValue({
       items: [auditLogRow()],
       total: 1,
       limit: 20,
@@ -63,7 +63,7 @@ describe('createAuditController', () => {
       mockRequest({ query: { limit: 20, include_total: 'true' } }),
       mockReply(),
     );
-    expect(service.list).toHaveBeenCalled();
+    expect(service.listForAdmin).toHaveBeenCalled();
     expect(response).toMatchObject({
       data: [
         expect.objectContaining({
@@ -76,7 +76,7 @@ describe('createAuditController', () => {
   });
 
   it('listLogs sets has_more and next when more pages exist', async () => {
-    vi.mocked(service.list).mockResolvedValueOnce({
+    vi.mocked(service.listForAdmin).mockResolvedValueOnce({
       items: [auditLogRow({ id: 1 }), auditLogRow({ id: 2 })],
       total: 4,
       limit: 2,
@@ -98,7 +98,7 @@ describe('createAuditController', () => {
   });
 
   it('listLogs clears next when on final page', async () => {
-    vi.mocked(service.list).mockResolvedValueOnce({
+    vi.mocked(service.listForAdmin).mockResolvedValueOnce({
       items: [auditLogRow()],
       total: 1,
       limit: 20,
@@ -109,5 +109,17 @@ describe('createAuditController', () => {
     expect(response).toMatchObject({
       meta: { pagination: expect.objectContaining({ has_more: false, next: null }) },
     });
+  });
+
+  it('listLogs omits estimated_total when service total is null', async () => {
+    vi.mocked(service.listForAdmin).mockResolvedValueOnce({
+      items: [],
+      total: null,
+      limit: 20,
+      has_more: false,
+      next_cursor: null,
+    } as never);
+    const response = await controller.listLogs(mockRequest(), mockReply());
+    expect(response.meta?.pagination).not.toHaveProperty('estimated_total');
   });
 });

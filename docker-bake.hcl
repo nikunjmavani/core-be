@@ -7,7 +7,7 @@ target "_common" {
   dockerfile = "Dockerfile"
   args = {
     NODE_VERSION = "24.13.0"
-    PNPM_VERSION = "10.28.2"
+    PNPM_VERSION = "11.1.1"
   }
 }
 

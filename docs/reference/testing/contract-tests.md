@@ -43,3 +43,8 @@ flowchart LR
 | `helpers/`           | Nock isolation, circuit reset, Stripe form/signature utilities |
 
 See **`src/tests/contract/README.md`** for a short developer checklist.
+
+## Related
+
+- [`src/tests/contract/OVERVIEW.md`](../../../src/tests/contract/OVERVIEW.md) — suite scope, fixture organisation, dependencies
+- [`src/infrastructure/payment/OVERVIEW.md`](../../../src/infrastructure/payment/OVERVIEW.md), [`src/infrastructure/mail/OVERVIEW.md`](../../../src/infrastructure/mail/OVERVIEW.md), [`src/infrastructure/storage/OVERVIEW.md`](../../../src/infrastructure/storage/OVERVIEW.md) — wrappers under test

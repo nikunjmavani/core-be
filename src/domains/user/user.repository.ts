@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
-import { and, asc, eq, isNull, like, or, count, type SQL } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, like, or, sql, type SQL } from 'drizzle-orm';
+import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { users } from '@/domains/user/user.schema.js';
-import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
-import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { escapeLikePattern } from '@/shared/utils/validation/validation.util.js';
 import {
   buildAscendingCreatedAtIdCursorCondition,
@@ -12,6 +11,26 @@ import {
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
 
+/** Drizzle-inferred `auth.users` row shape returned by every {@link UserRepository} read. */
+type UserRow = typeof users.$inferSelect;
+
+/**
+ * Normalises a raw SECURITY DEFINER resolver row (postgres.js returns the `bigint` `id` column as a
+ * string) into the typed {@link UserRow} the application consumes. All other columns already arrive
+ * as the correct JavaScript types (timestamptz → Date, int4 → number, bool → boolean).
+ */
+function mapResolverRowToUserRow(row: Record<string, unknown>): UserRow {
+  return { ...(row as UserRow), id: Number((row as { id: unknown }).id) };
+}
+
+function extractResolverRows(result: unknown): Record<string, unknown>[] {
+  return (Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])) as Record<
+    string,
+    unknown
+  >[];
+}
+
+/** Pagination + filter inputs for {@link UserRepository.findMany} (admin user listing). */
 export interface UserListPagination {
   after?: string;
   limit: number;
@@ -20,6 +39,21 @@ export interface UserListPagination {
   include_total?: boolean;
 }
 
+/**
+ * Drizzle data-access for `auth.users`.
+ *
+ * @remarks
+ * - **Algorithm:** all queries scope by `isNull(deleted_at)` so soft-deleted rows are invisible to
+ *   the application; admin list uses keyset pagination on `(created_at, id)` with `limit + 1` to
+ *   detect `has_more`. Optional `count(*)` only when callers opt in via `include_total`.
+ * - **Failure modes:** lookups return `null` when missing; updates return `null` when the row was
+ *   concurrently soft-deleted. Public-id generation uses
+ *   `runInsertWithPublicIdentifierRetry` so unique-violation collisions retry transparently.
+ * - **Side effects:** writes `auth.users` only; cross-domain side effects (sessions, uploads,
+ *   exports) live in {@link UserService.softDeleteUserWithOffboarding}.
+ * - **Notes:** OAuth signup hashes email lowercased to populate `email_hash` for case-insensitive
+ *   lookups; case search is `LIKE %term%` over email + name with backslash-escaped patterns.
+ */
 export class UserRepository {
   async findByPublicId(public_id: string) {
     const rows = await getRequestDatabase()
@@ -30,22 +64,31 @@ export class UserRepository {
     return rows[0] ?? null;
   }
 
-  async findByEmail(email: string) {
-    const rows = await getRequestDatabase()
-      .select()
-      .from(users)
-      .where(and(eq(users.email, email), isNull(users.deleted_at)))
-      .limit(1);
-    return rows[0] ?? null;
+  /**
+   * Resolves a user by email for the pre-session authentication phase (login, forgot-password,
+   * webauthn auth-options, OAuth find-or-create). Goes through the `auth.resolve_user_*` SECURITY
+   * DEFINER resolver because `auth.users` is FORCE RLS and no `app.current_user_id` is set yet — a
+   * plain SELECT would resolve the owner policy to NULL and return zero rows, rejecting every login.
+   */
+  async findByEmail(email: string): Promise<UserRow | null> {
+    const result = await getRequestDatabase().execute(
+      sql`SELECT * FROM auth.resolve_user_for_authentication_by_email(${email})`,
+    );
+    const rows = extractResolverRows(result);
+    return rows[0] ? mapResolverRowToUserRow(rows[0]) : null;
   }
 
-  async findById(identifier: number) {
-    const rows = await getRequestDatabase()
-      .select()
-      .from(users)
-      .where(eq(users.id, identifier))
-      .limit(1);
-    return rows[0] ?? null;
+  /**
+   * Resolves a user by internal id for the pre-session token-consume flows (magic-link verify,
+   * password reset, email verify) and session refresh — same FORCE RLS rationale as
+   * {@link UserRepository.findByEmail}. Mirrors the historical no-`deleted_at`-filter behaviour.
+   */
+  async findById(identifier: number): Promise<UserRow | null> {
+    const result = await getRequestDatabase().execute(
+      sql`SELECT * FROM auth.resolve_user_by_internal_id(${identifier})`,
+    );
+    const rows = extractResolverRows(result);
+    return rows[0] ? mapResolverRowToUserRow(rows[0]) : null;
   }
 
   async updatePassword(publicId: string, passwordHash: string) {
@@ -95,32 +138,39 @@ export class UserRepository {
     return this.updateByPublicId(public_id, data as Record<string, unknown>);
   }
 
-  /** Create a user from an OAuth profile (no password). */
-  async createFromOAuth(data: {
-    email: string;
-    first_name?: string;
-    last_name?: string;
-    avatar_url?: string;
-    is_email_verified: boolean;
-  }) {
+  /**
+   * Inserts a user from an OAuth profile (no password) with a caller-supplied `public_id`.
+   *
+   * Public-id generation, unique-collision retry, and the `withUserDatabaseContext` wrapper that
+   * satisfies the FORCE RLS owner WITH CHECK (`public_id = app.current_user_id`) live in
+   * {@link UserService.createFromOAuth}: the context must be set to the exact `public_id` used for
+   * the insert, so the service owns the generate → enter-context → insert sequence per attempt.
+   */
+  async insertOAuthUser(
+    publicId: string,
+    data: {
+      email: string;
+      first_name?: string;
+      last_name?: string;
+      avatar_url?: string;
+      is_email_verified: boolean;
+    },
+  ) {
     const emailHash = createHash('sha256').update(data.email.toLowerCase()).digest('hex');
-    return runInsertWithPublicIdentifierRetry(async () => {
-      const publicId = generatePublicId();
-      const rows = await getRequestDatabase()
-        .insert(users)
-        .values({
-          public_id: publicId,
-          email: data.email,
-          email_hash: emailHash,
-          first_name: data.first_name ?? null,
-          last_name: data.last_name ?? null,
-          avatar_url: data.avatar_url ?? null,
-          is_email_verified: data.is_email_verified,
-          status: 'ACTIVE',
-        })
-        .returning();
-      return rows[0]!;
-    });
+    const rows = await getRequestDatabase()
+      .insert(users)
+      .values({
+        public_id: publicId,
+        email: data.email,
+        email_hash: emailHash,
+        first_name: data.first_name ?? null,
+        last_name: data.last_name ?? null,
+        avatar_url: data.avatar_url ?? null,
+        is_email_verified: data.is_email_verified,
+        status: 'ACTIVE',
+      })
+      .returning();
+    return rows[0]!;
   }
 
   // ── Admin methods ──────────────────────────────────────────
@@ -160,11 +210,7 @@ export class UserRepository {
       .limit(limit + 1);
 
     const countPromise = includeTotal
-      ? getRequestDatabase()
-          .select({ count: count() })
-          .from(users)
-          .where(countWhere)
-          .then((rows) => rows[0]?.count ?? 0)
+      ? countWithCap({ database: getRequestDatabase(), table: users, where: countWhere })
       : Promise.resolve(null);
 
     const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);
@@ -207,11 +253,26 @@ export class UserRepository {
     return rows[0] ?? null;
   }
 
+  async markDeletionStarted(public_id: string) {
+    const rows = await getRequestDatabase()
+      .update(users)
+      .set({ deletion_started_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .where(and(eq(users.public_id, public_id), isNull(users.deleted_at)))
+      .returning();
+    return rows[0] ?? null;
+  }
+
   async softDelete(public_id: string) {
     const rows = await getRequestDatabase()
       .update(users)
       .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
-      .where(and(eq(users.public_id, public_id), isNull(users.deleted_at)))
+      .where(
+        and(
+          eq(users.public_id, public_id),
+          isNull(users.deleted_at),
+          isNotNull(users.deletion_started_at),
+        ),
+      )
       .returning();
     return rows[0] ?? null;
   }

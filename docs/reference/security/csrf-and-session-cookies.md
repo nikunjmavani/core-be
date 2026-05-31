@@ -73,7 +73,7 @@ flowchart TB
   CookiePolicy -->|"Cookie not sent cross-site"| Refresh
 ```
 
-**CORS:** [`src/shared/middlewares/cors.middleware.ts`](../../../src/shared/middlewares/cors.middleware.ts) uses **`credentials: true`** and an **`ALLOWED_ORIGINS`** allowlist (required in production). That aligns credentialed browser calls with known frontend origins.
+**CORS:** [`src/shared/middlewares/security/cors.middleware.ts`](../../../src/shared/middlewares/security/cors.middleware.ts) uses **`credentials: true`** and an **`ALLOWED_ORIGINS`** allowlist (required in production). That aligns credentialed browser calls with known frontend origins.
 
 **Defense in depth:** When **`ALLOWED_ORIGINS`** is non-empty, **`POST /api/v1/auth/refresh`** requires a trusted source origin:
 
@@ -109,6 +109,8 @@ Document the new mechanism here and in release notes when that happens.
 
 ## Related code
 
-- Cookie plugin: [`src/shared/middlewares/cookie.middleware.ts`](../../../src/shared/middlewares/cookie.middleware.ts)
-- CORS: [`src/shared/middlewares/cors.middleware.ts`](../../../src/shared/middlewares/cors.middleware.ts)
+- Cookie plugin: [`src/shared/middlewares/session/cookie.middleware.ts`](../../../src/shared/middlewares/session/cookie.middleware.ts)
+- CORS: [`src/shared/middlewares/security/cors.middleware.ts`](../../../src/shared/middlewares/security/cors.middleware.ts)
 - Refresh route: [`src/domains/auth/auth.routes.ts`](../../../src/domains/auth/auth.routes.ts)
+- [`src/domains/auth/sub-domains/auth-session/OVERVIEW.md`](../../../src/domains/auth/sub-domains/auth-session/OVERVIEW.md) — session lifecycle invariants, JWT-per-session rule, retention
+- [`src/POLICIES.md`](../../../src/POLICIES.md) — `JWT_*`, `SESSION_*` policy constants

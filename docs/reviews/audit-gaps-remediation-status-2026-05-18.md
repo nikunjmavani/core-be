@@ -23,7 +23,7 @@ Tracks implementation of the consolidated plan from [production-audit-2026-05-18
 | -- | ---- | ------------- |
 | P0-01 | BullMQ Zod at enqueue + worker | `bullmq-job-validation.util.ts`, `*.job.schema.ts`, mail/stripe/notification/webhook queues + workers |
 | P0-02 | Permission cache invalidation | `member-role-permission.service.ts`, `membership.service.ts` |
-| P0-03 | MFA TOTP encrypt at rest | `field-secret-encryption.util.ts`, `mfa.service.ts` |
+| P0-03 | MFA TOTP encrypt at rest | `field-secret-encryption.util.ts`, `auth-mfa.service.ts` |
 | P0-04 | Webhook signing secret encrypt; API omits secret | `webhook.service.ts`, `webhook.serializer.ts`, `webhook-delivery.worker.ts` |
 | P0-05 | `auth.verification_tokens` RLS policies | `migrations/20260518000001_verification_tokens_rls_policies.sql` |
 | P0-06 | Stripe webhook fail-closed without org | `stripe-webhook-organization.util.ts` |

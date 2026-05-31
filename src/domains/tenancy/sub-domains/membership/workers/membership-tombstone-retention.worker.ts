@@ -11,7 +11,24 @@ import { runMembershipTombstoneRetentionJob } from '@/domains/tenancy/sub-domain
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { MEMBERSHIP_TOMBSTONE_RETENTION_QUEUE_NAME } from './membership-tombstone-retention.constants.js';
 
-/** Hard-delete memberships tombstoned longer than TOMBSTONE_RETENTION_DAYS. */
+/**
+ * Hard-delete memberships tombstoned longer than TOMBSTONE_RETENTION_DAYS.
+ *
+ * @remarks
+ * - **Algorithm:** constructs a BullMQ `Worker` for the
+ *   `MEMBERSHIP_TOMBSTONE_RETENTION_QUEUE_NAME` queue that invokes
+ *   {@link runMembershipTombstoneRetentionJob} inside
+ *   {@link withGlobalRetentionCleanupDatabaseContext} so RLS is bypassed for
+ *   the cleanup.
+ * - **Failure modes:** processor exceptions feed BullMQ retry/backoff; stalled
+ *   jobs are logged via the `stalled` listener; permanent failures land in
+ *   the queue DLQ.
+ * - **Side effects:** opens a BullMQ Redis connection and a Postgres handle
+ *   per job; emits info/warn logs.
+ * - **Notes:** registered through the worker registry — never wire directly
+ *   in `bootstrap.ts`. Concurrency and stall tuning come from
+ *   {@link getRetentionWorkerOptions} / {@link RETENTION_WORKER_CONCURRENCY}.
+ */
 export function createMembershipTombstoneRetentionWorker(): WorkerHandle {
   const worker = new Worker(
     MEMBERSHIP_TOMBSTONE_RETENTION_QUEUE_NAME,

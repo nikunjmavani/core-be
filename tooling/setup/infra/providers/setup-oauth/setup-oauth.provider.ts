@@ -1,4 +1,4 @@
-import * as logger from '../../../common/logger.js';
+import * as logger from '@tooling/setup/common/logger.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -6,7 +6,7 @@ import type {
   InfraProvider,
   InfraProviderContext,
   InfraProviderPreview,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 async function validateGoogleOAuth(clientId: string, environmentName: string): Promise<boolean> {
   if (!clientId) {

@@ -7,6 +7,7 @@ import {
   injectUnauthenticated,
 } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
  * MCP endpoints proxy arbitrary API calls — must require authentication and admin role.
@@ -26,7 +27,7 @@ describe('Security: MCP authentication', () => {
   it('POST /api/v1/mcp returns 401 without token', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'POST',
-      url: '/api/v1/mcp',
+      url: testApiPath('/mcp'),
       payload: {},
     });
     expect(response.statusCode).toBe(401);
@@ -37,7 +38,7 @@ describe('Security: MCP authentication', () => {
     const token = await generateTestToken({ userId: user.public_id, role: 'user' });
     const response = await injectAuthenticated(app, {
       method: 'POST',
-      url: '/api/v1/mcp',
+      url: testApiPath('/mcp'),
       token,
       payload: {},
     });
@@ -49,7 +50,7 @@ describe('Security: MCP authentication', () => {
     const token = await generateSuperAdminToken(user.public_id);
     const response = await injectAuthenticated(app, {
       method: 'POST',
-      url: '/api/v1/mcp',
+      url: testApiPath('/mcp'),
       token,
       payload: { jsonrpc: '2.0', method: 'initialize', id: 1, params: {} },
     });

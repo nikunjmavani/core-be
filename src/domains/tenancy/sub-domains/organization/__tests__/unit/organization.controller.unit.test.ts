@@ -49,7 +49,7 @@ describe('createOrganizationController', () => {
   } as unknown as OrganizationService;
 
   const auditService = {
-    list: vi.fn().mockResolvedValue({
+    listForOrganization: vi.fn().mockResolvedValue({
       items: [],
       limit: 20,
       total: null,
@@ -148,7 +148,7 @@ describe('createOrganizationController', () => {
   });
 
   it('listOrganizationAuditLogs delegates to audit service', async () => {
-    vi.mocked(auditService.list).mockResolvedValueOnce({
+    vi.mocked(auditService.listForOrganization).mockResolvedValueOnce({
       items: [],
       limit: 20,
       total: null,
@@ -159,7 +159,7 @@ describe('createOrganizationController', () => {
       mockRequest({ params: { id: organizationPublicId }, query: { limit: '20' } }),
       mockReply(),
     );
-    expect(auditService.list).toHaveBeenCalled();
+    expect(auditService.listForOrganization).toHaveBeenCalled();
     expect(response).toMatchObject({
       meta: { pagination: expect.objectContaining({ has_more: true, next: 'audit_cursor_2' }) },
     });
@@ -218,7 +218,7 @@ describe('createOrganizationController', () => {
   });
 
   it('listOrganizationAuditLogs returns has_more false on last page', async () => {
-    vi.mocked(auditService.list).mockResolvedValueOnce({
+    vi.mocked(auditService.listForOrganization).mockResolvedValueOnce({
       items: [],
       limit: 20,
       total: null,

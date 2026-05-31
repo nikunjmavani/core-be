@@ -1,4 +1,9 @@
-# Skill: Test Generator (write test cases)
+---
+name: test-generator
+description: Decides which test layer to add and writes tests following core-be conventions — unit for pure layers (validators, serializers, shared/utils, errors) and domain e2e via fastify.inject. Use when adding or changing routes, controllers, services, workers, validators, or serializers, after creating a domain/sub-domain, or when tests are missing.
+---
+
+# Test generator (core-be)
 
 ## Purpose
 
@@ -78,7 +83,7 @@ src/domains/<domain>/sub-domains/<parent>/<nested>/   # nested sub-domain (aggre
     __tests__/                  # when nested resource emits/handles events
 ```
 
-Examples: `auth/__tests__/auth.test.ts` (bundled e2e), `billing/sub-domains/subscription/__tests__/unit/subscription.validator.test.ts`, `notify/sub-domains/webhook/webhook-event/` (nested), `tenancy/sub-domains/organization/organization-api-key/__tests__/organization-api-key.test.ts`, `auth/sub-domains/auth-method/events/__tests__/auth-method.event-handlers.test.ts`, `tenancy/__tests__/factories/permission.factory.ts`.
+Examples: `auth/__tests__/auth.test.ts` (bundled e2e), `billing/sub-domains/subscription/__tests__/unit/subscription.validator.test.ts`, `notify/sub-domains/webhook/webhook-event/` (nested), `tenancy/sub-domains/organization/organization-api-key/__tests__/organization-api-key.test.ts`, `auth/sub-domains/auth-method/__tests__/unit/events/auth-method.event-handlers.unit.test.ts`, `tenancy/__tests__/factories/permission.factory.ts`.
 
 **Bundled domain e2e (intentional):** `auth.test.ts`, `billing.test.ts`, `notify.test.ts`, `user.test.ts` cover many sub-domain routes in one file. Billing sub-domains without dedicated e2e (plan, stripe-webhook) are covered there; add sub-domain unit tests for validators/serializers instead of splitting e2e unless routes are extracted.
 
@@ -94,7 +99,7 @@ Examples: `auth/__tests__/auth.test.ts` (bundled e2e), `billing/sub-domains/subs
 | Validator/serializer (top-level sub-domain)           | `src/domains/<domain>/sub-domains/<resource>/__tests__/unit/`                 |
 | Validator/serializer (nested sub-domain)              | `src/domains/<domain>/sub-domains/<parent>/<nested>/__tests__/unit/`          |
 | Domain-level validator (auth.login, user profile)     | `src/domains/<domain>/__tests__/unit/`                                        |
-| Event handlers / emit helpers                         | `src/domains/<domain>/sub-domains/<resource>/events/__tests__/`               |
+| Event handlers / emit helpers                         | `src/domains/<domain>/sub-domains/<resource>/__tests__/unit/events/`               |
 | Cross-sub-domain policy scan (ledger immutability)    | `src/domains/<domain>/__tests__/unit/` with file comment                      |
 | Shared tenancy permission test data                   | `@/domains/tenancy/__tests__/factories/permission.factory.js`                 |
 | Cross-domain flow (health, multi-domain contract)     | `src/tests/integration/`                                                      |

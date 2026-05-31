@@ -11,7 +11,20 @@ import { runOrganizationApiKeyTombstoneRetentionJob } from '@/domains/tenancy/su
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_QUEUE_NAME } from './organization-api-key-tombstone-retention.constants.js';
 
-/** Hard-delete API keys tombstoned longer than TOMBSTONE_RETENTION_DAYS. */
+/**
+ * Hard-delete API keys tombstoned longer than TOMBSTONE_RETENTION_DAYS.
+ *
+ * @remarks
+ * - **Algorithm:** subscribes to {@link ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_QUEUE_NAME}
+ *   and runs {@link runOrganizationApiKeyTombstoneRetentionJob} inside the
+ *   global retention-cleanup DB context per delivered job.
+ * - **Failure modes:** stalled jobs are logged and retried per BullMQ stall
+ *   policy; final-failure DLQ + Sentry are wired by `infrastructure/queue`.
+ * - **Side effects:** permanent API-key deletions in `tenancy.api_keys`.
+ * - **Notes:** the repeatable cron is registered in
+ *   `src/infrastructure/queue/scheduler.ts`; the worker is instantiated by
+ *   the worker bootstrap rather than wired directly.
+ */
 export function createOrganizationApiKeyTombstoneRetentionWorker(): WorkerHandle {
   const worker = new Worker(
     ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_QUEUE_NAME,

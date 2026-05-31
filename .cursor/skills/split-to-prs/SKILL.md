@@ -24,7 +24,7 @@ Compare to default branch (`main`). Use `CODEOWNERS` / path ownership when prese
 | ---------------------------- | --------------------------------------------------------------------------- | --------------------------------------------- |
 | **Schema + migration**       | `src/domains/**/*.schema.ts`, `migrations/*.sql`                            | Land first; run `pnpm db:migrate:lint`        |
 | **Domain feature**           | `src/domains/<domain>/**`                                                   | One domain per PR when possible               |
-| **Routes + OpenAPI + seeds** | `*.routes.ts`, `openapi-enricher.ts`, `locales/*/openapi.json`, `*.seed.ts` | Keep route catalog + OpenAPI + seeds together |
+| **Routes + OpenAPI + seeds** | `*.routes.ts` (incl. `schema: { summary, description, tags }`), `locales/*/openapi.json`, `*.seed.ts` | Keep route catalog + OpenAPI + seeds together |
 | **Workers / queues**         | `**/events/**`, `**/queues/**`, `**/workers/**`, `infrastructure/queue/**`  | After schema if jobs touch new tables         |
 | **Tests only**               | `__tests__/**`, `src/tests/**`                                              | Stack on feature PR or follow-up              |
 | **CI / tooling**             | `.github/workflows/**`, `biome.json`, `.husky/**`                           | Isolate from product code                     |

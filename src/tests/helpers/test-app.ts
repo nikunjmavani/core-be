@@ -134,7 +134,7 @@ function createTestRequestAgent(app: FastifyInstance): TestRequestAgent {
  * Always call `app.close()` after tests.
  *
  * Both Redis connections are eagerly connected before serving traffic so
- * `/health` (which pings cache + BullMQ Redis when they live on different
+ * `/readyz` (which pings cache + BullMQ Redis when they live on different
  * logical databases) does not hit "Stream isn't writeable" with
  * `enableOfflineQueue: false`.
  */

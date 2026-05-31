@@ -16,6 +16,11 @@ import { notifySchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * Drizzle table for `notify.notifications` — the per-user in-app inbox. Soft-scoped by RLS to
+ * the current organization or the row owner; a `read_at` check constraint enforces that any
+ * row marked `is_read = true` carries a timestamp.
+ */
 export const notifications = notifySchema
   .table(
     'notifications',

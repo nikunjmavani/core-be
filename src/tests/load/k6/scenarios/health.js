@@ -5,7 +5,7 @@ import { BASE_URL, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
 /**
  * k6 Scenario: Health endpoints only
  *
- * Load test for GET /health.
+ * Load test for GET /readyz.
  * No auth required — use for baseline throughput and latency.
  */
 export const options = {
@@ -28,7 +28,7 @@ export const options = {
 };
 
 export function health() {
-  const response = http.get(`${BASE_URL}/health`, {
+  const response = http.get(`${BASE_URL}/readyz`, {
     tags: { name: 'health' },
   });
   check(response, {

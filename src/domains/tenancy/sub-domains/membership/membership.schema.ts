@@ -14,6 +14,13 @@ import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
 
+/**
+ * `tenancy.memberships` table — links a user to an organization with a role
+ * and a lifecycle `status` (INVITED, ACTIVE, SUSPENDED, enforced by
+ * `chk_memberships_status`). A partial unique index keeps `(user_id,
+ * organization_id)` unique only for active rows so a user can rejoin after
+ * being soft-deleted. RLS scopes rows to the caller's organization.
+ */
 export const memberships = tenancySchema
   .table(
     'memberships',

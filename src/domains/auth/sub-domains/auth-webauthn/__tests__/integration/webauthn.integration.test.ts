@@ -8,6 +8,7 @@ import {
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestTokenWithActiveSession } from '@/tests/helpers/test-auth.js';
+import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import type { FastifyInstance } from 'fastify';
 
 describe('Auth WebAuthn — Integration', () => {
@@ -29,6 +30,7 @@ describe('Auth WebAuthn — Integration', () => {
   describe('POST /api/v1/auth/webauthn/register/options', () => {
     it('should return registration options for authenticated user', async () => {
       const user = await createTestUser();
+      await seedRecentStepUpForTestUser(user.public_id);
       const token = await generateTestTokenWithActiveSession(app, user.public_id);
 
       const response = await injectAuthenticated(app, {
@@ -78,13 +80,13 @@ describe('Auth WebAuthn — Integration', () => {
   });
 
   describe('POST /api/v1/auth/webauthn/authenticate/options', () => {
-    it('should return 400 when email is omitted', async () => {
+    it('should return 401 when email is omitted (anti-enumeration)', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/webauthn/authenticate/options'),
         payload: {},
       });
-      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(401);
     });
   });
 

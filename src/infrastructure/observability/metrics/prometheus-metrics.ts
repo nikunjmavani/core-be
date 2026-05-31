@@ -1,4 +1,5 @@
 import { Counter, Gauge, Histogram, type Registry } from 'prom-client';
+import type { OrganizationRlsCheckoutPath } from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
 import {
   getMetricsRegistry,
   isMetricsEnabled,
@@ -22,6 +23,9 @@ let pgPoolWaiting: Gauge | null = null;
 let bullmqJobsWaiting: Gauge<'queue'> | null = null;
 let eventLoopLagMilliseconds: Gauge | null = null;
 let stripeWebhookEventsFailed: Gauge | null = null;
+let databaseRlsActiveCheckouts: Gauge | null = null;
+let databaseRlsCheckoutHoldSeconds: Histogram<'path'> | null = null;
+let processUnhandledRejectionsTotal: Counter<'process'> | null = null;
 
 function registerOn(registry: Registry): void {
   httpRequestsTotal = new Counter({
@@ -130,6 +134,27 @@ function registerOn(registry: Registry): void {
     help: 'Stripe webhook ledger rows in failed processing_status (alert when >0 for >10m)',
     registers: [registry],
   });
+
+  databaseRlsActiveCheckouts = new Gauge({
+    name: 'database_rls_active_checkouts',
+    help: 'In-process org-scoped RLS transaction checkouts currently held (early pool-saturation signal; alert near DATABASE_POOL_MAX)',
+    registers: [registry],
+  });
+
+  databaseRlsCheckoutHoldSeconds = new Histogram({
+    name: 'database_rls_checkout_hold_seconds',
+    help: 'Wall-clock seconds an org-scoped RLS transaction held a pooled connection, by path (scoped_context | request_transaction)',
+    labelNames: ['path'],
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+    registers: [registry],
+  });
+
+  processUnhandledRejectionsTotal = new Counter({
+    name: 'process_unhandled_rejections_total',
+    help: 'Non-fatal unhandledRejection events tolerated by the burst handler, by process (api | worker). Alert on a sustained sub-threshold rate — it hides a persistent failing path that never trips the fatal burst exit',
+    labelNames: ['process'],
+    registers: [registry],
+  });
 }
 
 function bindMetricHandlesFromRegistry(registry: Registry): void {
@@ -157,6 +182,13 @@ function bindMetricHandlesFromRegistry(registry: Registry): void {
   bullmqJobsWaiting = registry.getSingleMetric('bullmq_jobs_waiting') as Gauge<'queue'>;
   eventLoopLagMilliseconds = registry.getSingleMetric('event_loop_lag_ms') as Gauge;
   stripeWebhookEventsFailed = registry.getSingleMetric('stripe_webhook_events_failed') as Gauge;
+  databaseRlsActiveCheckouts = registry.getSingleMetric('database_rls_active_checkouts') as Gauge;
+  databaseRlsCheckoutHoldSeconds = registry.getSingleMetric(
+    'database_rls_checkout_hold_seconds',
+  ) as Histogram<'path'>;
+  processUnhandledRejectionsTotal = registry.getSingleMetric(
+    'process_unhandled_rejections_total',
+  ) as Counter<'process'>;
   registeredMetricsRegistry = registry;
 }
 
@@ -179,6 +211,11 @@ export function ensurePrometheusMetricsRegistered(registry: Registry): void {
   registeredMetricsRegistry = registry;
 }
 
+/**
+ * Records one HTTP request into `http_requests_total` (counter) and
+ * `http_request_duration_seconds` (histogram) keyed by method/route/status.
+ * No-op when metrics are disabled or registration has not yet happened.
+ */
 export function recordHttpRequest(
   method: string,
   route: string,
@@ -198,6 +235,11 @@ export function recordHttpRequest(
   httpRequestDurationSeconds.observe(labels, durationSeconds);
 }
 
+/**
+ * Updates the `bullmq_queue_{waiting,active,delayed,failed}` gauges (plus the
+ * legacy `bullmq_jobs_waiting` alias) for a single queue from a freshly read
+ * `getJobCounts` payload. Called by {@link refreshBullMQQueueGauges}.
+ */
 export function setBullMQQueueCounts(
   queueName: string,
   counts: { waiting: number; active: number; delayed: number; failed: number },
@@ -214,6 +256,11 @@ export function setBullMQQueueCounts(
   bullmqQueueFailed.set(label, counts.failed);
 }
 
+/**
+ * Observes one BullMQ job's processing duration on the
+ * `bullmq_job_duration_seconds` histogram, labelled by queue + job name. Wired
+ * to worker `completed` events via `attachBullMQJobMetrics`.
+ */
 export function recordBullMQJobDuration(
   queueName: string,
   jobName: string,
@@ -229,6 +276,11 @@ export function recordBullMQJobDuration(
   histogram.observe({ queue: queueName, job_name: jobName }, durationSeconds);
 }
 
+/**
+ * Sets the static pool-configuration gauges: `postgres_pool_max_connections`
+ * and `postgres_pool_metrics_available` (1 when `pg_stat_activity` sampling
+ * succeeded, 0 when only the configured ceiling is known).
+ */
 export function setPostgresPoolConfigMetrics(options: {
   maxConnections: number;
   liveMetricsAvailable: boolean;
@@ -239,6 +291,11 @@ export function setPostgresPoolConfigMetrics(options: {
   postgresPoolMetricsAvailable.set(options.liveMetricsAvailable ? 1 : 0);
 }
 
+/**
+ * Sets the `db_pool_connections{state=...}` gauge plus the legacy
+ * `pg_pool_{active,idle,waiting}` aliases from a fresh `pg_stat_activity` sample.
+ * Missing states default to 0 so dashboards see a stable schema.
+ */
 export function setPostgresPoolConnectionCounts(
   samples: ReadonlyArray<{ state: 'active' | 'idle' | 'waiting'; count: number }>,
 ): void {
@@ -261,6 +318,11 @@ export function setPostgresPoolConnectionCounts(
   pgPoolWaiting?.set(countsByState.waiting);
 }
 
+/**
+ * Updates the `event_loop_lag_ms` gauge from the perf-hooks p99 sample.
+ * Lazily registers metrics so the event-loop refresh path can run before the
+ * scrape endpoint has been hit.
+ */
 export function setEventLoopLagMilliseconds(lagMilliseconds: number): void {
   if (!isMetricsEnabled()) return;
   ensurePrometheusMetricsRegistered(getMetricsRegistry());
@@ -268,8 +330,55 @@ export function setEventLoopLagMilliseconds(lagMilliseconds: number): void {
   eventLoopLagMilliseconds.set(lagMilliseconds);
 }
 
+/**
+ * Sets the `stripe_webhook_events_failed` gauge — fed by the Stripe ledger
+ * reclaim worker so dashboards alert when failed rows linger more than 10
+ * minutes (Sentry rule, see help text on the metric).
+ */
 export function setStripeWebhookEventsFailedCount(count: number): void {
   if (!isMetricsEnabled()) return;
   if (!stripeWebhookEventsFailed) return;
   stripeWebhookEventsFailed.set(count);
+}
+
+/**
+ * Sets the `database_rls_active_checkouts` gauge from the in-process org-RLS checkout
+ * counter. Fed by the pool-metrics scrape refresh so dashboards see how many org-scoped
+ * RLS checkouts are held against `DATABASE_POOL_MAX` before postgres.js starts queuing.
+ */
+export function setOrganizationRlsActiveCheckouts(count: number): void {
+  if (!isMetricsEnabled()) return;
+  if (!databaseRlsActiveCheckouts) return;
+  databaseRlsActiveCheckouts.set(count);
+}
+
+/**
+ * Observes one completed org-RLS checkout hold on the `database_rls_checkout_hold_seconds`
+ * histogram, labelled by `path` (`scoped_context` unit of work vs legacy full-request
+ * `request_transaction`). Wired via `registerOrganizationRlsCheckoutHoldObserver` so the hot
+ * database-checkout paths stay free of a prom-client import. No-op when metrics are disabled.
+ */
+export function recordOrganizationRlsCheckoutHold(options: {
+  path: OrganizationRlsCheckoutPath;
+  durationSeconds: number;
+}): void {
+  if (!isMetricsEnabled()) return;
+  if (!databaseRlsCheckoutHoldSeconds) return;
+  databaseRlsCheckoutHoldSeconds.observe({ path: options.path }, options.durationSeconds);
+}
+
+/** Process whose `unhandledRejection` handler fired — distinguishes API from worker series. */
+export type UnhandledRejectionProcess = 'api' | 'worker';
+
+/**
+ * Increments `process_unhandled_rejections_total{process}` for one non-fatal
+ * `unhandledRejection`. Lazily registers metrics so the very first rejection (which can occur
+ * before any scrape) is still counted. No-op when metrics are disabled — the rejection is still
+ * logged + captured by the caller, so observability never depends on `METRICS_ENABLED`.
+ */
+export function recordUnhandledRejection(process: UnhandledRejectionProcess): void {
+  if (!isMetricsEnabled()) return;
+  ensurePrometheusMetricsRegistered(getMetricsRegistry());
+  if (!processUnhandledRejectionsTotal) return;
+  processUnhandledRejectionsTotal.inc({ process });
 }

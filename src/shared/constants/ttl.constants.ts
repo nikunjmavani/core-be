@@ -18,6 +18,9 @@ export const MILLISECONDS_PER_DAY = SECONDS_PER_DAY * MILLISECONDS_PER_SECOND;
 /** Five seconds in milliseconds (metrics poll, shutdown buffer). */
 export const FIVE_SECONDS_MS = 5_000;
 
+/** Ten seconds in milliseconds (outbound HTTP timeouts, webhook retry base delay). */
+export const TEN_SECONDS_MS = 10_000;
+
 /** Fifteen seconds in milliseconds (mail enqueue deadline, graceful shutdown). */
 export const FIFTEEN_SECONDS_MS = 15_000;
 
@@ -36,8 +39,23 @@ export const IDEMPOTENCY_PLACEHOLDER_TTL_SECONDS = SESSION_TOKEN_CACHE_TTL_SECON
 /** Cached idempotent HTTP response TTL (seconds). */
 export const IDEMPOTENCY_RESPONSE_CACHE_TTL_SECONDS = SECONDS_PER_DAY;
 
+/**
+ * `Retry-After` advertised on the idempotency-store-unavailable 503 (seconds). Kept short
+ * so well-behaved clients retry quickly once a transient Redis blip clears, instead of
+ * treating the degraded response as a hard failure.
+ */
+export const IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS = 2;
+
 /** MFA challenge session lifetime in Redis (seconds). */
 export const MFA_SESSION_TTL_SECONDS = 300;
+
+/**
+ * Window during which a successfully consumed TOTP code is remembered in Redis
+ * to reject replay (seconds). Covers the current 30-second step plus the
+ * ±1-step verification tolerance, so a captured code cannot be reused while it
+ * is still cryptographically valid.
+ */
+export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = 90;
 
 /** WebAuthn ceremony challenge lifetime in Redis (seconds). */
 export const WEBAUTHN_CHALLENGE_TTL_SECONDS = MFA_SESSION_TTL_SECONDS;
@@ -53,6 +71,13 @@ export const PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS = 15;
 
 /** Worker queue last-job heartbeat key TTL in Redis (seconds). */
 export const WORKER_QUEUE_HEARTBEAT_TTL_SECONDS = SECONDS_PER_DAY;
+
+/**
+ * Lifetime of the per-notification email-dispatch idempotency marker in Redis (seconds).
+ * Must comfortably exceed the notification queue's retry/backoff window so a retried job
+ * never re-sends an email that a prior attempt already enqueued.
+ */
+export const NOTIFICATION_EMAIL_DISPATCH_IDEMPOTENCY_TTL_SECONDS = SECONDS_PER_DAY;
 
 /** Browser CORS preflight cache max-age (seconds). */
 export const CORS_PREFLIGHT_MAX_AGE_SECONDS = SECONDS_PER_DAY;
@@ -74,6 +99,13 @@ export const CATALOG_CACHE_STALE_WHILE_REVALIDATE_SECONDS = SESSION_TOKEN_CACHE_
 
 /** Aggregate readiness probe budget per dependency (milliseconds). */
 export const HEALTH_READINESS_PROBE_TIMEOUT_MS = 1_500;
+
+/**
+ * Window during which a dependency readiness result is reused before re-probing
+ * (milliseconds). Bounds probe load from deploy gating and external pollers
+ * while staying small enough that a genuine outage surfaces within ~2 seconds.
+ */
+export const HEALTH_READINESS_PROBE_CACHE_TTL_MS = 2_000;
 
 /** S3 presigned URL lifetime (seconds); aligns with access token TTL. */
 export const PRESIGNED_URL_EXPIRY_SECONDS = ACCESS_TOKEN_EXPIRY_SECONDS;

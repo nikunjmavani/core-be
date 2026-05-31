@@ -1,9 +1,15 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import { getRequestIdentifier, requirePrincipal } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationApiKeyService } from './organization-api-key.service.js';
 
+/**
+ * Builds the Fastify handler map for `/organizations/:id/api-keys` routes —
+ * list, get, create (returns the raw key once), update, delete, and rotate.
+ * Wraps service calls with `requirePrincipal` (user or organization API-key
+ * principal), public-id validation, and the standard response shapers.
+ */
 export function createOrganizationApiKeyController(service: OrganizationApiKeyService) {
   return {
     listApiKeys: async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -28,7 +34,7 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
       return successResponse(data, getRequestIdentifier(request));
     },
     createApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const organizationId = validatePublicIdParam(
         (request.params as { id: string }).id ?? '',
         'id',
@@ -41,7 +47,7 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
       );
     },
     updateApiKey: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const { id: organizationId, apiKeyId } = (request.params as {
         id: string;
         apiKeyId: string;
@@ -50,7 +56,7 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const { id: organizationId, apiKeyId } = (request.params as {
         id: string;
         apiKeyId: string;
@@ -59,7 +65,7 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
       return reply.code(204).send();
     },
     rotateApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const { id: organizationId, apiKeyId } = (request.params as {
         id: string;
         apiKeyId: string;

@@ -40,12 +40,14 @@ describe('Stripe webhook ingress policy', () => {
     expect(source).toContain('stripeWebhookIngressPlugin');
     expect(source).toMatch(/prefix:\s*['"]\/stripe['"]/);
 
-    const ingressIndex = source.indexOf('await stripeWebhookIngressPlugin(app');
-    const postIndex = source.indexOf("zodApplication.post('/webhook'");
-    const legacyIngressIndex = source.indexOf(
-      'await stripeRoutes.register(stripeWebhookIngressPlugin)',
+    // Patterns tolerate Biome line-wrapping of `.post(` arguments when the
+    // schema block is large enough to force multi-line formatting.
+    const ingressIndex = source.search(/await\s+stripeWebhookIngressPlugin\s*\(\s*app/);
+    const postIndex = source.search(/zodApplication\.post\(\s*['"]\/webhook['"]/);
+    const legacyIngressIndex = source.search(
+      /await\s+stripeRoutes\.register\(\s*stripeWebhookIngressPlugin/,
     );
-    const legacyPostIndex = source.indexOf("stripeZodApplication.post('/webhook'");
+    const legacyPostIndex = source.search(/stripeZodApplication\.post\(\s*['"]\/webhook['"]/);
 
     expect(ingressIndex).toBeGreaterThanOrEqual(0);
     expect(postIndex).toBeGreaterThan(ingressIndex);

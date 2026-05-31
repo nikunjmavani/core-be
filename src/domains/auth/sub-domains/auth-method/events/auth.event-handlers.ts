@@ -1,5 +1,6 @@
 import i18next from 'i18next';
 import { eventBus, type DomainEvent } from '@/core/events/event-bus.js';
+import { ServiceUnavailableError } from '@/shared/errors/index.js';
 import {
   dispatchOutboxEmail,
   recordOutboxEmail,
@@ -29,8 +30,7 @@ async function handleMagicLinkEmail(
   requestId?: string,
 ): Promise<void> {
   if (!isMailConfigured()) {
-    logger.warn({ email: payload.email }, 'Mail not configured — magic link email skipped');
-    return;
+    throw new ServiceUnavailableError('errors:mailNotConfigured');
   }
 
   const frontendUrl = env.FRONTEND_URL ?? 'http://localhost:3000';
@@ -56,8 +56,7 @@ async function handlePasswordResetEmail(
   requestId?: string,
 ): Promise<void> {
   if (!isMailConfigured()) {
-    logger.warn({ email: payload.email }, 'Mail not configured — password reset email skipped');
-    return;
+    throw new ServiceUnavailableError('errors:mailNotConfigured');
   }
 
   const frontendUrl = env.FRONTEND_URL ?? 'http://localhost:3000';
@@ -83,8 +82,7 @@ async function handleEmailVerificationEmail(
   requestId?: string,
 ): Promise<void> {
   if (!isMailConfigured()) {
-    logger.warn({ email: payload.email }, 'Mail not configured — verification email skipped');
-    return;
+    throw new ServiceUnavailableError('errors:mailNotConfigured');
   }
 
   const frontendUrl = env.FRONTEND_URL ?? 'http://localhost:3000';
@@ -152,6 +150,7 @@ function registerAuthMethodEmailEventHandlers(): void {
   eventBus.on(AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED, onEmailVerificationEmailEvent);
 }
 
+/** Subscribes the auth-method side-effect handlers to the in-process event bus (magic link, password reset, and email-verification emails). Idempotent: subsequent calls are no-ops. */
 export function registerAuthMethodEventHandlers(): void {
   if (authEventHandlersRegistered) return;
   authEventHandlersRegistered = true;

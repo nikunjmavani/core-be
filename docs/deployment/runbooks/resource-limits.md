@@ -131,6 +131,10 @@ Use **`DATABASE_MIGRATION_URL`** (owner) for migrations and **`DATABASE_URL`** a
 
 Size the connection budget against Neon `max_connections` (see formula above).
 
+**Enforcement:** `pnpm db:migrate` fails fast when `DATABASE_MIGRATION_URL` (or the `DATABASE_URL` fallback) resolves to a pooler endpoint — the migration advisory lock is meaningless through transaction-mode PgBouncer. Use the direct host for migrations only.
+
+**Transport security (TLS):** in hosted deployments a boot assertion ([`assert-database-tls-safety.ts`](../../../src/infrastructure/database/assert-database-tls-safety.ts)) refuses to start unless the Postgres client verifies the server certificate — set `?sslmode=verify-full` (preferred) or `?sslmode=verify-ca` in `DATABASE_URL`, or set `DATABASE_SSL_REJECT_UNAUTHORIZED=true`. Verification uses Node's system trust store; managed providers (Neon, Railway) present certificates chained to public CAs already in that store, so no custom CA file is needed. Neon's bare `sslmode=require` encrypts but does **not** validate the chain (MITM exposure) and will be rejected at boot. Local/CI only warns.
+
 **Backups:** enable automated backups and point-in-time recovery on your managed Postgres provider (Neon/Railway); test restore quarterly.
 
 ### Row-level security (RLS) and the connection pool
@@ -153,10 +157,11 @@ Org-scoped HTTP routes (`X-Organization-Id` set) hold **one pool checkout** for 
 | `DATABASE_HTTP_STATEMENT_TIMEOUT_MS` | `5000`  | `SET LOCAL statement_timeout` on org RLS and other pinned HTTP transactions (legacy mode); also the connection-level `statement_timeout` when scoped contexts are enabled                         |
 | `DATABASE_STATEMENT_TIMEOUT_MS`      | `30000` | Connection-level default for workers and unpinned queries                                                                                                                                         |
 | `DATABASE_RLS_SCOPED_CONTEXTS`       | `true`  | When `true` (default), the per-request transaction pin is bypassed and services wrap DB work in `withOrganizationDatabaseContext`. Set `false` to restore legacy request-pinned RLS transactions. |
+| `DATABASE_RLS_LEGACY_PINNING_ACK`    | `false` | Break-glass only: must be `true` to allow `DATABASE_RLS_SCOPED_CONTEXTS=false` in `NODE_ENV=production` (schema rejects boot otherwise). |
 
-When `DATABASE_RLS_SCOPED_CONTEXTS=false`, org-scoped routes hold a pool checkout for the **full** request. Slow outbound calls (Stripe, S3, Resend) inside that window still occupy the slot — keep external calls **outside** `withOrganizationDatabaseContext` blocks even in scoped mode.
+When `DATABASE_RLS_SCOPED_CONTEXTS=false`, org-scoped routes hold a pool checkout for the **full** request. Slow outbound calls (Stripe, S3, Resend) inside that window still occupy the slot — keep external calls **outside** `withOrganizationDatabaseContext` blocks even in scoped mode. **Production** deployments must keep scoped contexts enabled unless an emergency rollback explicitly sets both `DATABASE_RLS_SCOPED_CONTEXTS=false` and `DATABASE_RLS_LEGACY_PINNING_ACK=true`.
 
-Non-org routes (auth, user without `X-Organization-Id`) use `request-statement-timeout` middleware with the same `DATABASE_HTTP_STATEMENT_TIMEOUT_MS`. `/health/*` and `/metrics` are excluded.
+Non-org routes (auth, user without `X-Organization-Id`) use `request-statement-timeout` middleware with the same `DATABASE_HTTP_STATEMENT_TIMEOUT_MS`. `/livez`, `/readyz`, and `/metrics` are excluded.
 
 ### DATABASE_RLS_SCOPED_CONTEXTS rollout (item 2)
 
@@ -208,7 +213,7 @@ Alerting runs on API startup (`registerPostgresPoolMetrics` in `server.ts`) and 
 
 3. **CD workflow:** `NODE_OPTIONS` can be synced from GitHub Environment variables (`NODE_OPTIONS`) via [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) to both API and worker services. Use equal or higher heap for workers if they run heavier jobs.
 
-4. **Graceful drain:** On `SIGTERM`/`SIGINT`, the API sets a process-wide draining flag before `app.close()`. **`GET /health` returns HTTP 503** with `status: "draining"` so the load balancer stops sending traffic while in-flight requests finish. Align platform **draining / health-check grace** with `SHUTDOWN_TIMEOUT_MS` (default 30s).
+4. **Graceful drain:** On `SIGTERM`/`SIGINT`, the API sets a process-wide draining flag before `app.close()`. **`GET /readyz` returns HTTP 503** with `status: "draining"` so the load balancer stops sending traffic while in-flight requests finish, while **`GET /livez` stays HTTP 200** until the process exits. Align platform **draining / health-check grace** with `SHUTDOWN_TIMEOUT_MS` (default 30s).
 
 ---
 

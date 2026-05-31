@@ -14,17 +14,18 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { loadConfig, getEnvironmentNames } from '../common/config.js';
-import { loadSecrets } from '../common/secrets.js';
-import { loadState } from '../common/state.js';
+import dotenv from 'dotenv';
+import { loadConfig, getEnvironmentNames } from '@tooling/setup/common/config.js';
+import { loadSecrets } from '@tooling/setup/common/secrets.js';
+import { loadState } from '@tooling/setup/common/state.js';
 import { buildEnvironmentVariables } from './build-env-vars.js';
-import * as logger from '../common/logger.js';
+import * as logger from '@tooling/setup/common/logger.js';
 import type {
   EnvironmentVariables,
   SetupConfig,
   SetupSecrets,
   SetupState,
-} from '../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../../');
 
@@ -54,16 +55,20 @@ function escapeEnvValue(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
-/** Parses KEY=value pairs from a dotenv file. */
+/**
+ * Parses KEY=value pairs from a dotenv file into LOGICAL values.
+ *
+ * Uses `dotenv.parse` so quoted values, escape sequences (`\n`, `\"`, `\\`),
+ * and multi-line single-quoted blocks (e.g. PEM keys) are unwrapped to their
+ * runtime string. Pairing this with `escapeEnvValue` on write is round-trip
+ * safe — without it, every regen would re-escape quotes/backslashes and the
+ * file would grow `\` characters and quote nesting on every `setup:infra` run.
+ */
 function parseEnvValues(filePath: string): Map<string, string> {
-  const map = new Map<string, string>();
-  if (!existsSync(filePath)) return map;
+  if (!existsSync(filePath)) return new Map();
   const content = readFileSync(filePath, 'utf-8');
-  for (const line of content.split('\n')) {
-    const match = line.match(ENV_KEY_RE);
-    if (match) map.set(match[1], match[2]);
-  }
-  return map;
+  const parsed = dotenv.parse(content);
+  return new Map(Object.entries(parsed));
 }
 
 /**
@@ -93,6 +98,10 @@ function buildEnvContent(
     const match = line.match(ENV_KEY_RE);
     if (match) {
       const key = match[1];
+      if (key === undefined) {
+        result.push(line);
+        continue;
+      }
 
       // Provisioned keys always get fresh values from state.
       if (key in provisioned) {
@@ -103,8 +112,9 @@ function buildEnvContent(
       }
 
       // Non-provisioned keys: preserve existing value if present, else keep default.
-      if (existingValues?.has(key)) {
-        result.push(`${key}=${escapeEnvValue(existingValues.get(key)!)}`);
+      const existingValue = existingValues?.get(key);
+      if (existingValue !== undefined) {
+        result.push(`${key}=${escapeEnvValue(existingValue)}`);
         continue;
       }
     }

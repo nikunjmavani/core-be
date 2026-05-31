@@ -1,4 +1,5 @@
-import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, lte, type SQL } from 'drizzle-orm';
+import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { logs } from '@/domains/audit/audit.schema.js';
 import {
@@ -32,6 +33,12 @@ function buildAuditFilterConditions(filters: AuditLogFilters): SQL[] {
   return conditions;
 }
 
+/**
+ * Data-access layer for `audit.logs`. Append-only writes via {@link AuditRepository.insert};
+ * reads expose cursor-paginated filtering on organization, actor, resource, action, and
+ * time window, with an optional capped `count(*)` opt-in (bounded by
+ * `LIST_TOTAL_COUNT_CAP`) for callers that need an approximate total.
+ */
 export class AuditRepository {
   async insert(entry: NewAuditLog): Promise<void> {
     await getRequestDatabase().insert(logs).values(entry);
@@ -61,11 +68,7 @@ export class AuditRepository {
       .limit(limit + 1);
 
     const countPromise = includeTotal
-      ? getRequestDatabase()
-          .select({ count: sql<number>`count(*)::int` })
-          .from(logs)
-          .where(countWhere)
-          .then((rows) => rows[0]?.count ?? 0)
+      ? countWithCap({ database: getRequestDatabase(), table: logs, where: countWhere })
       : Promise.resolve(null);
 
     const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);
@@ -82,6 +85,23 @@ export class AuditRepository {
       .select()
       .from(logs)
       .orderBy(desc(logs.created_at), desc(logs.id))
+      .limit(limit);
+  }
+
+  /** Lists audit activity rows authored by the user for a GDPR data-export bundle. */
+  async listActivityForUserDataExport(
+    actor_user_id: number,
+    limit: number,
+  ): Promise<{ action: string; resource_type: string; created_at: Date }[]> {
+    return getRequestDatabase()
+      .select({
+        action: logs.action,
+        resource_type: logs.resource_type,
+        created_at: logs.created_at,
+      })
+      .from(logs)
+      .where(eq(logs.actor_user_id, actor_user_id))
+      .orderBy(desc(logs.created_at))
       .limit(limit);
   }
 }

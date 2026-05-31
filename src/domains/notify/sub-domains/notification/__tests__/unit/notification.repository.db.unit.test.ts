@@ -56,7 +56,7 @@ describe('NotificationRepository (database)', () => {
     expect(organizationPublicIdWithoutOrg).toBeNull();
 
     const markedAll = await repository.markAllReadForUser(user.id);
-    expect(markedAll.length).toBeGreaterThanOrEqual(1);
+    expect(markedAll).toBeGreaterThanOrEqual(1);
 
     const deleted = await repository.deleteByPublicIdForUser(listed.items[0]!.public_id, user.id);
     expect(deleted?.public_id).toBe(listed.items[0]!.public_id);
@@ -108,9 +108,9 @@ describe('NotificationRepository (database)', () => {
     expect(await repository.deleteByPublicIdForUser('missing_public_id', user.id)).toBeNull();
   });
 
-  it('markAllReadForUser returns empty when nothing is unread', async () => {
+  it('markAllReadForUser returns zero when nothing is unread', async () => {
     const user = await createTestUser({ email: 'notify-read-all@example.com' });
-    expect(await repository.markAllReadForUser(user.id)).toEqual([]);
+    expect(await repository.markAllReadForUser(user.id)).toBe(0);
     expect(await repository.countUnreadForUser(user.id)).toBe(0);
   });
 

@@ -6,6 +6,21 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const PURGE_BATCH_SIZE = 500;
 
+/**
+ * Purge GDPR export rows whose presigned download window has elapsed and remove the matching S3
+ * objects (defense-in-depth alongside the bucket lifecycle policy).
+ *
+ * @remarks
+ * - **Algorithm:** loop in batches of `PURGE_BATCH_SIZE` (500); each batch selects expired rows
+ *   that still have an `s3_key`, deletes the S3 object, then deletes the row by id; exits when a
+ *   batch comes back smaller than the limit.
+ * - **Failure modes:** S3 delete failures are logged at `warn` and do not block the row delete
+ *   (lifecycle rules will eventually reap the object); database errors propagate to BullMQ.
+ * - **Side effects:** deletes from `auth.user_data_exports` and the S3 GDPR prefix; emits
+ *   `info` start/end logs and per-failure `warn` logs.
+ * - **Notes:** runs inside `withGlobalRetentionCleanupDatabaseContext` (no per-tenant RLS); idempotent
+ *   — re-running yields zero deletions once cleanup is complete.
+ */
 export async function runUserDataExportRetentionJob(
   databaseHandle: WorkerDatabaseHandle,
 ): Promise<{ deletedCount: number }> {

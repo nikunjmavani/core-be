@@ -13,8 +13,8 @@
  *   pnpm setup:infra --providers neon,jwt,github
  *   SETUP_INFRA_PROVIDERS=neon,jwt pnpm setup:infra --yes
  */
-import { loadEnvSetupIntoProcess } from '../common/secrets.js';
-import * as logger from '../common/logger.js';
+import { loadEnvSetupIntoProcess } from '@tooling/setup/common/secrets.js';
+import * as logger from '@tooling/setup/common/logger.js';
 import {
   runProvision,
   runCheck,
@@ -60,9 +60,11 @@ function parseProviderList(flagName: string): string[] | undefined {
 }
 
 function getProviderSelection(): ProviderSelectionInput {
+  const includeKeys = parseProviderList('--providers') ?? parseProviderList('--only-providers');
+  const skipKeys = parseProviderList('--skip-providers');
   return {
-    includeKeys: parseProviderList('--providers') ?? parseProviderList('--only-providers'),
-    skipKeys: parseProviderList('--skip-providers'),
+    ...(includeKeys !== undefined ? { includeKeys } : {}),
+    ...(skipKeys !== undefined ? { skipKeys } : {}),
   };
 }
 

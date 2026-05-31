@@ -1,7 +1,7 @@
 import type Stripe from 'stripe';
 import { sql } from '@/infrastructure/database/connection.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const SUBSCRIPTION_STRIPE_EVENT_TYPES = new Set([
@@ -73,6 +73,13 @@ export async function runWithOrganizationPublicIdForStripeWebhook<T>(
   return withOrganizationContext(organizationPublicId, callback);
 }
 
+/**
+ * Resolves the organization scope for `event` and runs `handler` inside that
+ * RLS context, returning `undefined` for events that legitimately have no
+ * organization (e.g. unhandled global event types). Throws when the event type
+ * requires tenancy (subscription lifecycle) but no organization could be found,
+ * so the caller marks the ledger row failed instead of silently skipping.
+ */
 export async function runStripeWebhookHandlerWithOrganizationContext<T>(
   event: Stripe.Event,
   handler: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,

@@ -4,8 +4,12 @@ import { NotImplementedError, UnauthorizedError, ValidationError } from '@/share
 import { createAuthController } from '@/domains/auth/auth.controller.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
-vi.mock('@/shared/middlewares/cookie-session-origin.pre-handler.js', () => ({
+vi.mock('@/shared/middlewares/session/cookie-session-origin.pre-handler.js', () => ({
   requireAllowedSourceOriginForCookieSessionRoute: vi.fn(),
+}));
+
+vi.mock('@/shared/utils/auth/recent-step-up.util.js', () => ({
+  recordRecentStepUp: vi.fn().mockResolvedValue(undefined),
 }));
 
 /**
@@ -70,9 +74,12 @@ describe('createAuthController', () => {
     login: vi.fn().mockResolvedValue({
       access_token: 'token',
       session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
     }),
     logout: vi.fn().mockResolvedValue(undefined),
-    refreshToken: vi.fn().mockResolvedValue({ access_token: 'new-token' }),
+    refreshToken: vi
+      .fn()
+      .mockResolvedValue({ access_token: 'new-token', refresh_secret: 'new-refresh-secret' }),
   };
 
   const authMethodService = {
@@ -95,22 +102,30 @@ describe('createAuthController', () => {
     verify: vi.fn().mockResolvedValue({
       access_token: 'token',
       session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
     }),
   };
 
   const oauthService = {
     listProviders: vi.fn().mockReturnValue({ providers: ['google', 'github'] }),
-    getRedirectUrl: vi.fn().mockResolvedValue({ redirect_url: 'https://oauth.example/authorize' }),
+    getRedirectUrl: vi
+      .fn()
+      .mockResolvedValue({ redirect_url: 'https://oauth.example/authorize', nonce: 'oauth-nonce' }),
     handleCallback: vi.fn().mockResolvedValue({
       access_token: 'token',
       session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
     }),
   };
 
   const mfaService = {
     verify: vi.fn().mockResolvedValue({ verified: true }),
     enroll: vi.fn().mockResolvedValue({ secret: 'secret', provisioning_uri: 'uri', method_id: 1 }),
-    challenge: vi.fn().mockResolvedValue({ access_token: 'token', session_public_id: 'session' }),
+    verifyLoginMfa: vi.fn().mockResolvedValue({
+      access_token: 'token',
+      session_public_id: 'session',
+      session_refresh_secret: 'refresh-secret',
+    }),
     listMfaMethods: vi.fn().mockResolvedValue([]),
     deleteMfa: vi.fn().mockResolvedValue(undefined),
   };
@@ -198,34 +213,34 @@ describe('createAuthController', () => {
   });
 
   it('MFA handlers delegate to mfa service', async () => {
-    const challengeReply = mockReply();
+    const loginReply = mockReply();
     await controller.enrollMfa(mockRequest({ body: { method_type: 'MFA_TOTP' } }), mockReply());
     await controller.verifyMfa(mockRequest({ body: { code: '123456' } }), mockReply());
-    await controller.challengeMfa(
-      mockRequest({ body: { user_id: generatePublicId(), code: '123456' } }),
-      challengeReply,
+    await controller.verifyMfaLogin(
+      mockRequest({ body: { mfa_session_token: 'session-token', totp_code: '123456' } }),
+      loginReply,
     );
     await controller.listMfaMethods(mockRequest(), mockReply());
     const deleteReply = mockReply();
     await controller.deleteMfa(mockRequest({ params: { mfaMethodId: '5' } }), deleteReply);
     expect(mfaService.enroll).toHaveBeenCalled();
-    expect(mfaService.challenge).toHaveBeenCalled();
+    expect(mfaService.verifyLoginMfa).toHaveBeenCalled();
     expect(deleteReply.code).toHaveBeenCalledWith(204);
   });
 
-  it('challengeMfa returns session_public_id and sets session cookie', async () => {
-    const challengeReply = mockReply();
-    const responsePayload = await controller.challengeMfa(
-      mockRequest({ body: { user_id: generatePublicId(), code: '123456' } }),
-      challengeReply,
+  it('verifyMfaLogin returns session_public_id and sets session cookie', async () => {
+    const loginReply = mockReply();
+    const responsePayload = await controller.verifyMfaLogin(
+      mockRequest({ body: { mfa_session_token: 'session-token', totp_code: '123456' } }),
+      loginReply,
     );
     expect(responsePayload.data).toMatchObject({
       access_token: 'token',
       session_public_id: 'session',
     });
-    expect(challengeReply.setCookie).toHaveBeenCalledWith(
+    expect(loginReply.setCookie).toHaveBeenCalledWith(
       'session_id',
-      'session',
+      'session.refresh-secret',
       expect.objectContaining({ httpOnly: true }),
     );
   });
@@ -263,16 +278,19 @@ describe('createAuthController', () => {
   it('refreshToken and revokeAllSessions use session cookie', async () => {
     const refreshReply = mockReply();
     await controller.refreshToken(
-      mockRequest({ cookies: { session_id: 'session' } }),
+      mockRequest({ cookies: { session_id: 'session.refresh-secret' } }),
       refreshReply,
     );
     const revokeAllReply = mockReply();
     await controller.revokeAllSessions(mockRequest(), revokeAllReply);
-    expect(authService.refreshToken).toHaveBeenCalledWith('session');
+    expect(authService.refreshToken).toHaveBeenCalledWith({
+      sessionPublicId: 'session',
+      refreshSecret: 'refresh-secret',
+    });
     expect(refreshReply.setCookie).toHaveBeenCalledWith(
-      'csrf_token',
-      expect.any(String),
-      expect.objectContaining({ httpOnly: false }),
+      'session_id',
+      'session.new-refresh-secret',
+      expect.objectContaining({ httpOnly: true }),
     );
     expect(revokeAllReply.clearCookie).toHaveBeenCalled();
   });
@@ -334,16 +352,6 @@ describe('createAuthController', () => {
     } as never);
     const reply = mockReply();
     await controller.verifyMagicLink(mockRequest({ body: { token: 'magic' } }), reply);
-    expect(reply.setCookie).not.toHaveBeenCalled();
-  });
-
-  it('challengeMfa skips session cookie when session_public_id is absent', async () => {
-    vi.mocked(mfaService.challenge).mockResolvedValueOnce({ access_token: 'token-only' } as never);
-    const reply = mockReply();
-    await controller.challengeMfa(
-      mockRequest({ body: { user_id: generatePublicId(), code: '123456' } }),
-      reply,
-    );
     expect(reply.setCookie).not.toHaveBeenCalled();
   });
 

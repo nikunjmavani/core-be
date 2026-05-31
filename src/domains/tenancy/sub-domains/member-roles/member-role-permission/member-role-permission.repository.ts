@@ -2,6 +2,12 @@ import { eq } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { role_permissions } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.schema.js';
 
+/**
+ * Drizzle data access for `tenancy.role_permissions`, the join table that
+ * couples organization roles to permission codes. {@link replace} implements
+ * set semantics: it deletes every existing row for the role before inserting
+ * the new set, so callers should pass the full desired permission list.
+ */
 export class MemberRolePermissionRepository {
   async findByRoleId(role_id: number) {
     return getRequestDatabase()

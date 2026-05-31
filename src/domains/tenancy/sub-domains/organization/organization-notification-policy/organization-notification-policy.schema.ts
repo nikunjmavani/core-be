@@ -14,6 +14,15 @@ import { tenancySchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * Drizzle table for `tenancy.organization_notification_policies` — defines,
+ * per organization, how each `(notification_type, channel)` pair is
+ * delivered (default_enabled / is_mandatory / muted_until). The
+ * `idx_org_notif_policy_unique` index enforces a single policy per pair, the
+ * channel `check` constraint restricts values to
+ * `EMAIL`/`SMS`/`PUSH`/`IN_APP`, and the
+ * `organization_notification_policies_tenant_isolation` policy enforces RLS.
+ */
 export const organization_notification_policies = tenancySchema
   .table(
     'organization_notification_policies',

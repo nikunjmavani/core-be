@@ -25,7 +25,7 @@ vi.mock('@/shared/utils/security/encryption.util.js', () => ({
   encryptPayload: (...arguments_: unknown[]) => encryptPayloadMock(...arguments_),
 }));
 
-import encryptionMiddleware from '@/shared/middlewares/encryption.middleware.js';
+import encryptionMiddleware from '@/shared/middlewares/security/encryption.middleware.js';
 
 async function getOnSendHook(application: ReturnType<typeof Fastify>) {
   const addHook = vi.spyOn(application, 'addHook');

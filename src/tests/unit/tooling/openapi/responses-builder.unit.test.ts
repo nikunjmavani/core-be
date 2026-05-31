@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildResponses } from '../../../../../tooling/openapi/emitters/responses-builder.js';
+import { buildResponses } from '@tooling/openapi/emitters/responses-builder.js';
 
 describe('responses-builder', () => {
   it('buildResponses includes standard error responses', () => {
-    const responses = buildResponses('GET', 'GET /health', {});
+    const responses = buildResponses('GET', 'GET /readyz', {});
 
     expect(responses['400']).toBeDefined();
     expect(responses['401']).toBeDefined();
@@ -18,7 +18,7 @@ describe('responses-builder', () => {
   });
 
   it('buildResponses uses route response map when defined', () => {
-    const responses = buildResponses('GET', 'GET /health', { success: 'OK' });
+    const responses = buildResponses('GET', 'GET /readyz', { success: 'OK' });
     expect(responses['200']).toMatchObject({ description: 'OK' });
   });
 });

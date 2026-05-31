@@ -19,17 +19,36 @@ on:
         required: false
       TEST_REPORT_EMAIL_TO:
         required: false
+    outputs:
+      coverage_gate_result:
+        description: Summary emitted by the merged coverage gate job
+        value: ${{ jobs.coverage-gate.outputs.coverage_summary }}
+  workflow_dispatch:
+    inputs:
+      merge_commit_sha:
+        description: Commit SHA to test
+        required: false
+        type: string
+        default: ''
+      target_branch:
+        description: Branch context (main or dev)
+        required: true
+        type: choice
+        options:
+          - main
+          - dev
 
 permissions:
   contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   matrix-config:
     name: Matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       shards: ${{ steps.config.outputs.shards }}
     steps:
@@ -46,6 +65,7 @@ jobs:
     name: ${{ matrix.shard.name }}
     needs: matrix-config
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
@@ -93,15 +113,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.merge_commit_sha }}
+          ref: ${{ inputs.merge_commit_sha || github.sha }}
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Cache Vitest
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: node_modules/.vitest
           key: vitest-integration-${{ runner.os }}-${{ matrix.shard.id }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -136,11 +156,11 @@ jobs:
 
       - name: Upload coverage artifact
         if: always() && hashFiles(format('coverage-{0}/**', matrix.shard.id)) != ''
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-${{ matrix.shard.id }}
           path: coverage-${{ matrix.shard.id }}/
-          retention-days: 14
+          retention-days: ${{ github.event_name == 'pull_request' && 30 || 14 }}
 
       - name: Send test result email
         if: always() && env.RESEND_API_KEY != '' && env.TEST_REPORT_EMAIL_TO != ''
@@ -161,14 +181,17 @@ jobs:
     name: Coverage
     needs: run
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      coverage_summary: ${{ steps.summary.outputs.coverage_summary }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.merge_commit_sha }}
+          ref: ${{ inputs.merge_commit_sha || github.sha }}
 
       - name: Download all shard coverage artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: coverage-*
           path: coverage-shards
@@ -200,8 +223,13 @@ jobs:
 
       - name: Upload merged coverage artifact
         if: always() && hashFiles('coverage-merged/**') != ''
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-merged
           path: coverage-merged/
-          retention-days: 14
+          retention-days: ${{ github.event_name == 'pull_request' && 30 || 14 }}
+
+      - name: Emit coverage summary output
+        id: summary
+        if: always()
+        run: echo "coverage_summary=coverage-gate-complete" >> "$GITHUB_OUTPUT"

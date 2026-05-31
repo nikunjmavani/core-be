@@ -4,6 +4,10 @@ import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-tr
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  OTEL_SERVICE_NAME_API,
+  OTEL_SERVICE_NAME_WORKER,
+} from '@/shared/constants/project-identity.constants.js';
+import {
   captureTraceContextForPropagation,
   runWithPropagatedTraceContext,
 } from '@/infrastructure/observability/tracing/trace-context.util.js';
@@ -73,7 +77,7 @@ describe('initOpenTelemetry / shutdownOpenTelemetry', () => {
       '@/infrastructure/observability/tracing/otel.js'
     );
 
-    initOpenTelemetry('core-be-api');
+    initOpenTelemetry(OTEL_SERVICE_NAME_API);
     await shutdownOpenTelemetry();
 
     expect(startMock).not.toHaveBeenCalled();
@@ -89,7 +93,7 @@ describe('initOpenTelemetry / shutdownOpenTelemetry', () => {
     });
 
     const { initOpenTelemetry } = await import('@/infrastructure/observability/tracing/otel.js');
-    initOpenTelemetry('core-be-api');
+    initOpenTelemetry(OTEL_SERVICE_NAME_API);
 
     expect(startMock).toHaveBeenCalledOnce();
     expect(otlpExporterConstructorMock).toHaveBeenCalledWith({
@@ -109,7 +113,7 @@ describe('initOpenTelemetry / shutdownOpenTelemetry', () => {
       '@/infrastructure/observability/tracing/otel.js'
     );
 
-    initOpenTelemetry('core-be-worker');
+    initOpenTelemetry(OTEL_SERVICE_NAME_WORKER);
     await shutdownOpenTelemetry();
 
     expect(shutdownMock).toHaveBeenCalledOnce();
@@ -174,6 +178,7 @@ describe('trace context propagation (API → mail enqueue → worker)', () => {
 
     vi.doMock('@/infrastructure/queue/connection.js', () => ({
       getBullMQConnectionOptions: () => ({}),
+      getBullMQProducerConnectionOptions: () => ({ enableOfflineQueue: false }),
     }));
 
     vi.doMock('@/infrastructure/mail/mail-outbox.repository.js', () => ({

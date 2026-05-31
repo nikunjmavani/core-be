@@ -7,7 +7,7 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
 }));
 
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
-import apiVersioningMiddleware from '@/shared/middlewares/api-versioning.middleware.js';
+import apiVersioningMiddleware from '@/shared/middlewares/core/api-versioning.middleware.js';
 import {
   applyDeprecatedEndpointHeaders,
   formatHttpDate,

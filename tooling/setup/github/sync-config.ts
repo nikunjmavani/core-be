@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { loadConfig, getEnvironmentNames } from '../common/config.js';
-import type { SetupConfig } from '../common/types.js';
+import { buildProjectIdentitySnapshot } from '@tooling/setup/codegen/project-identity.util.js';
+import { loadConfig, getEnvironmentNames } from '@tooling/setup/common/config.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 const projectRoot = resolve(import.meta.dirname, '../../..');
 const environmentExamplePath = resolve(projectRoot, '.env.example');
@@ -40,7 +41,10 @@ function extractNodeEnvironmentValues(): string[] {
   if (!match) {
     throw new Error(`Could not locate nodeEnvSchema enum in ${environmentSchemaPath}`);
   }
-  return [...(match[1]?.matchAll(/'([a-z][a-z0-9-]*)'/g) ?? [])].map((m) => m[1]!);
+  const enumSource = match[1] ?? '';
+  return [...enumSource.matchAll(/'([a-z][a-z0-9-]*)'/g)]
+    .map((enumMatch) => enumMatch[1])
+    .filter((value): value is string => value !== undefined);
 }
 
 function listGithubEnvironmentConfigs(): string[] {
@@ -62,7 +66,12 @@ function parseWorkflowBranchEnvironmentMap(): Map<string, string> {
   const lineRegex = /([a-z][a-z0-9-]*)\)\s*echo\s+"environment=([a-z][a-z0-9-]*)"/g;
   const map = new Map<string, string>();
   for (const match of source.matchAll(lineRegex)) {
-    map.set(match[1]!, match[2]!);
+    const branch = match[1];
+    const environment = match[2];
+    if (branch === undefined || environment === undefined) {
+      continue;
+    }
+    map.set(branch, environment);
   }
   return map;
 }
@@ -145,6 +154,28 @@ export function validateGithubSyncConsistency(config: SetupConfig): GitHubSyncCo
       issues.push({
         dimension: 'setup.config.json ↔ reusable-railway-deploy.yml',
         detail: `Configured branch "${env.branch}" must map to environment "${env.name}" in reusable-railway-deploy.yml.`,
+      });
+    }
+  }
+
+  const syncConfigPath = resolve(projectRoot, '.github/sync.config.json');
+  if (existsSync(syncConfigPath)) {
+    const snapshot = buildProjectIdentitySnapshot(config);
+    const expectedSyncConfig = `${JSON.stringify(
+      {
+        environments: snapshot.environments.map((environment) => ({
+          name: environment.name,
+          branch: environment.branch,
+        })),
+      },
+      null,
+      2,
+    )}\n`;
+    const actualSyncConfig = readFileSync(syncConfigPath, 'utf-8');
+    if (actualSyncConfig !== expectedSyncConfig) {
+      issues.push({
+        dimension: 'setup.config.json ↔ .github/sync.config.json',
+        detail: 'Generated sync.config.json is stale. Run: pnpm tool:generate-project-identity',
       });
     }
   }
@@ -244,10 +275,13 @@ function buildBranchRuleset(branch: string): string {
           required_status_checks: [
             { context: 'PR CI / Lint' },
             { context: 'PR CI / Typecheck' },
+            { context: 'PR CI / Static sync' },
             { context: 'PR CI / Unit + global (pull_request)' },
             { context: 'PR CI / Migration lint' },
             { context: 'PR CI / Build verify' },
-            { context: 'PR CI / Security scan' },
+            { context: 'PR CI / Security audit' },
+            { context: 'PR CI / Security secrets' },
+            { context: 'PR CI / Security SAST' },
             { context: 'PR CI / Contract + property' },
             { context: 'PR Governance / Checks' },
           ],

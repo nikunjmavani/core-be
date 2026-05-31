@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { resolve } from 'node:path';
 import {
   getMaxMigrationPrefix,
-  incrementMigrationPrefix,
   lintMigrationTimestamps,
   suggestNextMigrationPrefix,
 } from '@/scripts/validators/migration/lint-migrations.js';
@@ -71,14 +70,34 @@ describe('migration prefix helpers', () => {
     ).toBe('20260530000002');
   });
 
-  it('incrementMigrationPrefix adds one to the numeric prefix', () => {
-    expect(incrementMigrationPrefix('20260530000002')).toBe('20260530000003');
+  it('suggestNextMigrationPrefix always uses the wall clock, even when now <= current max', () => {
+    const now = new Date('2026-05-28T05:43:21.000Z');
+    // `now` formats to 20260528054321, which is LESS than the current max below.
+    // There is no increment fallback: the helper still returns the wall-clock
+    // prefix and leaves monotonic enforcement to lintMigrationTimestamps.
+    expect(
+      suggestNextMigrationPrefix(['20260530000001_a.sql', '20260530000002_b.sql'], now),
+    ).toEqual({
+      currentMax: '20260530000002',
+      nextPrefix: '20260528054321',
+    });
   });
 
-  it('suggestNextMigrationPrefix increments after current max', () => {
-    expect(suggestNextMigrationPrefix(['20260530000001_a.sql', '20260530000002_b.sql'])).toEqual({
-      currentMax: '20260530000002',
-      nextPrefix: '20260530000003',
+  it('suggestNextMigrationPrefix uses real UTC time when greater than current max', () => {
+    const now = new Date('2026-05-30T05:43:21.000Z');
+    expect(
+      suggestNextMigrationPrefix(['20260520000001_a.sql', '20260520000002_b.sql'], now),
+    ).toEqual({
+      currentMax: '20260520000002',
+      nextPrefix: '20260530054321',
+    });
+  });
+
+  it('suggestNextMigrationPrefix uses real UTC time when no migrations exist', () => {
+    const now = new Date('2026-05-28T12:00:00.000Z');
+    expect(suggestNextMigrationPrefix([], now)).toEqual({
+      currentMax: null,
+      nextPrefix: '20260528120000',
     });
   });
 });

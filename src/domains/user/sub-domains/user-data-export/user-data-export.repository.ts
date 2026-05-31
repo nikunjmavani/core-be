@@ -1,10 +1,11 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
-import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database-context.js';
+import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { user_data_exports } from '@/domains/user/sub-domains/user-data-export/user-data-export.schema.js';
 import type { UserDataExportStatus } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
 
+/** Row payload accepted by {@link UserDataExportRepository.create} when enqueuing a new export. */
 export type UserDataExportInsert = {
   public_id: string;
   user_id: number;
@@ -13,6 +14,19 @@ export type UserDataExportInsert = {
   expires_at: Date;
 };
 
+/**
+ * Drizzle data-access for `auth.user_data_exports`.
+ *
+ * @remarks
+ * - **Algorithm:** thin CRUD on a single table; reads/writes always scope by `(public_id, user_id)`
+ *   so callers cannot cross users by guessing a public id.
+ * - **Failure modes:** lookups return `null` when missing; `updateStatus` returns `null` when the
+ *   row was deleted concurrently (offboarding) — callers should treat that as a cancelled job.
+ * - **Side effects:** writes to `auth.user_data_exports` only; S3 / queue side effects live in the
+ *   service.
+ * - **Notes:** dual-mode handle — request-scoped DB (HTTP) or worker-scoped handle (resolved via
+ *   {@link createWorkerUserDataExportRepository}); never call directly from a worker without a handle.
+ */
 export class UserDataExportRepository {
   constructor(private readonly databaseHandle?: RequestScopedPostgresDatabase) {}
 
@@ -42,6 +56,20 @@ export class UserDataExportRepository {
         and(
           eq(user_data_exports.public_id, export_public_id),
           eq(user_data_exports.user_id, user_id),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  async findPendingOrProcessingByUserId(user_id: number) {
+    const rows = await this.db()
+      .select()
+      .from(user_data_exports)
+      .where(
+        and(
+          eq(user_data_exports.user_id, user_id),
+          inArray(user_data_exports.status, ['pending', 'processing']),
         ),
       )
       .limit(1);

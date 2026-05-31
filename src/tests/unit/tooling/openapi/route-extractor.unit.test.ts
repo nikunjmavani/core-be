@@ -6,7 +6,7 @@ import {
   collectRoutes,
   extractRoutesFromFile,
   findRouteFiles,
-} from '../../../../../tooling/openapi/extractors/route-extractor.js';
+} from '@tooling/openapi/extractors/route-extractor.js';
 
 describe('route-extractor', () => {
   it('extractRoutesFromFile parses Fastify route registrations', () => {
@@ -33,8 +33,8 @@ describe('route-extractor', () => {
     const routes = collectRoutes();
     const keys = routes.map((route) => `${route.method} ${route.path}`);
 
-    expect(keys).toContain('GET /health');
-    expect(keys).toContain('GET /health');
+    expect(keys).toContain('GET /livez');
+    expect(keys).toContain('GET /readyz');
     expect(keys).toContain('GET /api/v1/mcp');
     expect(keys).toContain('POST /api/v1/mcp');
     expect(keys.some((key) => key.startsWith('GET /api/v1/auth'))).toBe(true);

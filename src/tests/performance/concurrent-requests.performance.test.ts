@@ -29,7 +29,7 @@ describe('Performance: Concurrent Requests', () => {
 
   it('should handle 50 parallel unauthenticated requests', async () => {
     const promises = Array.from({ length: 50 }, () =>
-      request.get('/health').catch(() => ({ status: 503 })),
+      request.get('/livez').catch(() => ({ status: 503 })),
     );
 
     const results = await Promise.all(promises);

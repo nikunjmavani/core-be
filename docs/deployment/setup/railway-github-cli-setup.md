@@ -111,7 +111,47 @@ Push to **dev** or **main**. The deploy workflow uses the corresponding GitHub e
 
 ---
 
+## Rotating an invalid or expired Railway token
+
+The `Deploy` job in [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) runs `railway whoami` during preflight. If `RAILWAY_TOKEN` is missing, revoked, expired, or scoped to a different project, the step fails before any database migrations or `railway variable set` calls with:
+
+```text
+Railway rejected RAILWAY_TOKEN for GitHub Environment '<env>': Invalid RAILWAY_TOKEN. ...
+```
+
+To recover:
+
+1. **Mint a new project token** — Railway → Project → Settings → Tokens → Create token. Pick the project that matches the GitHub Environment (`development` or `production`).
+2. **Update the GitHub Environment secret**:
+
+   ```bash
+   gh secret set RAILWAY_TOKEN --env development --body "paste-new-token"
+   # or for production
+   gh secret set RAILWAY_TOKEN --env production --body "paste-new-token"
+   ```
+
+   Or push from the local env file via `pnpm github:sync <environment>`.
+
+3. **Re-run the failed `Deploy` job** from the Actions tab. The preflight will pass once `railway whoami` succeeds with the new token.
+
+If the token authenticates but a later step still fails with permission errors, confirm `RAILWAY_SERVICE_ID` / `RAILWAY_WORKER_SERVICE_ID` belong to the same project the token is scoped to.
+
+---
+
+## Custom domain (SSL)
+
+After deploy, Railway exposes the service on a generated `*.up.railway.app` hostname. To map a domain you own (e.g. `api.example.com`) and let Railway issue + renew a Let's Encrypt cert, run:
+
+```bash
+pnpm setup:domain --all-environments --domain-template "api.{env}.example.com"
+```
+
+The command attaches the custom domain, prints the DNS records to add at your DNS provider, and polls until DNS verifies and the certificate issues. See **[../runbooks/railway-custom-domain.md](../runbooks/railway-custom-domain.md)** for full flag reference, troubleshooting, and the env-var follow-ups (`ALLOWED_ORIGINS`, `FRONTEND_URL`, OAuth redirect URIs).
+
+---
+
 ## See Also
 
 - [setup-automation.md](setup-automation.md) — Automated provisioning (recommended)
 - [cicd-and-deployment.md](../ci-cd/cicd-and-deployment.md) — Full CI/CD reference
+- [../runbooks/railway-custom-domain.md](../runbooks/railway-custom-domain.md) — Attach a custom domain (SSL) via `pnpm setup:domain`

@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
-import * as logger from '../common/logger.js';
-import type { SetupConfig } from '../common/types.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 interface PrerequisiteCheck {
   name: string;
@@ -119,7 +119,7 @@ export function checkPrerequisites(config: SetupConfig): boolean {
       } else {
         const hint = prerequisite.tokenEnvKey
           ? `set ${prerequisite.tokenEnvKey} in .env.setup or run: ${prerequisite.authCheck?.split(' ').slice(0, 2).join(' ') ?? ''} login`
-          : `run: ${prerequisite.authCheck!.split(' ').slice(0, 2).join(' ')} login`;
+          : `run: ${prerequisite.authCheck?.split(' ').slice(0, 2).join(' ')} login`;
         logger.warn(`  └─ NOT authenticated — ${hint}`);
         allPassed = false;
       }

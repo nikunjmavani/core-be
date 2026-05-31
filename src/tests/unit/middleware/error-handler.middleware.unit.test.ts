@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z, ZodError } from 'zod';
-import errorHandlerMiddleware from '@/shared/middlewares/error-handler.middleware.js';
+import errorHandlerMiddleware from '@/shared/middlewares/core/error-handler.middleware.js';
 import { AppError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 
 vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({

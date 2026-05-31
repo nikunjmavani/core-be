@@ -17,6 +17,11 @@ import { completeUserContainer, createUserContainerBase } from '@/domains/user/u
 import { UserDataExportService } from '@/domains/user/sub-domains/user-data-export/user-data-export.service.js';
 import { UserDataExportRepository } from '@/domains/user/sub-domains/user-data-export/user-data-export.repository.js';
 
+/**
+ * Aggregate of every domain container the API and worker processes need.
+ * Built once at startup by {@link createDomainContainers} so cross-domain
+ * service references are wired consistently.
+ */
 export type DomainContainers = {
   userDomain: UserContainer;
   tenancyDomain: TenancyContainer;
@@ -76,6 +81,13 @@ export function createDomainContainers(
   });
 
   tenancyDomain.organizationService.wireOffboardingUploadService(uploadDomain.uploadService);
+
+  userDomain.userDataExportService.wireCrossDomainServices({
+    authSessionService: authDomain.authSessionService,
+    membershipService: tenancyDomain.membershipService,
+    notificationService: notifyDomain.notificationService,
+    auditService: auditDomain.auditService,
+  });
 
   return {
     userDomain,

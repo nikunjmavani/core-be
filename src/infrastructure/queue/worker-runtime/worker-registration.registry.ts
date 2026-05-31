@@ -3,8 +3,8 @@ import { createMailOutboxSweeperWorker } from '@/infrastructure/mail/workers/mai
 import { MAIL_OUTBOX_SWEEPER_QUEUE_NAME } from '@/infrastructure/mail/workers/mail-outbox-sweeper.constants.js';
 import { MAIL_QUEUE_NAME } from '@/infrastructure/mail/queues/mail.queue.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
-import { createWebhookDeliveryWorker } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js';
-import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
+import { createWebhookDeliveryWorker } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
+import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
 import { createNotificationWorker } from '@/domains/notify/sub-domains/notification/workers/notification.worker.js';
 import { NOTIFICATION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { createAuditRetentionWorker } from '@/domains/audit/workers/audit-retention.worker.js';
@@ -50,8 +50,6 @@ import { createStripeWebhookEventReclaimWorker } from '@/domains/billing/sub-dom
 import { STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-reclaim.constants.js';
 import { createNotificationRetentionWorker } from '@/domains/notify/sub-domains/notification/workers/notification-retention.worker.js';
 import { NOTIFICATION_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/workers/notification-retention.constants.js';
-import { createPartitionMaintenanceWorker } from '@/infrastructure/queue/partition-maintenance/partition-maintenance.worker.js';
-import { PARTITION_MAINTENANCE_QUEUE_NAME } from '@/infrastructure/queue/partition-maintenance/partition-maintenance.constants.js';
 import {
   isStripeConfigured,
   isStripeWebhookIngressConfigured,
@@ -73,6 +71,13 @@ import type { WorkerContainers } from '@/worker-containers.js';
  */
 export type WorkerCriticality = 'throughput' | 'maintenance' | 'observability';
 
+/**
+ * Single row in the worker registry — declarative metadata plus a `create` factory used
+ * by {@link registerDomainWorkers} to instantiate the BullMQ worker. Drives pool
+ * budgeting, family-based split worker selection, `auditSchedulerRegistryConsistency`
+ * drift detection, and `isEnabled` gating for workers that depend on optional secrets
+ * (Resend, Stripe).
+ */
 export type WorkerQueueRegistrationDefinition = {
   readonly queueName: string;
   readonly family: WorkerQueueFamily;
@@ -152,7 +157,9 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     usesPostgres: true,
     scheduled: false,
     criticality: 'throughput',
-    holdsConnectionDuringExternalIo: true,
+    // Claim + record run in separate short transactions; the outbound POST happens with no
+    // open Postgres checkout, so delivery no longer pins a connection during external IO.
+    holdsConnectionDuringExternalIo: false,
     resolvePostgresConcurrency: () => getWorkerConcurrencyWebhook(),
     create: () => createWebhookDeliveryWorker(),
   },
@@ -222,8 +229,6 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     queueName: NOTIFICATION_RETENTION_QUEUE_NAME,
     family: 'retention',
     logLabel: 'notification retention worker',
-    // Worker registered, no cron in scheduler.ts yet — orphan flagged by auditSchedulerRegistryConsistency.
-    scheduled: false,
     create: () => createNotificationRetentionWorker(),
   }),
   retentionDefinition({
@@ -237,14 +242,6 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     family: 'stripe',
     logLabel: 'stripe webhook event reclaim worker',
     create: () => createStripeWebhookEventReclaimWorker(),
-  }),
-  retentionDefinition({
-    queueName: PARTITION_MAINTENANCE_QUEUE_NAME,
-    family: 'retention',
-    logLabel: 'partition maintenance worker',
-    // Worker registered, no cron in scheduler.ts yet — orphan flagged by auditSchedulerRegistryConsistency.
-    scheduled: false,
-    create: () => createPartitionMaintenanceWorker(),
   }),
   retentionDefinition({
     queueName: WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME,
@@ -329,10 +326,16 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
   },
 ];
 
+/** Returns the full registry (every queue family) — used by the scheduler audit and pool-budget calculations. */
 export function getWorkerQueueRegistrationDefinitions(): readonly WorkerQueueRegistrationDefinition[] {
   return WORKER_QUEUE_REGISTRATION_DEFINITIONS;
 }
 
+/**
+ * Filters the registry down to definitions whose `family` is in the selected set — used
+ * by split worker services so `pnpm dev:worker` only starts the queues the local process
+ * is responsible for.
+ */
 export function getWorkerRegistrationsForFamilies(
   families: readonly WorkerQueueFamily[],
 ): WorkerQueueRegistrationDefinition[] {

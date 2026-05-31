@@ -17,7 +17,7 @@ permissions:
   pull-requests: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   ci-failed-triage:
@@ -31,6 +31,7 @@ jobs:
       ) &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Open or update Dependabot CI failure issue
         env:

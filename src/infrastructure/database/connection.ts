@@ -2,28 +2,29 @@ import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { THIRTY_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 import { env } from '@/shared/config/env.config.js';
+import {
+  isNeonPoolerConnection,
+  isStrictDatabaseTlsVerification,
+  parseSslMode,
+} from '@/infrastructure/database/utils/connection-url.util.js';
 
-function parseSslMode(databaseUrl: string): string | null {
-  const match = databaseUrl.match(/[?&]sslmode=([^&]+)/i);
-  if (!match?.[1]) return null;
-  const raw = match[1];
-  try {
-    return decodeURIComponent(raw).toLowerCase();
-  } catch {
-    return raw.toLowerCase();
-  }
-}
+import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool/pool.constants.js';
 
-export function isNeonPoolerConnection(databaseUrl: string): boolean {
-  return /-pooler\./i.test(databaseUrl) || /[?&]pgbouncer=true/i.test(databaseUrl);
-}
+export { isNeonPoolerConnection };
+export { DEFAULT_DATABASE_POOL_MAX };
 
+/**
+ * Builds the postgres.js client options from `DATABASE_URL` + env: SSL mode parsed from
+ * the URL (and tightened by `DATABASE_SSL_REJECT_UNAUTHORIZED`), per-connection
+ * `statement_timeout` / `idle_in_transaction_session_timeout`, pool sizing, and a
+ * Neon-pooler-aware `prepare: false` toggle.
+ */
 export function buildPostgresOptions(databaseUrl: string) {
   const sslMode = parseSslMode(databaseUrl);
-  const strictVerification =
-    sslMode === 'verify-ca' ||
-    sslMode === 'verify-full' ||
-    env.DATABASE_SSL_REJECT_UNAUTHORIZED === true;
+  const strictVerification = isStrictDatabaseTlsVerification({
+    databaseUrl,
+    rejectUnauthorizedOverride: env.DATABASE_SSL_REJECT_UNAUTHORIZED,
+  });
 
   const sslEnabled = sslMode === 'disable' ? false : sslMode !== null || env.DATABASE_SSL_ENABLED;
 
@@ -50,7 +51,7 @@ export function buildPostgresOptions(databaseUrl: string) {
   };
 
   return {
-    max: env.DATABASE_POOL_MAX ?? 10,
+    max: env.DATABASE_POOL_MAX ?? DEFAULT_DATABASE_POOL_MAX,
     idle_timeout: env.DATABASE_POOL_IDLE_TIMEOUT_SECONDS ?? 30,
     connect_timeout: env.DATABASE_POOL_CONNECT_TIMEOUT_SECONDS ?? 10,
     max_lifetime: env.DATABASE_POOL_MAX_LIFETIME_SECONDS ?? 1800,
@@ -67,8 +68,17 @@ export function buildPostgresOptions(databaseUrl: string) {
  */
 export const sql = postgres(env.DATABASE_URL, buildPostgresOptions(env.DATABASE_URL));
 
+/**
+ * Process-wide Drizzle handle bound to the {@link sql} postgres.js pool — the
+ * default database accessor for repositories and ad-hoc queries when no
+ * request/worker context has pinned a transaction-scoped handle in ALS.
+ */
 export const database = drizzle(sql);
 
+/**
+ * Drains the postgres.js pool and waits up to `SHUTDOWN_TIMEOUT_MS` (30s default)
+ * for in-flight queries before terminating. Called from the shutdown middleware.
+ */
 export async function closeDatabase(): Promise<void> {
   const timeout = env.SHUTDOWN_TIMEOUT_MS ?? THIRTY_SECONDS_MS;
   await sql.end({ timeout });

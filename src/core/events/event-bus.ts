@@ -1,6 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+/**
+ * Envelope for an in-process domain event published through {@link eventBus}.
+ * Handlers receive the event verbatim; downstream BullMQ jobs receive the
+ * payload plus `requestId` for log correlation across the async boundary.
+ */
 export interface DomainEvent<TPayload = unknown> {
   type: string;
   payload: TPayload;
@@ -27,6 +32,11 @@ export function buildDomainEvent<TPayload>(
   return event;
 }
 
+/**
+ * Async function registered with {@link EventBus.on}. Failures are logged but
+ * never propagate — the bus catches and swallows handler errors so an
+ * in-process side effect cannot fail the originating HTTP request.
+ */
 export type EventHandler<TPayload = unknown> = (event: DomainEvent<TPayload>) => Promise<void>;
 
 type OnCommitTask = () => Promise<void>;
@@ -47,6 +57,16 @@ function getOrCreateOnCommitQueue(): OnCommitQueue {
   return queue;
 }
 
+/**
+ * In-process publish-subscribe bus for domain events. One singleton instance
+ * (`eventBus`) is exported below; services emit through it and handlers
+ * registered at startup react. Handler errors are caught and logged so a
+ * failing handler cannot bubble up and fail the originating HTTP request.
+ *
+ * Pairs with `onCommit` / `flushOnCommit` for the transactional-outbox
+ * pattern: side effects (BullMQ enqueues) wait until the surrounding HTTP
+ * transaction commits before they fire.
+ */
 export class EventBus {
   private handlers: Map<string, EventHandler[]> = new Map();
 
@@ -98,6 +118,31 @@ export class EventBus {
       }),
     );
   }
+
+  /**
+   * Like {@link emit} but propagates the first handler failure to the caller.
+   * Used for auth recovery/login email paths where a silent handler failure
+   * must not return success to the client.
+   */
+  async emitStrict(event: DomainEvent): Promise<void> {
+    const handlers = this.handlers.get(event.type) ?? [];
+    if (handlers.length === 0) return;
+
+    const errors: unknown[] = [];
+    await Promise.all(
+      handlers.map(async (handler) => {
+        try {
+          await handler(event);
+        } catch (error) {
+          errors.push(error);
+          logger.error({ eventType: event.type, error }, 'Domain event handler failed');
+        }
+      }),
+    );
+    if (errors.length > 0) {
+      throw errors[0];
+    }
+  }
 }
 
 /** Runs `callback` with an isolated onCommit task queue (HTTP request scope). */
@@ -110,6 +155,11 @@ export function enterOnCommitScope(): void {
   onCommitStorage.enterWith({ tasks: [] });
 }
 
+/**
+ * Process-wide {@link EventBus} singleton. Services import this directly to
+ * emit; handlers are registered against it at startup by
+ * {@link registerEventHandlers} and the per-domain container registrations.
+ */
 export const eventBus = new EventBus();
 
 /**

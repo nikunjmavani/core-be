@@ -201,6 +201,22 @@
       }
     },
     {
+      "includes": ["tooling/setup/codegen/generate-project-identity.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/shared/constants/project-identity.constants.ts"],
+      "formatter": {
+        "enabled": false
+      }
+    },
+    {
       "includes": ["tooling/**/*.ts"],
       "linter": {
         "rules": {

@@ -19,6 +19,13 @@ import {
 } from '@/infrastructure/queue/worker-runtime/worker-queue-family.util.js';
 import type { WorkerContainers } from '@/worker-containers.js';
 
+/**
+ * Per-queue contribution to the worker's Postgres pool budget. `postgresConcurrency` is
+ * the BullMQ concurrency this queue runs at when enabled (0 when the worker is gated off
+ * by `isEnabled`, e.g. missing Resend/Stripe secrets), and
+ * `holdsConnectionDuringExternalIo` flags workers that keep their pool checkout while
+ * doing outbound HTTP/S3 work — those amplify pool starvation under slow externals.
+ */
 export type WorkerPostgresQueueDemandEntry = {
   readonly queueName: string;
   readonly family: WorkerQueueFamily;
@@ -28,6 +35,11 @@ export type WorkerPostgresQueueDemandEntry = {
   readonly enabled: boolean;
 };
 
+/**
+ * Aggregated Postgres-pool demand for this worker process, summed across every enabled
+ * BullMQ worker in the selected {@link WorkerQueueFamily}s. Used at bootstrap to log
+ * `worker.queue_families.selected` and to gate replica-mode pool sizing.
+ */
 export type WorkerPostgresPoolDemandReport = {
   readonly selectedFamilies: readonly WorkerQueueFamily[];
   readonly monolithicWorker: boolean;

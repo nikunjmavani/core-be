@@ -3,7 +3,7 @@ import { env } from '@/shared/config/env.config.js';
 import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
 import { ExternalServiceError } from '@/infrastructure/outbound/outbound-error.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import type { OAuthProfile } from '../oauth.types.js';
+import type { OAuthProfile } from '@/domains/auth/sub-domains/auth-method/oauth/oauth.types.js';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -16,7 +16,8 @@ function getGoogleRedirectUri(): string {
   );
 }
 
-export function buildGoogleOAuthRedirectUrl(state: string): string {
+/** Builds the Google authorize URL (`https://accounts.google.com/o/oauth2/v2/auth?...`) with the configured client id, callback URI, OIDC scopes, CSRF `state`, the PKCE S256 `code_challenge`, and offline + consent prompts. Throws `NotImplementedError` when `OAUTH_GOOGLE_CLIENT_ID` is unset. */
+export function buildGoogleOAuthRedirectUrl(state: string, codeChallenge: string): string {
   const clientId = env.OAUTH_GOOGLE_CLIENT_ID;
   if (!clientId) {
     throw new NotImplementedError('errors:googleOAuthNotConfigured');
@@ -30,16 +31,21 @@ export function buildGoogleOAuthRedirectUrl(state: string): string {
     state,
     access_type: 'offline',
     prompt: 'consent',
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
 
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }
 
+/** Input for {@link exchangeGoogleOAuthCode}: the authorization `code` returned by Google, the PKCE `codeVerifier` bound to the original authorize request, plus an optional request id used for outbound observability. */
 export interface ExchangeGoogleOAuthCodeOptions {
   code: string;
+  codeVerifier: string;
   requestId?: string;
 }
 
+/** Trades the Google authorization code for an access token, fetches the OIDC userinfo response, and returns a normalised {@link OAuthProfile}. Rejects responses whose `email_verified` is not strictly `true` to prevent find-or-link account takeover. Translates outbound failures to `UnauthorizedError` with provider-specific i18n keys. */
 export async function exchangeGoogleOAuthCode(
   options: ExchangeGoogleOAuthCodeOptions,
 ): Promise<OAuthProfile> {
@@ -66,6 +72,7 @@ export async function exchangeGoogleOAuthCode(
             client_secret: clientSecret,
             redirect_uri: getGoogleRedirectUri(),
             grant_type: 'authorization_code',
+            code_verifier: options.codeVerifier,
           }),
         },
       }),
@@ -105,12 +112,19 @@ export async function exchangeGoogleOAuthCode(
   const userInfo = (await userInfoResponse.json()) as {
     sub?: string;
     email?: string;
+    email_verified?: boolean;
     name?: string;
     picture?: string;
   };
 
   if (!(userInfo.email && userInfo.sub)) {
     throw new UnauthorizedError('errors:googleUserMissingEmailOrSub');
+  }
+
+  // Reject accounts whose email Google has not verified: linking by an
+  // attacker-controlled unverified address would enable account takeover.
+  if (userInfo.email_verified !== true) {
+    throw new UnauthorizedError('errors:googleEmailNotVerified');
   }
 
   return omitUndefined({

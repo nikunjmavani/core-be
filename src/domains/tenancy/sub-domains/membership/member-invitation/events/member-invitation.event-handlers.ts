@@ -49,6 +49,11 @@ async function onMemberInvitationEmailEvent(event: DomainEvent): Promise<void> {
 
 let memberInvitationHandlersRegistered = false;
 
+/**
+ * Subscribes the invitation email handler to {@link MEMBER_INVITATION_EVENT}
+ * `CREATED` and `RESENT`. Idempotent: re-invocation is a no-op so the API and
+ * worker bootstraps can both call it without double-wiring listeners.
+ */
 export function registerMemberInvitationEventHandlers(): void {
   if (memberInvitationHandlersRegistered) return;
   memberInvitationHandlersRegistered = true;

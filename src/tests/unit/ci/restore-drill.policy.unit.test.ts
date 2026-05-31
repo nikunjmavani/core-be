@@ -25,7 +25,9 @@ describe('restore drill automation policy', () => {
 
     expect(workflow).toContain('MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY');
     expect(workflow).not.toContain('MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression in the workflow YAML — not a TS template.
     expect(workflow).toContain('RESTORE_DRILL_PARENT_BRANCH_NAME: ${{ github.ref_name }}');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression in the workflow YAML — not a TS template.
     expect(workflow).toContain('environment: ${{ needs.resolve-environment.outputs.environment }}');
     expect(workflow).toContain('tooling/ci/restore-drill-neon.sh create');
     expect(workflow).toContain('tooling/ci/restore-drill-neon.sh delete');
@@ -33,6 +35,8 @@ describe('restore drill automation policy', () => {
     expect(script).toContain('MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY');
     expect(script).not.toContain('MONTHLY_DATABASE_RESTORE_DRILL_NEON_PROJECT_ID');
     expect(script).toContain('RESTORE_DRILL_NEON_PROJECT_NAME');
+    expect(script).toContain('project-identity.env');
+    expect(script).toContain('PROJECT_SLUG');
     expect(script).toContain('RESTORE_DRILL_PARENT_BRANCH_NAME');
     expect(script).not.toContain('NEON_PARENT_BRANCH_ID');
     expect(script).not.toContain('DATABASE_URL_FOR_MONTHLY');

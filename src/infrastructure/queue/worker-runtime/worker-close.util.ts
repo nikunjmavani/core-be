@@ -12,6 +12,14 @@ export async function closeWorkerHandle(handle: WorkerHandle): Promise<void> {
   await handle.close();
 }
 
+/**
+ * Awaits `worker.close()` but rejects after {@link getShutdownTimeoutMs} so a stuck
+ * processor (long external IO, network split) cannot stall the whole shutdown sequence.
+ * Logs `worker.shutdown.timeout` on deadline expiry and `worker.close.timeout_or_error`
+ * for any other rejection before rethrowing so the parent shutdown can decide whether to
+ * force-exit. The pending timeout handle is always cleared in `finally` to avoid leaking
+ * timers.
+ */
 export async function closeWorkerWithTimeout(
   worker: Worker,
   options?: { timeoutMs?: number; queueName?: string },
@@ -44,6 +52,11 @@ export async function closeWorkerWithTimeout(
   }
 }
 
+/**
+ * Wraps a freshly constructed BullMQ {@link Worker} in the {@link WorkerHandle} contract
+ * that bootstrap returns: `close()` delegates to {@link closeWorkerWithTimeout} so every
+ * domain worker shuts down with the same bounded drain semantics.
+ */
 export function buildWorkerHandle(worker: Worker, queueName: string): WorkerHandle {
   return {
     worker,

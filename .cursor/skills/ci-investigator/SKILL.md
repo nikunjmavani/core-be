@@ -3,7 +3,7 @@ name: ci-investigator
 description: Investigate a single failing PR CI check in core-be and return a short root-cause summary with a fix plan. Use when the user asks why CI failed or to diagnose a specific GitHub Actions job.
 ---
 
-# CI Investigator (core-be)
+# CI investigator (core-be)
 
 Produce a **short root-cause summary** for **one** failing check (not full PR babysit — see **pr-babysit** for the full loop).
 

@@ -53,6 +53,12 @@ For a visual flow diagram (Service → EventBus → Handler → Queue → Redis 
 - Workers return `{ worker, queueName, close }` (see `WorkerHandle` in `bootstrap.ts`) so bootstrap can attach the hook; the repeatable-job **scheduler** handle has `close` only.
 - Bull Board (`queue-dashboard.ts`) lists each `-dlq` queue next to its source queue when the dashboard is enabled.
 - On worker shutdown, `closeDeadLetterQueues()` runs after worker handles close (see `src/worker.ts`).
+- **Poison messages:** at each worker processing entry point, validate `job.data` with `parseJobDataOrDeadLetter({ schema, job, queueName })` (`src/infrastructure/queue/dlq/poison-job.util.ts`) instead of `parseBullMQJobData`. On a schema failure it records the dead-letter (Postgres + Redis mirror) and throws BullMQ `UnrecoverableError`, so a malformed payload skips the remaining retries instead of burning the backoff budget. `attachDeadLetterAndAlerting` recognises `UnrecoverableError` and does not record a second time. Keep using `parseBullMQJobData` in the producer-side `enqueue*` helpers (enqueue is not a retry path).
+
+## Distributed tracing across the queue
+
+- **Inject on enqueue:** spread `captureTraceContextForPropagation()` into the job payload in every `enqueue*` helper, and merge `traceContextJobFieldsSchema` (`src/infrastructure/observability/tracing/trace-context-job-fields.schema.ts`) into the job's `*.job.schema.ts` so `traceparent` / `tracestate` validate.
+- **Extract in the worker:** wrap the job body in `runWithPropagatedTraceContext({ traceparent, tracestate }, job.name, () => …)` (`trace-context.util.ts`) so the worker span is a child of the originating request. Both helpers no-op when no span is active or OTEL is disabled.
 
 ## Canonical examples
 
@@ -110,7 +116,7 @@ billing events  →  notify/sub-domains/webhook/events/billing-webhook.event-han
      - be idempotent when possible
    - **Database access in workers/processors** (never `getRequestDatabase()` or `request-database.context` imports):
      - Type handles via `PostgresDatabaseHandle` / `WorkerDatabaseHandle` in `src/infrastructure/database/database-handle.types.ts` and `worker-processor.util.ts`
-     - **Runtime guard:** `src/worker.ts` sets `CORE_BE_RUNTIME=worker`. Unpinned `getRequestDatabase()` throws `WorkerDatabaseContextError`. Context kind is tracked in `worker-database-context.ts` (ALS).
+     - **Runtime guard:** `src/worker.ts` sets `CORE_BE_RUNTIME=worker`. Unpinned `getRequestDatabase()` throws `WorkerDatabaseContextError`. Context kind is tracked in `worker-database.context.ts` (ALS).
      - Use `runTenantScopedWorkerJob`, `runGlobalRetentionWorkerJob`, or `runUserScopedWorkerJob` from `worker-processor.util.ts`, or `createTenantScopedBullMQWorker` for tenant-scoped queues, or call the context wrappers directly
      - Tenant-scoped jobs → `withOrganizationContext(organizationPublicId, (databaseHandle) => …)` — pins ALS + `SET LOCAL app.current_organization_id`
      - Global tombstone/retention → `withGlobalRetentionCleanupDatabaseContext((databaseHandle) => …)` — `app.global_retention_cleanup`
@@ -165,7 +171,7 @@ Every BullMQ worker is registered exactly once in [`worker-registration.registry
 | `usesPostgres`                    | `true` if the processor checks out a postgres.js connection at any point during a job. `false` only when the processor talks exclusively to Redis / external HTTP (e.g. `dlq-depth`, `idempotency-cardinality`).                                                                                                                                                                                                         |
 | `scheduled`                       | `true` when there is a matching `upsertJobScheduler` entry in `scheduler.ts`. `false` for event-driven workers (`mail`, `webhook-delivery`, `notification`, `user-data-export`, `stripe-webhook`). `scheduler-registry-audit.ts` cross-checks both directions and logs `worker.registry.scheduler_mismatch` on drift.                                                                                                    |
 | `criticality`                     | `throughput` for workers that drive user-visible latency (event-driven mail/notify/webhook/stripe). `maintenance` for retention/cron/sweeper/reclaim. `observability` for metrics-only workers (`dlq-depth`, `idempotency-cardinality`). Surfaced in `worker.queue_families.selected` and pool alerts.                                                                                                                   |
-| `holdsConnectionDuringExternalIo` | `true` when the Postgres checkout is held during an outbound HTTP / S3 / Resend / Stripe call. Examples: `webhook-delivery` (tenant transaction wraps outbound HTTP), `audit-export` / `upload-tombstone-retention` / `upload-pending-sweep` / `user-data-export(-retention)` (S3 calls during DB context). Omit / `false` when the DB context closes before any external IO. Only meaningful when `usesPostgres: true`. |
+| `holdsConnectionDuringExternalIo` | `true` when the Postgres checkout is held during an outbound HTTP / S3 / Resend / Stripe call. Examples: `audit-export` / `upload-tombstone-retention` / `upload-pending-sweep` / `user-data-export(-retention)` (S3 calls during DB context). Omit / `false` when the DB context closes before any external IO — e.g. `webhook-delivery`, which claims and records the attempt in separate short transactions around (not across) the outbound POST. Only meaningful when `usesPostgres: true`. |
 | `resolvePostgresConcurrency`      | Throughput: `() => getWorkerConcurrencyMail()` / `_Notify()` / `_Webhook()` / `_Stripe()` from `@/shared/config/worker-concurrency.util.js`. Cron / retention / sweeper: use the `retentionDefinition()` helper (concurrency `RETENTION_WORKER_CONCURRENCY = 1`). Required when `usesPostgres: true`.                                                                                                                    |
 | `isEnabled`                       | Only when the worker is conditional on env config (e.g. mail disabled in CI, Stripe disabled when keys absent). Omit when always enabled.                                                                                                                                                                                                                                                                                |
 | `create`                          | Factory that returns a `WorkerHandle`. May accept `workerContainers` for cross-domain service deps (e.g. user-data-export needs `userDomain.userDataExportService`).                                                                                                                                                                                                                                                     |
@@ -189,6 +195,17 @@ Every BullMQ worker is registered exactly once in [`worker-registration.registry
 - **Do not** mark `holdsConnectionDuringExternalIo: false` for workers that wrap S3 / Resend / Stripe / outbound HTTP inside a DB context — the at-risk demand metric will under-count pool starvation risk during external slowness.
 
 ---
+
+## Sync after changes (layered docs)
+
+When a worker, processor, queue, event type, or handler is added or renamed:
+
+1. **TSDoc on every public export** in the new `*.worker.ts`, `*.processor.ts`, queue file, or event-handlers file. Workers / processors are **service-like** and require both `summary` and `@remarks` (Algorithm / Failure modes / Side effects / Notes). Invoke **tsdoc-export-guard**.
+2. **OVERVIEW.md** for the new domain / sub-domain folder if not present (Template A.2 with a `## Lifecycle` Mermaid showing the worker's job state machine). Invoke **overview-doc-maintainer**.
+3. **System narrative** updates if the worker introduces a cross-cutting pattern (e.g. a new transactional-outbox surface) or participates in a new end-to-end flow. Invoke **system-narrative-maintainer**.
+4. **Coverage check** — run `pnpm tsdoc:check` to confirm new worker / processor / queue / event exports carry summaries (and `@remarks` for service-like files).
+
+The strict ratchet at pre-commit and CI ensures none of the four `MISSING_*` token counts grow when a worker is added.
 
 ## Don'ts
 

@@ -16,6 +16,7 @@ import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js'
 import { database } from '@/infrastructure/database/connection.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
  * RLS session variable + HTTP tenant header alignment (FORCE ROW LEVEL SECURITY migrations).
@@ -83,7 +84,7 @@ describe('Security: Organization RLS session', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: `/api/v1/tenancy/organizations/${organization.public_id}`,
+      url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
       token,
       organizationPublicId: organization.public_id,
     });

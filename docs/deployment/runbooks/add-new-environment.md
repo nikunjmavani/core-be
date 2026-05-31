@@ -6,13 +6,18 @@ mapping intact across all dimensions.
 
 ## Canonical invariant
 
-Every hosted environment must be declared in `.github/sync.config.json`:
+Every hosted environment must be declared in **`tooling/setup/setup.config.json`**
+(`environments[]`). That manifest is the single source of truth; CI and GitHub
+sync consume the generated slim file `.github/sync.config.json` (do not edit by
+hand — run `pnpm tool:generate-project-identity` after manifest changes).
+
+Example manifest excerpt:
 
 ```json
 {
   "environments": [
-    { "name": "development", "branch": "dev" },
-    { "name": "production", "branch": "main" }
+    { "name": "development", "branch": "dev", "nodeEnvironment": "development", "isDefault": true },
+    { "name": "production", "branch": "main", "nodeEnvironment": "production" }
   ]
 }
 ```
@@ -27,7 +32,7 @@ artefact:
 
 | Dimension | Lives in |
 | --------- | -------- |
-| Branch ↔ environment mapping | `.github/sync.config.json` |
+| Branch ↔ environment mapping | `tooling/setup/setup.config.json` → generated `.github/sync.config.json` |
 | `NODE_ENV` enum value | `src/shared/config/env-schema.ts` |
 | `.github/environments/<env>.json` | committed protection config |
 | Branch ruleset | `.github/rulesets/<branch>.json` |
@@ -69,24 +74,16 @@ pnpm github:sync production
 If not, add it to `nodeEnvSchema` in `src/shared/config/env-schema.ts` first and run
 `pnpm validate`.
 
-### 2. Update sync config and scaffold local files
+### 2. Update manifest, regenerate artifacts, and scaffold local files
 
-Edit `.github/sync.config.json`:
-
-```json
-{
-  "environments": [
-    { "name": "development", "branch": "dev" },
-    { "name": "production", "branch": "main" },
-    { "name": "staging", "branch": "staging" }
-  ]
-}
-```
+Edit `tooling/setup/setup.config.json` — add the new entry under `environments[]`
+(and `git.protectedBranches` if the deploy branch is protected).
 
 Then run:
 
 ```bash
-pnpm github:sync
+pnpm tool:generate-project-identity   # constants, sync.config.json, workflow branch/env maps
+pnpm github:sync                    # .env.<environment>, rulesets, GitHub Environment JSON
 ```
 
 This creates (idempotent — never overwrites existing files):
@@ -120,22 +117,12 @@ The file structure is the source of truth — no separate classifier file, no ov
 The `env-schema-add` skill walks through which half + sub-section to pick when adding a new
 env var.
 
-### 5. Wire the workflow
+### 5. Wire CI (usually automatic)
 
-Edit `.github/workflows/reusable-railway-deploy.yml`:
-
-```yaml
-on:
-  workflow_run:
-    branches: [main, dev, staging]   # add the new branch
-  workflow_dispatch:
-    inputs:
-      target:
-        options:
-          - production
-          - development
-          - staging                  # add the new env
-```
+Re-run `pnpm tool:generate-project-identity` so workflow `branches:` lists, deploy
+`case` maps, and `PROTECTED_BRANCHES_JSON` match the manifest. Only hand-edit a
+workflow if you are adding a **new** workflow file — then add it to
+`WORKFLOW_FILES_TO_PATCH` in `tooling/setup/codegen/generate-project-identity.ts`.
 
 ```bash
 case "${{ github.event.workflow_run.head_branch }}" in

@@ -311,24 +311,28 @@ export class CircuitBreaker {
 }
 
 // Pre-configured circuit breakers (Redis-backed for cluster-wide state)
+/** Shared circuit breaker for all Stripe API calls — trips after 5 failures, half-opens after 30s. */
 export const stripeCircuit = new CircuitBreaker({
   name: 'stripe',
   redis: redisConnection,
   failureThreshold: 5,
   resetTimeoutMs: 30_000,
 });
+/** Shared circuit breaker for all S3/object-storage calls — trips after 3 failures, half-opens after 15s. */
 export const s3Circuit = new CircuitBreaker({
   name: 's3',
   redis: redisConnection,
   failureThreshold: 3,
   resetTimeoutMs: 15_000,
 });
+/** Shared circuit breaker for all Resend email API calls — trips after 5 failures, half-opens after 60s. */
 export const resendCircuit = new CircuitBreaker({
   name: 'resend',
   redis: redisConnection,
   failureThreshold: 5,
   resetTimeoutMs: 60_000,
 });
+/** Shared circuit breaker for Cloudflare Turnstile CAPTCHA verification — trips after 5 failures, half-opens after 30s. */
 export const turnstileCircuit = new CircuitBreaker({
   name: 'turnstile',
   redis: redisConnection,
@@ -336,6 +340,9 @@ export const turnstileCircuit = new CircuitBreaker({
   resetTimeoutMs: 30_000,
 });
 
+/** Reset window (ms) for {@link stripeCircuit}; exported so retry callers can align BullMQ backoff. */
 export const STRIPE_CIRCUIT_RESET_TIMEOUT_MS = 30_000;
+/** Reset window (ms) for {@link s3Circuit}; exported for consistent BullMQ backoff in storage workers. */
 export const S3_CIRCUIT_RESET_TIMEOUT_MS = 15_000;
+/** Reset window (ms) for {@link resendCircuit}; exported for mail-queue backoff alignment. */
 export const RESEND_CIRCUIT_RESET_TIMEOUT_MS = 60_000;

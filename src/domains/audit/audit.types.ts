@@ -1,5 +1,11 @@
 import type { AuditLogInsert } from './audit.schema.js';
 
+/**
+ * Repository-level filters for {@link AuditRepository.findWithFilters}. All
+ * identifiers are already resolved to internal numeric ids by the service;
+ * `from`/`to` are ISO-8601 strings, `after` is an opaque cursor, and `limit`
+ * is the page size enforced by the route's pagination schema.
+ */
 export interface AuditLogFilters {
   organization_id?: number;
   actor_user_id?: number;

@@ -10,8 +10,8 @@ alwaysApply: false
 |----------|---------|
 | **`src/tests/`** | **Common** tests — helpers, factories, unit/integration/security/performance/global/chaos/contract; k6 load assets in **`src/tests/load/k6/`** (not Vitest) |
 | **`src/domains/<domain>/__tests__/`** | **Domain-specific** tests — bundled e2e (`<domain>.test.ts`), domain factories (e.g. `tenancy/__tests__/factories/`), domain-level **`unit/`** |
-| **`src/domains/<domain>/sub-domains/<r>/__tests__/`** | Top-level sub-domain **unit**, optional e2e, or parent’s **`events/__tests__/`** |
-| **`src/domains/<domain>/sub-domains/<parent>/<child>/__tests__/`** | **Nested** sub-domain unit, e2e, or `events/__tests__/` (aggregate children) |
+| **`src/domains/<domain>/sub-domains/<r>/__tests__/`** | Top-level sub-domain **unit**, optional e2e, or parent’s **`__tests__/unit/events/`** |
+| **`src/domains/<domain>/sub-domains/<parent>/<child>/__tests__/`** | **Nested** sub-domain unit, e2e, or `__tests__/unit/events/` (aggregate children) |
 
 Do **not** put a domain’s main API test suite under `src/tests/`. Do **not** put cross-cutting security tests inside a domain folder.
 
@@ -33,7 +33,7 @@ For org-scoped **POST/PATCH/DELETE**, use **`injectAuthenticatedOrganizationMuta
 1. **Helpers**: `src/tests/helpers/` — `createTestApp`, `test-http-inject.helper`, `generateTestToken`, `cleanupDatabase`
 2. **Shared factories**: `src/tests/factories/`; **domain factories**: `src/domains/<domain>/__tests__/factories/`
 3. **Unit (common)**: `src/tests/unit/` for `shared/utils`, errors, and cross-cutting pure code
-4. **Unit (domain)**: `src/domains/<domain>/__tests__/unit/` for domain-level validators/serializers; `sub-domains/<r>/__tests__/unit/` or `sub-domains/<parent>/<child>/__tests__/unit/` for resource validators/serializers; `events/__tests__/` for event handlers — never under `src/tests/unit/`
+4. **Unit (domain)**: `src/domains/<domain>/__tests__/unit/` for domain-level validators/serializers; `sub-domains/<r>/__tests__/unit/` or `sub-domains/<parent>/<child>/__tests__/unit/` for resource validators/serializers; `__tests__/unit/events/` for event handlers — never under `src/tests/unit/`
 5. **Domain e2e**: `src/domains/<domain>/__tests__/<domain>.test.ts` (bundled) or `sub-domains/<parent>/<child>/__tests__/<child>.test.ts` (nested resource suite) — 401, 403, 200/201, 400 per route
 6. **Tenancy factories**: `@/domains/tenancy/__tests__/factories/permission.factory.js` for permission seed helpers used across domains
 7. **HTTP inject**: `import { createTestApp } from '@/tests/helpers/test-app.js'` and inject helpers from `test-http-inject.helper.js`

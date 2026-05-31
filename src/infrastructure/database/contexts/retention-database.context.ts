@@ -5,8 +5,9 @@ import {
   setLocalDatabaseConfig,
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
-import { runWithWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database-context.js';
+import { runWithWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 
+/** Options for {@link withGlobalRetentionCleanupDatabaseContext}. */
 export type GlobalRetentionCleanupDatabaseContextOptions = {
   /** When true, `SET LOCAL ROLE core_be_app` for tests that connect as a privileged owner role. */
   useApplicationDatabaseRole?: boolean;
