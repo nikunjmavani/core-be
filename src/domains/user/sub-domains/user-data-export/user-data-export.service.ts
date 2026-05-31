@@ -1,4 +1,5 @@
 import { ConfigurationError, NotFoundError } from '@/shared/errors/index.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { createWorkerUserDataExportRepository } from '@/domains/user/sub-domains/user-data-export/user-data-export.repository.js';
@@ -144,15 +145,33 @@ export class UserDataExportService {
 
     // auth.user_data_exports is FORCE RLS keyed on app.current_user_id — insert inside the user
     // context so the row passes the owner-access policy in default scoped-RLS mode.
-    const row = await withUserDatabaseContext(userPublicId, () =>
-      this.exportRepository.create({
-        public_id: exportPublicId,
-        user_id: user.id,
-        status: USER_DATA_EXPORT_STATUSES.PENDING,
-        s3_key: s3Key,
-        expires_at: expiresAt,
-      }),
-    );
+    let row: Awaited<ReturnType<UserDataExportRepository['create']>>;
+    try {
+      row = await withUserDatabaseContext(userPublicId, () =>
+        this.exportRepository.create({
+          public_id: exportPublicId,
+          user_id: user.id,
+          status: USER_DATA_EXPORT_STATUSES.PENDING,
+          s3_key: s3Key,
+          expires_at: expiresAt,
+        }),
+      );
+    } catch (error) {
+      if (!isPostgresUniqueViolation(error)) {
+        throw error;
+      }
+      const existingAfterRace = await withUserDatabaseContext(userPublicId, () =>
+        this.exportRepository.findPendingOrProcessingByUserId(user.id),
+      );
+      if (existingAfterRace) {
+        logger.info(
+          { userPublicId, exportPublicId: existingAfterRace.public_id },
+          'user-data-export.concurrent_pending_returned',
+        );
+        return serializeUserDataExport(existingAfterRace);
+      }
+      throw error;
+    }
 
     eventBus.onCommit(async () => {
       try {

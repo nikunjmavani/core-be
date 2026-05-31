@@ -121,6 +121,24 @@ describe('UserDataExportService', () => {
     expect(result.status).toBe(USER_DATA_EXPORT_STATUSES.PENDING);
   });
 
+  it('requestExport returns existing pending export when concurrent insert hits unique index', async () => {
+    const existingPending = {
+      public_id: 'exp_existing',
+      status: USER_DATA_EXPORT_STATUSES.PENDING,
+      expires_at: new Date(),
+      created_at: new Date(),
+    };
+    exportRepository.create.mockRejectedValue({ code: '23505' });
+    exportRepository.findPendingOrProcessingByUserId
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(existingPending);
+
+    const result = await service.requestExport('user_public');
+
+    expect(result.export_id).toBe('exp_existing');
+    expect(result.status).toBe(USER_DATA_EXPORT_STATUSES.PENDING);
+  });
+
   it('getExportStatus uses 24h presigned download expiry for completed exports', async () => {
     const expiresAt = new Date(Date.now() + 60_000);
     exportRepository.findByPublicIdAndUserId.mockResolvedValue({
