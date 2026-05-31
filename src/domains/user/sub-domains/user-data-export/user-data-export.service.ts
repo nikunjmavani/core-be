@@ -267,29 +267,26 @@ export class UserDataExportService {
     },
     databaseHandle?: RequestScopedPostgresDatabase,
   ): Promise<void> {
-    const exportRepository = this.resolveExportRepository(databaseHandle);
     if (databaseHandle !== undefined) {
-      const cancelled = await this.isExportJobCancelled({
-        exportPublicId: options.exportPublicId,
-        userInternalId: options.userInternalId,
-        userPublicId: options.userPublicId,
-        databaseHandle,
-      });
-      if (cancelled) {
-        throw new UserDataExportCancelledError();
-      }
+      await this.completeExportJobInDatabaseContext(options, databaseHandle);
+      return;
     }
 
-    const row = await exportRepository.findByPublicIdAndUserId(
-      options.exportPublicId,
-      options.userInternalId,
+    const s3Key = await withUserDatabaseContext(
+      options.userPublicId,
+      async (scopedDatabaseHandle) =>
+        this.resolveExportArtifactS3Key(
+          {
+            exportPublicId: options.exportPublicId,
+            userInternalId: options.userInternalId,
+            userPublicId: options.userPublicId,
+          },
+          scopedDatabaseHandle,
+        ),
     );
-    if (!row?.s3_key) {
-      throw new UserDataExportCancelledError();
-    }
 
     await this.objectStorage.putObject({
-      key: row.s3_key,
+      key: s3Key,
       body: options.body,
       contentType: 'application/gzip',
       metadata: {
@@ -298,6 +295,57 @@ export class UserDataExportService {
       },
     });
 
+    await withUserDatabaseContext(options.userPublicId, async (scopedDatabaseHandle) => {
+      const cancelled = await this.isExportJobCancelled({
+        exportPublicId: options.exportPublicId,
+        userInternalId: options.userInternalId,
+        userPublicId: options.userPublicId,
+        databaseHandle: scopedDatabaseHandle,
+      });
+      if (cancelled) {
+        throw new UserDataExportCancelledError();
+      }
+
+      const exportRepository = this.resolveExportRepository(scopedDatabaseHandle);
+      const completedAt = new Date();
+      await exportRepository.updateStatus(options.exportPublicId, options.userInternalId, {
+        status: USER_DATA_EXPORT_STATUSES.COMPLETED,
+        completed_at: completedAt,
+        failed_at: null,
+        error_code: null,
+      });
+    });
+  }
+
+  private async completeExportJobInDatabaseContext(
+    options: {
+      exportPublicId: string;
+      userInternalId: number;
+      userPublicId: string;
+      body: Buffer;
+    },
+    databaseHandle: RequestScopedPostgresDatabase,
+  ): Promise<void> {
+    const s3Key = await this.resolveExportArtifactS3Key(
+      {
+        exportPublicId: options.exportPublicId,
+        userInternalId: options.userInternalId,
+        userPublicId: options.userPublicId,
+      },
+      databaseHandle,
+    );
+
+    await this.objectStorage.putObject({
+      key: s3Key,
+      body: options.body,
+      contentType: 'application/gzip',
+      metadata: {
+        format: 'json',
+        schema_version: '1',
+      },
+    });
+
+    const exportRepository = this.resolveExportRepository(databaseHandle);
     const completedAt = new Date();
     await exportRepository.updateStatus(options.exportPublicId, options.userInternalId, {
       status: USER_DATA_EXPORT_STATUSES.COMPLETED,
@@ -305,6 +353,36 @@ export class UserDataExportService {
       failed_at: null,
       error_code: null,
     });
+  }
+
+  private async resolveExportArtifactS3Key(
+    options: {
+      exportPublicId: string;
+      userInternalId: number;
+      userPublicId: string;
+    },
+    databaseHandle: RequestScopedPostgresDatabase,
+  ): Promise<string> {
+    const cancelled = await this.isExportJobCancelled({
+      exportPublicId: options.exportPublicId,
+      userInternalId: options.userInternalId,
+      userPublicId: options.userPublicId,
+      databaseHandle,
+    });
+    if (cancelled) {
+      throw new UserDataExportCancelledError();
+    }
+
+    const exportRepository = this.resolveExportRepository(databaseHandle);
+    const row = await exportRepository.findByPublicIdAndUserId(
+      options.exportPublicId,
+      options.userInternalId,
+    );
+    if (!row?.s3_key) {
+      throw new UserDataExportCancelledError();
+    }
+
+    return row.s3_key;
   }
 
   async failExportJob(
