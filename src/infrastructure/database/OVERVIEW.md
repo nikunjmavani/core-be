@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Postgres connection management, the abstract `BaseRepository` (with cursor pagination), the transactional helpers, the migration runner, the shared `pgSchema` definitions, and the **context family** that owns the platform's RLS contract — `withOrganizationContext`, `withUserDatabaseContext`, `withGlobalRetentionCleanupDatabaseContext`, etc. Domains never construct Drizzle clients themselves; they receive a `databaseHandle` from one of these contexts.
+Postgres connection management, the abstract `BaseRepository` (with cursor pagination), the transactional helpers, the migration runner, the shared `pgSchema` definitions, and the **context family** that owns the platform's RLS contract — `withOrganizationDatabaseContext`, `withUserDatabaseContext`, `withGlobalAdminDatabaseContext` (`app.global_admin`), `withGlobalRetentionCleanupDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`, etc. Domains never construct Drizzle clients themselves; they receive a `databaseHandle` from one of these contexts.
 
 ## Design decisions
 

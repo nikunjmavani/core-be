@@ -15,9 +15,9 @@ export type GlobalAdminDatabaseContextOptions = {
 
 /**
  * Runs a callback inside a transaction with `SET LOCAL app.global_admin = true` so cross-user admin
- * and system flows can read/write the FORCE RLS `auth.users` / `auth.auth_methods` tables under the
- * non-superuser `core_be_app` role (admin user listing, suspend, soft-delete, cross-user actor
- * lookups).
+ * and system flows can read/write FORCE RLS tables under the non-superuser `core_be_app` role —
+ * including `auth.users`, `auth.auth_methods`, and cross-tenant `audit.logs` reads (admin audit
+ * listing, user suspend/soft-delete, cross-user actor lookups).
  *
  * @remarks
  * - **Algorithm:** mirrors {@link withGlobalRetentionCleanupDatabaseContext} — opens (or reuses, via
@@ -28,8 +28,9 @@ export type GlobalAdminDatabaseContextOptions = {
  *   back, discarding the GUC.
  * - **Side effects:** opens a database transaction and toggles the admin RLS escape hatch for its
  *   lifetime.
- * - **SECURITY:** `app.global_admin = 'true'` bypasses per-user isolation on `auth.users` and
- *   `auth.auth_methods`. This wrapper MUST only be entered from code paths that have already
+ * - **SECURITY:** `app.global_admin = 'true'` bypasses per-user / per-tenant isolation on protected
+ *   tables (including `auth.users`, `auth.auth_methods`, and cross-tenant `audit.logs`). This
+ *   wrapper MUST only be entered from code paths that have already
  *   authorized the caller as a global admin (HTTP routes guarded by `requireRole(SUPER_ADMIN,
  *   ADMIN)`) or from trusted system/offboarding code. Never call it on an unauthenticated or
  *   self-service request path.

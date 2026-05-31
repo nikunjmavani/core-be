@@ -138,8 +138,8 @@ export class AuditService {
    *
    * Side effects: read-only.
    *
-   * Notes: caller must already have global admin role (enforced at the route
-   * level via `requireRole('admin')`).
+   * Notes: caller must already hold `audit-log:read` on the organization (enforced
+   * at the tenancy route via `requireOrganizationPermission`).
    */
   async listForOrganization(organization_public_id: string, query: Record<string, unknown>) {
     return withOrganizationDatabaseContext(organization_public_id, () => this.list(query));
