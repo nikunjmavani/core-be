@@ -55,7 +55,7 @@ export const GHCR_CACHE_SCOPE_API = 'core-be-api' as const;
 export const GHCR_CACHE_SCOPE_WORKER = 'core-be-worker' as const;
 
 /** Git branches that receive protected CI + deploy pipelines. */
-export const PROTECTED_GIT_BRANCHES = ["dev","main"] as const;
+export const PROTECTED_GIT_BRANCHES = ['dev', 'main'] as const;
 
 /** Default git branch for new clones and PR bases (typically `dev`). */
 export const GIT_DEFAULT_BRANCH = 'dev' as const;
@@ -68,6 +68,6 @@ export const GIT_NON_PRODUCTION_BRANCH = 'dev' as const;
 
 /** Maps git branch ref → hosted environment name (GitHub Environment / NODE_ENV). */
 export const BRANCH_TO_ENVIRONMENT_MAP: Readonly<Record<string, string>> = {
-  "dev": "development",
-  "main": "production"
+  dev: 'development',
+  main: 'production',
 };

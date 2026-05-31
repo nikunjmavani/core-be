@@ -50,6 +50,18 @@ const WORKFLOW_FILES_TO_PATCH = [
 const LEGACY_DEPLOY_CASE_BLOCK = `              main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
               dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;`;
 
+const LEGACY_SCHEDULED_CHAOS_BRANCH_GUARD = `          if [ "$branch" != "main" ] && [ "$branch" != "dev" ]; then
+            branch="dev"
+          fi`;
+
+const LEGACY_CLEANUP_CACHE_BRANCH_GUARD =
+  '                if [ "$WF_RUN_BRANCH" = "dev" ] || [ "$WF_RUN_BRANCH" = "main" ]; then\n' +
+  '                  mode="lru"\n' +
+  '                  if [ "$WF_RUN_CONCLUSION" = "failure" ]; then\n' +
+  '                    keep_count="${KEEP_FAILED_RUNS}"\n' +
+  '                  fi\n' +
+  '                fi';
+
 function renderConstants(snapshot: ReturnType<typeof buildProjectIdentitySnapshot>): string {
   const { slug, displayName, artifacts, git, branchEnvironmentMap } = snapshot;
   const escapedDisplay = displayName.replace(/'/g, "\\'");
@@ -109,7 +121,7 @@ export const GHCR_CACHE_SCOPE_API = '${artifacts.ghcrCacheScopeApi}' as const;
 export const GHCR_CACHE_SCOPE_WORKER = '${artifacts.ghcrCacheScopeWorker}' as const;
 
 /** Git branches that receive protected CI + deploy pipelines. */
-export const PROTECTED_GIT_BRANCHES = ${JSON.stringify([...git.protectedBranches])} as const;
+export const PROTECTED_GIT_BRANCHES = [${[...git.protectedBranches].map((branch) => `'${branch}'`).join(', ')}] as const;
 
 /** Default git branch for new clones and PR bases (typically \`dev\`). */
 export const GIT_DEFAULT_BRANCH = '${git.defaultBranch}' as const;
@@ -121,7 +133,11 @@ export const GIT_PRODUCTION_BRANCH = '${git.productionBranch}' as const;
 export const GIT_NON_PRODUCTION_BRANCH = '${git.nonProductionBranch}' as const;
 
 /** Maps git branch ref → hosted environment name (GitHub Environment / NODE_ENV). */
-export const BRANCH_TO_ENVIRONMENT_MAP: Readonly<Record<string, string>> = ${JSON.stringify(branchEnvironmentMap, null, 2)};
+export const BRANCH_TO_ENVIRONMENT_MAP: Readonly<Record<string, string>> = {
+${Object.entries(branchEnvironmentMap)
+  .map(([branch, environment]) => `  ${branch}: '${environment}',`)
+  .join('\n')}
+};
 `;
 }
 
@@ -326,6 +342,47 @@ function patchDeployCaseBlocks(
   return workflowContents.split(LEGACY_DEPLOY_CASE_BLOCK).join(caseBody);
 }
 
+function patchScheduledChaosBranchGuard(
+  workflowContents: string,
+  branchGuard: string,
+  nonProductionBranch: string,
+): string {
+  if (!workflowContents.includes(LEGACY_SCHEDULED_CHAOS_BRANCH_GUARD)) {
+    return workflowContents;
+  }
+  const caseBody = `          case "$branch" in
+            ${branchGuard}) ;;
+            *) branch="${nonProductionBranch}" ;;
+          esac`;
+  return workflowContents.split(LEGACY_SCHEDULED_CHAOS_BRANCH_GUARD).join(caseBody);
+}
+
+function patchCleanupCacheBranchGuard(workflowContents: string, branchGuard: string): string {
+  if (!workflowContents.includes(LEGACY_CLEANUP_CACHE_BRANCH_GUARD)) {
+    return workflowContents;
+  }
+  const caseBody =
+    `                case "$WF_RUN_BRANCH" in\n` +
+    `                  ${branchGuard})\n` +
+    '                    mode="lru"\n' +
+    '                    if [ "$WF_RUN_CONCLUSION" = "failure" ]; then\n' +
+    '                      keep_count="${KEEP_FAILED_RUNS}"\n' +
+    '                    fi\n' +
+    '                    ;;\n' +
+    '                esac';
+  return workflowContents.split(LEGACY_CLEANUP_CACHE_BRANCH_GUARD).join(caseBody);
+}
+
+function patchCleanupGhcrPackageMatrix(
+  workflowContents: string,
+  snapshot: ReturnType<typeof buildProjectIdentitySnapshot>,
+): string {
+  return workflowContents.replace(
+    /(\s+package:\s*\n)(?:\s+- [^\n]+\n)+/,
+    `$1          - ${snapshot.artifacts.apiImage}\n          - ${snapshot.artifacts.workerImage}\n`,
+  );
+}
+
 function patchWorkflowDockerArtifacts(
   workflowContents: string,
   snapshot: ReturnType<typeof buildProjectIdentitySnapshot>,
@@ -427,27 +484,15 @@ function patchWorkflowFile(
   }
   if (relativePath === 'scheduled-chaos.yml') {
     const branchGuard = snapshot.git.protectedBranches.join('|');
-    contents = contents
-      .replace(
-        /if ! echo '\[[^\]]*\]' \| jq[^\n]+\n\s+branch="[^"]+"/g,
-        `case "$branch" in\n            ${branchGuard}) ;;\n            *) branch="${snapshot.git.nonProductionBranch}" ;;\n          esac`,
-      )
-      .replace(
-        /if \[ "\$branch" != "main" \] && \[ "\$branch" != "dev" \]; then\n\s+branch="dev"/g,
-        `case "$branch" in\n            ${branchGuard}) ;;\n            *) branch="${snapshot.git.nonProductionBranch}" ;;\n          esac`,
-      );
+    contents = patchScheduledChaosBranchGuard(
+      contents,
+      branchGuard,
+      snapshot.git.nonProductionBranch,
+    );
   }
   if (relativePath === 'cleanup-cache.yml') {
     const branchGuard = snapshot.git.protectedBranches.join('|');
-    contents = contents
-      .replace(
-        /if echo '\[[^\]]*\]' \| jq[^\n]+; then/g,
-        `case "$WF_RUN_BRANCH" in\n                  ${branchGuard})`,
-      )
-      .replace(
-        /if \[ "\$WF_RUN_BRANCH" = "dev" \] \|\| \[ "\$WF_RUN_BRANCH" = "main" \]; then/g,
-        `case "$WF_RUN_BRANCH" in\n                  ${branchGuard})`,
-      );
+    contents = patchCleanupCacheBranchGuard(contents, branchGuard);
   }
   if (relativePath === 'reusable-vitest-postgres-redis.yml') {
     contents = contents.replace(
@@ -465,10 +510,7 @@ function patchWorkflowFile(
     );
   }
   if (relativePath === 'cleanup-ghcr.yml') {
-    contents = contents
-      .replaceAll(`- ${snapshot.artifacts.apiImage}`, '- ${{ env.API_IMAGE }}')
-      .replaceAll(`- ${snapshot.artifacts.workerImage}`, '- ${{ env.WORKER_IMAGE }}');
-    contents = injectIdentityJobEnvBlock(contents, snapshot);
+    contents = patchCleanupGhcrPackageMatrix(contents, snapshot);
   }
 
   const dockerWorkflows = new Set([
@@ -476,7 +518,6 @@ function patchWorkflowFile(
     'reusable-docker-build-trivy.yml',
     'reusable-railway-deploy.yml',
     'bootstrap-railway-service.yml',
-    'cleanup-ghcr.yml',
   ]);
   if (dockerWorkflows.has(relativePath)) {
     contents = patchWorkflowDockerArtifacts(contents, snapshot);

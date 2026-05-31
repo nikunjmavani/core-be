@@ -113,11 +113,28 @@ function findDisallowedBranchLiterals(options: {
   return [...disallowed].sort();
 }
 
+/** GHCR matrix.package entries cannot use job env; manifest literals are allowed there. */
+function stripMatrixPackageImageLines(contents: string, imageNames: readonly string[]): string {
+  return contents
+    .split('\n')
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('- ')) {
+        return true;
+      }
+      return !imageNames.some((imageName) => trimmed === `- ${imageName}`);
+    })
+    .join('\n');
+}
+
 function findDisallowedImageLiterals(options: {
   readonly contents: string;
   readonly imageNames: readonly string[];
 }): string[] {
-  const stripped = stripYamlComments(options.contents);
+  const stripped = stripMatrixPackageImageLines(
+    stripYamlComments(options.contents),
+    options.imageNames,
+  );
   const identityBlock = stripped.includes('# BEGIN GENERATED project-identity')
     ? (stripped
         .split('# BEGIN GENERATED project-identity')[1]

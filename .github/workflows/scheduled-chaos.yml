@@ -38,7 +38,6 @@ jobs:
             dev|main) ;;
             *) branch="dev" ;;
           esac
-          fi
           git fetch origin "${branch}" --depth=1
           sha="$(git rev-parse "origin/${branch}")"
           echo "merge_commit_sha=${sha}" >> "$GITHUB_OUTPUT"

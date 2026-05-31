@@ -92,11 +92,12 @@ jobs:
                 ref="refs/heads/${WF_RUN_BRANCH}"
                 case "$WF_RUN_BRANCH" in
                   dev|main)
-                  mode="lru"
-                  if [ "$WF_RUN_CONCLUSION" = "failure" ]; then
-                    keep_count="${KEEP_FAILED_RUNS}"
-                  fi
-                fi
+                    mode="lru"
+                    if [ "$WF_RUN_CONCLUSION" = "failure" ]; then
+                      keep_count="${KEEP_FAILED_RUNS}"
+                    fi
+                    ;;
+                esac
               fi
               ;;
             schedule)
