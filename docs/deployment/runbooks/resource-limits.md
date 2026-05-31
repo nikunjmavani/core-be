@@ -154,34 +154,12 @@ Org-scoped HTTP routes (`X-Organization-Id` set) hold **one pool checkout** for 
 | ------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FASTIFY_REQUEST_TIMEOUT_MS`         | `30000` | Entire HTTP request (Fastify)                                                                                                                                                                     |
 | `FASTIFY_CONNECTION_TIMEOUT_MS`      | `10000` | TCP connection accept                                                                                                                                                                             |
-| `DATABASE_HTTP_STATEMENT_TIMEOUT_MS` | `5000`  | `SET LOCAL statement_timeout` on org RLS and other pinned HTTP transactions (legacy mode); also the connection-level `statement_timeout` when scoped contexts are enabled                         |
-| `DATABASE_STATEMENT_TIMEOUT_MS`      | `30000` | Connection-level default for workers and unpinned queries                                                                                                                                         |
-| `DATABASE_RLS_SCOPED_CONTEXTS`       | `true`  | When `true` (default), the per-request transaction pin is bypassed and services wrap DB work in `withOrganizationDatabaseContext`. Set `false` to restore legacy request-pinned RLS transactions. |
-| `DATABASE_RLS_LEGACY_PINNING_ACK`    | `false` | Break-glass only: must be `true` to allow `DATABASE_RLS_SCOPED_CONTEXTS=false` in `NODE_ENV=production` (schema rejects boot otherwise). |
+| `DATABASE_HTTP_STATEMENT_TIMEOUT_MS` | `5000`  | Connection-level `statement_timeout` for HTTP handlers (scoped RLS contexts only)                                                                                                                   |
+| `DATABASE_STATEMENT_TIMEOUT_MS`      | `30000` | Connection-level default for workers and long-running queries                                                                                                                                     |
 
-When `DATABASE_RLS_SCOPED_CONTEXTS=false`, org-scoped routes hold a pool checkout for the **full** request. Slow outbound calls (Stripe, S3, Resend) inside that window still occupy the slot — keep external calls **outside** `withOrganizationDatabaseContext` blocks even in scoped mode. **Production** deployments must keep scoped contexts enabled unless an emergency rollback explicitly sets both `DATABASE_RLS_SCOPED_CONTEXTS=false` and `DATABASE_RLS_LEGACY_PINNING_ACK=true`.
+Org-scoped HTTP handlers wrap database work in `withOrganizationDatabaseContext` — there is no per-request transaction pin. Keep Stripe / S3 / Resend calls **outside** those callbacks (enforced by ESLint).
 
-Non-org routes (auth, user without `X-Organization-Id`) use `request-statement-timeout` middleware with the same `DATABASE_HTTP_STATEMENT_TIMEOUT_MS`. `/livez`, `/readyz`, and `/metrics` are excluded.
-
-### DATABASE_RLS_SCOPED_CONTEXTS rollout (item 2)
-
-When the flag is enabled:
-
-- `organization-rls-transaction.middleware` and `request-statement-timeout.middleware` are bypassed; no per-request DB checkout is held.
-- `statement_timeout` is set at the postgres.js connection level using `DATABASE_HTTP_STATEMENT_TIMEOUT_MS`, so every query inherits the tight HTTP budget without a transaction.
-- Services that touch RLS-FORCE tables MUST wrap their unit-of-work in `withOrganizationDatabaseContext(organizationPublicId, async (databaseHandle) => ...)`. Stripe / S3 / Resend calls run **outside** that callback (`stripeCircuit.execute(...)`, `s3Circuit.execute(...)` inside `withOrganizationDatabaseContext` is blocked by ESLint).
-- Cross-organization reads (organization list/get/getBySlug/create) and invitation flows (accept/decline/listPending) cannot rely on `app.current_organization_id` because they operate before or across tenants. They MUST either:
-  1. Wrap in `withUserDatabaseContext(userPublicId, ...)` so the `organizations_user_discovery` and `memberships_user_self_discovery` policies grant visibility (see migration `20260520000004_organization_discovery_and_invitation_lookup_rls.sql`).
-  2. Use the `tenancy.resolve_member_invitation_lookup_by_public_id` or `tenancy.list_pending_member_invitations_for_email` `SECURITY DEFINER` helpers to resolve the owning organization, then wrap subsequent writes in `withOrganizationDatabaseContext`.
-- Rollout is incremental: apply the discovery migration, deploy code, enable on staging, watch DB pool gauges + Stripe latency, then promote per environment.
-
-**Rollout sequence per environment:**
-
-1. Deploy code + migration `20260520000004_organization_discovery_and_invitation_lookup_rls.sql` with the env flag still set to `false` (no behavior change).
-2. Verify the new policies are active: run `pnpm test:security src/tests/security/rls/organization-user-discovery.security.test.ts` against the target environment’s schema.
-3. Flip `DATABASE_RLS_SCOPED_CONTEXTS=true` for that environment.
-4. Watch `db_pool_active_ratio`, `http_request_duration_seconds`, and the audit-log path (which uses `withUserDatabaseContext` when authenticated) for regressions.
-5. Roll back by setting the env var to `false` — no schema rollback is required because the policies are PERMISSIVE additions.
+Cross-organization reads (organization list/get/getBySlug/create) and invitation flows MUST use `withUserDatabaseContext` or the `tenancy.resolve_member_invitation_lookup_by_public_id` / `tenancy.list_pending_member_invitations_for_email` SECURITY DEFINER helpers (see migration `20260520000004_organization_discovery_and_invitation_lookup_rls.sql`).
 
 ### Pool exhaustion alerting (API)
 

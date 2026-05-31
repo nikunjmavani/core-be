@@ -31,17 +31,14 @@ export function buildPostgresOptions(databaseUrl: string) {
   const ssl = sslEnabled ? { rejectUnauthorized: strictVerification } : false;
 
   /**
-   * When DATABASE_RLS_SCOPED_CONTEXTS is enabled (production hardening item 2), the per-request
-   * `SET LOCAL statement_timeout` middleware is bypassed, so the connection-level value
-   * must be tight enough to cap runaway HTTP queries (default 5s). When the flag is off,
-   * the per-connection cap stays at `DATABASE_STATEMENT_TIMEOUT_MS` (30s default) and per-request
-   * `SET LOCAL` provides the tighter per-HTTP-request budget.
+   * HTTP handlers use scoped RLS contexts (short transactions per unit-of-work), so the
+   * connection-level `statement_timeout` must cap runaway queries on autocommit paths
+   * (default 5s via `DATABASE_HTTP_STATEMENT_TIMEOUT_MS`).
    */
-  const connectionStatementTimeoutMs = env.DATABASE_RLS_SCOPED_CONTEXTS
-    ? env.DATABASE_HTTP_STATEMENT_TIMEOUT_MS > 0
+  const connectionStatementTimeoutMs =
+    env.DATABASE_HTTP_STATEMENT_TIMEOUT_MS > 0
       ? env.DATABASE_HTTP_STATEMENT_TIMEOUT_MS
-      : (env.DATABASE_STATEMENT_TIMEOUT_MS ?? THIRTY_SECONDS_MS)
-    : (env.DATABASE_STATEMENT_TIMEOUT_MS ?? THIRTY_SECONDS_MS);
+      : (env.DATABASE_STATEMENT_TIMEOUT_MS ?? THIRTY_SECONDS_MS);
   const idleInTransactionTimeoutMs =
     env.DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS ?? THIRTY_SECONDS_MS;
 

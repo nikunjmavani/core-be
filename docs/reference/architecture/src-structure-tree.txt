@@ -1620,7 +1620,6 @@ src/
     │   │   ├── request-statement-timeout.middleware.unit.test.ts
     │   │   ├── response-format.middleware.hook.unit.test.ts
     │   │   ├── response-format.middleware.unit.test.ts
-    │   │   ├── rls-scoped-contexts-bypass.unit.test.ts
     │   │   ├── shutdown.middleware.unit.test.ts
     │   │   └── tenant.middleware.unit.test.ts
     │   ├── observability/
