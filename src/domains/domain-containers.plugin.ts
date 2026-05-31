@@ -27,6 +27,13 @@ async function registerDomainContainers(application: FastifyInstance): Promise<v
   application.tenancyDomain.organizationService.wireOffboardingUploadService(
     application.uploadDomain.uploadService,
   );
+
+  application.userDomain.userDataExportService.wireCrossDomainServices({
+    authSessionService: application.authDomain.authSessionService,
+    membershipService: application.tenancyDomain.membershipService,
+    notificationService: application.notifyDomain.notificationService,
+    auditService: application.auditDomain.auditService,
+  });
 }
 
 /** Registers all domain containers on the Fastify instance (composition root). */

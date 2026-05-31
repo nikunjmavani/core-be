@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { enterOnCommitScope, eventBus } from '@/core/events/event-bus.js';
-import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { NotFoundError } from '@/shared/errors/index.js';
 import {
   capExportCategory,
@@ -14,34 +13,22 @@ import {
 } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
 import { USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS } from '@/shared/constants/ttl.constants.js';
 
-const mockLimit = vi.fn();
-const mockOrderBy = vi.fn(() => ({ limit: mockLimit }));
-const mockWhere = vi.fn(() => ({ orderBy: mockOrderBy }));
-const mockInnerJoin = vi.fn(() => ({ where: mockWhere }));
-const mockFrom = vi.fn(() => ({ innerJoin: mockInnerJoin, where: mockWhere }));
-const mockSelect = vi.fn(() => ({ from: mockFrom }));
-
-vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => ({
-  getRequestDatabase: () => ({ select: mockSelect }),
-}));
-
-vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
-  withUserDatabaseContext: (_userPublicId: string, callback: (handle: unknown) => unknown) =>
-    callback({ select: mockSelect }),
-}));
-
-vi.mock('@/domains/user/sub-domains/user-data-export/queues/user-data-export.queue.js', () => ({
-  enqueueUserDataExport: vi.fn().mockResolvedValue(undefined),
-}));
-
 const { workerExportRepository } = vi.hoisted(() => ({
   workerExportRepository: {
     findByPublicIdAndUserId: vi.fn(),
   },
 }));
 
+vi.mock('@/domains/user/sub-domains/user-data-export/queues/user-data-export.queue.js', () => ({
+  enqueueUserDataExport: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/domains/user/sub-domains/user-data-export/user-data-export.repository.js', () => ({
   createWorkerUserDataExportRepository: () => workerExportRepository,
+}));
+
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: (_userPublicId: string, callback: () => unknown) => callback(),
 }));
 
 const userRecord = {
@@ -50,12 +37,14 @@ const userRecord = {
   email: 'user@example.com',
   first_name: null,
   last_name: null,
+  deleted_at: null,
   created_at: new Date('2026-01-01T00:00:00.000Z'),
 };
 
 describe('UserDataExportService', () => {
   const userService = {
     findUserRecordByPublicId: vi.fn(),
+    requireUserRecordByPublicId: vi.fn(),
   };
   const exportRepository = {
     create: vi.fn(),
@@ -64,6 +53,12 @@ describe('UserDataExportService', () => {
     listByUserId: vi.fn(),
     updateStatus: vi.fn(),
     deleteAllByUserId: vi.fn(),
+  };
+  const crossDomainServices = {
+    authSessionService: { listForUserDataExport: vi.fn().mockResolvedValue([]) },
+    membershipService: { listOrganizationsForUserDataExport: vi.fn().mockResolvedValue([]) },
+    notificationService: { listForUserDataExport: vi.fn().mockResolvedValue([]) },
+    auditService: { listActivityForUserDataExport: vi.fn().mockResolvedValue([]) },
   };
   const objectStorage = createObjectStoragePortMock();
   const service = new UserDataExportService(
@@ -74,43 +69,29 @@ describe('UserDataExportService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockLimit.mockReset();
-    mockSelect.mockReturnValue({ from: mockFrom });
-    mockFrom.mockReturnValue({ where: mockWhere, innerJoin: mockInnerJoin });
-    mockWhere.mockImplementation(() => ({ orderBy: mockOrderBy, limit: mockLimit }));
-    mockInnerJoin.mockReturnValue({ where: mockWhere });
-    mockOrderBy.mockReturnValue({ limit: mockLimit });
+    service.wireCrossDomainServices(crossDomainServices as never);
     userService.findUserRecordByPublicId.mockResolvedValue(userRecord);
+    userService.requireUserRecordByPublicId.mockResolvedValue(userRecord);
+    crossDomainServices.authSessionService.listForUserDataExport.mockResolvedValue([]);
+    crossDomainServices.membershipService.listOrganizationsForUserDataExport.mockResolvedValue([]);
+    crossDomainServices.notificationService.listForUserDataExport.mockResolvedValue([]);
+    crossDomainServices.auditService.listActivityForUserDataExport.mockResolvedValue([]);
   });
 
-  it('buildExportPayload returns aggregated user data', async () => {
-    mockLimit
-      .mockResolvedValueOnce([userRecord])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
-
-    const mockDatabaseHandle = { select: mockSelect };
-    const result = await service.buildExportPayload(
-      'user_public',
-      mockDatabaseHandle as unknown as RequestScopedPostgresDatabase,
-    );
+  it('buildExportPayload returns aggregated user data via cross-domain services', async () => {
+    const result = await service.buildExportPayload('user_public');
 
     expect(result.user.email).toBe('user@example.com');
     expect(result.organizations).toEqual([]);
     expect(result.exported_at).toBeDefined();
+    expect(
+      crossDomainServices.membershipService.listOrganizationsForUserDataExport,
+    ).toHaveBeenCalled();
   });
 
   it('buildExportPayload throws when user is missing', async () => {
-    mockLimit.mockResolvedValueOnce([]);
-    const mockDatabaseHandle = { select: mockSelect };
-    await expect(
-      service.buildExportPayload(
-        'missing',
-        mockDatabaseHandle as unknown as RequestScopedPostgresDatabase,
-      ),
-    ).rejects.toBeInstanceOf(NotFoundError);
+    userService.requireUserRecordByPublicId.mockRejectedValue(new NotFoundError('User'));
+    await expect(service.buildExportPayload('missing')).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('requestExport creates row and defers enqueue until flushOnCommit', async () => {
@@ -164,13 +145,13 @@ describe('UserDataExportService', () => {
 
   it('isExportJobCancelled returns true when export row is missing', async () => {
     workerExportRepository.findByPublicIdAndUserId.mockResolvedValue(null);
-    const mockDatabaseHandle = { select: mockSelect };
 
-    const cancelled = await service.isExportJobCancelled(
-      'exp_missing',
-      1,
-      mockDatabaseHandle as never,
-    );
+    const cancelled = await service.isExportJobCancelled({
+      exportPublicId: 'exp_missing',
+      userInternalId: 1,
+      userPublicId: 'user_public',
+      databaseHandle: {} as never,
+    });
 
     expect(cancelled).toBe(true);
   });
@@ -180,22 +161,33 @@ describe('UserDataExportService', () => {
       public_id: 'exp_1',
       s3_key: 'user-data-export/user/exp_1.json.gz',
     });
-    mockLimit.mockResolvedValueOnce([{ deleted_at: new Date() }]);
-    const mockDatabaseHandle = { select: mockSelect };
+    userService.findUserRecordByPublicId.mockResolvedValue({
+      ...userRecord,
+      deleted_at: new Date(),
+    });
 
-    const cancelled = await service.isExportJobCancelled('exp_1', 1, mockDatabaseHandle as never);
+    const cancelled = await service.isExportJobCancelled({
+      exportPublicId: 'exp_1',
+      userInternalId: 1,
+      userPublicId: 'user_public',
+      databaseHandle: {} as never,
+    });
 
     expect(cancelled).toBe(true);
   });
 
   it('completeExportJob skips S3 when export row was removed', async () => {
     workerExportRepository.findByPublicIdAndUserId.mockResolvedValue(null);
-    const mockDatabaseHandle = { select: mockSelect };
 
     await expect(
       service.completeExportJob(
-        { exportPublicId: 'exp_gone', userInternalId: 1, body: Buffer.from('x') },
-        mockDatabaseHandle as never,
+        {
+          exportPublicId: 'exp_gone',
+          userInternalId: 1,
+          userPublicId: 'user_public',
+          body: Buffer.from('x'),
+        },
+        {} as never,
       ),
     ).rejects.toBeInstanceOf(UserDataExportCancelledError);
 

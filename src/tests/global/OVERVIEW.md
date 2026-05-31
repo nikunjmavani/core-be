@@ -10,7 +10,7 @@ Vitest project: `global` (configured in [tooling/vitest/projects.ts](tooling/vit
 
 What this suite covers:
 
-- Domain dependency rules (no cross-domain repository imports, no `request-database.context` from workers, etc.).
+- Domain dependency rules (services: same-domain repository + other domains' services only; no `request-database.context` from workers, etc.).
 - Worker readiness — every domain that registers a worker has a corresponding heartbeat and DLQ wiring.
 - Auth / audit emission cardinality — every controller path that should emit audit does.
 - Schema / route catalog drift detection.
@@ -41,6 +41,6 @@ None — these tests read source files directly.
 
 ## Failure modes
 
-- **New cross-domain repository import sneaks in** → the test prints the offending file + line; refactor through the domain's service.
+- **New cross-domain repository or schema import in a service** → `service-cross-domain-boundary.global.test.ts` prints the offending file; refactor through the owning domain's service.
 - **New worker file forgets to register its DLQ** → the readiness scan flags it; wire through [src/infrastructure/queue/dead-letter.ts](src/infrastructure/queue/dead-letter.ts).
 - **Route added without `schema` block** → catalog drift caught by sibling `routes:catalog:check`.

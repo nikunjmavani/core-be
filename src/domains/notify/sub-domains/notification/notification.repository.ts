@@ -20,6 +20,14 @@ export interface NotificationListPagination {
   include_total?: boolean;
 }
 
+/** Row shape returned by {@link NotificationRepository.listForUserDataExport}. */
+export interface NotificationUserDataExportRow {
+  type: string;
+  title: string;
+  message: string;
+  created_at: Date;
+}
+
 /** Insert payload for a new notification row (consumed by {@link NotificationRepository.create}). */
 export interface CreateNotificationInput {
   user_id: number;
@@ -149,6 +157,23 @@ export class NotificationRepository {
       has_more: hasMore,
       next_cursor: nextCursor,
     };
+  }
+
+  async listForUserDataExport(
+    user_id: number,
+    limit: number,
+  ): Promise<NotificationUserDataExportRow[]> {
+    return this.db()
+      .select({
+        type: notifications.type,
+        title: notifications.title,
+        message: notifications.message,
+        created_at: notifications.created_at,
+      })
+      .from(notifications)
+      .where(eq(notifications.user_id, user_id))
+      .orderBy(desc(notifications.created_at))
+      .limit(limit);
   }
 
   async findByPublicIdForUser(public_id: string, user_id: number) {

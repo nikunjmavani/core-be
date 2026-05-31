@@ -30,6 +30,6 @@ See [data-classification.md](../security/data-classification.md) and [data-lifec
 
 ## Related
 
-- [`src/domains/user/sub-domains/user-data-export/OVERVIEW.md`](../../../src/domains/user/sub-domains/user-data-export/OVERVIEW.md) — sub-domain invariants, documented dependency-rule exception, failure modes
+- [`src/domains/user/sub-domains/user-data-export/OVERVIEW.md`](../../../src/domains/user/sub-domains/user-data-export/OVERVIEW.md) — sub-domain invariants, cross-domain service wiring, failure modes
 - [`src/POLICIES.md`](../../../src/POLICIES.md) — `USER_DATA_EXPORT_*` policy constants and rationale
 - [`src/FLOWS.md`](../../../src/FLOWS.md) § GDPR export — end-to-end flow diagram

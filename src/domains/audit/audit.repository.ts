@@ -87,4 +87,21 @@ export class AuditRepository {
       .orderBy(desc(logs.created_at), desc(logs.id))
       .limit(limit);
   }
+
+  /** Lists audit activity rows authored by the user for a GDPR data-export bundle. */
+  async listActivityForUserDataExport(
+    actor_user_id: number,
+    limit: number,
+  ): Promise<{ action: string; resource_type: string; created_at: Date }[]> {
+    return getRequestDatabase()
+      .select({
+        action: logs.action,
+        resource_type: logs.resource_type,
+        created_at: logs.created_at,
+      })
+      .from(logs)
+      .where(eq(logs.actor_user_id, actor_user_id))
+      .orderBy(desc(logs.created_at))
+      .limit(limit);
+  }
 }

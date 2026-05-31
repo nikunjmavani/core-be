@@ -78,7 +78,7 @@ Nested sub-domains use the same layer files and optional `events/`, `queues/`, `
 | **Implementation module** | `auth/auth-method/magic-link.service.ts`                      | No separate public resource; wired from parent `auth.routes.ts`     |
 | **No repository**         | `upload/` uses `infrastructure/storage`                       | Thin presigned-URL flow                                             |
 | **Aggregate child**       | `webhook/webhook-event/`                                      | Lifecycle tied to parent                                            |
-| **Cross-domain read**     | `user-data-export.service.ts`                                 | Documented exception (e.g. GDPR export); keep reads in one service  |
+| **Cross-domain read**     | `user-data-export.service.ts`                                 | Calls auth, tenancy, notify, and audit services (`list*ForUserDataExport`) |
 
 **Route file strategy by domain** (follow the existing style when adding endpoints):
 

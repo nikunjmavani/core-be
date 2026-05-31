@@ -44,7 +44,7 @@ export interface UserDataExport {
     joined_at: string;
   }[];
   sessions: {
-    ip_address: string;
+    ip_address: string | null;
     last_active_at: string;
     created_at: string;
   }[];

@@ -8,8 +8,31 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { AuthSessionCreateData } from './auth-session.types.js';
 
+/** Row shape returned by {@link AuthSessionRepository.listForUserDataExport}. */
+export interface AuthSessionUserDataExportRow {
+  ip_address: string | null;
+  last_active_at: Date;
+  created_at: Date;
+}
+
 /** Drizzle repository for the {@link sessions} table; uses {@link generatePublicId} + {@link runInsertWithPublicIdentifierRetry} for collision-safe inserts and operates under request-scoped RLS contexts so users only see their own sessions. */
 export class AuthSessionRepository {
+  async listForUserDataExport(
+    userId: number,
+    limit: number,
+  ): Promise<AuthSessionUserDataExportRow[]> {
+    return getRequestDatabase()
+      .select({
+        ip_address: sessions.ip_address,
+        last_active_at: sessions.last_active_at,
+        created_at: sessions.created_at,
+      })
+      .from(sessions)
+      .where(eq(sessions.user_id, userId))
+      .orderBy(desc(sessions.created_at))
+      .limit(limit);
+  }
+
   async listByUserId(userId: number, limit = DEFAULT_REPOSITORY_LIST_LIMIT) {
     // Fetch one extra row so a hit on the cap is observable instead of a silent truncation.
     const rows = await getRequestDatabase()

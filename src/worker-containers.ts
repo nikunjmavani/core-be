@@ -82,6 +82,13 @@ export function createDomainContainers(
 
   tenancyDomain.organizationService.wireOffboardingUploadService(uploadDomain.uploadService);
 
+  userDomain.userDataExportService.wireCrossDomainServices({
+    authSessionService: authDomain.authSessionService,
+    membershipService: tenancyDomain.membershipService,
+    notificationService: notifyDomain.notificationService,
+    auditService: auditDomain.auditService,
+  });
+
   return {
     userDomain,
     tenancyDomain,

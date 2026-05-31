@@ -209,4 +209,14 @@ export class AuditService {
       next_cursor: nextCursor,
     };
   }
+
+  /**
+   * Lists audit rows where the user is the actor, for GDPR data-export bundles (user-scoped RLS).
+   */
+  async listActivityForUserDataExport(options: { userPublicId: string; limit: number }) {
+    const user = await this.userService.requireUserRecordByPublicId(options.userPublicId);
+    return withUserDatabaseContext(options.userPublicId, (_databaseHandle) =>
+      this.repository.listActivityForUserDataExport(user.id, options.limit),
+    );
+  }
 }

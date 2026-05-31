@@ -259,10 +259,8 @@ Billing event helpers and types live with the billing sub-domains that emit them
 ## Dependency Rules
 
 - HTTP controllers may import: services (or container deps), `@/shared/utils/http/request.util.js`, `@/shared/utils/http/response.util.js`, shared errors
-- Services may import: own domain repositories, own domain validators, own domain types, shared errors, `src/core/events/event-bus.ts`, `src/shared/utils/infrastructure/logger.util.ts`
-- Services may import other domains’ **services** for cross-domain reads/writes. Cross-domain **repository** imports from services are forbidden.
-- Repositories may import: DB connection, schema, own domain types; may extend BaseRepository. Repositories may import other domains’ **schemas** for joins only (same bounded context or documented exception).
-- **Documented exception**: `user-data-export` may use direct DB + cross-domain schema reads for GDPR export until refactored.
+- Services may import: **same-domain** repositories, own validators/types, shared errors, `eventBus`, `logger`. For **cross-domain** reads/writes, import the other domain's **service** only — never its repository or schema.
+- Repositories may import: DB connection, schema, own domain types; may extend BaseRepository. Repositories may import other domains' **schemas** for joins only (same bounded context or documented exception).
 - Containers may import: own domain repositories, services. Accept cross-domain deps as parameters. Export services for route registration.
 - Routes may import: own domain controllers, container types. Must use `FastifyPluginAsync` pattern.
 

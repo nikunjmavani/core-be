@@ -58,6 +58,17 @@ export class AuthSessionService {
     );
   }
 
+  /**
+   * Lists session metadata for a GDPR data-export bundle (includes revoked sessions; capped by
+   * caller).
+   */
+  async listForUserDataExport(options: { userPublicId: string; limit: number }) {
+    const user = await this.userService.requireUserRecordByPublicId(options.userPublicId);
+    return withUserDatabaseContext(options.userPublicId, (_databaseHandle) =>
+      this.sessionRepository.listForUserDataExport(user.id, options.limit),
+    );
+  }
+
   async revoke(userPublicId: string, sessionPublicId: string) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
