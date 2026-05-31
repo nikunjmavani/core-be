@@ -925,6 +925,7 @@ src/
     │   │   └── idempotency-cardinality.worker.ts
     │   ├── metrics/
     │   │   ├── bullmq-metrics.ts
+    │   │   ├── business-metrics.ts
     │   │   ├── db-pool-metrics.ts
     │   │   ├── event-loop-metrics.ts
     │   │   ├── http-metrics.plugin.ts
@@ -1168,6 +1169,7 @@ src/
     │   │   ├── i18n.middleware.ts
     │   │   ├── idempotency.middleware.ts
     │   │   ├── metrics.middleware.ts
+    │   │   ├── ops.middleware.ts
     │   │   ├── recent-step-up.middleware.ts
     │   │   ├── request-context.middleware.ts
     │   │   ├── request-lifecycle.middleware.ts
@@ -1613,6 +1615,7 @@ src/
     │   │   ├── idempotency.middleware.unit.test.ts
     │   │   ├── metrics.middleware.unit.test.ts
     │   │   ├── middleware-order.unit.test.ts
+    │   │   ├── ops.middleware.unit.test.ts
     │   │   ├── organization-rls-transaction.middleware.unit.test.ts
     │   │   ├── rate-limit-fallback-store.unit.test.ts
     │   │   ├── rate-limit-presets.constants.unit.test.ts
@@ -1624,6 +1627,7 @@ src/
     │   │   ├── shutdown.middleware.unit.test.ts
     │   │   └── tenant.middleware.unit.test.ts
     │   ├── observability/
+    │   │   ├── business-metrics.unit.test.ts
     │   │   ├── db-pool-alert.service.unit.test.ts
     │   │   ├── db-rls-checkout-metrics.unit.test.ts
     │   │   ├── dlq-depth.service.unit.test.ts

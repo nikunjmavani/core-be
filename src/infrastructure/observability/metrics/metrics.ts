@@ -11,6 +11,7 @@ export {
 
 type MetricsStackModules = {
   bullmq: typeof import('@/infrastructure/observability/metrics/bullmq-metrics.js');
+  business: typeof import('@/infrastructure/observability/metrics/business-metrics.js');
   eventLoop: typeof import('@/infrastructure/observability/metrics/event-loop-metrics.js');
   postgresPool: typeof import('@/infrastructure/observability/metrics/db-pool-metrics.js');
   prometheus: typeof import('@/infrastructure/observability/metrics/prometheus-metrics.js');
@@ -21,11 +22,13 @@ let metricsStackModulesPromise: Promise<MetricsStackModules> | null = null;
 function loadMetricsStackModules(): Promise<MetricsStackModules> {
   metricsStackModulesPromise ??= Promise.all([
     import('@/infrastructure/observability/metrics/bullmq-metrics.js'),
+    import('@/infrastructure/observability/metrics/business-metrics.js'),
     import('@/infrastructure/observability/metrics/event-loop-metrics.js'),
     import('@/infrastructure/observability/metrics/db-pool-metrics.js'),
     import('@/infrastructure/observability/metrics/prometheus-metrics.js'),
-  ]).then(([bullmq, eventLoop, postgresPool, prometheus]) => ({
+  ]).then(([bullmq, business, eventLoop, postgresPool, prometheus]) => ({
     bullmq,
+    business,
     eventLoop,
     postgresPool,
     prometheus,
@@ -55,6 +58,7 @@ export async function refreshMetricsBeforeScrape(): Promise<void> {
   await Promise.all([
     modules.postgresPool.refreshPostgresPoolMetrics(),
     modules.bullmq.refreshBullMQQueueGauges(),
+    modules.business.refreshBusinessMetricsGauges(),
   ]);
 }
 
