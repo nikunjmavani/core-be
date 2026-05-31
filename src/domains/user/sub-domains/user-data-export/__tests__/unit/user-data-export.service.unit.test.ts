@@ -212,6 +212,75 @@ describe('UserDataExportService', () => {
     expect(objectStorage.putObject).not.toHaveBeenCalled();
   });
 
+  it('completeExportJob deletes S3 artifact when cancelled after upload on worker path', async () => {
+    const s3Key = 'user-data-export/user/exp_cancelled.json.gz';
+    exportRepository.findByPublicIdAndUserId
+      .mockResolvedValueOnce({
+        public_id: 'exp_cancelled',
+        s3_key: s3Key,
+      })
+      .mockResolvedValueOnce({
+        public_id: 'exp_cancelled',
+        s3_key: s3Key,
+      })
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      service.completeExportJob({
+        exportPublicId: 'exp_cancelled',
+        userInternalId: 1,
+        userPublicId: 'user_public',
+        body: Buffer.from('gzip-body'),
+      }),
+    ).rejects.toBeInstanceOf(UserDataExportCancelledError);
+
+    expect(objectStorage.putObject).toHaveBeenCalledWith(expect.objectContaining({ key: s3Key }));
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith(s3Key);
+  });
+
+  it('completeExportJob deletes S3 artifact when updateStatus returns null after upload', async () => {
+    const s3Key = 'user-data-export/user/exp_stale.json.gz';
+    exportRepository.findByPublicIdAndUserId.mockResolvedValue({
+      public_id: 'exp_stale',
+      s3_key: s3Key,
+    });
+    exportRepository.updateStatus.mockResolvedValue(null);
+
+    await expect(
+      service.completeExportJob({
+        exportPublicId: 'exp_stale',
+        userInternalId: 1,
+        userPublicId: 'user_public',
+        body: Buffer.from('gzip-body'),
+      }),
+    ).rejects.toBeInstanceOf(UserDataExportCancelledError);
+
+    expect(objectStorage.putObject).toHaveBeenCalledWith(expect.objectContaining({ key: s3Key }));
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith(s3Key);
+  });
+
+  it('completeExportJob does not delete S3 artifact on successful completion', async () => {
+    const s3Key = 'user-data-export/user/exp_ok.json.gz';
+    exportRepository.findByPublicIdAndUserId.mockResolvedValue({
+      public_id: 'exp_ok',
+      s3_key: s3Key,
+    });
+    exportRepository.updateStatus.mockResolvedValue({
+      public_id: 'exp_ok',
+      status: USER_DATA_EXPORT_STATUSES.COMPLETED,
+    });
+
+    await service.completeExportJob({
+      exportPublicId: 'exp_ok',
+      userInternalId: 1,
+      userPublicId: 'user_public',
+      body: Buffer.from('gzip-body'),
+    });
+
+    expect(objectStorage.putObject).toHaveBeenCalledWith(expect.objectContaining({ key: s3Key }));
+    expect(objectStorage.deleteObject).not.toHaveBeenCalled();
+  });
+
   it('deleteAllExportsForUser removes S3 objects and database rows', async () => {
     exportRepository.listByUserId.mockResolvedValue([
       { public_id: 'exp_1', s3_key: 'user-data-export/user/exp_1.json.gz' },
