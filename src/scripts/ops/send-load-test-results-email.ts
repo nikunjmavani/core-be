@@ -5,6 +5,7 @@
  * Run: pnpm run scripts:send-load-test-results-email
  */
 import '@/shared/config/load-env-files.js';
+import { PROJECT_DISPLAY_NAME } from '@/shared/constants/project-identity.constants.js';
 import { spawn } from 'node:child_process';
 import { sendEmail, isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -104,7 +105,7 @@ async function main(): Promise<void> {
   const apiOk = apiResult.exitCode === 0;
 
   const overallOk = healthOk && apiOk;
-  const subject = `core-be Load Test Results: ${overallOk ? 'PASS' : 'FAIL'} — ${dateTime}`;
+  const subject = `${PROJECT_DISPLAY_NAME} Load Test Results: ${overallOk ? 'PASS' : 'FAIL'} — ${dateTime}`;
 
   const summaryLines: string[] = [
     `Load test run at ${dateTime}`,

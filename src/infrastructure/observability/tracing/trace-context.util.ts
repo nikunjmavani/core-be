@@ -6,6 +6,7 @@ import {
   SpanStatusCode,
   trace,
 } from '@opentelemetry/api';
+import { OTEL_TRACER_NAME } from '@/shared/constants/project-identity.constants.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
 /** W3C trace context fields stored on BullMQ job payloads for cross-process propagation. */
@@ -48,7 +49,7 @@ export async function runWithPropagatedTraceContext<T>(
   }
 
   const extractedContext = propagation.extract(ROOT_CONTEXT, extractionCarrier);
-  const tracer = trace.getTracer('core-be');
+  const tracer = trace.getTracer(OTEL_TRACER_NAME);
 
   return context.with(extractedContext, () =>
     tracer.startActiveSpan(spanName, { kind: SpanKind.CONSUMER }, async (span) => {

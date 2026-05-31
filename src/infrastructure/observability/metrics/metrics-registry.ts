@@ -1,5 +1,6 @@
 import { collectDefaultMetrics, Registry } from 'prom-client';
 import { getEnv } from '@/shared/config/env.config.js';
+import { PROJECT_SLUG } from '@/shared/constants/project-identity.constants.js';
 
 let metricsRegistry: Registry | null = null;
 
@@ -14,7 +15,7 @@ export function getMetricsRegistry(): Registry {
     metricsRegistry = new Registry();
     const environment = getEnv();
     metricsRegistry.setDefaultLabels({
-      service: 'core-be',
+      service: PROJECT_SLUG,
       environment: environment.SENTRY_ENVIRONMENT ?? environment.NODE_ENV,
     });
     collectDefaultMetrics({ register: metricsRegistry });

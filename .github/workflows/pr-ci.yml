@@ -9,7 +9,7 @@ name: PR CI
 
 on:
   pull_request:
-    branches: [main, dev]
+    branches: [dev, main]
 
 concurrency:
   group: pr-ci-${{ github.event.pull_request.number }}
@@ -161,6 +161,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
+      # BEGIN GENERATED project-identity
+      PROJECT_SLUG: core-be
+      PROJECT_DISPLAY_NAME: core-be
+      API_IMAGE: core-be-api
+      WORKER_IMAGE: core-be-worker
+      DOCKER_LOCAL_API_TAG: core-be
+      GHCR_CACHE_SCOPE_API: core-be-api
+      GHCR_CACHE_SCOPE_WORKER: core-be-worker
+      GIT_DEFAULT_BRANCH: dev
+      GIT_PRODUCTION_BRANCH: main
+      GIT_NON_PRODUCTION_BRANCH: dev
+      PROTECTED_BRANCHES_JSON: '["dev","main"]'
+      BRANCH_ENV_MAP_JSON: '{"dev":"development","main":"production"}'
+      # END GENERATED project-identity
       DOCKER_BUILDKIT: 1
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -183,13 +197,13 @@ jobs:
           target: api
           load: true
           push: false
-          tags: core-be:pr-verify
+          tags: ${{ env.DOCKER_LOCAL_API_TAG }}:pr-verify
           build-args: |
             GENERATE_MCP_DOCS=true
             BUILD_REVISION=${{ github.sha }}
             IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=core-be-api-pr
-          cache-to: type=gha,mode=max,scope=core-be-api-pr
+          cache-from: type=gha,scope=${{ env.GHCR_CACHE_SCOPE_API }}-pr
+          cache-to: type=gha,mode=max,scope=${{ env.GHCR_CACHE_SCOPE_API }}-pr
 
       - name: Build worker Docker image (load only)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
@@ -198,12 +212,12 @@ jobs:
           file: Dockerfile.worker
           load: true
           push: false
-          tags: core-be-worker:pr-verify
+          tags: ${{ env.WORKER_IMAGE }}:pr-verify
           build-args: |
             BUILD_REVISION=${{ github.sha }}
             IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=core-be-worker-pr
-          cache-to: type=gha,mode=max,scope=core-be-worker-pr
+          cache-from: type=gha,scope=${{ env.GHCR_CACHE_SCOPE_WORKER }}-pr
+          cache-to: type=gha,mode=max,scope=${{ env.GHCR_CACHE_SCOPE_WORKER }}-pr
 
   security-audit:
     name: Security audit

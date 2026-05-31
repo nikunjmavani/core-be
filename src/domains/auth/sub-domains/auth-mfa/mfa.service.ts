@@ -16,6 +16,7 @@ import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodService } from '../auth-method/auth-method.service.js';
 import type { AuthSessionService } from '../auth-session/auth-session.service.js';
 import { MFA_TOTP_CODE_REPLAY_TTL_SECONDS } from '@/shared/constants/index.js';
+import { TOTP_ISSUER } from '@/shared/constants/project-identity.constants.js';
 import {
   validateMfaVerify,
   validateMfaEnroll,
@@ -24,7 +25,6 @@ import {
 import { createMfaSession, verifyMfaSession } from './mfa-session.js';
 import { consumeMfaRecoveryCode } from './mfa-recovery-code.repository.js';
 
-const TOTP_ISSUER = 'core-be';
 const ERROR_KEY_MFA_USER_NOT_FOUND = 'errors:mfaUserNotFound';
 const ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE = 'errors:mfaInvalidOrExpiredCode';
 

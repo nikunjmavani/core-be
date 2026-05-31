@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { decodeJwt } from 'jose';
+import { PROJECT_SLUG } from '@/shared/constants/project-identity.constants.js';
 import {
   signAccessToken,
   verifyAccessToken,
@@ -25,7 +26,7 @@ describe('Security: JWT', () => {
   });
 
   it('should include correct issuer and audience claims', async () => {
-    expect(JWT_ISSUER).toBe('core-be');
+    expect(JWT_ISSUER).toBe(PROJECT_SLUG);
     expect(JWT_AUDIENCE).toBe('core-api');
   });
 

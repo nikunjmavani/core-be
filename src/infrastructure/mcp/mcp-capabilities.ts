@@ -1,13 +1,16 @@
 /**
- * Canonical MCP tools and resources for core-be.
+ * Canonical MCP tools and resources for the API.
  * Used by the MCP server and OpenAPI generation (Scalar /reference UI).
  */
 import { z } from 'zod';
+import {
+  MCP_OPENAPI_RESOURCE_URI,
+  MCP_ROUTES_RESOURCE_URI,
+  PROJECT_DISPLAY_NAME,
+  PROJECT_SLUG,
+} from '@/shared/constants/project-identity.constants.js';
 
-/** MCP resource URI for the generated OpenAPI 3.0 spec (`docs/openapi/openapi.json`). */
-export const MCP_OPENAPI_RESOURCE_URI = 'core-be://openapi';
-/** MCP resource URI for the human-readable route catalog (`docs/routes.txt`). */
-export const MCP_ROUTES_RESOURCE_URI = 'core-be://routes';
+export { MCP_OPENAPI_RESOURCE_URI, MCP_ROUTES_RESOURCE_URI };
 
 /**
  * Zod input schema for the `call_api` MCP tool. Forwards HTTP method, path (must start
@@ -44,19 +47,18 @@ export type McpToolDefinition = {
 /** Canonical resource catalog exposed via MCP (OpenAPI spec + route catalog). */
 export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
   {
-    name: 'core-be-openapi',
+    name: `${PROJECT_SLUG}-openapi`,
     uri: MCP_OPENAPI_RESOURCE_URI,
-    title: 'core-be OpenAPI spec',
+    title: `${PROJECT_DISPLAY_NAME} OpenAPI spec`,
     description:
       'OpenAPI 3.0 spec (paths, schemas, request/response). Use this to discover and validate API calls. Generate with pnpm docs:generate.',
     mimeType: 'application/json',
   },
   {
-    name: 'core-be-routes',
+    name: `${PROJECT_SLUG}-routes`,
     uri: MCP_ROUTES_RESOURCE_URI,
-    title: 'core-be API routes',
-    description:
-      'List of all API routes (method, path, access). Use with core-be://openapi to discover endpoints before calling call_api.',
+    title: `${PROJECT_DISPLAY_NAME} API routes`,
+    description: `List of all API routes (method, path, access). Use with ${MCP_OPENAPI_RESOURCE_URI} to discover endpoints before calling call_api.`,
     mimeType: 'text/plain',
   },
 ] as const;
@@ -65,9 +67,8 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
     name: 'call_api',
-    title: 'Call core-be API',
-    description:
-      'Call any core-be REST API endpoint. Path must start with /api/v1/. Pass Authorization and X-Organization-Id in headers for authenticated/tenant-scoped calls. Use core-be://openapi or core-be://routes to discover available endpoints.',
+    title: `Call ${PROJECT_DISPLAY_NAME} API`,
+    description: `Call any ${PROJECT_DISPLAY_NAME} REST API endpoint. Path must start with /api/v1/. Pass Authorization and X-Organization-Id in headers for authenticated/tenant-scoped calls. Use ${MCP_OPENAPI_RESOURCE_URI} or ${MCP_ROUTES_RESOURCE_URI} to discover available endpoints.`,
     inputSchema: callApiInputSchema,
   },
 ] as const;

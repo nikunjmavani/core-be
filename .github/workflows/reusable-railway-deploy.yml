@@ -142,20 +142,20 @@ jobs:
             echo "environment=$TARGET_INPUT" >> "$GITHUB_OUTPUT"
           elif [ -n "$TARGET_BRANCH_INPUT" ]; then
             case "$TARGET_BRANCH_INPUT" in
+              dev) echo "environment=development"  >> "$GITHUB_OUTPUT" ;;
               main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
-              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
               *)    echo "::error::Unsupported branch for deploy: $TARGET_BRANCH_INPUT" && exit 1 ;;
             esac
           elif [ "$EVENT_NAME" = "pull_request" ]; then
             case "$PULL_REQUEST_BASE_REF" in
+              dev) echo "environment=development"  >> "$GITHUB_OUTPUT" ;;
               main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
-              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
               *)    echo "::error::Unsupported base branch for deploy: $PULL_REQUEST_BASE_REF" && exit 1 ;;
             esac
           else
             case "$REF_NAME" in
+              dev) echo "environment=development"  >> "$GITHUB_OUTPUT" ;;
               main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
-              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
               *)    echo "::error::Unsupported branch for deploy: $REF_NAME" && exit 1 ;;
             esac
           fi
@@ -179,6 +179,20 @@ jobs:
     # DATABASE_URL alongside). Defining each value once here makes the file
     # DRY: rotating a Railway token only needs one edit, not six.
     env:
+      # BEGIN GENERATED project-identity
+      PROJECT_SLUG: core-be
+      PROJECT_DISPLAY_NAME: core-be
+      API_IMAGE: core-be-api
+      WORKER_IMAGE: core-be-worker
+      DOCKER_LOCAL_API_TAG: core-be
+      GHCR_CACHE_SCOPE_API: core-be-api
+      GHCR_CACHE_SCOPE_WORKER: core-be-worker
+      GIT_DEFAULT_BRANCH: dev
+      GIT_PRODUCTION_BRANCH: main
+      GIT_NON_PRODUCTION_BRANCH: dev
+      PROTECTED_BRANCHES_JSON: '["dev","main"]'
+      BRANCH_ENV_MAP_JSON: '{"dev":"development","main":"production"}'
+      # END GENERATED project-identity
       ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
@@ -369,11 +383,11 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          API_BASE="ghcr.io/${REPOSITORY}/core-be-api"
-          WORKER_BASE="ghcr.io/${REPOSITORY}/core-be-worker"
+          API_BASE="ghcr.io/${REPOSITORY}/${{ env.API_IMAGE }}"
+          WORKER_BASE="ghcr.io/${REPOSITORY}/${{ env.WORKER_IMAGE }}"
           if [ -n "${IMAGE_OVERRIDE:-}" ]; then
             api_image="${IMAGE_OVERRIDE}"
-            worker_image="${IMAGE_OVERRIDE/core-be-api/core-be-worker}"
+            worker_image="${IMAGE_OVERRIDE/${{ env.API_IMAGE }}/${{ env.WORKER_IMAGE }}}"
           elif [ -n "${GHCR_API_IMAGE:-}" ]; then
             api_image="${GHCR_API_IMAGE}"
           else

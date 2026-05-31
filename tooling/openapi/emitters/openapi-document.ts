@@ -26,6 +26,7 @@ import {
   isMcpOpenApiPath,
 } from '@tooling/openapi/mcp-openapi.js';
 import { buildResponses } from './responses-builder.js';
+import { PROJECT_OPENAPI_TITLE } from '@/shared/constants/project-identity.constants.js';
 import { buildTagDefinitions } from './tag-definitions.js';
 
 export type OpenApiDocument = {
@@ -181,7 +182,7 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
   return {
     openapi: '3.0.0',
     info: {
-      title: localeStrings.info?.title ?? 'core-be API',
+      title: localeStrings.info?.title ?? PROJECT_OPENAPI_TITLE,
       description:
         localeStrings.info?.description ??
         'Backend API for the Core platform. Includes authentication, multi-tenant organization management, billing, notifications, webhooks, and admin operations.\n\nAll authenticated endpoints require a Bearer JWT token in the Authorization header. Organization-scoped endpoints also require the appropriate permission.',

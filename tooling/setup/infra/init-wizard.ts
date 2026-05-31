@@ -10,6 +10,7 @@ import {
 } from '../common/secrets.js';
 import { loadConfigIfExists } from '../common/config.js';
 import * as logger from '../common/logger.js';
+import { buildDefaultArtifacts } from '../codegen/project-identity.util.js';
 import type { SetupConfig } from '../common/types.js';
 
 const SETUP_CONFIG_PATH = resolve(import.meta.dirname, '../setup.config.json');
@@ -98,11 +99,21 @@ export function buildConfig(
         : { traces: 0.5, profile: 0.5 };
   }
 
+  const artifacts = buildDefaultArtifacts(projectName);
+  const protectedBranches = environments.map((environment) => environment.branch);
+  const defaultBranch =
+    environments.find((environment) => environment.isDefault)?.branch ?? protectedBranches[0];
+
   return {
     project: {
       name: projectName,
       displayName,
       organization,
+      artifacts,
+    },
+    git: {
+      protectedBranches,
+      defaultBranch,
     },
     environments,
     providers: {

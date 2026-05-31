@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { SignJWT, decodeProtectedHeader, jwtVerify, importPKCS8, importSPKI } from 'jose';
 import type { CryptoKey } from 'jose';
 import { ACCESS_TOKEN_EXPIRY_SECONDS } from '@/shared/constants/index.js';
+import { JWT_ISSUER } from '@/shared/constants/project-identity.constants.js';
 import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
-const JWT_ISSUER = 'core-be';
 const JWT_AUDIENCE = 'core-api';
 const JWT_ALGORITHM = 'RS256' as const;
 
