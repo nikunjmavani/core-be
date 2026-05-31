@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.4.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.4-dev.0...v3.4.5-dev.0) (2026-05-31)
+
+
+### Fixed
+
+* regression residual findings P2–P5 (export, audit, lint) ([#212](https://github.com/nikunjmavani/core-be/issues/212)) ([69a02f2](https://github.com/nikunjmavani/core-be/commit/69a02f24627c009b8b3baedb3eb44b4dc7a9c719))
+
 ## [3.4.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.3-dev.0...v3.4.4-dev.0) (2026-05-31)
 
 
