@@ -5,7 +5,7 @@ import i18next from 'i18next';
 import { enterOnCommitScope, eventBus } from '@/core/events/event-bus.js';
 import { AUTH_EVENT } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import { registerAuthMethodEventHandlers } from '../auth.event-handlers.js';
+import { registerAuthMethodEventHandlers } from '@/domains/auth/sub-domains/auth-method/events/auth.event-handlers.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { ServiceUnavailableError } from '@/shared/errors/index.js';
 

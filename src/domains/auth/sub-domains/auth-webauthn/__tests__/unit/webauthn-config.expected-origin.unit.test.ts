@@ -17,7 +17,7 @@ vi.mock('@/shared/config/env.config.js', () => ({
   env: mockEnv,
 }));
 
-import { resolveWebauthnExpectedOrigin } from '../../webauthn.config.js';
+import { resolveWebauthnExpectedOrigin } from '@/domains/auth/sub-domains/auth-webauthn/webauthn.config.js';
 
 describe('resolveWebauthnExpectedOrigin — trusted-origin allowlist (bug 39)', () => {
   afterEach(() => {

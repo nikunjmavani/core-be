@@ -15,17 +15,17 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import dotenv from 'dotenv';
-import { loadConfig, getEnvironmentNames } from '../common/config.js';
-import { loadSecrets } from '../common/secrets.js';
-import { loadState } from '../common/state.js';
+import { loadConfig, getEnvironmentNames } from '@tooling/setup/common/config.js';
+import { loadSecrets } from '@tooling/setup/common/secrets.js';
+import { loadState } from '@tooling/setup/common/state.js';
 import { buildEnvironmentVariables } from './build-env-vars.js';
-import * as logger from '../common/logger.js';
+import * as logger from '@tooling/setup/common/logger.js';
 import type {
   EnvironmentVariables,
   SetupConfig,
   SetupSecrets,
   SetupState,
-} from '../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../../');
 
@@ -98,6 +98,10 @@ function buildEnvContent(
     const match = line.match(ENV_KEY_RE);
     if (match) {
       const key = match[1];
+      if (key === undefined) {
+        result.push(line);
+        continue;
+      }
 
       // Provisioned keys always get fresh values from state.
       if (key in provisioned) {

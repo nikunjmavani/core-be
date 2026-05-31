@@ -11,10 +11,10 @@ import {
   sendOauthProviderNotImplementedResponse,
   setOauthNonceCookie,
   setSessionCookie,
-} from '../auth.http.util.js';
-import type { OauthCallbackQueryInput } from '../auth.dto.js';
-import { AuthSerializer } from '../auth.serializer.js';
-import type { AuthContainer } from '../auth.container.js';
+} from '@/domains/auth/auth.http.util.js';
+import type { OauthCallbackQueryInput } from '@/domains/auth/auth.dto.js';
+import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthOauthHandlersDependencies = Pick<AuthContainer, 'oauthService'>;
 

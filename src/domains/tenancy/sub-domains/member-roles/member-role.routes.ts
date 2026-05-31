@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
-import { TENANCY_PERMISSIONS } from '../../tenancy.permissions.js';
+import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import type { MemberRoleService } from './member-role.service.js';
 import type { MemberRolePermissionService } from './member-role-permission/member-role-permission.service.js';
 import { createMemberRoleController } from './member-role.controller.js';

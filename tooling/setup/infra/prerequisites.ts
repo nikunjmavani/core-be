@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
-import * as logger from '../common/logger.js';
-import type { SetupConfig } from '../common/types.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 interface PrerequisiteCheck {
   name: string;

@@ -1,6 +1,6 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import type { OrganizationRepository } from '../organization.repository.js';
+import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import type { OrganizationNotificationPolicyRepository } from './organization-notification-policy.repository.js';
 import type { OrganizationNotificationPolicyOutput } from './organization-notification-policy.types.js';
 import {

@@ -7,10 +7,10 @@ import {
   isFactoryDefaultUserLocaleSettings,
   preferredLocalesForOrganizationDefaultLocale,
 } from '@/domains/user/sub-domains/user-settings/user-settings-locale-defaults.util.js';
-import type { OrganizationService } from '../organization/organization.service.js';
-import type { OrganizationSettingsService } from '../organization/organization-settings/organization-settings.service.js';
-import type { MemberRoleService } from '../member-roles/member-role.service.js';
-import type { MemberRolePermissionService } from '../member-roles/member-role-permission/member-role-permission.service.js';
+import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
+import type { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
+import type { MemberRolePermissionService } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.service.js';
 import type { MembershipRepository } from './membership.repository.js';
 import type { MembershipOutput } from './membership.types.js';
 import {
@@ -20,7 +20,7 @@ import {
   validateTransferOwnership,
 } from './membership.validator.js';
 import { serializeMembership } from './membership.serializer.js';
-import { invalidatePermissions } from '../permission/permission-cache.service.js';
+import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 
 /**
  * HTTP response shape for `GET

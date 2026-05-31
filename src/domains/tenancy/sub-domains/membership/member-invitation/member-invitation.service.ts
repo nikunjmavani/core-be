@@ -6,8 +6,8 @@ import {
 } from '@/shared/errors/index.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import type { OrganizationRepository } from '../../organization/organization.repository.js';
-import type { MembershipRepository } from '../membership.repository.js';
+import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
+import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { MemberInvitationRepository } from './member-invitation.repository.js';
 import type { MemberInvitationOutput } from './member-invitation.types.js';
@@ -19,7 +19,7 @@ import {
 } from './member-invitation.validator.js';
 import { serializeMemberInvitation } from './member-invitation.serializer.js';
 import { hashInvitationToken, generateInvitationToken } from './member-invitation.token.js';
-import { invalidatePermissions } from '../../permission/permission-cache.service.js';
+import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import {
   MEMBER_INVITATION_EVENT,

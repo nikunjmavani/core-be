@@ -4,8 +4,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CURSOR_PAGINATED_LIST_ROUTE_KEYS } from '../../../tooling/openapi/pagination-openapi.js';
-import { routeQuerySchemaMap } from '../../../tooling/openapi/query-schema-map.js';
+import { CURSOR_PAGINATED_LIST_ROUTE_KEYS } from '@tooling/openapi/pagination-openapi.js';
+import { routeQuerySchemaMap } from '@tooling/openapi/query-schema-map.js';
 
 const OPENAPI_PATH = join(process.cwd(), 'docs', 'openapi', 'openapi.json');
 

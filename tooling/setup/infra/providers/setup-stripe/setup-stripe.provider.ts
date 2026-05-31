@@ -1,10 +1,10 @@
-import * as logger from '../../../common/logger.js';
+import * as logger from '@tooling/setup/common/logger.js';
 import type {
   SetupSecrets,
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 async function validateStripeKey(secretKey: string, environmentName: string): Promise<boolean> {
   try {

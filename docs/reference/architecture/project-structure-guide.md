@@ -168,6 +168,15 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 
 **Middleware** (Fastify plugins) lives in `src/shared/middlewares/` — registered via `registerMiddleware()` from `@/shared/middlewares/index.js`.
 
+### Import path conventions
+
+| Tree | Allowed | Forbidden |
+| ---- | ------- | --------- |
+| `src/**/*.ts` | `@/domains/...`, `@/shared/...`, `@/infrastructure/...`, `@/core/...`; same-folder `./` | Parent-relative `../` |
+| `tooling/**/*.ts` | `@tooling/setup/...`, `@tooling/openapi/...`, etc.; same-folder `./` | Parent-relative `../` |
+
+Always use `.js` extensions in import specifiers. CI gate: `src/tests/global/import-paths.global.test.ts`.
+
 ---
 
 ## 6. Access Rules (Actual)

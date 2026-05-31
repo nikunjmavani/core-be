@@ -11,11 +11,11 @@ import {
 import { getWorkerConcurrencyWebhook } from '@/shared/config/worker-concurrency.util.js';
 import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import { webhookDeliveryJobDataSchema } from '../queues/webhook-delivery.job.schema.js';
+import { webhookDeliveryJobDataSchema } from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.job.schema.js';
 import {
   WEBHOOK_DELIVERY_QUEUE_NAME,
   type WebhookDeliveryJobData,
-} from '../queues/webhook-delivery.queue.js';
+} from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
 import { parseJobDataOrDeadLetter } from '@/infrastructure/queue/dlq/poison-job.util.js';
 import { runWithPropagatedTraceContext } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import {

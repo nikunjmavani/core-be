@@ -24,17 +24,12 @@ export default defineConfig({
     pool: 'forks',
     fileParallelism: false,
     maxWorkers: 1,
-    minWorkers: 1,
     passWithNoTests: false,
   },
   resolve: {
     alias: {
       '@': resolve(projectRoot, 'src'),
-    },
-  },
-  server: {
-    deps: {
-      external: ['stripe', 'resend', '@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
+      '@tooling': resolve(projectRoot, 'tooling'),
     },
   },
 });

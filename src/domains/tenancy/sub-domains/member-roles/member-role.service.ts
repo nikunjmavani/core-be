@@ -1,6 +1,6 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import type { OrganizationService } from '../organization/organization.service.js';
+import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { MemberRoleRepository } from './member-role.repository.js';
 import type { MemberRoleOutput, MemberRoleRow } from './member-role.types.js';
 import {
@@ -9,7 +9,7 @@ import {
   validateListMemberRolesQuery,
 } from './member-role.validator.js';
 import { serializeMemberRole } from './member-role.serializer.js';
-import { invalidateOrganizationPermissions } from '../permission/permission-cache.service.js';
+import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { CursorPaginationInput } from '@/shared/utils/http/pagination.util.js';
 

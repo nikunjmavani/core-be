@@ -5,9 +5,9 @@ import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-requ
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
-import { getIpAddress, getUserAgent, setSessionCookie } from '../auth.http.util.js';
-import { AuthSerializer } from '../auth.serializer.js';
-import type { AuthContainer } from '../auth.container.js';
+import { getIpAddress, getUserAgent, setSessionCookie } from '@/domains/auth/auth.http.util.js';
+import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthLoginHandlersDependencies = Pick<AuthContainer, 'authService'>;
 

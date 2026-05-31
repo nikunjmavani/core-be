@@ -37,6 +37,7 @@ Single owner for **code quality** under `src/`. Fix issues in files you change. 
 ### Best practices
 
 - Prefer `import type` for type-only imports.
+- **Import paths**: use `@/` in `src/` and `@tooling/` in tooling for cross-folder imports; same-folder `./` only. Never `../` (CI: `import-paths.global.test.ts`).
 - Avoid unnecessary `as` type assertions; use proper typing or Zod schemas where possible.
 - Use Zod `parse()` instead of `safeParse` + `as` in validators when the function always throws on invalid input.
 - Keep functions under ~100 lines; extract helpers when logic grows.

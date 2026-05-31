@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from '../../../../tooling/setup/common/config.js';
-import { resolveGitMetadata } from '../../../../tooling/setup/codegen/project-identity.util.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
+import { resolveGitMetadata } from '@tooling/setup/codegen/project-identity.util.js';
 
 const ROOT = process.cwd();
 const POST_MERGE_WORKFLOW = join(ROOT, '.github/workflows/post-merge-ci.yml');

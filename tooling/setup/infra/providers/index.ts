@@ -12,7 +12,7 @@
  *   2. Export `setup<Name>Provider: InfraProvider`
  *   3. Add it to `INFRA_PROVIDERS` below (order matters — providers run sequentially)
  */
-import type { InfraProvider } from '../../common/types.js';
+import type { InfraProvider } from '@tooling/setup/common/types.js';
 import { setupNeonProvider } from './setup-neon/setup-neon.provider.js';
 import { setupAwsProvider } from './setup-aws/setup-aws.provider.js';
 import { setupSentryProvider } from './setup-sentry/setup-sentry.provider.js';

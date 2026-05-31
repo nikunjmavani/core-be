@@ -20,6 +20,7 @@ alwaysApply: false
 - **No orchestrator layer**: Multi-sub-domain domains use `<domain>.container.ts` to export services; controllers call the appropriate sub-domain service directly (see auth, user, billing, tenancy). Do not add `<domain>.orchestrator.ts`.
 - **Containers**: `<domain>.container.ts` at domain root handles dependency injection (instantiates repositories, services). Export services for route registration. Cross-domain deps are passed as constructor parameters.
 - **Cross-domain reads/writes** are handled via service imports (no separate use-cases layer).
+- **Import paths**: use `@/` for all cross-folder imports in `src/`; same-folder `./` only. Never `../`. See **[import-paths.mdc](import-paths.mdc)**.
 - **Routes**: All route files use `FastifyPluginAsync` pattern. Route files create controllers from services and register HTTP handlers. Route files should NOT instantiate repositories or services — that belongs in containers.
 - **Central routes.ts**: imports domain containers and domain routes, wires them together. Should be thin (~50 lines).
 - **Event bus vs BullMQ**: In-process `eventBus.emit` (API process) is not the same as BullMQ workers (`pnpm dev:worker`). Typical: service → emit → handler → `enqueueEmail()` → mail worker. See `CLAUDE.md` § Domain events vs BullMQ workers.

@@ -10,12 +10,12 @@ import {
   createRoleWithPermissions,
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
-import { resolveUserOrganizationPermissions } from '../authorization.service.js';
+import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import {
   invalidatePermissions,
   invalidateOrganizationPermissions,
-} from '../permission-cache.service.js';
-import { TENANCY_PERMISSIONS } from '../../../tenancy.permissions.js';
+} from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
+import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 

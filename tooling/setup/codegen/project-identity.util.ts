@@ -1,4 +1,4 @@
-import type { SetupConfig } from '../common/types.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 /** Docker/GHCR artifact names derived from {@link SetupConfig}. */
 export interface ProjectArtifacts {

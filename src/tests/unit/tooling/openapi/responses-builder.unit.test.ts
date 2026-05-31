@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildResponses } from '../../../../../tooling/openapi/emitters/responses-builder.js';
+import { buildResponses } from '@tooling/openapi/emitters/responses-builder.js';
 
 describe('responses-builder', () => {
   it('buildResponses includes standard error responses', () => {

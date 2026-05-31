@@ -30,6 +30,7 @@ Write production-grade, maintainable, scalable code. Preserve simplicity; avoid 
 
 ## Architecture (brief)
 
+- **Import paths**: `@/` in `src/`, `@tooling/` in tooling; same-folder `./` only — no parent-relative `../`. See **[import-paths.mdc](import-paths.mdc)**.
 - **Controllers** coordinate only — thin handlers, no DB queries.
 - **Services** express intent — business logic, validators, events; no transaction management in services.
 - **Repositories** own DB access (Drizzle).

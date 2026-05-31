@@ -1,0 +1,39 @@
+---
+description: Enforces strict path-alias imports in src/ and tooling/ — no parent-relative (../) paths.
+globs: src/**/*.ts, tooling/**/*.ts
+alwaysApply: false
+---
+
+# Import paths (core-be)
+
+## Allowed
+
+| Tree | Prefix | Example |
+| ---- | ------ | ------- |
+| Application code | `@/` | `@/domains/auth/auth.service.js` |
+| Tooling scripts | `@tooling/` | `@tooling/setup/common/logger.js` |
+| Same folder only | `./` | `./auth.repository.js` (co-located layers) |
+
+- Always use the **`.js` extension** in import specifiers (NodeNext).
+- Cross-domain imports in `src/` use `@/domains/<domain>/...` — never `../` to reach another folder.
+
+## Forbidden
+
+- **Parent-relative imports** (`from '../'`, `from '../../'`, …) anywhere under `src/**/*.ts` or `tooling/**/*.ts`.
+- Cross-folder relative paths — resolve to `@/` or `@tooling/` instead.
+
+## Enforcement
+
+- CI global test: [`src/tests/global/import-paths.global.test.ts`](../../src/tests/global/import-paths.global.test.ts) (`pnpm test:global`).
+- IDE default: `.vscode/settings.json` → `typescript.preferences.importModuleSpecifier: "non-relative"`.
+- Path aliases: [`tsconfig.json`](../../tsconfig.json) — `@/*` → `src/*`, `@tooling/*` → `tooling/*`.
+
+## Exemptions
+
+- `src/tests/load/k6/**/*.js` — JavaScript load scripts (not TypeScript).
+- Framework-mandated dynamic imports where aliases are impossible (rare; document in PR if added).
+
+## Related
+
+- Cross-domain **dependency** rules (services vs repositories): [`core-be-src-architecture.mdc`](core-be-src-architecture.mdc).
+- Product slug constants: [`project-identity.mdc`](project-identity.mdc) — use `project-identity.constants.ts`, not string literals.

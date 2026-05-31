@@ -4,10 +4,10 @@ import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.u
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { recordRecentStepUp } from '@/shared/utils/auth/recent-step-up.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
-import { getIpAddress, getUserAgent, setSessionCookie } from '../auth.http.util.js';
-import { validateMfaMethodIdParam } from '../auth.validator.js';
-import { AuthSerializer } from '../auth.serializer.js';
-import type { AuthContainer } from '../auth.container.js';
+import { getIpAddress, getUserAgent, setSessionCookie } from '@/domains/auth/auth.http.util.js';
+import { validateMfaMethodIdParam } from '@/domains/auth/auth.validator.js';
+import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthMfaHandlersDependencies = Pick<AuthContainer, 'mfaService'>;
 

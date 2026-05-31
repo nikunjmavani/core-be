@@ -15,7 +15,7 @@ import {
   createRoleWithPermissions,
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
-import { TENANCY_PERMISSIONS } from '../tenancy.permissions.js';
+import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 

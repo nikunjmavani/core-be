@@ -7,8 +7,8 @@
  *   pnpm setup:envs --diff <env>    Diff local .env.<env> vs GitHub
  *   pnpm setup:envs --clone <src> <dst> Clone env config to another
  */
-import * as logger from '../common/logger.js';
-import { loadConfig, getEnvironmentNames } from '../common/config.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { loadConfig, getEnvironmentNames } from '@tooling/setup/common/config.js';
 import { runExportEnv } from './export-env-files.js';
 import { printEnvValidation } from './validate.js';
 import { printDiff } from './diff.js';

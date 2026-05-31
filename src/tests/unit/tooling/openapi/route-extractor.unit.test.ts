@@ -6,7 +6,7 @@ import {
   collectRoutes,
   extractRoutesFromFile,
   findRouteFiles,
-} from '../../../../../tooling/openapi/extractors/route-extractor.js';
+} from '@tooling/openapi/extractors/route-extractor.js';
 
 describe('route-extractor', () => {
   it('extractRoutesFromFile parses Fastify route registrations', () => {

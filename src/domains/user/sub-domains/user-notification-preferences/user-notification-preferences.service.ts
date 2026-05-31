@@ -1,6 +1,6 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
-import type { UserService } from '../../user.service.js';
+import type { UserService } from '@/domains/user/user.service.js';
 import type { UserNotificationPreferencesRepository } from './user-notification-preferences.repository.js';
 import { serializeUserNotificationPreferenceList } from './user-notification-preferences.serializer.js';
 import type { NotificationPreferenceOutput } from './user-notification-preferences.types.js';

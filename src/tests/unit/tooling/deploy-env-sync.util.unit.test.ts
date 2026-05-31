@@ -7,7 +7,7 @@ import {
   metricsDeploySyncHasErrors,
   metricsEnvironmentVariableNames,
   validateMetricsDeploySync,
-} from '../../../../tooling/setup/github/deploy-sync.js';
+} from '@tooling/setup/github/deploy-sync.js';
 
 const DEPLOY_WORKFLOW_PATH = resolve(
   import.meta.dirname,

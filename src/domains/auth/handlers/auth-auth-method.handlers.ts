@@ -4,10 +4,10 @@ import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.u
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { recordRecentStepUp } from '@/shared/utils/auth/recent-step-up.util.js';
-import { resolveAuthMessageKeyResponse } from '../auth.http.util.js';
-import { validateAuthMethodIdParam, validateStepUpVerify } from '../auth.validator.js';
-import { AuthSerializer } from '../auth.serializer.js';
-import type { AuthContainer } from '../auth.container.js';
+import { resolveAuthMessageKeyResponse } from '@/domains/auth/auth.http.util.js';
+import { validateAuthMethodIdParam, validateStepUpVerify } from '@/domains/auth/auth.validator.js';
+import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthAuthMethodHandlersDependencies = Pick<AuthContainer, 'authMethodService'>;
 

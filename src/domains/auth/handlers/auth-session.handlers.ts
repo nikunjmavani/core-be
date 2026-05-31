@@ -10,9 +10,9 @@ import {
   parseSessionCookieValue,
   SESSION_COOKIE_NAME,
   setSessionCookie,
-} from '../auth.http.util.js';
-import { AuthSerializer } from '../auth.serializer.js';
-import type { AuthContainer } from '../auth.container.js';
+} from '@/domains/auth/auth.http.util.js';
+import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthSessionHandlersDependencies = Pick<AuthContainer, 'authService' | 'authSessionService'>;
 

@@ -1,4 +1,4 @@
-import { envSchemaKeys } from '../../../src/shared/config/env-schema.js';
+import { envSchemaKeys } from '@/shared/config/env-schema.js';
 
 export const METRICS_ENVIRONMENT_VARIABLE_PREFIX = 'METRICS_';
 

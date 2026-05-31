@@ -45,11 +45,11 @@
  */
 import { promises as dns } from 'node:dns';
 import { createInterface } from 'node:readline';
-import * as logger from '../common/logger.js';
-import { loadConfig } from '../common/config.js';
-import { loadEnvSetupIntoProcess } from '../common/secrets.js';
-import { loadState, saveState } from '../common/state.js';
-import type { SetupState } from '../common/types.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
+import { loadEnvSetupIntoProcess } from '@tooling/setup/common/secrets.js';
+import { loadState, saveState } from '@tooling/setup/common/state.js';
+import type { SetupState } from '@tooling/setup/common/types.js';
 
 const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
 

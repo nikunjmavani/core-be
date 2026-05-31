@@ -68,6 +68,14 @@ src/domains/<domain>/
 
 - Top-level: `@/domains/<domain>/sub-domains/<sub-domain>/...`
 - Nested: `@/domains/<domain>/sub-domains/<parent>/<nested>/...`
+- **Never** parent-relative (`../`) — same-folder `./` only for co-located layers (e.g. service → `./repository.js`).
+- Domain handlers under `handlers/` import sub-domains via `@/domains/<domain>/sub-domains/...`.
+
+Example (auth handler):
+
+```typescript
+import { createAuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+```
 
 Flat domains (`audit`, `upload`) keep all layers at domain root with no `sub-domains/`.
 

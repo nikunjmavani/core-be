@@ -31,7 +31,7 @@
 
 import { execSync } from 'node:child_process';
 
-import { loadConfig } from '../common/config.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
 import { runGhAuthPreflight } from './auth-preflight.js';
 import {
   getGithubSyncBranches,

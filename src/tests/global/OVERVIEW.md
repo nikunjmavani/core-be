@@ -14,6 +14,7 @@ What this suite covers:
 - Worker readiness — every domain that registers a worker has a corresponding heartbeat and DLQ wiring.
 - Auth / audit emission cardinality — every controller path that should emit audit does.
 - Schema / route catalog drift detection.
+- Import path policy — no parent-relative `../` in `src/` or `tooling/` TypeScript (`import-paths.global.test.ts`).
 - RLS database context network isolation — no outbound I/O inside `withOrganizationDatabaseContext` callbacks in domain code.
 
 What it does **not** cover: API behavior (see integration / e2e), worker per-job behavior (see integration).

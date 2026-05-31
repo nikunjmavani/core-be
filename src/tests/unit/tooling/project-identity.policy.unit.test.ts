@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from '../../../../tooling/setup/common/config.js';
-import { buildProjectIdentitySnapshot } from '../../../../tooling/setup/codegen/project-identity.util.js';
-import { validateWorkflowLiteralsAgainstManifest } from '../../../../tooling/setup/codegen/validate-project-identity-workflows.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
+import { buildProjectIdentitySnapshot } from '@tooling/setup/codegen/project-identity.util.js';
+import { validateWorkflowLiteralsAgainstManifest } from '@tooling/setup/codegen/validate-project-identity-workflows.js';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../../..');
 

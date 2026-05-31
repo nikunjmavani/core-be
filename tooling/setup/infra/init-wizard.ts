@@ -1,17 +1,17 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createReadline, questionWithDefault } from '../common/prompts.js';
+import { createReadline, questionWithDefault } from '@tooling/setup/common/prompts.js';
 import {
   writeEnvSetupTemplateIfMissing,
   updateEnvSetupHeader,
   appendMissingEnvSetupVariables,
   getEnvSetupValue,
   setEnvSetupVariable,
-} from '../common/secrets.js';
-import { loadConfigIfExists } from '../common/config.js';
-import * as logger from '../common/logger.js';
-import { buildDefaultArtifacts } from '../codegen/project-identity.util.js';
-import type { SetupConfig } from '../common/types.js';
+} from '@tooling/setup/common/secrets.js';
+import { loadConfigIfExists } from '@tooling/setup/common/config.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { buildDefaultArtifacts } from '@tooling/setup/codegen/project-identity.util.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
 const SETUP_CONFIG_PATH = resolve(import.meta.dirname, '../setup.config.json');
 

@@ -2,8 +2,8 @@ import type { Redis } from 'ioredis';
 import { NotImplementedError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { UserService } from '@/domains/user/user.service.js';
-import type { AuthMethodService } from '../auth-method.service.js';
-import type { AuthSessionService } from '../../auth-session/auth-session.service.js';
+import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import { SUPPORTED_OAUTH_PROVIDERS } from './oauth.types.js';
 import {
   assertOAuthProviderSupported,
@@ -20,7 +20,7 @@ import {
   exchangeGitHubOAuthCode,
 } from './providers/github-oauth.provider.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
-import type { MfaService } from '../../auth-mfa/mfa.service.js';
+import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/mfa.service.js';
 import { completeOAuthUserSession } from './oauth-user-session.js';
 import type { FirstFactorAuthResult } from '@/domains/auth/shared/complete-first-factor-auth.js';
 

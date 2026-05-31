@@ -1,7 +1,7 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import type { OrganizationRepository } from '../organization.repository.js';
+import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import type { OrganizationSettingsRepository } from './organization-settings.repository.js';
 import type {
   OrganizationDefaultLocale,

@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadConfig } from '../common/config.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
 import { buildProjectIdentitySnapshot } from './project-identity.util.js';
 import { validateWorkflowLiteralsAgainstManifest } from './validate-project-identity-workflows.js';
 

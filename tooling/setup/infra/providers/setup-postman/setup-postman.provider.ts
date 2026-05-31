@@ -1,10 +1,10 @@
 import { execSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import * as logger from '../../../common/logger.js';
-import { isSecretFilled } from '../../../common/secrets.js';
-import { buildEnvironmentVariables } from '../../../envs/build-env-vars.js';
-import { refreshEnvFiles } from '../../../envs/export-env-files.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { isSecretFilled } from '@tooling/setup/common/secrets.js';
+import { buildEnvironmentVariables } from '@tooling/setup/envs/build-env-vars.js';
+import { refreshEnvFiles } from '@tooling/setup/envs/export-env-files.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -12,7 +12,7 @@ import type {
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 const POSTMAN_API_BASE = 'https://api.getpostman.com';
 const COLLECTION_PATH = resolve(import.meta.dirname, '../../../../docs/postman-collection.json');

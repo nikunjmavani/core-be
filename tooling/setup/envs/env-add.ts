@@ -45,6 +45,9 @@ function parseArgs(): AddEnvOptions | null {
   }
 
   const key = args[0];
+  if (key === undefined) {
+    return null;
+  }
   if (!/^[A-Z][A-Z0-9_]*$/.test(key)) {
     console.error(`Invalid key name "${key}". Must be SCREAMING_SNAKE_CASE.`);
     return null;
@@ -67,13 +70,15 @@ function parseArgs(): AddEnvOptions | null {
     return null;
   }
 
+  const defaultValue = getFlag('--default');
+
   return {
     key,
     type,
     section,
     description: getFlag('--desc') ?? '',
-    defaultValue: getFlag('--default'),
     optional: !args.includes('--required'),
+    ...(defaultValue !== undefined ? { defaultValue } : {}),
   };
 }
 
@@ -104,13 +109,15 @@ async function interactivePrompt(): Promise<AddEnvOptions> {
 
   rl.close();
 
+  const defaultValue = defaultAnswer.trim() || undefined;
+
   return {
     key: key.trim(),
     type,
     section,
     description: desc.trim(),
-    defaultValue: defaultAnswer.trim() || undefined,
     optional: requiredAnswer.trim().toLowerCase() !== 'y',
+    ...(defaultValue !== undefined ? { defaultValue } : {}),
   };
 }
 

@@ -1,7 +1,7 @@
 /** OpenAPI success responses — billing. */
-import type { ResponseDefinition } from '../building-blocks.js';
-import { wrapSuccess } from '../building-blocks.js';
-import * as schemas from '../resource-schemas.js';
+import type { ResponseDefinition } from '@tooling/openapi/response-map/building-blocks.js';
+import { wrapSuccess } from '@tooling/openapi/response-map/building-blocks.js';
+import * as schemas from '@tooling/openapi/response-map/resource-schemas.js';
 
 export const billingRouteResponses: Record<string, ResponseDefinition> = {
   'GET /api/v1/billing/plans': {
