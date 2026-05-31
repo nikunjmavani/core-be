@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.4.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.0-dev.0...v3.4.1-dev.0) (2026-05-31)
+
+
+### Changed
+
+* enforce strict @/ and @tooling/ import paths ([#203](https://github.com/nikunjmavani/core-be/issues/203)) ([09b4bc6](https://github.com/nikunjmavani/core-be/commit/09b4bc6166f6904adce92e20b0ca5abf7d37324d))
+
 ## [3.4.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.3.7-dev.0...v3.4.0-dev.0) (2026-05-31)
 
 
