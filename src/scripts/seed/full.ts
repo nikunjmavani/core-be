@@ -11,7 +11,7 @@ import {
   seedPermissions,
   SYSTEM_PERMISSIONS,
 } from '@/domains/tenancy/sub-domains/permission/seed/permission.reference.seed.js';
-import { seedPlans } from '@/domains/billing/sub-domains/plan/plan.seed.js';
+import { seedPlans } from '@/domains/billing/sub-domains/plan/seed/plan.reference.seed.js';
 import { seedDemoUser, seedUser } from '@/domains/user/seed/user.seed.js';
 import {
   seedOrganization,
