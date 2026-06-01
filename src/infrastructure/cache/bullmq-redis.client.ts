@@ -47,7 +47,11 @@ export async function connectBullMqRedis(): Promise<void> {
     return;
   }
 
-  if (bullmqRedisConnection.status === 'wait') {
+  if (
+    bullmqRedisConnection.status === 'wait' ||
+    bullmqRedisConnection.status === 'end' ||
+    bullmqRedisConnection.status === 'close'
+  ) {
     await bullmqRedisConnection.connect();
     return;
   }

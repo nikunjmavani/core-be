@@ -7,6 +7,7 @@ import { Queue, UnrecoverableError, type Job, type Worker } from 'bullmq';
 import { isSentryInitialized, Sentry } from '@/infrastructure/observability/sentry/sentry.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { insertDeadLetterJob } from '@/infrastructure/queue/dlq/dead-letter.repository.js';
+import { THIRTY_DAYS_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
@@ -20,7 +21,7 @@ const DEAD_LETTER_JOB_NAME = 'dead-letter';
  * them, after which BullMQ evicts the records from Redis to prevent unbounded growth and
  * OOM. Replay flows must finish (or re-enqueue) within this window.
  */
-const DEAD_LETTER_RETENTION_SECONDS = 30 * 24 * 60 * 60;
+const DEAD_LETTER_RETENTION_SECONDS = THIRTY_DAYS_SECONDS;
 
 const deadLetterQueuesByName = new Map<string, Queue>();
 

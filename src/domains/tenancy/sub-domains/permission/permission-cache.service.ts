@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { PERMISSION_CACHE_STAMPEDE_POLL_MS } from '@/shared/constants/limits.constants.js';
 import {
   PERMISSION_CACHE_DEFAULT_TTL_SECONDS,
   PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS,
@@ -8,7 +9,6 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const PERMISSION_CACHE_PREFIX = 'perm';
 const PERMISSION_CACHE_ORGANIZATION_VERSION_PREFIX = 'perm:org';
-const STAMPEDE_POLL_MS = 50;
 const STAMPEDE_POLL_ATTEMPTS = 40;
 
 /**
@@ -175,7 +175,7 @@ async function commitCachedPermissionsIfLockHeld(
  *   per-call nonce; on success runs `recompute()`, then commits the result via
  *   {@link commitCachedPermissionsIfLockHeld} (a compare-and-set guarded on the
  *   nonce) and returns. Waiters poll up to `STAMPEDE_POLL_ATTEMPTS` ×
- *   `STAMPEDE_POLL_MS` (≈2s) for the cache to populate; if still empty, they fall
+ *   `PERMISSION_CACHE_STAMPEDE_POLL_MS` (≈2s) for the cache to populate; if still empty, they fall
  *   through to a fresh recompute as a safety net (without caching, since they do
  *   not own the lock).
  * - **Failure modes:** Redis `SET` failure is logged
@@ -219,7 +219,9 @@ export async function withPermissionCacheRecomputeLock(
 
     if (!acquiredLock) {
       for (let attempt = 0; attempt < STAMPEDE_POLL_ATTEMPTS; attempt++) {
-        await new Promise<void>((resolve) => setTimeout(resolve, STAMPEDE_POLL_MS));
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, PERMISSION_CACHE_STAMPEDE_POLL_MS),
+        );
         const waiterCached = await getCachedPermissions(userId, organizationId);
         if (waiterCached !== null) {
           return waiterCached;

@@ -53,7 +53,11 @@ redisConnection.on('reconnecting', () => {
 export async function connectRedis(): Promise<void> {
   if (redisConnection.status === 'ready') return;
 
-  if (redisConnection.status === 'wait') {
+  if (
+    redisConnection.status === 'wait' ||
+    redisConnection.status === 'end' ||
+    redisConnection.status === 'close'
+  ) {
     await redisConnection.connect();
     return;
   }

@@ -12,6 +12,9 @@ export const MILLISECONDS_PER_HOUR = 60 * MILLISECONDS_PER_MINUTE;
 /** Seconds in one calendar day. */
 export const SECONDS_PER_DAY = 86_400;
 
+/** Seconds in thirty days (default long-lived Redis retention window). */
+export const THIRTY_DAYS_SECONDS = 30 * SECONDS_PER_DAY;
+
 /** Milliseconds in one calendar day. */
 export const MILLISECONDS_PER_DAY = SECONDS_PER_DAY * MILLISECONDS_PER_SECOND;
 
