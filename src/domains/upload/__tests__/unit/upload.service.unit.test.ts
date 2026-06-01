@@ -57,11 +57,14 @@ const uploadRow = {
 describe('UploadService', () => {
   const repository = {
     create: vi.fn().mockResolvedValue(uploadRow),
+    findByPublicId: vi.fn().mockResolvedValue(uploadRow),
     findByPublicIdForUser: vi.fn().mockResolvedValue(uploadRow),
     findActiveByUserId: vi.fn().mockResolvedValue([uploadRow]),
     findActiveByUserIdAfter: vi.fn().mockResolvedValue([uploadRow]),
     markStatus: vi.fn().mockResolvedValue(uploadRow),
+    markStatusByPublicId: vi.fn().mockResolvedValue(uploadRow),
     softDelete: vi.fn().mockResolvedValue(uploadRow),
+    softDeleteByPublicId: vi.fn().mockResolvedValue(uploadRow),
     softDeleteAllByUserId: vi.fn().mockResolvedValue(1),
     softDeleteAllByOrganizationId: vi.fn().mockResolvedValue(2),
     countPendingByUserId: vi.fn().mockResolvedValue(0),
@@ -89,8 +92,8 @@ describe('UploadService', () => {
       UPLOAD_ALLOW_SVG: false,
       UPLOAD_MAX_PENDING_PER_USER: 100,
     } as ReturnType<typeof getEnv>);
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue(uploadRow as never);
-    vi.mocked(repository.softDelete).mockResolvedValue(uploadRow as never);
+    vi.mocked(repository.findByPublicId).mockResolvedValue(uploadRow as never);
+    vi.mocked(repository.softDeleteByPublicId).mockResolvedValue(uploadRow as never);
     vi.mocked(repository.countPendingByUserId).mockResolvedValue(0);
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
   });
@@ -172,11 +175,38 @@ describe('UploadService', () => {
 
   it('deleteUpload removes upload for user', async () => {
     await service.deleteUpload(uploadPublicId, userPublicId);
-    expect(repository.softDelete).toHaveBeenCalled();
+    expect(repository.softDeleteByPublicId).toHaveBeenCalled();
+  });
+
+  it('deleteUpload allows org managers to delete teammate-created organization uploads', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...uploadRow,
+      user_id: 99,
+      organization_id: 10,
+    } as never);
+
+    await service.deleteUpload(uploadPublicId, userPublicId);
+
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith(uploadRow.file_key);
+    expect(repository.softDeleteByPublicId).toHaveBeenCalledWith(uploadPublicId);
+  });
+
+  it('deleteUpload hides personal uploads owned by another user', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...uploadRow,
+      user_id: 99,
+      organization_id: null,
+    } as never);
+
+    await expect(service.deleteUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+    expect(objectStorage.deleteObject).not.toHaveBeenCalled();
+    expect(repository.softDeleteByPublicId).not.toHaveBeenCalled();
   });
 
   it('deleteUpload rejects org-scoped upload when caller lacks upload:manage', async () => {
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...uploadRow,
       organization_id: 10,
     } as never);
@@ -186,7 +216,7 @@ describe('UploadService', () => {
       ForbiddenError,
     );
     expect(objectStorage.deleteObject).not.toHaveBeenCalled();
-    expect(repository.softDelete).not.toHaveBeenCalled();
+    expect(repository.softDeleteByPublicId).not.toHaveBeenCalled();
   });
 
   it('createUpload succeeds for organization logo with permission', async () => {
@@ -205,7 +235,7 @@ describe('UploadService', () => {
   });
 
   it('getUpload throws when upload is missing', async () => {
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue(null);
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
     await expect(service.getUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
       NotFoundError,
     );
@@ -227,7 +257,7 @@ describe('UploadService', () => {
   const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
 
   it('confirmUpload marks UPLOADED when the object matches declared type, size, and magic bytes', async () => {
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...uploadRow,
       status: 'PENDING',
     } as never);
@@ -239,7 +269,7 @@ describe('UploadService', () => {
       body: PNG_MAGIC,
       contentType: 'image/png',
     });
-    vi.mocked(repository.markStatus).mockResolvedValue({
+    vi.mocked(repository.markStatusByPublicId).mockResolvedValue({
       ...uploadRow,
       status: 'UPLOADED',
     } as never);
@@ -250,12 +280,40 @@ describe('UploadService', () => {
       contentType: 'image/png',
       contentLength: 1024,
     });
-    expect(repository.markStatus).toHaveBeenCalledWith(uploadPublicId, user.id, 'UPLOADED');
+    expect(repository.markStatusByPublicId).toHaveBeenCalledWith(uploadPublicId, 'UPLOADED');
     expect(result.status).toBe('UPLOADED');
   });
 
+  it('confirmUpload allows org managers to confirm teammate-created organization uploads', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...uploadRow,
+      user_id: 99,
+      organization_id: 10,
+      status: 'PENDING',
+    } as never);
+    vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
+      contentType: 'image/png',
+      contentLength: 1024,
+    });
+    vi.mocked(objectStorage.getObject).mockResolvedValueOnce({
+      body: PNG_MAGIC,
+      contentType: 'image/png',
+    });
+    vi.mocked(repository.markStatusByPublicId).mockResolvedValue({
+      ...uploadRow,
+      user_id: 99,
+      organization_id: 10,
+      status: 'UPLOADED',
+    } as never);
+
+    const result = await service.confirmUpload(uploadPublicId, userPublicId);
+
+    expect(result.status).toBe('UPLOADED');
+    expect(repository.markStatusByPublicId).toHaveBeenCalledWith(uploadPublicId, 'UPLOADED');
+  });
+
   it('confirmUpload marks FAILED when magic bytes do not match the declared type (spoofed content)', async () => {
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...uploadRow,
       status: 'PENDING',
     } as never);
@@ -272,11 +330,11 @@ describe('UploadService', () => {
     await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
       ValidationError,
     );
-    expect(repository.markStatus).toHaveBeenCalledWith(uploadPublicId, user.id, 'FAILED');
+    expect(repository.markStatusByPublicId).toHaveBeenCalledWith(uploadPublicId, 'FAILED');
   });
 
   it('confirmUpload marks FAILED and throws when object size does not match', async () => {
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...uploadRow,
       status: 'PENDING',
     } as never);
@@ -288,7 +346,7 @@ describe('UploadService', () => {
     await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
       ValidationError,
     );
-    expect(repository.markStatus).toHaveBeenCalledWith(uploadPublicId, user.id, 'FAILED');
+    expect(repository.markStatusByPublicId).toHaveBeenCalledWith(uploadPublicId, 'FAILED');
   });
 
   it('confirmUpload sanitizes a stored SVG in place before marking UPLOADED', async () => {
@@ -300,8 +358,11 @@ describe('UploadService', () => {
       file_size: 80,
       status: 'PENDING',
     };
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue(svgRow as never);
-    vi.mocked(repository.markStatus).mockResolvedValue({ ...svgRow, status: 'UPLOADED' } as never);
+    vi.mocked(repository.findByPublicId).mockResolvedValue(svgRow as never);
+    vi.mocked(repository.markStatusByPublicId).mockResolvedValue({
+      ...svgRow,
+      status: 'UPLOADED',
+    } as never);
     vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
       contentType: 'image/svg+xml',
       contentLength: 80,
@@ -336,7 +397,7 @@ describe('UploadService', () => {
       file_size: 12,
       status: 'PENDING',
     };
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue(svgRow as never);
+    vi.mocked(repository.findByPublicId).mockResolvedValue(svgRow as never);
     vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
       contentType: 'image/svg+xml',
       contentLength: 12,
@@ -349,12 +410,12 @@ describe('UploadService', () => {
     await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
       ValidationError,
     );
-    expect(repository.markStatus).toHaveBeenCalledWith(uploadPublicId, user.id, 'FAILED');
+    expect(repository.markStatusByPublicId).toHaveBeenCalledWith(uploadPublicId, 'FAILED');
     expect(objectStorage.putObject).not.toHaveBeenCalled();
   });
 
   it('confirmUpload is idempotent for already-UPLOADED rows', async () => {
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...uploadRow,
       status: 'UPLOADED',
     } as never);
@@ -362,11 +423,11 @@ describe('UploadService', () => {
     const result = await service.confirmUpload(uploadPublicId, userPublicId);
     expect(result.status).toBe('UPLOADED');
     expect(objectStorage.verifyUploadedObject).not.toHaveBeenCalled();
-    expect(repository.markStatus).not.toHaveBeenCalled();
+    expect(repository.markStatusByPublicId).not.toHaveBeenCalled();
   });
 
   it('confirmUpload rejects when the upload is not pending', async () => {
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue({
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...uploadRow,
       status: 'FAILED',
     } as never);
@@ -378,7 +439,7 @@ describe('UploadService', () => {
   });
 
   it('confirmUpload throws NotFound when the upload is missing', async () => {
-    vi.mocked(repository.findByPublicIdForUser).mockResolvedValue(null);
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
     await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
       NotFoundError,
     );
