@@ -114,8 +114,8 @@ const envSchemaBase = z.object({
   WEBAUTHN_RP_NAME: z.string().min(1).optional(),
 
   // App URLs
-  FRONTEND_URL: z.string().url().optional(),
-  API_DOCS_BASE_URL: z.string().url().optional(),
+  FRONTEND_URL: z.url().optional(),
+  API_DOCS_BASE_URL: z.url().optional(),
 
   // Rate limiting
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
@@ -127,7 +127,7 @@ const envSchemaBase = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   /** Outbound Resend API request timeout (ms). Forwarded to fetch via AbortSignal. */
   RESEND_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
-  EMAIL_FROM_ADDRESS: z.string().email().optional(),
+  EMAIL_FROM_ADDRESS: z.email().optional(),
   EMAIL_FROM_NAME: z.string().min(1).optional(),
   // Block disposable/temporary email domains (default true). Set to false to allow (e.g. for testing).
   BLOCK_DISPOSABLE_EMAIL: z
@@ -139,10 +139,10 @@ const envSchemaBase = z.object({
   // OAuth
   OAUTH_GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   OAUTH_GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
-  OAUTH_GOOGLE_REDIRECT_URI: z.string().url().optional(),
+  OAUTH_GOOGLE_REDIRECT_URI: z.url().optional(),
   OAUTH_GITHUB_CLIENT_ID: z.string().min(1).optional(),
   OAUTH_GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
-  OAUTH_GITHUB_REDIRECT_URI: z.string().url().optional(),
+  OAUTH_GITHUB_REDIRECT_URI: z.url().optional(),
 
   // Stripe
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
@@ -151,7 +151,7 @@ const envSchemaBase = z.object({
   STRIPE_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
 
   // Sentry
-  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_DSN: z.url().optional(),
   SENTRY_ENVIRONMENT: z.string().min(1).optional(),
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
   SENTRY_PROFILE_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
@@ -167,7 +167,7 @@ const envSchemaBase = z.object({
   /** Bearer token a Prometheus scraper sends when scraping /metrics. Required when METRICS_ENABLED=true (min 32 chars). */
   METRICS_SCRAPE_TOKEN: z.string().min(32).optional(),
   /** OTLP HTTP traces endpoint base URL (e.g. https://otel.example.com). Appends /v1/traces when omitted. */
-  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
   /** OpenTelemetry service.name override (defaults: core-be-api / core-be-worker). */
   OTEL_SERVICE_NAME: z.string().min(1).optional(),
 
@@ -634,7 +634,7 @@ export const envSchemaKeys = Object.keys(envSchemaBase.shape) as (keyof z.infer<
  * required (which would also flag optional integrations like Stripe / OAuth / S3).
  */
 export const envSchemaRequiredKeys: readonly string[] = Object.entries(envSchemaBase.shape)
-  .filter(([, schema]) => !(schema as z.ZodTypeAny).isOptional())
+  .filter(([, schema]) => !(schema as z.ZodTypeAny).safeParse(undefined).success)
   .map(([key]) => key);
 
 /**

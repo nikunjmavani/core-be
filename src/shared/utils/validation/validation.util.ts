@@ -28,8 +28,8 @@ export function trimmedEmail(): z.ZodType<string> {
     .string()
     .trim()
     .toLowerCase()
-    .email()
     .max(255)
+    .pipe(z.email())
     .refine(
       (email) => {
         const atIndex = email.indexOf('@');

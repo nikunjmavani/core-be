@@ -77,7 +77,7 @@ export function parseListLimitQuery(query: unknown): ListLimitQueryInput {
  */
 export const listCursorPayloadSchema = z
   .object({
-    created_at: z.string().datetime(),
+    created_at: z.iso.datetime(),
     sort_value: z.string().optional(),
     public_id: z.string().min(1).max(21).optional(),
     id: z.number().int().positive().optional(),
