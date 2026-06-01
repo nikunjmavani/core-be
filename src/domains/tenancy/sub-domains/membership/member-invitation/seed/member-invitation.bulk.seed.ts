@@ -17,7 +17,7 @@ import { memberships } from '@/domains/tenancy/sub-domains/membership/membership
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
 import { seedMembership, seedMemberInvitation } from '@/domains/tenancy/seed/tenancy.seed.js';
-import type { SeedContext, SeededOrg } from '@/scripts/seed/seed-contract.js';
+import type { SeedContext } from '@/scripts/seed/seed-contract.js';
 import { generateBulkInviteeEmail } from './member-invitation.faker.js';
 
 /** Target number of pending invitations to maintain per organization. */
@@ -74,7 +74,7 @@ export async function seedMemberInvitationsBulk(context: SeedContext): Promise<v
   const now = Date.now();
 
   for (const seededOrganization of organizations) {
-    const organization = seededOrganization as SeededOrg;
+    const organization = seededOrganization;
     const adminRoleId = await findAdminRoleId(organization.id);
     if (adminRoleId === null) continue;
 

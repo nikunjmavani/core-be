@@ -168,14 +168,17 @@ function handleZodErrorResponse(
     {},
     'Invalid values for fields in request',
   );
-  const errors = Object.entries(z.flattenError(error).fieldErrors).map(([field, message]) => ({
-    field,
-    message: Array.isArray(message)
-      ? message.join(', ')
-      : typeof message === 'string'
-        ? message
-        : 'Invalid',
-  }));
+  const errors = Object.entries(z.flattenError(error).fieldErrors).map(([field, fieldMessages]) => {
+    let message: string;
+    if (Array.isArray(fieldMessages)) {
+      message = fieldMessages.join(', ');
+    } else if (typeof fieldMessages === 'string') {
+      message = fieldMessages;
+    } else {
+      message = 'Invalid';
+    }
+    return { field, message };
+  });
   return {
     error: buildErrorPayload('validation_error', 'invalid_field', detail, errors),
     meta: { request_id: requestId },
