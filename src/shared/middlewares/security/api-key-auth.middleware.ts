@@ -13,11 +13,11 @@ const API_KEY_PREFIX = 'ak_';
 export function extractApiKeyFromRequest(request: FastifyRequest): string | null {
   const authorizationHeader = request.headers.authorization;
   if (authorizationHeader) {
-    const apiKeyMatch = authorizationHeader.match(/^ApiKey\s+(.+)$/i);
+    const apiKeyMatch = authorizationHeader.match(/^ApiKey\s+(\S.*)$/i);
     const apiKeyCandidate = apiKeyMatch?.[1]?.trim();
     if (apiKeyCandidate?.startsWith(API_KEY_PREFIX)) return apiKeyCandidate;
 
-    const bearerMatch = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+    const bearerMatch = authorizationHeader.match(/^Bearer\s+(\S.*)$/i);
     const bearerCandidate = bearerMatch?.[1]?.trim();
     if (bearerCandidate?.startsWith(API_KEY_PREFIX)) return bearerCandidate;
   }
