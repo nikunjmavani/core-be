@@ -1075,10 +1075,15 @@ src/
     ├── seed/
     │   ├── __tests__/
     │   │   └── full-seed.integration.test.ts
+    │   ├── bulk-config.ts
+    │   ├── bulk.ts
     │   ├── faker-data.ts
     │   ├── full.ts
     │   ├── helpers.ts
     │   ├── minimal.ts
+    │   ├── production-guard.ts
+    │   ├── seed-contract.ts
+    │   ├── seed-registry.ts
     │   └── sync-demo-permissions.ts
     ├── tooling/
     │   ├── codemod-import-paths.ts
@@ -1648,6 +1653,10 @@ src/
     │   │   ├── dead-letter.repository.unit.test.ts
     │   │   └── dead-letter.unit.test.ts
     │   ├── scripts/
+    │   │   ├── seed/
+    │   │   │   ├── bulk-config.unit.test.ts
+    │   │   │   ├── production-guard.unit.test.ts
+    │   │   │   └── seed-contract.unit.test.ts
     │   │   ├── generate-project-structure-tree.unit.test.ts
     │   │   ├── generate-route-catalog.unit.test.ts
     │   │   ├── lint-migrations-concurrent-index.unit.test.ts

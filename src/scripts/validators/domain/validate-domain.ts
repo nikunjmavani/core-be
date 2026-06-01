@@ -28,6 +28,7 @@ const RESERVED_DOMAIN_ROOT_DIRS = new Set([
   'workers',
   'handlers', // auth-only: route handler factories
   'shared', // auth-only: cross-handler helpers
+  'seed', // per-domain seed/ dir (DomainSeedModule: reference + bulk seeders)
 ]);
 
 /** Allowed subdirectories directly under `__tests__/`. */
