@@ -37,6 +37,12 @@ src/domains/<domain>/
     factories/                # Optional: helpers shared across sub-domains (tenancy permission)
     unit/                     # Domain-level validators/serializers + policy scans
 
+  seed/                       # Present when this level owns tables (see seed-maintainer)
+    index.ts                  # Domain root: exports a DomainSeedModule (name + dependsOn)
+    <domain>.reference.seed.ts
+    <domain>.bulk.seed.ts
+    <domain>.faker.ts
+
   sub-domains/                # Required for multi-resource domains (omit for audit, upload)
     <sub-domain>/             # Top-level resource
       <sub-domain>.routes.ts  # When sub-domain registers its own plugin (billing, tenancy, notify)
@@ -48,6 +54,11 @@ src/domains/<domain>/
       <sub-domain>.serializer.ts
       <sub-domain>.types.ts
       <sub-domain>.schema.ts
+      seed/                   # When this resource owns tables: exports a SeedContribution
+        index.ts
+        <sub-domain>.reference.seed.ts
+        <sub-domain>.bulk.seed.ts
+        <sub-domain>.faker.ts
       __tests__/
         unit/                 # *.validator.test.ts, *.serializer.test.ts
         <sub-domain>.test.ts  # Optional dedicated e2e (tenancy org children)
@@ -61,6 +72,7 @@ src/domains/<domain>/
       <nested-sub-domain>/    # Optional aggregate child
         <nested-sub-domain>.controller.ts
         ... same layers ...
+        seed/                 # When this child owns tables: exports a SeedContribution
         __tests__/unit/
 ```
 
@@ -144,18 +156,19 @@ export function <domain>Routes(deps: <Domain>RoutesDeps): FastifyPluginAsync {
 2. **Create or extend the domain skeleton** at `src/domains/<domain>/`.
 3. **Create sub-domain** at `sub-domains/<resource>/` or `sub-domains/<parent>/<nested>/`.
 4. **Create DB schema** (if new table) — co-located `*.schema.ts`; run **sql-design-guard** + **db-migration-maintainer**.
-5. **Add tests** (see **test-generator**):
+5. **Scaffold `seed/`** (when this level owns tables) — add `<name>.reference.seed.ts` / `<name>.bulk.seed.ts` / `<name>.faker.ts` and an `index.ts` exporting a `SeedContribution` (or, for a new top-level domain, a `DomainSeedModule` with `name` + `dependsOn`, registered in `MODULES` in `src/scripts/seed/bulk.ts`). Parent `seed/index.ts` composes the new contribution via `composeContributions(...)`. Seed only this level's tables; read parents from `context.registry`. Run **seed-maintainer**.
+6. **Add tests** (see **test-generator**):
    - Bundled routes: extend `<domain>/__tests__/<domain>.test.ts` OR add nested `__tests__/<resource>.test.ts`.
    - Validators/serializers: `__tests__/unit/` on the resource that owns the file.
    - Event handlers: `__tests__/unit/events/` — call leaf `register*EventHandlers()` only (never `events/__tests__/`).
-6. **Wire DI** via `<domain>.container.ts`.
-7. **Wire routes** in `<domain>.routes.ts` or sub-domain `*.routes.ts`; mount in `src/routes.ts`.
-8. **Author in-source docs** (required, gated by `pnpm tsdoc:check`):
+7. **Wire DI** via `<domain>.container.ts`.
+8. **Wire routes** in `<domain>.routes.ts` or sub-domain `*.routes.ts`; mount in `src/routes.ts`.
+9. **Author in-source docs** (required, gated by `pnpm tsdoc:check`):
    - **TSDoc** on every public export — invoke **tsdoc-export-guard**.
    - **`schema: { summary, description, tags }`** on every Fastify route — invoke **route-schema-doc-guard**.
    - **`OVERVIEW.md`** at the new domain folder (Template A.1) and at the new sub-domain folder (Template A.2) — invoke **overview-doc-maintainer**.
    - For a **new domain**, also update `src/OVERVIEW.md` Domains table — invoke **system-narrative-maintainer**.
-9. **Verify coverage** — run `pnpm tsdoc:check` and confirm the budget did not regress.
+10. **Verify coverage** — run `pnpm tsdoc:check` and confirm the budget did not regress.
 
 ## Dependency boundaries
 

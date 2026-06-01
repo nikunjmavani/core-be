@@ -1170,6 +1170,8 @@ src/
     │   ├── full.ts
     │   ├── helpers.ts
     │   ├── minimal.ts
+    │   ├── modules.ts
+    │   ├── OVERVIEW.md
     │   ├── production-guard.ts
     │   ├── seed-contract.ts
     │   ├── seed-registry.ts
@@ -1744,6 +1746,7 @@ src/
     │   ├── scripts/
     │   │   ├── seed/
     │   │   │   ├── bulk-config.unit.test.ts
+    │   │   │   ├── modules.unit.test.ts
     │   │   │   ├── production-guard.unit.test.ts
     │   │   │   └── seed-contract.unit.test.ts
     │   │   ├── generate-project-structure-tree.unit.test.ts
