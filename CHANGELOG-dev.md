@@ -6,6 +6,16 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.5.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.5.0-dev.0...v3.5.1-dev.0) (2026-06-01)
+
+
+### Fixed
+
+* **ci:** restore CodeQL tuning lost in [#220](https://github.com/nikunjmavani/core-be/issues/220) squash; unbreak node24 policy ([#221](https://github.com/nikunjmavani/core-be/issues/221)) ([68aec6f](https://github.com/nikunjmavani/core-be/commit/68aec6f4a54572dd082efcdbb08c163b1ec291e7))
+* **ci:** unblock dev-&gt;main promotion (PR [#157](https://github.com/nikunjmavani/core-be/issues/157)) ([#222](https://github.com/nikunjmavani/core-be/issues/222)) ([dc0efec](https://github.com/nikunjmavani/core-be/commit/dc0efec1303fd2abf83402698f47881a6368210f))
+* security hardening follow-up fixes ([#218](https://github.com/nikunjmavani/core-be/issues/218)) ([b3a27e0](https://github.com/nikunjmavani/core-be/commit/b3a27e0f31561681a4f9891d7b9cd24e4274cba6))
+* **security:** residual-findings remediation (auth principal, idempotency, audit, upload, degraded-mode) ([#219](https://github.com/nikunjmavani/core-be/issues/219)) ([cddfb4b](https://github.com/nikunjmavani/core-be/commit/cddfb4b251f5247346156c46c458a2b0a2d160f5))
+
 ## [3.5.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.5-dev.0...v3.5.0-dev.0) (2026-06-01)
 
 
