@@ -40,10 +40,11 @@ describe('Security: cross-tenant org rate-limit isolation (audit #14)', () => {
       const actorId = request.headers['x-test-actor'];
       const organizationId = request.headers['x-test-org'];
       const mutableRequest = request as {
-        auth?: { userId?: string } | undefined;
+        auth?: { kind: 'user'; userId: string } | undefined;
         organizationId?: string | null;
       };
-      mutableRequest.auth = typeof actorId === 'string' ? { userId: actorId } : undefined;
+      mutableRequest.auth =
+        typeof actorId === 'string' ? { kind: 'user', userId: actorId } : undefined;
       mutableRequest.organizationId = typeof organizationId === 'string' ? organizationId : null;
     });
 

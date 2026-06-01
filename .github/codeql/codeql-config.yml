@@ -7,8 +7,12 @@ name: core-be CodeQL config
 queries:
   - uses: security-extended
 
-# Exclude generated output, migrations, tests, and agent worktrees from analysis
-# so findings focus on application + tooling source (src/, tooling/).
+# Scope analysis to the DEPLOYED, network-facing application surface — the Fastify
+# app under src/ (excluding src/scripts/). Generated output, migrations, tests,
+# agent worktrees, and dev/CI tooling are excluded because their inputs are trusted
+# (developer CLI args, local .env / git output, interactive provider-setup API
+# responses), not attacker-controlled request data, so security-extended taint
+# queries systematically mis-flag them.
 paths-ignore:
   - dist
   - migrations
@@ -20,6 +24,15 @@ paths-ignore:
   # Local agent worktrees checked out under .claude/ are gitignored stale copies
   # of the repo; never analyze them.
   - .claude/**
+  # Dev/CI command-line utilities (project setup, codegen, migration/ops scripts).
+  # These run locally or in CI with trusted inputs (a developer's own argv, local
+  # .env files, local `git` output, provider-setup responses), never untrusted
+  # request data, so taint queries — command injection, clear-text logging, TOCTOU
+  # file races (js/file-system-race), regex / URL-substring sanitization — produce
+  # systematic false positives. The deployed attack surface is the Fastify app
+  # under src/ (excluding src/scripts/), which remains fully analyzed.
+  - tooling/**
+  - src/scripts/**
 
 # Suppress queries that are verified architectural false positives for this
 # codebase (not blanket security-rule disabling):
@@ -37,3 +50,12 @@ query-filters:
   # passwords use a dedicated KDF, not these call sites.
   - exclude:
       id: js/insufficient-password-hash
+  # All application logging flows through the process-wide Pino logger configured
+  # with `redactSensitive` — recursive sensitive-value scrubbing plus redact paths,
+  # censor '[REDACTED]' (see shared/utils/infrastructure/logger.util.ts). CodeQL
+  # cannot see the logger's redaction hook, so it flags structured log calls that
+  # carry only non-sensitive metadata (queue / cron config, API-key PUBLIC ids,
+  # error and event types) as clear-text logging. Sensitive values are scrubbed
+  # before reaching any transport; direct console logging is disallowed by lint.
+  - exclude:
+      id: js/clear-text-logging

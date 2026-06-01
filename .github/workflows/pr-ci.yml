@@ -373,6 +373,9 @@ jobs:
         run: |
           pnpm docs:generate
           cp docs/openapi/openapi.json "$RUNNER_TEMP/openapi-head.json"
+          # Snapshot the err-ignore file while still on the PR head — the next step
+          # checks out the PR base SHA, which predates this file.
+          cp .github/oasdiff/breaking-changes-ignore.txt "$RUNNER_TEMP/breaking-ignore.txt"
 
       - name: Generate base OpenAPI spec
         run: |
@@ -397,10 +400,13 @@ jobs:
         # Run the pinned binary directly (the Docker action remaps RUNNER_TEMP to a
         # different in-container path). Fail only on ERR-severity breaking changes
         # (removed/renamed operations, newly required inputs, removed response fields);
-        # additive/WARN changes pass.
+        # additive/WARN changes pass. --err-ignore carries breaking changes explicitly
+        # accepted for major promotions (see .github/oasdiff/breaking-changes-ignore.txt);
+        # unlisted breaks still fail the gate.
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/oasdiff" breaking \
             "$RUNNER_TEMP/openapi-base.json" \
             "$RUNNER_TEMP/openapi-head.json" \
-            --fail-on ERR
+            --fail-on ERR \
+            --err-ignore "$RUNNER_TEMP/breaking-ignore.txt"
