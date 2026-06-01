@@ -73,60 +73,76 @@ export async function seedMemberInvitationsBulk(context: SeedContext): Promise<v
   let created = 0;
   const now = Date.now();
 
-  for (const seededOrganization of organizations) {
-    const organization = seededOrganization;
-    const adminRoleId = await findAdminRoleId(organization.id);
-    if (adminRoleId === null) continue;
-
-    const slotHashes = Array.from({ length: INVITATIONS_PER_ORG }, (_, slot) =>
-      invitationTokenHash(organization.public_id, slot),
-    );
-    const existingInvites = await database
-      .select({ token_hash: member_invitations.token_hash })
-      .from(member_invitations)
-      .where(inArray(member_invitations.token_hash, slotHashes));
-    const existingHashes = new Set(existingInvites.map((row) => row.token_hash));
-
-    const memberUserIds = await existingMemberUserIds(organization.id);
-
-    for (let slot = 0; slot < INVITATIONS_PER_ORG; slot += 1) {
-      const tokenHash = slotHashes[slot] as string;
-      if (existingHashes.has(tokenHash)) continue;
-
-      const invitee = users.find((user) => !memberUserIds.has(user.id));
-      if (!invitee) break;
-      memberUserIds.add(invitee.id);
-
-      const isExpiredEdgeCase = context.counts.edgeCases && slot === INVITATIONS_PER_ORG - 1;
-      const createdAt = isExpiredEdgeCase ? new Date(now - 30 * ONE_DAY_MS) : new Date(now);
-      const expiresAt = isExpiredEdgeCase
-        ? new Date(now - 23 * ONE_DAY_MS)
-        : new Date(now + 7 * ONE_DAY_MS);
-
-      const membership = await seedMembership({
-        user_id: invitee.id,
-        organization_id: organization.id,
-        role_id: adminRoleId,
-        status: 'INVITED',
-        invited_by_user_id: organization.ownerUserId,
-        created_by_user_id: organization.ownerUserId,
-      });
-      if (!membership) continue;
-
-      await seedMemberInvitation({
-        membership_id: membership.id,
-        email: generateBulkInviteeEmail(context.faker),
-        token_hash: tokenHash,
-        invited_by_user_id: organization.ownerUserId,
-        expires_at: expiresAt,
-        created_by_user_id: organization.ownerUserId,
-        created_at: createdAt,
-      });
-      created += 1;
-    }
+  for (const organization of organizations) {
+    created += await seedOrganizationMemberInvitations({ organization, context, database, now });
   }
   context.logger.info(
     { organizations: organizations.length, created },
     'seed.bulk.member-invitation: invitations seeded',
   );
+}
+
+/**
+ * Seeds one organization's pending invitations + backing INVITED memberships, returning the
+ * number created. Returns 0 when the org has no Admin role; stops early when the registry has no
+ * remaining eligible (non-member) invitee.
+ */
+async function seedOrganizationMemberInvitations(options: {
+  organization: SeedContext['registry']['organizations'][number];
+  context: SeedContext;
+  database: ReturnType<typeof getRequestDatabase>;
+  now: number;
+}): Promise<number> {
+  const { organization, context, database, now } = options;
+  const adminRoleId = await findAdminRoleId(organization.id);
+  if (adminRoleId === null) return 0;
+
+  const slotHashes = Array.from({ length: INVITATIONS_PER_ORG }, (_, slot) =>
+    invitationTokenHash(organization.public_id, slot),
+  );
+  const existingInvites = await database
+    .select({ token_hash: member_invitations.token_hash })
+    .from(member_invitations)
+    .where(inArray(member_invitations.token_hash, slotHashes));
+  const existingHashes = new Set(existingInvites.map((row) => row.token_hash));
+  const memberUserIds = await existingMemberUserIds(organization.id);
+  const users = context.registry.users;
+
+  let created = 0;
+  for (let slot = 0; slot < INVITATIONS_PER_ORG; slot += 1) {
+    const tokenHash = slotHashes[slot] as string;
+    if (existingHashes.has(tokenHash)) continue;
+
+    const invitee = users.find((user) => !memberUserIds.has(user.id));
+    if (!invitee) break;
+    memberUserIds.add(invitee.id);
+
+    const isExpiredEdgeCase = context.counts.edgeCases && slot === INVITATIONS_PER_ORG - 1;
+    const createdAt = isExpiredEdgeCase ? new Date(now - 30 * ONE_DAY_MS) : new Date(now);
+    const expiresAt = isExpiredEdgeCase
+      ? new Date(now - 23 * ONE_DAY_MS)
+      : new Date(now + 7 * ONE_DAY_MS);
+
+    const membership = await seedMembership({
+      user_id: invitee.id,
+      organization_id: organization.id,
+      role_id: adminRoleId,
+      status: 'INVITED',
+      invited_by_user_id: organization.ownerUserId,
+      created_by_user_id: organization.ownerUserId,
+    });
+    if (!membership) continue;
+
+    await seedMemberInvitation({
+      membership_id: membership.id,
+      email: generateBulkInviteeEmail(context.faker),
+      token_hash: tokenHash,
+      invited_by_user_id: organization.ownerUserId,
+      expires_at: expiresAt,
+      created_by_user_id: organization.ownerUserId,
+      created_at: createdAt,
+    });
+    created += 1;
+  }
+  return created;
 }

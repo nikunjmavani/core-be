@@ -58,45 +58,60 @@ export function parseMigrationExecutionMode(fileContent: string): MigrationExecu
   let reason: string | null = null;
 
   for (let lineIndex = 0; lineIndex < headerLineCount; lineIndex += 1) {
-    const trimmed = (lines[lineIndex] ?? '').trim();
-    if (!trimmed.startsWith('--')) continue;
-    if (!trimmed.toLowerCase().includes('migration-transaction:')) continue;
-
-    if (bareMigrationTransactionPattern.test(trimmed)) {
-      headerErrors.push(
-        `Line ${lineIndex + 1}: bare "migration-transaction" comment is not allowed; use "-- migration-transaction: none reason=\\"...\\""`,
-      );
-      continue;
+    const result = parseMigrationHeaderLine((lines[lineIndex] ?? '').trim(), lineIndex + 1);
+    if (result.kind === 'error') {
+      headerErrors.push(result.error);
+    } else if (result.kind === 'directive') {
+      transactional = false;
+      reason = result.reason;
     }
-
-    const match = migrationTransactionHeaderPattern.exec(trimmed);
-    if (!match) {
-      if (malformedMigrationTransactionPattern.test(trimmed)) {
-        headerErrors.push(
-          `Line ${lineIndex + 1}: only "none reason=\\"...\\"" is a valid migration-transaction header`,
-        );
-      }
-      continue;
-    }
-
-    const mode = match[1]?.toLowerCase() ?? '';
-    const parsedReason = match[2]?.trim() ?? '';
-    if (mode !== 'none') {
-      headerErrors.push(
-        `Line ${lineIndex + 1}: unknown migration-transaction mode "${mode}". Only "none" is supported.`,
-      );
-      continue;
-    }
-    if (parsedReason.length === 0) {
-      headerErrors.push(
-        `Line ${lineIndex + 1}: migration-transaction header requires a non-empty reason`,
-      );
-      continue;
-    }
-
-    transactional = false;
-    reason = parsedReason;
   }
 
   return { transactional, reason, headerErrors };
+}
+
+type MigrationHeaderLineResult =
+  | { kind: 'skip' }
+  | { kind: 'error'; error: string }
+  | { kind: 'directive'; reason: string };
+
+/** Classifies one trimmed migration header line as skip / error / a valid `none` directive. */
+function parseMigrationHeaderLine(trimmed: string, lineNumber: number): MigrationHeaderLineResult {
+  if (!trimmed.startsWith('--')) return { kind: 'skip' };
+  if (!trimmed.toLowerCase().includes('migration-transaction:')) return { kind: 'skip' };
+
+  if (bareMigrationTransactionPattern.test(trimmed)) {
+    return {
+      kind: 'error',
+      error: `Line ${lineNumber}: bare "migration-transaction" comment is not allowed; use "-- migration-transaction: none reason=\\"...\\""`,
+    };
+  }
+
+  const match = migrationTransactionHeaderPattern.exec(trimmed);
+  if (!match) {
+    if (malformedMigrationTransactionPattern.test(trimmed)) {
+      return {
+        kind: 'error',
+        error: `Line ${lineNumber}: only "none reason=\\"...\\"" is a valid migration-transaction header`,
+      };
+    }
+    return { kind: 'skip' };
+  }
+
+  const mode = match[1]?.toLowerCase() ?? '';
+  const parsedReason = match[2]?.trim() ?? '';
+  if (mode !== 'none') {
+    return {
+      kind: 'error',
+      error: `Line ${lineNumber}: unknown migration-transaction mode "${mode}". Only "none" is supported.`,
+    };
+  }
+  if (parsedReason.length === 0) {
+    return {
+      kind: 'error',
+      error: `Line ${lineNumber}: migration-transaction header requires a non-empty reason`,
+    };
+  }
+
+  return { kind: 'directive', reason: parsedReason };
 }
