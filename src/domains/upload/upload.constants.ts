@@ -99,6 +99,26 @@ export const UPLOAD_OFFBOARDING_DELETE_CONCURRENCY = 10;
 
 export { PRESIGNED_URL_EXPIRY_SECONDS } from '@/shared/constants/ttl.constants.js';
 
+/**
+ * Key-prefix namespace for the object a client uploads to via its presigned URL. On confirmation
+ * the verified/sanitized bytes are published to the prefix-stripped final key (which the client
+ * never holds a presigned URL for), so the served object cannot be overwritten through the still-
+ * valid upload URL. Pending objects are reclaimed by the pending-sweep worker.
+ */
+export const UPLOAD_PENDING_KEY_PREFIX = 'pending/';
+
+/** Wraps a final object key in the pending-upload namespace (`pending/<finalKey>`). */
+export function buildPendingObjectKey(finalKey: string): string {
+  return `${UPLOAD_PENDING_KEY_PREFIX}${finalKey}`;
+}
+
+/** Strips the `pending/` namespace from a pending key, returning the final key (idempotent if absent). */
+export function stripPendingObjectKeyPrefix(key: string): string {
+  return key.startsWith(UPLOAD_PENDING_KEY_PREFIX)
+    ? key.slice(UPLOAD_PENDING_KEY_PREFIX.length)
+    : key;
+}
+
 /** S3 key prefix for a user's avatar uploads (`avatars/{userPublicId}/...`). */
 export function buildUserAvatarKeyPrefix(userPublicId: string): string {
   return `${UPLOAD_PURPOSE_CONFIG[UPLOAD_PURPOSES.AVATAR].keyPrefix}/${userPublicId}/`;

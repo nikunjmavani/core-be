@@ -57,6 +57,18 @@ export interface ObjectStoragePort {
     metadata?: Record<string, string>;
   }): Promise<void>;
 
+  /**
+   * Server-side copy of an existing object to a new key (no bytes transit the app). Used by the
+   * upload confirm step to publish a verified pending object to its immutable final key so the
+   * served object can never be overwritten via the client's still-valid presigned upload URL. The
+   * destination `contentType` is set on the copy so the served object carries the verified type.
+   */
+  copyObject(options: {
+    sourceKey: string;
+    destinationKey: string;
+    contentType: string;
+  }): Promise<void>;
+
   getObject(key: string): Promise<{ body: Buffer; contentType: string | undefined }>;
 
   getObjectUrl(key: string): string;

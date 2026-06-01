@@ -22,6 +22,9 @@ vi.mock('@aws-sdk/client-s3', () => {
   class GetObjectCommand {
     constructor(public readonly input: unknown) {}
   }
+  class CopyObjectCommand {
+    constructor(public readonly input: unknown) {}
+  }
   return {
     S3Client: vi.fn(function S3ClientMock() {
       return { send: sendMock };
@@ -30,6 +33,7 @@ vi.mock('@aws-sdk/client-s3', () => {
     HeadObjectCommand,
     DeleteObjectCommand,
     GetObjectCommand,
+    CopyObjectCommand,
   };
 });
 
@@ -122,5 +126,25 @@ describe('S3ObjectStorageAdapter', () => {
     const deleted = await adapter.deleteObject('uploads/missing.png');
 
     expect(deleted).toBe(false);
+  });
+
+  it('copyObject issues a server-side copy that replaces the content-type', async () => {
+    sendMock.mockResolvedValueOnce({});
+
+    await adapter.copyObject({
+      sourceKey: 'pending/avatars/u/x.png',
+      destinationKey: 'avatars/u/x.png',
+      contentType: 'image/png',
+    });
+
+    expect(sendMock).toHaveBeenCalledOnce();
+    const command = sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> };
+    expect(command.input).toMatchObject({
+      Bucket: 'test-bucket',
+      CopySource: 'test-bucket/pending/avatars/u/x.png',
+      Key: 'avatars/u/x.png',
+      ContentType: 'image/png',
+      MetadataDirective: 'REPLACE',
+    });
   });
 });
