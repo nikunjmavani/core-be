@@ -137,8 +137,14 @@ export function classifyOutboundError(
     const statusMatch = /HTTP\s+(\d{3})/i.exec(error.message);
     if (statusMatch) {
       const status = Number(statusMatch[1]);
-      const category: OutboundCategory =
-        status >= 500 ? 'http_5xx' : status >= 400 ? 'http_4xx' : 'unknown';
+      let category: OutboundCategory;
+      if (status >= 500) {
+        category = 'http_5xx';
+      } else if (status >= 400) {
+        category = 'http_4xx';
+      } else {
+        category = 'unknown';
+      }
       return new ExternalServiceError({
         integration,
         category,

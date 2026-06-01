@@ -170,7 +170,11 @@ function handleZodErrorResponse(
   );
   const errors = Object.entries(z.flattenError(error).fieldErrors).map(([field, message]) => ({
     field,
-    message: Array.isArray(message) ? message.join(', ') : String(message ?? 'Invalid'),
+    message: Array.isArray(message)
+      ? message.join(', ')
+      : typeof message === 'string'
+        ? message
+        : 'Invalid',
   }));
   return {
     error: buildErrorPayload('validation_error', 'invalid_field', detail, errors),

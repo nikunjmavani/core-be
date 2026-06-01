@@ -545,12 +545,11 @@ const idempotencyMiddlewarePlugin: FastifyPluginAsync = async (application) => {
   application.addHook('onRoute', (routeOptions: RouteOptions) => {
     if (!isWriteRouteMethod(routeOptions.method)) return;
 
-    const existingPreHandlers =
-      routeOptions.preHandler === undefined
-        ? []
-        : Array.isArray(routeOptions.preHandler)
-          ? [...routeOptions.preHandler]
-          : [routeOptions.preHandler];
+    const existingPreHandlers = (() => {
+      if (routeOptions.preHandler === undefined) return [];
+      if (Array.isArray(routeOptions.preHandler)) return [...routeOptions.preHandler];
+      return [routeOptions.preHandler];
+    })();
 
     routeOptions.preHandler = [...existingPreHandlers, idempotencyClaimPreHandler];
   });

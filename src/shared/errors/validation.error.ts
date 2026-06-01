@@ -46,6 +46,10 @@ export class ValidationError extends AppError {
 function objectToFieldMessages(details: Record<string, unknown>): ValidationErrorItem[] {
   return Object.entries(details).map(([field, value]) => ({
     field,
-    message: Array.isArray(value) ? value.join(', ') : String(value ?? 'Invalid'),
+    message: Array.isArray(value)
+      ? value.join(', ')
+      : typeof value === 'string'
+        ? value
+        : 'Invalid',
   }));
 }

@@ -22,7 +22,7 @@ export function isPostgresStatementTimeoutError(error: unknown): boolean {
     return true;
   }
 
-  const message = error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
   const normalized = message.toLowerCase();
   return (
     normalized.includes('statement timeout') ||

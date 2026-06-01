@@ -73,12 +73,8 @@ export async function seedMemberInvitationsBulk(context: SeedContext): Promise<v
   let created = 0;
   const now = Date.now();
 
-  for (
-    let organizationIndex = 0;
-    organizationIndex < organizations.length;
-    organizationIndex += 1
-  ) {
-    const organization = organizations[organizationIndex] as SeededOrg;
+  for (const seededOrganization of organizations) {
+    const organization = seededOrganization as SeededOrg;
     const adminRoleId = await findAdminRoleId(organization.id);
     if (adminRoleId === null) continue;
 
