@@ -4,11 +4,11 @@
  */
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
-import { organizations } from './sub-domains/organization/organization.schema.js';
-import { roles } from './sub-domains/member-roles/member-role.schema.js';
-import { memberships } from './sub-domains/membership/membership.schema.js';
-import { role_permissions } from './sub-domains/member-roles/member-role-permission/member-role-permission.schema.js';
-import { member_invitations } from './sub-domains/membership/member-invitation/member-invitation.schema.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
+import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
+import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
+import { role_permissions } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.schema.js';
+import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
 
 /** Input for {@link seedOrganization}; `owner_user_id` is the internal id of the future organization owner. */
 export interface SeedOrganizationPayload {

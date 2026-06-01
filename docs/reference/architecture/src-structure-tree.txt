@@ -464,6 +464,11 @@ src/
     │   ├── events/
     │   │   ├── index.ts
     │   │   └── tenancy.event-handlers.ts
+    │   ├── seed/
+    │   │   ├── index.ts
+    │   │   ├── tenancy.bulk.seed.ts
+    │   │   ├── tenancy.faker.ts
+    │   │   └── tenancy.seed.ts
     │   ├── sub-domains/
     │   │   ├── member-roles/
     │   │   │   ├── __tests__/
@@ -647,6 +652,9 @@ src/
     │   │   │       │   ├── permission.serializer.unit.test.ts
     │   │   │       │   └── permission.service.unit.test.ts
     │   │   │       └── permissions.test.ts
+    │   │   │   ├── seed/
+    │   │   │       ├── index.ts
+    │   │   │       └── permission.reference.seed.ts
     │   │   │   ├── assert-grantable-permissions.util.ts
     │   │   │   ├── authorization.service.ts
     │   │   │   ├── OVERVIEW.md
@@ -656,15 +664,13 @@ src/
     │   │   │   ├── permission.repository.ts
     │   │   │   ├── permission.routes.ts
     │   │   │   ├── permission.schema.ts
-    │   │   │   ├── permission.seed.ts
     │   │   │   ├── permission.serializer.ts
     │   │   │   ├── permission.service.ts
     │   │   │   └── permission.types.ts
     │   ├── OVERVIEW.md
     │   ├── tenancy.container.ts
     │   ├── tenancy.permissions.ts
-    │   ├── tenancy.routes.ts
-    │   └── tenancy.seed.ts
+    │   └── tenancy.routes.ts
     ├── upload/
     │   ├── __tests__/
     │   │   ├── integration/
@@ -726,6 +732,11 @@ src/
     │   │   │   ├── user.validator.unit.test.ts
     │   │   │   └── users-email-trgm-migration.policy.unit.test.ts
     │   │   └── user.test.ts
+    │   ├── seed/
+    │   │   ├── index.ts
+    │   │   ├── user.bulk.seed.ts
+    │   │   ├── user.faker.ts
+    │   │   └── user.seed.ts
     │   ├── sub-domains/
     │   │   ├── user-data-export/
     │   │   │   ├── __tests__/
@@ -806,7 +817,6 @@ src/
     │   ├── user.repository.ts
     │   ├── user.routes.ts
     │   ├── user.schema.ts
-    │   ├── user.seed.ts
     │   ├── user.serializer.ts
     │   ├── user.service.ts
     │   ├── user.types.ts

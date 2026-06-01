@@ -7,6 +7,8 @@
  */
 import '@/shared/config/load-env-files.js';
 import { faker } from '@faker-js/faker';
+import { tenancySeedModule } from '@/domains/tenancy/seed/index.js';
+import { userSeedModule } from '@/domains/user/seed/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { resolveCounts } from './bulk-config.js';
 import { initFakerSeed } from './faker-data.js';
@@ -19,7 +21,7 @@ import { type DomainSeedModule, orderModules, type SeedContext } from './seed-co
  * All registered domain seed modules. Each domain's `seed/index.ts` exports one
  * `DomainSeedModule`; they are added here as the per-domain seeders land.
  */
-const MODULES: DomainSeedModule[] = [];
+const MODULES: DomainSeedModule[] = [userSeedModule, tenancySeedModule];
 
 /**
  * Runs the full bulk seed: guard, resolve config, seed reference data then bulk rows in

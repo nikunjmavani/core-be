@@ -6,7 +6,7 @@
  * billing.permissions.ts) and docs/routes.txt — routes enforce these exact strings.
  */
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
-import { permissions } from './permission.schema.js';
+import { permissions } from '@/domains/tenancy/sub-domains/permission/permission.schema.js';
 
 /**
  * Canonical list of system permission codes seeded into `tenancy.permissions`.

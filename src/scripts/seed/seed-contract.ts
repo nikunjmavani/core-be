@@ -105,7 +105,7 @@ export interface DomainSeedModule extends SeedContribution {
  * `seedReference` (in order), then later every part's `seedBulk` (in order), skipping
  * undefined hooks. Used at every level — nested sub-domain → sub-domain → domain.
  */
-export function composeContributions(...parts: SeedContribution[]): SeedContribution {
+export function composeContributions(...parts: SeedContribution[]): Required<SeedContribution> {
   return {
     async seedReference(context: SeedContext): Promise<void> {
       for (const part of parts) {
