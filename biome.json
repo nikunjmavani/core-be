@@ -92,7 +92,8 @@
         "noGlobalEval": "error"
       },
       "nursery": {
-        "noImpliedEval": "error"
+        "noImpliedEval": "error",
+        "noFloatingPromises": "error"
       }
     }
   },
@@ -106,6 +107,9 @@
         "rules": {
           "suspicious": {
             "noThenProperty": "off"
+          },
+          "nursery": {
+            "noFloatingPromises": "off"
           },
           "complexity": {
             "noExcessiveLinesPerFunction": "off",

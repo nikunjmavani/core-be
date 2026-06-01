@@ -133,5 +133,5 @@ async function main(): Promise<void> {
 const isMainModule = process.argv[1]?.includes('infra/infra');
 
 if (isMainModule) {
-  main();
+  void main();
 }
