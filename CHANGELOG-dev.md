@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.7.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.6.3-dev.0...v3.7.0-dev.0) (2026-06-01)
+
+
+### Added
+
+* **seed:** orchestration wiring smoke test + docs/skills/rules ([#238](https://github.com/nikunjmavani/core-be/issues/238)) ([09ee7ef](https://github.com/nikunjmavani/core-be/commit/09ee7ef517075142e587838da5c0df6110504eaa))
+
 ## [3.6.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.6.2-dev.0...v3.6.3-dev.0) (2026-06-01)
 
 
