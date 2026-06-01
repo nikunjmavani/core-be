@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
   updateOrganizationSettingsDto,
@@ -8,7 +9,11 @@ import {
 export function validateUpdateOrganizationSettings(data: unknown): UpdateOrganizationSettingsInput {
   const result = updateOrganizationSettingsDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }

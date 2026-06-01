@@ -1,5 +1,5 @@
+import { z } from 'zod';
 import { UnrecoverableError, type Job } from 'bullmq';
-import type { z } from 'zod';
 import { recordDeadLetterFailure } from '@/infrastructure/queue/dlq/dead-letter.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
@@ -40,7 +40,7 @@ export async function parseJobDataOrDeadLetter<T>({
     return parsed.data;
   }
 
-  const fieldErrors = parsed.error.flatten().fieldErrors;
+  const fieldErrors = z.flattenError(parsed.error).fieldErrors;
   const error = new UnrecoverableError(
     `bullmq.invalid_job_payload:${queueName}:${JSON.stringify(fieldErrors)}`,
   );

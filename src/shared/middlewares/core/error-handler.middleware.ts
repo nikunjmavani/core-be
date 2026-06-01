@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { randomUUID } from 'node:crypto';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import { AppError, ERROR_CODE_TO_SNAKE, ValidationError } from '@/shared/errors/index.js';
 import { EXTERNAL_ERROR_MESSAGE } from '@/shared/constants/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -168,7 +168,7 @@ function handleZodErrorResponse(
     {},
     'Invalid values for fields in request',
   );
-  const errors = Object.entries(error.flatten().fieldErrors).map(([field, message]) => ({
+  const errors = Object.entries(z.flattenError(error).fieldErrors).map(([field, message]) => ({
     field,
     message: Array.isArray(message) ? message.join(', ') : String(message ?? 'Invalid'),
   }));

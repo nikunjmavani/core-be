@@ -33,7 +33,7 @@ const trustProxyHopCountSchema = z
     }
 
     context.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       message:
         'TRUST_PROXY must be false/0 or an integer proxy hop count from 1 to 10; do not use bare true',
     });
