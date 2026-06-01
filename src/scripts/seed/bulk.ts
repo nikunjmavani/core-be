@@ -6,35 +6,16 @@
  * Usage: `pnpm db:seed:bulk` · `BULK_PROFILE=load SCALE=5 pnpm db:seed:bulk`
  */
 import '@/shared/config/load-env-files.js';
+import { fileURLToPath } from 'node:url';
 import { faker } from '@faker-js/faker';
-import { authSeedModule } from '@/domains/auth/seed/index.js';
-import { auditSeedModule } from '@/domains/audit/seed/index.js';
-import { billingSeedModule } from '@/domains/billing/seed/index.js';
-import { notifySeedModule } from '@/domains/notify/seed/index.js';
-import { tenancySeedModule } from '@/domains/tenancy/seed/index.js';
-import { uploadSeedModule } from '@/domains/upload/seed/index.js';
-import { userSeedModule } from '@/domains/user/seed/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { resolveCounts } from './bulk-config.js';
 import { initFakerSeed } from './faker-data.js';
 import { closeDatabase } from './helpers.js';
+import { SEED_MODULES } from './modules.js';
 import { assertBulkSeedAllowed } from './production-guard.js';
 import { createSeedRegistry } from './seed-registry.js';
-import { type DomainSeedModule, orderModules, type SeedContext } from './seed-contract.js';
-
-/**
- * All registered domain seed modules. Each domain's `seed/index.ts` exports one
- * `DomainSeedModule`; they are added here as the per-domain seeders land.
- */
-const MODULES: DomainSeedModule[] = [
-  userSeedModule,
-  authSeedModule,
-  tenancySeedModule,
-  billingSeedModule,
-  notifySeedModule,
-  uploadSeedModule,
-  auditSeedModule,
-];
+import { orderModules, type SeedContext } from './seed-contract.js';
 
 /**
  * Runs the full bulk seed: guard, resolve config, seed reference data then bulk rows in
@@ -52,7 +33,7 @@ export async function runBulkSeed(environment: NodeJS.ProcessEnv): Promise<void>
   const context: SeedContext = { counts, faker, registry: createSeedRegistry(), logger };
   logger.info({ profile, scale, counts }, 'seed.bulk: starting');
 
-  const ordered = orderModules(MODULES);
+  const ordered = orderModules(SEED_MODULES);
   for (const module of ordered) {
     if (module.seedReference) await module.seedReference(context);
   }
@@ -71,14 +52,17 @@ export async function runBulkSeed(environment: NodeJS.ProcessEnv): Promise<void>
 }
 
 /**
- * `closeDatabase` always runs (success or failure) so the postgres.js pool drains before
- * the process exits.
+ * Auto-run only when executed directly (`tsx src/scripts/seed/bulk.ts`), never on import — so a
+ * test can import {@link runBulkSeed} without triggering a seed. `closeDatabase` always runs so the
+ * postgres.js pool drains before the process exits.
  */
-runBulkSeed(process.env)
-  .catch((error) => {
-    logger.error({ error }, 'seed.bulk: failed');
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await closeDatabase();
-  });
+if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1]) {
+  runBulkSeed(process.env)
+    .catch((error) => {
+      logger.error({ error }, 'seed.bulk: failed');
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await closeDatabase();
+    });
+}

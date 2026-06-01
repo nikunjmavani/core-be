@@ -13,10 +13,11 @@ This skill ensures that when the **project structure changes**, the repo's "sour
 
 Whenever you change code structure (e.g. add a domain, rename layers, add infrastructure), you **must** update the following so rules and skills stay in sync:
 
-- **Rules:** `.cursor/rules/core-be-src-architecture.mdc` — ensure it matches current layout and naming.
+- **Rules:** `.cursor/rules/core-be-src-architecture.mdc` — ensure it matches current layout and naming. `.cursor/rules/seed-conventions.mdc` (if the `seed/` dir layout or seed contract changed).
 - **Skills:**
   - `.cursor/skills/domain-generator/SKILL.md` (scaffolding and sub-domain list)
   - `.cursor/skills/workers-events/SKILL.md` (if events/queues/workers paths changed)
+  - `.cursor/skills/seed-maintainer/SKILL.md` (if the `seed/` dir layout, seed contract, or tiers changed)
   - `.cursor/skills/supabase-porting/SKILL.md` (if Supabase porting conventions changed)
   - `.cursor/skills/db-migration-maintainer/SKILL.md` (if SQL migration conventions changed)
   - `.cursor/skills/test-generator/SKILL.md` (if test layout or scripts changed)
@@ -40,14 +41,17 @@ src/domains/<domain>/
   <domain>.routes.ts
   <domain>.container.ts
   events/                     # optional: register<Domain>EventHandlers() aggregator
+  seed/                       # optional: when this level owns tables (see Seed layout)
   __tests__/                  # domain e2e, unit, factories (see Test layout)
   sub-domains/                # required except audit, upload
     <sub-domain>/             # top-level resource
       ... layers ...
+      seed/                   # optional: when this resource owns tables
       __tests__/unit/         # optional
       events/ | queues/ | workers/   # optional
       <nested-sub-domain>/    # optional aggregate child (webhook-event, organization-api-key, …)
         ... layers ...
+        seed/                 # optional: when this child owns tables
         __tests__/unit/
 ```
 
@@ -125,7 +129,16 @@ tooling/
 
 ```text
 src/scripts/    # e.g. generate-openapi.ts → docs/openapi/openapi.json for ApiDog
+  seed/         # seed orchestrator + contract (bulk.ts, bulk-config.ts, seed-contract.ts,
+                # production-guard.ts, seed-registry.ts, minimal.ts, full.ts); OVERVIEW.md
 ```
+
+### Seed layout
+
+- Every folder that **owns tables** (domain, sub-domain, nested sub-domain) carries a co-located `seed/` dir: `<name>.reference.seed.ts`, `<name>.bulk.seed.ts`, `<name>.faker.ts`, `index.ts`.
+- `seed/index.ts` exports a `SeedContribution` **except** a top-level domain's, which exports a `DomainSeedModule` (`name` + `dependsOn`). Parents fold children up with `composeContributions(...)`; the orchestrator (`src/scripts/seed/bulk.ts`) registers one module per domain.
+- Three tiers: `pnpm db:seed` (reference) · `pnpm db:seed:full` (demo) · `pnpm db:seed:bulk` (scaled). Detail: **seed-maintainer**, `.cursor/rules/seed-conventions.mdc`, `src/scripts/seed/OVERVIEW.md`.
+- **Validator allowlist**: `seed/` is permitted at domain root by the domain-structure validator (`src/scripts/validators/domain/validate-domain.ts`).
 
 ### Test layout
 
