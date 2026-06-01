@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.7.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.7.1-dev.0...v3.7.2-dev.0) (2026-06-01)
+
+
+### Changed
+
+* **sonar:** reduce cognitive complexity of 7 functions (S3776) ([#249](https://github.com/nikunjmavani/core-be/issues/249)) ([1ed41da](https://github.com/nikunjmavani/core-be/commit/1ed41da6232496617897ef977deb3cbeca8d9ace))
+
 ## [3.7.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.7.0-dev.0...v3.7.1-dev.0) (2026-06-01)
 
 
