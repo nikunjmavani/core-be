@@ -1,0 +1,23 @@
+# oasdiff --err-ignore file: breaking API changes intentionally accepted for the
+# dev -> main promotion (PR #157 and future major promotions that carry these).
+#
+# Matching: oasdiff lower-cases each finding to a single line and ignores it when
+# a line below is a CONTIGUOUS SUBSTRING of that text. Keep every entry narrow
+# (operation + path + exact message) so UNRELATED / FUTURE breaking changes still
+# fail the gate. Lines starting with `#` and blank lines are inert (they never
+# match a finding). Verified against oasdiff v1.18.1.
+#
+# Each accepted change below is also pinned by a test, so it cannot silently
+# regress:
+
+# 1. GET /health is an operational liveness probe, intentionally excluded from the
+#    public OpenAPI document (it carries no versioned API contract).
+api get /health api path removed without deprecation
+
+# 2. POST /api/v1/auth/mfa/challenge was removed in the #219 security hardening; the
+#    route is no longer publicly exposed (auth-mfa.integration.test.ts pins this).
+api post /api/v1/auth/mfa/challenge api path removed without deprecation
+
+# 3. POST /api/v1/auth/me/auth-methods tightened `method_type` to a fixed enum so the
+#    DTO rejects manual provider-identity binding (auth-method.service.unit.test.ts).
+api post /api/v1/auth/me/auth-methods request property `method_type` was restricted to a list of enum values

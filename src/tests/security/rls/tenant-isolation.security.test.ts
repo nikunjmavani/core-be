@@ -361,7 +361,7 @@ describe('Security: Tenant isolation', () => {
       expect(response.statusCode).toBe(403);
     });
 
-    it('returns 404 when GET targets an upload owned by another user', async () => {
+    it('returns 403 when GET targets an upload in another organization', async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
       const uploadInB = await seedUploadForOrganization({
         userId: fixture.userB.id,
@@ -374,13 +374,13 @@ describe('Security: Tenant isolation', () => {
         token: fixture.userA.token,
       });
 
-      expect(response.statusCode).toBe(404);
+      expect(response.statusCode).toBe(403);
       expect(response.json()).not.toMatchObject({
         data: expect.objectContaining({ publicId: uploadInB.public_id }),
       });
     });
 
-    it('returns 404 when DELETE targets an upload owned by another user and row remains', async () => {
+    it('returns 403 when DELETE targets an upload in another organization and row remains', async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
       const uploadInB = await seedUploadForOrganization({
         userId: fixture.userB.id,
@@ -393,7 +393,7 @@ describe('Security: Tenant isolation', () => {
         token: fixture.userA.token,
       });
 
-      expect(response.statusCode).toBe(404);
+      expect(response.statusCode).toBe(403);
 
       const [row] = await database
         .select({ deleted_at: uploads.deleted_at })

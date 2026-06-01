@@ -51,7 +51,9 @@ export default {
     if (filtered.length === 0) {
       return [];
     }
-    const quoted = filtered.map((path) => `"${path.replace(/"/g, '\\"')}"`).join(' ');
+    const quoted = filtered
+      .map((path) => `"${path.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
+      .join(' ');
     return [`biome check --write --no-errors-on-unmatched ${quoted}`];
   },
   'tooling/**/*.{ts,mjs}': ['biome check --write --no-errors-on-unmatched'],
@@ -61,7 +63,9 @@ export default {
     if (filtered.length === 0) {
       return [];
     }
-    const quoted = filtered.map((path) => `"${path.replace(/"/g, '\\"')}"`).join(' ');
+    const quoted = filtered
+      .map((path) => `"${path.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
+      .join(' ');
     return [`markdownlint-cli2 --config .markdownlint.json --fix ${quoted}`];
   },
 };
