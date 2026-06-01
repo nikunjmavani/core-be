@@ -88,4 +88,24 @@ describe('createRedisFallbackRateLimitStore', () => {
     expect(parentHit.current).toBe(1);
     expect(childHit.current).toBe(1);
   });
+
+  it('evicts old local buckets instead of growing without bound during Redis outages', async () => {
+    const redis = {
+      incr: vi.fn().mockRejectedValue(new Error('down')),
+      pexpire: vi.fn(),
+      pttl: vi.fn(),
+    } as unknown as Redis;
+    const StoreCtor = createRedisFallbackRateLimitStore(redis);
+    const store = new StoreCtor({}) as never;
+
+    for (let index = 0; index < 10_000; index++) {
+      await incrAsync(store, `ip-${index}`, 60_000, 5);
+    }
+
+    await incrAsync(store, 'overflow', 60_000, 5);
+
+    await expect(incrAsync(store, 'ip-0', 60_000, 5)).resolves.toMatchObject({ current: 1 });
+    await expect(incrAsync(store, 'ip-9999', 60_000, 5)).resolves.toMatchObject({ current: 2 });
+    await expect(incrAsync(store, 'overflow', 60_000, 5)).resolves.toMatchObject({ current: 2 });
+  });
 });
