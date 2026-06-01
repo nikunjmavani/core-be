@@ -24,7 +24,7 @@ export function createAuthSessionHandlers({
   return {
     logout: async (request: FastifyRequest, reply: FastifyReply) => {
       const authorizationHeader = request.headers.authorization;
-      const match = authorizationHeader?.match(/^Bearer\s+(.+)$/i);
+      const match = authorizationHeader?.match(/^Bearer\s+(\S.*)$/i);
       const token = match?.[1];
       if (!token) {
         throw new UnauthorizedError('errors:missingAuthorizationHeader');

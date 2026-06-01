@@ -10,7 +10,7 @@ import { applyApiKeyAuthentication } from '@/shared/middlewares/security/api-key
 function getBearerToken(request: FastifyRequest): string {
   const authorizationHeader = request.headers.authorization;
   if (!authorizationHeader) throw new UnauthorizedError('errors:missingAuthorizationHeader');
-  const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+  const match = authorizationHeader.match(/^Bearer\s+(\S.*)$/i);
   if (!match) throw new UnauthorizedError('errors:invalidAuthorizationHeaderFormat');
   return match[1]!;
 }
