@@ -296,7 +296,7 @@ export class WebauthnService {
     const storedCredential = await withUserDatabaseContext(challenge.user_public_id, () =>
       this.credentialRepository.findActiveByCredentialId(response.id),
     );
-    if (!storedCredential || storedCredential.user_id === undefined) {
+    if (storedCredential?.user_id === undefined) {
       throw new UnauthorizedError('errors:webauthnCredentialNotFound');
     }
 

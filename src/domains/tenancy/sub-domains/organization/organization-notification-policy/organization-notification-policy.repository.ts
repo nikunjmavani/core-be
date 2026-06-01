@@ -57,10 +57,7 @@ export class OrganizationNotificationPolicyRepository {
     muted_until?: Date | null;
     created_by_user_id?: number | null;
   }) {
-    const mutableCreatedBy =
-      data.created_by_user_id !== undefined && data.created_by_user_id !== null
-        ? data.created_by_user_id
-        : undefined;
+    const mutableCreatedBy = data.created_by_user_id ?? undefined;
     const rows = await getRequestDatabase()
       .insert(organization_notification_policies)
       .values({

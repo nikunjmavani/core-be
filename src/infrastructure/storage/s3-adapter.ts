@@ -281,8 +281,6 @@ let defaultAdapter: S3ObjectStorageAdapter | null = null;
  * factory as the production binding; tests can supply a fake port instead.
  */
 export function getDefaultS3ObjectStorageAdapter(): S3ObjectStorageAdapter {
-  if (!defaultAdapter) {
-    defaultAdapter = new S3ObjectStorageAdapter();
-  }
+  defaultAdapter ??= new S3ObjectStorageAdapter();
   return defaultAdapter;
 }

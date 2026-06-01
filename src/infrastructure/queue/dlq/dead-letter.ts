@@ -124,7 +124,7 @@ export function isFinalJobFailure(job: Job | undefined): boolean {
 export async function enqueueDeadLetter(
   sourceQueueName: string,
   job: Job,
-  error: Error | unknown,
+  error: unknown,
 ): Promise<void> {
   const deadLetterQueueName = getDeadLetterQueueName(sourceQueueName);
   const queue = getOrCreateDeadLetterQueue(deadLetterQueueName);
@@ -181,7 +181,7 @@ export async function enqueueDeadLetter(
 async function persistDeadLetterFailureToPostgres(
   queueName: string,
   job: Job,
-  error: Error | unknown,
+  error: unknown,
 ): Promise<void> {
   const errorObject = error instanceof Error ? error : new Error(String(error));
   const maxAttempts = job.opts.attempts ?? 1;
@@ -223,11 +223,7 @@ async function persistDeadLetterFailureToPostgres(
  * Best-effort: any error is logged (`queue.dead_letter.enqueue_failed`) and swallowed —
  * the durable record already lives in Postgres via {@link persistDeadLetterFailureToPostgres}.
  */
-async function mirrorDeadLetterToRedis(
-  queueName: string,
-  job: Job,
-  error: Error | unknown,
-): Promise<void> {
+async function mirrorDeadLetterToRedis(queueName: string, job: Job, error: unknown): Promise<void> {
   try {
     await enqueueDeadLetter(queueName, job, error);
   } catch (deadLetterError) {
@@ -260,13 +256,13 @@ async function mirrorDeadLetterToRedis(
 export async function recordDeadLetterFailure(
   queueName: string,
   job: Job,
-  error: Error | unknown,
+  error: unknown,
 ): Promise<void> {
   await persistDeadLetterFailureToPostgres(queueName, job, error);
   await mirrorDeadLetterToRedis(queueName, job, error);
 }
 
-function captureFinalFailureInSentry(queueName: string, job: Job, error: Error | unknown): void {
+function captureFinalFailureInSentry(queueName: string, job: Job, error: unknown): void {
   if (!isSentryInitialized()) return;
 
   const errorObject = error instanceof Error ? error : new Error(String(error));
@@ -285,7 +281,7 @@ function captureFinalFailureInSentry(queueName: string, job: Job, error: Error |
 function captureDeadLetterPersistFailureInSentry(
   queueName: string,
   job: Job,
-  error: Error | unknown,
+  error: unknown,
 ): void {
   if (!isSentryInitialized()) return;
 

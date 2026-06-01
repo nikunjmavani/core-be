@@ -49,7 +49,7 @@ export interface ParsedRedisMemoryInfo {
  */
 export function parseRedisMemoryInfo(info: string): ParsedRedisMemoryInfo {
   const readField = (field: string): number => {
-    const match = info.match(new RegExp(`^${field}:(\\d+)`, 'm'));
+    const match = new RegExp(`^${field}:(\\d+)`, 'm').exec(info);
     if (!match?.[1]) return 0;
     const value = Number.parseInt(match[1], 10);
     return Number.isFinite(value) ? value : 0;

@@ -1,5 +1,7 @@
-import type { UserDataExportOutput } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
-import type { UserDataExportRow } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
+import type {
+  UserDataExportOutput,
+  UserDataExportRow,
+} from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
 
 /**
  * Project a `user_data_exports` row into the public {@link UserDataExportOutput} shape.

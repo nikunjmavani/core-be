@@ -69,7 +69,7 @@ export function parseMigrationExecutionMode(fileContent: string): MigrationExecu
       continue;
     }
 
-    const match = trimmed.match(migrationTransactionHeaderPattern);
+    const match = migrationTransactionHeaderPattern.exec(trimmed);
     if (!match) {
       if (malformedMigrationTransactionPattern.test(trimmed)) {
         headerErrors.push(

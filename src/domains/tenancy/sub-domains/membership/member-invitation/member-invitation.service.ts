@@ -10,7 +10,7 @@ import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organ
 import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { MemberInvitationRepository } from './member-invitation.repository.js';
-import type { MemberInvitationOutput } from './member-invitation.types.js';
+import type { MemberInvitationOutput, MemberInvitationRow } from './member-invitation.types.js';
 import {
   validateCreateMemberInvitation,
   validateAcceptMemberInvitation,
@@ -26,7 +26,6 @@ import {
   type MemberInvitationEmailPayload,
 } from '@/domains/tenancy/sub-domains/membership/member-invitation/events/member-invitation.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
-import type { MemberInvitationRow } from './member-invitation.types.js';
 
 const MEMBER_INVITATION_RESOURCE = 'Member invitation';
 

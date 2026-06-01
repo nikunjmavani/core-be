@@ -90,7 +90,7 @@ export class OrganizationService {
     if (!logo_url) return null;
     const prefix = buildOrganizationLogoKeyPrefix(public_id);
     if (logo_url.startsWith(prefix)) return logo_url;
-    const keyMatch = logo_url.match(/organization-logos\/[^?#]+/);
+    const keyMatch = /organization-logos\/[^?#]+/.exec(logo_url);
     return keyMatch?.[0] ?? null;
   }
 
@@ -439,7 +439,7 @@ export class OrganizationService {
     });
     // External I/O (S3) runs outside the DB context.
     if (organization.logo_url) {
-      const keyMatch = organization.logo_url.match(/organization-logos\/[^?#]+/);
+      const keyMatch = /organization-logos\/[^?#]+/.exec(organization.logo_url);
       if (keyMatch) {
         const metadata = await this.objectStorage.headObject(keyMatch[0]);
         if (!metadata) {

@@ -141,7 +141,7 @@ async function resolvePendingUploadVerdict(
   row: PendingUploadSweepRow,
 ): Promise<PendingUploadVerdict> {
   const metadata = await headObject(row.file_key);
-  if (metadata === null || metadata.contentLength === undefined) {
+  if (metadata?.contentLength === undefined) {
     return 'orphan';
   }
   const lengthMatches = metadata.contentLength === row.file_size;

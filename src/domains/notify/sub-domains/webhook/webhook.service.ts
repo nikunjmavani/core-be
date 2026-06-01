@@ -9,10 +9,12 @@ import {
   decryptFieldSecret,
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
-import { resolveAndPinWebhookUrl } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
+import {
+  createPinnedWebhookFetch,
+  resolveAndPinWebhookUrl,
+} from '@/shared/utils/security/webhook-outbound-fetch.util.js';
 import { invalidateWebhookOutboundCircuit } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-outbound-circuit.js';
 import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
-import { createPinnedWebhookFetch } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
 import { buildWebhookSignatureHeader } from '@/shared/utils/security/webhook-signature.util.js';
 import { NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
