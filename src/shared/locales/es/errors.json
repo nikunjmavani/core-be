@@ -13,6 +13,7 @@
   "idempotencyKeyConflict": "Solicitud simultánea con la misma clave de idempotencia",
   "idempotencyKeyInFlight": "Una solicitud con esta clave de idempotencia aún está en curso. Vuelve a intentarlo cuando se complete la solicitud original.",
   "idempotencyKeyInvalid": "Idempotency-Key debe tener entre 1 y 255 caracteres y solo puede contener letras, dígitos y . _ : ~ + / = -",
+  "idempotencyKeyReuse": "Esta clave de idempotencia ya se usó con una carga de solicitud diferente",
   "notImplemented": "Por favor, solicite esta función",
   "rateLimited": "Demasiadas solicitudes",
   "payloadTooLarge": "Carga demasiado grande",

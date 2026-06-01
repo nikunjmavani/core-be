@@ -43,7 +43,7 @@ describe('createUserDataExportController', () => {
     const reply = mockReply();
 
     await controller.requestExport(
-      mockRequest({ auth: { userId: userPublicId, role: 'user' } }),
+      mockRequest({ auth: { kind: 'user' as const, userId: userPublicId, role: 'user' } }),
       reply,
     );
 
@@ -64,7 +64,7 @@ describe('createUserDataExportController', () => {
 
     const response = await controller.getExportStatus(
       mockRequest({
-        auth: { userId: userPublicId, role: 'user' },
+        auth: { kind: 'user' as const, userId: userPublicId, role: 'user' },
         params: { exportId },
       }),
       mockReply(),

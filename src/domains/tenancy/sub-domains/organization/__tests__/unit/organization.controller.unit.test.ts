@@ -12,7 +12,7 @@ describe('createOrganizationController', () => {
 
   function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
     return {
-      auth: { userId: userPublicId, role: 'USER' },
+      auth: { kind: 'user' as const, userId: userPublicId, role: 'USER' },
       params: {},
       body: {},
       query: {},

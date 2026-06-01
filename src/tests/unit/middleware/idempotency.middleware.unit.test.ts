@@ -95,7 +95,7 @@ describe('idempotency middleware fail-closed behavior', () => {
     const request = {
       method: 'POST',
       headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
     } as unknown as FastifyRequest & { _idempotencyKey?: string };
 
     const { parseIdempotencyKeyHeader } = await import(
@@ -178,7 +178,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const request = {
       method: 'POST',
       headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
     } as unknown as FastifyRequest;
 
@@ -197,6 +197,91 @@ describe('idempotency middleware happy paths and conflicts', () => {
     expect(mockRedisSet).not.toHaveBeenCalled();
   });
 
+  it('returns 422 when the same key is reused with a different request payload', async () => {
+    // A completed entry whose stored fingerprint cannot match the incoming request's fingerprint
+    // (method + route + body). The reuse must be rejected (422) rather than replaying the prior
+    // response or executing a divergent second operation.
+    mockRedisGet.mockResolvedValue(
+      JSON.stringify({
+        state: 'completed',
+        statusCode: 201,
+        body: JSON.stringify({ id: 'first' }),
+        headers: { 'content-type': 'application/json' },
+        fingerprint: 'fingerprint-for-a-different-original-body',
+      }),
+    );
+    const { claimPreHandler } = await registerIdempotencyHooks();
+
+    const request = {
+      method: 'POST',
+      headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
+      body: { name: 'A different payload than the original' },
+      _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+    } as unknown as FastifyRequest;
+
+    const send = vi.fn();
+    const reply = {
+      sent: false,
+      status: vi.fn().mockReturnThis(),
+      header: vi.fn().mockReturnThis(),
+      send,
+    } as unknown as FastifyReply;
+
+    await claimPreHandler(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(422);
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: 'idempotency_key_reuse' }),
+      }),
+    );
+    expect(mockRedisSet).not.toHaveBeenCalled();
+  });
+
+  it('replays a completed entry when the fingerprint matches (same key + same payload)', async () => {
+    const { buildIdempotencyRequestFingerprint } = await import(
+      '@/shared/utils/idempotency/idempotency-fingerprint.util.js'
+    );
+    const body = { name: 'same payload' };
+    const fingerprint = buildIdempotencyRequestFingerprint({
+      method: 'POST',
+      routePath: '/',
+      body,
+    });
+    mockRedisGet.mockResolvedValue(
+      JSON.stringify({
+        state: 'completed',
+        statusCode: 201,
+        body: JSON.stringify({ id: 'created' }),
+        headers: { 'content-type': 'application/json' },
+        fingerprint,
+      }),
+    );
+    const { claimPreHandler } = await registerIdempotencyHooks();
+
+    const request = {
+      method: 'POST',
+      headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
+      body,
+      _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+    } as unknown as FastifyRequest;
+
+    const send = vi.fn();
+    const reply = {
+      sent: false,
+      status: vi.fn().mockReturnThis(),
+      header: vi.fn().mockReturnThis(),
+      send,
+    } as unknown as FastifyReply;
+
+    await claimPreHandler(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(201);
+    expect(send).toHaveBeenCalledWith({ id: 'created' });
+  });
+
   it('returns 409 in_flight when an in-flight entry already exists', async () => {
     mockRedisGet.mockResolvedValue(buildInFlightEntry());
     const { claimPreHandler } = await registerIdempotencyHooks();
@@ -204,7 +289,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const request = {
       method: 'POST',
       headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
     } as unknown as FastifyRequest;
 
@@ -233,7 +318,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const request = {
       method: 'POST',
       headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
     } as unknown as FastifyRequest;
 
@@ -259,7 +344,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const { claimPreHandler } = await registerIdempotencyHooks();
     const request = {
       headers: {},
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
       t: (key: string) => `translated:${key}`,
     } as unknown as FastifyRequest;
@@ -287,7 +372,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const request = {
       method: 'POST',
       headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
     } as unknown as FastifyRequest;
 
@@ -317,7 +402,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const request = {
       method: 'POST',
       headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
     } as unknown as FastifyRequest;
 
@@ -400,7 +485,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
         [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY,
         'x-organization-id': 'header-org',
       },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       organizationId: organizationPublicId,
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
     } as unknown as FastifyRequest & { organizationId: string };
@@ -422,7 +507,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const request = {
       method: 'POST',
       headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
       id: 'req-1',
     } as unknown as FastifyRequest;
@@ -445,7 +530,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
         [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY,
         'x-organization-id': organizationPublicId,
       },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
     } as unknown as FastifyRequest & { _idempotencyClaimed?: boolean };
 
@@ -467,7 +552,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const request = {
       method: 'POST',
       headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
     } as unknown as FastifyRequest & { _idempotencyClaimed?: boolean };
 
@@ -692,7 +777,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const { claimPreHandler } = await registerIdempotencyHooks();
     const request = {
       headers: {},
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
       t: (key: string) => `translated:${key}`,
     } as unknown as FastifyRequest;
@@ -740,7 +825,7 @@ describe('idempotency middleware happy paths and conflicts', () => {
     const request = {
       method: 'POST',
       headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
-      auth: { userId: TEST_USER_PUBLIC_ID },
+      auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
       _idempotencyKey: IDEMPOTENCY_TEST_KEY,
     } as unknown as FastifyRequest;
 

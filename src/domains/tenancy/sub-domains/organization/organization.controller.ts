@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
 import {
+  getActingUserPublicId,
   getRequestIdentifier,
   requireAuth,
   requirePrincipal,
@@ -52,7 +53,7 @@ export function createOrganizationController(
     updateOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
-      const data = await service.update(id, request.body, auth.userId);
+      const data = await service.update(id, request.body, getActingUserPublicId(auth));
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteOrganization: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -64,13 +65,13 @@ export function createOrganizationController(
     uploadLogo: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
-      const data = await service.uploadLogo(id, request.body, auth.userId);
+      const data = await service.uploadLogo(id, request.body, getActingUserPublicId(auth));
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteLogo: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const id = validatePublicIdParam((request.params as { id: string }).id ?? '', 'id');
-      const data = await service.deleteLogo(id, auth.userId);
+      const data = await service.deleteLogo(id, getActingUserPublicId(auth));
       return successResponse(data, getRequestIdentifier(request));
     },
     listOrganizationAuditLogs: async (request: FastifyRequest, _reply: FastifyReply) => {

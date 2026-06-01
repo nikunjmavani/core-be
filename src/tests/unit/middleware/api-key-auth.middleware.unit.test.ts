@@ -81,7 +81,7 @@ describe('api-key-auth.middleware', () => {
 
       await expect(applyApiKeyAuthentication(request)).resolves.toBe(true);
       expect(request.auth).toEqual({
-        userId: '',
+        kind: 'apiKey',
         apiKeyPublicId: 'key_public_id',
         apiKeyScopes: ['api-key:read'],
         organizationPublicId: 'org_public_id',

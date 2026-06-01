@@ -12,12 +12,20 @@ import type { PermissionRepository } from './permission.repository.js';
 export async function assertCallerCanGrantPermissionCodes(options: {
   authorizationService: AuthorizationService;
   permissionRepository: PermissionRepository;
-  callerUserPublicId: string;
+  callerUserPublicId: string | undefined;
   organizationPublicId: string;
   requestedPermissionCodes: string[];
 }): Promise<void> {
   if (options.requestedPermissionCodes.length === 0) {
     return;
+  }
+
+  // An API-key principal has no acting user, so there is no held-permission set to check it
+  // against — it can never be authorized to assign permissions to a role or API key. Fail closed
+  // against privilege escalation (preserves the pre-union behavior where an empty-userId key
+  // resolved to an empty caller-permission set and was denied any non-empty grant).
+  if (!options.callerUserPublicId) {
+    throw new ForbiddenError('errors:cannotGrantPermissionNotHeld');
   }
 
   const catalogRows = await options.permissionRepository.findAll();

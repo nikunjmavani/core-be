@@ -158,7 +158,7 @@ export class MembershipService {
   async create(
     organization_public_id: string,
     body: unknown,
-    invited_by_user_public_id: string,
+    invited_by_user_public_id: string | undefined,
   ): Promise<MembershipOutput> {
     const parsed = validateCreateMembership(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -194,7 +194,7 @@ export class MembershipService {
     organization_public_id: string,
     membership_public_id: string,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<MembershipOutput> {
     const parsed = validateUpdateMembership(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {

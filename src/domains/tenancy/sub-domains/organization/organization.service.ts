@@ -173,7 +173,12 @@ export class OrganizationService {
     };
   }
 
-  async resolveUserInternalIdByPublicId(user_public_id: string): Promise<number | null> {
+  async resolveUserInternalIdByPublicId(
+    user_public_id: string | undefined,
+  ): Promise<number | null> {
+    // An API-key principal has no acting user, so the public id is `undefined`; resolve to a
+    // null actor rather than looking up an empty string.
+    if (!user_public_id) return null;
     return this.repository.resolveUserIdByPublicId(user_public_id);
   }
 
@@ -327,7 +332,7 @@ export class OrganizationService {
   async update(
     public_id: string,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<OrganizationOutput> {
     const parsed = validateUpdateOrganization(body);
     return withOrganizationDatabaseContext(public_id, async () => {
@@ -383,7 +388,7 @@ export class OrganizationService {
   async uploadLogo(
     public_id: string,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<OrganizationOutput> {
     const parsed = validateUploadLogo(body);
     const expectedPrefix = buildOrganizationLogoKeyPrefix(public_id);
@@ -425,7 +430,7 @@ export class OrganizationService {
 
   async deleteLogo(
     public_id: string,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<OrganizationOutput> {
     const organization = await withOrganizationDatabaseContext(public_id, async () => {
       const found = await this.repository.findByPublicId(public_id);

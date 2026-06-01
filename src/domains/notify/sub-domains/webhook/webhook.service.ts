@@ -120,7 +120,11 @@ export class WebhookService {
     });
   }
 
-  async create(organization_public_id: string, body: unknown, created_by_user_public_id: string) {
+  async create(
+    organization_public_id: string,
+    body: unknown,
+    created_by_user_public_id: string | undefined,
+  ) {
     const parsed = validateCreateWebhook(body);
     await resolveAndPinWebhookUrl(parsed.url);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -146,7 +150,7 @@ export class WebhookService {
     organization_public_id: string,
     webhook_public_id: string,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ) {
     const parsed = validateUpdateWebhook(body);
     if (parsed.url !== undefined) {

@@ -17,6 +17,7 @@ export function createObjectStoragePortMock(
     headObject: vi.fn().mockResolvedValue({ contentType: 'image/png', contentLength: 100 }),
     deleteObject: vi.fn().mockResolvedValue(true),
     putObject: vi.fn().mockResolvedValue(undefined),
+    copyObject: vi.fn().mockResolvedValue(undefined),
     getObject: vi.fn().mockResolvedValue({ body: Buffer.from(''), contentType: 'image/png' }),
     getObjectUrl: vi.fn().mockReturnValue('https://cdn.example/object'),
     createPresignedDownloadUrl: vi.fn().mockResolvedValue('https://presigned.example/download'),

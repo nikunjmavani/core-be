@@ -45,7 +45,7 @@ export class AuditService {
    *
    * @remarks
    * Algorithm:
-   * 1. Resolve `input.actorUserPublicId` → internal user id inside
+   * 1. Resolve `actorUserPublicId` → internal user id inside
    *    `withUserDatabaseContext`. Returning `null` means the actor was deleted
    *    between event emission and audit recording; row is skipped.
    * 2. INSERT the row inside the same context so RLS attributes it correctly.
@@ -57,6 +57,16 @@ export class AuditService {
    * Side effects: one INSERT; no event emitted.
    */
   async record(input: AuditLogRecordInput): Promise<void> {
+    const actorUserPublicId = input.actorUserPublicId;
+    if (!actorUserPublicId) {
+      // No acting user — attribute to the organization API key when present (always org-scoped),
+      // otherwise skip rather than write an unattributable row.
+      if (input.actorApiKeyPublicId && input.organization_id) {
+        return this.recordApiKeyActorEvent(input.actorApiKeyPublicId, input.organization_id, input);
+      }
+      logger.warn({ action: input.action }, 'audit.record.missingActor');
+      return;
+    }
     if (input.organization_id) {
       const organization = await this.organizationService.findOrganizationByInternalId(
         input.organization_id,
@@ -69,10 +79,10 @@ export class AuditService {
         return;
       }
       return withOrganizationDatabaseContext(organization.public_id, async () => {
-        const user = await this.userService.findUserRecordByPublicId(input.actorUserPublicId);
+        const user = await this.userService.findUserRecordByPublicId(actorUserPublicId);
         if (!user) {
           logger.warn(
-            { actorUserPublicId: input.actorUserPublicId },
+            { actorUserPublicId: actorUserPublicId },
             'audit.record.unknownActorUserPublicId',
           );
           return;
@@ -92,18 +102,18 @@ export class AuditService {
       });
     }
 
-    const user = await withUserDatabaseContext(input.actorUserPublicId, () =>
-      this.userService.findUserRecordByPublicId(input.actorUserPublicId),
+    const user = await withUserDatabaseContext(actorUserPublicId, () =>
+      this.userService.findUserRecordByPublicId(actorUserPublicId),
     );
     if (!user) {
       logger.warn(
-        { actorUserPublicId: input.actorUserPublicId },
+        { actorUserPublicId: actorUserPublicId },
         'audit.record.unknownActorUserPublicId',
       );
       return;
     }
 
-    await withUserDatabaseContext(input.actorUserPublicId, () =>
+    await withUserDatabaseContext(actorUserPublicId, () =>
       this.repository.insert({
         actor_user_id: user.id,
         action: input.action,
@@ -117,6 +127,47 @@ export class AuditService {
         metadata: input.metadata ?? {},
       }),
     );
+  }
+
+  /**
+   * Persists an audit row attributed to an organization API key (no acting user).
+   *
+   * @remarks
+   * Algorithm: resolve the organization, then under its RLS context resolve the API key's internal
+   * id (`tenancy.api_keys` is tenant-isolated) and INSERT the row with `actor_api_key_id` set and
+   * `actor_user_id` left null. Failure modes: unknown organization or unknown API key → logged at
+   * `warn`, no row written (best-effort, never fails the caller's request). Side effects: one INSERT.
+   */
+  private async recordApiKeyActorEvent(
+    actorApiKeyPublicId: string,
+    organizationId: number,
+    input: AuditLogRecordInput,
+  ): Promise<void> {
+    const organization =
+      await this.organizationService.findOrganizationByInternalId(organizationId);
+    if (!organization) {
+      logger.warn({ organizationId }, 'audit.record.unknownOrganizationId');
+      return;
+    }
+    await withOrganizationDatabaseContext(organization.public_id, async () => {
+      const apiKeyId = await this.repository.resolveActorApiKeyId(actorApiKeyPublicId);
+      if (apiKeyId === null) {
+        logger.warn({ actorApiKeyPublicId }, 'audit.record.unknownActorApiKeyPublicId');
+        return;
+      }
+      await this.repository.insert({
+        actor_api_key_id: apiKeyId,
+        action: input.action,
+        resource_type: input.resource_type,
+        resource_id: input.resource_id ?? null,
+        target_user_id: input.target_user_id ?? null,
+        organization_id: organizationId,
+        ip_address: input.ip_address ?? null,
+        user_agent: input.user_agent ?? null,
+        severity: input.severity ?? 'INFO',
+        metadata: input.metadata ?? {},
+      });
+    });
   }
 
   /**

@@ -4,6 +4,7 @@ import {
   HeadObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
@@ -217,6 +218,30 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
             Body: options.body,
             ContentType: options.contentType,
             Metadata: options.metadata,
+          }),
+          { abortSignal: signal },
+        );
+      },
+    });
+  }
+
+  async copyObject(options: {
+    sourceKey: string;
+    destinationKey: string;
+    contentType: string;
+  }): Promise<void> {
+    const bucket = requireBucket();
+    await outboundCall({
+      name: 's3',
+      operation: async (signal) => {
+        await getS3Client().send(
+          new CopyObjectCommand({
+            Bucket: bucket,
+            // CopySource is `<bucket>/<key>`; our keys use only URL-safe path characters.
+            CopySource: `${bucket}/${options.sourceKey}`,
+            Key: options.destinationKey,
+            ContentType: options.contentType,
+            MetadataDirective: 'REPLACE',
           }),
           { abortSignal: signal },
         );

@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
 import {
+  getActingUserPublicId,
   getRequestIdentifier,
   requireAuth,
   requirePrincipal,
@@ -57,7 +58,12 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
         id: string;
         apiKeyId: string;
       }) ?? { id: '', apiKeyId: '' };
-      const data = await service.update(organizationId, apiKeyId, request.body, auth.userId);
+      const data = await service.update(
+        organizationId,
+        apiKeyId,
+        request.body,
+        getActingUserPublicId(auth),
+      );
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteApiKey: async (request: FastifyRequest, reply: FastifyReply) => {

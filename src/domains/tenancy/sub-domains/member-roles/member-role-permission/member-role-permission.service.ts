@@ -58,7 +58,7 @@ export class MemberRolePermissionService {
     organization_public_id: string,
     role_public_id: string,
     body: unknown,
-    created_by_user_public_id: string,
+    created_by_user_public_id: string | undefined,
   ) {
     const parsed = validatePutMemberRolePermissions(body);
     await assertCallerCanGrantPermissionCodes({
@@ -73,8 +73,9 @@ export class MemberRolePermissionService {
       if (!organization) throw new NotFoundError('Organization');
       const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
       if (!role) throw new NotFoundError('Role');
-      const userId =
-        await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id);
+      const userId = created_by_user_public_id
+        ? await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id)
+        : null;
       const result = await this.memberRolePermissionRepository.replace(
         role.id,
         parsed.permission_codes,

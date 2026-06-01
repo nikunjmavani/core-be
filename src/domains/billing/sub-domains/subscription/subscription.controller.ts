@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requirePrincipal } from '@/shared/utils/http/request.util.js';
+import {
+  getActingUserPublicId,
+  getRequestIdentifier,
+  requirePrincipal,
+} from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { SubscriptionService } from './subscription.service.js';
 import { SubscriptionSerializer } from './subscription.serializer.js';
@@ -47,7 +51,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       const data = await service.create(
         validatePublicIdParam(request.params.id, 'id'),
         request.body,
-        auth.userId,
+        getActingUserPublicId(auth),
         idempotencyKey,
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));

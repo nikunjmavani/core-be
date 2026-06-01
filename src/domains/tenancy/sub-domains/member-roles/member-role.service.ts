@@ -131,7 +131,7 @@ export class MemberRoleService {
   async create(
     organization_public_id: string,
     body: unknown,
-    created_by_user_public_id: string,
+    created_by_user_public_id: string | undefined,
   ): Promise<MemberRoleOutput> {
     const parsed = validateCreateMemberRole(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -158,7 +158,7 @@ export class MemberRoleService {
     organization_public_id: string,
     role_public_id: string,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<MemberRoleOutput> {
     const parsed = validateUpdateMemberRole(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {

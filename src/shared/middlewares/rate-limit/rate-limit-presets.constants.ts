@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import type { RateLimitOptions } from '@fastify/rate-limit';
 import { env } from '@/shared/config/env.config.js';
+import { getAuthenticatedActorId } from '@/shared/utils/http/request.util.js';
 import { Sentry } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
@@ -58,7 +59,8 @@ function buildRateLimitKeyFromRequestBodyEmail(request: FastifyRequest): string 
 }
 
 function buildRateLimitKeyFromAuthenticatedUserOrIpAddress(request: FastifyRequest): string {
-  const userId = request.auth?.userId;
+  const auth = request.auth;
+  const userId = auth && auth.kind === 'user' ? auth.userId : undefined;
   return userId ? `user:${userId}` : `ip:${request.ip}`;
 }
 
@@ -74,7 +76,10 @@ function buildRateLimitKeyFromAuthenticatedUserOrIpAddress(request: FastifyReque
  * verified org context yet) and finally to the caller IP for unauthenticated edge cases.
  */
 function buildRateLimitKeyFromOrganizationActorOrIpAddress(request: FastifyRequest): string {
-  const actorId = request.auth?.userId ?? request.auth?.apiKeyPublicId;
+  // Resolve the actor via the principal union so an API-key caller keys on its key public id
+  // (`actor:<apiKeyPublicId>`) instead of collapsing to `ip:` — the old `userId ?? apiKeyPublicId`
+  // returned the empty-string user sentinel for API keys, defeating per-actor isolation.
+  const actorId = request.auth ? getAuthenticatedActorId(request.auth) : undefined;
   const requestWithOrganization = request as FastifyRequest & { organizationId?: string | null };
   const organizationPublicId = requestWithOrganization.organizationId;
   if (

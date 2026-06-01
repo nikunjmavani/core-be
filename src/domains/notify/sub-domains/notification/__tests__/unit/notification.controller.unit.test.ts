@@ -6,7 +6,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): never {
   return {
-    auth: { userId: generatePublicId(), role: 'user' },
+    auth: { kind: 'user' as const, userId: generatePublicId(), role: 'user' },
     params: {},
     body: {},
     headers: {},

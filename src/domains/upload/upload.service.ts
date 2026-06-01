@@ -21,7 +21,9 @@ import {
   UPLOAD_STATUS,
   UPLOAD_TARGETS,
   buildOrganizationLogoKeyPrefix,
+  buildPendingObjectKey,
   buildUserAvatarKeyPrefix,
+  stripPendingObjectKeyPrefix,
 } from './upload.constants.js';
 import { getCanonicalExtensionForContentType } from './utils/upload-content-type.util.js';
 import { isSvgContentType, sanitizeSvgBuffer } from './utils/upload-svg.util.js';
@@ -121,6 +123,11 @@ export class UploadService {
       throw new ConfigurationError('S3_BUCKET is not configured');
     }
 
+    // The client uploads to a `pending/<finalKey>` object via its presigned URL. On confirm the
+    // verified bytes are published to `finalKey` (which the client never holds a URL for), so the
+    // served object cannot be overwritten through the still-valid presigned upload URL.
+    const pendingKey = buildPendingObjectKey(key);
+
     // Reserve the PENDING row BEFORE presigning so the per-user quota is enforced atomically
     // against concurrent requests (advisory lock + count + insert in one transaction). The
     // presigned URL is minted only after a slot is committed — concurrent callers can never
@@ -130,7 +137,7 @@ export class UploadService {
       userPublicId,
       organizationInternalId,
       fileName: input.fileName,
-      fileKey: key,
+      fileKey: pendingKey,
       contentType: input.contentType,
       fileSize: input.fileSize,
       bucket,
@@ -143,7 +150,7 @@ export class UploadService {
     if (environment.UPLOAD_USE_PRESIGNED_POST) {
       // S3 enforces the content-length-range at upload time, rejecting empty/oversized bodies.
       const post = await this.objectStorage.createPresignedUploadPost({
-        key,
+        key: pendingKey,
         contentType: input.contentType,
         minContentLength: 1,
         maxContentLength: config.maxSize,
@@ -159,7 +166,7 @@ export class UploadService {
       uploadMethod = 'POST';
     } else {
       uploadUrl = await this.objectStorage.createPresignedUploadUrl({
-        key,
+        key: pendingKey,
         contentType: input.contentType,
         contentLength: input.fileSize,
         expiresInSeconds: PRESIGNED_URL_EXPIRY_SECONDS,
@@ -172,7 +179,7 @@ export class UploadService {
     return serializeUploadCreate({
       publicId: row.public_id,
       uploadUrl,
-      key,
+      key: pendingKey,
       expiresAt,
       uploadMethod,
       ...(fields !== undefined ? { fields } : {}),
@@ -364,9 +371,16 @@ export class UploadService {
       });
     }
 
+    // The bytes live at the (still client-writable) pending key; the verified bytes are published
+    // to `finalKey`. For rows created before pending-keying (rolling deploy) source === final and
+    // the verify/sanitize happens in place exactly as before.
+    const sourceKey = row.file_key;
+    const finalKey = stripPendingObjectKeyPrefix(sourceKey);
+    const pendingKeyed = finalKey !== sourceKey;
+
     let verified = false;
     try {
-      const metadata = await this.objectStorage.verifyUploadedObject(row.file_key, {
+      const metadata = await this.objectStorage.verifyUploadedObject(sourceKey, {
         contentType: row.mime_type,
         contentLength: row.file_size,
       });
@@ -376,73 +390,102 @@ export class UploadService {
       const typeMatches =
         metadata.contentType === undefined || metadata.contentType === row.mime_type;
       verified = objectExists && lengthMatches && typeMatches;
-      // SVGs are active content: an uploaded <svg onload=…> served from S3/CDN with an
-      // image/svg+xml type executes as stored XSS. Neutralise the bytes in place before the
-      // object is ever marked UPLOADED (and therefore servable). Hostile/empty SVGs throw and
-      // fail verification below.
-      if (verified && isSvgContentType(row.mime_type)) {
-        await this.sanitizeStoredSvg(row.file_key, row.mime_type);
-      } else if (verified && isMagicByteVerifiable(row.mime_type)) {
-        // HEAD only echoes the client-declared content-type, which is trivially spoofable
-        // (e.g. an HTML/script payload uploaded as image/png). Verify the actual leading
-        // bytes match the declared type before the object becomes servable.
-        verified = await this.verifyStoredObjectMagicBytes(row.file_key, row.mime_type);
+      if (verified) {
+        verified = await this.publishConfirmedObject(sourceKey, finalKey, row.mime_type);
       }
     } catch (error) {
       logger.warn(
-        { publicId: validatedPublicId, fileKey: row.file_key, error },
+        { publicId: validatedPublicId, fileKey: sourceKey, error },
         'upload.confirm.verifyFailed',
       );
       verified = false;
     }
 
-    const updated = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.markStatusByPublicId(
-        validatedPublicId,
-        verified ? UPLOAD_STATUS.UPLOADED : UPLOAD_STATUS.FAILED,
-      ),
-    );
-    if (!updated) throw new NotFoundError('Upload');
-
     if (!verified) {
+      const failedRow = await withUserDatabaseContext(userPublicId, () =>
+        this.repository.markStatusByPublicId(validatedPublicId, UPLOAD_STATUS.FAILED),
+      );
+      if (!failedRow) throw new NotFoundError('Upload');
       throw new ValidationError('errors:uploadVerificationFailed', undefined, {
         file: ['Uploaded object could not be verified against its declared type and size'],
       });
+    }
+
+    // Repoint the row at the immutable final key in the same update that marks it UPLOADED, so a
+    // servable row never references the overwritable pending key.
+    const updated = await withUserDatabaseContext(userPublicId, () =>
+      this.repository.markConfirmedByPublicId(validatedPublicId, finalKey),
+    );
+    if (!updated) throw new NotFoundError('Upload');
+
+    // Best-effort: drop the now-published pending object so it is not billed or swept.
+    if (pendingKeyed) {
+      const pendingObjectDeleted = await this.objectStorage.deleteObject(sourceKey);
+      if (!pendingObjectDeleted) {
+        logger.warn(
+          { publicId: validatedPublicId, pendingKey: sourceKey },
+          'upload.confirm.pendingObjectDeleteFailed',
+        );
+      }
     }
 
     return this.toUploadDetail(updated, userPublicId);
   }
 
   /**
-   * Fetches a stored SVG object, strips XSS vectors (scripts, event handlers, hostile filters)
-   * via {@link sanitizeSvgBuffer}, and re-writes the sanitized bytes to the same key when they
-   * differ from the original. Throws when sanitization yields an empty document so the caller
-   * fails verification for hostile or zero-byte SVGs.
+   * Publishes the verified pending object to its immutable `finalKey`. SVGs are sanitized in
+   * transit (and rejected when hostile/empty); magic-byte-verifiable types have their leading bytes
+   * checked against the declared content-type, then the object is server-side copied to `finalKey`.
+   * When `finalKey === sourceKey` (legacy in-place row) nothing is copied. Returns false when
+   * magic-byte verification fails so the caller marks the row FAILED.
    */
-  private async sanitizeStoredSvg(fileKey: string, contentType: string): Promise<void> {
-    const object = await this.objectStorage.getObject(fileKey);
-    const sanitized = sanitizeSvgBuffer(object.body);
-    if (!sanitized.equals(object.body)) {
-      await this.objectStorage.putObject({
-        key: fileKey,
-        body: sanitized,
-        contentType,
-      });
+  private async publishConfirmedObject(
+    sourceKey: string,
+    finalKey: string,
+    contentType: string,
+  ): Promise<boolean> {
+    // SVGs are active content: an uploaded <svg onload=…> served with an image/svg+xml type would
+    // execute as stored XSS. Neutralise the bytes before publishing them to the servable key.
+    if (isSvgContentType(contentType)) {
+      await this.publishSanitizedSvg(sourceKey, finalKey, contentType);
+      return true;
     }
+    // HEAD only echoes the client-declared content-type, which is trivially spoofable (e.g. an
+    // HTML/script payload uploaded as image/png). Verify the actual leading bytes before the object
+    // becomes servable.
+    if (isMagicByteVerifiable(contentType)) {
+      const object = await this.objectStorage.getObject(sourceKey);
+      if (!verifyFileMagicBytes(object.body, contentType)) {
+        return false;
+      }
+      if (finalKey !== sourceKey) {
+        await this.objectStorage.copyObject({ sourceKey, destinationKey: finalKey, contentType });
+      }
+      return true;
+    }
+    if (finalKey !== sourceKey) {
+      await this.objectStorage.copyObject({ sourceKey, destinationKey: finalKey, contentType });
+    }
+    return true;
   }
 
   /**
-   * Fetches the stored object and confirms its leading magic bytes match `contentType`.
-   * Returns false (so the caller fails verification and marks the row FAILED) when the
-   * content does not match the declared type — closing the spoofed-content-type vector
-   * where, e.g., an HTML/script payload is uploaded under an image MIME type.
+   * Fetches the pending SVG, strips XSS vectors (scripts, event handlers, hostile filters) via
+   * {@link sanitizeSvgBuffer}, and writes the sanitized bytes to `finalKey`. Always writes when
+   * `finalKey` differs from the source (the publish step); for a legacy in-place row (same key) it
+   * writes only when sanitization changed the bytes. Throws when sanitization yields an empty
+   * document so the caller fails verification for hostile or zero-byte SVGs.
    */
-  private async verifyStoredObjectMagicBytes(
-    fileKey: string,
+  private async publishSanitizedSvg(
+    sourceKey: string,
+    finalKey: string,
     contentType: string,
-  ): Promise<boolean> {
-    const object = await this.objectStorage.getObject(fileKey);
-    return verifyFileMagicBytes(object.body, contentType);
+  ): Promise<void> {
+    const object = await this.objectStorage.getObject(sourceKey);
+    const sanitized = sanitizeSvgBuffer(object.body);
+    if (finalKey !== sourceKey || !sanitized.equals(object.body)) {
+      await this.objectStorage.putObject({ key: finalKey, body: sanitized, contentType });
+    }
   }
 
   private async toUploadDetail(row: UploadRow, userPublicId?: string): Promise<UploadDetailOutput> {

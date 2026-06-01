@@ -16,7 +16,7 @@ function getBearerToken(request: FastifyRequest): string {
 }
 
 async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
-  if (request.auth?.userId || request.auth?.apiKeyPublicId) {
+  if (request.auth) {
     return;
   }
 
@@ -38,6 +38,7 @@ async function authenticate(request: FastifyRequest, _reply: FastifyReply): Prom
     await authSessionService.verifyActiveAccessToken(token);
 
     request.auth = omitUndefined({
+      kind: 'user',
       userId: payload.userId,
       role: payload.role ? (payload.role as GlobalRole) : undefined,
     }) as AuthContext;

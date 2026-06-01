@@ -2,6 +2,7 @@ import { and, desc, eq, gte, lte, type SQL } from 'drizzle-orm';
 import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { logs } from '@/domains/audit/audit.schema.js';
+import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
 import {
   buildDescendingCreatedAtIdCursorCondition,
   createOpaqueCursorFromRow,
@@ -42,6 +43,21 @@ function buildAuditFilterConditions(filters: AuditLogFilters): SQL[] {
 export class AuditRepository {
   async insert(entry: NewAuditLog): Promise<void> {
     await getRequestDatabase().insert(logs).values(entry);
+  }
+
+  /**
+   * Resolves an organization API key's internal id from its public id under the active
+   * organization RLS context (`tenancy.api_keys` is tenant-isolated). Returns `null` for an
+   * unknown key so the caller skips writing an unattributable audit row. Soft-deleted keys are
+   * intentionally still resolvable so actions remain attributable after the key is later revoked.
+   */
+  async resolveActorApiKeyId(apiKeyPublicId: string): Promise<number | null> {
+    const rows = await getRequestDatabase()
+      .select({ id: api_keys.id })
+      .from(api_keys)
+      .where(eq(api_keys.public_id, apiKeyPublicId))
+      .limit(1);
+    return rows[0]?.id ?? null;
   }
 
   async findWithFilters(filters: AuditLogFilters) {

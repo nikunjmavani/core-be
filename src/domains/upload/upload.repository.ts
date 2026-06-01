@@ -3,7 +3,10 @@ import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { uploads } from '@/domains/upload/upload.schema.js';
-import { UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE } from '@/domains/upload/upload.constants.js';
+import {
+  UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE,
+  UPLOAD_STATUS,
+} from '@/domains/upload/upload.constants.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 
@@ -136,6 +139,20 @@ export class UploadRepository {
     const rows = await getRequestDatabase()
       .update(uploads)
       .set({ status, updated_at: databaseNowTimestamp })
+      .where(and(eq(uploads.public_id, public_id), isNull(uploads.deleted_at)))
+      .returning();
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Transitions a PENDING upload to UPLOADED and repoints `file_key` to the final (immutable) key
+   * the confirm step published the verified bytes to. One atomic update so the row never points at
+   * the still-overwritable pending key once it is servable.
+   */
+  async markConfirmedByPublicId(public_id: string, file_key: string): Promise<UploadRow | null> {
+    const rows = await getRequestDatabase()
+      .update(uploads)
+      .set({ status: UPLOAD_STATUS.UPLOADED, file_key, updated_at: databaseNowTimestamp })
       .where(and(eq(uploads.public_id, public_id), isNull(uploads.deleted_at)))
       .returning();
     return rows[0] ?? null;

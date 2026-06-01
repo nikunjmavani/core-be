@@ -13,6 +13,7 @@ import {
 import { auditSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
+import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
 
 /**
  * Drizzle definition for `audit.logs` — the append-only ledger of actor/resource
@@ -29,6 +30,13 @@ export const logs = auditSchema
       actor_user_id: bigint('actor_user_id', { mode: 'number' }).references(() => users.id, {
         onDelete: 'set null',
       }),
+      // Set instead of actor_user_id when the action was performed by an organization API key
+      // (which has no acting user). Nullable + ON DELETE SET NULL like actor_user_id; the app
+      // guarantees at least one of the two actor columns is set at write time.
+      actor_api_key_id: bigint('actor_api_key_id', { mode: 'number' }).references(
+        () => api_keys.id,
+        { onDelete: 'set null' },
+      ),
       target_user_id: bigint('target_user_id', { mode: 'number' }).references(() => users.id, {
         onDelete: 'set null',
       }),

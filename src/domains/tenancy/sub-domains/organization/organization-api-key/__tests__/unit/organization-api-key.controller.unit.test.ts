@@ -52,7 +52,7 @@ describe('createOrganizationApiKeyController', () => {
       controller.createApiKey(
         mockRequest({
           auth: {
-            userId: '',
+            kind: 'apiKey' as const,
             apiKeyPublicId,
             apiKeyScopes: ['api-key:manage'],
             organizationPublicId,
@@ -69,7 +69,7 @@ describe('createOrganizationApiKeyController', () => {
       controller.rotateApiKey(
         mockRequest({
           auth: {
-            userId: '',
+            kind: 'apiKey' as const,
             apiKeyPublicId,
             apiKeyScopes: ['api-key:manage'],
             organizationPublicId,
@@ -85,7 +85,7 @@ describe('createOrganizationApiKeyController', () => {
     await controller.updateApiKey(
       mockRequest({
         auth: {
-          userId: '',
+          kind: 'apiKey' as const,
           apiKeyPublicId,
           apiKeyScopes: ['api-key:manage'],
           organizationPublicId,
@@ -94,6 +94,11 @@ describe('createOrganizationApiKeyController', () => {
       mockReply(),
     );
 
-    expect(service.update).toHaveBeenCalledWith(organizationPublicId, apiKeyPublicId, {}, '');
+    expect(service.update).toHaveBeenCalledWith(
+      organizationPublicId,
+      apiKeyPublicId,
+      {},
+      undefined,
+    );
   });
 });
