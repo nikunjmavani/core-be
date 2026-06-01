@@ -1,0 +1,50 @@
+name: CodeQL
+
+# Semantic (taint-tracking) security analysis for JS/TS. Complements the Semgrep
+# SAST job in pr-ci.yml: CodeQL traces dataflow from request-input sources to
+# dangerous sinks (SQL, exec, redirects) that pattern-based SAST can miss.
+# Results land in the repository Security tab.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+  schedule:
+    # Weekly full scan (Monday 04:27 UTC) so advisories that land between pushes
+    # are still surfaced.
+    - cron: '27 4 * * 1'
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # Required to upload analysis results to the Security tab.
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@84498526a009a99c875e83ef4821a8ba52de7c22 # codeql-bundle-v2.25.5
+        with:
+          languages: javascript-typescript
+          # JS/TS needs no compilation; analyze source directly.
+          build-mode: none
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@84498526a009a99c875e83ef4821a8ba52de7c22 # codeql-bundle-v2.25.5
+        with:
+          category: '/language:javascript-typescript'

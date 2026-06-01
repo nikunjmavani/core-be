@@ -1,0 +1,19 @@
+# CodeQL analysis configuration for core-be.
+# Security-focused query suite (complements Semgrep SAST); quality queries are
+# intentionally omitted because Biome + the custom validators already cover
+# maintainability, keeping CodeQL findings high-signal.
+name: core-be CodeQL config
+
+queries:
+  - uses: security-extended
+
+# Exclude generated output, migrations, and tests from analysis so findings
+# focus on application + tooling source (src/, tooling/).
+paths-ignore:
+  - dist
+  - migrations
+  - coverage
+  - coverage-db-bound
+  - coverage-fast
+  - '**/__tests__/**'
+  - src/tests/**
