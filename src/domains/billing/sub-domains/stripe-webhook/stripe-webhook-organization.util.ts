@@ -48,16 +48,21 @@ export async function resolveOrganizationPublicIdForStripeEvent(
   const stripeObject = event.data.object as Stripe.Subscription;
 
   const fromMetadata = readOrganizationPublicIdFromStripeMetadata(stripeObject.metadata);
-  if (fromMetadata !== undefined) {
-    return fromMetadata;
-  }
+  if (stripeEventRequiresOrganizationContext(event.type)) {
+    const fromSubscription = await resolveOrganizationPublicIdByProviderSubscriptionId(
+      stripeObject.id,
+    );
+    if (
+      fromMetadata !== undefined &&
+      fromSubscription !== undefined &&
+      fromMetadata !== fromSubscription
+    ) {
+      throw new Error(
+        `Stripe webhook event ${event.id} (${event.type}) has mismatched organization metadata for subscription ${stripeObject.id}`,
+      );
+    }
 
-  if (
-    event.type === 'customer.subscription.created' ||
-    event.type === 'customer.subscription.updated' ||
-    event.type === 'customer.subscription.deleted'
-  ) {
-    return resolveOrganizationPublicIdByProviderSubscriptionId(stripeObject.id);
+    return fromMetadata ?? fromSubscription;
   }
 
   return undefined;
