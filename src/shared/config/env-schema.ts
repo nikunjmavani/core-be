@@ -406,7 +406,7 @@ const envSchemaBase = z.object({
     .transform((v) => v === 'true' || v === '1'),
   OPENAPI_SPEC_PATH: z.string().min(1).optional(),
 
-  // Response encryption (obfuscation layer — AES-256-CBC; hides JSON from DevTools Network tab)
+  // Response encryption (obfuscation layer — AES-256-GCM; hides JSON from DevTools Network tab)
   ENABLE_RESPONSE_ENCRYPTION: z
     .string()
     .optional()
