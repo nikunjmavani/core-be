@@ -1,3 +1,5 @@
+import { randomInt } from 'node:crypto';
+
 /** Maximum length after trim; Stripe-style keys are typically shorter. */
 export const IDEMPOTENCY_KEY_MAX_LENGTH = 255;
 
@@ -82,11 +84,12 @@ export function buildIdempotencyClaimCounterShardKey(shardIndex: number): string
  * instead of contending on one hot Redis slot.
  *
  * @remarks
- * Uses `Math.random` deliberately: shard selection only needs even-ish spread for load, not
- * cryptographic unpredictability. The total claim count is the sum across all shards.
+ * Uses `crypto.randomInt` for a uniform, unbiased shard spread. Shard selection needs even
+ * distribution for load (the CSPRNG strength is incidental). The total claim count is the sum
+ * across all shards.
  */
 export function selectIdempotencyClaimCounterShardKey(): string {
-  const shardIndex = Math.floor(Math.random() * IDEMPOTENCY_CLAIM_COUNTER_SHARD_COUNT);
+  const shardIndex = randomInt(IDEMPOTENCY_CLAIM_COUNTER_SHARD_COUNT);
   return buildIdempotencyClaimCounterShardKey(shardIndex);
 }
 
