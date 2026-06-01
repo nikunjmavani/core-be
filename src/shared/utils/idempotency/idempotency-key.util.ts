@@ -92,14 +92,16 @@ export function selectIdempotencyClaimCounterShardKey(): string {
 
 /**
  * Builds a scoped Redis key for idempotency caching.
- * Keys are namespaced by actor, organization, request fingerprint, and client key to prevent
- * cross-tenant and cross-route replay.
+ *
+ * @remarks
+ * Keys are namespaced by organization and actor (never anonymous in practice — see
+ * {@link hasAuthenticatedIdempotencyActor}) plus the client-supplied key, so the same key cannot
+ * replay across tenants or actors. The request fingerprint (method + route + body) is intentionally
+ * NOT part of the key: it is stored inside the cache entry and compared on a hit, so reusing one
+ * key for a *different* payload collides here and is rejected with a 422 rather than silently
+ * executing as a second, independent operation (Stripe-style key-reuse semantics).
  */
-export function buildIdempotencyCacheKey(
-  idempotencyKey: string,
-  scope: IdempotencyScope,
-  requestFingerprint?: string,
-): string {
+export function buildIdempotencyCacheKey(idempotencyKey: string, scope: IdempotencyScope): string {
   const actorSegment =
     scope.apiKeyPublicId && scope.apiKeyPublicId.length > 0
       ? `api-key:${scope.apiKeyPublicId}`
@@ -107,9 +109,5 @@ export function buildIdempotencyCacheKey(
         ? scope.userId
         : 'anonymous';
   const organizationSegment = scope.organizationId ?? 'none';
-  const fingerprintSegment =
-    typeof requestFingerprint === 'string' && requestFingerprint.length > 0
-      ? requestFingerprint
-      : 'none';
-  return `idempotency:${organizationSegment}:${actorSegment}:${fingerprintSegment}:${idempotencyKey}`;
+  return `idempotency:${organizationSegment}:${actorSegment}:${idempotencyKey}`;
 }

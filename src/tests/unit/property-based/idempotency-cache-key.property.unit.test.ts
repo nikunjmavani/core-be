@@ -18,7 +18,7 @@ describe('buildIdempotencyCacheKey (property)', () => {
         segmentArbitrary,
         (key, userId, organizationId) => {
           const cacheKey = buildIdempotencyCacheKey(key, { userId, organizationId });
-          expect(cacheKey).toBe(`idempotency:${organizationId}:${userId}:none:${key}`);
+          expect(cacheKey).toBe(`idempotency:${organizationId}:${userId}:${key}`);
         },
       ),
       propertyOptions,
@@ -28,7 +28,7 @@ describe('buildIdempotencyCacheKey (property)', () => {
   it('uses anonymous and none placeholders when scope is omitted', () => {
     fc.assert(
       fc.property(segmentArbitrary, (key) => {
-        expect(buildIdempotencyCacheKey(key, {})).toBe(`idempotency:none:anonymous:none:${key}`);
+        expect(buildIdempotencyCacheKey(key, {})).toBe(`idempotency:none:anonymous:${key}`);
       }),
       propertyOptions,
     );

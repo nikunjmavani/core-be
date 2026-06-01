@@ -31,12 +31,16 @@ interface CompletedIdempotencyEntry {
   statusCode: number;
   body: string;
   headers: Record<string, string>;
+  /** Fingerprint (method + route + body) of the request that produced this entry; used to reject key reuse with a different payload. */
+  fingerprint?: string;
 }
 
 interface InFlightIdempotencyEntry {
   state: 'in_flight';
   claimedAt: number;
   requestId?: string;
+  /** Fingerprint of the in-flight request; a later request reusing the key with a different fingerprint is rejected. */
+  fingerprint?: string;
 }
 
 type IdempotencyEntry = CompletedIdempotencyEntry | InFlightIdempotencyEntry;
@@ -79,6 +83,9 @@ function parseIdempotencyEntry(raw: string): IdempotencyEntry {
           statusCode: completed.statusCode,
           body: completed.body,
           headers: completed.headers as Record<string, string>,
+          ...(typeof completed.fingerprint === 'string'
+            ? { fingerprint: completed.fingerprint }
+            : {}),
         };
       }
     }
@@ -88,6 +95,7 @@ function parseIdempotencyEntry(raw: string): IdempotencyEntry {
         state: 'in_flight',
         claimedAt: typeof inFlight.claimedAt === 'number' ? inFlight.claimedAt : 0,
         ...(typeof inFlight.requestId === 'string' ? { requestId: inFlight.requestId } : {}),
+        ...(typeof inFlight.fingerprint === 'string' ? { fingerprint: inFlight.fingerprint } : {}),
       };
     }
     return { state: 'in_flight', claimedAt: 0 };
@@ -156,6 +164,31 @@ function sendInFlightConflict(request: FastifyRequest, reply: FastifyReply): Fas
 }
 
 /**
+ * Rejects a request that reuses an `Idempotency-Key` already associated with a *different* request
+ * payload (method + route + body fingerprint mismatch). Returns 422 so the client knows the key was
+ * reused incorrectly rather than retrying the same operation — matching Stripe-style semantics and
+ * preventing a divergent second operation from executing under the same key.
+ */
+function sendIdempotencyKeyReuseConflict(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): FastifyReply {
+  const detail = translateRequestMessage(
+    request,
+    'errors:idempotencyKeyReuse',
+    'This idempotency key was already used with a different request payload',
+  );
+  reply.status(422);
+  return reply.send({
+    error: {
+      type: 'request_error',
+      code: 'idempotency_key_reuse',
+      detail,
+    },
+  });
+}
+
+/**
  * Short-lived placeholder TTL. Once a real response is computed, `onSend` overwrites the
  * key with the real cached response and the standard 24h TTL. Keeping the in-flight
  * window short avoids 24h "ghost" placeholders if the worker crashes hard before `onSend`
@@ -204,7 +237,7 @@ async function idempotencyClaimPreHandler(
   });
   requestWithIdempotency._idempotencyRequestFingerprint = requestFingerprint;
 
-  const cacheKey = buildIdempotencyCacheKey(idempotencyKey, scope, requestFingerprint);
+  const cacheKey = buildIdempotencyCacheKey(idempotencyKey, scope);
   requestWithIdempotency._idempotencyScope = scope;
 
   let cached: string | null;
@@ -213,6 +246,11 @@ async function idempotencyClaimPreHandler(
     cached = await redisConnection.get(cacheKey);
     if (cached !== null) {
       const entry = parseIdempotencyEntry(cached);
+      // Same key, different payload → reject (do not execute a divergent second operation).
+      // Entries written before this rollout carry no fingerprint; skip the check for them.
+      if (entry.fingerprint !== undefined && entry.fingerprint !== requestFingerprint) {
+        return sendIdempotencyKeyReuseConflict(request, reply);
+      }
       if (entry.state === 'completed') {
         return sendCachedIdempotencyResponse(reply, entry);
       }
@@ -223,6 +261,7 @@ async function idempotencyClaimPreHandler(
       state: 'in_flight',
       claimedAt: Date.now(),
       requestId: typeof request.id === 'string' ? request.id : String(request.id ?? ''),
+      fingerprint: requestFingerprint,
     };
     claimed = await redisConnection.set(
       cacheKey,
@@ -272,6 +311,9 @@ async function idempotencyClaimPreHandler(
       if (rawRace !== null) raceEntry = parseIdempotencyEntry(rawRace);
     } catch (raceError) {
       logger.warn({ error: raceError, idempotencyKey }, 'idempotency.cache.race.read.failed');
+    }
+    if (raceEntry?.fingerprint !== undefined && raceEntry.fingerprint !== requestFingerprint) {
+      return sendIdempotencyKeyReuseConflict(request, reply);
     }
     if (raceEntry?.state === 'completed') {
       return sendCachedIdempotencyResponse(reply, raceEntry);
@@ -418,7 +460,7 @@ export async function idempotencyOnResponse(
 
   const scope = requestWithIdempotency._idempotencyScope ?? resolveIdempotencyScope(request);
   const requestFingerprint = requestWithIdempotency._idempotencyRequestFingerprint;
-  const cacheKey = buildIdempotencyCacheKey(idempotencyKey, scope, requestFingerprint);
+  const cacheKey = buildIdempotencyCacheKey(idempotencyKey, scope);
   requestWithIdempotency._idempotencyClaimed = false;
 
   const statusCode = reply.statusCode;
@@ -439,6 +481,7 @@ export async function idempotencyOnResponse(
       statusCode: pending.statusCode,
       body: pending.body,
       headers: pending.headers,
+      ...(requestFingerprint !== undefined ? { fingerprint: requestFingerprint } : {}),
     };
     try {
       await redisConnection.set(
