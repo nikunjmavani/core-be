@@ -1,6 +1,16 @@
-export type RouteAccess = 'PUBLIC' | 'AUTH' | `ROLE: ${string}` | `PERM: ${string}`;
+export type RouteAccess =
+  | 'PUBLIC'
+  | 'AUTH'
+  | `ROLE: ${string}`
+  | `PERM: ${string}`
+  | `TOKEN: ${string}`;
 
-export type RegistryAccess = 'public' | 'authenticated' | 'global-role' | 'org-permission';
+export type RegistryAccess =
+  | 'public'
+  | 'authenticated'
+  | 'global-role'
+  | 'org-permission'
+  | 'bearer-token';
 
 export type ParsedRoute = {
   method: string;

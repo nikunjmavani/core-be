@@ -4,7 +4,7 @@ export function extractRouteSnippet(content: string, methodIndex: number): strin
   const rest = content.slice(methodIndex);
   const nextRouteMatch = rest
     .slice(1)
-    .match(/\n\s*(?:app|zodApplication)\.(get|post|patch|put|delete)\s*[(<]/);
+    .match(/\n\s*[a-zA-Z][\w$]*\.(get|post|patch|put|delete)\s*[(<]/);
   const endIndex =
     nextRouteMatch?.index !== undefined ? nextRouteMatch.index + 1 : Math.min(rest.length, 500);
   return rest.slice(0, endIndex);

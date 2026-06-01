@@ -63,6 +63,7 @@ describe('generate-route-catalog', () => {
     expect(toRegistryAccess('AUTH')).toBe('authenticated');
     expect(toRegistryAccess('ROLE: admin')).toBe('global-role');
     expect(toRegistryAccess('PERM: organization:update')).toBe('org-permission');
+    expect(toRegistryAccess('TOKEN: metrics')).toBe('bearer-token');
   });
 
   it('inferDomainSlug normalizes API path segments', () => {
@@ -70,6 +71,7 @@ describe('generate-route-catalog', () => {
     expect(inferDomainSlug('upload', '/api/v1/uploads/')).toBe('upload');
     expect(inferDomainSlug('billing', '/api/v1/billing/plans')).toBe('billing');
     expect(inferDomainSlug('health', '/readyz')).toBe('health');
+    expect(inferDomainSlug('ops', '/internal/ops/circuit-breakers')).toBe('ops');
   });
 
   it('collectAllParsedRoutes includes billing, notify, health, and MCP routes', () => {
@@ -81,6 +83,10 @@ describe('generate-route-catalog', () => {
     expect(paths).toContain('GET /livez');
     expect(paths).toContain('GET /readyz');
     expect(paths).toContain('POST /api/v1/mcp');
+    expect(paths).toContain('POST /api/v1/billing/stripe/webhook');
+    expect(paths).toContain('GET /mcp');
+    expect(paths).toContain('GET /metrics');
+    expect(paths).toContain('GET /internal/ops/circuit-breakers');
     expect(routes.length).toBeGreaterThan(100);
   });
 });

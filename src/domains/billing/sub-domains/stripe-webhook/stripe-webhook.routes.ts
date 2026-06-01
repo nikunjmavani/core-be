@@ -49,25 +49,18 @@ export function stripeWebhookRoutes(): FastifyPluginAsync {
       controller.handleWebhook,
     );
 
-    await app.register(
-      async (stripeRoutes) => {
-        const stripeZodApplication = stripeRoutes.withTypeProvider<ZodTypeProvider>();
-        await stripeRoutes.register(stripeWebhookIngressPlugin);
-        stripeZodApplication.post(
-          '/webhook',
-          {
-            ...WEBHOOK_RATE_LIMIT,
-            schema: {
-              summary: 'Stripe webhook receiver',
-              description:
-                'Public endpoint for Stripe billing events. Verifies the `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET` and enqueues durable processing. Raw JSON body is required for signature verification.',
-              tags: ['Billing', 'Stripe Webhook'],
-            },
-          },
-          controller.handleWebhook,
-        );
+    zodApplication.post(
+      '/stripe/webhook',
+      {
+        ...WEBHOOK_RATE_LIMIT,
+        schema: {
+          summary: 'Stripe webhook receiver',
+          description:
+            'Public endpoint for Stripe billing events. Verifies the `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET` and enqueues durable processing. Raw JSON body is required for signature verification.',
+          tags: ['Billing', 'Stripe Webhook'],
+        },
       },
-      { prefix: '/stripe' },
+      controller.handleWebhook,
     );
   };
 }

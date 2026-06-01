@@ -15,10 +15,13 @@ export const DOMAIN_LABELS: Record<string, string> = {
   '/api/v1/notify': 'NOTIFY',
   '/api/v1/uploads': 'UPLOAD',
   '/api/v1/mcp': 'MCP',
+  '/mcp': 'MCP',
   '/livez': 'HEALTH',
+  '/metrics': 'METRICS',
+  '/internal/ops': 'OPS',
 };
 
-export const ROUTE_METHOD_PATTERN = /(?:app|zodApplication)\.(get|post|patch|put|delete)/g;
+export const ROUTE_METHOD_PATTERN = /\b[a-zA-Z][\w$]*\.(get|post|patch|put|delete)\s*[(<]/g;
 export const ROUTE_PATH_PATTERN = /['"]([/][^'"]*)['"]/;
 
 export const SUPPLEMENTAL_ROUTES: ParsedRoute[] = [
@@ -39,15 +42,50 @@ export const SUPPLEMENTAL_ROUTES: ParsedRoute[] = [
   {
     method: 'GET',
     fullPath: '/api/v1/mcp',
-    access: 'AUTH',
+    access: 'ROLE: super_admin, admin',
     domainKey: '/api/v1/mcp',
     domain: 'mcp',
   },
   {
     method: 'POST',
     fullPath: '/api/v1/mcp',
-    access: 'AUTH',
+    access: 'ROLE: super_admin, admin',
     domainKey: '/api/v1/mcp',
     domain: 'mcp',
+  },
+  {
+    method: 'GET',
+    fullPath: '/mcp',
+    access: 'ROLE: super_admin, admin',
+    domainKey: '/mcp',
+    domain: 'mcp',
+  },
+  {
+    method: 'POST',
+    fullPath: '/mcp',
+    access: 'ROLE: super_admin, admin',
+    domainKey: '/mcp',
+    domain: 'mcp',
+  },
+  {
+    method: 'GET',
+    fullPath: '/metrics',
+    access: 'TOKEN: metrics',
+    domainKey: '/metrics',
+    domain: 'metrics',
+  },
+  {
+    method: 'GET',
+    fullPath: '/internal/ops/circuit-breakers',
+    access: 'TOKEN: metrics',
+    domainKey: '/internal/ops',
+    domain: 'ops',
+  },
+  {
+    method: 'POST',
+    fullPath: '/internal/ops/circuit-breakers/:circuitName/reset',
+    access: 'TOKEN: metrics',
+    domainKey: '/internal/ops',
+    domain: 'ops',
   },
 ];

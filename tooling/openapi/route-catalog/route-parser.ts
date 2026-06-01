@@ -32,7 +32,9 @@ export function inferSubDomainLabel(subDomain: string | undefined): string | und
 
 export function inferDomainSlug(domainFolder: string, fullPath: string): string {
   if (fullPath.startsWith('/livez') || fullPath.startsWith('/readyz')) return 'health';
-  if (fullPath.startsWith('/api/v1/mcp')) return 'mcp';
+  if (fullPath.startsWith('/api/v1/mcp') || fullPath.startsWith('/mcp')) return 'mcp';
+  if (fullPath.startsWith('/metrics')) return 'metrics';
+  if (fullPath.startsWith('/internal/ops')) return 'ops';
   const apiSegment = fullPath.split('/')[3];
   if (apiSegment === 'users') return 'user';
   if (apiSegment === 'uploads') return 'upload';
@@ -43,6 +45,7 @@ export function toRegistryAccess(access: RouteAccess): RegistryAccess {
   if (access === 'PUBLIC') return 'public';
   if (access === 'AUTH') return 'authenticated';
   if (access.startsWith('ROLE:')) return 'global-role';
+  if (access.startsWith('TOKEN:')) return 'bearer-token';
   return 'org-permission';
 }
 
