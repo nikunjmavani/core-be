@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
@@ -17,7 +18,11 @@ import type {
 export function validateCreateOrganization(data: unknown): CreateOrganizationInput {
   const result = createOrganizationDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -26,7 +31,11 @@ export function validateCreateOrganization(data: unknown): CreateOrganizationInp
 export function validateUpdateOrganization(data: unknown): UpdateOrganizationInput {
   const result = updateOrganizationDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -44,7 +53,7 @@ export function validateListOrganizationsQuery(data: unknown): ListOrganizations
     throw new ValidationError(
       'errors:validation.invalidPagination',
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -54,7 +63,11 @@ export function validateListOrganizationsQuery(data: unknown): ListOrganizations
 export function validateUploadLogo(data: unknown): UploadLogoInput {
   const result = uploadLogoDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }

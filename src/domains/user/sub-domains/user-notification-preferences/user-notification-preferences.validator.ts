@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
   PutNotificationPreferencesDto,
@@ -19,7 +20,7 @@ export function validatePutUserNotificationPreferences(
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;

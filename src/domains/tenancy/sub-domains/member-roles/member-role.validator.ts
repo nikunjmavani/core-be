@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
@@ -19,7 +20,11 @@ import type {
 export function validateCreateMemberRole(data: unknown): CreateMemberRoleInput {
   const result = createMemberRoleDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -32,7 +37,11 @@ export function validateCreateMemberRole(data: unknown): CreateMemberRoleInput {
 export function validateUpdateMemberRole(data: unknown): UpdateMemberRoleInput {
   const result = updateMemberRoleDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -49,7 +58,7 @@ export function validateListMemberRolesQuery(data: unknown): ListMemberRolesQuer
     throw new ValidationError(
       'errors:validation.invalidPagination',
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;

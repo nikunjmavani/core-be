@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import { getPlanParamsDto, type GetPlanParamsInput } from './plan.dto.js';
 
@@ -13,7 +14,7 @@ export function validateGetPlanParams(params: unknown): GetPlanParamsInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;

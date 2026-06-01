@@ -14,8 +14,8 @@ export const webhookDeliveryJobDataSchema = z
     organizationPublicId: z.string().min(1).max(21),
     requestId: z.string().min(1).max(128).optional(),
   })
-  .merge(traceContextJobFieldsSchema)
-  .merge(dlqReplayJobFieldsSchema);
+  .extend(traceContextJobFieldsSchema.shape)
+  .extend(dlqReplayJobFieldsSchema.shape);
 
 /** Type inferred from {@link webhookDeliveryJobDataSchema}; what the worker receives after parsing. */
 export type WebhookDeliveryJobDataValidated = z.infer<typeof webhookDeliveryJobDataSchema>;

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
   createOrganizationNotificationPolicyDto,
@@ -12,7 +13,11 @@ export function validateCreateOrganizationNotificationPolicy(
 ): CreateOrganizationNotificationPolicyInput {
   const result = createOrganizationNotificationPolicyDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -23,7 +28,11 @@ export function validateUpdateOrganizationNotificationPolicy(
 ): UpdateOrganizationNotificationPolicyInput {
   const result = updateOrganizationNotificationPolicyDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }

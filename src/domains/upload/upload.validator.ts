@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import path from 'node:path';
 import { ValidationError } from '@/shared/errors/index.js';
 import { createUploadDto, uploadPublicIdParamDto } from './upload.dto.js';
@@ -23,7 +24,7 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
     throw new ValidationError(
       'errors:invalidUploadInput',
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
 
@@ -125,7 +126,11 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
 export function validateUploadPublicIdParam(public_id: string): string {
   const parsed = uploadPublicIdParamDto.safeParse({ publicId: public_id });
   if (!parsed.success) {
-    throw new ValidationError('errors:invalidInput', undefined, parsed.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(parsed.error).fieldErrors,
+    );
   }
   return validatePublicIdParam(parsed.data.publicId, 'publicId');
 }

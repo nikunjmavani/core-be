@@ -13,7 +13,7 @@ export const userDataExportJobDataSchema = z
     userPublicId: z.string().min(1).max(21),
     userInternalId: z.number().int().positive(),
   })
-  .merge(traceContextJobFieldsSchema);
+  .extend(traceContextJobFieldsSchema.shape);
 
 /** Inferred BullMQ job payload type for the `user-data-export` queue. */
 export type UserDataExportJobData = z.infer<typeof userDataExportJobDataSchema>;

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
   webauthnAuthenticateOptionsDto,
@@ -9,7 +10,11 @@ import {
 export function validateWebauthnAuthenticateOptions(body: unknown) {
   const parsed = webauthnAuthenticateOptionsDto.safeParse(body ?? {});
   if (!parsed.success) {
-    throw new ValidationError('errors:invalidInput', undefined, parsed.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(parsed.error).fieldErrors,
+    );
   }
   return parsed.data;
 }
@@ -18,7 +23,11 @@ export function validateWebauthnAuthenticateOptions(body: unknown) {
 export function validateWebauthnRegisterVerify(body: unknown) {
   const parsed = webauthnRegisterVerifyDto.safeParse(body);
   if (!parsed.success) {
-    throw new ValidationError('errors:invalidInput', undefined, parsed.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(parsed.error).fieldErrors,
+    );
   }
   return parsed.data;
 }
@@ -27,7 +36,11 @@ export function validateWebauthnRegisterVerify(body: unknown) {
 export function validateWebauthnAuthenticateVerify(body: unknown) {
   const parsed = webauthnAuthenticateVerifyDto.safeParse(body);
   if (!parsed.success) {
-    throw new ValidationError('errors:invalidInput', undefined, parsed.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(parsed.error).fieldErrors,
+    );
   }
   return parsed.data;
 }

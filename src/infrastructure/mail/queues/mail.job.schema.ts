@@ -13,8 +13,8 @@ export const mailJobDataSchema = z
     mailOutboxId: z.number().int().positive(),
     requestId: z.string().min(1).max(128).optional(),
   })
-  .merge(traceContextJobFieldsSchema)
-  .merge(dlqReplayJobFieldsSchema);
+  .extend(traceContextJobFieldsSchema.shape)
+  .extend(dlqReplayJobFieldsSchema.shape);
 
 /** Validated mail job payload — `z.infer<typeof mailJobDataSchema>`. */
 export type MailJobDataValidated = z.infer<typeof mailJobDataSchema>;

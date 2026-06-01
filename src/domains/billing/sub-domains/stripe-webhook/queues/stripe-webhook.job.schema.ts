@@ -8,8 +8,8 @@ export const stripeWebhookJobDataSchema = z
     stripeEventId: z.string().min(1),
     requestId: z.string().min(1).max(128).optional(),
   })
-  .merge(traceContextJobFieldsSchema)
-  .merge(dlqReplayJobFieldsSchema);
+  .extend(traceContextJobFieldsSchema.shape)
+  .extend(dlqReplayJobFieldsSchema.shape);
 
 /** Inferred payload type for jobs on the `stripe-webhook` queue (validated form). */
 export type StripeWebhookJobDataValidated = z.infer<typeof stripeWebhookJobDataSchema>;
