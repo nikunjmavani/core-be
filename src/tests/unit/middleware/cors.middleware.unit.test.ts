@@ -40,6 +40,7 @@ describe('cors.middleware', () => {
       expect.objectContaining({
         origin: ['https://app.example.com', 'https://admin.example.com'],
         credentials: true,
+        allowedHeaders: expect.arrayContaining(['X-Captcha-Token']),
       }),
     );
   });
