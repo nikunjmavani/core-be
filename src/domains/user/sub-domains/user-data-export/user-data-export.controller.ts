@@ -18,7 +18,7 @@ export function createUserDataExportController(userDataExportService: UserDataEx
     async requestExport(request: FastifyRequest, reply: FastifyReply) {
       const requestId = getRequestIdentifier(request);
       const auth = requireAuth(request);
-      const data = await userDataExportService.requestExport(auth.userId);
+      const data = await userDataExportService.requestExport(auth.userId, { requestId });
       return reply.status(202).send(successResponse(data, requestId));
     },
 

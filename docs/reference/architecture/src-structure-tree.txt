@@ -836,6 +836,7 @@ src/
     │   │   │   ├── assert-database-rls-safety.unit.test.ts
     │   │   │   ├── assert-database-tls-safety.unit.test.ts
     │   │   │   ├── tenant-database.context.test.ts
+    │   │   │   ├── worker-context-database-handle.unit.test.ts
     │   │   │   └── worker-database.context.test.ts
     │   ├── contexts/
     │   │   ├── global-admin-database.context.ts
@@ -924,6 +925,7 @@ src/
     │   │   └── idempotency-cardinality.worker.ts
     │   ├── metrics/
     │   │   ├── bullmq-metrics.ts
+    │   │   ├── business-metrics.ts
     │   │   ├── db-pool-metrics.ts
     │   │   ├── event-loop-metrics.ts
     │   │   ├── http-metrics.plugin.ts
@@ -960,15 +962,31 @@ src/
     ├── queue/
     │   ├── __tests__/
     │   │   └── unit/
+    │   │   │   ├── commit-dispatch.executor.unit.test.ts
+    │   │   │   ├── commit-dispatch.store.unit.test.ts
+    │   │   │   ├── dlq-auto-retry-circuit.util.unit.test.ts
+    │   │   │   ├── dlq-auto-retry.store.unit.test.ts
     │   │   │   ├── dlq-replay.util.unit.test.ts
     │   │   │   ├── poison-job.util.unit.test.ts
     │   │   │   ├── worker-close.util.unit.test.ts
     │   │   │   ├── worker-health.server.unit.test.ts
     │   │   │   └── worker-queue-heartbeat.unit.test.ts
+    │   ├── commit-dispatch/
+    │   │   ├── commit-dispatch-recovery.constants.ts
+    │   │   ├── commit-dispatch-recovery.processor.ts
+    │   │   ├── commit-dispatch-recovery.worker.ts
+    │   │   ├── commit-dispatch.executor.ts
+    │   │   ├── commit-dispatch.store.ts
+    │   │   └── commit-dispatch.types.ts
     │   ├── dlq/
     │   │   ├── dead-letter.repository.ts
     │   │   ├── dead-letter.schema.ts
     │   │   ├── dead-letter.ts
+    │   │   ├── dlq-auto-retry-circuit.util.ts
+    │   │   ├── dlq-auto-retry.constants.ts
+    │   │   ├── dlq-auto-retry.processor.ts
+    │   │   ├── dlq-auto-retry.store.ts
+    │   │   ├── dlq-auto-retry.worker.ts
     │   │   ├── dlq-replay-job-fields.schema.ts
     │   │   ├── dlq-replay.util.ts
     │   │   └── poison-job.util.ts
@@ -1151,6 +1169,7 @@ src/
     │   │   ├── i18n.middleware.ts
     │   │   ├── idempotency.middleware.ts
     │   │   ├── metrics.middleware.ts
+    │   │   ├── ops.middleware.ts
     │   │   ├── recent-step-up.middleware.ts
     │   │   ├── request-context.middleware.ts
     │   │   ├── request-lifecycle.middleware.ts
@@ -1596,6 +1615,7 @@ src/
     │   │   ├── idempotency.middleware.unit.test.ts
     │   │   ├── metrics.middleware.unit.test.ts
     │   │   ├── middleware-order.unit.test.ts
+    │   │   ├── ops.middleware.unit.test.ts
     │   │   ├── organization-rls-transaction.middleware.unit.test.ts
     │   │   ├── rate-limit-fallback-store.unit.test.ts
     │   │   ├── rate-limit-presets.constants.unit.test.ts
@@ -1604,10 +1624,10 @@ src/
     │   │   ├── request-statement-timeout.middleware.unit.test.ts
     │   │   ├── response-format.middleware.hook.unit.test.ts
     │   │   ├── response-format.middleware.unit.test.ts
-    │   │   ├── rls-scoped-contexts-bypass.unit.test.ts
     │   │   ├── shutdown.middleware.unit.test.ts
     │   │   └── tenant.middleware.unit.test.ts
     │   ├── observability/
+    │   │   ├── business-metrics.unit.test.ts
     │   │   ├── db-pool-alert.service.unit.test.ts
     │   │   ├── db-rls-checkout-metrics.unit.test.ts
     │   │   ├── dlq-depth.service.unit.test.ts

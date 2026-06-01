@@ -1,8 +1,7 @@
 import i18next from 'i18next';
-import { eventBus, type DomainEvent } from '@/core/events/event-bus.js';
+import { eventBus, scheduleCommitDispatch, type DomainEvent } from '@/core/events/event-bus.js';
 import { ServiceUnavailableError } from '@/shared/errors/index.js';
 import {
-  dispatchOutboxEmail,
   recordOutboxEmail,
   type MailEnqueueInput,
 } from '@/infrastructure/mail/queues/mail.queue.js';
@@ -19,10 +18,18 @@ import {
 
 async function recordAndScheduleOutboxEmail(
   data: MailEnqueueInput,
-  requestId?: string,
+  options?: { requestId?: string },
 ): Promise<void> {
   const mailOutboxId = await recordOutboxEmail(data);
-  eventBus.onCommit(() => dispatchOutboxEmail(mailOutboxId, requestId ? { requestId } : undefined));
+  const requestId = options?.requestId;
+  await scheduleCommitDispatch(
+    {
+      type: 'mail_outbox',
+      mailOutboxId,
+      requestId,
+    },
+    requestId !== undefined ? { requestId } : undefined,
+  );
 }
 
 async function handleMagicLinkEmail(
@@ -47,7 +54,7 @@ async function handleMagicLinkEmail(
       html,
       tags: [{ name: 'category', value: 'magic-link' }],
     },
-    requestId,
+    requestId !== undefined ? { requestId } : undefined,
   );
 }
 
@@ -73,7 +80,7 @@ async function handlePasswordResetEmail(
       }),
       tags: [{ name: 'category', value: 'password-reset' }],
     },
-    requestId,
+    requestId !== undefined ? { requestId } : undefined,
   );
 }
 
@@ -99,7 +106,7 @@ async function handleEmailVerificationEmail(
       }),
       tags: [{ name: 'category', value: 'email-verification' }],
     },
-    requestId,
+    requestId !== undefined ? { requestId } : undefined,
   );
 }
 

@@ -30,7 +30,6 @@ vi.mock('@/shared/config/env.config.js', () => {
     DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
     DATABASE_SSL_ENABLED: false,
     DATABASE_SSL_REJECT_UNAUTHORIZED: false,
-    DATABASE_RLS_SCOPED_CONTEXTS: false,
     DATABASE_HTTP_STATEMENT_TIMEOUT_MS: 5_000,
     DATABASE_STATEMENT_TIMEOUT_MS: 30_000,
   } as const;

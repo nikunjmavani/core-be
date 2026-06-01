@@ -57,7 +57,7 @@ const requestLifecycleMiddleware: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await eventBus.flushOnCommit();
+      await eventBus.flushOnCommit({ requestId: request.id });
     } catch (error) {
       logger.warn({ error, requestId: request.id }, 'request.lifecycle.outbox_flush_failed');
     }

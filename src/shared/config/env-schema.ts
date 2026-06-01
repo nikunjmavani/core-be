@@ -245,37 +245,11 @@ const envSchemaBase = z.object({
   /** Per-connection statement_timeout (ms). Caps runaway queries; 0 disables. Default: 30000. */
   DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
   /**
-   * Per-request SET LOCAL statement_timeout (ms) for HTTP handlers (org RLS and non-org pinned tx).
-   * Tighter than DATABASE_STATEMENT_TIMEOUT_MS to release pool slots faster. Default: 5000. 0 disables SET LOCAL.
+   * Connection-level statement_timeout (ms) for HTTP handlers. Scoped RLS contexts hold
+   * checkouts only for the unit-of-work, so this caps runaway autocommit queries. Default: 5000.
+   * 0 falls back to `DATABASE_STATEMENT_TIMEOUT_MS`.
    */
   DATABASE_HTTP_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(0).default(5_000),
-  /**
-   * Rollout flag for scoped RLS contexts (item 2 of the production hardening plan). When true,
-   * the per-HTTP-request `organization-rls-transaction` + `request-statement-timeout` pinning
-   * is disabled and services are expected to wrap their unit-of-work calls in
-   * `withOrganizationDatabaseContext(...)` or `withUserDatabaseContext(...)`. When false,
-   * the legacy request-pinned transaction model stays in place.
-   *
-   * Prerequisites for safely enabling `true` in an environment:
-   *   1. Apply migration `20260520000004_organization_discovery_and_invitation_lookup_rls.sql`
-   *      (adds `organizations_user_discovery` + `memberships_user_self_discovery` policies and
-   *      the `tenancy.resolve_member_invitation_lookup_by_public_id` /
-   *      `tenancy.list_pending_member_invitations_for_email` SECURITY DEFINER helpers).
-   *   2. Confirm services on the deployment wrap cross-org reads in
-   *      `withUserDatabaseContext` (organization list/getByPublicId/getBySlug/create) and that
-   *      invitation accept/decline/listPending resolve the owning org via the SECURITY DEFINER
-   *      lookup before writing.
-   *
-   * Roll out per-environment by flipping the env var; the schema default remains `true` so new
-   * environments inherit the post-migration mode. See
-   * `docs/deployment/runbooks/resource-limits.md` for the full rollout sequence.
-   */
-  DATABASE_RLS_SCOPED_CONTEXTS: booleanString('true'),
-  /**
-   * Break-glass acknowledgement to run legacy request-pinned RLS transactions in production
-   * (`DATABASE_RLS_SCOPED_CONTEXTS=false`). Must be explicitly `true`; only for emergency rollback.
-   */
-  DATABASE_RLS_LEGACY_PINNING_ACK: booleanString('false'),
   /** Per-connection idle_in_transaction_session_timeout (ms). Caps stuck transactions; 0 disables. Default: 30000. */
   DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
   /** Warn when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.8). */
@@ -369,6 +343,16 @@ const envSchemaBase = z.object({
   /** Alert when a dead-letter queue has at least this many waiting + failed jobs. */
   DLQ_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(10),
   DLQ_DEPTH_CRON: z.string().min(1).optional(),
+
+  /** When true, the `dlq-auto-retry` sweeper re-enqueues replayable ledger rows after cooldown. */
+  DLQ_AUTO_RETRY_ENABLED: z.coerce.boolean().default(true),
+  /** Maximum automated replays per `audit.dead_letter_jobs` row (Redis counter). */
+  DLQ_AUTO_RETRY_MAX_COUNT: z.coerce.number().int().min(0).default(3),
+  /** Minimum minutes between failure (or last auto-retry) and the next automated replay. */
+  DLQ_AUTO_RETRY_COOLDOWN_MINUTES: z.coerce.number().int().min(1).default(30),
+  /** Maximum ledger rows inspected per sweeper tick. */
+  DLQ_AUTO_RETRY_BATCH_SIZE: z.coerce.number().int().min(1).default(20),
+  DLQ_AUTO_RETRY_CRON: z.string().min(1).optional(),
 
   /**
    * Alert when a single BullMQ source queue's waiting + delayed backlog reaches this many
@@ -521,22 +505,6 @@ export const envSchema = envSchemaBase
       message:
         'In production, CAPTCHA_PROVIDER=turnstile and CAPTCHA_SECRET are required on public auth routes',
       path: ['CAPTCHA_PROVIDER'],
-    },
-  )
-  .refine(
-    (data) => {
-      if (data.NODE_ENV !== 'production') {
-        return true;
-      }
-      if (data.DATABASE_RLS_SCOPED_CONTEXTS) {
-        return true;
-      }
-      return data.DATABASE_RLS_LEGACY_PINNING_ACK === true;
-    },
-    {
-      message:
-        'In production, DATABASE_RLS_SCOPED_CONTEXTS=false requires DATABASE_RLS_LEGACY_PINNING_ACK=true (break-glass rollback only)',
-      path: ['DATABASE_RLS_SCOPED_CONTEXTS'],
     },
   )
   .refine(

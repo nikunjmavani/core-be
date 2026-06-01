@@ -3,6 +3,10 @@ import { getTotalDeadLetterJobCount } from '@/infrastructure/observability/dlq-d
 import { countPendingMailOutbox } from '@/infrastructure/mail/mail-outbox.repository.js';
 import { MONITORED_BULLMQ_QUEUE_NAMES } from '@/infrastructure/observability/metrics/bullmq-metrics.js';
 import {
+  getWorkerQueueOperationalManifest,
+  type WorkerQueueOperationalManifestEntry,
+} from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
+import {
   readWorkerQueueHeartbeats,
   type WorkerQueueHeartbeat,
 } from '@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js';
@@ -18,6 +22,7 @@ export type HealthOperationalMetrics = {
   dlq_depth: number;
   draining: boolean;
   worker_queues: WorkerQueueHeartbeat[];
+  worker_queue_manifest: readonly WorkerQueueOperationalManifestEntry[];
 };
 
 let cachedOperationalMetrics: {
@@ -47,6 +52,7 @@ export async function getCachedHealthOperationalMetrics(): Promise<HealthOperati
     dlq_depth,
     draining: isApplicationDraining(),
     worker_queues,
+    worker_queue_manifest: getWorkerQueueOperationalManifest(),
   };
   cachedOperationalMetrics = {
     value,

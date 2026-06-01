@@ -62,6 +62,8 @@ const INIT_MIGRATION_FILENAME = '00000000000000_init.sql';
  */
 const MIGRATION_ADVISORY_LOCK_KEY = 4_017_309_021;
 
+const isDryRun = process.argv.includes('--dry-run');
+
 /**
  * Acquires the migration advisory lock on the shared `sql` session. The pool
  * is created with `max: 1`, so every statement in this process runs on the
@@ -142,6 +144,15 @@ async function baselineExistingInitialMigrationIfNeeded({
     row.upload_uploads_exists === true;
 
   if (!hasExistingInitialSchema) {
+    return;
+  }
+
+  if (isDryRun) {
+    logger.warn(
+      { filename: INIT_MIGRATION_FILENAME },
+      'Dry run: would baseline migration metadata for existing initialized database',
+    );
+    appliedSet.add(INIT_MIGRATION_FILENAME);
     return;
   }
 
@@ -226,7 +237,7 @@ async function assertNoInvalidIndexes({ filename }: { filename: string }): Promi
 
 async function main() {
   const migrationsFolder = resolve(process.cwd(), 'migrations');
-  logger.info({ migrationsFolder }, 'Running migrations');
+  logger.info({ migrationsFolder, dryRun: isDryRun }, 'Running migrations');
 
   await assertPostgresMajorVersionAtLeast17();
 
@@ -268,7 +279,7 @@ async function main() {
         );
       }
 
-      logger.info({ filename, transactional }, 'Applying migration');
+      logger.info({ filename, transactional, dryRun: isDryRun }, 'Applying migration');
       /**
        * Drizzle-style splitter: SQL files use `--> statement-breakpoint` between
        * statements so that each statement is sent independently. This prevents
@@ -284,9 +295,12 @@ async function main() {
       if (transactional) {
         await sql.begin(async (transaction) => {
           await runMigrationStatements({ filename, statements, executor: transaction });
-          await transaction.unsafe('insert into public.schema_migrations (filename) values ($1)', [
-            filename,
-          ]);
+          if (!isDryRun) {
+            await transaction.unsafe(
+              'insert into public.schema_migrations (filename) values ($1)',
+              [filename],
+            );
+          }
         });
         continue;
       }
@@ -301,10 +315,12 @@ async function main() {
        */
       await runMigrationStatements({ filename, statements, executor: sql });
       await assertNoInvalidIndexes({ filename });
-      await sql.unsafe('insert into public.schema_migrations (filename) values ($1)', [filename]);
+      if (!isDryRun) {
+        await sql.unsafe('insert into public.schema_migrations (filename) values ($1)', [filename]);
+      }
     }
 
-    logger.info('Migrations complete');
+    logger.info({ dryRun: isDryRun }, 'Migrations complete');
   } finally {
     await releaseMigrationAdvisoryLock();
   }

@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
 import { sql } from '@/infrastructure/database/connection.js';
-import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import type { WorkerContextDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
 import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
@@ -68,7 +68,7 @@ export async function resolveOrganizationPublicIdForStripeEvent(
  */
 export async function runWithOrganizationPublicIdForStripeWebhook<T>(
   organizationPublicId: string,
-  callback: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,
+  callback: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
 ): Promise<T> {
   return withOrganizationContext(organizationPublicId, callback);
 }
@@ -82,7 +82,7 @@ export async function runWithOrganizationPublicIdForStripeWebhook<T>(
  */
 export async function runStripeWebhookHandlerWithOrganizationContext<T>(
   event: Stripe.Event,
-  handler: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,
+  handler: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
 ): Promise<T | undefined> {
   const organizationPublicId = await resolveOrganizationPublicIdForStripeEvent(event);
   if (organizationPublicId === undefined) {

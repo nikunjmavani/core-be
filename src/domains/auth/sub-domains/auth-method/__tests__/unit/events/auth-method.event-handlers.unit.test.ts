@@ -69,7 +69,7 @@ describe('auth event handlers', () => {
       }),
     );
     expect(dispatchOutboxEmailMock).toHaveBeenCalledOnce();
-    expect(dispatchOutboxEmailMock).toHaveBeenCalledWith(42, undefined);
+    expect(dispatchOutboxEmailMock).toHaveBeenCalledWith(42);
   });
 
   it('records outbox and dispatches after commit on auth.password_reset.requested', async () => {

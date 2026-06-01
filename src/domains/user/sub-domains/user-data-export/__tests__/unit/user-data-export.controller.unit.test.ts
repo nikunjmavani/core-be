@@ -47,7 +47,7 @@ describe('createUserDataExportController', () => {
       reply,
     );
 
-    expect(service.requestExport).toHaveBeenCalledWith(userPublicId);
+    expect(service.requestExport).toHaveBeenCalledWith(userPublicId, { requestId: 'request-id' });
     expect(reply.status).toHaveBeenCalledWith(202);
   });
 

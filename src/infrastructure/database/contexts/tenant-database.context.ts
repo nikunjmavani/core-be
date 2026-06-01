@@ -14,6 +14,10 @@ import {
   incrementOrganizationRlsCheckoutCount,
   observeOrganizationRlsCheckoutHold,
 } from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
+import {
+  brandWorkerContextDatabaseHandle,
+  type WorkerContextDatabaseHandle,
+} from '@/infrastructure/database/utils/database-handle.types.js';
 
 /**
  * Runs a callback inside a transaction with RLS organization context set via SET LOCAL.
@@ -29,13 +33,13 @@ import {
  */
 export async function withOrganizationContext<T>(
   organizationPublicId: string,
-  callback: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,
+  callback: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
 ): Promise<T> {
   const activeSession = getOrganizationRequestDatabaseSession();
   if (activeSession !== undefined && activeSession.organizationPublicId === organizationPublicId) {
     return runWithWorkerDatabaseContext(
       workerDatabaseContextForOrganization(organizationPublicId),
-      () => callback(activeSession.databaseHandle),
+      () => callback(brandWorkerContextDatabaseHandle(activeSession.databaseHandle)),
     );
   }
 
@@ -57,7 +61,7 @@ export async function withOrganizationContext<T>(
           return runWithPinnedOrganizationDatabaseSession(
             organizationPublicId,
             databaseHandle,
-            () => callback(databaseHandle),
+            () => callback(brandWorkerContextDatabaseHandle(databaseHandle)),
           );
         }),
     );

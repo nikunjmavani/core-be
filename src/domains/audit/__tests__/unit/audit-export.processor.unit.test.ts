@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { brandWorkerContextDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
+import type { PostgresDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
 
 vi.mock('@/shared/config/env.config.js', () => ({
   env: {
@@ -38,7 +39,7 @@ describe('audit-export.processor', () => {
       select: vi.fn(),
     };
     const result = await runAuditExportJob(
-      mockDatabaseHandle as unknown as RequestScopedPostgresDatabase,
+      brandWorkerContextDatabaseHandle(mockDatabaseHandle as unknown as PostgresDatabaseHandle),
     );
     expect(result).toEqual({ exportedOrganizations: 0, skipped: 0 });
   });

@@ -23,6 +23,8 @@ let pgPoolWaiting: Gauge | null = null;
 let bullmqJobsWaiting: Gauge<'queue'> | null = null;
 let eventLoopLagMilliseconds: Gauge | null = null;
 let stripeWebhookEventsFailed: Gauge | null = null;
+let mailOutboxPending: Gauge | null = null;
+let dlqDepthTotal: Gauge | null = null;
 let databaseRlsActiveCheckouts: Gauge | null = null;
 let databaseRlsCheckoutHoldSeconds: Histogram<'path'> | null = null;
 let processUnhandledRejectionsTotal: Counter<'process'> | null = null;
@@ -135,6 +137,18 @@ function registerOn(registry: Registry): void {
     registers: [registry],
   });
 
+  mailOutboxPending = new Gauge({
+    name: 'mail_outbox_pending',
+    help: 'Pending rows in auth.mail_outbox awaiting BullMQ dispatch',
+    registers: [registry],
+  });
+
+  dlqDepthTotal = new Gauge({
+    name: 'dlq_depth',
+    help: 'Total BullMQ dead-letter jobs (waiting + failed) across monitored source queues',
+    registers: [registry],
+  });
+
   databaseRlsActiveCheckouts = new Gauge({
     name: 'database_rls_active_checkouts',
     help: 'In-process org-scoped RLS transaction checkouts currently held (early pool-saturation signal; alert near DATABASE_POOL_MAX)',
@@ -182,6 +196,8 @@ function bindMetricHandlesFromRegistry(registry: Registry): void {
   bullmqJobsWaiting = registry.getSingleMetric('bullmq_jobs_waiting') as Gauge<'queue'>;
   eventLoopLagMilliseconds = registry.getSingleMetric('event_loop_lag_ms') as Gauge;
   stripeWebhookEventsFailed = registry.getSingleMetric('stripe_webhook_events_failed') as Gauge;
+  mailOutboxPending = registry.getSingleMetric('mail_outbox_pending') as Gauge;
+  dlqDepthTotal = registry.getSingleMetric('dlq_depth') as Gauge;
   databaseRlsActiveCheckouts = registry.getSingleMetric('database_rls_active_checkouts') as Gauge;
   databaseRlsCheckoutHoldSeconds = registry.getSingleMetric(
     'database_rls_checkout_hold_seconds',
@@ -339,6 +355,19 @@ export function setStripeWebhookEventsFailedCount(count: number): void {
   if (!isMetricsEnabled()) return;
   if (!stripeWebhookEventsFailed) return;
   stripeWebhookEventsFailed.set(count);
+}
+
+/**
+ * Sets business-level backlog gauges refreshed on each Prometheus scrape.
+ */
+export function setBusinessMetricCounts(options: {
+  mailOutboxPending: number;
+  dlqDepth: number;
+}): void {
+  if (!isMetricsEnabled()) return;
+  ensurePrometheusMetricsRegistered(getMetricsRegistry());
+  mailOutboxPending?.set(options.mailOutboxPending);
+  dlqDepthTotal?.set(options.dlqDepth);
 }
 
 /**

@@ -49,6 +49,42 @@ export function resolveDeadLetterQueueNames(filter?: string): string[] {
   return [normalized];
 }
 
+/** Minimal ledger fields needed to reconstruct a replay payload from Postgres. */
+export type DeadLetterLedgerReplayInput = {
+  source_queue: string;
+  job_id: string | null;
+  job_name: string;
+  payload_summary: Record<string, unknown>;
+  auto_retry_count?: number;
+};
+
+/**
+ * Reconstructs a replay payload from an `audit.dead_letter_jobs` row (Postgres ledger).
+ *
+ * @remarks
+ * - **Algorithm:** adapts ledger snake_case columns into {@link DeadLetterJobData} and
+ *   delegates to {@link buildReplayJobPayload}.
+ * - **Failure modes:** returns `null` when required summary keys are missing (same as manual replay).
+ * - **Side effects:** none.
+ * - **Notes:** `auto_retry_count` becomes `dlqReplayAttempt` on the re-enqueued job.
+ */
+export function buildReplayJobPayloadFromLedger(
+  record: DeadLetterLedgerReplayInput,
+): Record<string, unknown> | null {
+  const data: DeadLetterJobData = omitUndefined({
+    original_queue: record.source_queue,
+    original_job_id: record.job_id ?? undefined,
+    original_job_name: record.job_name,
+    original_data_summary: record.payload_summary,
+    failed_reason: 'auto-retry',
+    attempts_made: 0,
+    max_attempts: 0,
+    failed_at: new Date().toISOString(),
+    replay_attempt: record.auto_retry_count ?? 0,
+  });
+  return buildReplayJobPayload(data);
+}
+
 /**
  * Reconstructs the minimal job payload needed to re-enqueue a dead-lettered job onto its
  * original BullMQ queue. Mail, webhook delivery, notification, and Stripe webhook jobs each
@@ -156,6 +192,104 @@ export type ReplayDeadLetterJobResult =
   | { status: 'replayed'; originalQueue: string }
   | { status: 'not_found' }
   | { status: 'payload_not_reconstructable' };
+
+/**
+ * Outcome of {@link autoReplayDeadLetterFromLedger} — automated sweeper replay (no CLI actor).
+ */
+export type AutoReplayDeadLetterFromLedgerResult =
+  | { status: 'replayed'; originalQueue: string }
+  | { status: 'payload_not_reconstructable' };
+
+/**
+ * Writes a `queue.dlq.auto_retried` row to `audit.logs` for automated sweeper replays.
+ *
+ * @remarks
+ * - **Algorithm:** system-initiated audit row with `actor_user_id` null.
+ * - **Failure modes:** propagates Postgres errors to the caller.
+ * - **Side effects:** one append to `audit.logs`.
+ * - **Notes:** complements manual `queue.dlq.replayed` entries from the CLI.
+ */
+export async function recordDlqAutoRetryAuditEntry(input: {
+  deadLetterJobId: number;
+  sourceQueue: string;
+  originalJobId: string | null;
+  autoRetryCount: number;
+}): Promise<void> {
+  await database.insert(logs).values({
+    actor_user_id: null,
+    action: 'queue.dlq.auto_retried',
+    resource_type: 'bullmq_dead_letter_job',
+    severity: 'INFO',
+    metadata: {
+      dead_letter_job_id: input.deadLetterJobId,
+      original_queue: input.sourceQueue,
+      original_job_id: input.originalJobId,
+      auto_retry_count: input.autoRetryCount,
+    },
+  });
+}
+
+/**
+ * Re-enqueues one dead-letter ledger row onto its source queue and removes the Redis DLQ mirror.
+ *
+ * @remarks
+ * - **Algorithm:** builds payload from Postgres summary, adds to source queue (re-using
+ *   `job_id` when present), best-effort removes the `-dlq` mirror job, writes audit row.
+ * - **Failure modes:** `payload_not_reconstructable` when summary keys are missing; Redis/Postgres
+ *   errors propagate after a successful source enqueue.
+ * - **Side effects:** BullMQ add + optional DLQ remove + audit insert.
+ * - **Notes:** idempotent with downstream worker idempotency keys; does not mutate ledger rows.
+ */
+export async function autoReplayDeadLetterFromLedger(input: {
+  ledgerRow: DeadLetterLedgerReplayInput & { id: number; dead_letter_queue: string };
+  autoRetryCount: number;
+}): Promise<AutoReplayDeadLetterFromLedgerResult> {
+  const payload = buildReplayJobPayloadFromLedger({
+    ...input.ledgerRow,
+    auto_retry_count: input.autoRetryCount,
+  });
+  if (!payload) {
+    return { status: 'payload_not_reconstructable' };
+  }
+
+  const sourceQueue = new Queue(input.ledgerRow.source_queue, {
+    connection: getBullMQConnectionOptions(),
+  });
+  try {
+    await sourceQueue.add(
+      input.ledgerRow.job_name,
+      payload,
+      omitUndefined({
+        jobId: input.ledgerRow.job_id ? String(input.ledgerRow.job_id) : undefined,
+      }),
+    );
+
+    const deadLetterQueue = new Queue(input.ledgerRow.dead_letter_queue, {
+      connection: getBullMQConnectionOptions(),
+    });
+    try {
+      const safeOriginalJobIdentifier = input.ledgerRow.job_id ?? 'unknown';
+      const deadLetterJobIdentifier = `dlq-${input.ledgerRow.source_queue}-${String(safeOriginalJobIdentifier)}`;
+      const deadLetterJob = await deadLetterQueue.getJob(deadLetterJobIdentifier);
+      if (deadLetterJob) {
+        await deadLetterJob.remove();
+      }
+    } finally {
+      await deadLetterQueue.close();
+    }
+
+    await recordDlqAutoRetryAuditEntry({
+      deadLetterJobId: input.ledgerRow.id,
+      sourceQueue: input.ledgerRow.source_queue,
+      originalJobId: input.ledgerRow.job_id,
+      autoRetryCount: input.autoRetryCount,
+    });
+
+    return { status: 'replayed', originalQueue: input.ledgerRow.source_queue };
+  } finally {
+    await sourceQueue.close();
+  }
+}
 
 /**
  * Replays a single dead-lettered job: looks it up, reconstructs its payload, adds it back

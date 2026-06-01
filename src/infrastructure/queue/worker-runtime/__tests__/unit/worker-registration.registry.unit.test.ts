@@ -37,14 +37,17 @@ vi.mock('bullmq', () => ({
   Queue: vi.fn(),
 }));
 
-import { getWorkerQueueRegistrationDefinitions } from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
+import {
+  getWorkerQueueOperationalManifest,
+  getWorkerQueueRegistrationDefinitions,
+} from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
 import { WORKER_QUEUE_FAMILY_NAMES } from '@/infrastructure/queue/worker-runtime/worker-queue-family.constants.js';
 
 describe('worker-registration.registry', () => {
   it('keeps complete metadata for every registered worker', () => {
     const definitions = getWorkerQueueRegistrationDefinitions();
 
-    expect(definitions).toHaveLength(24);
+    expect(definitions).toHaveLength(26);
     for (const definition of definitions) {
       expect(definition.queueName).toBeTruthy();
       expect(definition.logLabel).toBeTruthy();
@@ -66,14 +69,14 @@ describe('worker-registration.registry', () => {
   it('keeps expected family, criticality, scheduler, and external-io counts', () => {
     const definitions = getWorkerQueueRegistrationDefinitions();
 
-    expect(definitions.filter((definition) => definition.usesPostgres)).toHaveLength(22);
-    expect(definitions.filter((definition) => definition.scheduled)).toHaveLength(19);
+    expect(definitions.filter((definition) => definition.usesPostgres)).toHaveLength(23);
+    expect(definitions.filter((definition) => definition.scheduled)).toHaveLength(21);
     expect(
       definitions.filter((definition) => definition.criticality === 'throughput'),
     ).toHaveLength(5);
     expect(
       definitions.filter((definition) => definition.criticality === 'maintenance'),
-    ).toHaveLength(17);
+    ).toHaveLength(19);
     expect(
       definitions.filter((definition) => definition.criticality === 'observability'),
     ).toHaveLength(2);
@@ -91,5 +94,15 @@ describe('worker-registration.registry', () => {
       .sort();
 
     expect(orphanQueueNames).toEqual([]);
+  });
+
+  it('exports a serializable operational manifest without factory functions', () => {
+    const manifest = getWorkerQueueOperationalManifest();
+    expect(manifest).toHaveLength(getWorkerQueueRegistrationDefinitions().length);
+    for (const entry of manifest) {
+      expect(entry).not.toHaveProperty('create');
+      expect(entry.queueName).toBeTruthy();
+      expect(entry.family).toBeTruthy();
+    }
   });
 });
