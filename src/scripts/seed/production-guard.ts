@@ -31,7 +31,7 @@ export function assertBulkSeedAllowed(env: NodeJS.ProcessEnv): void {
 
   let host: string;
   try {
-    host = new URL(databaseUrl).hostname.replace(/^\[|\]$/g, '');
+    host = new URL(databaseUrl).hostname.replace(/(?:^\[)|(?:\]$)/g, '');
   } catch {
     throw new Error('Refusing to bulk-seed: DATABASE_URL is not a valid URL.');
   }
