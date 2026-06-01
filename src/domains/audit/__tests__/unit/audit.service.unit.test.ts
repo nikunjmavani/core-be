@@ -20,6 +20,12 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
+vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
+  withOrganizationDatabaseContext: vi.fn(
+    (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
+  ),
+}));
+
 const globalAdminContextMock = vi.hoisted(() =>
   vi.fn((callback: () => Promise<unknown>) => callback()),
 );
@@ -36,6 +42,7 @@ vi.mock('@/infrastructure/database/contexts/global-admin-database.context.js', (
 describe('AuditService', () => {
   const repository = {
     insert: vi.fn().mockResolvedValue(undefined),
+    resolveActorApiKeyId: vi.fn().mockResolvedValue(77),
     findWithFilters: vi.fn().mockResolvedValue({
       items: [{ action: 'user.login' }],
       total: 1,
@@ -46,6 +53,7 @@ describe('AuditService', () => {
 
   const organizationService = {
     findOrganizationByPublicId: vi.fn().mockResolvedValue({ id: 10, public_id: 'org_public' }),
+    findOrganizationByInternalId: vi.fn().mockResolvedValue({ id: 10, public_id: 'org_public' }),
   } as unknown as OrganizationService;
 
   const userService = {
@@ -79,6 +87,47 @@ describe('AuditService', () => {
       actorUserPublicId: 'missing',
       action: 'user.login',
       resource_type: 'user',
+    });
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+
+  it('record attributes API-key actions to actor_api_key_id (no acting user)', async () => {
+    await service.record({
+      actorApiKeyPublicId: 'key_public',
+      action: 'tenancy.role.create',
+      resource_type: 'role',
+      organization_id: 10,
+    });
+    expect(repository.resolveActorApiKeyId).toHaveBeenCalledWith('key_public');
+    expect(repository.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor_api_key_id: 77,
+        action: 'tenancy.role.create',
+        organization_id: 10,
+      }),
+    );
+    // An API-key row carries no acting user.
+    expect(repository.insert).toHaveBeenCalledWith(
+      expect.not.objectContaining({ actor_user_id: expect.anything() }),
+    );
+  });
+
+  it('record skips an API-key actor that cannot be resolved', async () => {
+    vi.mocked(repository.resolveActorApiKeyId).mockResolvedValueOnce(null);
+    await service.record({
+      actorApiKeyPublicId: 'unknown_key',
+      action: 'tenancy.role.create',
+      resource_type: 'role',
+      organization_id: 10,
+    });
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+
+  it('record skips when there is neither a user nor an API-key actor', async () => {
+    await service.record({
+      action: 'tenancy.role.create',
+      resource_type: 'role',
+      organization_id: 10,
     });
     expect(repository.insert).not.toHaveBeenCalled();
   });

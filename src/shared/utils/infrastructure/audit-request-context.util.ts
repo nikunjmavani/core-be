@@ -1,7 +1,24 @@
 import type { FastifyRequest } from 'fastify';
 import type { AuditLogRecordInput } from '@/domains/audit/audit.types.js';
+import type { AuthContext } from '@/shared/types/index.js';
+import { isApiKeyPrincipal } from '@/shared/utils/http/request.util.js';
 import { recordAuditEvent } from '@/shared/utils/infrastructure/audit-record.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
+
+/**
+ * Derives the audit actor fields from an authenticated principal: an organization API-key
+ * principal is recorded as `actorApiKeyPublicId`, a user principal as `actorUserPublicId`. Spread
+ * the result into a {@link recordScopedAuditEvent} input so API-key-driven mutations are attributed
+ * (the audit row carries a key actor) instead of being silently dropped for lack of a user.
+ */
+export function buildAuditActorFields(auth: AuthContext): {
+  actorUserPublicId?: string;
+  actorApiKeyPublicId?: string;
+} {
+  return isApiKeyPrincipal(auth)
+    ? { actorApiKeyPublicId: auth.apiKeyPublicId }
+    : { actorUserPublicId: auth.userId };
+}
 
 /** Extracts `ip_address` and `user_agent` from the Fastify request for audit log fields; either may be `null`. */
 export function getAuditRequestNetworkContext(request: FastifyRequest): {

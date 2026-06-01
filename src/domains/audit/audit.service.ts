@@ -59,9 +59,11 @@ export class AuditService {
   async record(input: AuditLogRecordInput): Promise<void> {
     const actorUserPublicId = input.actorUserPublicId;
     if (!actorUserPublicId) {
-      // No acting user to attribute this row to (e.g. an organization API-key principal).
-      // Skip rather than write a null actor; first-class API-key audit attribution is handled
-      // separately via the api-key actor column.
+      // No acting user — attribute to the organization API key when present (always org-scoped),
+      // otherwise skip rather than write an unattributable row.
+      if (input.actorApiKeyPublicId && input.organization_id) {
+        return this.recordApiKeyActorEvent(input.actorApiKeyPublicId, input.organization_id, input);
+      }
       logger.warn({ action: input.action }, 'audit.record.missingActor');
       return;
     }
@@ -125,6 +127,47 @@ export class AuditService {
         metadata: input.metadata ?? {},
       }),
     );
+  }
+
+  /**
+   * Persists an audit row attributed to an organization API key (no acting user).
+   *
+   * @remarks
+   * Algorithm: resolve the organization, then under its RLS context resolve the API key's internal
+   * id (`tenancy.api_keys` is tenant-isolated) and INSERT the row with `actor_api_key_id` set and
+   * `actor_user_id` left null. Failure modes: unknown organization or unknown API key → logged at
+   * `warn`, no row written (best-effort, never fails the caller's request). Side effects: one INSERT.
+   */
+  private async recordApiKeyActorEvent(
+    actorApiKeyPublicId: string,
+    organizationId: number,
+    input: AuditLogRecordInput,
+  ): Promise<void> {
+    const organization =
+      await this.organizationService.findOrganizationByInternalId(organizationId);
+    if (!organization) {
+      logger.warn({ organizationId }, 'audit.record.unknownOrganizationId');
+      return;
+    }
+    await withOrganizationDatabaseContext(organization.public_id, async () => {
+      const apiKeyId = await this.repository.resolveActorApiKeyId(actorApiKeyPublicId);
+      if (apiKeyId === null) {
+        logger.warn({ actorApiKeyPublicId }, 'audit.record.unknownActorApiKeyPublicId');
+        return;
+      }
+      await this.repository.insert({
+        actor_api_key_id: apiKeyId,
+        action: input.action,
+        resource_type: input.resource_type,
+        resource_id: input.resource_id ?? null,
+        target_user_id: input.target_user_id ?? null,
+        organization_id: organizationId,
+        ip_address: input.ip_address ?? null,
+        user_agent: input.user_agent ?? null,
+        severity: input.severity ?? 'INFO',
+        metadata: input.metadata ?? {},
+      });
+    });
   }
 
   /**

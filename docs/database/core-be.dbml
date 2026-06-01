@@ -78,6 +78,7 @@ Note audit.dead_letter_jobs {
 
 Table audit.logs {
   action varchar(100) [not null]
+  actor_api_key_id bigint
   actor_user_id bigint
   created_at timestamptz [not null]
   id bigint [pk, increment, not null]
@@ -602,6 +603,7 @@ Note upload.uploads {
   'RLS: enabled\nPolicies: uploads_tenant_isolation, uploads_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
+Ref: audit.logs.actor_api_key_id > tenancy.api_keys.id [delete: set null]
 Ref: audit.logs.actor_user_id > auth.users.id [delete: set null]
 Ref: audit.logs.organization_id > tenancy.organizations.id [delete: set null]
 Ref: audit.logs.target_user_id > auth.users.id [delete: set null]

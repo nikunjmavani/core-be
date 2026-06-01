@@ -10,7 +10,10 @@ import {
   ensureCursorOnlyPagination,
 } from '@/shared/utils/http/pagination.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
-import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
+import {
+  buildAuditActorFields,
+  recordScopedAuditEvent,
+} from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import type { MemberRoleService } from './member-role.service.js';
 
 /**
@@ -52,7 +55,7 @@ export function createMemberRoleController(service: MemberRoleService) {
       );
       const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
       await recordScopedAuditEvent(request, {
-        actorUserPublicId: getActingUserPublicId(auth),
+        ...buildAuditActorFields(auth),
         action: 'tenancy.role.create',
         resource_type: 'role',
         organizationPublicId: organizationId,
@@ -74,7 +77,7 @@ export function createMemberRoleController(service: MemberRoleService) {
         getActingUserPublicId(auth),
       );
       await recordScopedAuditEvent(request, {
-        actorUserPublicId: getActingUserPublicId(auth),
+        ...buildAuditActorFields(auth),
         action: 'tenancy.role.update',
         resource_type: 'role',
         organizationPublicId: organizationId,
@@ -90,7 +93,7 @@ export function createMemberRoleController(service: MemberRoleService) {
       }) ?? { id: '', roleId: '' };
       await service.delete(organizationId, roleId);
       await recordScopedAuditEvent(request, {
-        actorUserPublicId: getActingUserPublicId(auth),
+        ...buildAuditActorFields(auth),
         action: 'tenancy.role.delete',
         resource_type: 'role',
         organizationPublicId: organizationId,
