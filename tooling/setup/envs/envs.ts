@@ -74,5 +74,5 @@ async function main(): Promise<void> {
 const isMainModule = process.argv[1]?.includes('envs/envs');
 
 if (isMainModule) {
-  main();
+  void main();
 }

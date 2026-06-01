@@ -345,3 +345,62 @@ jobs:
         env:
           FAST_CHECK_NUM_RUNS: 50
         run: pnpm test:property
+
+  openapi-breaking:
+    name: OpenAPI breaking-change
+    needs: [changes]
+    if: needs.changes.outputs.src-code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # docs:generate emits the spec statically (no app boot), but env validation
+    # requires DATABASE_URL/REDIS_URL to be present — point them at unused
+    # localhost values; no Postgres/Redis service is started (keeps PR CI fast).
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Full history so the PR base commit can be checked out for the baseline spec.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - uses: ./.github/actions/test-env
+
+      - name: Generate head OpenAPI spec
+        run: |
+          pnpm docs:generate
+          cp docs/openapi/openapi.json "$RUNNER_TEMP/openapi-head.json"
+
+      - name: Generate base OpenAPI spec
+        run: |
+          git checkout --force "${{ github.event.pull_request.base.sha }}"
+          pnpm install --frozen-lockfile
+          pnpm docs:generate
+          cp docs/openapi/openapi.json "$RUNNER_TEMP/openapi-base.json"
+
+      - name: Install oasdiff (pinned + checksum-verified)
+        env:
+          OASDIFF_VERSION: 1.18.1
+          OASDIFF_SHA256: 5174ba660d559684e67e8ab44ca6d45919114f8c57de5a1e32b91d4e5347705d
+        run: |
+          set -euo pipefail
+          url="https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL "$url" -o "$RUNNER_TEMP/oasdiff.tar.gz"
+          echo "${OASDIFF_SHA256}  $RUNNER_TEMP/oasdiff.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/oasdiff.tar.gz" -C "$RUNNER_TEMP" oasdiff
+          "$RUNNER_TEMP/oasdiff" --version
+
+      - name: Detect breaking API changes (oasdiff)
+        # Run the pinned binary directly (the Docker action remaps RUNNER_TEMP to a
+        # different in-container path). Fail only on ERR-severity breaking changes
+        # (removed/renamed operations, newly required inputs, removed response fields);
+        # additive/WARN changes pass.
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/oasdiff" breaking \
+            "$RUNNER_TEMP/openapi-base.json" \
+            "$RUNNER_TEMP/openapi-head.json" \
+            --fail-on ERR
