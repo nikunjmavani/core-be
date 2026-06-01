@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.5.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.5.1-dev.0...v3.5.2-dev.0) (2026-06-01)
+
+
+### Fixed
+
+* **db:** make audit_logs actor_api_key FK partitioned-table safe ([#225](https://github.com/nikunjmavani/core-be/issues/225)) ([f93c695](https://github.com/nikunjmavani/core-be/commit/f93c6950d5eff54935f79ba7c788e95cc954b3ba))
+
 ## [3.5.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.5.0-dev.0...v3.5.1-dev.0) (2026-06-01)
 
 
