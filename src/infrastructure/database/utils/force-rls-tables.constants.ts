@@ -94,7 +94,11 @@ export function diffForceRlsTables(
   const expectedKeys = new Set(
     expected.map((table) => forceRlsTableKey(table.schemaName, table.tableName)),
   );
-  const missing = [...expectedKeys].filter((key) => !databaseKeys.has(key)).sort();
-  const extra = [...databaseKeys].filter((key) => !expectedKeys.has(key)).sort();
+  const missing = [...expectedKeys]
+    .filter((key) => !databaseKeys.has(key))
+    .sort((a, b) => a.localeCompare(b));
+  const extra = [...databaseKeys]
+    .filter((key) => !expectedKeys.has(key))
+    .sort((a, b) => a.localeCompare(b));
   return { missing, extra };
 }
