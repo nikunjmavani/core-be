@@ -7,8 +7,8 @@ name: core-be CodeQL config
 queries:
   - uses: security-extended
 
-# Exclude generated output, migrations, and tests from analysis so findings
-# focus on application + tooling source (src/, tooling/).
+# Exclude generated output, migrations, tests, and agent worktrees from analysis
+# so findings focus on application + tooling source (src/, tooling/).
 paths-ignore:
   - dist
   - migrations
@@ -17,3 +17,23 @@ paths-ignore:
   - coverage-fast
   - '**/__tests__/**'
   - src/tests/**
+  # Local agent worktrees checked out under .claude/ are gitignored stale copies
+  # of the repo; never analyze them.
+  - .claude/**
+
+# Suppress queries that are verified architectural false positives for this
+# codebase (not blanket security-rule disabling):
+query-filters:
+  # Every route is covered by the app-wide `@fastify/rate-limit` limiter
+  # registered with `global: true` (see rate-limit.middleware.ts), plus per-route
+  # org-scoped presets. CodeQL cannot see app-level middleware, so it flags every
+  # route handler.
+  - exclude:
+      id: js/missing-rate-limiting
+  # All SHA-256 hashing flagged here is over HIGH-ENTROPY secrets — organization
+  # API keys (`ak_` + 32 random bytes) and password-reset / email-verification
+  # tokens (randomBytes) — hashed at rest to prevent DB-leak replay. A slow
+  # password KDF is neither needed nor appropriate for high-entropy secrets; user
+  # passwords use a dedicated KDF, not these call sites.
+  - exclude:
+      id: js/insufficient-password-hash
