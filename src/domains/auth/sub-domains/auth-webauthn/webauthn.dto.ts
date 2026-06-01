@@ -4,7 +4,7 @@ import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.j
 /** Zod schema for the `POST /api/v1/auth/webauthn/authenticate/options` request body — optional `email` to scope the credential discovery. */
 export const webauthnAuthenticateOptionsDto = z
   .object({
-    email: trimmedStringMinMax(3, 320).email().optional(),
+    email: trimmedStringMinMax(3, 320).pipe(z.email()).optional(),
   })
   .strict();
 

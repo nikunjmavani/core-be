@@ -12,7 +12,7 @@ export const createOrganizationNotificationPolicyDto = z
     channel: trimmedStringMinMax(1, 20),
     default_enabled: z.boolean().optional().default(true),
     is_mandatory: z.boolean().optional().default(false),
-    muted_until: z.string().trim().datetime().optional().nullable(),
+    muted_until: z.string().trim().pipe(z.iso.datetime()).optional().nullable(),
   })
   .strict();
 
@@ -25,7 +25,7 @@ export const updateOrganizationNotificationPolicyDto = z
   .object({
     default_enabled: z.boolean().optional(),
     is_mandatory: z.boolean().optional(),
-    muted_until: z.string().trim().datetime().optional().nullable(),
+    muted_until: z.string().trim().pipe(z.iso.datetime()).optional().nullable(),
   })
   .strict();
 
