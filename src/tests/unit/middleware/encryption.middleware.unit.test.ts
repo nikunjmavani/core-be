@@ -77,6 +77,7 @@ describe('encryption.middleware', () => {
     encryptPayloadMock.mockReturnValue({
       payload: 'cipher',
       iv: 'iv-bytes',
+      authTag: 'tag-bytes',
     });
 
     application = Fastify();
@@ -97,6 +98,7 @@ describe('encryption.middleware', () => {
         _encrypted: true,
         payload: 'cipher',
         iv: 'iv-bytes',
+        authTag: 'tag-bytes',
       }),
     );
     expect(encryptPayloadMock).toHaveBeenCalled();

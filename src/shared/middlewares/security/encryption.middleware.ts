@@ -12,12 +12,13 @@ interface RouteConfig {
 const API_PATH_PREFIX = '/api/';
 
 /**
- * AES-256-CBC response encryption middleware.
+ * AES-256-GCM response encryption middleware.
  *
  * When enabled via ENABLE_RESPONSE_ENCRYPTION, all JSON responses under /api/
  * are encrypted so they appear as unreadable ciphertext in Chrome DevTools.
  *
- * Encrypted envelope: `{ _encrypted: true, payload: "<base64>", iv: "<base64>" }`
+ * Encrypted envelope: `{ _encrypted: true, payload: "<base64>", iv: "<base64>", authTag: "<base64>" }`
+ * (clients decrypt with Web Crypto AES-GCM; see encryption.util.ts).
  *
  * Skips:
  *  - Non-API routes (health checks, queue dashboard, static files)
@@ -57,6 +58,7 @@ const encryptionMiddleware: FastifyPluginAsync = async (application) => {
         _encrypted: true,
         payload: encrypted.payload,
         iv: encrypted.iv,
+        authTag: encrypted.authTag,
       });
     } catch (error) {
       logger.error({ error, url: request.url }, 'Response encryption failed');
