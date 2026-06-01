@@ -135,9 +135,10 @@ export class CircuitBreaker {
       const nextFailures = previous.failures + 1;
       const nextHalfOpen = previous.state === 'HALF_OPEN' ? previous.halfOpenAttempts + 1 : 0;
       let nextState: CircuitState = previous.state;
-      if (nextFailures >= this.failureThreshold) {
-        nextState = 'OPEN';
-      } else if (previous.state === 'HALF_OPEN' && nextHalfOpen >= this.maxHalfOpenAttempts) {
+      if (
+        nextFailures >= this.failureThreshold ||
+        (previous.state === 'HALF_OPEN' && nextHalfOpen >= this.maxHalfOpenAttempts)
+      ) {
         nextState = 'OPEN';
       }
       this.localState = {

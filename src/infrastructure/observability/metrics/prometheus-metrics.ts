@@ -7,8 +7,9 @@ import {
 
 let registeredMetricsRegistry: Registry | null = null;
 
-let httpRequestsTotal: Counter<'method' | 'route' | 'status_code'> | null = null;
-let httpRequestDurationSeconds: Histogram<'method' | 'route' | 'status_code'> | null = null;
+type HttpRequestMetricLabel = 'method' | 'route' | 'status_code';
+let httpRequestsTotal: Counter<HttpRequestMetricLabel> | null = null;
+let httpRequestDurationSeconds: Histogram<HttpRequestMetricLabel> | null = null;
 let bullmqQueueWaiting: Gauge<'queue'> | null = null;
 let bullmqQueueActive: Gauge<'queue'> | null = null;
 let bullmqQueueDelayed: Gauge<'queue'> | null = null;

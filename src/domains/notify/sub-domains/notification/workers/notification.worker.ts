@@ -67,15 +67,17 @@ export async function processNotificationDispatchJob(
     return repository.findByIdForDispatch(notificationId, organizationPublicId ?? null);
   };
 
+  const loadNotificationForScope = () =>
+    organizationPublicId === null || organizationPublicId === undefined
+      ? runGlobalRetentionWorkerJob(loadNotification)
+      : withOrganizationContext(organizationPublicId, loadNotification);
   const notificationRow =
     notificationRepository !== undefined
       ? await notificationRepository.findByIdForDispatch(
           notificationId,
           organizationPublicId ?? null,
         )
-      : organizationPublicId === null || organizationPublicId === undefined
-        ? await runGlobalRetentionWorkerJob(loadNotification)
-        : await withOrganizationContext(organizationPublicId, loadNotification);
+      : await loadNotificationForScope();
 
   if (!notificationRow) {
     throw new Error(`notification.not_found:${String(notificationId)}`);

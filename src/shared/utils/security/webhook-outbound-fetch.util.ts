@@ -158,7 +158,7 @@ async function pinnedNodeFetch(
       request.end(body);
       return;
     }
-    request.end(String(body));
+    reject(new Error('webhook.fetch.unsupported_body_type'));
   });
 }
 
@@ -187,12 +187,14 @@ export async function createPinnedWebhookFetch(webhookUrl: string): Promise<Pinn
   const { pinnedAddress, port } = await resolveAndPinWebhookUrl(webhookUrl);
 
   return (input, init) => {
-    const targetUrl =
-      typeof input === 'string'
-        ? new URL(input)
-        : input instanceof URL
-          ? input
-          : new URL(input.url);
+    let targetUrl: URL;
+    if (typeof input === 'string') {
+      targetUrl = new URL(input);
+    } else if (input instanceof URL) {
+      targetUrl = input;
+    } else {
+      targetUrl = new URL(input.url);
+    }
     return pinnedNodeFetch(targetUrl, pinnedAddress, port, init);
   };
 }

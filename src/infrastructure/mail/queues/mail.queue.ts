@@ -77,7 +77,9 @@ export async function enqueueMailOutboxJob(
         })
         .catch((error: unknown) => {
           if (deadlineTimer) clearTimeout(deadlineTimer);
-          reject(error);
+          reject(
+            error instanceof Error ? error : new Error('mail.enqueue.failed', { cause: error }),
+          );
         });
     });
   } catch (error) {

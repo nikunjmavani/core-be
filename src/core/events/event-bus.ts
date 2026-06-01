@@ -75,7 +75,7 @@ function getOrCreateOnCommitQueue(): OnCommitQueue {
  * transaction commits before they fire.
  */
 export class EventBus {
-  private handlers: Map<string, EventHandler[]> = new Map();
+  private readonly handlers: Map<string, EventHandler[]> = new Map();
 
   on(eventType: string, handler: EventHandler): void {
     const existing = this.handlers.get(eventType) ?? [];

@@ -105,12 +105,14 @@ export function selectIdempotencyClaimCounterShardKey(): string {
  * executing as a second, independent operation (Stripe-style key-reuse semantics).
  */
 export function buildIdempotencyCacheKey(idempotencyKey: string, scope: IdempotencyScope): string {
-  const actorSegment =
-    scope.apiKeyPublicId && scope.apiKeyPublicId.length > 0
-      ? `api-key:${scope.apiKeyPublicId}`
-      : scope.userId && scope.userId.length > 0
-        ? scope.userId
-        : 'anonymous';
+  let actorSegment: string;
+  if (scope.apiKeyPublicId && scope.apiKeyPublicId.length > 0) {
+    actorSegment = `api-key:${scope.apiKeyPublicId}`;
+  } else if (scope.userId && scope.userId.length > 0) {
+    actorSegment = scope.userId;
+  } else {
+    actorSegment = 'anonymous';
+  }
   const organizationSegment = scope.organizationId ?? 'none';
   return `idempotency:${organizationSegment}:${actorSegment}:${idempotencyKey}`;
 }

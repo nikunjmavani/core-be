@@ -191,8 +191,8 @@ export async function verifyAccessToken(token: string): Promise<TokenPayload> {
   }
 
   const tokenPayload: TokenPayload = { userId: payload.sub };
-  if (payload.role !== undefined && payload.role !== null) {
-    tokenPayload.role = String(payload.role);
+  if (typeof payload.role === 'string') {
+    tokenPayload.role = payload.role;
   }
   return tokenPayload;
 }

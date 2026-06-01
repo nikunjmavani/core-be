@@ -80,12 +80,6 @@ function summarizeReadinessProbeOutcome(outcome: SuccessfulProbeOutcome | Failed
   return { connectivitySucceeded: false, latencyMilliseconds: null };
 }
 
-function buildReadinessConnectivityLabel(
-  connectivitySucceeded: boolean,
-): 'connected' | 'unavailable' {
-  return connectivitySucceeded ? 'connected' : 'unavailable';
-}
-
 /**
  * Short window during which a {@link runDependencyReadinessProbes} result is
  * reused by {@link getCachedDependencyReadinessProbes}. Keeps Docker/Railway
@@ -141,9 +135,9 @@ export async function runDependencyReadinessProbes(): Promise<ReadinessProbeSumm
 
   return {
     status: allDependenciesReady ? 'ok' : 'error',
-    database: buildReadinessConnectivityLabel(databaseProbeSummary.connectivitySucceeded),
-    redis: buildReadinessConnectivityLabel(redisProbeSummary.connectivitySucceeded),
-    bullmq: buildReadinessConnectivityLabel(bullMqProbeSummary.connectivitySucceeded),
+    database: databaseProbeSummary.connectivitySucceeded ? 'connected' : 'unavailable',
+    redis: redisProbeSummary.connectivitySucceeded ? 'connected' : 'unavailable',
+    bullmq: bullMqProbeSummary.connectivitySucceeded ? 'connected' : 'unavailable',
     latencyMs: {
       database: databaseProbeSummary.latencyMilliseconds,
       redis: redisProbeSummary.latencyMilliseconds,

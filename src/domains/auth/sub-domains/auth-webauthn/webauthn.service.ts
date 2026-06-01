@@ -103,7 +103,7 @@ export class WebauthnService {
 
   async generateRegistrationOptions(
     userPublicId: string,
-    requestOrigin?: string,
+    _requestOrigin?: string,
   ): Promise<WebauthnRegisterOptionsResult> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) {
@@ -138,7 +138,6 @@ export class WebauthnService {
       options.challenge,
     );
 
-    void requestOrigin;
     return { options, challenge_token: challengeToken };
   }
 
@@ -193,7 +192,7 @@ export class WebauthnService {
 
   async generateAuthenticationOptions(
     body: unknown,
-    requestOrigin?: string,
+    _requestOrigin?: string,
   ): Promise<WebauthnAuthenticateOptionsResult> {
     const parsed = validateWebauthnAuthenticateOptions(body);
     if (!parsed.email) {
@@ -213,7 +212,6 @@ export class WebauthnService {
     // 200 + allowCredentials payload is indistinguishable from a genuine challenge. The
     // follow-up verify fails uniformly because no authenticator can satisfy the decoy.
     if (!user || credentials.length === 0) {
-      void requestOrigin;
       return this.buildDecoyAuthenticationOptions(parsed.email);
     }
 
@@ -233,7 +231,6 @@ export class WebauthnService {
       options.challenge,
     );
 
-    void requestOrigin;
     return { options, challenge_token: challengeToken };
   }
 
