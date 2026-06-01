@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.5.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.5-dev.0...v3.5.0-dev.0) (2026-06-01)
+
+
+### Added
+
+* **reliability:** crash-safe dispatch, DLQ auto-retry, and ops improvements ([#214](https://github.com/nikunjmavani/core-be/issues/214)) ([ffdff4d](https://github.com/nikunjmavani/core-be/commit/ffdff4d0eaade870eb50198e0afdb769d72917df))
+
 ## [3.4.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.4.4-dev.0...v3.4.5-dev.0) (2026-05-31)
 
 
