@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export type RouteCatalogAccess = 'public' | 'authenticated' | 'global-role' | 'org-permission';
+export type RouteCatalogAccess =
+  | 'public'
+  | 'authenticated'
+  | 'global-role'
+  | 'org-permission'
+  | 'bearer-token';
 
 export type RouteEntry = {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -28,7 +33,7 @@ function parseRouteCatalogLine(line: string): {
   const method = methodMatch[1] as RouteEntry['method'];
   const remainder = line.slice(methodMatch[0].length);
 
-  const spacedAccessMatch = /\s+(PUBLIC|AUTH|ROLE:.+|PERM:.+)\s*$/.exec(remainder);
+  const spacedAccessMatch = /\s+(PUBLIC|AUTH|ROLE:.+|PERM:.+|TOKEN:.+)\s*$/.exec(remainder);
   if (spacedAccessMatch?.[1]) {
     return {
       method,
@@ -37,7 +42,7 @@ function parseRouteCatalogLine(line: string): {
     };
   }
 
-  const gluedAccessMatch = /(PERM:.+|ROLE:.+)\s*$/.exec(remainder);
+  const gluedAccessMatch = /(PERM:.+|ROLE:.+|TOKEN:.+)\s*$/.exec(remainder);
   if (gluedAccessMatch?.[1]) {
     return {
       method,
@@ -50,7 +55,7 @@ function parseRouteCatalogLine(line: string): {
 }
 
 function domainSlugFromPrefix(prefix: string): string {
-  if (prefix === '/health') return 'health';
+  if (prefix === '/livez') return 'health';
   const segments = prefix.split('/').filter(Boolean);
   return segments[segments.length - 1] ?? 'unknown';
 }
@@ -59,6 +64,7 @@ function catalogAccessToRegistry(accessToken: string): RouteCatalogAccess {
   if (accessToken === 'PUBLIC') return 'public';
   if (accessToken === 'AUTH') return 'authenticated';
   if (accessToken.startsWith('ROLE')) return 'global-role';
+  if (accessToken.startsWith('TOKEN')) return 'bearer-token';
   return 'org-permission';
 }
 

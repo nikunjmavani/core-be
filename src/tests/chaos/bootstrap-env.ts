@@ -35,6 +35,7 @@ process.env.STRIPE_SECRET_KEY ??= 'sk_test_contract_fixture_key_for_nock_stubs';
 process.env.STRIPE_WEBHOOK_SECRET ??=
   'whsec_test_contract_fixture_fallback_when_local_secret_below_32_xx';
 process.env.RESEND_API_KEY ??= 're_test_contract_fixture_for_chaos_testing_queue_only';
+process.env.EMAIL_FROM_ADDRESS ??= 'noreply@example.com';
 process.env.S3_BUCKET ??= 'contract-test-bucket';
 process.env.S3_REGION ??= 'us-east-1';
 process.env.S3_ACCESS_KEY_ID ??= 'AKIAIOSFODNN7EXAMPLE';

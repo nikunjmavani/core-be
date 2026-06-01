@@ -11,19 +11,42 @@ name: Post-merge CI
 #   then release-please
 #       ├─ release sbom
 #       └─ api docs
-#   then resolve environment → deploy → API smoke on deployed URL
+#   then deploy → API /readyz probe on deployed URL
 #
 # Branch → GitHub Environment mapping for deploy (only difference between dev and main):
 #   dev  → development
 #   main → production
-#
-# Re-triggered after a merge whose push event was silently dropped by GitHub Actions
-# while a previous run was still in flight under the same concurrency group.
 
 on:
   push:
-    branches: [main, dev]
+    branches: [dev, main]
   workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: Skip matrix integration tests
+        required: false
+        type: boolean
+        default: false
+      skip_security:
+        description: Skip Docker build and Trivy scan
+        required: false
+        type: boolean
+        default: false
+      skip_docker:
+        description: Skip Docker build/push (alias for skip_security when only docker is needed)
+        required: false
+        type: boolean
+        default: false
+      skip_deploy:
+        description: Skip Railway deploy
+        required: false
+        type: boolean
+        default: false
+      skip_docs:
+        description: Skip API docs generation and publish
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: post-merge-ci-${{ github.ref }}
@@ -31,15 +54,15 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       src-code: ${{ steps.filter.outputs.src-code }}
       docker: ${{ steps.filter.outputs.docker }}
@@ -47,13 +70,13 @@ jobs:
       docs-artifacts: ${{ steps.filter.outputs.docs-artifacts }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Path filter
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
           filters: |
@@ -76,12 +99,23 @@ jobs:
             docs-artifacts:
               - 'docs/openapi/**'
               - 'docs/postman-collection.json'
+              - 'src/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
 
   docker-build-push:
     name: Docker
     needs: [changes]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
     if: |
       always() &&
+      inputs.skip_security != true &&
+      inputs.skip_docker != true &&
       (
         needs.changes.outputs.src-code == 'true' ||
         needs.changes.outputs.docker == 'true' ||
@@ -96,11 +130,17 @@ jobs:
   matrix-tests:
     name: Matrix Tests
     needs: [changes, sbom, docker-build-push]
-    # TEMP: matrix tests disabled to shorten post-merge feedback loop.
-    # Re-enable by restoring the previous `if:` expression — release-please
-    # already accepts `needs.matrix-tests.result == 'skipped'`, so leaving
-    # this short-circuited keeps deploys flowing without other edits.
-    if: false
+    if: |
+      always() &&
+      inputs.skip_tests != true &&
+      (
+        needs.changes.outputs.src-code == 'true' ||
+        needs.changes.outputs.ci-config == 'true'
+      ) &&
+      (
+        needs.docker-build-push.result == 'success' ||
+        needs.docker-build-push.result == 'skipped'
+      )
     uses: ./.github/workflows/reusable-vitest-postgres-redis.yml
     secrets: inherit
     with:
@@ -110,36 +150,54 @@ jobs:
   sbom:
     name: SBOM
     needs: [changes]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     if: |
       always() &&
       needs.changes.outputs.src-code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 1
 
       - name: Generate SBOM
-        uses: anchore/sbom-action@v0.24.0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
           format: cyclonedx-json
           output-file: sbom.cyclonedx.json
 
+      - name: Attest CycloneDX source SBOM
+        uses: actions/attest-sbom@51e74621a501c89df81fc1391c5a8f4cfc9fab2f # v3
+        with:
+          subject-path: sbom.cyclonedx.json
+          sbom-path: sbom.cyclonedx.json
+
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sbom.cyclonedx.json
           path: sbom.cyclonedx.json
+          retention-days: 30
 
   api-docs:
     name: API docs
-    needs: [release-please]
+    needs: [release-please, changes]
     if: |
       always() &&
+      inputs.skip_docs != true &&
       needs.release-please.result != 'failure' &&
-      needs.release-please.result != 'cancelled'
+      needs.release-please.result != 'cancelled' &&
+      (
+        needs.changes.outputs.docs-artifacts == 'true' ||
+        needs.changes.outputs.src-code == 'true'
+      )
     uses: ./.github/workflows/reusable-openapi-postman-publish.yml
     secrets: inherit
     with:
@@ -166,24 +224,74 @@ jobs:
       CHANNEL_SUFFIX: ${{ github.ref_name == 'dev' && '.dev' || '' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Run release-please
         id: release
-        uses: googleapis/release-please-action@v5
+        uses: googleapis/release-please-action@0dfd8538845b8e92600d271a895a5372865d4062 # v5
         with:
           token: ${{ github.token }}
           target-branch: ${{ github.ref_name }}
           config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
           manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
 
+      - name: Lint-fix CHANGELOGs on release PR branches
+        if: steps.release.outputs.prs_created == 'true' || steps.release.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t branches < <(
+            jq -rn --arg pr "${RELEASE_PR}" --arg prs "${RELEASE_PRS}" '
+              def parse_object($raw):
+                try ($raw | fromjson) catch null;
+              def parse_array($raw):
+                try ($raw | fromjson) catch [];
+              (
+                [parse_object($pr) | .headBranchName // .headRefName // empty] +
+                [parse_array($prs)[] | .headBranchName // .headRefName // empty]
+              )
+              | map(select(. != null and . != ""))
+              | unique
+              | .[]
+            '
+          )
+
+          if [ "${#branches[@]}" -eq 0 ]; then
+            echo "No release PR branches to lint-fix."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for branch in "${branches[@]}"; do
+            echo "::group::Lint-fix CHANGELOG on ${branch}"
+            git fetch origin "${branch}" --depth=2
+            git checkout -B "${branch}" "origin/${branch}"
+            npx --yes markdownlint-cli2@0.15.0 \
+              --config .markdownlint.json \
+              --fix \
+              'CHANGELOG*.md' || true
+            if [ -n "$(git status --porcelain CHANGELOG*.md 2>/dev/null)" ]; then
+              git add CHANGELOG*.md
+              git commit -m "chore(docs): lint-fix CHANGELOG after release-please"
+              git push origin "${branch}"
+              echo "Pushed CHANGELOG lint-fix to ${branch}"
+            else
+              echo "${branch} CHANGELOG already lint-clean."
+            fi
+            echo "::endgroup::"
+          done
+
       - name: Enable auto-merge on release PRs
-        # Runs every release-please job (not only when a new PR is opened) so
-        # existing release PRs that release-please left unchanged still get
-        # auto-merge enabled. `gh pr merge --auto` is idempotent.
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_PR: ${{ steps.release.outputs.pr }}
@@ -239,6 +347,7 @@ jobs:
       needs.release-please.outputs.releases_created == 'true' &&
       needs.sbom.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
@@ -258,13 +367,13 @@ jobs:
           echo "Attaching SBOM to release ${tag_name}"
 
       - name: Download SBOM artifact from sbom job
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sbom.cyclonedx.json
           path: .
 
       - name: Upload SBOM to GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
         with:
           tag_name: ${{ steps.tag.outputs.tag_name }}
           files: sbom.cyclonedx.json
@@ -272,45 +381,53 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-  resolve-environment:
-    name: Resolve Environment
-    needs:
-      - api-docs
-      - release-sbom
-    runs-on: ubuntu-latest
-    outputs:
-      post_merge_sha: ${{ steps.target.outputs.post_merge_sha }}
-      post_merge_branch: ${{ steps.target.outputs.post_merge_branch }}
-      github_environment: ${{ steps.target.outputs.github_environment }}
-    if: |
-      always() &&
-      (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped') &&
-      (needs.release-sbom.result == 'success' || needs.release-sbom.result == 'skipped')
-    steps:
-      - name: Resolve post-merge target and environment
-        id: target
-        run: |
-          echo "post_merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          echo "post_merge_branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-
-          branch="${{ github.ref_name }}"
-
-          if [ "$branch" = "main" ]; then
-            echo "github_environment=production" >> "$GITHUB_OUTPUT"
-          elif [ "$branch" = "dev" ]; then
-            echo "github_environment=development" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::Unsupported branch for deployment: $branch"
-            exit 1
-          fi
-
   deploy:
     name: Deploy
     needs:
-      - resolve-environment
-    if: always() && needs.resolve-environment.result == 'success'
+      - changes
+      - docker-build-push
+      - api-docs
+      - release-sbom
+    permissions:
+      contents: read
+      packages: write
+    if: |
+      always() &&
+      inputs.skip_deploy != true &&
+      (needs.api-docs.result == 'success' || needs.api-docs.result == 'skipped') &&
+      (needs.release-sbom.result == 'success' || needs.release-sbom.result == 'skipped') &&
+      needs.docker-build-push.result == 'success'
     uses: ./.github/workflows/reusable-railway-deploy.yml
     secrets: inherit
     with:
-      merge_commit_sha: ${{ needs.resolve-environment.outputs.post_merge_sha }}
-      target_branch: ${{ needs.resolve-environment.outputs.post_merge_branch }}
+      merge_commit_sha: ${{ github.sha }}
+      target_branch: ${{ github.ref_name }}
+
+  notify-failure:
+    name: Notify failure
+    needs:
+      - docker-build-push
+      - matrix-tests
+      - deploy
+      - release-please
+    if: |
+      always() &&
+      (
+        needs.docker-build-push.result == 'failure' ||
+        needs.matrix-tests.result == 'failure' ||
+        needs.deploy.result == 'failure' ||
+        needs.release-please.result == 'failure'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Emit post-merge failure notice
+        env:
+          DOCKER_RESULT: ${{ needs.docker-build-push.result }}
+          TESTS_RESULT: ${{ needs.matrix-tests.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          RELEASE_RESULT: ${{ needs.release-please.result }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          echo "::error title=Post-merge CI failed::docker=${DOCKER_RESULT} tests=${TESTS_RESULT} deploy=${DEPLOY_RESULT} release=${RELEASE_RESULT} — ${WORKFLOW_URL}"

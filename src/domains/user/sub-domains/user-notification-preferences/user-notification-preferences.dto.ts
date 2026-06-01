@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { trimmedString } from '@/shared/utils/validation/validation.util.js';
 
+/**
+ * Zod schema for the `PUT /api/v1/users/me/notification-preferences` request body.
+ * Replace-all semantics: clients send the complete preference set per `(notification_type, channel,
+ * organization_id?)` triple; the service deletes rows for the user and re-inserts this list.
+ */
 export const PutNotificationPreferencesDto = z
   .object({
     preferences: z.array(
@@ -16,4 +21,5 @@ export const PutNotificationPreferencesDto = z
   })
   .strict();
 
+/** Inferred body type from {@link PutNotificationPreferencesDto}. */
 export type PutNotificationPreferencesInput = z.infer<typeof PutNotificationPreferencesDto>;

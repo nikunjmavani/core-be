@@ -4,10 +4,10 @@
  * Shows what WILL be created, what is SKIPPED (disabled in config),
  * and what is ALREADY DONE (resources found in remote or state).
  */
-import type { SetupConfig } from '../common/types.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 import { INFRA_PROVIDERS } from './providers/index.js';
-import { loadState } from '../common/state.js';
-import { getEnvironmentNames } from '../common/config.js';
+import { loadState } from '@tooling/setup/common/state.js';
+import { getEnvironmentNames } from '@tooling/setup/common/config.js';
 
 export interface SummaryLine {
   status: 'create' | 'skip' | 'done';

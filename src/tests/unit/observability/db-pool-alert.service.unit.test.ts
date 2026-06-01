@@ -6,7 +6,7 @@ import {
 import {
   incrementOrganizationRlsCheckoutCount,
   resetOrganizationRlsCheckoutCountForTests,
-} from '@/infrastructure/database/organization-rls-checkout-counter.js';
+} from '@/infrastructure/database/pool/organization-rls-checkout-counter.js';
 
 const captureMessage = vi.fn();
 
@@ -22,7 +22,7 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   captureMessage: (...arguments_: unknown[]) => captureMessage(...arguments_),
 }));
 
-vi.mock('@/infrastructure/database/contexts/worker-database-context.js', () => ({
+vi.mock('@/infrastructure/database/contexts/worker-database.context.js', () => ({
   isWorkerRuntime: () => false,
 }));
 

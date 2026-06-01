@@ -1,5 +1,6 @@
 import type { UserSettingsOutput } from './user-settings.types.js';
 
+/** Minimal row projection accepted by {@link serializeUserSettings} (database row → API output). */
 export interface UserSettingsRow {
   is_dark_mode_enabled: boolean;
   is_notifications_enabled: boolean;
@@ -14,6 +15,10 @@ const DEFAULT_USER_SETTINGS: UserSettingsOutput = {
   preferred_locales: ['en'],
 };
 
+/**
+ * Project a `user_settings` row into the public {@link UserSettingsOutput} shape, applying the
+ * factory defaults when the row is missing so the API never returns "settings not found".
+ */
 export function serializeUserSettings(row: UserSettingsRow | null): UserSettingsOutput {
   if (!row)
     return {

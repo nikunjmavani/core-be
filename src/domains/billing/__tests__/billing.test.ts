@@ -16,6 +16,7 @@ import {
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 /**
  * Billing permissions imported inline to avoid cross-domain coupling in test setup.
@@ -64,13 +65,16 @@ describe('Billing Domain — Integration', () => {
 
   describe('GET /api/v1/billing/plans', () => {
     it('should return plans without authentication', async () => {
-      const response = await injectUnauthenticated(app, { url: '/api/v1/billing/plans' });
+      const response = await injectUnauthenticated(app, { url: testApiPath('/billing/plans') });
       expect(response.statusCode).toBe(200);
     });
 
     it('should return plans with authentication', async () => {
       const { token } = await createAuthorizedBillingContext();
-      const response = await injectAuthenticated(app, { url: '/api/v1/billing/plans', token });
+      const response = await injectAuthenticated(app, {
+        url: testApiPath('/billing/plans'),
+        token,
+      });
       expect(response.statusCode).toBe(200);
       const body = response.json() as { data?: unknown };
       expect(body.data).toBeDefined();
@@ -79,7 +83,10 @@ describe('Billing Domain — Integration', () => {
     it('should include created plan in list', async () => {
       await createTestPlan({ name: 'Pro Plan' });
       const { token } = await createAuthorizedBillingContext();
-      const response = await injectAuthenticated(app, { url: '/api/v1/billing/plans', token });
+      const response = await injectAuthenticated(app, {
+        url: testApiPath('/billing/plans'),
+        token,
+      });
       expect(response.statusCode).toBe(200);
       const body = response.json() as { data: Array<{ name: string }> };
       const planNames = body.data.map((plan) => plan.name);
@@ -91,7 +98,7 @@ describe('Billing Domain — Integration', () => {
     it('should return plan without authentication', async () => {
       const plan = await createTestPlan();
       const response = await injectUnauthenticated(app, {
-        url: `/api/v1/billing/plans/${plan.public_id}`,
+        url: testApiPath(`/billing/plans/${plan.public_id}`),
       });
       expect(response.statusCode).toBe(200);
     });
@@ -100,7 +107,7 @@ describe('Billing Domain — Integration', () => {
       const plan = await createTestPlan();
       const { token } = await createAuthorizedBillingContext();
       const response = await injectAuthenticated(app, {
-        url: `/api/v1/billing/plans/${plan.public_id}`,
+        url: testApiPath(`/billing/plans/${plan.public_id}`),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -111,7 +118,7 @@ describe('Billing Domain — Integration', () => {
     it('should return 404 for non-existent plan', async () => {
       const { token } = await createAuthorizedBillingContext();
       const response = await injectAuthenticated(app, {
-        url: '/api/v1/billing/plans/nonexistent',
+        url: testApiPath('/billing/plans/nonexistent'),
         token,
       });
       expect(response.statusCode).toBe(404);
@@ -123,7 +130,7 @@ describe('Billing Domain — Integration', () => {
   describe('GET /api/v1/billing/organizations/:id/subscriptions', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: '/api/v1/billing/organizations/some-id/subscriptions',
+        url: testApiPath('/billing/organizations/some-id/subscriptions'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -133,7 +140,7 @@ describe('Billing Domain — Integration', () => {
       const user = await createTestUser({ email: 'noperm@test.com' });
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
-        url: `/api/v1/billing/organizations/${organization.public_id}/subscriptions`,
+        url: testApiPath(`/billing/organizations/${organization.public_id}/subscriptions`),
         token,
       });
       expect(response.statusCode).toBe(403);
@@ -142,7 +149,7 @@ describe('Billing Domain — Integration', () => {
     it('should return subscriptions with permission', async () => {
       const { organization, token } = await createAuthorizedBillingContext();
       const response = await injectAuthenticated(app, {
-        url: `/api/v1/billing/organizations/${organization.public_id}/subscriptions`,
+        url: testApiPath(`/billing/organizations/${organization.public_id}/subscriptions`),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -154,7 +161,7 @@ describe('Billing Domain — Integration', () => {
       const { organization, token } = await createAuthorizedBillingContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: `/api/v1/billing/organizations/${organization.public_id}/subscriptions`,
+        url: testApiPath(`/billing/organizations/${organization.public_id}/subscriptions`),
         token,
         payload: {},
       });
@@ -168,7 +175,7 @@ describe('Billing Domain — Integration', () => {
     it('should return 400 for missing signature', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/billing/stripe/webhook',
+        url: testApiPath('/billing/stripe/webhook'),
         payload: { type: 'test' },
       });
       expect([400, 401]).toContain(response.statusCode);
@@ -177,7 +184,7 @@ describe('Billing Domain — Integration', () => {
     it('should return 400 for invalid stripe-signature header', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/billing/stripe/webhook',
+        url: testApiPath('/billing/stripe/webhook'),
         headers: { 'stripe-signature': 'invalid' },
         payload: { type: 'customer.subscription.updated', data: { object: {} } },
       });

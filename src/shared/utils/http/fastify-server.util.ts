@@ -33,25 +33,57 @@ export const PINO_REDACT_PATHS = [
   'req.body.email',
 ] as const;
 
-function resolveTrustProxy(): boolean | number {
+/**
+ * Resolves the Fastify `trustProxy` value from the validated env. `TRUST_PROXY` is parsed
+ * by the schema into `false | number` (a hop count); this normalizes to the shape Fastify
+ * accepts and never trusts a bare boolean `true`.
+ */
+export function resolveTrustProxy(): boolean | number {
   const trustProxy = env.TRUST_PROXY;
   if (trustProxy === false) return false;
-  if (trustProxy === true) return true;
   if (typeof trustProxy === 'number') return trustProxy;
   return false;
 }
 
+/**
+ * Maximum accepted length for a client-supplied `x-request-id`. Bounds memory/log size and
+ * comfortably covers a canonical UUID (36 chars) plus common tracing token formats.
+ */
+const MAX_INBOUND_REQUEST_IDENTIFIER_LENGTH = 128;
+
+/**
+ * Strict allow-list for inbound `x-request-id` values: a non-empty token of safe correlation-id
+ * characters (alphanumerics, hyphen, underscore) within {@link MAX_INBOUND_REQUEST_IDENTIFIER_LENGTH}.
+ * Canonical UUIDs satisfy this pattern. Anything else (whitespace, control chars, separators,
+ * oversized values) is rejected so attackers cannot inject arbitrary correlation ids, collide
+ * with other traffic, or poison incident triage — those requests get a server-generated id.
+ */
+const SAFE_INBOUND_REQUEST_IDENTIFIER_PATTERN = new RegExp(
+  `^[A-Za-z0-9_-]{1,${MAX_INBOUND_REQUEST_IDENTIFIER_LENGTH}}$`,
+);
+
+function isSafeInboundRequestIdentifier(candidate: string): boolean {
+  return SAFE_INBOUND_REQUEST_IDENTIFIER_PATTERN.test(candidate);
+}
+
 function resolveIncomingRequestIdentifier(incomingMessage: IncomingMessage): string {
   const headerValue = incomingMessage.headers['x-request-id'];
-  if (typeof headerValue === 'string' && headerValue.length > 0) {
-    return headerValue.slice(0, 128);
-  }
-  if (Array.isArray(headerValue) && headerValue[0] && headerValue[0].length > 0) {
-    return headerValue[0].slice(0, 128);
+  const candidate = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  if (typeof candidate === 'string' && isSafeInboundRequestIdentifier(candidate)) {
+    return candidate;
   }
   return randomUUID();
 }
 
+/**
+ * Builds the canonical {@link FastifyServerOptions} used by both the HTTP server and the
+ * worker health server: Pino logger with {@link PINO_REDACT_PATHS} plus recursive
+ * `redactSensitive` formatter, `pino-pretty` only in local, `trustProxy` resolved from
+ * env (required behind Railway/LB), correlation id propagation from `x-request-id`
+ * (accepted only when it matches {@link SAFE_INBOUND_REQUEST_IDENTIFIER_PATTERN}, otherwise a
+ * server-side UUID is generated), and the platform body-limit, request-timeout, and
+ * connection-timeout defaults.
+ */
 export function buildFastifyServerOptions(): FastifyServerOptions {
   return {
     logger: {

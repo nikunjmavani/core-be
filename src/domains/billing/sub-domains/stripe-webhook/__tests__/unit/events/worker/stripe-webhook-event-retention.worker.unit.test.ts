@@ -3,7 +3,7 @@ import { runStripeWebhookEventRetentionJob } from '@/domains/billing/sub-domains
 
 const deleteInBatchesByConditionMock = vi.fn();
 
-vi.mock('@/infrastructure/database/batch-delete.util.js', () => ({
+vi.mock('@/infrastructure/database/utils/batch-delete.util.js', () => ({
   deleteInBatchesByCondition: (...arguments_: unknown[]) =>
     deleteInBatchesByConditionMock(...arguments_),
 }));

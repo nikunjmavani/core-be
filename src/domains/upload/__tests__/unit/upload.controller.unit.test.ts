@@ -6,7 +6,7 @@ import type { UploadService } from '@/domains/upload/upload.service.js';
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    auth: { userId: generatePublicId(), role: 'USER' },
+    auth: { kind: 'user' as const, userId: generatePublicId(), role: 'USER' },
     params: {},
     body: {},
     headers: {},

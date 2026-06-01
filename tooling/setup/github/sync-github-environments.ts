@@ -27,6 +27,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import sodium from 'libsodium-wrappers';
 
 import { runGhAuthPreflight } from './auth-preflight.js';
@@ -34,6 +35,75 @@ import { runGhAuthPreflight } from './auth-preflight.js';
 const projectRoot = process.cwd();
 
 const RATE_LIMIT_BACKOFF_MS = [15_000, 30_000, 60_000, 120_000, 240_000] as const;
+
+/**
+ * Dynamic-delay tuning. Between every successful request we wait
+ * `clamp(timeToReset / remaining, MIN, MAX)` so a long batch is paced evenly
+ * across the GitHub primary-rate-limit window. This avoids the secondary
+ * abuse-detection rate limit that fires on bursts of writes to the same
+ * environment, even when the primary quota is healthy.
+ */
+const DYNAMIC_DELAY_MIN_MS = 250;
+const DYNAMIC_DELAY_MAX_MS = 5_000;
+const DYNAMIC_DELAY_DEFAULT_MS = 350;
+const DYNAMIC_DELAY_LOW_REMAINING_THRESHOLD = 50;
+
+interface RateLimitState {
+  remaining: number | null;
+  resetAtMs: number | null;
+  retryAfterMs: number | null;
+}
+
+const rateLimitState: RateLimitState = {
+  remaining: null,
+  resetAtMs: null,
+  retryAfterMs: null,
+};
+
+function parseIntegerHeader(headers: Headers, name: string): number | null {
+  const raw = headers.get(name);
+  if (raw === null || raw === '') return null;
+  const value = Number.parseInt(raw, 10);
+  return Number.isFinite(value) ? value : null;
+}
+
+function recordRateLimitHeaders(headers: Headers): void {
+  const remaining = parseIntegerHeader(headers, 'x-ratelimit-remaining');
+  const resetSeconds = parseIntegerHeader(headers, 'x-ratelimit-reset');
+  const retryAfterSeconds = parseIntegerHeader(headers, 'retry-after');
+  if (remaining !== null) rateLimitState.remaining = remaining;
+  if (resetSeconds !== null) rateLimitState.resetAtMs = resetSeconds * 1_000;
+  rateLimitState.retryAfterMs = retryAfterSeconds === null ? null : retryAfterSeconds * 1_000;
+}
+
+function computeDynamicDelayMs(): number {
+  const { remaining, resetAtMs, retryAfterMs } = rateLimitState;
+
+  if (retryAfterMs !== null && retryAfterMs > 0) {
+    return Math.min(retryAfterMs, DYNAMIC_DELAY_MAX_MS);
+  }
+
+  if (remaining === null || resetAtMs === null) {
+    return DYNAMIC_DELAY_DEFAULT_MS;
+  }
+
+  const timeToResetMs = resetAtMs - Date.now();
+  if (timeToResetMs <= 0) return DYNAMIC_DELAY_MIN_MS;
+
+  if (remaining <= 0) {
+    return Math.min(timeToResetMs, DYNAMIC_DELAY_MAX_MS);
+  }
+
+  const evenSpacingMs = Math.ceil(timeToResetMs / remaining);
+
+  // When quota is plentiful, stay near the floor; when it's tight, slow down.
+  const baseDelayMs =
+    remaining > DYNAMIC_DELAY_LOW_REMAINING_THRESHOLD
+      ? Math.max(DYNAMIC_DELAY_MIN_MS, Math.min(evenSpacingMs, DYNAMIC_DELAY_DEFAULT_MS))
+      : evenSpacingMs;
+
+  return Math.min(Math.max(baseDelayMs, DYNAMIC_DELAY_MIN_MS), DYNAMIC_DELAY_MAX_MS);
+}
 
 interface GitHubEnvironmentPublicKey {
   readonly key_id: string;
@@ -86,6 +156,11 @@ async function requestGitHub<T>(
   pathname: string,
   options: { readonly method?: string; readonly body?: unknown } = {},
 ): Promise<T> {
+  const dynamicDelayMs = computeDynamicDelayMs();
+  if (dynamicDelayMs > 0) {
+    await sleep(dynamicDelayMs);
+  }
+
   for (let attempt = 0; ; attempt += 1) {
     const response = await fetch(buildGitHubApiUrl(pathname), {
       method: options.method ?? 'GET',
@@ -95,8 +170,10 @@ async function requestGitHub<T>(
         'Content-Type': 'application/json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
     });
+    recordRateLimitHeaders(response.headers);
+
     if (response.ok) {
       if (response.status === 204) return undefined as T;
       return (await response.json()) as T;
@@ -109,7 +186,12 @@ async function requestGitHub<T>(
         `${label}: HTTP ${response.status} ${responseText}`,
       );
     }
-    const waitMs = RATE_LIMIT_BACKOFF_MS[attempt];
+    const retryAfterMs = rateLimitState.retryAfterMs;
+    const fallbackBackoffMs =
+      RATE_LIMIT_BACKOFF_MS[attempt] ??
+      RATE_LIMIT_BACKOFF_MS[RATE_LIMIT_BACKOFF_MS.length - 1] ??
+      1000;
+    const waitMs = retryAfterMs !== null && retryAfterMs > 0 ? retryAfterMs : fallbackBackoffMs;
     console.warn(
       `  ! GitHub API throttled "${label}" — backing off ${formatDuration(waitMs)} ` +
         `(retry ${attempt + 1}/${RATE_LIMIT_BACKOFF_MS.length})`,
@@ -142,6 +224,11 @@ function classifyKey(key: string): 'secret' | 'variable' {
   if (key.endsWith('_ENCRYPTION_KEY')) return 'secret';
   if (key.endsWith('_TOKEN')) return 'secret';
   if (key.endsWith('_DSN')) return 'secret';
+  // Deploy-provider service / workspace IDs (e.g. RAILWAY_SERVICE_ID,
+  // RAILWAY_WORKER_SERVICE_ID, POSTMAN_WORKSPACE_ID) are read via `secrets.*`
+  // in workflows, so they ship as Secrets, not Variables.
+  if (key.endsWith('_SERVICE_ID')) return 'secret';
+  if (key.endsWith('_WORKSPACE_ID')) return 'secret';
 
   // Connection strings with embedded credentials → Secret
   if (key === 'DATABASE_URL' || key === 'DATABASE_MIGRATION_URL') return 'secret';
@@ -156,32 +243,23 @@ function classifyKey(key: string): 'secret' | 'variable' {
   return 'variable';
 }
 
-/** Flat parser — reads all KEY=VALUE pairs, ignores section headers. */
+/**
+ * Flat parser — reads all KEY=VALUE pairs into their LOGICAL runtime values
+ * via `dotenv.parse`, which strips quotes, decodes `\n`/`\"`/`\\` escapes,
+ * and reassembles multi-line single-quoted blocks (PEM keys).
+ *
+ * Pushing the raw post-`=` text (including literal quotes) is incorrect for
+ * GitHub Environment Variables — GitHub stores the value verbatim, so a
+ * cron expression written locally as `KEY="0 3 * * *"` would land in GitHub
+ * as the literal `"0 3 * * *"` with surrounding quotes and would also fail
+ * the value-diff check on the next sync.
+ */
 function parseEnvFile(filePath: string): EnvEntry[] {
-  const entries: EnvEntry[] = [];
   const content = readFileSync(filePath, 'utf-8');
-
-  for (const line of content.split('\n')) {
-    if (line.startsWith('#') || line.trim() === '') continue;
-
-    const match = line.match(/^([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);
-    if (!match) continue;
-
-    const name = match[1]!;
-    const value = match[2]!;
-
-    // Reassemble multi-line double-quoted values
-    if (value.startsWith('"') && !value.endsWith('"')) {
-      // Multi-line values are handled differently — for PEM keys etc.
-      // We read the value as-is; the escape handling is done at push time.
-    }
-
-    if (value === '') continue; // skip empty values
-
-    entries.push({ name, value });
-  }
-
-  return entries;
+  const parsed = dotenv.parse(content);
+  return Object.entries(parsed)
+    .filter(([, value]) => value !== '')
+    .map(([name, value]) => ({ name, value }));
 }
 
 function formatDuration(milliseconds: number): string {
@@ -490,10 +568,13 @@ export async function syncEnvironmentToGitHub(
     const indexLabel = `${padIndex(processed, pushTotal)}/${pushTotal}`;
     const kindLabel = kind === 'secret' ? '[secret]  ' : '[variable]';
 
+    const quotaLabel =
+      rateLimitState.remaining !== null ? `, quota ${rateLimitState.remaining}` : '';
+
     console.log(
       `  ${indexLabel}  ${kindLabel} ${name}  (` +
         `${status}, took ${formatDuration(itemDuration)}, ${remaining} left, ` +
-        `ETA ${formatDuration(estimatedRemaining)})`,
+        `ETA ${formatDuration(estimatedRemaining)}${quotaLabel})`,
     );
   };
 
@@ -516,11 +597,23 @@ export async function syncEnvironmentToGitHub(
     });
   }
 
-  // ── Delete stale items (on GitHub but NOT in local file) ───────────────
+  // ── Delete stale items (on GitHub but NOT in local file with same kind) ──
+  //
+  // This covers two cases in a single pass:
+  //   1. Item removed from the local .env file (true stale).
+  //   2. Item re-classified across kinds, or pushed as the wrong kind by an
+  //      older setup-infra version (e.g. ALLOWED_ORIGINS pushed as a Secret
+  //      previously, now correctly classified as a Variable). The Secret is
+  //      no longer in localSecretNames, so it gets pruned here while the
+  //      Variable is created above — no duplicate left behind.
   const staleSecrets = [...existingSecrets].filter((name) => !localSecretNames.has(name));
   const staleVariables = [...existingVariables.keys()].filter(
     (name) => !localVariableNames.has(name),
   );
+  const crossKindDuplicates = new Set<string>([
+    ...staleSecrets.filter((name) => localVariableNames.has(name)),
+    ...staleVariables.filter((name) => localSecretNames.has(name)),
+  ]);
   const deleteTotal = staleSecrets.length + staleVariables.length;
 
   let deleted = 0;
@@ -528,12 +621,18 @@ export async function syncEnvironmentToGitHub(
   if (deleteTotal > 0) {
     console.log('');
     console.log(`Pruning ${deleteTotal} stale item(s) from GitHub...`);
+    if (crossKindDuplicates.size > 0) {
+      console.log(
+        `  (${crossKindDuplicates.size} of these are cross-kind duplicates from an older setup:infra version)`,
+      );
+    }
 
     for (const name of staleSecrets) {
       try {
         await deleteSecret(token, repositoryFullName, environment, name);
         deleted += 1;
-        console.log(`  [deleted]  secret ${name}`);
+        const note = crossKindDuplicates.has(name) ? ' (now a variable)' : '';
+        console.log(`  [deleted]  secret ${name}${note}`);
       } catch (deleteError) {
         const msg = deleteError instanceof Error ? deleteError.message : String(deleteError);
         console.error(`  [error]    secret ${name}: ${msg}`);
@@ -544,7 +643,8 @@ export async function syncEnvironmentToGitHub(
       try {
         await deleteVariable(token, repositoryFullName, environment, name);
         deleted += 1;
-        console.log(`  [deleted]  variable ${name}`);
+        const note = crossKindDuplicates.has(name) ? ' (now a secret)' : '';
+        console.log(`  [deleted]  variable ${name}${note}`);
       } catch (deleteError) {
         const msg = deleteError instanceof Error ? deleteError.message : String(deleteError);
         console.error(`  [error]    variable ${name}: ${msg}`);

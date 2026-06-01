@@ -36,6 +36,7 @@ describe('event-loop-metrics', () => {
 
     refreshEventLoopMetrics();
     const metricsBody = await renderMetrics();
+    expect(metricsBody).toBe('');
     expect(metricsBody).not.toContain('event_loop_lag_ms');
   });
 

@@ -37,7 +37,7 @@ Vitest tests live under `src/` in **two places only**.
 
 ### 1. `src/tests/` — cross-cutting
 
-```
+```text
 src/tests/
   helpers/          # test-app, test-auth, test-database, test-organization
   factories/        # shared factories
@@ -57,7 +57,7 @@ Do not put full domain route suites here.
 
 Never place `*.test.ts` directly under `__tests__/` — use `integration/`, `unit/`, or `e2e/`.
 
-```
+```text
 src/domains/<domain>/__tests__/
   integration/<domain>.integration.test.ts
   e2e/<flow>.e2e.test.ts
@@ -260,5 +260,6 @@ describe('example.validator', () => {
 
 - [sub-domains-layout.md](../architecture/sub-domains-layout.md) — test placement vs with/without routes
 - [api-testing.md](../../getting-started/api-testing.md) — manual smoke checklist
-- [documentation-system.md](../architecture/documentation-system.md) — ownership map
+- [documentation-system.md](../architecture/documentation-system.md) — layered docs ownership map
+- `src/tests/<suite>/OVERVIEW.md` — per-suite scope (unit, integration, e2e, global, chaos, contract, performance, security, smoke, load, bench)
 - `.cursor/skills/test-generator/SKILL.md` — orchestration checklist

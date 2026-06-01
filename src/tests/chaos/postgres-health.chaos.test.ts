@@ -31,7 +31,7 @@ describe('Chaos resilience: Postgres outage on readiness probing', () => {
         const healthResponseAwaitingIsolation =
           await chaosListeningFastifyApplicationListeningForHealthIsolation.inject({
             method: 'GET',
-            url: '/health',
+            url: '/readyz',
           });
 
         expect(healthResponseAwaitingIsolation.statusCode).toBe(503);

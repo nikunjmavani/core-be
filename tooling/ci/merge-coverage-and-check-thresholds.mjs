@@ -97,70 +97,98 @@ function loadCoverage(inputPath) {
   return JSON.parse(raw);
 }
 
+function tallyHitMap(hitMap) {
+  let total = 0;
+  let covered = 0;
+  for (const id of Object.keys(hitMap)) {
+    total += 1;
+    if (hitMap[id] > 0) covered += 1;
+  }
+  return { total, covered };
+}
+
+function tallyBranchMap(branchMap) {
+  let total = 0;
+  let covered = 0;
+  for (const branchId of Object.keys(branchMap)) {
+    for (const hits of branchMap[branchId]) {
+      total += 1;
+      if (hits > 0) covered += 1;
+    }
+  }
+  return { total, covered };
+}
+
+/**
+ * Line coverage is derived from statementMap: each line is covered if any
+ * statement starting on that line was executed at least once. Mirrors the
+ * istanbul-lib-coverage `FileCoverage.toSummary()` heuristic.
+ */
+function tallyLineCoverage(fileCoverage) {
+  const lineHits = new Map();
+  for (const statementId of Object.keys(fileCoverage.statementMap)) {
+    const lineNumber = fileCoverage.statementMap[statementId].start.line;
+    const previousHits = lineHits.get(lineNumber) ?? 0;
+    const statementHits = fileCoverage.s[statementId] ?? 0;
+    lineHits.set(lineNumber, Math.max(previousHits, statementHits));
+  }
+  let total = 0;
+  let covered = 0;
+  for (const hits of lineHits.values()) {
+    total += 1;
+    if (hits > 0) covered += 1;
+  }
+  return { total, covered };
+}
+
 function computeSummary(merged) {
-  let statementsTotal = 0;
-  let statementsCovered = 0;
-  let functionsTotal = 0;
-  let functionsCovered = 0;
-  let branchesTotal = 0;
-  let branchesCovered = 0;
-  let linesTotal = 0;
-  let linesCovered = 0;
+  const totals = {
+    statements: { total: 0, covered: 0 },
+    functions: { total: 0, covered: 0 },
+    branches: { total: 0, covered: 0 },
+    lines: { total: 0, covered: 0 },
+  };
 
   for (const filePath of Object.keys(merged)) {
     const fileCoverage = merged[filePath];
+    const statementCounts = tallyHitMap(fileCoverage.s);
+    const functionCounts = tallyHitMap(fileCoverage.f);
+    const branchCounts = tallyBranchMap(fileCoverage.b);
+    const lineCounts = tallyLineCoverage(fileCoverage);
 
-    for (const statementId of Object.keys(fileCoverage.s)) {
-      statementsTotal += 1;
-      if (fileCoverage.s[statementId] > 0) statementsCovered += 1;
-    }
-    for (const functionId of Object.keys(fileCoverage.f)) {
-      functionsTotal += 1;
-      if (fileCoverage.f[functionId] > 0) functionsCovered += 1;
-    }
-    for (const branchId of Object.keys(fileCoverage.b)) {
-      for (const hits of fileCoverage.b[branchId]) {
-        branchesTotal += 1;
-        if (hits > 0) branchesCovered += 1;
-      }
-    }
-
-    /**
-     * Line coverage is derived from statementMap: each line is covered if any
-     * statement starting on that line was executed at least once. Mirrors the
-     * istanbul-lib-coverage `FileCoverage.toSummary()` heuristic.
-     */
-    const lineHits = new Map();
-    for (const statementId of Object.keys(fileCoverage.statementMap)) {
-      const lineNumber = fileCoverage.statementMap[statementId].start.line;
-      const previousHits = lineHits.get(lineNumber) ?? 0;
-      const statementHits = fileCoverage.s[statementId] ?? 0;
-      lineHits.set(lineNumber, Math.max(previousHits, statementHits));
-    }
-    for (const hits of lineHits.values()) {
-      linesTotal += 1;
-      if (hits > 0) linesCovered += 1;
-    }
+    totals.statements.total += statementCounts.total;
+    totals.statements.covered += statementCounts.covered;
+    totals.functions.total += functionCounts.total;
+    totals.functions.covered += functionCounts.covered;
+    totals.branches.total += branchCounts.total;
+    totals.branches.covered += branchCounts.covered;
+    totals.lines.total += lineCounts.total;
+    totals.lines.covered += lineCounts.covered;
   }
 
+  const { statements, functions, branches, lines } = totals;
   const percentage = (covered, total) => (total === 0 ? 100 : (covered / total) * 100);
 
   return {
-    lines: { covered: linesCovered, total: linesTotal, pct: percentage(linesCovered, linesTotal) },
+    lines: {
+      covered: lines.covered,
+      total: lines.total,
+      pct: percentage(lines.covered, lines.total),
+    },
     statements: {
-      covered: statementsCovered,
-      total: statementsTotal,
-      pct: percentage(statementsCovered, statementsTotal),
+      covered: statements.covered,
+      total: statements.total,
+      pct: percentage(statements.covered, statements.total),
     },
     functions: {
-      covered: functionsCovered,
-      total: functionsTotal,
-      pct: percentage(functionsCovered, functionsTotal),
+      covered: functions.covered,
+      total: functions.total,
+      pct: percentage(functions.covered, functions.total),
     },
     branches: {
-      covered: branchesCovered,
-      total: branchesTotal,
-      pct: percentage(branchesCovered, branchesTotal),
+      covered: branches.covered,
+      total: branches.total,
+      pct: percentage(branches.covered, branches.total),
     },
   };
 }

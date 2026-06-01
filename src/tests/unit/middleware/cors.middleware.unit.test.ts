@@ -16,7 +16,7 @@ vi.mock('@/shared/config/env.config.js', () => ({
   },
 }));
 
-import corsMiddleware from '@/shared/middlewares/cors.middleware.js';
+import corsMiddleware from '@/shared/middlewares/security/cors.middleware.js';
 
 describe('cors.middleware', () => {
   let application: ReturnType<typeof Fastify>;
@@ -40,6 +40,7 @@ describe('cors.middleware', () => {
       expect.objectContaining({
         origin: ['https://app.example.com', 'https://admin.example.com'],
         credentials: true,
+        allowedHeaders: expect.arrayContaining(['X-Captcha-Token']),
       }),
     );
   });

@@ -8,8 +8,7 @@ const ACTION = 'audit.boundary.test';
 const RESOURCE_TYPE = 'audit-boundary';
 
 /**
- * `audit.logs` is range-partitioned by `created_at` (monthly). Tests must keep
- * timestamps inside the partitions seeded at migration time (current + next month).
+ * Inserts a single `audit.logs` row at an explicit `created_at` for boundary assertions.
  */
 async function insertAuditLogAt(actorUserId: number, createdAt: Date): Promise<number> {
   const rows = await sql<{ id: number }[]>`
@@ -38,8 +37,7 @@ describe('AuditRepository.findWithFilters from/to boundary semantics (database)'
   });
 
   /**
-   * Use timestamps within the current monthly partition (e.g. one hour ago / two hours ago)
-   * so we never write outside the partition range seeded by migrations.
+   * Use recent timestamps (e.g. one hour ago / two hours ago) for stable boundary assertions.
    */
   function buildBoundary(offsetMillis: number): Date {
     return new Date(Date.now() - offsetMillis);

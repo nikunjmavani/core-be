@@ -15,6 +15,19 @@ const ARGON2_OPTIONS: argon2.Options & { raw?: false } = {
 };
 
 /**
+ * Precomputed Argon2id hash (of a fixed, non-secret sentinel value) used to
+ * equalize login timing. When a login is attempted for an email with no user
+ * or no stored password, callers verify the supplied password against this
+ * dummy hash and discard the result, so the response time matches the
+ * password-mismatch path and cannot be used to enumerate valid emails.
+ *
+ * @remarks
+ * Generated with {@link ARGON2_OPTIONS}; it never validates any real password.
+ */
+export const DUMMY_ARGON2_HASH =
+  '$argon2id$v=19$m=19456,t=2,p=1$DesFxz144SQTxwQTYSQixw$yURO8nyJ9JO7gWawKpX+uutayJl5m6m2DkvWIp2kHiM';
+
+/**
  * Hash a password with Argon2id.
  */
 export async function hashPassword(plaintext: string): Promise<string> {

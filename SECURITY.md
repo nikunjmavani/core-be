@@ -49,7 +49,7 @@ For any dependency security update that requires manual merge:
 
 1. Read the linked advisory and determine whether the vulnerable code path is reachable.
 2. Prefer patch or minor updates when they contain the fix.
-3. For transitive vulnerabilities, prefer a `pnpm.overrides` entry that pins the vulnerable package to a patched version before upgrading a direct dependency to a new major version.
+3. For transitive vulnerabilities, prefer an `overrides` entry in `pnpm-workspace.yaml` that pins the vulnerable package to a patched version before upgrading a direct dependency to a new major version.
 4. If a direct dependency requires a major upgrade, review the changelog, update the affected call sites, and keep the fix in the same pull request.
 5. Run the dependency and quality gates before merging:
 

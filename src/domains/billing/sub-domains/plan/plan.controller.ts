@@ -6,6 +6,11 @@ import type { PlanService } from './plan.service.js';
 import { PlanSerializer } from './plan.serializer.js';
 import { validateGetPlanParams } from './plan.validator.js';
 
+/**
+ * Builds the HTTP handlers for the public plan catalog (`/plans`, `/plans/:id`),
+ * applying catalog cache headers on the list route so unchanged responses can
+ * short-circuit with a 304.
+ */
 export function createPlanController(service: PlanService) {
   return {
     listPlans: async (request: FastifyRequest, reply: FastifyReply) => {

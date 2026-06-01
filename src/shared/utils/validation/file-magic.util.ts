@@ -26,6 +26,15 @@ const MAGIC_SIGNATURES: ReadonlyArray<{
 ];
 
 /**
+ * Returns true when {@link verifyFileMagicBytes} knows a magic-byte signature for
+ * `contentType` (i.e. the type can be content-verified). Used to skip enforcement for
+ * allowed-but-signature-less types (e.g. text-based SVG, which is sanitized instead).
+ */
+export function isMagicByteVerifiable(contentType: string): boolean {
+  return MAGIC_SIGNATURES.some((entry) => entry.contentType === contentType);
+}
+
+/**
  * Verifies that the buffer's magic bytes match the declared content type.
  * Returns true if valid, false otherwise.
  */

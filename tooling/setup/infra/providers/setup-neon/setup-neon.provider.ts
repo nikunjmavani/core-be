@@ -1,5 +1,6 @@
-import * as logger from '../../../common/logger.js';
-import { isSecretFilled } from '../../../common/secrets.js';
+import postgres from 'postgres';
+import * as logger from '@tooling/setup/common/logger.js';
+import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -7,9 +8,42 @@ import type {
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 const NEON_API_BASE = 'https://console.neon.tech/api/v2';
+
+/** Postgres schemas owned by core-be migrations. Kept in sync with src/infrastructure/database/pg-schemas.ts. */
+const CORE_BE_APP_SCHEMAS = [
+  'auth',
+  'tenancy',
+  'billing',
+  'notify',
+  'audit',
+  'upload',
+  'public',
+] as const;
+
+const POSTGRES_IDENTIFIER_PATTERN = /^[a-z_][a-z0-9_]*$/;
+
+/** Resolve the Neon branch name to use for an environment from setup.config.json. */
+function getNeonBranchName(config: SetupConfig, environmentName: string): string {
+  const environment = config.environments.find((entry) => entry.name === environmentName);
+  if (!environment) {
+    throw new Error(`Unknown environment "${environmentName}" in setup.config.json`);
+  }
+  return environment.branch;
+}
+
+/** Build the per-environment runtime role name (e.g. development_service_user). */
+function getServiceRoleName(environmentName: string): string {
+  const candidate = `${environmentName}_service_user`;
+  if (!POSTGRES_IDENTIFIER_PATTERN.test(candidate)) {
+    throw new Error(
+      `Cannot derive Postgres role from environment name "${environmentName}" — expected lowercase letters, digits, underscores.`,
+    );
+  }
+  return candidate;
+}
 
 function neonHeaders(apiKey: string, orgId?: string): Record<string, string> {
   const headers: Record<string, string> = {
@@ -39,7 +73,7 @@ async function neonRequest<T>(
   const response = await fetch(url.toString(), {
     method,
     headers: neonHeaders(apiKey),
-    body: body ? JSON.stringify(body) : undefined,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
 
   if (!response.ok) {
@@ -74,20 +108,20 @@ async function resolveNeonOrgId(
       'No Neon organization found. Create one at https://console.neon.tech/app/settings or use an organization API key.',
     );
   }
-  const match =
-    preferredOrganizationName &&
-    organizations.find(
-      (org) =>
-        org.name?.toLowerCase() === preferredOrganizationName.toLowerCase() ||
-        org.id === preferredOrganizationName,
-    );
+  const match = preferredOrganizationName
+    ? organizations.find(
+        (org) =>
+          org.name?.toLowerCase() === preferredOrganizationName.toLowerCase() ||
+          org.id === preferredOrganizationName,
+      )
+    : undefined;
   const organization = match ?? organizations[0];
-  const orgId = organization?.id;
-  if (!orgId) {
+  if (!organization) {
     throw new Error(
-      `Neon organization has no id. Response: ${JSON.stringify(organization)}. Check https://console.neon.tech/app/settings.`,
+      'No Neon organization found. Create one at https://console.neon.tech/app/settings or use an organization API key.',
     );
   }
+  const orgId = organization.id;
   return orgId;
 }
 
@@ -200,28 +234,202 @@ async function waitForOperations(apiKey: string, projectId: string): Promise<voi
   );
 }
 
-const NEON_DEFAULT_ROLE = 'neondb_owner';
+const NEON_OWNER_ROLE = 'neondb_owner';
 const NEON_DEFAULT_DATABASE = 'neondb';
 
-async function getConnectionUri(
-  apiKey: string,
-  projectId: string,
-  branchId: string,
-  pooled: boolean,
-): Promise<string> {
+interface NeonBranchEntry {
+  branchId: string;
+  endpointId: string;
+  databaseUrl: string;
+  databaseMigrationUrl?: string;
+  serviceRoleName?: string;
+}
+
+interface GetConnectionUriOptions {
+  apiKey: string;
+  projectId: string;
+  branchId: string;
+  roleName: string;
+  pooled: boolean;
+}
+
+async function getConnectionUri(options: GetConnectionUriOptions): Promise<string> {
   const connectionResponse = await neonRequest<NeonConnectionUri>(
-    apiKey,
+    options.apiKey,
     'GET',
-    `/projects/${projectId}/connection_uri`,
+    `/projects/${options.projectId}/connection_uri`,
     undefined,
     {
-      branch_id: branchId,
+      branch_id: options.branchId,
       database_name: NEON_DEFAULT_DATABASE,
-      role_name: NEON_DEFAULT_ROLE,
-      pooled: String(pooled),
+      role_name: options.roleName,
+      pooled: String(options.pooled),
     },
   );
   return connectionResponse.uri;
+}
+
+interface NeonRoleSummary {
+  name: string;
+  branch_id?: string;
+  protected?: boolean;
+}
+
+interface NeonRolesListResponse {
+  roles: NeonRoleSummary[];
+}
+
+interface EnsureRuntimeRoleOptions {
+  apiKey: string;
+  projectId: string;
+  branchId: string;
+  roleName: string;
+}
+
+/**
+ * Ensure a Neon role with the given name exists on the branch. Idempotent: lists
+ * roles first and POSTs only if the role is missing. We do not persist the role
+ * password because the subsequent `connection_uri` call returns a URI with the
+ * password already embedded by Neon.
+ */
+async function ensureRuntimeRoleExists(options: EnsureRuntimeRoleOptions): Promise<boolean> {
+  const { apiKey, projectId, branchId, roleName } = options;
+  const listResponse = await neonRequest<NeonRolesListResponse>(
+    apiKey,
+    'GET',
+    `/projects/${projectId}/branches/${branchId}/roles`,
+  );
+  if (listResponse.roles?.some((role) => role.name === roleName)) {
+    return false;
+  }
+  await neonRequest<unknown>(apiKey, 'POST', `/projects/${projectId}/branches/${branchId}/roles`, {
+    role: { name: roleName },
+  });
+  return true;
+}
+
+interface GrantRuntimePrivilegesOptions {
+  migrationUrl: string;
+  roleName: string;
+  environmentName: string;
+}
+
+/**
+ * Connect as `neondb_owner` and grant least-privilege DML access to the runtime
+ * role across all core-be application schemas. Tolerant of schemas that don't
+ * exist yet (first-time setup before migrations have run) — we list pg_namespace
+ * up-front and only grant on schemas that are present.
+ */
+async function grantRuntimePrivileges(options: GrantRuntimePrivilegesOptions): Promise<string[]> {
+  const { migrationUrl, roleName, environmentName } = options;
+  if (!POSTGRES_IDENTIFIER_PATTERN.test(roleName)) {
+    throw new Error(`Refusing to grant on unsafe role identifier: ${roleName}`);
+  }
+
+  const sql = postgres(migrationUrl, { max: 1, prepare: false });
+  const grantedSchemas: string[] = [];
+  try {
+    const existing = await sql<{ nspname: string }[]>`
+      SELECT nspname
+      FROM pg_namespace
+      WHERE nspname = ANY(${[...CORE_BE_APP_SCHEMAS]}::text[])
+    `;
+    const existingSchemas = new Set(existing.map((row) => row.nspname));
+
+    await sql.unsafe(`GRANT CONNECT ON DATABASE ${NEON_DEFAULT_DATABASE} TO ${roleName}`);
+
+    for (const schema of CORE_BE_APP_SCHEMAS) {
+      if (!existingSchemas.has(schema)) continue;
+      await sql.unsafe(`GRANT USAGE ON SCHEMA ${schema} TO ${roleName}`);
+      await sql.unsafe(
+        `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${schema} TO ${roleName}`,
+      );
+      await sql.unsafe(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ${schema} TO ${roleName}`);
+      await sql.unsafe(
+        `ALTER DEFAULT PRIVILEGES FOR ROLE ${NEON_OWNER_ROLE} IN SCHEMA ${schema} GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${roleName}`,
+      );
+      await sql.unsafe(
+        `ALTER DEFAULT PRIVILEGES FOR ROLE ${NEON_OWNER_ROLE} IN SCHEMA ${schema} GRANT USAGE, SELECT ON SEQUENCES TO ${roleName}`,
+      );
+      grantedSchemas.push(schema);
+    }
+
+    if (grantedSchemas.length === 0) {
+      logger.warn(
+        `  No core-be schemas present yet on "${environmentName}" — run \`pnpm db:migrate\` and re-run \`pnpm setup:infra\` to grant runtime privileges.`,
+      );
+    }
+
+    return grantedSchemas;
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+}
+
+interface EnsureBranchRuntimeRoleOptions {
+  apiKey: string;
+  projectId: string;
+  environmentName: string;
+  entry: NeonBranchEntry;
+}
+
+/**
+ * Create (if missing) the per-environment runtime role on a branch, fetch fresh
+ * pooled (service-role) and direct (owner) connection URIs, then grant
+ * least-privilege access on existing schemas. Returns the updated branch entry.
+ */
+async function ensureBranchRuntimeRole(
+  options: EnsureBranchRuntimeRoleOptions,
+): Promise<NeonBranchEntry> {
+  const { apiKey, projectId, environmentName, entry } = options;
+  const serviceRoleName = getServiceRoleName(environmentName);
+
+  const created = await ensureRuntimeRoleExists({
+    apiKey,
+    projectId,
+    branchId: entry.branchId,
+    roleName: serviceRoleName,
+  });
+  logger.success(
+    created
+      ? `  Runtime role "${serviceRoleName}" created on Neon branch ${entry.branchId}`
+      : `  Runtime role "${serviceRoleName}" already exists on Neon branch ${entry.branchId}`,
+  );
+
+  const [databaseUrl, databaseMigrationUrl] = await Promise.all([
+    getConnectionUri({
+      apiKey,
+      projectId,
+      branchId: entry.branchId,
+      roleName: serviceRoleName,
+      pooled: true,
+    }),
+    getConnectionUri({
+      apiKey,
+      projectId,
+      branchId: entry.branchId,
+      roleName: NEON_OWNER_ROLE,
+      pooled: false,
+    }),
+  ]);
+
+  const grantedSchemas = await grantRuntimePrivileges({
+    migrationUrl: databaseMigrationUrl,
+    roleName: serviceRoleName,
+    environmentName,
+  });
+  if (grantedSchemas.length > 0) {
+    logger.success(
+      `  Granted runtime privileges to "${serviceRoleName}" on schemas: ${grantedSchemas.join(', ')}`,
+    );
+  }
+
+  return {
+    ...entry,
+    databaseUrl,
+    databaseMigrationUrl,
+    serviceRoleName,
+  };
 }
 
 export async function provision(
@@ -238,8 +446,9 @@ export async function provision(
 
   try {
     let projectId = state.neon?.projectId;
-    const branches: Record<string, { branchId: string; endpointId: string; databaseUrl: string }> =
-      state.neon?.branches ? { ...state.neon.branches } : {};
+    const branches: Record<string, NeonBranchEntry> = state.neon?.branches
+      ? ({ ...state.neon.branches } as Record<string, NeonBranchEntry>)
+      : {};
 
     // Adopt remote project by name when local state is missing the project ID.
     if (!projectId) {
@@ -303,11 +512,14 @@ export async function provision(
       projectId = projectResponse.project.id;
       logger.stopSpinner(spinner, `Neon project created: ${projectId}`);
 
-      // The default branch (main) is used for the last environment (typically prod)
+      // The default branch (typically named "main") is used for the last environment
+      // (typically prod). The branch id will be resolved below once the project's
+      // operations finish — leave it as a placeholder so the post-branch pass can
+      // re-fetch a proper URI keyed by the configured branch name.
       const productionEnvironment = environments[environments.length - 1];
       if (productionEnvironment && projectResponse.connection_uris?.[0]) {
         branches[productionEnvironment] = {
-          branchId: 'main',
+          branchId: '',
           endpointId: projectResponse.connection_uris[0].connection_uri ? 'default' : '',
           databaseUrl: projectResponse.connection_uris[0].connection_uri,
         };
@@ -316,45 +528,59 @@ export async function provision(
       logger.stopSpinner(spinner, `Neon project already exists: ${projectId}`);
     }
 
-    await waitForOperations(apiKey, projectId!);
+    if (projectId === undefined) {
+      throw new Error(
+        'Neon projectId is unset after create/adopt flow (unreachable; both branches assign it).',
+      );
+    }
+    const neonProjectId: string = projectId;
 
-    const remoteBranches = await listBranches(apiKey, projectId!);
+    await waitForOperations(apiKey, neonProjectId);
+
+    const remoteBranches = await listBranches(apiKey, neonProjectId);
 
     // Create branches for remaining environments
     const nonProductionEnvironments = environments.slice(0, -1);
 
     for (const environmentName of nonProductionEnvironments) {
-      if (branches[environmentName]) {
-        logger.success(`  Branch "${environmentName}" already exists`);
+      const neonBranchName = getNeonBranchName(config, environmentName);
+      const existingEntry = branches[environmentName];
+      if (existingEntry?.branchId) {
+        logger.success(`  Branch "${environmentName}" (Neon: ${neonBranchName}) already exists`);
         continue;
       }
 
-      const remoteBranch = remoteBranches.find((branch) => branch.name === environmentName);
+      const remoteBranch = remoteBranches.find((branch) => branch.name === neonBranchName);
       if (remoteBranch) {
-        await waitForOperations(apiKey, projectId!);
+        await waitForOperations(apiKey, neonProjectId);
         const adoptSpinner = logger.startSpinner(
-          `Adopting existing Neon branch: ${environmentName}...`,
+          `Adopting existing Neon branch "${neonBranchName}" for environment "${environmentName}"...`,
         );
-        const databaseUrl = await getConnectionUri(apiKey, projectId!, remoteBranch.id, true);
         branches[environmentName] = {
+          ...(existingEntry ?? {}),
           branchId: remoteBranch.id,
-          endpointId: '',
-          databaseUrl,
+          endpointId: existingEntry?.endpointId ?? '',
+          databaseUrl: existingEntry?.databaseUrl ?? '',
         };
-        logger.stopSpinner(adoptSpinner, `Branch "${environmentName}" adopted: ${remoteBranch.id}`);
+        logger.stopSpinner(
+          adoptSpinner,
+          `Branch "${neonBranchName}" adopted for "${environmentName}": ${remoteBranch.id}`,
+        );
         continue;
       }
 
-      const branchSpinner = logger.startSpinner(`Creating branch: ${environmentName}...`);
+      const branchSpinner = logger.startSpinner(
+        `Creating Neon branch "${neonBranchName}" for environment "${environmentName}"...`,
+      );
 
-      await waitForOperations(apiKey, projectId!);
+      await waitForOperations(apiKey, neonProjectId);
 
       const branchResponse = await neonRequest<NeonBranch>(
         apiKey,
         'POST',
-        `/projects/${projectId}/branches`,
+        `/projects/${neonProjectId}/branches`,
         {
-          branch: { name: environmentName },
+          branch: { name: neonBranchName },
           endpoints: [{ type: 'read_write' }],
         },
       );
@@ -362,39 +588,66 @@ export async function provision(
       const branchId = branchResponse.branch.id;
       const endpointId = branchResponse.endpoints?.[0]?.id ?? '';
 
-      const databaseUrl =
-        branchResponse.connection_uris?.[0]?.connection_uri ??
-        (await getConnectionUri(apiKey, projectId!, branchId, true));
-
-      branches[environmentName] = { branchId, endpointId, databaseUrl };
-      logger.stopSpinner(branchSpinner, `Branch "${environmentName}" created: ${branchId}`);
+      branches[environmentName] = {
+        ...(existingEntry ?? {}),
+        branchId,
+        endpointId,
+        databaseUrl: existingEntry?.databaseUrl ?? '',
+      };
+      logger.stopSpinner(
+        branchSpinner,
+        `Branch "${neonBranchName}" created for "${environmentName}": ${branchId}`,
+      );
     }
 
-    // Fetch production connection URI if not yet set — resolve the actual production branch
-    // (do not hard-code 'main') to avoid using a placeholder branch ID in state.
+    // Resolve production branch — prefer the configured branch name, fall back to
+    // Neon's default "main" or the only remaining branch.
     const productionEnvironment = environments[environments.length - 1];
-    if (productionEnvironment && !branches[productionEnvironment]?.databaseUrl) {
-      const productionBranch =
-        remoteBranches.find((branch) => branch.name === productionEnvironment) ??
-        remoteBranches.find((branch) => branch.name === 'main') ??
-        remoteBranches[0];
-      if (!productionBranch) {
+    if (productionEnvironment) {
+      const productionBranchName = getNeonBranchName(config, productionEnvironment);
+      const existingProductionEntry = branches[productionEnvironment];
+      if (!existingProductionEntry?.branchId) {
+        const productionBranch =
+          remoteBranches.find((branch) => branch.name === productionBranchName) ??
+          remoteBranches.find((branch) => branch.name === 'main') ??
+          remoteBranches[0];
+        if (!productionBranch) {
+          throw new Error(
+            `Neon project "${neonProjectId}" has no branches; cannot resolve production connection URI.`,
+          );
+        }
+        branches[productionEnvironment] = {
+          ...(existingProductionEntry ?? {}),
+          branchId: productionBranch.id,
+          endpointId: existingProductionEntry?.endpointId ?? 'default',
+          databaseUrl: existingProductionEntry?.databaseUrl ?? '',
+        };
+      }
+    }
+
+    // Ensure each environment has a runtime role + populated DATABASE_URL and
+    // DATABASE_MIGRATION_URL, then grant least-privilege access on the existing
+    // schemas. Idempotent for re-runs.
+    for (const environmentName of environments) {
+      const entry = branches[environmentName];
+      if (!entry?.branchId) {
         throw new Error(
-          `Neon project "${projectId}" has no branches; cannot resolve production connection URI.`,
+          `Neon branch for environment "${environmentName}" was not resolved; cannot create runtime role.`,
         );
       }
-      const databaseUrl = await getConnectionUri(apiKey, projectId!, productionBranch.id, true);
-      branches[productionEnvironment] = {
-        branchId: productionBranch.id,
-        endpointId: 'default',
-        databaseUrl,
-      };
+      const updated = await ensureBranchRuntimeRole({
+        apiKey,
+        projectId: neonProjectId,
+        environmentName,
+        entry,
+      });
+      branches[environmentName] = updated;
     }
 
     return {
       success: true,
-      message: `Neon: ${Object.keys(branches).length} branches ready`,
-      stateUpdates: { neon: { projectId: projectId!, branches } },
+      message: `Neon: ${Object.keys(branches).length} branches ready with runtime roles`,
+      stateUpdates: { neon: { projectId: neonProjectId, branches } },
     };
   } catch (provisionError) {
     const message =
@@ -423,7 +676,21 @@ export async function check(state: SetupState, secrets: SetupSecrets): Promise<b
 function allEnvironmentsHaveBranch(environments: string[], state: SetupState): boolean {
   const branches = state.neon?.branches;
   if (!branches) return false;
-  return environments.every((environmentName) => Boolean(branches[environmentName]?.databaseUrl));
+  return environments.every((environmentName) => {
+    const entry = branches[environmentName];
+    return Boolean(
+      entry?.branchId &&
+        entry?.databaseUrl &&
+        entry?.databaseMigrationUrl &&
+        entry?.serviceRoleName,
+    );
+  });
+}
+
+function countEnvironmentsWithServiceRole(state: SetupState): number {
+  const branches = state.neon?.branches;
+  if (!branches) return 0;
+  return Object.values(branches).filter((entry) => Boolean(entry?.serviceRoleName)).length;
 }
 
 export const setupNeonProvider: InfraProvider = {
@@ -493,7 +760,8 @@ export const setupNeonProvider: InfraProvider = {
     alreadyDone: () =>
       Boolean(context.state.neon?.projectId) &&
       allEnvironmentsHaveBranch(context.environments, context.state),
-    alreadyDoneMessage: 'project + all environment branches already in state',
+    alreadyDoneMessage:
+      'project + all environment branches (with runtime role + migration URL) already in state',
     execute: async () => {
       const result = await provision(
         context.config,
@@ -505,12 +773,16 @@ export const setupNeonProvider: InfraProvider = {
       context.applyStateUpdates(result.stateUpdates ?? {});
       return result;
     },
-    verifyState: () => ({
-      ok: Boolean(context.state.neon?.projectId) && Boolean(context.state.neon?.branches),
-      message: context.state.neon?.projectId
-        ? `project ${context.state.neon.projectId} with ${Object.keys(context.state.neon.branches ?? {}).length} branches`
-        : 'no Neon project recorded',
-    }),
+    verifyState: () => {
+      const branchCount = Object.keys(context.state.neon?.branches ?? {}).length;
+      const withRole = countEnvironmentsWithServiceRole(context.state);
+      return {
+        ok: Boolean(context.state.neon?.projectId) && Boolean(context.state.neon?.branches),
+        message: context.state.neon?.projectId
+          ? `project ${context.state.neon.projectId} with ${branchCount} branch(es), ${withRole} with runtime role`
+          : 'no Neon project recorded',
+      };
+    },
     verifyLive: async () => {
       const ok = await check(context.state, context.secrets);
       return { ok, message: ok ? 'reachable' : 'unreachable' };

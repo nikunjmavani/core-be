@@ -5,6 +5,7 @@ import type { Job, Worker } from 'bullmq';
 const queueAddMock = vi.fn().mockResolvedValue(undefined);
 const queueCloseMock = vi.fn().mockResolvedValue(undefined);
 const sentryCaptureExceptionMock = vi.fn();
+const insertDeadLetterJobMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('bullmq', () => ({
   Queue: class MockQueue {
@@ -12,6 +13,11 @@ vi.mock('bullmq', () => ({
 
     close = queueCloseMock;
   },
+  UnrecoverableError: class UnrecoverableError extends Error {},
+}));
+
+vi.mock('@/infrastructure/queue/dlq/dead-letter.repository.js', () => ({
+  insertDeadLetterJob: (...arguments_: unknown[]) => insertDeadLetterJobMock(...arguments_),
 }));
 
 vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
@@ -33,6 +39,8 @@ describe('dead-letter helpers', () => {
     queueAddMock.mockClear();
     queueCloseMock.mockClear();
     sentryCaptureExceptionMock.mockClear();
+    insertDeadLetterJobMock.mockClear();
+    insertDeadLetterJobMock.mockResolvedValue(undefined);
     const { closeDeadLetterQueues } = await import('@/infrastructure/queue/dlq/dead-letter.js');
     await closeDeadLetterQueues();
     vi.resetModules();
@@ -105,10 +113,11 @@ describe('dead-letter helpers', () => {
       await Promise.resolve();
 
       expect(queueAddMock).not.toHaveBeenCalled();
+      expect(insertDeadLetterJobMock).not.toHaveBeenCalled();
       expect(sentryCaptureExceptionMock).not.toHaveBeenCalled();
     });
 
-    it('enqueues dead letter and captures Sentry on final failure', async () => {
+    it('persists to Postgres, enqueues dead letter, and captures Sentry on final failure', async () => {
       const { attachDeadLetterAndAlerting } = await import(
         '@/infrastructure/queue/dlq/dead-letter.js'
       );
@@ -127,9 +136,52 @@ describe('dead-letter helpers', () => {
       fakeWorker.emit('failed', job, finalError, 'active');
 
       await vi.waitFor(() => {
+        expect(insertDeadLetterJobMock).toHaveBeenCalledTimes(1);
         expect(queueAddMock).toHaveBeenCalledTimes(1);
       });
 
+      expect(insertDeadLetterJobMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source_queue: 'notification',
+          dead_letter_queue: 'notification-dlq',
+          job_id: 'job-2',
+          job_name: 'dispatch-notification',
+          failed_reason: 'permanent',
+          attempts_made: 3,
+          max_attempts: 3,
+          payload_summary: { notification_id: 2 },
+        }),
+      );
+      expect(sentryCaptureExceptionMock).toHaveBeenCalledWith(finalError);
+    });
+
+    it('still mirrors to Redis after a Postgres persist failure is captured to Sentry', async () => {
+      const persistError = new Error('postgres-down');
+      insertDeadLetterJobMock.mockRejectedValueOnce(persistError);
+
+      const { attachDeadLetterAndAlerting } = await import(
+        '@/infrastructure/queue/dlq/dead-letter.js'
+      );
+      const fakeWorker = new EventEmitter() as unknown as Worker;
+      attachDeadLetterAndAlerting(fakeWorker, 'notification');
+
+      const finalError = new Error('permanent');
+      const job = {
+        id: 'job-3',
+        name: 'dispatch-notification',
+        data: { notificationId: 3 },
+        attemptsMade: 3,
+        opts: { attempts: 3 },
+      } as Job;
+
+      fakeWorker.emit('failed', job, finalError, 'active');
+
+      await vi.waitFor(() => {
+        expect(queueAddMock).toHaveBeenCalledTimes(1);
+      });
+
+      // One Sentry capture for the persist failure, one for the final-failure alert.
+      expect(sentryCaptureExceptionMock).toHaveBeenCalledWith(persistError);
       expect(sentryCaptureExceptionMock).toHaveBeenCalledWith(finalError);
     });
   });

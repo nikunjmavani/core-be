@@ -1,6 +1,17 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import {
+  appendCommitDispatchTask,
+  consumeCommitDispatchTasks,
+} from '@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js';
+import { executeCommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.executor.js';
+import type { CommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.types.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+/**
+ * Envelope for an in-process domain event published through {@link eventBus}.
+ * Handlers receive the event verbatim; downstream BullMQ jobs receive the
+ * payload plus `requestId` for log correlation across the async boundary.
+ */
 export interface DomainEvent<TPayload = unknown> {
   type: string;
   payload: TPayload;
@@ -27,6 +38,11 @@ export function buildDomainEvent<TPayload>(
   return event;
 }
 
+/**
+ * Async function registered with {@link EventBus.on}. Failures are logged but
+ * never propagate — the bus catches and swallows handler errors so an
+ * in-process side effect cannot fail the originating HTTP request.
+ */
 export type EventHandler<TPayload = unknown> = (event: DomainEvent<TPayload>) => Promise<void>;
 
 type OnCommitTask = () => Promise<void>;
@@ -36,6 +52,7 @@ interface OnCommitQueue {
 }
 
 const onCommitStorage = new AsyncLocalStorage<OnCommitQueue>();
+const pendingCommitDispatchRequestIds = new Set<string>();
 
 function getOrCreateOnCommitQueue(): OnCommitQueue {
   const existing = onCommitStorage.getStore();
@@ -47,6 +64,16 @@ function getOrCreateOnCommitQueue(): OnCommitQueue {
   return queue;
 }
 
+/**
+ * In-process publish-subscribe bus for domain events. One singleton instance
+ * (`eventBus`) is exported below; services emit through it and handlers
+ * registered at startup react. Handler errors are caught and logged so a
+ * failing handler cannot bubble up and fail the originating HTTP request.
+ *
+ * Pairs with `onCommit` / `flushOnCommit` for the transactional-outbox
+ * pattern: side effects (BullMQ enqueues) wait until the surrounding HTTP
+ * transaction commits before they fire.
+ */
 export class EventBus {
   private handlers: Map<string, EventHandler[]> = new Map();
 
@@ -60,16 +87,37 @@ export class EventBus {
    * Schedules work to run after the active HTTP request transaction commits (or at
    * `onResponse` for autocommit routes). Used by transactional outbox handlers to
    * dispatch BullMQ jobs only after the outbox row is durable.
+   *
+   * Prefer {@link scheduleCommitDispatch} for production HTTP paths — it persists
+   * serializable tasks to Redis immediately so a process crash cannot drop side effects.
    */
   onCommit(task: OnCommitTask): void {
     getOrCreateOnCommitQueue().tasks.push(task);
   }
 
   /**
-   * Runs all tasks queued via `onCommit` for the current async context since the last flush.
-   * Call from request `onResponse` after organization RLS / statement-timeout transactions settle.
+   * Runs durable Redis-backed tasks for `requestId`, then any in-memory tasks queued via
+   * `onCommit` for the current async context. Call from request `onResponse` after the
+   * organization RLS / statement-timeout transactions settle.
    */
-  async flushOnCommit(): Promise<void> {
+  async flushOnCommit(options?: { requestId?: string }): Promise<void> {
+    const requestId = options?.requestId;
+    if (requestId !== undefined && pendingCommitDispatchRequestIds.has(requestId)) {
+      pendingCommitDispatchRequestIds.delete(requestId);
+      try {
+        const durableTasks = await consumeCommitDispatchTasks({ requestId });
+        for (const task of durableTasks) {
+          try {
+            await executeCommitDispatchTask(task);
+          } catch (error) {
+            logger.error({ error, requestId, task }, 'event-bus.commit-dispatch.task.failed');
+          }
+        }
+      } catch (error) {
+        logger.warn({ error, requestId }, 'commit-dispatch.consume_failed');
+      }
+    }
+
     const queue = onCommitStorage.getStore();
     if (queue === undefined || queue.tasks.length === 0) return;
     const tasks = queue.tasks.splice(0, queue.tasks.length);
@@ -98,6 +146,31 @@ export class EventBus {
       }),
     );
   }
+
+  /**
+   * Like {@link emit} but propagates the first handler failure to the caller.
+   * Used for auth recovery/login email paths where a silent handler failure
+   * must not return success to the client.
+   */
+  async emitStrict(event: DomainEvent): Promise<void> {
+    const handlers = this.handlers.get(event.type) ?? [];
+    if (handlers.length === 0) return;
+
+    const errors: unknown[] = [];
+    await Promise.all(
+      handlers.map(async (handler) => {
+        try {
+          await handler(event);
+        } catch (error) {
+          errors.push(error);
+          logger.error({ eventType: event.type, error }, 'Domain event handler failed');
+        }
+      }),
+    );
+    if (errors.length > 0) {
+      throw errors[0];
+    }
+  }
 }
 
 /** Runs `callback` with an isolated onCommit task queue (HTTP request scope). */
@@ -110,7 +183,46 @@ export function enterOnCommitScope(): void {
   onCommitStorage.enterWith({ tasks: [] });
 }
 
+/**
+ * Process-wide {@link EventBus} singleton. Services import this directly to
+ * emit; handlers are registered against it at startup by
+ * {@link registerEventHandlers} and the per-domain container registrations.
+ */
 export const eventBus = new EventBus();
+
+/** Optional HTTP request id for {@link scheduleCommitDispatch} durable Redis persistence. */
+export interface ScheduleCommitDispatchOptions {
+  requestId?: string;
+}
+
+/**
+ * Schedules a serializable post-commit side effect.
+ *
+ * @remarks
+ * - **Algorithm:** when `requestId` is set, RPUSH JSON to Redis immediately; otherwise queue in-memory for flush.
+ * - **Failure modes:** Redis append failure falls back to in-memory onCommit (not crash-safe).
+ * - **Side effects:** may write Redis keys; execution deferred until {@link EventBus.flushOnCommit}.
+ * - **Notes:** task payloads must stay secret-free — identifiers only.
+ */
+export async function scheduleCommitDispatch(
+  task: CommitDispatchTask,
+  options?: ScheduleCommitDispatchOptions,
+): Promise<void> {
+  const requestId = options?.requestId;
+  if (requestId !== undefined) {
+    try {
+      await appendCommitDispatchTask({ requestId, task });
+      pendingCommitDispatchRequestIds.add(requestId);
+      return;
+    } catch (error) {
+      logger.warn(
+        { error, requestId, taskType: task.type },
+        'commit-dispatch.append_failed.fallback_to_memory',
+      );
+    }
+  }
+  eventBus.onCommit(() => executeCommitDispatchTask(task));
+}
 
 /**
  * Runs `callback` immediately when no HTTP onCommit scope is active (workers, scripts);
@@ -122,4 +234,9 @@ export async function runEnqueueAfterCommit(callback: OnCommitTask): Promise<voi
     return;
   }
   eventBus.onCommit(callback);
+}
+
+/** Clears in-process pending markers — test harness only. */
+export function resetCommitDispatchPendingStateForTests(): void {
+  pendingCommitDispatchRequestIds.clear();
 }

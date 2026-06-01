@@ -1,26 +1,71 @@
 /**
- * Interactive Railway custom-domain helper.
+ * Interactive + scriptable Railway custom-domain helper.
  *
- * Walks the user through one prompt at a time:
- *   1. Pick environment (development / production)
- *   2. Pick service (api / worker)
- *   3. Optional target port (Railway only sets a target port when the service exposes one)
- *   4. Custom domain to attach (e.g. api.albetrios.com)
- *   5. Confirm
+ * What it does (per environment + service):
+ *   1. Resolve the Railway service (only services exposing inbound HTTP — `worker` is rejected).
+ *   2. Ensure a Railway-generated service domain exists so the service has a backing hostname.
+ *   3. Attach the requested custom domain (idempotent — adopts an existing attachment if present).
+ *   4. Print the DNS records Railway expects at the user's DNS provider.
+ *   5. Poll local DNS resolution and Railway's `customDomains.status` until both DNS is verified
+ *      and Railway has issued the Let's Encrypt certificate (or the timeout elapses).
+ *   6. Persist `customDomain` into `.setup-state.json` for downstream tooling.
+ *   7. Print the env-var follow-ups the user almost always needs (`ALLOWED_ORIGINS`,
+ *      `FRONTEND_URL`, `OAUTH_*_REDIRECT_URI`) with copy-pasteable `gh secret set` commands.
  *
- * Then it ensures a Railway-generated service domain exists, attaches the custom domain
- * (idempotent — re-running with the same custom domain re-uses the existing one),
- * and prints the DNS records the user needs to add at their DNS provider.
+ * Modes:
+ *   - Interactive (no flags): one-env-at-a-time, prompts walk through environment, service,
+ *     target port, custom domain, confirmation.
+ *   - Scriptable / non-interactive (flags below): same flow, no prompts. Suitable for CI or
+ *     for batch-attaching across both `development` and `production`.
+ *   - `--check`: read-only re-poll of an already-attached custom domain. Safe to run on a cron.
  *
- * Run via: pnpm setup:railway-domain
+ * Flags:
+ *   --environment <name>          Repeatable. Limits the run to specific envs from
+ *                                 `.setup-state.json`. When omitted, behavior depends on
+ *                                 `--all-environments` and whether prompts are usable.
+ *   --all-environments            Loop every environment recorded in `.setup-state.json`.
+ *   --service <name>              Defaults to `api`. `worker` is rejected.
+ *   --domain <fqdn>               Required (per env) when running non-interactively. Mutually
+ *                                 exclusive with `--domain-template`.
+ *   --domain-template <pattern>   Pattern with `{env}` placeholder, e.g.
+ *                                 `api.{env}.example.com`. Convenient with
+ *                                 `--all-environments`. Empty `{env}` segments collapse so
+ *                                 `production` does not gain an `api..example.com` style label —
+ *                                 see resolveDomainFromTemplate below.
+ *   --port <n>                    Defaults to `app.port` from `tooling/setup/setup.config.json`
+ *                                 (currently 3000).
+ *   --check                       Read-only — query and print existing custom-domain status,
+ *                                 don't create anything.
+ *   --no-wait                     Skip the DNS + cert poll loop. Fire-and-forget.
+ *   --wait-timeout-seconds <n>    How long to poll before giving up (default 900 = 15m).
+ *   --poll-interval-seconds <n>   Cadence between polls (default 10s).
+ *   --help, -h                    Print this flag reference.
+ *
+ * Run via: pnpm setup:domain
  */
+import { promises as dns } from 'node:dns';
 import { createInterface } from 'node:readline';
-import * as logger from './logger.js';
-import { loadConfig } from '../common/config.js';
-import { loadState } from '../common/state.js';
-import { loadEnvSetupIntoProcess } from './secrets.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
+import { loadEnvSetupIntoProcess } from '@tooling/setup/common/secrets.js';
+import { loadState, saveState } from '@tooling/setup/common/state.js';
+import type { SetupState } from '@tooling/setup/common/types.js';
 
 const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
+
+// Railway certificate-status enum values that mean "ready". Treated case-insensitively.
+const READY_CERTIFICATE_STATUSES = new Set(['ISSUED', 'ACTIVE', 'ISSUE_SUCCESS']);
+
+// Railway certificate-status enum values that mean "terminal failure".
+const FAILED_CERTIFICATE_STATUSES = new Set([
+  'FAILED',
+  'ERROR',
+  'ISSUE_FAILED',
+  'VALIDATION_FAILED',
+]);
+
+const DEFAULT_WAIT_TIMEOUT_SECONDS = 900;
+const DEFAULT_POLL_INTERVAL_SECONDS = 10;
 
 async function railwayGraphQL<T>(
   token: string,
@@ -55,19 +100,21 @@ interface ServiceDomain {
   targetPort: number | null;
 }
 
+interface DnsRecord {
+  recordType: string;
+  hostlabel: string;
+  fqdn: string;
+  requiredValue: string;
+  currentValue: string;
+  status: string;
+  purpose: string;
+  zone: string;
+}
+
 interface CustomDomainStatus {
   certificateStatus: string;
   verified: boolean;
-  dnsRecords: Array<{
-    recordType: string;
-    hostlabel: string;
-    fqdn: string;
-    requiredValue: string;
-    currentValue: string;
-    status: string;
-    purpose: string;
-    zone: string;
-  }>;
+  dnsRecords: DnsRecord[];
 }
 
 interface CustomDomainSummary {
@@ -239,12 +286,13 @@ async function selectOne(
   choices: PromptChoice[],
   defaultIndex = 0,
 ): Promise<string> {
-  if (choices.length === 0) {
+  const [first] = choices;
+  if (!first) {
     throw new Error(`No choices available for "${question}"`);
   }
   if (choices.length === 1) {
-    logger.info(`  ${question}: ${choices[0].label} (only option)`);
-    return choices[0].value;
+    logger.info(`  ${question}: ${first.label} (only option)`);
+    return first.value;
   }
 
   logger.info(question);
@@ -255,24 +303,44 @@ async function selectOne(
   while (true) {
     const answer = await ask('Pick number', String(defaultIndex + 1));
     const index = Number.parseInt(answer, 10) - 1;
-    if (Number.isInteger(index) && index >= 0 && index < choices.length) {
-      return choices[index].value;
+    const choice = choices[index];
+    if (choice && Number.isInteger(index) && index >= 0 && index < choices.length) {
+      return choice.value;
     }
     logger.warn(`  Invalid choice. Enter a number between 1 and ${choices.length}.`);
   }
 }
 
-function parseOptionalPort(input: string): number | undefined {
-  if (input === '') return undefined;
+function parsePort(input: string, source: string): number {
   const port = Number.parseInt(input, 10);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid port: "${input}" (expected integer 1-65535 or empty)`);
+    throw new Error(`Invalid port from ${source}: "${input}" (expected integer 1-65535)`);
   }
   return port;
 }
 
 function isValidDomain(domain: string): boolean {
   return /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain);
+}
+
+function isReadyCertificateStatus(status: string): boolean {
+  return READY_CERTIFICATE_STATUSES.has(status.toUpperCase());
+}
+
+function isFailedCertificateStatus(status: string): boolean {
+  return FAILED_CERTIFICATE_STATUSES.has(status.toUpperCase());
+}
+
+/**
+ * Expand a domain template like `api.{env}.example.com`.
+ * Replaces `{env}` with the env name. When the env is the default
+ * environment (e.g. `production`) and the result would yield an
+ * unnecessary label like `api.production.example.com`, the caller
+ * can decide what they want — this helper does the literal substitution
+ * only. For collapsing logic, prefer passing `--domain` explicitly.
+ */
+function resolveDomainFromTemplate(template: string, environmentName: string): string {
+  return template.replaceAll('{env}', environmentName).toLowerCase();
 }
 
 function printDnsRecords(domain: string, status: CustomDomainStatus): void {
@@ -297,7 +365,620 @@ function printDnsRecords(domain: string, status: CustomDomainStatus): void {
   );
 }
 
+interface LocalDnsCheckResult {
+  recordType: string;
+  fqdn: string;
+  expected: string;
+  observed: string[];
+  matches: boolean;
+}
+
+/**
+ * Probe local DNS resolvers for each Railway-supplied record so the user gets
+ * fast feedback before Railway's own re-verification kicks in. Returns a
+ * per-record result; never throws — DNS failures are reflected in `observed`.
+ */
+async function probeLocalDns(records: DnsRecord[]): Promise<LocalDnsCheckResult[]> {
+  const results: LocalDnsCheckResult[] = [];
+  for (const record of records) {
+    const expected = record.requiredValue;
+    let observed: string[] = [];
+    try {
+      switch (record.recordType.toUpperCase()) {
+        case 'CNAME':
+        case 'ALIAS':
+        case 'ANAME':
+          observed = await dns.resolveCname(record.fqdn);
+          break;
+        case 'A':
+          observed = await dns.resolve4(record.fqdn);
+          break;
+        case 'AAAA':
+          observed = await dns.resolve6(record.fqdn);
+          break;
+        case 'TXT': {
+          const txt = await dns.resolveTxt(record.fqdn);
+          observed = txt.map((chunks) => chunks.join(''));
+          break;
+        }
+        default:
+          observed = [];
+      }
+    } catch {
+      observed = [];
+    }
+    const matches = observed.some(
+      (value) =>
+        value.replace(/\.$/, '').toLowerCase() === expected.replace(/\.$/, '').toLowerCase(),
+    );
+    results.push({
+      recordType: record.recordType,
+      fqdn: record.fqdn,
+      expected,
+      observed,
+      matches,
+    });
+  }
+  return results;
+}
+
+function summarizeLocalDns(results: LocalDnsCheckResult[]): string {
+  if (results.length === 0) return 'no records to probe';
+  const matched = results.filter((result) => result.matches).length;
+  return `local DNS ${matched}/${results.length} records resolve to expected values`;
+}
+
+async function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+interface PollOptions {
+  waitTimeoutSeconds: number;
+  pollIntervalSeconds: number;
+}
+
+type PollOutcome =
+  | { ok: true; final: CustomDomainSummary }
+  | { ok: false; reason: 'timeout' | 'cert-failed'; final: CustomDomainSummary };
+
+async function pollUntilReady(
+  token: string,
+  projectId: string,
+  environmentId: string,
+  serviceId: string,
+  customDomainId: string,
+  options: PollOptions,
+): Promise<PollOutcome> {
+  const deadline = Date.now() + options.waitTimeoutSeconds * 1000;
+  let lastSummary: CustomDomainSummary | null = null;
+
+  while (Date.now() < deadline) {
+    const customDomains = await fetchCustomDomains(token, projectId, environmentId, serviceId);
+    const current = customDomains.find((entry) => entry.id === customDomainId);
+    if (!current) {
+      throw new Error(
+        `Custom domain ${customDomainId} disappeared from Railway — was it deleted in the dashboard?`,
+      );
+    }
+    lastSummary = current;
+
+    const dnsResults = await probeLocalDns(current.status.dnsRecords);
+    const timestamp = new Date().toISOString();
+    logger.info(
+      `[${timestamp}] verified=${current.status.verified} cert=${current.status.certificateStatus} (${summarizeLocalDns(dnsResults)})`,
+    );
+
+    if (current.status.verified && isReadyCertificateStatus(current.status.certificateStatus)) {
+      return { ok: true, final: current };
+    }
+    if (isFailedCertificateStatus(current.status.certificateStatus)) {
+      return { ok: false, reason: 'cert-failed', final: current };
+    }
+
+    await sleep(options.pollIntervalSeconds * 1000);
+  }
+
+  if (!lastSummary) {
+    throw new Error('Poll loop ended before a single Railway status response was observed.');
+  }
+  return { ok: false, reason: 'timeout', final: lastSummary };
+}
+
+interface DownstreamHintInput {
+  environmentName: string;
+  serviceName: string;
+  domain: string;
+  oauthGoogleEnabled: boolean;
+  oauthGithubEnabled: boolean;
+}
+
+/**
+ * Print the env-var follow-ups the user almost always needs after attaching a
+ * custom domain. Mentions the canonical keys from `.env.example` and emits
+ * copy-pasteable `gh secret set` commands. We deliberately do not push any of
+ * these automatically — keep that as a separate user decision.
+ */
+function printDownstreamEnvHints(input: DownstreamHintInput): void {
+  logger.blank();
+  logger.info(
+    `Next: update env vars for "${input.environmentName}" so the API answers under https://${input.domain}.`,
+  );
+  logger.blank();
+
+  logger.info(`  ALLOWED_ORIGINS — include https://${input.domain}`);
+  logger.info(
+    `  FRONTEND_URL    — set to https://${input.domain} when this is the public API origin`,
+  );
+  if (input.oauthGoogleEnabled) {
+    logger.info(`  OAUTH_GOOGLE_REDIRECT_URI — https://${input.domain}/auth/oauth/google/callback`);
+  }
+  if (input.oauthGithubEnabled) {
+    logger.info(`  OAUTH_GITHUB_REDIRECT_URI — https://${input.domain}/auth/oauth/github/callback`);
+  }
+  logger.blank();
+
+  logger.info('  Copy-pasteable GitHub Environment updates:');
+  logger.info(
+    `    gh secret set ALLOWED_ORIGINS --env ${input.environmentName} --body "https://${input.domain}"`,
+  );
+  logger.info(
+    `    gh secret set FRONTEND_URL --env ${input.environmentName} --body "https://${input.domain}"`,
+  );
+  if (input.oauthGoogleEnabled) {
+    logger.info(
+      `    gh secret set OAUTH_GOOGLE_REDIRECT_URI --env ${input.environmentName} --body "https://${input.domain}/auth/oauth/google/callback"`,
+    );
+  }
+  if (input.oauthGithubEnabled) {
+    logger.info(
+      `    gh secret set OAUTH_GITHUB_REDIRECT_URI --env ${input.environmentName} --body "https://${input.domain}/auth/oauth/github/callback"`,
+    );
+  }
+  logger.info('  Or push from the local env file via `pnpm github:sync <environment>`.');
+}
+
+interface CliFlags {
+  help: boolean;
+  environments: string[];
+  allEnvironments: boolean;
+  service: string | null;
+  domain: string | null;
+  domainTemplate: string | null;
+  port: number | null;
+  check: boolean;
+  noWait: boolean;
+  waitTimeoutSeconds: number;
+  pollIntervalSeconds: number;
+}
+
+function parseFlags(argv: string[]): CliFlags {
+  const flags: CliFlags = {
+    help: false,
+    environments: [],
+    allEnvironments: false,
+    service: null,
+    domain: null,
+    domainTemplate: null,
+    port: null,
+    check: false,
+    noWait: false,
+    waitTimeoutSeconds: DEFAULT_WAIT_TIMEOUT_SECONDS,
+    pollIntervalSeconds: DEFAULT_POLL_INTERVAL_SECONDS,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    const consumeValue = (label: string): string => {
+      const value = argv[index + 1];
+      if (value === undefined) {
+        throw new Error(`Missing value for ${label}`);
+      }
+      index += 1;
+      return value;
+    };
+
+    switch (arg) {
+      case '--help':
+      case '-h':
+        flags.help = true;
+        break;
+      case '--environment':
+        flags.environments.push(consumeValue('--environment'));
+        break;
+      case '--all-environments':
+        flags.allEnvironments = true;
+        break;
+      case '--service':
+        flags.service = consumeValue('--service');
+        break;
+      case '--domain':
+        flags.domain = consumeValue('--domain').toLowerCase();
+        break;
+      case '--domain-template':
+        flags.domainTemplate = consumeValue('--domain-template');
+        break;
+      case '--port':
+        flags.port = parsePort(consumeValue('--port'), '--port');
+        break;
+      case '--check':
+        flags.check = true;
+        break;
+      case '--no-wait':
+        flags.noWait = true;
+        break;
+      case '--wait-timeout-seconds':
+        flags.waitTimeoutSeconds = parsePort(
+          consumeValue('--wait-timeout-seconds'),
+          '--wait-timeout-seconds',
+        );
+        break;
+      case '--poll-interval-seconds':
+        flags.pollIntervalSeconds = parsePort(
+          consumeValue('--poll-interval-seconds'),
+          '--poll-interval-seconds',
+        );
+        break;
+      default:
+        throw new Error(`Unknown flag: ${arg}`);
+    }
+  }
+
+  if (flags.domain && flags.domainTemplate) {
+    throw new Error('Pass either --domain or --domain-template, not both.');
+  }
+
+  return flags;
+}
+
+function printHelp(): void {
+  const lines = [
+    'pnpm setup:domain — attach a custom domain (with SSL) to a Railway service.',
+    '',
+    'Usage:',
+    '  pnpm setup:domain                                       # interactive, single env',
+    '  pnpm setup:domain --check --all-environments            # read-only status poll',
+    '  pnpm setup:domain --all-environments \\',
+    '                    --domain-template "api.{env}.example.com"',
+    '  pnpm setup:domain --environment production --domain api.example.com',
+    '',
+    'Flags:',
+    '  --environment <name>          Repeatable. Limit run to specific envs.',
+    '  --all-environments            Loop every env in .setup-state.json.',
+    '  --service <name>              Defaults to "api". "worker" is rejected.',
+    '  --domain <fqdn>               Required per env when running non-interactively.',
+    '  --domain-template <pattern>   Use with --all-environments. {env} placeholder.',
+    `  --port <n>                    Defaults to app.port from setup.config.json.`,
+    '  --check                       Read-only; print status only, no mutations.',
+    '  --no-wait                     Skip DNS + cert poll. Fire-and-forget.',
+    `  --wait-timeout-seconds <n>    Default ${DEFAULT_WAIT_TIMEOUT_SECONDS}.`,
+    `  --poll-interval-seconds <n>   Default ${DEFAULT_POLL_INTERVAL_SECONDS}.`,
+    '  --help, -h                    Print this reference.',
+    '',
+    'Runbook: docs/deployment/runbooks/railway-custom-domain.md',
+  ];
+  for (const line of lines) {
+    console.log(line);
+  }
+}
+
+interface EnvironmentBinding {
+  name: string;
+  environmentId: string;
+  services: Record<string, { serviceId: string }>;
+}
+
+function listEnvironments(state: SetupState): EnvironmentBinding[] {
+  const entries = Object.entries(state.railway?.environments ?? {});
+  return entries.map(([name, value]) => ({
+    name,
+    environmentId: value.environmentId,
+    services: Object.fromEntries(
+      Object.entries(value.services).map(([serviceName, service]) => [
+        serviceName,
+        { serviceId: service.serviceId },
+      ]),
+    ),
+  }));
+}
+
+async function resolveEnvironmentSelection(
+  flags: CliFlags,
+  available: EnvironmentBinding[],
+): Promise<EnvironmentBinding[]> {
+  if (flags.allEnvironments) {
+    return available;
+  }
+  if (flags.environments.length > 0) {
+    const byName = new Map(available.map((entry) => [entry.name, entry]));
+    const selected: EnvironmentBinding[] = [];
+    for (const requested of flags.environments) {
+      const match = byName.get(requested);
+      if (!match) {
+        throw new Error(
+          `Environment "${requested}" not found in .setup-state.json. Available: ${available
+            .map((entry) => entry.name)
+            .join(', ')}`,
+        );
+      }
+      selected.push(match);
+    }
+    return selected;
+  }
+  const chosen = await selectOne(
+    'Pick the Railway environment',
+    available.map((entry) => ({
+      label: `${entry.name} (${entry.environmentId})`,
+      value: entry.name,
+    })),
+  );
+  return [available.find((entry) => entry.name === chosen) as EnvironmentBinding];
+}
+
+async function resolveService(
+  flags: CliFlags,
+  environment: EnvironmentBinding,
+): Promise<{ name: string; serviceId: string }> {
+  const eligibleServices = Object.entries(environment.services).filter(
+    ([name]) => name.toLowerCase() !== 'worker',
+  );
+  if (eligibleServices.length === 0) {
+    throw new Error(
+      `Environment "${environment.name}" has no HTTP-exposing services (workers are not eligible for custom domains).`,
+    );
+  }
+
+  const [firstService] = eligibleServices;
+  const requestedName =
+    flags.service ?? (eligibleServices.length === 1 && firstService ? firstService[0] : null);
+
+  if (requestedName) {
+    if (requestedName.toLowerCase() === 'worker') {
+      throw new Error(
+        '`worker` services have no inbound HTTP and cannot have a custom domain. Pick the `api` service.',
+      );
+    }
+    const match = eligibleServices.find(([name]) => name === requestedName);
+    if (!match) {
+      throw new Error(
+        `Service "${requestedName}" not found in environment "${environment.name}". Eligible: ${eligibleServices
+          .map(([name]) => name)
+          .join(', ')}`,
+      );
+    }
+    return { name: match[0], serviceId: match[1].serviceId };
+  }
+
+  const chosen = await selectOne(
+    'Pick the service',
+    eligibleServices.map(([name, value]) => ({
+      label: `${name} (${value.serviceId})`,
+      value: name,
+    })),
+  );
+  const match = eligibleServices.find(([name]) => name === chosen);
+  if (!match) {
+    throw new Error(`Service "${chosen}" not found after selection.`);
+  }
+  return { name: match[0], serviceId: match[1].serviceId };
+}
+
+async function resolveDomain(
+  flags: CliFlags,
+  environmentName: string,
+  isInteractiveDefault: boolean,
+): Promise<string | null> {
+  if (flags.domain) return flags.domain;
+  if (flags.domainTemplate) return resolveDomainFromTemplate(flags.domainTemplate, environmentName);
+  if (flags.check) return null;
+  if (!isInteractiveDefault) {
+    throw new Error(
+      `--domain or --domain-template is required when running non-interactively (env: ${environmentName}).`,
+    );
+  }
+  const input = (await ask('  Custom domain (e.g. api.example.com)')).toLowerCase();
+  return input;
+}
+
+function resolveTargetPort(flags: CliFlags, defaultPort: number): number {
+  return flags.port ?? defaultPort;
+}
+
+function persistCustomDomainIntoState(
+  state: SetupState,
+  environmentName: string,
+  serviceName: string,
+  customDomain: CustomDomainSummary,
+  targetPort: number | undefined,
+): void {
+  const railway = state.railway;
+  if (!railway?.environments) return;
+  const environment = railway.environments[environmentName];
+  if (!environment) return;
+  const service = environment.services[serviceName];
+  if (!service) return;
+
+  service.customDomain = {
+    domain: customDomain.domain,
+    customDomainId: customDomain.id,
+    ...(typeof targetPort === 'number' ? { targetPort } : {}),
+    verified: customDomain.status.verified,
+    certificateStatus: customDomain.status.certificateStatus,
+    attachedAt: new Date().toISOString(),
+  };
+}
+
+interface RunOneInput {
+  token: string;
+  projectId: string;
+  environment: EnvironmentBinding;
+  service: { name: string; serviceId: string };
+  domain: string | null;
+  targetPort: number;
+  flags: CliFlags;
+  state: SetupState;
+  oauthGoogleEnabled: boolean;
+  oauthGithubEnabled: boolean;
+}
+
+interface RunOneOutput {
+  status: 'ok' | 'pending' | 'failed' | 'skipped';
+  message: string;
+}
+
+async function runOne(input: RunOneInput): Promise<RunOneOutput> {
+  const {
+    token,
+    projectId,
+    environment,
+    service,
+    domain,
+    targetPort,
+    flags,
+    state,
+    oauthGoogleEnabled,
+    oauthGithubEnabled,
+  } = input;
+
+  if (flags.check) {
+    const customDomains = await fetchCustomDomains(
+      token,
+      projectId,
+      environment.environmentId,
+      service.serviceId,
+    );
+    if (customDomains.length === 0) {
+      logger.warn(
+        `[${environment.name}/${service.name}] no custom domains attached. Re-run without --check to add one.`,
+      );
+      return { status: 'skipped', message: 'no custom domain attached' };
+    }
+    for (const summary of customDomains) {
+      logger.info(`[${environment.name}/${service.name}] ${summary.domain}`);
+      printDnsRecords(summary.domain, summary.status);
+      const localDns = await probeLocalDns(summary.status.dnsRecords);
+      logger.info(`  ${summarizeLocalDns(localDns)}`);
+    }
+    return { status: 'ok', message: 'check complete' };
+  }
+
+  if (!domain) {
+    throw new Error(
+      `No --domain or --domain-template provided for ${environment.name}/${service.name}.`,
+    );
+  }
+  if (!isValidDomain(domain)) {
+    throw new Error(`Invalid domain: "${domain}"`);
+  }
+
+  logger.info(`[${environment.name}/${service.name}] attaching ${domain} (port ${targetPort})...`);
+
+  const existingServiceDomains = await fetchServiceDomains(
+    token,
+    projectId,
+    environment.environmentId,
+    service.serviceId,
+  );
+  let serviceDomain = existingServiceDomains[0];
+  if (serviceDomain) {
+    logger.info(`  Service domain already exists: ${serviceDomain.domain}`);
+  } else {
+    logger.info('  Creating Railway service domain...');
+    serviceDomain = await createServiceDomain(
+      token,
+      environment.environmentId,
+      service.serviceId,
+      targetPort,
+    );
+    logger.success(`  Service domain created: ${serviceDomain.domain}`);
+  }
+
+  const existingCustomDomains = await fetchCustomDomains(
+    token,
+    projectId,
+    environment.environmentId,
+    service.serviceId,
+  );
+  let customDomain = existingCustomDomains.find((entry) => entry.domain.toLowerCase() === domain);
+  if (customDomain) {
+    logger.info(`  Custom domain already attached: ${customDomain.domain}`);
+  } else {
+    logger.info(`  Attaching custom domain ${domain}...`);
+    customDomain = await createCustomDomain(
+      token,
+      projectId,
+      environment.environmentId,
+      service.serviceId,
+      domain,
+      targetPort,
+    );
+    logger.success(`  Custom domain attached: ${customDomain.domain}`);
+  }
+
+  printDnsRecords(customDomain.domain, customDomain.status);
+
+  let finalSummary = customDomain;
+  if (!flags.noWait) {
+    logger.blank();
+    logger.info(
+      `  Polling DNS verification + certificate issuance (timeout ${flags.waitTimeoutSeconds}s, interval ${flags.pollIntervalSeconds}s)...`,
+    );
+    const outcome = await pollUntilReady(
+      token,
+      projectId,
+      environment.environmentId,
+      service.serviceId,
+      customDomain.id,
+      {
+        waitTimeoutSeconds: flags.waitTimeoutSeconds,
+        pollIntervalSeconds: flags.pollIntervalSeconds,
+      },
+    );
+    finalSummary = outcome.final;
+    if (outcome.ok) {
+      logger.success(
+        `  Verified: ${finalSummary.domain} — certificate ${finalSummary.status.certificateStatus}`,
+      );
+    } else if (outcome.reason === 'cert-failed') {
+      logger.error(
+        `  Certificate issuance failed: ${finalSummary.status.certificateStatus}. Check DNS records and CAA settings.`,
+      );
+    } else {
+      logger.warn(
+        `  Timed out waiting for verification (last: verified=${finalSummary.status.verified}, cert=${finalSummary.status.certificateStatus}). Re-run with --check to resume polling.`,
+      );
+    }
+  }
+
+  persistCustomDomainIntoState(state, environment.name, service.name, finalSummary, targetPort);
+
+  printDownstreamEnvHints({
+    environmentName: environment.name,
+    serviceName: service.name,
+    domain: finalSummary.domain,
+    oauthGoogleEnabled,
+    oauthGithubEnabled,
+  });
+
+  if (flags.noWait) return { status: 'pending', message: 'attached, polling skipped' };
+  if (
+    finalSummary.status.verified &&
+    isReadyCertificateStatus(finalSummary.status.certificateStatus)
+  ) {
+    return { status: 'ok', message: 'verified + cert issued' };
+  }
+  if (isFailedCertificateStatus(finalSummary.status.certificateStatus)) {
+    return { status: 'failed', message: `cert ${finalSummary.status.certificateStatus}` };
+  }
+  return { status: 'pending', message: 'awaiting verification — re-run with --check' };
+}
+
 async function main(): Promise<void> {
+  const flags = parseFlags(process.argv.slice(2));
+  if (flags.help) {
+    printHelp();
+    return;
+  }
+
   loadEnvSetupIntoProcess();
   const token = (process.env.RAILWAY_TOKEN ?? '').trim();
   if (!token) {
@@ -317,137 +998,107 @@ async function main(): Promise<void> {
   }
 
   const projectId = state.railway.projectId;
-  const environmentEntries = Object.entries(state.railway.environments ?? {});
-  if (environmentEntries.length === 0) {
+  const available = listEnvironments(state);
+  if (available.length === 0) {
     logger.error(
       'No Railway environments recorded in .setup-state.json. Run pnpm setup:infra to populate them.',
     );
     process.exit(1);
   }
 
+  const isInteractiveDefault =
+    !flags.allEnvironments &&
+    flags.environments.length === 0 &&
+    !flags.domain &&
+    !flags.domainTemplate &&
+    !flags.check;
+
   logger.banner(
     config.project.displayName,
-    environmentEntries.map(([name]) => name),
+    available.map((entry) => entry.name),
   );
-  logger.info('Railway custom-domain setup — 5 steps');
-  logger.blank();
 
-  // Step 1 — environment
-  logger.info('Step 1/5 — Environment');
-  const environmentName = await selectOne(
-    '  Pick the Railway environment',
-    environmentEntries.map(([name, value]) => ({
-      label: `${name} (${value.environmentId})`,
-      value: name,
-    })),
-  );
-  const environmentEntry = state.railway.environments![environmentName];
-  const environmentId = environmentEntry.environmentId;
-  logger.success(`  Environment: ${environmentName} (${environmentId})`);
-  logger.blank();
+  const selectedEnvironments = await resolveEnvironmentSelection(flags, available);
+  const defaultPort = config.app.port;
+  const oauthGoogleEnabled = config.providers.oauth.google.enabled;
+  const oauthGithubEnabled = config.providers.oauth.github.enabled;
 
-  // Step 2 — service
-  logger.info('Step 2/5 — Service');
-  const serviceEntries = Object.entries(environmentEntry.services);
-  if (serviceEntries.length === 0) {
-    logger.error(
-      `Environment "${environmentName}" has no services in state. Run pnpm setup:infra to attach api/worker.`,
-    );
-    process.exit(1);
-  }
-  const serviceName = await selectOne(
-    '  Pick the service',
-    serviceEntries.map(([name, value]) => ({
-      label: `${name} (${value.serviceId})`,
-      value: name,
-    })),
-  );
-  const serviceId = environmentEntry.services[serviceName].serviceId;
-  logger.success(`  Service: ${serviceName} (${serviceId})`);
-  logger.blank();
+  const summaryRows: Array<{ env: string; status: string; detail: string }> = [];
 
-  // Step 3 — target port (optional)
-  logger.info('Step 3/5 — Target port');
-  logger.info(
-    '  Required only when the service listens on a non-default port (e.g. 3000 for the API).',
-  );
-  const portRaw = await ask('  Target port (Enter to skip)', '');
-  const targetPort = parseOptionalPort(portRaw);
-  logger.success(`  Target port: ${targetPort === undefined ? '(none)' : targetPort}`);
-  logger.blank();
+  for (const environment of selectedEnvironments) {
+    logger.blank();
+    logger.divider();
+    logger.info(`Environment: ${environment.name} (${environment.environmentId})`);
+    let resolvedService: { name: string; serviceId: string };
+    try {
+      resolvedService = await resolveService(flags, environment);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(message);
+      summaryRows.push({ env: environment.name, status: 'ERROR', detail: message });
+      continue;
+    }
 
-  // Step 4 — custom domain
-  logger.info('Step 4/5 — Custom domain');
-  const customDomain = (await ask('  Custom domain (e.g. api.example.com)')).toLowerCase();
-  if (!isValidDomain(customDomain)) {
-    logger.error(`Invalid domain: "${customDomain}"`);
-    process.exit(1);
-  }
-  logger.success(`  Domain: ${customDomain}`);
-  logger.blank();
+    const targetPort = resolveTargetPort(flags, defaultPort);
+    let domain: string | null;
+    try {
+      domain = await resolveDomain(flags, environment.name, isInteractiveDefault);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(message);
+      summaryRows.push({ env: environment.name, status: 'ERROR', detail: message });
+      continue;
+    }
 
-  // Step 5 — confirm
-  logger.info('Step 5/5 — Confirm');
-  logger.info(`  Project:      ${config.project.name} (${projectId})`);
-  logger.info(`  Environment:  ${environmentName}`);
-  logger.info(`  Service:      ${serviceName}`);
-  logger.info(`  Target port:  ${targetPort === undefined ? '(none)' : targetPort}`);
-  logger.info(`  Custom domain: ${customDomain}`);
-  const confirm = (await ask('  Proceed? (y/N)', 'N')).toLowerCase();
-  if (!(confirm === 'y' || confirm === 'yes')) {
-    logger.info('Aborted. Nothing changed.');
-    process.exit(0);
-  }
-  logger.blank();
+    if (isInteractiveDefault && !flags.check) {
+      logger.info(`  Target port: ${targetPort}`);
+      logger.info(`  Custom domain: ${domain}`);
+      const confirm = (await ask('  Proceed? (y/N)', 'N')).toLowerCase();
+      if (!(confirm === 'y' || confirm === 'yes')) {
+        logger.info(`Skipped ${environment.name}.`);
+        summaryRows.push({ env: environment.name, status: 'SKIPPED', detail: 'user declined' });
+        continue;
+      }
+    }
 
-  // Action 1 — ensure a Railway service domain exists (so the service has a backing hostname).
-  const existingServiceDomains = await fetchServiceDomains(
-    token,
-    projectId,
-    environmentId,
-    serviceId,
-  );
-  let serviceDomain = existingServiceDomains[0];
-  if (serviceDomain) {
-    logger.info(`Service domain already exists: ${serviceDomain.domain}`);
-  } else {
-    logger.info('Creating Railway service domain...');
-    serviceDomain = await createServiceDomain(token, environmentId, serviceId, targetPort);
-    logger.success(`Service domain created: ${serviceDomain.domain}`);
-  }
-  logger.blank();
-
-  // Action 2 — attach (or adopt) the custom domain.
-  const existingCustomDomains = await fetchCustomDomains(
-    token,
-    projectId,
-    environmentId,
-    serviceId,
-  );
-  let customDomainResult = existingCustomDomains.find(
-    (entry) => entry.domain.toLowerCase() === customDomain,
-  );
-  if (customDomainResult) {
-    logger.info(`Custom domain already attached: ${customDomainResult.domain}`);
-  } else {
-    logger.info(`Attaching custom domain ${customDomain}...`);
-    customDomainResult = await createCustomDomain(
-      token,
-      projectId,
-      environmentId,
-      serviceId,
-      customDomain,
-      targetPort,
-    );
-    logger.success(`Custom domain attached: ${customDomainResult.domain}`);
+    try {
+      const result = await runOne({
+        token,
+        projectId,
+        environment,
+        service: resolvedService,
+        domain,
+        targetPort,
+        flags,
+        state,
+        oauthGoogleEnabled,
+        oauthGithubEnabled,
+      });
+      summaryRows.push({
+        env: environment.name,
+        status:
+          result.status === 'ok'
+            ? 'OK'
+            : result.status === 'pending'
+              ? 'PENDING'
+              : result.status === 'skipped'
+                ? 'SKIPPED'
+                : 'ERROR',
+        detail: result.message,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(message);
+      summaryRows.push({ env: environment.name, status: 'ERROR', detail: message });
+    }
   }
 
-  // Action 3 — print DNS records the user must add.
-  printDnsRecords(customDomainResult.domain, customDomainResult.status);
+  saveState(state);
 
   logger.blank();
-  logger.success('Done. Add the DNS records above at your DNS provider, then re-run this script');
-  logger.success('(or check the Railway dashboard) to verify certificate issuance.');
+  logger.divider();
+  logger.table(summaryRows);
+  logger.success('Done. Re-run with --check to resume any pending verification.');
 }
 
 main().catch((error) => {

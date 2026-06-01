@@ -2,6 +2,10 @@ import { sql } from 'drizzle-orm';
 import { integer, varchar, text, timestamp, index, check } from 'drizzle-orm/pg-core';
 import { billingSchema } from '@/infrastructure/database/pg-schemas.js';
 
+/**
+ * Allowed values for `billing.stripe_webhook_events.processing_status`. Mirrored
+ * by the CHECK constraint on the table; update both in lockstep.
+ */
 export const stripeWebhookProcessingStatuses = [
   'processing',
   'processed',
@@ -9,6 +13,7 @@ export const stripeWebhookProcessingStatuses = [
   'failed',
 ] as const;
 
+/** Union of {@link stripeWebhookProcessingStatuses} values. */
 export type StripeWebhookProcessingStatus = (typeof stripeWebhookProcessingStatuses)[number];
 
 /**

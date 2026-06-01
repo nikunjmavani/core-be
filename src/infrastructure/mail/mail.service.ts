@@ -27,6 +27,23 @@ function getClient(): Resend {
   return resendClient;
 }
 
+/**
+ * Input for {@link sendEmail} — recipients, rendered HTML body, optional text
+ * fallback, reply-to override, and Resend tags for downstream analytics.
+ *
+ * @remarks
+ * - **Algorithm:** consumed by `sendEmailViaResend`, which fans `to` into an array
+ *   and forwards `tags`/`replyTo` to the Resend SDK after stripping `undefined`.
+ * - **Failure modes:** unset `to`/`subject`/`html` is a schema contract violation;
+ *   Resend rejects invalid recipients with `ResendApiError` (not retried).
+ * - **Side effects:** none — pure data carrier; persistence happens in
+ *   `insertMailOutbox`, transport happens in `sendEmail`.
+ * - **Notes:** `requestId` is propagated into Resend retry-context and structured
+ *   logs so a single mail can be correlated across HTTP, BullMQ, and Resend logs.
+ *   `idempotencyKey` is forwarded to Resend as the `Idempotency-Key` header so a
+ *   retried or sweeper-reclaimed send (same outbox row) is de-duplicated by
+ *   Resend instead of delivering twice (audit #20).
+ */
 export interface SendEmailOptions {
   to: string | string[];
   subject: string;
@@ -35,6 +52,7 @@ export interface SendEmailOptions {
   replyTo?: string;
   tags?: { name: string; value: string }[];
   requestId?: string;
+  idempotencyKey?: string;
 }
 
 async function sendEmailViaResend(
@@ -42,10 +60,19 @@ async function sendEmailViaResend(
   recipientCount: number,
   signal: AbortSignal,
 ): Promise<string> {
-  const fromAddress = env.EMAIL_FROM_ADDRESS ?? 'noreply@albetrios.com';
+  // No hardcoded sender fallback: env-schema requires EMAIL_FROM_ADDRESS whenever
+  // RESEND_API_KEY is set, so reaching here without it is a misconfiguration we surface
+  // rather than impersonating an arbitrary domain that Resend would silently reject.
+  const fromAddress = env.EMAIL_FROM_ADDRESS;
+  if (!fromAddress) {
+    throw new Error('EMAIL_FROM_ADDRESS is not configured');
+  }
   const fromName = env.EMAIL_FROM_NAME ?? 'Core';
   const client = getClient();
-  const requestOptions: ResendEmailRequestOptions = { signal };
+  const requestOptions: ResendEmailRequestOptions = omitUndefined({
+    signal,
+    idempotencyKey: options.idempotencyKey,
+  });
   const sendResult = await client.emails.send(
     omitUndefined({
       from: `${fromName} <${fromAddress}>`,
@@ -79,7 +106,23 @@ async function sendEmailViaResend(
 }
 
 /**
- * Send an email via Resend.
+ * Sends a single email through Resend behind the shared outbound circuit breaker.
+ *
+ * @remarks
+ * - **Algorithm:** wraps the Resend `emails.send` call in `outboundCall`, which
+ *   applies the `resend` circuit breaker + exponential backoff (3 attempts,
+ *   500ms base) and forwards an `AbortSignal` so circuit-open or shutdown can
+ *   cancel the in-flight HTTP request.
+ * - **Failure modes:** `ResendApiError` (4xx / missing `data.id`) is rethrown
+ *   without retry; `CircuitBreakerOpenError` propagates so BullMQ retries with
+ *   the custom backoff that defers past the circuit cooldown; transient network
+ *   errors (`isTransientNetworkError`) trigger the inner retry loop.
+ * - **Side effects:** outbound HTTP to Resend; emits `mail.send.success` /
+ *   `mail.send.failed` structured logs with recipient count.
+ * - **Notes:** treat as the only place that talks to Resend — callers
+ *   (mail worker, outbox sweeper retries) supply `requestId` for cross-system
+ *   correlation. Returns the Resend message id stored in `mail_outbox.resend_message_id`.
+ *
  * @throws on transport failure, Resend API error, or open circuit (for BullMQ retry/backoff).
  */
 export async function sendEmail(options: SendEmailOptions): Promise<string> {
@@ -114,7 +157,16 @@ export async function sendEmail(options: SendEmailOptions): Promise<string> {
 }
 
 /**
- * Check if mail service is configured and ready to send.
+ * Reports whether Resend credentials are present so callers can short-circuit
+ * mail flows in local/dev environments without raising on missing API key.
+ *
+ * @remarks
+ * - **Algorithm:** boolean check against `env.RESEND_API_KEY`.
+ * - **Failure modes:** never throws; environments without Resend should treat
+ *   `false` as "skip enqueue" rather than as a hard error.
+ * - **Side effects:** none (pure read).
+ * - **Notes:** intentionally does NOT validate the key against Resend — only
+ *   asserts configuration intent.
  */
 export function isMailConfigured(): boolean {
   return Boolean(env.RESEND_API_KEY);

@@ -4,6 +4,15 @@ import { UserSettingsService } from '@/domains/user/sub-domains/user-settings/us
 import type { UserService } from '@/domains/user/user.service.js';
 import type { UserSettingsRepository } from '@/domains/user/sub-domains/user-settings/user-settings.repository.js';
 
+// auth.user_settings is FORCE RLS, so the service wraps repository calls in
+// `withUserDatabaseContext`, which opens a real `database.transaction()` and would hit Postgres
+// (unavailable in the unit lane). Run the inner callback directly so this stays a pure unit test.
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
 const user = { id: 1, public_id: 'user_public' };
 const settingsRow = {
   is_dark_mode_enabled: true,

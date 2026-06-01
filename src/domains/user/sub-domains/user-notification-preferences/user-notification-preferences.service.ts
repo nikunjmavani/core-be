@@ -1,11 +1,27 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
-import type { UserService } from '../../user.service.js';
+import type { UserService } from '@/domains/user/user.service.js';
 import type { UserNotificationPreferencesRepository } from './user-notification-preferences.repository.js';
 import { serializeUserNotificationPreferenceList } from './user-notification-preferences.serializer.js';
 import type { NotificationPreferenceOutput } from './user-notification-preferences.types.js';
 import { validatePutUserNotificationPreferences } from './user-notification-preferences.validator.js';
 
+/**
+ * Read and replace the authenticated user's notification opt-ins per `(type, channel, organization?)`.
+ *
+ * @remarks
+ * - **Algorithm:** resolve the user via {@link UserService.findUserRecordByPublicId}, then run the
+ *   repository call inside `withUserDatabaseContext` so RLS scopes the SELECT/DELETE/INSERT to the
+ *   owning user. `put` validates first, then cascades by deleting all existing rows for the user
+ *   and inserting the supplied list in one repository call.
+ * - **Failure modes:** unknown / soft-deleted user → {@link NotFoundError}; invalid body →
+ *   {@link ValidationError} from the validator; channel values violating the schema CHECK
+ *   constraint surface as a Postgres error.
+ * - **Side effects:** writes to `auth.user_notification_preferences`. No event emission today —
+ *   downstream notification dispatch reads the latest rows directly.
+ * - **Notes:** replace-all semantics intentionally deletes preferences not present in the request,
+ *   so partial updates require sending the full set.
+ */
 export class UserNotificationPreferencesService {
   constructor(
     private readonly userService: UserService,

@@ -423,8 +423,8 @@ function buildDomainProbes(): RouteProbe[] {
 
 const healthProbes: RouteProbe[] = [
   {
-    name: 'GET /health',
-    path: '/health',
+    name: 'GET /readyz',
+    path: '/readyz',
     expectedStatus: 200,
   },
 ];

@@ -17,6 +17,12 @@ import { notifySchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * Drizzle table for `notify.webhooks` — per-organization HTTPS endpoints with their encrypted
+ * signing secret and the list of event types they subscribe to. Soft-deleted via `deleted_at`
+ * (the tombstone-retention worker hard-deletes rows after `TOMBSTONE_RETENTION_DAYS`).
+ * RLS pins reads to the current organization or the global retention scope.
+ */
 export const webhooks = notifySchema
   .table(
     'webhooks',
@@ -63,6 +69,12 @@ export const webhooks = notifySchema
   )
   .enableRLS();
 
+/**
+ * Drizzle table for `notify.webhook_delivery_attempts` — the immutable audit trail of outbound
+ * webhook deliveries. Status moves through `PENDING → SENDING → SENT|FAILED`, attempt count is
+ * capped at 5 by check constraint, and a partial unique index on `(webhook_id, event_key)`
+ * guards against duplicate pending deliveries for idempotent producer events.
+ */
 export const webhook_delivery_attempts = notifySchema
   .table(
     'webhook_delivery_attempts',

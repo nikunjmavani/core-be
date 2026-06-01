@@ -7,6 +7,23 @@ import { env } from '@/shared/config/env.config.js';
 
 const PURGE_BATCH_SIZE = 500;
 
+/**
+ * Hard-deletes upload rows that have been soft-deleted (`deleted_at IS NOT NULL`)
+ * for longer than `TOMBSTONE_RETENTION_DAYS`, removing the S3 object first.
+ *
+ * @remarks
+ * - **Algorithm:** loops in batches of {@link PURGE_BATCH_SIZE}, deletes each
+ *   batch's S3 objects (best-effort), then removes the rows by internal id.
+ *   Stops when a batch is smaller than the requested size (drained).
+ * - **Failure modes:** S3 delete failures log at `warn` and proceed with the
+ *   DB delete (object cleanup is recoverable through bucket lifecycle rules).
+ *   DB errors bubble to BullMQ for retry of the whole job; partial progress
+ *   from earlier batches is preserved because each batch commits independently.
+ * - **Side effects:** hard-deletes from `upload.uploads` and deletes from S3.
+ *   No events emitted.
+ * - **Notes:** caller (worker) provides the global-retention database handle
+ *   so RLS permits cross-tenant deletes. Designed to be re-runnable.
+ */
 export async function runUploadTombstoneRetentionJob(
   databaseHandle: WorkerDatabaseHandle,
 ): Promise<{

@@ -42,6 +42,7 @@ describe('stripe-webhook — enqueue correlation id', () => {
     }));
     vi.doMock('@/infrastructure/queue/connection.js', () => ({
       getBullMQConnectionOptions: () => ({}),
+      getBullMQProducerConnectionOptions: () => ({ enableOfflineQueue: false }),
     }));
 
     const { enqueueStripeWebhook } = await import(

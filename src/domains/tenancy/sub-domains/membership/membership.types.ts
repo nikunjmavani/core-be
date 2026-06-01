@@ -1,3 +1,8 @@
+/**
+ * Raw `tenancy.memberships` row shape from Drizzle. Holds internal numeric
+ * ids and the soft-delete marker (`deleted_at`); do not return this shape
+ * directly from HTTP handlers — serialize via {@link serializeMembership}.
+ */
 export interface MembershipRow {
   id: number;
   public_id: string;
@@ -12,6 +17,11 @@ export interface MembershipRow {
   updated_at: Date;
 }
 
+/**
+ * Public HTTP response shape for a membership. All identifiers are external
+ * public ids (or string-coerced numeric ids where the org id is not yet
+ * resolved); timestamps are ISO-8601 strings.
+ */
 export interface MembershipOutput {
   id: string;
   user_id: string;

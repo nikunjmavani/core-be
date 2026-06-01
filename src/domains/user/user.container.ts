@@ -18,12 +18,21 @@ export type UserContainer = {
   userDataExportService: UserDataExportService;
 };
 
+/** Internal DI surface that also exposes {@link UserRepository} for tests and offboarding wiring. */
 export type UserContainerWithRepository = UserContainer & {
   userRepository: UserRepository;
 };
 
+/**
+ * Partial container produced before the `userDataExportService` is constructed — used to break
+ * the cycle between user-data-export (which needs `UserService`) and the rest of the user domain.
+ */
 export type UserContainerBase = Omit<UserContainerWithRepository, 'userDataExportService'>;
 
+/**
+ * Wire the core user domain (repository + services minus data-export) so callers can construct
+ * `UserDataExportService` against the resulting `userService` before completing the container.
+ */
 export function createUserContainerBase(objectStorage: ObjectStoragePort): UserContainerBase {
   const userRepository = new UserRepository();
   const userSettingsRepository = new UserSettingsRepository();
@@ -44,6 +53,7 @@ export function createUserContainerBase(objectStorage: ObjectStoragePort): UserC
   };
 }
 
+/** Attach a constructed {@link UserDataExportService} to a base container produced by {@link createUserContainerBase}. */
 export function completeUserContainer(
   base: UserContainerBase,
   userDataExportService: UserDataExportService,
@@ -51,6 +61,11 @@ export function completeUserContainer(
   return { ...base, userDataExportService };
 }
 
+/**
+ * Build the full user-domain container in one shot for the standard case (HTTP startup).
+ * Constructs the data-export service against the freshly-built {@link UserService} and returns
+ * the public surface (services only — the repository is hidden by `UserContainer`).
+ */
 export function createUserContainer(objectStorage: ObjectStoragePort): UserContainer {
   const base = createUserContainerBase(objectStorage);
   const userDataExportRepository = new UserDataExportRepository();
@@ -68,6 +83,11 @@ export function createUserContainer(objectStorage: ObjectStoragePort): UserConta
   };
 }
 
+/**
+ * Register the user-domain container as `app.userDomain` on the Fastify instance.
+ * Uses the default S3 object-storage adapter; consumers (routes, plugins) read services off the
+ * decorated `userDomain` rather than reaching into individual modules.
+ */
 export function registerUserContainer(application: FastifyInstance): void {
   application.decorate('userDomain', createUserContainer(getDefaultS3ObjectStorageAdapter()));
 }

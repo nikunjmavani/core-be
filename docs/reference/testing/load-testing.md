@@ -61,7 +61,7 @@ Artifacts (`k6-*.json` summaries and `server.log`) are uploaded for 14 days. Opt
 To gain confidence in the **whole system** (not just health endpoints), run both infrastructure stress and API stress:
 
 1. **Health + infra stress** (no auth): `pnpm load:stress`
-   - Hits `GET /health` and `GET /health` with up to 100 VUs.
+   - Hits `GET /livez` and `GET /readyz` with up to 100 VUs.
 
 2. **API stress** (authenticated): set credentials, then run `pnpm load:stress:api`
    - Get credentials: `pnpm tool:load-test-credentials` (server up, `pnpm db:seed:full` done).
@@ -110,8 +110,8 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
 
 ## Quick commands (no auth)
 
-- **Autocannon** (single endpoint): `pnpm test:bench` — hits `http://localhost:3000/health`.
-- **k6 health**: `pnpm load:health` — runs `src/tests/load/k6/scenarios/health.js` (health/live and health/ready). No env vars needed.
+- **Autocannon** (single endpoint): `pnpm test:bench` — hits `http://localhost:3000/readyz`.
+- **k6 health**: `pnpm load:health` — runs `src/tests/load/k6/scenarios/health.js` (`/livez` and `/readyz`). No env vars needed.
 
 ## Scenarios (all seven)
 
@@ -178,6 +178,16 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
 | `user-data-export.js` | `TEST_TOKEN` | `POST /api/v1/users/me/data-export` |
 
 CI runs a subset in the **org-scoped routes** job step (see `scheduled-k6-load-slo.yml`).
+
+### RLS concurrency beyond pool size
+
+- **File**: `src/tests/load/k6/scenarios/rls-concurrency-beyond-pool.js`
+- **Auth**: Bearer token + organization context
+- **Env**: `TEST_TOKEN`, `TEST_ORG_ID` (required); optional `DATABASE_POOL_MAX` (default `10`), `BEYOND_POOL_FACTOR` (default `4`), `BEYOND_POOL_VUS` (explicit VU override)
+- **Run**: `RATE_LIMIT_MAX=10000 pnpm dev` (or `pnpm dev:loadtest`), then `pnpm load:rls-concurrency` with `TEST_TOKEN` and `TEST_ORG_ID`
+- **Rate limit**: This scenario drives `DATABASE_POOL_MAX × BEYOND_POOL_FACTOR` VUs (default 40) with a short `sleep`, so it sends far more than the default global limit of `RATE_LIMIT_MAX` (100) requests per `RATE_LIMIT_WINDOW_MS` (60s) per IP. Without raising `RATE_LIMIT_MAX`, k6 will count `429 Too Many Requests` as failures and breach the `http_req_failed < 1%` threshold even when the pool is healthy. Match the server's `DATABASE_POOL_MAX` when overriding it on the k6 side.
+- **Purpose**: Validates production-readiness audit item #5 (per-request RLS transaction pinning). It ramps concurrent VUs to `DATABASE_POOL_MAX × BEYOND_POOL_FACTOR` against an org-scoped (RLS) endpoint (`GET .../memberships`) and asserts `http_req_failed` stays below 1%. With `DATABASE_RLS_SCOPED_CONTEXTS=true` the connection checkout is held only for the unit-of-work, so the pool absorbs several multiples of concurrent requests; under the legacy request-pinned model the API would saturate near `DATABASE_POOL_MAX` and later requests would block or fail.
+- **CI**: Runs nightly as part of the **org-scoped routes** informational step in `scheduled-k6-load-slo.yml` (seeded full demo data guarantees `TEST_ORG_ID`; the workflow already boots the API with `RATE_LIMIT_MAX=10000`). Pair a manual run with the `database_rls_active_checkouts` / `database_rls_checkout_hold_seconds` metrics from the [resource-limits runbook](../../deployment/runbooks/resource-limits.md) to confirm checkout hold time stays short.
 
 ## Obtaining credentials
 

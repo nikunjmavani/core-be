@@ -84,9 +84,7 @@ function main(): void {
       }
     }
 
-    let match: RegExpExecArray | null;
-    MARKDOWN_LINK.lastIndex = 0;
-    while ((match = MARKDOWN_LINK.exec(content)) !== null) {
+    for (const match of content.matchAll(MARKDOWN_LINK)) {
       const target = match[1];
       if (!target || isExternalOrAnchor(target)) continue;
       const resolved = resolveMarkdownTarget(file, target);

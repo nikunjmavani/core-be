@@ -6,7 +6,12 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
+vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', () => ({
+  invalidateOrganizationPermissions: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { NotFoundError } from '@/shared/errors/index.js';
+import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { MemberRoleRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role.repository.js';
@@ -140,6 +145,16 @@ describe('MemberRoleService', () => {
     await service.delete(organization.public_id, roleRow.public_id);
     expect(memberRoleRepository.update).toHaveBeenCalled();
     expect(memberRoleRepository.softDelete).toHaveBeenCalled();
+  });
+
+  it('delete invalidates the entire organization permission namespace', async () => {
+    await service.delete(organization.public_id, roleRow.public_id);
+    expect(invalidateOrganizationPermissions).toHaveBeenCalledWith(organization.public_id);
+  });
+
+  it('update does not invalidate the permission cache (no permission change)', async () => {
+    await service.update(organization.public_id, roleRow.public_id, { name: 'X' }, 'updater');
+    expect(invalidateOrganizationPermissions).not.toHaveBeenCalled();
   });
 
   it('requireRoleRecordByPublicId throws when missing', async () => {

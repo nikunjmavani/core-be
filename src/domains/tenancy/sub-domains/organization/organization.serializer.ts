@@ -1,5 +1,10 @@
 import type { OrganizationOutput } from './organization.types.js';
 
+/**
+ * Maps an organization Drizzle row to the public {@link OrganizationOutput}
+ * shape — exposes `public_id` as `id`, drops internal numeric and audit
+ * columns, and serialises timestamps as ISO 8601 strings.
+ */
 export function serializeOrganization(row: {
   public_id: string;
   name: string;

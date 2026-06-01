@@ -15,6 +15,7 @@ import {
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 const TENANCY_PERMISSION_CODES = Object.values(TENANCY_PERMISSIONS);
 
@@ -30,7 +31,7 @@ async function getAuthenticatedUserReady(
 ): Promise<void> {
   for (let attempt = 1; attempt <= ME_RETRY_ATTEMPTS; attempt++) {
     const response = await injectAuthenticated(application, {
-      url: '/api/v1/users/me',
+      url: testApiPath('/users/me'),
       token: bearerToken,
     });
     if (response.statusCode === 200) return;
@@ -61,7 +62,7 @@ describe('User Data Export Sub-Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/users/me/data-export',
+        url: testApiPath('/users/me/data-export'),
         payload: {},
       });
       expect(response.statusCode).toBe(401);
@@ -88,7 +89,7 @@ describe('User Data Export Sub-Domain — Integration', () => {
 
       const exportResponse = await injectAuthenticated(app, {
         method: 'POST',
-        url: '/api/v1/users/me/data-export',
+        url: testApiPath('/users/me/data-export'),
         token: bearerToken,
         payload: {},
       });
@@ -101,7 +102,7 @@ describe('User Data Export Sub-Domain — Integration', () => {
       expect(payload).toHaveProperty('created_at');
 
       const statusResponse = await injectAuthenticated(app, {
-        url: `/api/v1/users/me/data-export/${String(payload.export_id)}`,
+        url: testApiPath(`/users/me/data-export/${String(payload.export_id)}`),
         token: bearerToken,
       });
       expect(statusResponse.statusCode).toBe(200);

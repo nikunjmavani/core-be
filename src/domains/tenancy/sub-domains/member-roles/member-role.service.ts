@@ -1,6 +1,6 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import type { OrganizationService } from '../organization/organization.service.js';
+import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { MemberRoleRepository } from './member-role.repository.js';
 import type { MemberRoleOutput, MemberRoleRow } from './member-role.types.js';
 import {
@@ -9,9 +9,34 @@ import {
   validateListMemberRolesQuery,
 } from './member-role.validator.js';
 import { serializeMemberRole } from './member-role.serializer.js';
+import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { CursorPaginationInput } from '@/shared/utils/http/pagination.util.js';
 
+/**
+ * Application service for the per-organization role catalog: list, get,
+ * create, update, and soft-delete custom roles.
+ *
+ * @remarks
+ * - **Algorithm:** every public method runs inside
+ *   {@link withOrganizationDatabaseContext} and resolves the caller's
+ *   organization through {@link OrganizationService.requireOrganizationMembershipByPublicId}
+ *   before touching the role repository, so RLS and membership checks happen
+ *   before any data access.
+ * - **Failure modes:** `NotFoundError('Role' | 'Organization')` when lookups
+ *   miss or rows are soft-deleted; `ValidationError` (i18n) for bad input or
+ *   illegal pagination. The repository's unique index on `(organization_id,
+ *   name)` raises duplicate-key errors for collisions on create/update.
+ * - **Side effects:** writes through `MemberRoleRepository` (insert / update /
+ *   soft-delete with `deleted_at`). Deleting a role calls
+ *   {@link invalidateOrganizationPermissions} so members who held it stop
+ *   resolving its permissions from cache. The companion
+ *   {@link MemberRolePermissionService} owns the role's permission set; this
+ *   service does not touch `role_permissions`.
+ * - **Notes:** `requireRoleRecord*` and `resolveRolePublicId*` helpers are
+ *   shared with other tenancy services (membership, invitations) to keep role
+ *   identity resolution in one place.
+ */
 export class MemberRoleService {
   constructor(
     private readonly organizationService: OrganizationService,
@@ -106,7 +131,7 @@ export class MemberRoleService {
   async create(
     organization_public_id: string,
     body: unknown,
-    created_by_user_public_id: string,
+    created_by_user_public_id: string | undefined,
   ): Promise<MemberRoleOutput> {
     const parsed = validateCreateMemberRole(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -133,7 +158,7 @@ export class MemberRoleService {
     organization_public_id: string,
     role_public_id: string,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<MemberRoleOutput> {
     const parsed = validateUpdateMemberRole(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -164,6 +189,7 @@ export class MemberRoleService {
         );
       const deleted = await this.memberRoleRepository.softDelete(role_public_id, organization.id);
       if (!deleted) throw new NotFoundError('Role');
+      await invalidateOrganizationPermissions(organization_public_id);
     });
   }
 }

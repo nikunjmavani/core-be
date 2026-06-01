@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { user_notification_preferences } from '@/domains/user/sub-domains/user-notification-preferences/user-notification-preferences.schema.js';
 
+/** Insert payload accepted by {@link UserNotificationPreferencesRepository.replaceAll}. */
 export type PreferenceRow = {
   notification_type: string;
   channel: string;
@@ -9,6 +10,11 @@ export type PreferenceRow = {
   is_enabled: boolean;
 };
 
+/**
+ * Drizzle data-access for `auth.user_notification_preferences`. Implements the replace-all cascade:
+ * `replaceAll` deletes every row for the user and re-inserts the supplied list within the request's
+ * (RLS-bound) database scope so the user can only mutate their own preferences.
+ */
 export class UserNotificationPreferencesRepository {
   async listByUserId(user_id: number) {
     return getRequestDatabase()

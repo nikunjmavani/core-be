@@ -6,6 +6,7 @@ import {
   type UpdateOrganizationNotificationPolicyInput,
 } from './organization-notification-policy.dto.js';
 
+/** Parses raw `POST /organizations/:id/notification-policies` body via {@link createOrganizationNotificationPolicyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateCreateOrganizationNotificationPolicy(
   data: unknown,
 ): CreateOrganizationNotificationPolicyInput {
@@ -16,6 +17,7 @@ export function validateCreateOrganizationNotificationPolicy(
   return result.data;
 }
 
+/** Parses raw `PATCH /organizations/:id/notification-policies/:policyId` body via {@link updateOrganizationNotificationPolicyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateUpdateOrganizationNotificationPolicy(
   data: unknown,
 ): UpdateOrganizationNotificationPolicyInput {
@@ -26,6 +28,11 @@ export function validateUpdateOrganizationNotificationPolicy(
   return result.data;
 }
 
+/**
+ * Coerces the `:policyId` path param to a positive integer. Throws
+ * `ValidationError('errors:validation.invalidPolicyId')` for non-integer or
+ * non-positive values.
+ */
 export function validatePolicyIdParam(policyId: string): number {
   const policyIdNumber = Number(policyId);
   if (!Number.isInteger(policyIdNumber) || policyIdNumber < 1) {

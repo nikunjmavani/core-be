@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedString } from '@/shared/utils/validation/validation.util.js';
 
+/**
+ * Zod schema for the `GET /api/v1/audit/logs` query string. Extends the shared
+ * cursor pagination schema with audit-specific filters and an `include_total`
+ * opt-in (kept as a string enum so it renders to JSON Schema for OpenAPI).
+ */
 export const ListAuditLogsQueryDto = cursorPaginationSchema
   .extend({
     organization_id: trimmedString().max(255).optional(),
@@ -18,4 +23,5 @@ export const ListAuditLogsQueryDto = cursorPaginationSchema
   })
   .strict();
 
+/** Parsed query type inferred from {@link ListAuditLogsQueryDto}. */
 export type ListAuditLogsQuery = z.infer<typeof ListAuditLogsQueryDto>;

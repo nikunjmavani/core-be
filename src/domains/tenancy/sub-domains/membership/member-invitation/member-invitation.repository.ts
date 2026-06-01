@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, gt, isNull, type SQL } from 'drizzle-orm';
 import { sql } from '@/infrastructure/database/connection.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
@@ -26,6 +26,13 @@ export interface MemberInvitationOrganizationLookupRow {
   membership_id: number;
 }
 
+/**
+ * Result row returned by the SECURITY DEFINER function
+ * `tenancy.list_pending_member_invitations_for_email`, used by the
+ * cross-organization "list my pending invitations" endpoint. Carries only the
+ * non-sensitive metadata required to render the invitation list — secret token
+ * hashes and inviter ids are intentionally omitted.
+ */
 export interface PendingMemberInvitationLookupRow {
   invitation_public_id: string;
   organization_public_id: string;
@@ -37,12 +44,24 @@ export interface PendingMemberInvitationLookupRow {
   invitation_created_at: Date;
 }
 
+/**
+ * Cursor-pagination options for {@link MemberInvitationRepository.findByOrganizationId}.
+ * Setting `include_total` to `true` opts in to a parallel `COUNT(*)` query for
+ * pagination summaries.
+ */
 export interface MemberInvitationListPagination {
   after?: string;
   limit: number;
   include_total?: boolean;
 }
 
+/**
+ * Drizzle data access for `tenancy.member_invitations`. Org-scoped reads
+ * (listing, find-by-public-id, accept/revoke/resend updates) run under the
+ * caller's RLS context; cross-org lookups by email or by invitation public id
+ * use SECURITY DEFINER SQL functions so the public accept/decline flows can
+ * resolve the owning organization without an org GUC set up front.
+ */
 export class MemberInvitationRepository {
   async findByOrganizationId(organization_id: number, pagination: MemberInvitationListPagination) {
     const { after, limit } = pagination;
@@ -218,13 +237,19 @@ export class MemberInvitationRepository {
     });
   }
 
-  async accept(public_id: string): Promise<MemberInvitationRow | null> {
+  async accept(
+    public_id: string,
+    token_hash: string,
+    expires_after: Date,
+  ): Promise<MemberInvitationRow | null> {
     const rows = await getRequestDatabase()
       .update(member_invitations)
       .set({ accepted_at: new Date() })
       .where(
         and(
           eq(member_invitations.public_id, public_id),
+          eq(member_invitations.token_hash, token_hash),
+          gt(member_invitations.expires_at, expires_after),
           isNull(member_invitations.accepted_at),
           isNull(member_invitations.revoked_at),
         ),

@@ -1,13 +1,22 @@
 import { and, eq, isNull } from 'drizzle-orm';
-import { database } from '@/infrastructure/database/connection.js';
+import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { webauthn_credentials } from './webauthn-credential.schema.js';
 
+/** Drizzle row type inferred from {@link webauthn_credentials}; used by the WebAuthn service when reading stored passkeys. */
 export type WebauthnCredentialRow = typeof webauthn_credentials.$inferSelect;
 
+/**
+ * Drizzle repository for {@link webauthn_credentials}; tracks signature counter monotonicity via
+ * {@link updateCounter} and revokes via `revoked_at` (partial unique index keeps `credential_id`
+ * reusable after revocation). `auth.webauthn_credentials` is FORCE RLS keyed on
+ * `app.current_user_id`, so every method reads/writes via the request-scoped handle and callers
+ * must run inside `withUserDatabaseContext` (the owning user public id is always known at the call
+ * site — authenticated request or WebAuthn challenge).
+ */
 export class WebauthnCredentialRepository {
   async listActiveByUserId(userId: number): Promise<WebauthnCredentialRow[]> {
-    return database
+    return getRequestDatabase()
       .select()
       .from(webauthn_credentials)
       .where(
@@ -16,7 +25,7 @@ export class WebauthnCredentialRepository {
   }
 
   async findActiveByCredentialId(credentialId: string): Promise<WebauthnCredentialRow | null> {
-    const rows = await database
+    const rows = await getRequestDatabase()
       .select()
       .from(webauthn_credentials)
       .where(
@@ -38,7 +47,7 @@ export class WebauthnCredentialRepository {
     backed_up: boolean;
     transports: string[];
   }): Promise<WebauthnCredentialRow> {
-    const rows = await database
+    const rows = await getRequestDatabase()
       .insert(webauthn_credentials)
       .values({
         user_id: data.user_id,
@@ -54,7 +63,7 @@ export class WebauthnCredentialRepository {
   }
 
   async updateCounter(credentialId: string, counter: number): Promise<void> {
-    await database
+    await getRequestDatabase()
       .update(webauthn_credentials)
       .set({
         counter,
@@ -69,7 +78,7 @@ export class WebauthnCredentialRepository {
   }
 
   async revokeByUserId(userId: number, credentialDatabaseId: number): Promise<void> {
-    await database
+    await getRequestDatabase()
       .update(webauthn_credentials)
       .set({ revoked_at: databaseNowTimestamp })
       .where(

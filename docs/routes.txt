@@ -1,6 +1,6 @@
 ================================================================================
   ROUTE CATALOG — core-be
-  Total routes: 122
+  Total routes: 130
 ================================================================================
 
 Legend:
@@ -8,72 +8,75 @@ Legend:
   AUTH    = JWT authentication required
   ROLE    = Global role required (super_admin, admin, user)
   PERM    = Organization-scoped permission required
+  TOKEN   = Non-JWT bearer token required
 
 ================================================================================
   DOMAIN: AUDIT (/api/v1/audit)
   Routes: 1
 ================================================================================
 
-  GET   /api/v1/audit/logs                                     ROLE: super_admin, admin
+  GET    /api/v1/audit/logs                                      ROLE: super_admin, admin
 
 ================================================================================
   DOMAIN: AUTH (/api/v1/auth)
-  Routes: 28
+  Routes: 29
 ================================================================================
 
-  POST  /api/v1/auth/email/resend-verification                 AUTH
-  POST  /api/v1/auth/email/verify                              PUBLIC
-  POST  /api/v1/auth/login                                     PUBLIC
-  POST  /api/v1/auth/logout                                    PUBLIC
-  POST  /api/v1/auth/magic-link/send                           PUBLIC
-  POST  /api/v1/auth/magic-link/verify                         PUBLIC
-  GET   /api/v1/auth/me/auth-methods                           AUTH
-  POST  /api/v1/auth/me/auth-methods                           AUTH
-  DELETE/api/v1/auth/me/auth-methods/:id                       AUTH
-  GET   /api/v1/auth/me/sessions                               AUTH
-  DELETE/api/v1/auth/me/sessions                               AUTH
-  DELETE/api/v1/auth/me/sessions/:id                           AUTH
-  GET   /api/v1/auth/mfa                                       AUTH
-  DELETE/api/v1/auth/mfa/:mfaMethodId                          AUTH
-  POST  /api/v1/auth/mfa/challenge                             PUBLIC
-  POST  /api/v1/auth/mfa/enroll                                AUTH
-  POST  /api/v1/auth/mfa/verify                                AUTH
-  GET   /api/v1/auth/oauth/:provider                           PUBLIC
-  GET   /api/v1/auth/oauth/:provider/callback                  PUBLIC
-  GET   /api/v1/auth/oauth/providers                           PUBLIC
-  POST  /api/v1/auth/password/change                           AUTH
-  POST  /api/v1/auth/password/forgot                           PUBLIC
-  POST  /api/v1/auth/password/reset                            PUBLIC
-  POST  /api/v1/auth/refresh                                   PUBLIC
-  POST  /api/v1/auth/webauthn/authenticate/options             PUBLIC
-  POST  /api/v1/auth/webauthn/authenticate/verify              PUBLIC
-  POST  /api/v1/auth/webauthn/register/options                 AUTH
-  POST  /api/v1/auth/webauthn/register/verify                  AUTH
+  POST   /api/v1/auth/email/resend-verification                  AUTH
+  POST   /api/v1/auth/email/verify                               PUBLIC
+  POST   /api/v1/auth/login                                      PUBLIC
+  POST   /api/v1/auth/logout                                     PUBLIC
+  POST   /api/v1/auth/magic-link/send                            PUBLIC
+  POST   /api/v1/auth/magic-link/verify                          PUBLIC
+  GET    /api/v1/auth/me/auth-methods                            AUTH
+  POST   /api/v1/auth/me/auth-methods                            AUTH
+  DELETE /api/v1/auth/me/auth-methods/:id                        AUTH
+  GET    /api/v1/auth/me/sessions                                AUTH
+  DELETE /api/v1/auth/me/sessions                                AUTH
+  DELETE /api/v1/auth/me/sessions/:id                            AUTH
+  GET    /api/v1/auth/mfa                                        AUTH
+  DELETE /api/v1/auth/mfa/:mfaMethodId                           AUTH
+  POST   /api/v1/auth/mfa/enroll                                 AUTH
+  POST   /api/v1/auth/mfa/login                                  PUBLIC
+  POST   /api/v1/auth/mfa/verify                                 AUTH
+  GET    /api/v1/auth/oauth/:provider                            PUBLIC
+  GET    /api/v1/auth/oauth/:provider/callback                   PUBLIC
+  GET    /api/v1/auth/oauth/providers                            PUBLIC
+  POST   /api/v1/auth/password/change                            AUTH
+  POST   /api/v1/auth/password/forgot                            PUBLIC
+  POST   /api/v1/auth/password/reset                             PUBLIC
+  POST   /api/v1/auth/refresh                                    PUBLIC
+  POST   /api/v1/auth/step-up                                    AUTH
+  POST   /api/v1/auth/webauthn/authenticate/options              PUBLIC
+  POST   /api/v1/auth/webauthn/authenticate/verify               PUBLIC
+  POST   /api/v1/auth/webauthn/register/options                  AUTH
+  POST   /api/v1/auth/webauthn/register/verify                   AUTH
 
 ================================================================================
   DOMAIN: BILLING (/api/v1/billing)
-  Routes: 10
+  Routes: 11
 ================================================================================
 
   — Sub Domains —
-  GET   /api/v1/billing/organizations/:id/subscriptions        PERM: subscription:read
-  POST  /api/v1/billing/organizations/:id/subscriptions        PERM: subscription:manage
-  GET   /api/v1/billing/organizations/:id/subscriptions/:subscriptionIdPERM: subscription:read
-  PATCH /api/v1/billing/organizations/:id/subscriptions/:subscriptionIdPERM: subscription:manage
-  POST  /api/v1/billing/organizations/:id/subscriptions/:subscriptionId/cancelPERM: subscription:manage
-  POST  /api/v1/billing/organizations/:id/subscriptions/:subscriptionId/change-planPERM: subscription:manage
-  POST  /api/v1/billing/organizations/:id/subscriptions/:subscriptionId/resumePERM: subscription:manage
-  GET   /api/v1/billing/plans                                  PUBLIC
-  GET   /api/v1/billing/plans/:id                              PUBLIC
-  POST  /api/v1/billing/webhook                                PUBLIC
+  GET    /api/v1/billing/organizations/:id/subscriptions         PERM: subscription:read
+  POST   /api/v1/billing/organizations/:id/subscriptions         PERM: subscription:manage
+  GET    /api/v1/billing/organizations/:id/subscriptions/:subscriptionId PERM: subscription:read
+  PATCH  /api/v1/billing/organizations/:id/subscriptions/:subscriptionId PERM: subscription:manage
+  POST   /api/v1/billing/organizations/:id/subscriptions/:subscriptionId/cancel PERM: subscription:manage
+  POST   /api/v1/billing/organizations/:id/subscriptions/:subscriptionId/change-plan PERM: subscription:manage
+  POST   /api/v1/billing/organizations/:id/subscriptions/:subscriptionId/resume PERM: subscription:manage
+  GET    /api/v1/billing/plans                                   PUBLIC
+  GET    /api/v1/billing/plans/:id                               PUBLIC
+  POST   /api/v1/billing/stripe/webhook                          PUBLIC
+  POST   /api/v1/billing/webhook                                 PUBLIC
 
 ================================================================================
   DOMAIN: MCP (/api/v1/mcp)
   Routes: 2
 ================================================================================
 
-  GET   /api/v1/mcp                                            AUTH
-  POST  /api/v1/mcp                                            AUTH
+  GET    /api/v1/mcp                                             ROLE: super_admin, admin
+  POST   /api/v1/mcp                                             ROLE: super_admin, admin
 
 ================================================================================
   DOMAIN: NOTIFY (/api/v1/notify)
@@ -81,20 +84,20 @@ Legend:
 ================================================================================
 
   — Sub Domains —
-  GET   /api/v1/notify/notifications                           AUTH
-  GET   /api/v1/notify/notifications/:id                       AUTH
-  PATCH /api/v1/notify/notifications/:id/read                  AUTH
-  DELETE/api/v1/notify/notifications/:notificationId           AUTH
-  POST  /api/v1/notify/notifications/mark-all-read             AUTH
-  GET   /api/v1/notify/notifications/unread-count              AUTH
-  GET   /api/v1/notify/organizations/:id/webhook-events        PERM: webhook:read
-  GET   /api/v1/notify/organizations/:id/webhooks              PERM: webhook:read
-  POST  /api/v1/notify/organizations/:id/webhooks              PERM: webhook:manage
-  GET   /api/v1/notify/organizations/:id/webhooks/:webhookId   PERM: webhook:read
-  PATCH /api/v1/notify/organizations/:id/webhooks/:webhookId   PERM: webhook:manage
-  DELETE/api/v1/notify/organizations/:id/webhooks/:webhookId   PERM: webhook:manage
-  GET   /api/v1/notify/organizations/:id/webhooks/:webhookId/delivery-attemptsPERM: webhook:read
-  POST  /api/v1/notify/organizations/:id/webhooks/:webhookId/testPERM: webhook:manage
+  GET    /api/v1/notify/notifications                            AUTH
+  GET    /api/v1/notify/notifications/:id                        AUTH
+  PATCH  /api/v1/notify/notifications/:id/read                   AUTH
+  DELETE /api/v1/notify/notifications/:notificationId            AUTH
+  POST   /api/v1/notify/notifications/mark-all-read              AUTH
+  GET    /api/v1/notify/notifications/unread-count               AUTH
+  GET    /api/v1/notify/organizations/:id/webhook-events         PERM: webhook:read
+  GET    /api/v1/notify/organizations/:id/webhooks               PERM: webhook:read
+  POST   /api/v1/notify/organizations/:id/webhooks               PERM: webhook:manage
+  GET    /api/v1/notify/organizations/:id/webhooks/:webhookId    PERM: webhook:read
+  PATCH  /api/v1/notify/organizations/:id/webhooks/:webhookId    PERM: webhook:manage
+  DELETE /api/v1/notify/organizations/:id/webhooks/:webhookId    PERM: webhook:manage
+  GET    /api/v1/notify/organizations/:id/webhooks/:webhookId/delivery-attempts PERM: webhook:read
+  POST   /api/v1/notify/organizations/:id/webhooks/:webhookId/test PERM: webhook:manage
 
 ================================================================================
   DOMAIN: TENANCY (/api/v1/tenancy)
@@ -102,101 +105,126 @@ Legend:
 ================================================================================
 
   — Sub Domains —
-  POST  /api/v1/tenancy/invitations/:invitationId/accept       PUBLIC
-  POST  /api/v1/tenancy/invitations/:invitationId/decline      AUTH
-  GET   /api/v1/tenancy/invitations/pending                    AUTH
-  GET   /api/v1/tenancy/organizations                          AUTH
-  POST  /api/v1/tenancy/organizations                          AUTH
-  GET   /api/v1/tenancy/organizations/:id                      AUTH
-  PATCH /api/v1/tenancy/organizations/:id                      PERM: organization:update
-  DELETE/api/v1/tenancy/organizations/:id                      PERM: organization:delete
-  GET   /api/v1/tenancy/organizations/:id/api-keys             PERM: api-key:read
-  POST  /api/v1/tenancy/organizations/:id/api-keys             PERM: api-key:manage
-  GET   /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId   PERM: api-key:read
-  PATCH /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId   PERM: api-key:manage
-  DELETE/api/v1/tenancy/organizations/:id/api-keys/:apiKeyId   PERM: api-key:manage
-  POST  /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId/rotatePERM: api-key:manage
-  GET   /api/v1/tenancy/organizations/:id/audit-logs           PERM: audit-log:read
-  GET   /api/v1/tenancy/organizations/:id/invitations          PERM: invitation:manage
-  POST  /api/v1/tenancy/organizations/:id/invitations          PERM: invitation:manage
-  DELETE/api/v1/tenancy/organizations/:id/invitations/:invitationIdPERM: invitation:manage
-  POST  /api/v1/tenancy/organizations/:id/invitations/:invitationId/resendPERM: invitation:manage
-  POST  /api/v1/tenancy/organizations/:id/leave                AUTH
-  PUT   /api/v1/tenancy/organizations/:id/logo                 PERM: organization:update
-  DELETE/api/v1/tenancy/organizations/:id/logo                 PERM: organization:update
-  GET   /api/v1/tenancy/organizations/:id/memberships          PERM: membership:read
-  POST  /api/v1/tenancy/organizations/:id/memberships          PERM: membership:manage
-  GET   /api/v1/tenancy/organizations/:id/memberships/:membershipIdPERM: membership:read
-  PATCH /api/v1/tenancy/organizations/:id/memberships/:membershipIdPERM: membership:manage
-  DELETE/api/v1/tenancy/organizations/:id/memberships/:membershipIdPERM: membership:manage
-  GET   /api/v1/tenancy/organizations/:id/memberships/:membershipId/permissionsPERM: membership:read
-  GET   /api/v1/tenancy/organizations/:id/notification-policiesPERM: notification-policy:read
-  POST  /api/v1/tenancy/organizations/:id/notification-policiesPERM: notification-policy:manage
-  GET   /api/v1/tenancy/organizations/:id/notification-policies/:policyIdPERM: notification-policy:read
-  PATCH /api/v1/tenancy/organizations/:id/notification-policies/:policyIdPERM: notification-policy:manage
-  DELETE/api/v1/tenancy/organizations/:id/notification-policies/:policyIdPERM: notification-policy:manage
-  GET   /api/v1/tenancy/organizations/:id/roles                PERM: role:read
-  POST  /api/v1/tenancy/organizations/:id/roles                PERM: role:manage
-  GET   /api/v1/tenancy/organizations/:id/roles/:roleId        PERM: role:read
-  PATCH /api/v1/tenancy/organizations/:id/roles/:roleId        PERM: role:manage
-  DELETE/api/v1/tenancy/organizations/:id/roles/:roleId        PERM: role:manage
-  GET   /api/v1/tenancy/organizations/:id/roles/:roleId/permissionsPERM: role:read
-  PUT   /api/v1/tenancy/organizations/:id/roles/:roleId/permissionsPERM: role:manage
-  GET   /api/v1/tenancy/organizations/:id/settings             PERM: organization:read
-  PATCH /api/v1/tenancy/organizations/:id/settings             PERM: organization:update
-  POST  /api/v1/tenancy/organizations/:id/transfer-ownership   AUTH
-  GET   /api/v1/tenancy/organizations/by-slug/:slug            AUTH
-  GET   /api/v1/tenancy/permissions                            AUTH
+  POST   /api/v1/tenancy/invitations/:invitationId/accept        PUBLIC
+  POST   /api/v1/tenancy/invitations/:invitationId/decline       AUTH
+  GET    /api/v1/tenancy/invitations/pending                     AUTH
+  GET    /api/v1/tenancy/organizations                           AUTH
+  POST   /api/v1/tenancy/organizations                           AUTH
+  GET    /api/v1/tenancy/organizations/:id                       AUTH
+  PATCH  /api/v1/tenancy/organizations/:id                       PERM: organization:update
+  DELETE /api/v1/tenancy/organizations/:id                       PERM: organization:delete
+  GET    /api/v1/tenancy/organizations/:id/api-keys              PERM: api-key:read
+  POST   /api/v1/tenancy/organizations/:id/api-keys              PERM: api-key:manage
+  GET    /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId    PERM: api-key:read
+  PATCH  /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId    PERM: api-key:manage
+  DELETE /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId    PERM: api-key:manage
+  POST   /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId/rotate PERM: api-key:manage
+  GET    /api/v1/tenancy/organizations/:id/audit-logs            PERM: audit-log:read
+  GET    /api/v1/tenancy/organizations/:id/invitations           PERM: invitation:manage
+  POST   /api/v1/tenancy/organizations/:id/invitations           PERM: invitation:manage
+  DELETE /api/v1/tenancy/organizations/:id/invitations/:invitationId PERM: invitation:manage
+  POST   /api/v1/tenancy/organizations/:id/invitations/:invitationId/resend PERM: invitation:manage
+  POST   /api/v1/tenancy/organizations/:id/leave                 AUTH
+  PUT    /api/v1/tenancy/organizations/:id/logo                  PERM: organization:update
+  DELETE /api/v1/tenancy/organizations/:id/logo                  PERM: organization:update
+  GET    /api/v1/tenancy/organizations/:id/memberships           PERM: membership:read
+  POST   /api/v1/tenancy/organizations/:id/memberships           PERM: membership:manage
+  GET    /api/v1/tenancy/organizations/:id/memberships/:membershipId PERM: membership:read
+  PATCH  /api/v1/tenancy/organizations/:id/memberships/:membershipId PERM: membership:manage
+  DELETE /api/v1/tenancy/organizations/:id/memberships/:membershipId PERM: membership:manage
+  GET    /api/v1/tenancy/organizations/:id/memberships/:membershipId/permissions PERM: membership:read
+  GET    /api/v1/tenancy/organizations/:id/notification-policies PERM: notification-policy:read
+  POST   /api/v1/tenancy/organizations/:id/notification-policies PERM: notification-policy:manage
+  GET    /api/v1/tenancy/organizations/:id/notification-policies/:policyId PERM: notification-policy:read
+  PATCH  /api/v1/tenancy/organizations/:id/notification-policies/:policyId PERM: notification-policy:manage
+  DELETE /api/v1/tenancy/organizations/:id/notification-policies/:policyId PERM: notification-policy:manage
+  GET    /api/v1/tenancy/organizations/:id/roles                 PERM: role:read
+  POST   /api/v1/tenancy/organizations/:id/roles                 PERM: role:manage
+  GET    /api/v1/tenancy/organizations/:id/roles/:roleId         PERM: role:read
+  PATCH  /api/v1/tenancy/organizations/:id/roles/:roleId         PERM: role:manage
+  DELETE /api/v1/tenancy/organizations/:id/roles/:roleId         PERM: role:manage
+  GET    /api/v1/tenancy/organizations/:id/roles/:roleId/permissions PERM: role:read
+  PUT    /api/v1/tenancy/organizations/:id/roles/:roleId/permissions PERM: role:manage
+  GET    /api/v1/tenancy/organizations/:id/settings              PERM: organization:read
+  PATCH  /api/v1/tenancy/organizations/:id/settings              PERM: organization:update
+  POST   /api/v1/tenancy/organizations/:id/transfer-ownership    AUTH
+  GET    /api/v1/tenancy/organizations/by-slug/:slug             AUTH
+  GET    /api/v1/tenancy/permissions                             AUTH
 
 ================================================================================
   DOMAIN: UPLOAD (/api/v1/uploads)
   Routes: 4
 ================================================================================
 
-  POST  /api/v1/uploads                                        AUTH
-  GET   /api/v1/uploads/:publicId                              AUTH
-  DELETE/api/v1/uploads/:publicId                              AUTH
-  POST  /api/v1/uploads/:publicId/confirm                      AUTH
+  POST   /api/v1/uploads                                         AUTH
+  GET    /api/v1/uploads/:publicId                               AUTH
+  DELETE /api/v1/uploads/:publicId                               AUTH
+  POST   /api/v1/uploads/:publicId/confirm                       AUTH
 
 ================================================================================
   DOMAIN: USER (/api/v1/users)
   Routes: 17
 ================================================================================
 
-  GET   /api/v1/users                                          ROLE: super_admin, admin
-  GET   /api/v1/users/:userId                                  ROLE: super_admin, admin
-  PATCH /api/v1/users/:userId                                  ROLE: super_admin, admin
-  DELETE/api/v1/users/:userId                                  ROLE: super_admin, admin
-  POST  /api/v1/users/:userId/suspend                          ROLE: super_admin, admin
-  POST  /api/v1/users/:userId/unsuspend                        ROLE: super_admin, admin
-  GET   /api/v1/users/me                                       AUTH
-  PATCH /api/v1/users/me                                       AUTH
-  DELETE/api/v1/users/me                                       AUTH
-  PUT   /api/v1/users/me/avatar                                AUTH
-  DELETE/api/v1/users/me/avatar                                AUTH
-  POST  /api/v1/users/me/data-export                           AUTH
-  GET   /api/v1/users/me/data-export/:exportId                 AUTH
-  GET   /api/v1/users/me/notification-preferences              AUTH
-  PUT   /api/v1/users/me/notification-preferences              AUTH
-  GET   /api/v1/users/me/settings                              AUTH
-  PATCH /api/v1/users/me/settings                              AUTH
+  GET    /api/v1/users                                           ROLE: super_admin, admin
+  GET    /api/v1/users/:userId                                   ROLE: super_admin, admin
+  PATCH  /api/v1/users/:userId                                   ROLE: super_admin, admin
+  DELETE /api/v1/users/:userId                                   ROLE: super_admin, admin
+  POST   /api/v1/users/:userId/suspend                           ROLE: super_admin, admin
+  POST   /api/v1/users/:userId/unsuspend                         ROLE: super_admin, admin
+  GET    /api/v1/users/me                                        AUTH
+  PATCH  /api/v1/users/me                                        AUTH
+  DELETE /api/v1/users/me                                        AUTH
+  PUT    /api/v1/users/me/avatar                                 AUTH
+  DELETE /api/v1/users/me/avatar                                 AUTH
+  POST   /api/v1/users/me/data-export                            AUTH
+  GET    /api/v1/users/me/data-export/:exportId                  AUTH
+  GET    /api/v1/users/me/notification-preferences               AUTH
+  PUT    /api/v1/users/me/notification-preferences               AUTH
+  GET    /api/v1/users/me/settings                               AUTH
+  PATCH  /api/v1/users/me/settings                               AUTH
 
 ================================================================================
-  DOMAIN: HEALTH (/health)
+  DOMAIN: OPS (/internal/ops)
+  Routes: 2
+================================================================================
+
+  GET    /internal/ops/circuit-breakers                          TOKEN: metrics
+  POST   /internal/ops/circuit-breakers/:circuitName/reset       TOKEN: metrics
+
+================================================================================
+  DOMAIN: HEALTH (/livez)
+  Routes: 2
+================================================================================
+
+  GET    /livez                                                  PUBLIC
+  GET    /readyz                                                 PUBLIC
+
+================================================================================
+  DOMAIN: MCP (/mcp)
+  Routes: 2
+================================================================================
+
+  GET    /mcp                                                    ROLE: super_admin, admin
+  POST   /mcp                                                    ROLE: super_admin, admin
+
+================================================================================
+  DOMAIN: METRICS (/metrics)
   Routes: 1
 ================================================================================
 
-  GET   /health                                                PUBLIC
+  GET    /metrics                                                TOKEN: metrics
 
 ================================================================================
   SUMMARY
 ================================================================================
 
-  Total routes    : 122
-  Public          : 19
-  Authenticated   : 46
-  Role-guarded    : 7
+  Total routes    : 130
+  Public          : 21
+  Authenticated   : 45
+  Role-guarded    : 11
   Perm-guarded    : 50
+  Token-guarded   : 3
 
 ================================================================================
   IDEMPOTENCY (Idempotency-Key header)

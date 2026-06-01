@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
+import { getBullMQProducerConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { insertMailOutbox } from '@/infrastructure/mail/mail-outbox.repository.js';
 import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { FIFTEEN_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
@@ -8,6 +8,7 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { mailJobDataSchema, type MailJobDataValidated } from './mail.job.schema.js';
 
+/** BullMQ queue name for outbox-driven mail send jobs (`mail/send-email`). */
 export const MAIL_QUEUE_NAME = 'mail';
 
 /** BullMQ attempts — extra headroom for Resend circuit-open deferred retries. */
@@ -31,17 +32,10 @@ let mailQueue: Queue<MailJobData> | null = null;
 function getMailQueue(): Queue<MailJobData> {
   if (mailQueue) return mailQueue;
   mailQueue = new Queue<MailJobData>(MAIL_QUEUE_NAME, {
-    connection: {
-      ...getBullMQConnectionOptions(),
-      /**
-       * Fail-fast on Redis partitions: commands error immediately instead of
-       * being buffered. `maxRetriesPerRequest` stays `null` (inherited from
-       * `getBullMQConnectionOptions`) so the producer behaves the same as all
-       * workers; the explicit 15s deadline in `enqueueMailOutboxJob` bounds
-       * how long a single enqueue can wait during graceful shutdown.
-       */
-      enableOfflineQueue: false,
-    },
+    // Shared producer options pin `enableOfflineQueue: false` so a Redis partition fails the
+    // enqueue fast instead of buffering it; the explicit 15s deadline in `enqueueMailOutboxJob`
+    // additionally bounds how long a single enqueue can wait during graceful shutdown.
+    connection: getBullMQProducerConnectionOptions(),
     defaultJobOptions: {
       removeOnComplete: { count: 1000 },
       removeOnFail: { count: 5000 },

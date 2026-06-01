@@ -45,6 +45,9 @@ function parseArgs(): AddEnvOptions | null {
   }
 
   const key = args[0];
+  if (key === undefined) {
+    return null;
+  }
   if (!/^[A-Z][A-Z0-9_]*$/.test(key)) {
     console.error(`Invalid key name "${key}". Must be SCREAMING_SNAKE_CASE.`);
     return null;
@@ -67,13 +70,15 @@ function parseArgs(): AddEnvOptions | null {
     return null;
   }
 
+  const defaultValue = getFlag('--default');
+
   return {
     key,
     type,
     section,
     description: getFlag('--desc') ?? '',
-    defaultValue: getFlag('--default'),
     optional: !args.includes('--required'),
+    ...(defaultValue !== undefined ? { defaultValue } : {}),
   };
 }
 
@@ -104,13 +109,15 @@ async function interactivePrompt(): Promise<AddEnvOptions> {
 
   rl.close();
 
+  const defaultValue = defaultAnswer.trim() || undefined;
+
   return {
     key: key.trim(),
     type,
     section,
     description: desc.trim(),
-    defaultValue: defaultAnswer.trim() || undefined,
     optional: requiredAnswer.trim().toLowerCase() !== 'y',
+    ...(defaultValue !== undefined ? { defaultValue } : {}),
   };
 }
 
@@ -132,7 +139,6 @@ function buildZodField(options: AddEnvOptions): string {
       }
       field = `z.string().optional().default('false').transform((v) => v === 'true' || v === '1')`;
       return `  /** ${options.description || options.key} */\n  ${options.key}: ${field},`;
-    case 'string':
     default:
       field = `z.string().min(1)`;
       break;
@@ -180,7 +186,7 @@ function addToSchema(options: AddEnvOptions): boolean {
   const lineStart = content.lastIndexOf('\n', lastClosing);
   const insertAt = lineStart === -1 ? lastClosing : lineStart;
 
-  content = content.slice(0, insertAt) + '\n' + field + '\n' + content.slice(insertAt);
+  content = `${content.slice(0, insertAt)}\n${field}\n${content.slice(insertAt)}`;
   writeFileSync(SCHEMA_PATH, content, 'utf-8');
   console.log(`  + Added ${options.key} to env-schema.ts`);
   return true;
@@ -266,4 +272,4 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+void main();

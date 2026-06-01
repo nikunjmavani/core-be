@@ -1,22 +1,37 @@
 import { Worker, type Job, type WorkerOptions } from 'bullmq';
-import type { PostgresDatabaseHandle } from '@/infrastructure/database/database-handle.types.js';
+import type { WorkerContextDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
+import { brandWorkerContextDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
 import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-close.util.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 
 /** Explicit Drizzle handle passed from a worker context wrapper into processors/repositories. */
-export type WorkerDatabaseHandle = PostgresDatabaseHandle;
+export type WorkerDatabaseHandle = WorkerContextDatabaseHandle;
 
+/**
+ * Decorates a per-queue job payload `TJob` with the `organizationPublicId` discriminator
+ * required by {@link runTenantScopedWorkerJob} so the processor can re-enter Postgres
+ * inside `withOrganizationContext` (sets `app.current_organization_id` for RLS).
+ */
 export type TenantScopedWorkerJob<TJob> = TJob & {
   organizationPublicId: string;
 };
 
+/**
+ * Minimal shape every tenant-scoped BullMQ job must satisfy — extracted as its own type
+ * so {@link createTenantScopedBullMQWorker}'s generic constraint stays narrow.
+ */
 export type TenantScopedJobData = {
   organizationPublicId: string;
 };
 
+/**
+ * Decorates a per-queue job payload `TJob` with the `userPublicId` discriminator required
+ * by {@link runUserScopedWorkerJob} so the processor can re-enter Postgres inside
+ * `withUserDatabaseContext` (sets `app.current_user_id` for GDPR-scoped reads).
+ */
 export type UserScopedWorkerJob<TJob> = TJob & {
   userPublicId: string;
 };
@@ -30,7 +45,7 @@ export async function runTenantScopedWorkerJob<TJob, TResult>(
 ): Promise<TResult> {
   const { organizationPublicId, ...jobPayload } = job;
   return withOrganizationContext(organizationPublicId, (databaseHandle) =>
-    processor(databaseHandle, jobPayload as TJob),
+    processor(brandWorkerContextDatabaseHandle(databaseHandle), jobPayload as TJob),
   );
 }
 
@@ -40,7 +55,9 @@ export async function runTenantScopedWorkerJob<TJob, TResult>(
 export async function runGlobalRetentionWorkerJob<TResult>(
   processor: (databaseHandle: WorkerDatabaseHandle) => Promise<TResult>,
 ): Promise<TResult> {
-  return withGlobalRetentionCleanupDatabaseContext((databaseHandle) => processor(databaseHandle));
+  return withGlobalRetentionCleanupDatabaseContext((databaseHandle) =>
+    processor(brandWorkerContextDatabaseHandle(databaseHandle)),
+  );
 }
 
 /**
@@ -52,7 +69,7 @@ export async function runUserScopedWorkerJob<TJob, TResult>(
 ): Promise<TResult> {
   const { userPublicId, ...jobPayload } = job;
   return withUserDatabaseContext(userPublicId, (databaseHandle) =>
-    processor(databaseHandle, jobPayload as TJob),
+    processor(brandWorkerContextDatabaseHandle(databaseHandle), jobPayload as TJob),
   );
 }
 

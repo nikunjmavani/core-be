@@ -2,8 +2,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import { NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import type { OrganizationRepository } from '../organization.repository.js';
+import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import type { OrganizationApiKeyRepository } from './organization-api-key.repository.js';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
+import type { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
+import { assertCallerCanGrantPermissionCodes } from '@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.util.js';
 import type {
   OrganizationApiKeyOutput,
   CreateOrganizationApiKeyResult,
@@ -32,10 +35,34 @@ function getKeyPrefix(key: string): string {
   return key.slice(0, ORGANIZATION_API_KEY_PREFIX_DISPLAY_LENGTH);
 }
 
+/**
+ * Lifecycle service for organization-scoped API keys (CRUD, rotate, and
+ * authenticate-by-prefix).
+ *
+ * @remarks
+ * - **Algorithm:** create generates `ak_<hex>` of
+ *   `ORGANIZATION_API_KEY_RAW_SECRET_BYTE_LENGTH` random bytes, derives a
+ *   SHA-256 hash and a fixed-length prefix; only the hash + prefix are
+ *   persisted. Authentication looks up active candidates by prefix, then
+ *   defers the equality check to the caller-supplied `hashCompare`
+ *   (constant-time), filters expired keys, and touches `last_used_at` on a
+ *   match. Rotation soft-deletes the existing key and creates a new one
+ *   with the same name and scopes; a fresh raw secret is returned.
+ * - **Failure modes:** `NotFoundError` for missing organization or API key;
+ *   validation errors propagate from the DTO validators.
+ * - **Side effects:** persistent row writes (`create`, `update`,
+ *   `softDelete`, `touchLastUsedAt`); mutations are wrapped in
+ *   `withOrganizationDatabaseContext` to satisfy RLS.
+ * - **Notes:** raw secret is returned to the caller exactly once (creation
+ *   and rotation responses); revocation = soft-delete or status flip to
+ *   `REVOKED`; key prefix is non-secret and used purely as a lookup index.
+ */
 export class OrganizationApiKeyService {
   constructor(
     private readonly organizationRepository: OrganizationRepository,
     private readonly apiKeyRepository: OrganizationApiKeyRepository,
+    private readonly authorizationService: AuthorizationService,
+    private readonly permissionRepository: PermissionRepository,
   ) {}
 
   async list(organization_public_id: string, query: unknown) {
@@ -76,6 +103,13 @@ export class OrganizationApiKeyService {
     created_by_user_public_id: string,
   ): Promise<CreateOrganizationApiKeyResult> {
     const parsed = validateCreateOrganizationApiKey(body);
+    await assertCallerCanGrantPermissionCodes({
+      authorizationService: this.authorizationService,
+      permissionRepository: this.permissionRepository,
+      callerUserPublicId: created_by_user_public_id,
+      organizationPublicId: organization_public_id,
+      requestedPermissionCodes: parsed.scopes,
+    });
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
@@ -107,7 +141,7 @@ export class OrganizationApiKeyService {
     organization_public_id: string,
     api_key_public_id: string,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<OrganizationApiKeyOutput> {
     const parsed = validateUpdateOrganizationApiKey(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -147,12 +181,15 @@ export class OrganizationApiKeyService {
     for (const candidate of candidates) {
       if (!hashCompare(candidate.key_hash, key_hash)) continue;
       if (candidate.expires_at && candidate.expires_at <= now) continue;
-      const organization = await this.organizationRepository.findById(candidate.organization_id);
-      if (!organization) continue;
-      await this.apiKeyRepository.touchLastUsedAt(candidate.public_id);
+      // The resolver already returned the owning organization public id (FORCE RLS on
+      // tenancy.organizations means we cannot read it here without an org context). Establish that
+      // context so the last_used_at touch passes the api_keys tenant-isolation policy.
+      await withOrganizationDatabaseContext(candidate.organization_public_id, () =>
+        this.apiKeyRepository.touchLastUsedAt(candidate.public_id),
+      );
       return {
         public_id: candidate.public_id,
-        organization_public_id: organization.public_id,
+        organization_public_id: candidate.organization_public_id,
         scopes: candidate.scopes,
       };
     }

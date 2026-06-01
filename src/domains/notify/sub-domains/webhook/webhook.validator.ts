@@ -11,6 +11,10 @@ import {
   type UpdateWebhookInput,
 } from './webhook.dto.js';
 
+/**
+ * Reject legacy page/per_page callers, then parse the `GET /organizations/:id/webhooks` query
+ * string with {@link listWebhooksQueryDto}; throws `ValidationError('errors:invalidInput')`.
+ */
 export function validateListWebhooksQuery(data: unknown): ListWebhooksQueryInput {
   ensureCursorOnlyPagination(data);
   const result = listWebhooksQueryDto.safeParse(data);
@@ -20,6 +24,10 @@ export function validateListWebhooksQuery(data: unknown): ListWebhooksQueryInput
   return result.data;
 }
 
+/**
+ * Reject legacy page/per_page callers, then parse the delivery-attempts list query string with
+ * {@link listWebhookDeliveryAttemptsQueryDto}; throws `ValidationError('errors:invalidInput')`.
+ */
 export function validateListWebhookDeliveryAttemptsQuery(
   data: unknown,
 ): ListWebhookDeliveryAttemptsQueryInput {
@@ -31,6 +39,10 @@ export function validateListWebhookDeliveryAttemptsQuery(
   return result.data;
 }
 
+/**
+ * Parse the `POST /organizations/:id/webhooks` request body via {@link CreateWebhookDto};
+ * throws `ValidationError('errors:invalidInput')` with field-level errors on failure.
+ */
 export function validateCreateWebhook(data: unknown): CreateWebhookInput {
   const result = CreateWebhookDto.safeParse(data);
   if (!result.success) {
@@ -39,6 +51,10 @@ export function validateCreateWebhook(data: unknown): CreateWebhookInput {
   return result.data;
 }
 
+/**
+ * Parse the `PATCH /organizations/:id/webhooks/:webhookId` request body via
+ * {@link UpdateWebhookDto}; throws `ValidationError('errors:invalidInput')` on failure.
+ */
 export function validateUpdateWebhook(data: unknown): UpdateWebhookInput {
   const result = UpdateWebhookDto.safeParse(data);
   if (!result.success) {

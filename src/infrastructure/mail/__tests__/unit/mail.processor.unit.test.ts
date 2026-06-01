@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
 import { MAIL_QUEUE_MAX_ATTEMPTS } from '@/infrastructure/mail/queues/mail.queue.js';
-import { processMailOutboxJob } from '@/infrastructure/mail/workers/mail.processor.js';
+import {
+  buildMailOutboxIdempotencyKey,
+  processMailOutboxJob,
+} from '@/infrastructure/mail/workers/mail.processor.js';
 
 const findMailOutboxByIdMock = vi.fn();
 const tryClaimPendingMailOutboxMock = vi.fn();
@@ -35,6 +38,11 @@ describe('mail.processor', () => {
     markMailOutboxFailedMock.mockReset();
     releaseMailOutboxClaimMock.mockReset();
     sendEmailMock.mockReset();
+  });
+
+  it('buildMailOutboxIdempotencyKey is deterministic per outbox row', () => {
+    expect(buildMailOutboxIdempotencyKey(43)).toBe('mail-outbox-43');
+    expect(buildMailOutboxIdempotencyKey(43)).toBe(buildMailOutboxIdempotencyKey(43));
   });
 
   it('processMailOutboxJob skips send when outbox row is already sent', async () => {
@@ -74,6 +82,9 @@ describe('mail.processor', () => {
     );
 
     expect(sendEmailMock).toHaveBeenCalledOnce();
+    expect(sendEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: 'mail-outbox-43' }),
+    );
     expect(markMailOutboxSentMock).toHaveBeenCalledWith(43, 'msg_new');
     expect(result).toEqual({ messageId: 'msg_new' });
     expect(logger.info).toHaveBeenCalledWith(

@@ -8,6 +8,7 @@ Project core_be {
 }
 
 TableGroup audit {
+  audit.dead_letter_jobs
   audit.logs
 }
 
@@ -53,11 +54,34 @@ TableGroup upload {
   upload.uploads
 }
 
+Table audit.dead_letter_jobs {
+  attempts_made int [not null]
+  created_at timestamptz [not null]
+  dead_letter_queue text [not null]
+  error_stack text
+  failed_at timestamptz [not null]
+  failed_reason text [not null]
+  id bigint [increment, not null]
+  job_id text
+  job_name text [not null]
+  max_attempts int [not null]
+  payload_summary jsonb [not null]
+  source_queue text [not null]
+  indexes {
+    (id) [pk]
+  }
+}
+
+Note audit.dead_letter_jobs {
+  'RLS: enabled\nPolicies: dead_letter_jobs_deny_all, dead_letter_jobs_app_access\nFORCE ROW LEVEL SECURITY'
+}
+
 Table audit.logs {
   action varchar(100) [not null]
+  actor_api_key_id bigint
   actor_user_id bigint
   created_at timestamptz [not null]
-  id bigint [increment, not null]
+  id bigint [pk, increment, not null]
   ip_address varchar(45)
   metadata jsonb [not null]
   organization_id bigint
@@ -66,13 +90,10 @@ Table audit.logs {
   severity varchar(20) [not null]
   target_user_id bigint
   user_agent text
-  indexes {
-    (id, created_at) [pk]
-  }
 }
 
 Note audit.logs {
-  'Partitioned BY RANGE (created_at)\nRLS: enabled\nPolicies: audit_logs_tenant_isolation\nFORCE ROW LEVEL SECURITY'
+  'RLS: enabled\nPolicies: audit_logs_tenant_isolation, audit_logs_user_export_select\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.auth_methods {
@@ -92,7 +113,7 @@ Table auth.auth_methods {
 }
 
 Note auth.auth_methods {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: auth_methods_self_or_admin_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.mail_outbox {
@@ -132,7 +153,7 @@ Table auth.mfa_methods {
 }
 
 Note auth.mfa_methods {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: mfa_methods_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.mfa_recovery_codes {
@@ -144,7 +165,7 @@ Table auth.mfa_recovery_codes {
 }
 
 Note auth.mfa_recovery_codes {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: mfa_recovery_codes_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.sessions {
@@ -156,6 +177,7 @@ Table auth.sessions {
   last_active_at timestamptz [not null]
   organization_id bigint
   public_id varchar(21) [not null, unique]
+  refresh_token_hash varchar(64)
   token_hash varchar(64) [not null, unique]
   user_agent text
   user_id bigint [not null]
@@ -180,7 +202,7 @@ Table auth.user_data_exports {
 }
 
 Note auth.user_data_exports {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: user_data_exports_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.user_notification_preferences {
@@ -211,7 +233,7 @@ Table auth.user_settings {
 }
 
 Note auth.user_settings {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: user_settings_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.users {
@@ -219,6 +241,7 @@ Table auth.users {
   avatar_url varchar(512)
   created_at timestamptz [not null]
   deleted_at timestamptz
+  deletion_started_at timestamptz
   email varchar(255) [not null]
   email_hash varchar(64) [not null]
   failed_login_count int [not null]
@@ -236,7 +259,7 @@ Table auth.users {
 }
 
 Note auth.users {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: users_self_or_admin_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.verification_tokens {
@@ -269,7 +292,7 @@ Table auth.webauthn_credentials {
 }
 
 Note auth.webauthn_credentials {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: webauthn_credentials_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table billing.plans {
@@ -343,7 +366,7 @@ Table notify.notifications {
   action_url varchar(512)
   created_at timestamptz [not null]
   data jsonb [not null]
-  id bigint [increment, not null]
+  id bigint [pk, increment, not null]
   is_read boolean [not null]
   message text [not null]
   organization_id bigint
@@ -352,13 +375,10 @@ Table notify.notifications {
   title varchar(255) [not null]
   type varchar(50) [not null]
   user_id bigint [not null]
-  indexes {
-    (id, created_at) [pk]
-  }
 }
 
 Note notify.notifications {
-  'Partitioned BY RANGE (created_at)\nRLS: enabled\nPolicies: notifications_tenant_isolation, notifications_owner_access\nFORCE ROW LEVEL SECURITY'
+  'RLS: enabled\nPolicies: notifications_tenant_isolation, notifications_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table notify.webhook_delivery_attempts {
@@ -498,6 +518,7 @@ Table tenancy.organizations {
   created_at timestamptz [not null]
   created_by_user_id bigint
   deleted_at timestamptz
+  deletion_started_at timestamptz
   id bigint [pk, increment, not null]
   logo_url varchar(512)
   name varchar(255) [not null]
@@ -582,6 +603,7 @@ Note upload.uploads {
   'RLS: enabled\nPolicies: uploads_tenant_isolation, uploads_owner_access\nFORCE ROW LEVEL SECURITY'
 }
 
+Ref: audit.logs.actor_api_key_id > tenancy.api_keys.id [delete: set null]
 Ref: audit.logs.actor_user_id > auth.users.id [delete: set null]
 Ref: audit.logs.organization_id > tenancy.organizations.id [delete: set null]
 Ref: audit.logs.target_user_id > auth.users.id [delete: set null]

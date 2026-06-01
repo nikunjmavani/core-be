@@ -1,12 +1,16 @@
 import { createInterface } from 'node:readline';
-import * as logger from '../common/logger.js';
-import { loadConfig, getEnvironmentNames, getConfigPath } from '../common/config.js';
-import { loadSecrets, getSecretsPath, ensureEnvSetupTemplate } from '../common/secrets.js';
-import { hasAnyEnvSecret } from '../common/secrets.js';
-import { loadState, saveState, stateFileExists } from '../common/state.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { loadConfig, getEnvironmentNames, getConfigPath } from '@tooling/setup/common/config.js';
+import {
+  loadSecrets,
+  getSecretsPath,
+  ensureEnvSetupTemplate,
+} from '@tooling/setup/common/secrets.js';
+import { hasAnyEnvSecret } from '@tooling/setup/common/secrets.js';
+import { loadState, saveState, stateFileExists } from '@tooling/setup/common/state.js';
 import { checkPrerequisites } from './prerequisites.js';
 import { runGuide } from './guide.js';
-import { exportEnvFiles } from '../envs/export-env-files.js';
+import { exportEnvFiles } from '@tooling/setup/envs/export-env-files.js';
 import { INFRA_PROVIDERS } from './providers/index.js';
 import {
   syncGithubFoundations,
@@ -17,15 +21,20 @@ import {
   summarizeOutcomes,
   type StepDescriptor,
   type StepOutcome,
-} from '../common/interactive-step.js';
-import { reviewProjectIdentity, SETUP_SERVICE_NAMES } from './identity-review.js';
+} from '@tooling/setup/common/interactive-step.js';
+import {
+  formatSetupServiceName,
+  formatSetupServiceNames,
+  reviewProjectIdentity,
+  SETUP_SERVICE_NAMES,
+} from './identity-review.js';
 import type {
   SetupConfig,
   SetupSecrets,
   SetupState,
   InfraProviderContext,
   InfraProvider,
-} from '../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 export interface ProvisionOptions {
   assumeYes?: boolean;
@@ -120,8 +129,8 @@ function getEnvironmentBranchEntries(config: SetupConfig): logger.EnvironmentBra
     name: environment.name,
     label: environment.label,
     branch: environment.branch,
-    services: SETUP_SERVICE_NAMES,
-    isDefault: environment.isDefault,
+    services: SETUP_SERVICE_NAMES.map(formatSetupServiceName),
+    ...(environment.isDefault !== undefined ? { isDefault: environment.isDefault } : {}),
   }));
 }
 
@@ -351,6 +360,31 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
 
   logger.blank();
 
+  // Pre-flight state reconstruction: for every enabled provider that supports
+  // `detectRemote`, query the remote provider and persist any resources we
+  // already created in a previous run that are missing from local state.
+  // Without this, providers whose state was wiped (or never written) would
+  // happily create duplicate resources (e.g. a second Railway Redis service)
+  // on rerun because their `alreadyDone` / idempotency checks only consult
+  // local state.
+  logger.info('Reconstructing state from remote providers (pre-flight)...');
+  const { foundCount: reconstructedCount, updatedProviderKeys } = await reconstructStateFromRemote({
+    config,
+    secrets,
+    state,
+    environments,
+    providers: selectedProviders,
+    verbose: false,
+  });
+  if (reconstructedCount > 0) {
+    logger.success(
+      `Adopted ${reconstructedCount} existing resource(s) from remote into state: ${updatedProviderKeys.join(', ')}.`,
+    );
+  } else {
+    logger.info('No existing remote resources required adoption.');
+  }
+  logger.blank();
+
   const existingResources = await checkForExistingResources(context, selectedProviders);
   if (existingResources.length > 0) {
     logger.existingResourcesError(existingResources);
@@ -378,7 +412,9 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
   const outcomes: StepOutcome<unknown>[] = [];
 
   for (let index = 0; index < steps.length; index += 1) {
-    const outcome = await runInteractiveStep(index + 1, totalSteps, steps[index], {
+    const step = steps[index];
+    if (step === undefined) continue;
+    const outcome = await runInteractiveStep(index + 1, totalSteps, step, {
       assumeYes: isAssumeYes(options),
     });
     outcomes.push(outcome);
@@ -416,8 +452,10 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
     }
   }
 
-  if (config.providers.upstash.enabled) {
-    summaryItems.push({ label: 'Upstash Redis', value: 'from .env.setup' });
+  if (state.redis?.databases) {
+    for (const [env, database] of Object.entries(state.redis.databases)) {
+      summaryItems.push({ label: `Railway Redis (${env})`, value: String(database.databaseId) });
+    }
   }
 
   if (state.aws?.buckets) {
@@ -437,7 +475,7 @@ export async function runProvision(options: ProvisionOptions = {}): Promise<void
     )) {
       const services = SETUP_SERVICE_NAMES.map((serviceName) => {
         const serviceId = environmentState.services[serviceName]?.serviceId ?? 'missing';
-        return `${serviceName}:${serviceId}`;
+        return `${formatSetupServiceName(serviceName)}:${serviceId}`;
       }).join(', ');
       summaryItems.push({ label: `  ${environmentName} services`, value: services });
     }
@@ -496,7 +534,9 @@ function buildGitHubSyncStep(context: InfraProviderContext): StepDescriptor<unkn
       'Uses GITHUB_TOKEN from .env.setup. Secrets are encrypted; variables are diffed.',
     ],
     execute: async () => {
-      const { syncEnvironmentToGitHub } = await import('../github/sync-github-environments.js');
+      const { syncEnvironmentToGitHub } = await import(
+        '@tooling/setup/github/sync-github-environments.js'
+      );
       let totalPushed = 0;
       let totalSkipped = 0;
       let totalDeleted = 0;
@@ -571,7 +611,7 @@ export function runStatus(): void {
 
   for (const environment of config.environments) {
     const neonOk = !!state.neon?.branches?.[environment.name]?.databaseUrl;
-    const redisOk = config.providers.upstash.enabled
+    const redisOk = config.providers.railwayRedis.enabled
       ? !!state.redis?.databases?.[environment.name]?.redisUrl
       : true;
     const awsOk = !!state.aws?.buckets?.[environment.name];
@@ -581,7 +621,7 @@ export function runStatus(): void {
 
     const details: string[] = [];
     if (!neonOk) details.push('Neon');
-    if (!redisOk) details.push('Upstash');
+    if (!redisOk) details.push('Railway Redis');
     if (!awsOk) details.push('AWS');
     if (!jwtOk) details.push('JWT');
 
@@ -589,7 +629,7 @@ export function runStatus(): void {
       env: environment.name,
       status: allOk ? 'OK' : 'MISSING',
       detail: allOk
-        ? `branch: ${environment.branch}; services: ${SETUP_SERVICE_NAMES.join(', ')}`
+        ? `branch: ${environment.branch}; services: ${formatSetupServiceNames(SETUP_SERVICE_NAMES)}`
         : `branch: ${environment.branch}; missing: ${details.join(', ')}`,
     });
   }
@@ -655,6 +695,76 @@ export async function runUpdate(
 
 // ─── RECONSTRUCT ────────────────────────────────────────────────────────────
 
+interface ReconstructStateOptions {
+  config: SetupConfig;
+  secrets: SetupSecrets;
+  state: SetupState;
+  environments: string[];
+  providers: readonly InfraProvider[];
+  /**
+   * When true, providers that do not implement `detectRemote` are logged
+   * (used by `runReconstruct`). When false, missing hooks are silent (used
+   * by the implicit reconstruct phase inside `runProvision`).
+   */
+  verbose?: boolean;
+}
+
+/**
+ * Walks every enabled provider that implements `detectRemote`, runs it,
+ * persists any state updates synchronously, and returns the total count of
+ * remote resources discovered. Used by both `runReconstruct` (explicit
+ * `--reconstruct` command) and `runProvision` (implicit pre-flight before
+ * the provision loop, so providers always see the freshest remote state and
+ * never create duplicates of resources that already exist remotely).
+ */
+async function reconstructStateFromRemote(
+  options: ReconstructStateOptions,
+): Promise<{ foundCount: number; updatedProviderKeys: string[] }> {
+  const { config, secrets, state, environments, providers, verbose = false } = options;
+  let foundCount = 0;
+  const updatedProviderKeys: string[] = [];
+
+  for (const provider of providers) {
+    if (
+      !provider.isEnabled({ config, secrets, state, environments, applyStateUpdates: () => {} })
+    ) {
+      continue;
+    }
+    if (!provider.detectRemote) {
+      if (verbose) {
+        logger.info(`${provider.name} — remote detection not available, skipping`);
+      }
+      continue;
+    }
+
+    const spinner = logger.startSpinner(`Querying ${provider.name}...`);
+    try {
+      const resources = await provider.detectRemote({
+        config,
+        secrets,
+        state,
+        environments,
+        applyStateUpdates: (updates: Partial<SetupState>) => {
+          Object.assign(state, updates);
+          saveState(state);
+        },
+      });
+      const count = Object.keys(resources).length;
+      if (count > 0) {
+        foundCount += count;
+        updatedProviderKeys.push(provider.key);
+      }
+      logger.stopSpinner(spinner, `${provider.name} — ${count} resource(s) found`);
+    } catch (detectError) {
+      const message = detectError instanceof Error ? detectError.message : String(detectError);
+      logger.stopSpinner(spinner, `${provider.name} — failed: ${message}`, 'fail');
+    }
+  }
+
+  saveState(state);
+  return { foundCount, updatedProviderKeys };
+}
+
 export async function runReconstruct(
   options: { providerSelection?: ProviderSelectionInput } = {},
 ): Promise<void> {
@@ -669,38 +779,15 @@ export async function runReconstruct(
   logger.info('Reconstructing state from remote providers...');
   logger.blank();
 
-  let foundCount = 0;
+  const { foundCount } = await reconstructStateFromRemote({
+    config,
+    secrets,
+    state,
+    environments,
+    providers,
+    verbose: true,
+  });
 
-  for (const provider of providers) {
-    if (
-      !provider.isEnabled({ config, secrets, state, environments, applyStateUpdates: () => {} })
-    ) {
-      continue;
-    }
-    if (!provider.detectRemote) {
-      logger.info(`${provider.name} — remote detection not available, skipping`);
-      continue;
-    }
-
-    const spinner = logger.startSpinner(`Querying ${provider.name}...`);
-    try {
-      const resources = await provider.detectRemote({
-        config,
-        secrets,
-        state,
-        environments,
-        applyStateUpdates: (updates: Partial<SetupState>) => Object.assign(state, updates),
-      });
-      const count = Object.keys(resources).length;
-      foundCount += count;
-      logger.stopSpinner(spinner, `${provider.name} — ${count} resource(s) found`);
-    } catch (detectError) {
-      const message = detectError instanceof Error ? detectError.message : String(detectError);
-      logger.stopSpinner(spinner, `${provider.name} — failed: ${message}`, 'fail');
-    }
-  }
-
-  saveState(state);
   logger.blank();
   if (foundCount > 0) {
     logger.success(`Rebuilt state with ${foundCount} resource(s) from remote.`);
@@ -729,12 +816,12 @@ export function runDeleteInstructions(
   showProviderSelection(providers);
   logger.blank();
 
-  const blocks = providers.flatMap((provider) =>
+  const blocks: logger.DeleteInstructionsBlock[] = providers.flatMap((provider) =>
     (provider.deleteInstructions?.(context) ?? []).map((block) => ({
       provider: block.provider,
       dashboardUrl: block.dashboardUrl,
-      steps: block.steps,
       resources: block.resources,
+      ...(block.steps !== undefined ? { steps: block.steps } : {}),
     })),
   );
 

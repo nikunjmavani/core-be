@@ -10,7 +10,7 @@ const databaseHandle = {
   }),
 };
 
-import { deleteInBatchesByCondition } from '@/infrastructure/database/batch-delete.util.js';
+import { deleteInBatchesByCondition } from '@/infrastructure/database/utils/batch-delete.util.js';
 
 describe('deleteInBatchesByCondition', () => {
   it('returns deleted and blocked counts when per-row FK failures occur', async () => {

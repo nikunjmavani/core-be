@@ -4,6 +4,14 @@ import { tenancySchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * Drizzle table for `tenancy.organization_settings` — 1:1 with
+ * `tenancy.organizations` (PK = `organization_id`). Stores per-tenant
+ * delivery toggles, default UI locale (constrained to `en`/`es`), and a
+ * free-form `security_policy` JSONB used for MFA enforcement and similar
+ * platform rules. RLS is enforced by the
+ * `organization_settings_tenant_isolation` policy.
+ */
 export const organization_settings = tenancySchema
   .table(
     'organization_settings',

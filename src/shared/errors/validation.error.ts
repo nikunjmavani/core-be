@@ -1,5 +1,6 @@
 import { AppError } from './app.error.js';
 
+/** One field-level entry in a {@link ValidationError}'s `errors` array (Paddle-style validation output). */
 export interface ValidationErrorItem {
   field: string;
   /** Fallback when messageKey is absent or request.t is unavailable. */
@@ -9,6 +10,11 @@ export interface ValidationErrorItem {
   messageParams?: Record<string, string | number>;
 }
 
+/**
+ * 400 Bad Request — request body or params failed schema/business validation.
+ * Carries a Paddle-style `errors[]` list with per-field translation keys so
+ * the error handler can localize each entry.
+ */
 export class ValidationError extends AppError {
   readonly details?: Record<string, unknown>;
   /** Paddle-style list for error response */

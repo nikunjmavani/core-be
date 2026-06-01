@@ -12,9 +12,20 @@ import {
   updateStripeSubscription,
 } from '@/infrastructure/payment/stripe.client.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { ServiceUnavailableError } from '@/shared/errors/index.js';
 
 /**
  * Stripe implementation of {@link PaymentProvider}.
+ *
+ * @remarks
+ * Mutation paths (`createSubscription`, `cancelSubscriptionAtPeriodEnd`,
+ * `resumeSubscription`, `updateSubscriptionPrice`) are **fail-closed**: a Stripe
+ * API failure is logged and re-surfaced as a {@link ServiceUnavailableError} so
+ * the caller never persists local billing state for a provider mutation that did
+ * not succeed. Compensation
+ * helpers (`compensateFailedCreate`, `compensatePlanChange`) intentionally swallow
+ * their own errors because they run on an already-failing path where the
+ * Stripe webhook remains the reconciliation source of truth.
  */
 export class StripePaymentProvider implements PaymentProvider {
   constructor(private readonly organizationService: OrganizationService) {}
@@ -81,39 +92,57 @@ export class StripePaymentProvider implements PaymentProvider {
       };
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.create.failed');
-      return {};
+      throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
     }
   }
 
-  async cancelSubscriptionAtPeriodEnd(providerSubscriptionId: string): Promise<void> {
+  async cancelSubscriptionAtPeriodEnd(
+    providerSubscriptionId: string,
+    idempotencyKey?: string,
+  ): Promise<void> {
     if (!isStripeConfigured()) return;
     try {
-      await cancelStripeSubscription(providerSubscriptionId, true);
+      await cancelStripeSubscription(
+        providerSubscriptionId,
+        true,
+        idempotencyKey !== undefined ? { idempotencyKey } : undefined,
+      );
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.cancel.failed');
+      throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
     }
   }
 
-  async resumeSubscription(providerSubscriptionId: string): Promise<void> {
+  async resumeSubscription(providerSubscriptionId: string, idempotencyKey?: string): Promise<void> {
     if (!isStripeConfigured()) return;
     try {
-      await resumeStripeSubscription(providerSubscriptionId);
+      await resumeStripeSubscription(
+        providerSubscriptionId,
+        idempotencyKey !== undefined ? { idempotencyKey } : undefined,
+      );
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.resume.failed');
+      throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
     }
   }
 
   async updateSubscriptionPrice(
     providerSubscriptionId: string,
     providerPriceId: string,
-  ): Promise<boolean> {
-    if (!isStripeConfigured()) return false;
+    idempotencyKey?: string,
+  ): Promise<void> {
+    if (!isStripeConfigured()) return;
     try {
-      await updateStripeSubscription(providerSubscriptionId, { priceId: providerPriceId });
-      return true;
+      await updateStripeSubscription(
+        providerSubscriptionId,
+        omitUndefined({
+          priceId: providerPriceId,
+          idempotencyKey,
+        }),
+      );
     } catch (error) {
       logger.error({ error }, 'stripe.subscription.change_plan.failed');
-      return false;
+      throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
     }
   }
 

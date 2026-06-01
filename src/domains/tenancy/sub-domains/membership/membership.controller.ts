@@ -1,9 +1,20 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import {
+  getActingUserPublicId,
+  getRequestIdentifier,
+  requireAuth,
+  requirePrincipal,
+} from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MembershipService } from './membership.service.js';
 
+/**
+ * Builds the HTTP handler map for the organization membership routes under
+ * `/organizations/:id/memberships` plus the self-service `leave` and
+ * `transfer-ownership` actions that take an organization id as the only
+ * path param.
+ */
 export function createMembershipController(service: MembershipService) {
   return {
     listMemberships: async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -28,26 +39,31 @@ export function createMembershipController(service: MembershipService) {
       return successResponse(data, getRequestIdentifier(request));
     },
     createMembership: async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const organizationId = validatePublicIdParam(
         (request.params as { id: string }).id ?? '',
         'id',
       );
-      const data = await service.create(organizationId, request.body, auth.userId);
+      const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
       reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },
     updateMembership: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const { id: organizationId, membershipId } = (request.params as {
         id: string;
         membershipId: string;
       }) ?? { id: '', membershipId: '' };
-      const data = await service.update(organizationId, membershipId, request.body, auth.userId);
+      const data = await service.update(
+        organizationId,
+        membershipId,
+        request.body,
+        getActingUserPublicId(auth),
+      );
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteMembership: async (request: FastifyRequest, reply: FastifyReply) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const { id: organizationId, membershipId } = (request.params as {
         id: string;
         membershipId: string;

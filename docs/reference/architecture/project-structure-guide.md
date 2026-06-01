@@ -8,14 +8,19 @@ Conventions, layer matrix, request flow, and known inconsistencies for `src/`. F
 
 The full `src/` file tree is **not** duplicated here (it drifts from code quickly).
 
-| Source                                                               | Use                                                                         |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| [CLAUDE.md](../../../CLAUDE.md)                                         | Domain → sub-domain (and nested sub-domain) layout, tests, dependency rules |
-| [domains-and-public-api-design.md](../architecture/domains-and-public-api-design.md) | Layout variants, nesting rules, tests (§1.5), route-file strategy           |
-| `.cursor/skills/domain-generator/SKILL.md`                           | Scaffolding checklist for new domains/resources                             |
-| `.cursor/skills/test-generator/SKILL.md`                             | Where to put unit, e2e, and event-handler tests                             |
-| [docs/routes.txt](../../routes.txt)                                     | Generated route catalog (`pnpm routes:catalog`)                             |
-| `pnpm tool:project-structure-tree`                                   | Print current `src/` tree to stdout (skips `__tests__/`, caches)            |
+| Source | Use |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [CLAUDE.md](../../../CLAUDE.md) | Domain → sub-domain (and nested sub-domain) layout, tests, dependency rules |
+| [domains-and-public-api-design.md](./domains-and-public-api-design.md) | Layout variants, nesting rules, tests (§1.5), route-file strategy |
+| [documentation-system.md](./documentation-system.md) | Layered docs system (system narratives, per-folder OVERVIEW, auto-generated DOCS, TSDoc) |
+| [`src/OVERVIEW.md`](../../../src/OVERVIEW.md) | Top of the system narrative tree — domain map, infra modules, cross-cutting overview |
+| [`src/PATTERNS.md`](../../../src/PATTERNS.md) | Cross-cutting patterns (RLS context, idempotency, transactional outbox, audit emission, …) |
+| [`src/FLOWS.md`](../../../src/FLOWS.md) | End-to-end flows (signup, webhook ingest, billing reconciliation, …) |
+| [`src/POLICIES.md`](../../../src/POLICIES.md) | Policy constants and the rationale behind each tunable |
+| `.cursor/skills/domain-generator/SKILL.md` | Scaffolding checklist for new domains/resources |
+| `.cursor/skills/test-generator/SKILL.md` | Where to put unit, e2e, and event-handler tests |
+| [docs/routes.txt](../../routes.txt) | Generated route catalog (`pnpm routes:catalog`) |
+| `pnpm tool:project-structure-tree` | Print current `src/` tree to stdout (skips `__tests__/`, caches) |
 
 ---
 
@@ -49,6 +54,16 @@ The full `src/` file tree is **not** duplicated here (it drifts from code quickl
 | `verification-token.repository.ts` / `verification-token.schema.ts` | Verification token entity under auth-method                                           |
 | `webhook-delivery-attempt.repository.ts`                            | Webhook delivery attempt entity under webhook                                         |
 
+**In-source documentation files**
+
+| File             | Where it lives                                        | Owner skill |
+| ---------------- | ----------------------------------------------------- | --------------------------------------- |
+| `OVERVIEW.md`    | At meaningful boundaries (domains, sub-domains, infra subsystems, test suites). Hand-written: Purpose, design decisions, failure modes, tuning | overview-doc-maintainer |
+| TSDoc            | Inline on every public export in `*.ts` (canonical, gated by `pnpm tsdoc:check`) | tsdoc-export-guard |
+| Route schema     | Inline `schema.summary` / `schema.description` / `schema.tags` on every Fastify route (drives OpenAPI) | route-schema-doc-guard |
+
+System-level narratives sit at the `src/` root only: `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` (owner: system-narrative-maintainer). There is no auto-generated `DOCS.md` aggregator.
+
 ---
 
 ## 3. Domain vs Sub-domain File Matrix
@@ -69,7 +84,7 @@ The full `src/` file tree is **not** duplicated here (it drifts from code quickl
 **Inconsistencies**
 
 - **Sub-domain has controller but no routes file:** Many sub-domains are exposed only via the parent domain routes (e.g. member-invitation, organization-settings, organization-api-key, organization-notification-policy, webhook-event). Their controllers are used by the parent `billing.routes.ts` or `tenancy.routes.ts` or `notify.routes.ts`; the sub-domain does not have its own `.routes.ts` that is mounted.
-- **`user-data-export`:** intentional cross-schema GDPR reads in `UserDataExportService` (documented exception; not refactored in layer-cleanup pass).
+- **`user-data-export`:** aggregates GDPR export data by calling `list*ForUserDataExport` on auth, tenancy, notify, and audit services (see `wireCrossDomainServices`).
 
 ---
 
@@ -77,7 +92,7 @@ The full `src/` file tree is **not** duplicated here (it drifts from code quickl
 
 **Standard flow (all domains, including auth and user with multiple sub-domain services):**
 
-```
+```text
 HTTP Request
     │
     ▼
@@ -151,7 +166,16 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 | `idempotency/` | `idempotency-key.util` |
 | `text/` | `email.util`, `html-escape.util` |
 
-**Middleware** (Fastify plugins) lives in `src/shared/middlewares/` — registered via `registerMiddleware()` from `@/shared/middlewares/index.js`.
+**Middleware** (Fastify plugins) lives in `src/shared/middlewares/` — grouped by concern (`core/`, `security/`, `session/`, `tenant/`, `rate-limit/`) and registered via `registerMiddleware()` from `@/shared/middlewares/index.js`.
+
+### Import path conventions
+
+| Tree | Allowed | Forbidden |
+| ---- | ------- | --------- |
+| `src/**/*.ts` | `@/domains/...`, `@/shared/...`, `@/infrastructure/...`, `@/core/...`; same-folder `./` | Parent-relative `../` |
+| `tooling/**/*.ts` | `@tooling/setup/...`, `@tooling/openapi/...`, etc.; same-folder `./` | Parent-relative `../` |
+
+Always use `.js` extensions in import specifiers. CI gate: `src/tests/global/import-paths.global.test.ts`.
 
 ---
 
@@ -177,7 +201,7 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 | notify/notification.service                                                                                        | user/user.service.js                                                                            | UserService                                      | READ              |
 | notify/webhook.service                                                                                             | tenancy/organization/organization.service.js                                                    | OrganizationService                              | READ              |
 | upload/upload.service                                                                                              | user/user.service.js, organization/organization.service.js, permission/authorization.service.js | UserService, OrganizationService, permissions    | READ              |
-| user/user-data-export/user-data-export.service (exception)                                                         | multiple domain schemas via direct DB                                                           | GDPR export                                      | READ              |
+| user/user-data-export/user-data-export.service                                                                 | auth/auth-session, tenancy/membership, notify/notification, audit/audit services (via `wireCrossDomainServices`) | GDPR export                                      | READ              |
 | tenancy sub-services (membership, member-role, organization-settings, etc.)                                        | organization.repository (same domain)                                                           | Within-tenancy only                              | READ              |
 
 ### Queues and email
@@ -194,7 +218,7 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 
 ### Violations and follow-up
 
-- **None (layer cleanup pass):** No controller imports another controller. Cross-domain access uses services only (except documented `user-data-export`).
+- **None (layer cleanup pass):** No controller imports another controller. Cross-domain access uses other domains' services only; each service uses its own domain's repository.
 - **Follow-up (separate PRs):** Optional `WebhookDeliveryService` extraction for `webhook-delivery.worker.ts` (worker already uses `createWorker*Repository(databaseHandle)` and `createTenantScopedBullMQWorker` — no `getRequestDatabase()`). New domain events/jobs only when product needs them. Tenancy sub-services using `organization.repository` within the tenancy domain is **intentional** — do not “fix” by injecting `OrganizationService` everywhere.
 
 ---
@@ -236,7 +260,7 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 
 | Domain  | Schema files                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| auth    | auth-method/auth-method.schema.ts, auth-method/verification-token.schema.ts, auth-session/auth-session.schema.ts, auth-mfa/mfa-method.schema.ts, auth-mfa/mfa-recovery-code.schema.ts, auth-webauthn/webauthn-credential.schema.ts                                                                                                                                                                                                         |
+| auth    | auth-method/auth-method.schema.ts, auth-method/verification-token/verification-token.schema.ts, auth-session/auth-session.schema.ts, auth-mfa/auth-mfa-method.schema.ts, auth-mfa/auth-mfa-recovery-code.schema.ts, auth-webauthn/webauthn-credential.schema.ts                                                                                                                                                                                                         |
 | user    | user.schema.ts, user-settings/user-settings.schema.ts, user-notification-preferences/user-notification-preferences.schema.ts                                                                                                                                                                                                                                                                                                              |
 | tenancy | organization/organization.schema.ts, organization-settings/organization-settings.schema.ts, organization-notification-policy/organization-notification-policy.schema.ts, organization-api-key/organization-api-key.schema.ts, membership/membership.schema.ts, member-invitation/member-invitation.schema.ts, member-role/member-role.schema.ts, member-role-permission/member-role-permission.schema.ts, permission/permission.schema.ts |
 | billing | plan/plan.schema.ts, subscription/subscription.schema.ts, stripe-webhook/stripe-webhook.schema.ts                                                                                                                                                                                                                                                                                                    |
@@ -244,12 +268,11 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 | audit   | audit.schema.ts                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | upload  | upload.schema.ts (`upload.uploads` table)                                                                                                                                                                                                                                                                                                                                                                                                 |
 
-**Schemas with no matching repository:** `user-data-export` has no schema (uses cross-domain reads). Mail outbox schema is infrastructure-owned.
+**Schemas with no matching repository:** `user-data-export` owns `user_data_exports` via `user-data-export.schema.ts`. Mail outbox schema is infrastructure-owned.
 
 **Repositories with no matching schema in same folder:**
 
 - **webhook-event:** has `webhook-event.repository.ts` but no `webhook-event.schema.ts`; likely uses webhook schema or shared table.
-- **auth-mfa:** repository is `mfa.repository.ts`, schema is `mfa-method.schema.ts` (naming mismatch).
 
 ---
 
@@ -267,7 +290,6 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 
 **Inconsistencies:**
 
-- **auth-mfa** schema file is `mfa-method.schema.ts` while service/repository are `mfa.service.ts` / `mfa.repository.ts` (file-name mismatch within the sub-domain; folder uses the required `auth-` prefix).
 - **plan**, **subscription** do not use a `billing-` prefix (standalone names under billing).
 
 ---
@@ -275,8 +297,9 @@ Utilities are grouped by concern. Prefer **deep imports** (e.g. `@/shared/utils/
 ## 10. Missing / Inconsistent Items Report
 
 - **webhook-event:** repository exists, no `webhook-event.schema.ts`.
-- **auth-mfa:** schema file is `mfa-method.schema.ts`; service/repository are `mfa.*` (file-name mismatch within the sub-domain).
+- **notify/webhook-delivery:** nested implementation folder under `webhook/` (repos, queues, workers, events) — not a separate API resource.
+- **auth-mfa-session:** Redis ticket store (no HTTP routes); exempt from standard layer matrix.
 - **CLAUDE.md / domains-and-public-api-design.md:** Domain mapping tables include `user-data-export` and nested `organization-api-key` under `organization` (keep in sync when adding sub-domains).
 - **No orchestrator layer:** Multi-sub-domain domains (**auth**, **user**, **billing**, **tenancy**, **notify**) wire sub-domain services via `<domain>.container.ts`; controllers call the appropriate service directly.
 - **Sub-domains missing standard files:** Several sub-domains lack .dto, .validator, .serializer, or .types as documented in Section 5 (e.g. user-data-export, stripe-webhook, webhook-event, plan, notification, auth-method, auth-session, auth-mfa, user-settings, user-notification-preferences).
-- **Test layout:** Domain e2e at `<domain>/__tests__/`; sub-domain and **nested** sub-domain unit/e2e under `sub-domains/.../__tests__/`; event tests under `events/__tests__/`; shared tenancy helpers at `tenancy/__tests__/factories/permission.factory.ts`. See **CLAUDE.md** § Testing and **domains-and-public-api-design.md** §1.5. `src/tests/node_modules/` is gitignored Vite cache (do not commit).
+- **Test layout:** Domain e2e at `<domain>/__tests__/`; sub-domain and **nested** sub-domain unit/e2e under `sub-domains/.../__tests__/`; event handler tests under `__tests__/unit/events/` (not `events/__tests__/`); shared tenancy helpers at `tenancy/__tests__/factories/permission.factory.ts`. See **CLAUDE.md** § Testing and **domains-and-public-api-design.md** §1.5. `src/tests/node_modules/` is gitignored Vite cache (do not commit).

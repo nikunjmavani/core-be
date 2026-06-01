@@ -67,10 +67,7 @@ function relocateEventsTests(): void {
             const base = stripTestSuffix(testFile);
             const isWorker = testFile.includes('worker') || base.includes('worker');
             const targetDir = isWorker ? targetWorkerDir : targetEventsDir;
-            const newName = addTierSuffix(
-              base.replace(/\.event-handlers$/, '.event-handlers').replace(/-emit$/, '-emit'),
-              'unit',
-            );
+            const newName = addTierSuffix(base, 'unit');
             addMove(from, join(targetDir, newName));
           }
           continue;

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyApiKeyAuthentication,
   extractApiKeyFromRequest,
-} from '@/shared/middlewares/api-key-auth.middleware.js';
+} from '@/shared/middlewares/security/api-key-auth.middleware.js';
 
 function createRequest(authorization?: string, xApiKey?: string) {
   const headers: Record<string, string> = {};
@@ -81,7 +81,7 @@ describe('api-key-auth.middleware', () => {
 
       await expect(applyApiKeyAuthentication(request)).resolves.toBe(true);
       expect(request.auth).toEqual({
-        userId: '',
+        kind: 'apiKey',
         apiKeyPublicId: 'key_public_id',
         apiKeyScopes: ['api-key:read'],
         organizationPublicId: 'org_public_id',

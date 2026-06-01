@@ -18,6 +18,15 @@ Hand-written guides live in **topic subfolders**; generated API artifacts stay a
 
 **Generated (do not edit by hand):** [routes.txt](routes.txt), [openapi/](openapi/) (`openapi*.json`), [postman-collection.json](postman-collection.json).
 
+**In-source documentation (lives under `src/`, not `docs/`):**
+
+- System narratives — `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` (hand-authored).
+- Per-folder overviews — `src/<folder>/OVERVIEW.md` at meaningful boundaries (hand-authored).
+- TSDoc on every public export, plus `@remarks` on services/workers/processors/policy files (canonical; gated by `pnpm tsdoc:check`).
+- Route documentation lives in inline Fastify `schema.summary` / `schema.description` and drives [openapi/openapi.json](openapi/openapi.json).
+
+There is no auto-generated `DOCS.md` aggregator. These layers are owned by the **system-narrative-maintainer**, **overview-doc-maintainer**, **tsdoc-export-guard**, and **route-schema-doc-guard** skills. Hand-written docs under `docs/` are owned by **docs-maintainer**.
+
 ```mermaid
 flowchart TB
   subgraph docsRoot [docs]
@@ -50,7 +59,7 @@ flowchart TB
 | [getting-started/setup.md](getting-started/setup.md)                                         | Local setup, testing, links to deployment and credentials.                                                  |
 | [getting-started/api-testing.md](getting-started/api-testing.md)                             | Manual API checklist and smoke after `pnpm db:seed:full`.                                                   |
 | [getting-started/requirement-intake.md](getting-started/requirement-intake.md)               | Format for new requirements; which skills and rules to run.                                                 |
-| [../CONTRIBUTING.md](../CONTRIBUTING.md)                                                     | Contributor quick start; links to **AGENTS.md** for the full PR checklist.                                  |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md)                                                     | Contributor quick start; **AGENTS.md** (author gate), **pr-review.md** (reviewers).                         |
 | [deployment/runbooks/environment-variables.md](deployment/runbooks/environment-variables.md) | Env variable workflow (`.github/sync.config.json` → `pnpm github:sync` → edit values → `pnpm github:sync`). |
 | [integrations/credentials-and-env.md](integrations/credentials-and-env.md)                   | Per-provider credential acquisition (S3, Resend, OAuth, Stripe, Sentry, etc.).                              |
 
@@ -61,6 +70,7 @@ flowchart TB
 | Doc                                                  | Description                                                                              |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | [process/git-workflow.md](process/git-workflow.md)   | Branch naming, PR flow, conventional commits.                                            |
+| [process/pr-review.md](process/pr-review.md)         | Human + agent PR review checklist, severity legend, doc-sync map.                        |
 | [process/dr-runbook.md](process/dr-runbook.md)       | Disaster recovery — RTO 1h, RPO 15m, failover, quarterly review.                         |
 | [process/backup-drills.md](process/backup-drills.md) | Monthly restore drill — required automated RTO gate + optional manual evidence workflow. |
 | [process/dlq-runbook.md](process/dlq-runbook.md)     | Dead-letter queue inspection and replay.                                                 |
@@ -89,6 +99,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [deployment/runbooks/observability.md](deployment/runbooks/observability.md)                                 | Sentry, logs, health; Prometheus re-enable checklist.                                             |
 | [deployment/runbooks/jwt-key-rotation.md](deployment/runbooks/jwt-key-rotation.md)                           | JWT PEM rotation (ops today; `kid` multi-key deferred).                                           |
 | [deployment/runbooks/upload-storage.md](deployment/runbooks/upload-storage.md)                               | Direct-to-S3 upload hardening: validation, presigned POST, PENDING sweeper, lifecycle policy.     |
+| [deployment/runbooks/railway-custom-domain.md](deployment/runbooks/railway-custom-domain.md)                 | `pnpm setup:domain` — attach a custom domain (SSL) to a Railway service; both envs in one run.    |
 
 ---
 
@@ -98,7 +109,10 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
 | [reference/runtime/bull-board.md](reference/runtime/bull-board.md)                               | BullMQ dashboard at `/admin/queues`.                                                                |
 | [integrations/cursor-backend-mcp.md](integrations/cursor-backend-mcp.md)                         | Connect frontend to core-be MCP.                                                                    |
+| [integrations/codegraph.md](integrations/codegraph.md)                                           | Semantic code index for AI agents (MCP); auto-set-up in `setup:local` (phase 7/9).                  |
+| [integrations/understand-anything.md](integrations/understand-anything.md)                         | Knowledge graph, dashboard, and learning-curve steps (`/understand`, tour, chat, diff).             |
 | [integrations/cursor-cloud-agent-environment.md](integrations/cursor-cloud-agent-environment.md) | `Dockerfile.agent` vs production image for Cursor cloud agents.                                     |
+| [integrations/cursor-agent-system.md](integrations/cursor-agent-system.md)                         | Skills, rules, subagents, and MCP map for Cursor / coding agents.                                   |
 | [reference/runtime/internationalization.md](reference/runtime/internationalization.md)           | Translation keys, locales, error/success messages.                                                  |
 | [reference/testing/load-testing.md](reference/testing/load-testing.md)                           | k6 and Autocannon; keep in sync with [src/tests/load/k6/README.md](../src/tests/load/k6/README.md). |
 
@@ -118,6 +132,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reference/reliability/chaos-testing.md](reference/reliability/chaos-testing.md)                                   | Toxiproxy chaos suite (`pnpm test:chaos`).                                             |
 | [reference/testing/contract-tests.md](reference/testing/contract-tests.md)                                         | Outbound contracts for Stripe, Resend, S3.                                             |
 | [reference/reliability/health-checks.md](reference/reliability/health-checks.md)                                   | API and worker health endpoints, curl examples, k8s/Railway probes.                    |
+| [reference/reliability/process-error-handling.md](reference/reliability/process-error-handling.md)                 | `uncaughtException` vs burst-tolerant `unhandledRejection` policy (audit #14).         |
 
 ---
 
@@ -125,6 +140,8 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 
 | Doc                                                                                                        | Description                                                    |
 | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [reviews/production-readiness-audit-2026-05-29.md](reviews/production-readiness-audit-2026-05-29.md)       | Principal-staff production-readiness audit for scale risks.    |
+| [reviews/production-readiness-remediation-2026-05-30.md](reviews/production-readiness-remediation-2026-05-30.md) | Remediation status tracker (findings 1–16 + extended bugs 31–64). |
 | [reviews/production-readiness-2026-05-15.md](reviews/production-readiness-2026-05-15.md)                   | Pre-production checklist (Prometheus/OTel deferred).           |
 | [reviews/full-codebase-review-deliverables.md](reviews/full-codebase-review-deliverables.md)               | Full review deliverables: security, performance, dependencies. |
 | [reviews/architecture-consistency-roadmap-2026-05.md](reviews/architecture-consistency-roadmap-2026-05.md) | Completed domain-layout / route-catalog program (archival).    |

@@ -1,6 +1,6 @@
 # Disaster recovery runbook
 
-Targets for **core-be** API and worker on Railway with Neon Postgres and Upstash Redis.
+Targets for **core-be** API and worker on Railway with Neon Postgres and Railway Redis (provisioned from Railway's `redis` database template).
 
 | Metric                   | Target         | Notes                                                      |
 | ------------------------ | -------------- | ---------------------------------------------------------- |
@@ -13,9 +13,9 @@ Neon point-in-time recovery (PITR) and Railway redeploys are the primary mechani
 
 ## When to invoke
 
-- Regional or provider outage affecting Neon, Upstash, or Railway
+- Regional or provider outage affecting Neon, Railway Redis, or Railway
 - Accidental destructive migration or data corruption confirmed in Postgres
-- Complete loss of the production API or worker service with no healthy `/health`
+- Complete loss of the production API or worker service with no healthy `/readyz`
 
 ---
 
@@ -36,7 +36,7 @@ flowchart TD
   A[Incident detected] --> B{Postgres reachable?}
   B -->|No| C[Neon restore / failover]
   B -->|Yes| D{Redis reachable?}
-  D -->|No| E[Upstash restore or new instance]
+  D -->|No| E[Railway Redis restore or new instance]
   D -->|Yes| F{App healthy?}
   F -->|No| G[Railway redeploy + env check]
   F -->|Yes| H[App-level triage: migrations, DLQ, Stripe]
@@ -60,7 +60,7 @@ flowchart TD
 3. Run `pnpm db:migrate` against the restored database (idempotent; fixes schema drift).
 4. Verify row counts on critical tables (`tenancy.organizations`, `billing.subscriptions`, `auth.auth_sessions`).
 
-### 2. Redis (Upstash)
+### 2. Redis (Railway Redis database)
 
 1. If Redis is unavailable, provision or restore the shared Redis instance (see [redis-topology.md](../deployment/runbooks/redis-topology.md)).
 2. Update `REDIS_URL` on API and worker services. Remove `REDIS_BULLMQ_URL` or set it to the same endpoint if it exists from an older split topology.
@@ -72,7 +72,7 @@ flowchart TD
 1. Redeploy latest known-good image from `main` (or previous green deployment).
 2. Confirm secrets: `JWT_*`, `STRIPE_*`, `SENTRY_DSN`, `ALLOWED_ORIGINS`, `DATABASE_URL`, `REDIS_URL`, `DEPLOYMENT_TOTAL_REPLICA_COUNT`.
 3. Scale workers to normal count ([worker-scaling.md](../deployment/runbooks/worker-scaling.md)).
-4. Hit `GET /health` until 200 with all dependencies available.
+4. Hit `GET /readyz` until 200 with all dependencies available.
 
 ### 4. Validation (before closing)
 
@@ -95,17 +95,17 @@ flowchart TD
 
 ## Quarterly review log
 
-Review this runbook at the start of each calendar quarter (January, April, July, October). Confirm RTO/RPO targets, Neon/Upstash/Railway steps, and cross-links still match production. Run or schedule the [monthly restore drill](backup-drills.md) in the same quarter when possible; the workflow records restore duration and fails when elapsed time is not below **`RTO_MINUTES`** (default 60).
+Review this runbook at the start of each calendar quarter (January, April, July, October). Confirm RTO/RPO targets, Neon/Railway Redis/Railway steps, and cross-links still match production. Run or schedule the [monthly restore drill](backup-drills.md) in the same quarter when possible; the workflow records restore duration and fails when elapsed time is not below **`RTO_MINUTES`** (default 60).
 
 | Quarter | Reviewer                    | Review date | Outcome | Notes                                                                                                    |
 | ------- | --------------------------- | ----------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| 2026-Q2 | Production readiness verify | 2026-05-20  | Passed  | Linked from [docs/index.md](../index.md); procedures aligned with restore drill and migrations reference |
+| 2026-Q2 | Production readiness verify | 2026-05-20  | Passed  | Linked from [docs/README.md](../README.md); procedures aligned with restore drill and migrations reference |
 
 ---
 
 ## Related
 
-- [docs/index.md](../index.md) — documentation index (links here)
+- [docs/README.md](../README.md) — documentation index (links here)
 - [backup-drills.md](backup-drills.md) — monthly automated restore drill (`MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY`; Neon project `core-be` by name; parent branch = workflow ref)
 - [restore-drill.md](../deployment/restore-drill.md) — workflow secrets and CI artifact names
 - [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md) — deploy and secrets

@@ -2,7 +2,7 @@
 
 JSON files here declare protection rules for [GitHub Environments](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment) used by [reusable-railway-deploy.yml](../workflows/reusable-railway-deploy.yml).
 
-**Canonical mapping source:** [`.github/sync.config.json`](../sync.config.json).
+**Canonical mapping source:** [`tooling/setup/setup.config.json`](../../tooling/setup/setup.config.json). [`.github/sync.config.json`](../sync.config.json) is generated (`pnpm tool:generate-project-identity`).
 
 | Branch | GitHub Environment | `NODE_ENV` |
 | ------ | ------------------ | ---------- |
@@ -21,7 +21,8 @@ JSON files here declare protection rules for [GitHub Environments](https://docs.
 **Bootstrap (first time):**
 
 ```bash
-pnpm github:sync              # creates missing .env.<environment> files from .github/sync.config.json
+pnpm tool:generate-project-identity  # refresh sync.config.json + CI env from setup.config.json
+pnpm github:sync              # creates missing .env.<environment> files from setup.config.json
 # Edit each file with real values (DB URL, JWT keys, Sentry DSN, etc.)
 pnpm github:sync              # branches + rulesets + environments + push values (confirms before push)
 ```

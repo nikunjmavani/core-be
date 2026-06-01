@@ -3,6 +3,7 @@ import { createTestApp } from '@/tests/helpers/test-app.js';
 import { loadProtectedRoutesFromCatalog } from '@/tests/helpers/route-catalog-auth.js';
 import { injectUnauthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 const protectedRoutes = loadProtectedRoutesFromCatalog();
 
@@ -38,7 +39,7 @@ describe('Security: Auth Enforcement', () => {
   it('should reject expired or malformed tokens', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/api/v1/users/me',
+      url: testApiPath('/users/me'),
       headers: { authorization: 'Bearer invalid-token-value' },
     });
     expect(response.statusCode).toBe(401);
@@ -47,7 +48,7 @@ describe('Security: Auth Enforcement', () => {
   it('should reject token with wrong prefix', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/api/v1/users/me',
+      url: testApiPath('/users/me'),
       headers: { authorization: 'Basic dXNlcjpwYXNz' },
     });
     expect(response.statusCode).toBe(401);
@@ -56,7 +57,7 @@ describe('Security: Auth Enforcement', () => {
   it('should reject empty Authorization header', async () => {
     const response = await injectUnauthenticated(app, {
       method: 'GET',
-      url: '/api/v1/users/me',
+      url: testApiPath('/users/me'),
       headers: { authorization: '' },
     });
     expect(response.statusCode).toBe(401);

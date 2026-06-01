@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const idempotencyMiddlewarePath = join(
   process.cwd(),
-  'src/shared/middlewares/idempotency.middleware.ts',
+  'src/shared/middlewares/core/idempotency.middleware.ts',
 );
 
 describe('idempotency cached body cap policy', () => {

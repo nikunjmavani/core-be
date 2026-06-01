@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 
 import { database } from '@/infrastructure/database/connection.js';
 import { webhook_delivery_attempts } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
-import { processWebhookDeliveryAttempt } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js';
+import { processWebhookDeliveryAttempt } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';

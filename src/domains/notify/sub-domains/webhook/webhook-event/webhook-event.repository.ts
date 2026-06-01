@@ -19,6 +19,11 @@ const AVAILABLE_WEBHOOK_EVENTS: WebhookEvent[] = [
   { event: 'subscription.cancelled', description: 'When a subscription is cancelled' },
 ];
 
+/**
+ * In-memory repository over the static {@link AVAILABLE_WEBHOOK_EVENTS} catalog. Wraps the
+ * literal array so the public surface stays a `Repository` and a future migration to a database
+ * table is a drop-in change for callers.
+ */
 export class WebhookEventRepository {
   async list(): Promise<WebhookEvent[]> {
     return [...AVAILABLE_WEBHOOK_EVENTS];

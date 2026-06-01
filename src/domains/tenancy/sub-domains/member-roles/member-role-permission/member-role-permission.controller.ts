@@ -1,10 +1,20 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import {
+  getActingUserPublicId,
+  getRequestIdentifier,
+  requirePrincipal,
+} from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MemberRolePermissionService } from './member-role-permission.service.js';
 import { serializeMemberRolePermission } from './member-role-permission.serializer.js';
 
+/**
+ * Builds the HTTP handler map for role-to-permission assignment endpoints
+ * (`GET /organizations/:id/roles/:roleId/permissions` and the matching `PUT`).
+ * Resolves the organization and role public ids from path params and forwards
+ * to {@link MemberRolePermissionService}.
+ */
 export function createMemberRolePermissionController(service: MemberRolePermissionService) {
   return {
     listRolePermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -23,13 +33,18 @@ export function createMemberRolePermissionController(service: MemberRolePermissi
       });
     },
     putRolePermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const auth = requireAuth(request);
+      const auth = requirePrincipal(request);
       const organizationId = validatePublicIdParam(
         (request.params as { id: string }).id ?? '',
         'id',
       );
       const { roleId } = request.params as { roleId: string };
-      const rows = await service.put(organizationId, roleId, request.body, auth.userId);
+      const rows = await service.put(
+        organizationId,
+        roleId,
+        request.body,
+        getActingUserPublicId(auth),
+      );
       const data = rows.map((row) => serializeMemberRolePermission(row, roleId));
       return successResponse(data, getRequestIdentifier(request));
     },

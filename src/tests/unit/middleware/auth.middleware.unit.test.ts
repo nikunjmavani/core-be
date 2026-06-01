@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnauthorizedError } from '@/shared/errors/index.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
-import authMiddleware from '@/shared/middlewares/auth.middleware.js';
+import authMiddleware from '@/shared/middlewares/core/auth.middleware.js';
 
 async function createAuthMiddlewareApplication() {
   const application = Fastify();
@@ -72,7 +72,7 @@ describe('auth.middleware', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ userId: userPublicId, role: 'user' });
+    expect(response.json()).toEqual({ kind: 'user', userId: userPublicId, role: 'user' });
   });
 
   it('omits role on request.auth when JWT payload has no role', async () => {
@@ -88,7 +88,7 @@ describe('auth.middleware', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ userId: userPublicId, role: undefined });
+    expect(response.json()).toEqual({ kind: 'user', userId: userPublicId, role: undefined });
   });
 
   it('rejects bearer when session is revoked or missing in database', async () => {

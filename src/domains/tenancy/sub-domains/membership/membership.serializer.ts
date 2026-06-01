@@ -1,5 +1,11 @@
 import type { MembershipOutput } from './membership.types.js';
 
+/**
+ * Shapes a `memberships` row into the HTTP response. Substitutes the
+ * organization's external public id for the internal numeric
+ * `organization_id`, stringifies the remaining numeric ids, and converts
+ * timestamps to ISO-8601.
+ */
 export function serializeMembership(
   row: {
     public_id: string;

@@ -22,6 +22,9 @@ vi.mock('@aws-sdk/client-s3', () => {
   class GetObjectCommand {
     constructor(public readonly input: unknown) {}
   }
+  class CopyObjectCommand {
+    constructor(public readonly input: unknown) {}
+  }
   return {
     S3Client: vi.fn(function S3ClientMock() {
       return { send: sendMock };
@@ -30,6 +33,7 @@ vi.mock('@aws-sdk/client-s3', () => {
     HeadObjectCommand,
     DeleteObjectCommand,
     GetObjectCommand,
+    CopyObjectCommand,
   };
 });
 
@@ -82,7 +86,7 @@ describe('S3ObjectStorageAdapter', () => {
     expect(getSignedUrlMock).toHaveBeenCalled();
   });
 
-  it('createPresignedUploadUrl returns a signed PUT URL', async () => {
+  it('createPresignedUploadUrl returns a signed PUT URL bound to an exact Content-Length', async () => {
     const url = await adapter.createPresignedUploadUrl({
       key: 'uploads/file.png',
       contentType: 'image/png',
@@ -92,6 +96,16 @@ describe('S3ObjectStorageAdapter', () => {
 
     expect(url).toBe('https://signed.example/put');
     expect(getSignedUrlMock).toHaveBeenCalledOnce();
+
+    const [, command, signingOptions] = getSignedUrlMock.mock.calls[0] as [
+      unknown,
+      { input: { ContentLength?: number } },
+      { signableHeaders?: Set<string> },
+    ];
+    // The signed command binds Content-Length so S3 rejects an oversized body.
+    expect(command.input.ContentLength).toBe(1024);
+    expect(signingOptions.signableHeaders).toBeInstanceOf(Set);
+    expect([...(signingOptions.signableHeaders ?? [])]).toContain('content-length');
   });
 
   it('headObject maps S3 metadata to port shape', async () => {
@@ -112,5 +126,25 @@ describe('S3ObjectStorageAdapter', () => {
     const deleted = await adapter.deleteObject('uploads/missing.png');
 
     expect(deleted).toBe(false);
+  });
+
+  it('copyObject issues a server-side copy that replaces the content-type', async () => {
+    sendMock.mockResolvedValueOnce({});
+
+    await adapter.copyObject({
+      sourceKey: 'pending/avatars/u/x.png',
+      destinationKey: 'avatars/u/x.png',
+      contentType: 'image/png',
+    });
+
+    expect(sendMock).toHaveBeenCalledOnce();
+    const command = sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> };
+    expect(command.input).toMatchObject({
+      Bucket: 'test-bucket',
+      CopySource: 'test-bucket/pending/avatars/u/x.png',
+      Key: 'avatars/u/x.png',
+      ContentType: 'image/png',
+      MetadataDirective: 'REPLACE',
+    });
   });
 });

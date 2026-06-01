@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
-import tenantMiddleware from '@/shared/middlewares/tenant.middleware.js';
+import tenantMiddleware from '@/shared/middlewares/tenant/tenant.middleware.js';
 
 async function createTenantApp() {
   const application = Fastify();

@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 const WORKER_PATH = join(
   process.cwd(),
-  'src/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.ts',
+  'src/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.ts',
 );
 
 describe('Policy: webhook-delivery worker uses repository, not Drizzle schema', () => {

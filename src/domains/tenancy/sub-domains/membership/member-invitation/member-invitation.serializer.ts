@@ -1,5 +1,10 @@
 import type { MemberInvitationOutput } from './member-invitation.types.js';
 
+/**
+ * Shapes a `member_invitations` row into the HTTP response form. Substitutes
+ * the external membership public id for the internal numeric `membership_id`
+ * and converts timestamps to ISO-8601; the raw `token_hash` is never exposed.
+ */
 export function serializeMemberInvitation(
   row: {
     public_id: string;

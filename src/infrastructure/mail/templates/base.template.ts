@@ -1,6 +1,13 @@
 /**
  * Shared HTML email layout wrapper.
  * Provides consistent styling and branding across all transactional emails.
+ *
+ * @remarks
+ * `title`, `preheader`, and `footerText` are interpolated as plain text and
+ * `body` as trusted HTML. This wrapper performs **no** escaping — callers MUST
+ * pass already-escaped values for any user/tenant-controlled data (see
+ * `escapeHtml` and `invitationTemplate`). Escaping here would double-encode the
+ * values templates escape at source.
  */
 export function baseTemplate(options: {
   title: string;

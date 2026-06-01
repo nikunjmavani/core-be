@@ -5,6 +5,12 @@ import { users } from '@/domains/user/user.schema.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
 import { permissions } from '@/domains/tenancy/sub-domains/permission/permission.schema.js';
 
+/**
+ * `tenancy.role_permissions` join table — assigns permission codes to roles.
+ * Composite primary key `(role_id, permission_code)` enforces uniqueness; rows
+ * cascade-delete with their role and are restricted from deleting referenced
+ * permission codes. RLS isolates rows to the role's owning organization.
+ */
 export const role_permissions = tenancySchema
   .table(
     'role_permissions',

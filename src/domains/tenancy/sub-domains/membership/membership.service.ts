@@ -1,15 +1,16 @@
 import { ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserSettingsService } from '@/domains/user/sub-domains/user-settings/user-settings.service.js';
 import {
   isFactoryDefaultUserLocaleSettings,
   preferredLocalesForOrganizationDefaultLocale,
 } from '@/domains/user/sub-domains/user-settings/user-settings-locale-defaults.util.js';
-import type { OrganizationService } from '../organization/organization.service.js';
-import type { OrganizationSettingsService } from '../organization/organization-settings/organization-settings.service.js';
-import type { MemberRoleService } from '../member-roles/member-role.service.js';
-import type { MemberRolePermissionService } from '../member-roles/member-role-permission/member-role-permission.service.js';
+import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
+import type { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
+import type { MemberRolePermissionService } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.service.js';
 import type { MembershipRepository } from './membership.repository.js';
 import type { MembershipOutput } from './membership.types.js';
 import {
@@ -19,12 +20,62 @@ import {
   validateTransferOwnership,
 } from './membership.validator.js';
 import { serializeMembership } from './membership.serializer.js';
-import { invalidatePermissions } from '../permission/permission-cache.service.js';
+import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 
+/**
+ * HTTP response shape for `GET
+ * /organizations/:id/memberships/:membershipId/permissions` — the resolved
+ * permission codes for the membership's current role.
+ *
+ * @remarks
+ * - **Algorithm:** computed by joining `memberships -> roles ->
+ *   role_permissions` for the requested membership and projecting only the
+ *   `permission_code` column.
+ * - **Failure modes:** carries no state of its own; producers raise
+ *   `NotFoundError('Membership')` when the membership cannot be resolved.
+ * - **Side effects:** none — this is a plain DTO.
+ * - **Notes:** identifies the membership by public id; codes are flat strings
+ *   matching the entries in `tenancy.permissions`.
+ */
 export interface MembershipPermissionsOutput {
   permissions: string[];
 }
 
+/**
+ * Application service for organization memberships: list/get/create/update/
+ * delete, plus self-service `leaveOrganization` and `transferOwnership`.
+ *
+ * @remarks
+ * - **Algorithm:** every public method runs inside
+ *   {@link withOrganizationDatabaseContext} and resolves the caller's
+ *   organization through
+ *   {@link OrganizationService.requireOrganizationMembershipByPublicId}
+ *   before touching the membership repository. `transferOwnership` is
+ *   delegated to {@link OrganizationService.transferOrganizationOwnership} so
+ *   the `owner_user_id` flip and the membership update happen atomically.
+ *   When a brand-new member is created, the service also pushes the
+ *   organization's default locale onto the new user via
+ *   {@link UserSettingsService.update} if the user is still on factory-default
+ *   locale settings.
+ * - **Failure modes:** `NotFoundError('Membership' | 'Organization' | 'Role' |
+ *   'User')` for missing rows; `ForbiddenError('errors:ownerCannotLeave')`
+ *   when the org owner tries to leave;
+ *   `ForbiddenError('errors:onlyOwnerCanTransfer')` for non-owner ownership
+ *   transfers;
+ *   `ForbiddenError('errors:membershipActivationRequiresInvitationAccept')`
+ *   when a PATCH tries to flip a never-joined membership to `ACTIVE` (initial
+ *   activation must come from invitation acceptance);
+ *   `ValidationError` from Zod-backed validators.
+ * - **Side effects:** writes through `MembershipRepository` (insert / update /
+ *   soft-delete with `deleted_at`); calls {@link invalidatePermissions} after
+ *   every membership mutation that changes effective permissions (create,
+ *   update, delete, leave) so the affected user's Redis permission cache is
+ *   purged immediately instead of lingering for the cache TTL; updates
+ *   {@link UserSettingsService} for locale defaults.
+ * - **Notes:** `getPermissions` reads through
+ *   {@link MemberRolePermissionService.listPermissionCodesForRole} so role
+ *   permissions remain a single source of truth.
+ */
 export class MembershipService {
   constructor(
     private readonly organizationService: OrganizationService,
@@ -34,6 +85,17 @@ export class MembershipService {
     private readonly organizationSettingsService?: OrganizationSettingsService,
     private readonly userSettingsService?: UserSettingsService,
   ) {}
+
+  private async invalidatePermissionsForMembership(
+    user_internal_id: number,
+    organization_public_id: string,
+  ): Promise<void> {
+    const userPublicId =
+      await this.organizationService.resolveUserPublicIdByInternalId(user_internal_id);
+    if (userPublicId) {
+      await invalidatePermissions(userPublicId, organization_public_id);
+    }
+  }
 
   private async applyOrganizationLocaleDefaults(
     userPublicId: string,
@@ -96,7 +158,7 @@ export class MembershipService {
   async create(
     organization_public_id: string,
     body: unknown,
-    invited_by_user_public_id: string,
+    invited_by_user_public_id: string | undefined,
   ): Promise<MembershipOutput> {
     const parsed = validateCreateMembership(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -132,7 +194,7 @@ export class MembershipService {
     organization_public_id: string,
     membership_public_id: string,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<MembershipOutput> {
     const parsed = validateUpdateMembership(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -145,6 +207,16 @@ export class MembershipService {
         organization.id,
       );
       if (!membership) throw new NotFoundError('Membership');
+      /**
+       * Initial activation must be driven by invitation acceptance, not a
+       * manager PATCH. A membership that has never joined (`joined_at IS NULL`,
+       * i.e. still `INVITED`) cannot be flipped to `ACTIVE` here. Reactivating a
+       * previously-active member (e.g. `SUSPENDED -> ACTIVE`, which already has
+       * `joined_at` set) stays allowed so admin suspend/reactivate flows work.
+       */
+      if (parsed.status === 'ACTIVE' && membership.joined_at === null) {
+        throw new ForbiddenError('errors:membershipActivationRequiresInvitationAccept');
+      }
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
       const updated = await this.membershipRepository.update(
@@ -154,6 +226,7 @@ export class MembershipService {
         userId ?? null,
       );
       if (!updated) throw new NotFoundError('Membership');
+      await this.invalidatePermissionsForMembership(updated.user_id, organization_public_id);
       return serializeMembership(updated, organization_public_id);
     });
   }
@@ -169,6 +242,7 @@ export class MembershipService {
         organization.id,
       );
       if (!deleted) throw new NotFoundError('Membership');
+      await this.invalidatePermissionsForMembership(deleted.user_id, organization_public_id);
     });
   }
 
@@ -214,6 +288,7 @@ export class MembershipService {
         organization.id,
       );
       if (!deleted) throw new NotFoundError('Membership');
+      await invalidatePermissions(user_public_id, organization_public_id);
     });
   }
 
@@ -242,12 +317,31 @@ export class MembershipService {
         newOwnerUserId,
         organization.id,
       );
-      if (!newOwnerMembership) throw new NotFoundError('New owner must be an active member');
+      if (!newOwnerMembership || newOwnerMembership.status !== 'ACTIVE') {
+        throw new NotFoundError('New owner must be an active member');
+      }
       await this.organizationService.transferOrganizationOwnership(
         organization_public_id,
         newOwnerUserId,
       );
       return serializeMembership(newOwnerMembership, organization_public_id);
     });
+  }
+
+  /**
+   * Lists organization memberships for a GDPR data-export bundle under the requesting user's RLS
+   * context (cross-organization read scoped to the owner).
+   */
+  async listOrganizationsForUserDataExport(options: {
+    userPublicId: string;
+    userInternalId: number;
+    limit: number;
+  }) {
+    return withUserDatabaseContext(options.userPublicId, (_databaseHandle) =>
+      this.membershipRepository.listOrganizationsForUserDataExport(
+        options.userInternalId,
+        options.limit,
+      ),
+    );
   }
 }

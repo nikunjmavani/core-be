@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAIL_QUEUE_NAME } from '@/infrastructure/mail/queues/mail.queue.js';
-import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
+import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
 import { NOTIFICATION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { STRIPE_WEBHOOK_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
 
@@ -30,6 +30,7 @@ vi.mock('bullmq', () => ({
 
 vi.mock('@/infrastructure/queue/connection.js', () => ({
   getBullMQConnectionOptions: () => ({}),
+  getBullMQProducerConnectionOptions: () => ({ enableOfflineQueue: false }),
 }));
 
 vi.mock('@/infrastructure/queue/worker-runtime/worker-options.js', () => ({
@@ -56,14 +57,20 @@ vi.mock('@/shared/config/worker-concurrency.util.js', () => ({
   getWorkerConcurrencyStripe: () => 3,
 }));
 
-vi.mock('@/domains/notify/sub-domains/webhook/workers/webhook-outbound-circuit.js', () => ({
-  fetchWebhookWithCircuitBreaker: vi.fn(),
-  webhookDeliveryBackoffWithJitter: () => 1000,
-}));
+vi.mock(
+  '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-outbound-circuit.js',
+  () => ({
+    fetchWebhookWithCircuitBreaker: vi.fn(),
+    webhookDeliveryBackoffWithJitter: () => 1000,
+  }),
+);
 
-vi.mock('@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js', () => ({
-  findWebhookDeliveryAttemptWithWebhook: vi.fn(),
-}));
+vi.mock(
+  '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.repository.js',
+  () => ({
+    findWebhookDeliveryAttemptWithWebhook: vi.fn(),
+  }),
+);
 
 vi.mock('@/infrastructure/payment/stripe.client.js', () => ({
   retrieveStripeEvent: vi.fn(),
@@ -87,7 +94,7 @@ describe('Performance: worker concurrency bulkheads', () => {
   it('registers mail and webhook-delivery on separate queues with independent concurrency', async () => {
     const { createMailWorker } = await import('@/infrastructure/mail/workers/mail.worker.js');
     const { createWebhookDeliveryWorker } = await import(
-      '@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js'
+      '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js'
     );
 
     const mailHandle = createMailWorker();

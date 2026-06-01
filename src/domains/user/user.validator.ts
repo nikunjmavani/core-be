@@ -26,19 +26,26 @@ function parseWithSchema<T>(schema: ZodType<T>, data: unknown): T {
   return result.data;
 }
 
+/** Validate the `PATCH /api/v1/users/me` body against {@link UpdateMeDto}; throws {@link ValidationError} on failure. */
 export function validateUpdateMe(body: unknown): UpdateMeInput {
   return parseWithSchema(UpdateMeDto, body);
 }
 
+/**
+ * Validate the admin `GET /api/v1/users` query string. Calls `ensureCursorOnlyPagination` first
+ * so legacy `page`/`offset` params are rejected with a typed error before Zod parses the query.
+ */
 export function validateListUsers(query: unknown): ListUsersInput {
   ensureCursorOnlyPagination(query);
   return parseWithSchema(ListUsersDto, query);
 }
 
+/** Validate the admin `PATCH /api/v1/users/:userId` body against {@link AdminUpdateUserDto}. */
 export function validateAdminUpdateUser(body: unknown): AdminUpdateUserInput {
   return parseWithSchema(AdminUpdateUserDto, body);
 }
 
+/** Validate the `PUT /api/v1/users/me/avatar` body against {@link UploadAvatarDto}. */
 export function validateUploadAvatar(body: unknown): UploadAvatarInput {
   return parseWithSchema(UploadAvatarDto, body);
 }

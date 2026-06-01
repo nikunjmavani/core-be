@@ -6,6 +6,7 @@ vi.mock('@/infrastructure/cache/redis.client.js', () => ({
     set: vi.fn(),
     del: vi.fn(),
     incr: vi.fn(),
+    eval: vi.fn(),
   },
 }));
 
@@ -57,6 +58,39 @@ describe('permission-cache service invalidation', () => {
     const delArgs = vi.mocked(redisConnection.del).mock.calls[0]!;
     expect(delArgs).toContain('perm:7:user_public_id:org_public_id');
     expect(delArgs).toContain('perm:lock:user_public_id:org_public_id');
+  });
+
+  it('commits the recomputed value via the lock-guarded Lua (closing the invalidation race)', async () => {
+    // Lock acquired, cache empty: the happy path must write through the compare-and-set Lua
+    // (guarded on the lock nonce), never a bare SET that could clobber a concurrent invalidation.
+    vi.mocked(redisConnection.set).mockResolvedValue('OK');
+    vi.mocked(redisConnection.get).mockImplementation(async (key) => {
+      if (String(key).startsWith('perm:org:')) return '0';
+      return null;
+    });
+    vi.mocked(redisConnection.eval).mockResolvedValue(1 as never);
+
+    const result = await withPermissionCacheRecomputeLock('user_public_id', 'org_public_id', () =>
+      Promise.resolve(['tenancy:read']),
+    );
+
+    expect(result).toEqual(['tenancy:read']);
+    expect(redisConnection.set).not.toHaveBeenCalledWith(
+      'perm:0:user_public_id:org_public_id',
+      expect.anything(),
+      'EX',
+      expect.anything(),
+    );
+    const commitCall = vi
+      .mocked(redisConnection.eval)
+      .mock.calls.find(
+        (call) => typeof call[0] === 'string' && call[0].includes("redis.call('SET'"),
+      );
+    expect(commitCall, 'commit went through the guarded Lua').toBeDefined();
+    // KEYS[1] = lock key, KEYS[2] = cache key, ARGV[1] = lock nonce.
+    expect(commitCall?.[2]).toBe('perm:lock:user_public_id:org_public_id');
+    expect(commitCall?.[3]).toBe('perm:0:user_public_id:org_public_id');
+    expect(commitCall?.[5]).toBe(JSON.stringify(['tenancy:read']));
   });
 
   it('withPermissionCacheRecomputeLock only runs one concurrent recomputation per user+org', async () => {

@@ -36,7 +36,7 @@ describe('redactSentryEvent', () => {
       type: undefined,
       breadcrumbs: [
         {
-          data: { 'X-Api-Key': 'k-123', route: '/health' },
+          data: { 'X-Api-Key': 'k-123', route: '/readyz' },
         },
       ],
       extra: { api_key: 'secret', count: 2 },
@@ -48,7 +48,7 @@ describe('redactSentryEvent', () => {
     const redacted = redactSentryEvent(event);
 
     expect(redacted.breadcrumbs?.[0]?.data?.['X-Api-Key']).toBe(SENSITIVE_REDACTION_PLACEHOLDER);
-    expect(redacted.breadcrumbs?.[0]?.data?.route).toBe('/health');
+    expect(redacted.breadcrumbs?.[0]?.data?.route).toBe('/readyz');
     expect(redacted.extra?.api_key).toBe(SENSITIVE_REDACTION_PLACEHOLDER);
     expect(redacted.extra?.count).toBe(2);
     expect(redacted.contexts?.request).toEqual({
