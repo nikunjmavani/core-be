@@ -17,9 +17,9 @@ import {
 import {
   USER_DATA_EXPORT_STATUSES,
   UserDataExportCancelledError,
+  type UserDataExport,
   type UserDataExportOutput,
 } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
-import type { UserDataExport } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
 import { scheduleCommitDispatch } from '@/core/events/event-bus.js';
 import { USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { env } from '@/shared/config/env.config.js';

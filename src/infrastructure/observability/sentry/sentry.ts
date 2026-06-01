@@ -167,7 +167,7 @@ export function initSentry(): void {
  * Capture an exception in Sentry with optional context.
  */
 export function captureException(
-  error: Error | unknown,
+  error: unknown,
   context?: {
     userId?: string;
     organizationId?: string;

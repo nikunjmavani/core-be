@@ -149,10 +149,7 @@ function resolveIdempotencyScope(request: FastifyRequest): {
     typeof organizationHeader === 'string' && organizationHeader.length > 0
       ? organizationHeader
       : undefined;
-  const organizationId =
-    organizationFromRequest !== undefined && organizationFromRequest !== null
-      ? organizationFromRequest
-      : organizationIdFromHeader;
+  const organizationId = organizationFromRequest ?? organizationIdFromHeader;
 
   return omitUndefined({
     userId: authentication?.kind === 'user' ? authentication.userId : undefined,

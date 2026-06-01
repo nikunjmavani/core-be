@@ -17,7 +17,7 @@
  * - **Side effects:** none — pure string parsing.
  */
 export function parseSslMode(databaseUrl: string): string | null {
-  const match = databaseUrl.match(/[?&]sslmode=([^&]+)/i);
+  const match = /[?&]sslmode=([^&]+)/i.exec(databaseUrl);
   if (!match?.[1]) return null;
   const raw = match[1];
   try {
