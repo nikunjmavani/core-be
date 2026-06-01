@@ -9,7 +9,7 @@ vi.mock('@/infrastructure/cache/redis.client.js', () => ({
   },
 }));
 
-vi.mock('@/infrastructure/database/contexts/tenant-context.js', () => ({
+vi.mock('@/infrastructure/database/contexts/tenant-database.context.js', () => ({
   withOrganizationContext: vi.fn(
     async (_organizationId: string, callback: () => Promise<string[]>) => callback(),
   ),

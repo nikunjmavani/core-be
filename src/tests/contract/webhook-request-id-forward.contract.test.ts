@@ -4,26 +4,23 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { eventBus, runWithOnCommitScope } from '@/core/events/event-bus.js';
 import { NOTIFY_EVENT } from '@/domains/notify/sub-domains/webhook/events/notify.events.js';
-import { registerWebhookDeliveryEventHandlers } from '@/domains/notify/sub-domains/webhook/events/webhook-delivery.event-handlers.js';
-import { processWebhookDeliveryAttempt } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js';
+import { registerWebhookDeliveryEventHandlers } from '@/domains/notify/sub-domains/webhook/webhook-delivery/events/webhook-delivery.event-handlers.js';
+import { processWebhookDeliveryAttempt } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
 
 const enqueueWebhookDeliveryByAttemptIdMock = vi.fn();
 const findOrganizationPublicIdByDeliveryAttemptIdMock = vi.fn();
 
-vi.mock('@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js', () => ({
-  enqueueWebhookDeliveryByAttemptId: (...arguments_: unknown[]) =>
-    enqueueWebhookDeliveryByAttemptIdMock(...arguments_),
-}));
-
-vi.mock('@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js', () => ({
-  findWebhookDeliveryAttemptWithWebhook: vi.fn().mockResolvedValue({
-    webhookId: 1,
-    webhookUrl: 'https://example.com/hook',
-    encryptedSecret: 'v1:secret',
-    eventType: 'webhook.test',
-    payload: { ok: true },
+vi.mock(
+  '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js',
+  () => ({
+    enqueueWebhookDeliveryByAttemptId: (...arguments_: unknown[]) =>
+      enqueueWebhookDeliveryByAttemptIdMock(...arguments_),
   }),
-  createWorkerWebhookDeliveryQueries: () => ({
+);
+
+vi.mock(
+  '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.repository.js',
+  () => ({
     findWebhookDeliveryAttemptWithWebhook: vi.fn().mockResolvedValue({
       webhookId: 1,
       webhookUrl: 'https://example.com/hook',
@@ -31,12 +28,21 @@ vi.mock('@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js', (
       eventType: 'webhook.test',
       payload: { ok: true },
     }),
+    createWorkerWebhookDeliveryQueries: () => ({
+      findWebhookDeliveryAttemptWithWebhook: vi.fn().mockResolvedValue({
+        webhookId: 1,
+        webhookUrl: 'https://example.com/hook',
+        encryptedSecret: 'v1:secret',
+        eventType: 'webhook.test',
+        payload: { ok: true },
+      }),
+    }),
+    findOrganizationPublicIdByDeliveryAttemptId: (...arguments_: unknown[]) =>
+      findOrganizationPublicIdByDeliveryAttemptIdMock(...arguments_),
   }),
-  findOrganizationPublicIdByDeliveryAttemptId: (...arguments_: unknown[]) =>
-    findOrganizationPublicIdByDeliveryAttemptIdMock(...arguments_),
-}));
+);
 
-vi.mock('@/infrastructure/database/contexts/tenant-context.js', () => ({
+vi.mock('@/infrastructure/database/contexts/tenant-database.context.js', () => ({
   withOrganizationContext: async (
     _organizationPublicId: string,
     callback: (databaseHandle: never) => unknown,

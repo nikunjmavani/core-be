@@ -37,15 +37,14 @@ There is no separate `POST /auth/signup` route. New accounts are created through
 
 Schema default is `CAPTCHA_PROVIDER=disabled`. In `development` / `test`, verification is skipped when Turnstile is not configured. Optional `CAPTCHA_BYPASS_HEADER` (non-production only) allows local testing. Failures return **401** with `errors:captchaRequired` or `errors:captchaInvalid`.
 
-**Production boot guard.** Because `captchaPreHandler` fail-closes when CAPTCHA is unconfigured, a production deploy with the default `CAPTCHA_PROVIDER=disabled` would turn login, magic-link, password recovery, email verification, and OAuth initiation into **401**s. To prevent that silent outage, the env schema rejects boot in production unless one of the following holds (see `src/shared/config/env-schema.ts`):
+**Production boot guard.** Because `captchaPreHandler` fail-closes when CAPTCHA is unconfigured, a production deploy with the default `CAPTCHA_PROVIDER=disabled` would turn login, magic-link, password recovery, email verification, and OAuth initiation into **401**s. Boot fails in production unless Turnstile is fully configured (see `src/shared/config/env-schema.ts`):
 
-| Posture                            | Required env                                              | Auth-route behavior                                                                                                                         |
-| ---------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **CAPTCHA enforced** (recommended) | `CAPTCHA_PROVIDER=turnstile` + `CAPTCHA_SECRET`           | Verify `X-Captcha-Token`; fail-closed on missing or invalid tokens.                                                                         |
-| **Emergency override**             | `CAPTCHA_PROVIDER=disabled` + `CAPTCHA_DISABLED_ACK=true` | Middleware fail-opens (skips verification) so auth routes do not return 401. Use only as a short-term unblock; track re-enabling Turnstile. |
-| **Anything else in production**    | N/A                                                       | Boot fails fast with `In production, configure CAPTCHA ... or set CAPTCHA_DISABLED_ACK=true`.                                               |
+| Posture                            | Required env                                    | Auth-route behavior                                                   |
+| ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------- |
+| **Production (required)**          | `CAPTCHA_PROVIDER=turnstile` + `CAPTCHA_SECRET` | Verify `X-Captcha-Token`; fail-closed on missing or invalid tokens.   |
+| **Development / test**             | Default `CAPTCHA_PROVIDER=disabled`             | Middleware fail-opens; optional `CAPTCHA_BYPASS_HEADER` for local UX. |
 
-Outside production (`development`, `test`), the acknowledgement is ignored and the middleware fail-opens by default.
+Outside production (`development`, `test`), the middleware fail-opens by default when Turnstile is not configured.
 
 ## Magic-link environment safety
 
@@ -83,3 +82,8 @@ MFA recovery codes (10 single-use) remain under the MFA sub-domain for TOTP back
 - [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md)
 - [api-versioning.md](../api/api-versioning.md)
 - [data-lifecycle-deletion.md](../data/data-lifecycle-deletion.md) — session retention
+- [`src/domains/auth/OVERVIEW.md`](../../../src/domains/auth/OVERVIEW.md) — domain overview, the five credential types, anti-enumeration invariant
+- [`src/domains/auth/sub-domains/auth-method/OVERVIEW.md`](../../../src/domains/auth/sub-domains/auth-method/OVERVIEW.md) — credential records, token flows
+- [`src/domains/auth/sub-domains/auth-mfa/OVERVIEW.md`](../../../src/domains/auth/sub-domains/auth-mfa/OVERVIEW.md) — TOTP enrolment and challenge
+- [`src/domains/auth/sub-domains/auth-webauthn/OVERVIEW.md`](../../../src/domains/auth/sub-domains/auth-webauthn/OVERVIEW.md) — passkey ceremonies
+- [`src/POLICIES.md`](../../../src/POLICIES.md) — `JWT_*`, `MAGIC_LINK_*`, `MFA_*`, `LOCKOUT_*`, `STRICT_PUBLIC_RATE_LIMIT` policy constants

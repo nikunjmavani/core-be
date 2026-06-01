@@ -4,13 +4,13 @@ import {
   CURSOR_PAGINATED_LIST_ROUTE_KEYS,
   CURSOR_PAGINATION_DESCRIPTION_SUFFIX,
 } from '@tooling/openapi/pagination-openapi.js';
-import { routeMetadataMap } from '@tooling/openapi/route-metadata.js';
 import {
   getPathParameterDescription,
   getPathParameterExample,
 } from '@tooling/openapi/enrichers/path-parameters.js';
 import type { OpenApiLocaleStrings } from '@tooling/openapi/extractors/locale-loader.js';
 import { collectRoutes } from '@tooling/openapi/extractors/route-extractor.js';
+import { collectRouteSchemaMetadata } from '@tooling/openapi/extractors/route-schema-metadata.js';
 import {
   generateOperationId,
   getQueryParameters,
@@ -26,6 +26,7 @@ import {
   isMcpOpenApiPath,
 } from '@tooling/openapi/mcp-openapi.js';
 import { buildResponses } from './responses-builder.js';
+import { PROJECT_OPENAPI_TITLE } from '@/shared/constants/project-identity.constants.js';
 import { buildTagDefinitions } from './tag-definitions.js';
 
 export type OpenApiDocument = {
@@ -44,6 +45,7 @@ export type OpenApiDocument = {
 
 export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenApiDocument {
   const routes = collectRoutes();
+  const schemaMetadataByRouteKey = collectRouteSchemaMetadata();
   const tagSet = new Set<string>();
   const paths: Record<string, Record<string, object>> = {};
   const responseStrings = localeStrings.responses ?? {};
@@ -54,13 +56,20 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
 
     const operation = method.toLowerCase();
     const routeKey = `${method} ${openapiPath}`;
-    const metadata = routeMetadataMap[routeKey];
+    const schemaMetadata = schemaMetadataByRouteKey.get(routeKey);
+    const metadata = schemaMetadata
+      ? {
+          summary: schemaMetadata.summary ?? undefined,
+          description: schemaMetadata.description ?? undefined,
+          tags: schemaMetadata.tags ?? undefined,
+        }
+      : undefined;
 
     const pathParameters: object[] = [];
     const parameterRegex = /\{([^}]+)\}/g;
-    let parameterMatch: RegExpExecArray | null;
-    while ((parameterMatch = parameterRegex.exec(openapiPath)) !== null) {
-      const parameterName = parameterMatch[1]!;
+    for (const parameterMatch of openapiPath.matchAll(parameterRegex)) {
+      const parameterName = parameterMatch[1];
+      if (!parameterName) continue;
       pathParameters.push({
         name: parameterName,
         in: 'path',
@@ -72,7 +81,7 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
     }
 
     const tags = metadata?.tags ?? [inferTagFromPath(openapiPath)];
-    tags.forEach((tag) => tagSet.add(tag));
+    for (const tag of tags) tagSet.add(tag);
 
     const queryParameters = getQueryParameters(method, openapiPath);
     const allParameters = [...pathParameters, ...queryParameters];
@@ -173,7 +182,7 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
   return {
     openapi: '3.0.0',
     info: {
-      title: localeStrings.info?.title ?? 'core-be API',
+      title: localeStrings.info?.title ?? PROJECT_OPENAPI_TITLE,
       description:
         localeStrings.info?.description ??
         'Backend API for the Core platform. Includes authentication, multi-tenant organization management, billing, notifications, webhooks, and admin operations.\n\nAll authenticated endpoints require a Bearer JWT token in the Authorization header. Organization-scoped endpoints also require the appropriate permission.',

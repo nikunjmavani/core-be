@@ -5,6 +5,7 @@ import {
   PutBucketCorsCommand,
   PutBucketLifecycleConfigurationCommand,
   HeadBucketCommand,
+  type BucketLocationConstraint,
 } from '@aws-sdk/client-s3';
 import {
   IAMClient,
@@ -13,8 +14,8 @@ import {
   CreateAccessKeyCommand,
   GetUserCommand,
 } from '@aws-sdk/client-iam';
-import * as logger from '../../../common/logger.js';
-import { isSecretFilled } from '../../../common/secrets.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { isSecretFilled } from '@tooling/setup/common/secrets.js';
 import type {
   SetupConfig,
   SetupSecrets,
@@ -22,7 +23,7 @@ import type {
   ProviderResult,
   InfraProvider,
   InfraProviderContext,
-} from '../../../common/types.js';
+} from '@tooling/setup/common/types.js';
 
 function createS3Client(secrets: SetupSecrets, region: string): S3Client {
   return new S3Client({
@@ -44,7 +45,7 @@ function createIamClient(secrets: SetupSecrets): IAMClient {
   });
 }
 
-function buildBucketPolicy(bucketName: string, bucketArn: string): string {
+function buildBucketPolicy(bucketArn: string): string {
   return JSON.stringify({
     Version: '2012-10-17',
     Statement: [
@@ -147,7 +148,11 @@ export async function provision(
             new CreateBucketCommand({
               Bucket: bucketName,
               ...(awsConfig.region !== 'us-east-1'
-                ? { CreateBucketConfiguration: { LocationConstraint: awsConfig.region } }
+                ? {
+                    CreateBucketConfiguration: {
+                      LocationConstraint: awsConfig.region as BucketLocationConstraint,
+                    },
+                  }
                 : {}),
             }),
           );
@@ -210,13 +215,25 @@ export async function provision(
           const getUserResponse = await iamClient.send(
             new GetUserCommand({ UserName: iamUsername }),
           );
-          userArn = getUserResponse.User!.Arn!;
+          const existingArn = getUserResponse.User?.Arn;
+          if (!existingArn) {
+            throw new Error(
+              `IAM GetUser succeeded but returned no Arn for "${iamUsername}" (AWS API contract violation).`,
+            );
+          }
+          userArn = existingArn;
           logger.stopSpinner(iamSpinner, `IAM user "${iamUsername}" already exists`);
         } catch {
           const createUserResponse = await iamClient.send(
             new CreateUserCommand({ UserName: iamUsername }),
           );
-          userArn = createUserResponse.User!.Arn!;
+          const createdArn = createUserResponse.User?.Arn;
+          if (!createdArn) {
+            throw new Error(
+              `IAM CreateUser succeeded but returned no Arn for "${iamUsername}" (AWS API contract violation).`,
+            );
+          }
+          userArn = createdArn;
           logger.stopSpinner(iamSpinner, `IAM user "${iamUsername}" created`);
         }
 
@@ -226,7 +243,7 @@ export async function provision(
           new PutUserPolicyCommand({
             UserName: iamUsername,
             PolicyName: `${bucketName}-access`,
-            PolicyDocument: buildBucketPolicy(bucketName, bucketArn),
+            PolicyDocument: buildBucketPolicy(bucketArn),
           }),
         );
 
@@ -235,11 +252,18 @@ export async function provision(
           new CreateAccessKeyCommand({ UserName: iamUsername }),
         );
 
+        const accessKey = accessKeyResponse.AccessKey;
+        if (!(accessKey?.AccessKeyId && accessKey.SecretAccessKey)) {
+          throw new Error(
+            `IAM CreateAccessKey returned an incomplete key pair for "${iamUsername}" (AWS API contract violation).`,
+          );
+        }
+
         iamUsers[environmentName] = {
           username: iamUsername,
           arn: userArn,
-          accessKeyId: accessKeyResponse.AccessKey!.AccessKeyId!,
-          secretAccessKey: accessKeyResponse.AccessKey!.SecretAccessKey!,
+          accessKeyId: accessKey.AccessKeyId,
+          secretAccessKey: accessKey.SecretAccessKey,
         };
 
         logger.success(`  Access key created for "${iamUsername}"`);

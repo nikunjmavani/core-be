@@ -6,14 +6,14 @@ vi.mock('@/shared/utils/security/webhook-outbound-fetch.util.js', () => ({
   createPinnedWebhookFetch: async () => globalThis.fetch,
 }));
 
-import { createWebhookDeliveryWorker } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.js';
-import { resetWebhookOutboundCircuitsForTesting } from '@/domains/notify/sub-domains/webhook/workers/webhook-outbound-circuit.js';
+import { createWebhookDeliveryWorker } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
+import { resetWebhookOutboundCircuitsForTesting } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-outbound-circuit.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 import {
   WEBHOOK_DELIVERY_QUEUE_NAME,
   type WebhookDeliveryJobData,
-} from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
-import { createPendingWebhookDeliveryAttempt } from '@/domains/notify/sub-domains/webhook/webhook-delivery.repository.js';
+} from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
+import { createPendingWebhookDeliveryAttempt } from '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.repository.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';

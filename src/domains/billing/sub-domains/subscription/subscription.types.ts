@@ -1,3 +1,4 @@
+/** Repository-level input for {@link SubscriptionRepository.create} — already-resolved numeric IDs. */
 export interface SubscriptionCreateData {
   organization_id: number;
   plan_id: number;
@@ -12,6 +13,11 @@ export interface SubscriptionCreateData {
   provider_customer_id?: string;
 }
 
+/**
+ * Partial update set for {@link SubscriptionRepository.update} and the
+ * webhook-driven sync paths; all fields are optional so callers can apply
+ * narrow patches.
+ */
 export interface SubscriptionUpdateData {
   cancel_at_period_end?: boolean;
   status?: string;

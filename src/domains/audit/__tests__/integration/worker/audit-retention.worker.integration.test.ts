@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Queue, QueueEvents } from 'bullmq';
 
-import { sql } from '@/infrastructure/database/connection.js';
 import { logs } from '@/domains/audit/audit.schema.js';
 import { createAuditRetentionWorker } from '@/domains/audit/workers/audit-retention.worker.js';
 import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retention.constants.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { ensureAuditLogPartitionsForTimestamps } from '@/tests/helpers/audit-log-partition.helper.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { env } from '@/shared/config/env.config.js';
 import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
@@ -54,18 +54,7 @@ describe('audit-retention.worker — purge', () => {
     staleCreatedAt.setDate(staleCreatedAt.getDate() - retentionDays - 1);
     const recentCreatedAt = new Date();
 
-    for (const createdAt of [staleCreatedAt, recentCreatedAt]) {
-      await sql`
-        SELECT infrastructure.ensure_monthly_range_partition(
-          'audit',
-          'logs',
-          'created_at',
-          ${new Date(
-            Date.UTC(createdAt.getUTCFullYear(), createdAt.getUTCMonth(), 1),
-          ).toISOString()}
-        )
-      `;
-    }
+    await ensureAuditLogPartitionsForTimestamps([staleCreatedAt, recentCreatedAt]);
 
     await withGlobalRetentionCleanupDatabaseContext(async (databaseHandle) => {
       await databaseHandle.insert(logs).values([

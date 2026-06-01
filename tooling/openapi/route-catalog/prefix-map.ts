@@ -5,8 +5,7 @@ import { DOMAINS_ROOT } from './constants.js';
 export function loadDomainPrefixMap(routesTsContent: string): Map<string, string> {
   const pluginToFolder = new Map<string, string>();
   const importPattern = /import\s*\{\s*(\w+)\s*\}\s*from\s*'@\/domains\/([\w-]+)\//g;
-  let importMatch: RegExpExecArray | null;
-  while ((importMatch = importPattern.exec(routesTsContent)) !== null) {
+  for (const importMatch of routesTsContent.matchAll(importPattern)) {
     const pluginVariable = importMatch[1];
     const domainFolder = importMatch[2];
     if (pluginVariable && domainFolder) {
@@ -16,8 +15,7 @@ export function loadDomainPrefixMap(routesTsContent: string): Map<string, string
 
   const prefixByDomainFolder = new Map<string, string>();
   const registerPattern = /app\.register\((\w+),\s*\{\s*prefix:\s*`\$\{apiV1\}\/([^`]+)`/g;
-  let registerMatch: RegExpExecArray | null;
-  while ((registerMatch = registerPattern.exec(routesTsContent)) !== null) {
+  for (const registerMatch of routesTsContent.matchAll(registerPattern)) {
     const pluginVariable = registerMatch[1];
     const apiSegment = registerMatch[2];
     if (!(pluginVariable && apiSegment)) continue;

@@ -1,5 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { defineConfig } from 'vitest/config';
 import baseConfig from './base.js';
 
 const configurationDirectory = dirname(fileURLToPath(import.meta.url));
@@ -9,7 +10,7 @@ const projectRoot = resolve(configurationDirectory, '..', '..');
  * Toxiproxy chaos suite — runs via `pnpm test:chaos`. Excluded from the default
  * Vitest graph (see root `vitest.config.ts` exclude list).
  */
-export default {
+export default defineConfig({
   ...baseConfig,
   root: projectRoot,
   test: {
@@ -30,4 +31,4 @@ export default {
       enabled: false,
     },
   },
-};
+});

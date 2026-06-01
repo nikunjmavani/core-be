@@ -6,16 +6,19 @@ import { faker } from '@faker-js/faker';
 
 const SEED = Number(process.env.SEED) || 12_345;
 
+/** Pins faker to the SEED env (defaults to 12345) so full-seed runs are reproducible. */
 export function initFakerSeed(): void {
   faker.seed(SEED);
 }
 
+/** Shape for a fake user inserted by the full seed (matches `auth.users` columns). */
 export interface FakerUserPayload {
   email: string;
   first_name: string;
   last_name: string;
 }
 
+/** Builds a deterministic fake user payload; `overrides` win over generated values. */
 export function generateUserPayload(overrides?: Partial<FakerUserPayload>): FakerUserPayload {
   const first = faker.person.firstName();
   const last = faker.person.lastName();
@@ -27,6 +30,7 @@ export function generateUserPayload(overrides?: Partial<FakerUserPayload>): Fake
   };
 }
 
+/** Shape for a fake organization inserted by the full seed (matches `tenancy.organizations`). */
 export interface FakerOrganizationPayload {
   name: string;
   slug: string;
@@ -41,6 +45,10 @@ function slugify(text: string): string {
     .replace(/^-|-$/g, '');
 }
 
+/**
+ * Builds a fake organization payload with a slug that is unique within the
+ * current process; collisions get a 5-char alphanumeric suffix.
+ */
 export function generateOrganizationPayload(
   overrides?: Partial<FakerOrganizationPayload>,
 ): FakerOrganizationPayload {
@@ -53,6 +61,7 @@ export function generateOrganizationPayload(
   return { name, slug };
 }
 
+/** Returns a lowercase email for an invitee row in the full seed. */
 export function generateInviteeEmail(): string {
   return faker.internet.email().toLowerCase();
 }

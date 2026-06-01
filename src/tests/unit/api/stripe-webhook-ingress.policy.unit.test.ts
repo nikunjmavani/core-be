@@ -34,23 +34,22 @@ function relativePath(absolutePath: string): string {
 }
 
 describe('Stripe webhook ingress policy', () => {
-  it('registers stripeWebhookIngressPlugin before POST /webhook under /stripe prefix', () => {
+  it('registers stripeWebhookIngressPlugin before both webhook routes', () => {
     const source = readFileSync(STRIPE_WEBHOOK_ROUTES, 'utf8');
 
     expect(source).toContain('stripeWebhookIngressPlugin');
-    expect(source).toMatch(/prefix:\s*['"]\/stripe['"]/);
 
-    const ingressIndex = source.indexOf('await stripeWebhookIngressPlugin(app');
-    const postIndex = source.indexOf("zodApplication.post('/webhook'");
-    const legacyIngressIndex = source.indexOf(
-      'await stripeRoutes.register(stripeWebhookIngressPlugin)',
+    // Patterns tolerate Biome line-wrapping of `.post(` arguments when the
+    // schema block is large enough to force multi-line formatting.
+    const ingressIndex = source.search(/await\s+stripeWebhookIngressPlugin\s*\(\s*app/);
+    const postIndex = source.search(/zodApplication\.post\(\s*['"]\/webhook['"]/);
+    const stripeAliasPostIndex = source.search(
+      /zodApplication\.post\(\s*['"]\/stripe\/webhook['"]/,
     );
-    const legacyPostIndex = source.indexOf("stripeZodApplication.post('/webhook'");
 
     expect(ingressIndex).toBeGreaterThanOrEqual(0);
     expect(postIndex).toBeGreaterThan(ingressIndex);
-    expect(legacyIngressIndex).toBeGreaterThanOrEqual(0);
-    expect(legacyPostIndex).toBeGreaterThan(legacyIngressIndex);
+    expect(stripeAliasPostIndex).toBeGreaterThan(ingressIndex);
   });
 
   it('does not register /stripe/webhook directly in other billing route files', () => {

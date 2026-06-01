@@ -1,0 +1,27 @@
+// markdownlint-cli2 configuration.
+//
+// `config` references the rule set in `.markdownlint.json` (kept separate so
+// editors / DavidAnson.vscode-markdownlint pick it up automatically).
+//
+// `globs` and `ignores` are the canonical place to control which files are
+// linted. We do not use a separate `.markdownlintignore` file — this is the
+// SINGLE source of truth.
+{
+  "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint-cli2/main/schema/markdownlint-cli2-config-schema.json",
+  "config": ".markdownlint.json",
+  "globs": ["**/*.md"],
+  "ignores": [
+    "node_modules/**",
+    "dist/**",
+    "coverage/**",
+    "coverage-*/**",
+    "CHANGELOG.md",
+    "CHANGELOG-dev.md",
+    "docs/openapi/**",
+    "docs/postman-collection.json",
+    "docs/routes.txt",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    "reports/**",
+    ".claude/**"
+  ]
+}

@@ -100,7 +100,7 @@ pnpm docs:upload:hosted        # Postman + Scalar Registry (needs secrets)
 
 **Before merge (PR):** Run `pnpm routes:catalog:check` and `pnpm docs:check` locally when changing routes or OpenAPI; post-merge **API docs** publishes on push. Pre-commit also regenerates `docs/routes.txt` when routes change.
 
-**After merge (push):** CI ([`.github/workflows/reusable/docs-generate.yml`](../../../.github/workflows/reusable/docs-generate.yml)) runs `docs:all`, `docs:validate:openapi`, then uploads to Postman and Scalar Registry when environment secrets are set.
+**After merge (push):** CI ([`.github/workflows/reusable-openapi-postman-publish.yml`](../../../.github/workflows/reusable-openapi-postman-publish.yml)) runs `docs:all`, `docs:validate:openapi`, then uploads to Postman and Scalar Registry when environment secrets are set.
 
 ---
 

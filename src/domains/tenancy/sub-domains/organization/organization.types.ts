@@ -1,3 +1,4 @@
+/** Internal domain row mirroring `tenancy.organizations` — includes audit columns and soft-delete. */
 export interface Organization {
   id: number;
   public_id: string;
@@ -8,10 +9,12 @@ export interface Organization {
   logo_url: string | null;
   stripe_customer_id: string | null;
   deleted_at: Date | null;
+  deletion_started_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
 
+/** Public organization shape returned by the API — produced by {@link serializeOrganization}. */
 export interface OrganizationOutput {
   id: string;
   name: string;

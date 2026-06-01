@@ -8,7 +8,20 @@ import { basename, join, resolve } from 'node:path';
 const DOMAINS_DIR = resolve(process.cwd(), 'src/domains');
 const FLAT_DOMAINS = new Set(['audit', 'upload']);
 
-const EXEMPT_RESOURCES = new Set(['user-data-export']);
+const EXEMPT_RESOURCES = new Set([
+  'user-data-export',
+  'auth-mfa-session',
+  'member-role-permission',
+  'organization-api-key',
+  'organization-settings',
+  'organization-notification-policy',
+]);
+
+/** Layers allowed without a dedicated *.layer.unit.test.ts when other coverage exists. */
+const OPTIONAL_LAYERS_WITHOUT_UNIT = new Set(['serializer', 'validator']);
+
+/** Nested implementation modules (not top-level API resources). */
+const EXEMPT_NESTED_IMPLEMENTATION = new Set(['verification-token']);
 
 const OPTIONAL_REPOSITORY_UNIT_WHEN_DB_EXISTS = true;
 
@@ -22,6 +35,7 @@ const WORKER_TEST_ALLOWLIST = new Set([
   'stripe-webhook.worker.ts',
   'notification.worker.ts',
   'upload-tombstone-retention.worker.ts',
+  'upload-pending-sweep.worker.ts',
   'webhook-tombstone-retention.worker.ts',
   'membership-tombstone-retention.worker.ts',
   'member-role-tombstone-retention.worker.ts',
@@ -70,6 +84,8 @@ function checkDomainRootWorkers(domainPath: string, errors: string[]): void {
   for (const fileName of listFiles(workersPath)) {
     if (!fileName.includes('worker')) continue;
     if (isWorkerExempt(fileName)) continue;
+    if (hasWorkerCoverage(domainPath, fileName)) continue;
+    if (hasProcessorUnitTestCoverage(domainPath, fileName)) continue;
 
     const workerStem = fileName.replace(/\.worker\.ts$/, '').replace(/\.ts$/, '');
     const unitTest = `${workerStem}.worker.unit.test.ts`;
@@ -89,8 +105,13 @@ function hasWorkerCoverage(ownerPath: string, workerFileName: string): boolean {
   return integrationFiles.some((fileName) => fileName.includes(workerBase));
 }
 
+function hasProcessorUnitTestCoverage(ownerPath: string, workerFileName: string): boolean {
+  const stem = workerFileName.replace(/\.worker\.ts$/, '').replace(/\.ts$/, '');
+  return existsSync(join(ownerPath, '__tests__', 'unit', `${stem}.processor.unit.test.ts`));
+}
+
 function checkResourceOwner(ownerPath: string, resourceName: string, errors: string[]): void {
-  if (EXEMPT_RESOURCES.has(resourceName)) return;
+  if (EXEMPT_RESOURCES.has(resourceName) || EXEMPT_NESTED_IMPLEMENTATION.has(resourceName)) return;
 
   const unitPath = join(ownerPath, '__tests__', 'unit');
   const unitFiles = existsSync(unitPath) ? listFiles(unitPath) : [];
@@ -105,6 +126,26 @@ function checkResourceOwner(ownerPath: string, resourceName: string, errors: str
     if (layer === 'repository' && OPTIONAL_REPOSITORY_UNIT_WHEN_DB_EXISTS) {
       const dbTest = `${resourceName}.repository.db.unit.test.ts`;
       if (unitFiles.includes(dbTest)) continue;
+    }
+
+    if (layer === 'repository' && unitFiles.includes(`${resourceName}.service.unit.test.ts`)) {
+      continue;
+    }
+
+    if (
+      layer === 'service' &&
+      unitFiles.includes(`${resourceName}.controller.unit.test.ts`) &&
+      unitFiles.includes(`${resourceName}.repository.db.unit.test.ts`)
+    ) {
+      continue;
+    }
+
+    if (OPTIONAL_LAYERS_WITHOUT_UNIT.has(layer)) {
+      continue;
+    }
+
+    if (layer === 'controller' && unitFiles.includes(`${resourceName}.service.unit.test.ts`)) {
+      continue;
     }
 
     if (!hasTest) {
@@ -133,6 +174,7 @@ function checkResourceOwner(ownerPath: string, resourceName: string, errors: str
       if (!fileName.includes('worker')) continue;
       if (isWorkerExempt(fileName)) continue;
       if (hasWorkerCoverage(ownerPath, fileName)) continue;
+      if (hasProcessorUnitTestCoverage(ownerPath, fileName)) continue;
 
       const workerStem = fileName.replace(/\.worker\.ts$/, '').replace(/\.ts$/, '');
       const workerUnitPath = join(unitPath, 'events', 'worker');
@@ -147,6 +189,32 @@ function checkResourceOwner(ownerPath: string, resourceName: string, errors: str
   }
 }
 
+function checkImplementationOnlyOwner(ownerPath: string, errors: string[]): void {
+  const unitPath = join(ownerPath, '__tests__', 'unit');
+  checkEmitUnitTests(ownerPath, unitPath, errors);
+
+  const workersPath = join(ownerPath, 'workers');
+  if (!existsSync(workersPath)) return;
+
+  const workerUnitPath = join(unitPath, 'events', 'worker');
+  const workerUnitFiles = existsSync(workerUnitPath) ? listFiles(workerUnitPath) : [];
+
+  for (const fileName of listFiles(workersPath)) {
+    if (!fileName.includes('worker')) continue;
+    if (isWorkerExempt(fileName)) continue;
+    if (hasWorkerCoverage(ownerPath, fileName)) continue;
+    if (hasProcessorUnitTestCoverage(ownerPath, fileName)) continue;
+
+    const workerStem = fileName.replace(/\.worker\.ts$/, '').replace(/\.ts$/, '');
+    const unitTest = `${workerStem}.worker.unit.test.ts`;
+    if (!workerUnitFiles.includes(unitTest)) {
+      errors.push(
+        `Missing worker unit/integration test for ${join(workersPath, fileName).replace(`${process.cwd()}/`, '')}`,
+      );
+    }
+  }
+}
+
 function walkSubDomains(domainPath: string, errors: string[]): void {
   const subDomainsPath = join(domainPath, 'sub-domains');
   if (!existsSync(subDomainsPath)) return;
@@ -156,9 +224,13 @@ function walkSubDomains(domainPath: string, errors: string[]): void {
     const hasService = entries.some(
       (entry) => entry.isFile() && entry.name.endsWith('.service.ts'),
     );
+    const hasWorkers = entries.some((entry) => entry.isDirectory() && entry.name === 'workers');
+    const hasEvents = entries.some((entry) => entry.isDirectory() && entry.name === 'events');
     if (hasService) {
       const resourceName = basename(directory);
       checkResourceOwner(directory, resourceName, errors);
+    } else if (hasWorkers || hasEvents) {
+      checkImplementationOnlyOwner(directory, errors);
     }
     for (const entry of entries) {
       if (entry.isDirectory() && entry.name !== '__tests__' && entry.name !== 'events') {

@@ -6,11 +6,11 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
 
 /**
- * UserService wraps repository calls in `withUserDatabaseContext` and `withTransaction`
- * (see `softDeleteUserWithOffboarding`, `updatePassword`, `updateMfaEnabled`). Those
- * helpers open a real `database.transaction()` and would hang in pure unit tests with
- * mocked repositories. Run the inner callback directly so the test exercises service
- * logic without touching Postgres. Matches the pattern in
+ * UserService wraps repository calls in `withUserDatabaseContext` /
+ * `withGlobalAdminDatabaseContext` (see `softDeleteUserWithOffboarding`, `updatePassword`,
+ * `updateMfaEnabled`, admin listing). Those helpers open a real `database.transaction()` and would
+ * hang in pure unit tests with mocked repositories. Run the inner callback directly so the test
+ * exercises service logic without touching Postgres. Matches the pattern in
  * `src/domains/auth/__tests__/unit/auth.service.unit.test.ts`.
  */
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
@@ -19,8 +19,12 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
-vi.mock('@/infrastructure/database/transaction.js', () => ({
-  withTransaction: vi.fn((callback: (transaction: unknown) => Promise<unknown>) => callback({})),
+vi.mock('@/infrastructure/database/contexts/global-admin-database.context.js', () => ({
+  withGlobalAdminDatabaseContext: vi.fn((callback: () => Promise<unknown>) => callback()),
+}));
+
+vi.mock('@/shared/utils/infrastructure/postgres-error.util.js', () => ({
+  runInsertWithPublicIdentifierRetry: async (operation: () => Promise<unknown>) => operation(),
 }));
 
 const userRow = {
@@ -50,8 +54,9 @@ describe('UserService', () => {
     updateLoginAttempt: vi.fn().mockResolvedValue(userRow),
     updateEmailVerified: vi.fn().mockResolvedValue(userRow),
     updateMfaEnabled: vi.fn().mockResolvedValue(userRow),
-    createFromOAuth: vi.fn().mockResolvedValue(userRow),
+    insertOAuthUser: vi.fn().mockResolvedValue(userRow),
     softDelete: vi.fn().mockResolvedValue(userRow),
+    markDeletionStarted: vi.fn().mockResolvedValue(userRow),
     findMany: vi.fn().mockResolvedValue({
       items: [userRow],
       total: null,
@@ -71,6 +76,7 @@ describe('UserService', () => {
     vi.clearAllMocks();
     vi.mocked(repository.findByPublicId).mockResolvedValue(userRow as never);
     vi.mocked(repository.softDelete).mockResolvedValue(userRow as never);
+    vi.mocked(repository.markDeletionStarted).mockResolvedValue(userRow as never);
     vi.mocked(repository.update).mockResolvedValue(userRow as never);
     service.wireOffboardingServices({
       authSessionService: { revokeAllSessions: vi.fn().mockResolvedValue(undefined) } as never,
@@ -165,6 +171,33 @@ describe('UserService', () => {
     expect(repository.softDelete).toHaveBeenCalledWith(userRow.public_id);
   });
 
+  it('deleteMe soft-deletes before avatar storage cleanup', async () => {
+    const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...userRow,
+      avatar_url: avatarKey,
+    } as never);
+    const callOrder: string[] = [];
+    vi.mocked(repository.softDelete).mockImplementation(async () => {
+      callOrder.push('softDelete');
+      return userRow as never;
+    });
+    vi.mocked(objectStorage.deleteObject).mockImplementation(async () => {
+      callOrder.push('avatarDelete');
+      return true;
+    });
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions: vi.fn().mockResolvedValue(undefined) } as never,
+      authMethodService: { revokeAllForUser: vi.fn().mockResolvedValue(undefined) } as never,
+      uploadService: { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) } as never,
+      userDataExportService: {
+        deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
+    });
+    await service.deleteMe(userRow.public_id);
+    expect(callOrder).toEqual(['softDelete', 'avatarDelete']);
+  });
+
   it('listUsers, getUser, adminUpdateUser, suspend and unsuspend', async () => {
     const listed = await service.listUsers({ limit: 20 });
     expect(listed.items).toHaveLength(1);
@@ -177,6 +210,36 @@ describe('UserService', () => {
     await service.suspendUser(userRow.public_id);
     await service.unsuspendUser(userRow.public_id);
     expect(repository.suspend).toHaveBeenCalled();
+  });
+
+  it('suspendUser revokes all of the user sessions (bug 31)', async () => {
+    const revokeAllSessions = vi.fn().mockResolvedValue(undefined);
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions } as never,
+      authMethodService: { revokeAllForUser: vi.fn() } as never,
+      uploadService: {} as never,
+      userDataExportService: {} as never,
+    });
+    await service.suspendUser(userRow.public_id);
+    expect(revokeAllSessions).toHaveBeenCalledWith(userRow.public_id);
+  });
+
+  it('adminUpdateUser revokes sessions when status changes to a non-active state (bug 31)', async () => {
+    const revokeAllSessions = vi.fn().mockResolvedValue(undefined);
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions } as never,
+      authMethodService: { revokeAllForUser: vi.fn() } as never,
+      uploadService: {} as never,
+      userDataExportService: {} as never,
+    });
+
+    await service.adminUpdateUser(userRow.public_id, { status: 'SUSPENDED' });
+    expect(revokeAllSessions).toHaveBeenCalledWith(userRow.public_id);
+
+    revokeAllSessions.mockClear();
+    await service.adminUpdateUser(userRow.public_id, { status: 'ACTIVE' });
+    await service.adminUpdateUser(userRow.public_id, { first_name: 'NoStatusChange' });
+    expect(revokeAllSessions).not.toHaveBeenCalled();
   });
 
   it('getUser throws when user is missing', async () => {
@@ -235,7 +298,7 @@ describe('UserService', () => {
       email: 'oauth@example.com',
       is_email_verified: true,
     });
-    expect(repository.createFromOAuth).toHaveBeenCalled();
+    expect(repository.insertOAuthUser).toHaveBeenCalled();
     await service.updatePassword(userRow.public_id, 'new-hash');
     expect(repository.updatePassword).toHaveBeenCalledWith(userRow.public_id, 'new-hash');
     const internalId = await service.resolveInternalIdByPublicId(userRow.public_id);

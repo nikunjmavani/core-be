@@ -42,6 +42,12 @@ function getDemoPassword(): string {
 }
 const ADMIN_PERMISSION_CODES = SYSTEM_PERMISSIONS.map((permission) => permission.code);
 
+/**
+ * Orchestrator for the full demo seed: applies the minimal seed (permissions,
+ * plans, demo user) and then layers on faker-generated organizations,
+ * memberships, invitations, and role wiring. Idempotent — re-running upserts
+ * existing rows. Closes the DB connection on completion.
+ */
 export async function runFullSeed(): Promise<void> {
   logger.info('seed.full: starting');
   initFakerSeed();

@@ -17,6 +17,7 @@ describe('AuthSessionRepository (database)', () => {
     const session = await repository.create({
       user_id: user.id,
       token_hash: 'initial-hash',
+      refresh_token_hash: 'refresh-hash',
       ip_address: '127.0.0.1',
       user_agent: 'vitest',
       expires_at: expiresAt,
@@ -51,6 +52,7 @@ describe('AuthSessionRepository (database)', () => {
     const first = await repository.create({
       user_id: user.id,
       token_hash: 'hash-one',
+      refresh_token_hash: 'refresh-hash',
       ip_address: '127.0.0.1',
       user_agent: 'vitest',
       expires_at: expiresAt,
@@ -58,6 +60,7 @@ describe('AuthSessionRepository (database)', () => {
     await repository.create({
       user_id: user.id,
       token_hash: 'hash-two',
+      refresh_token_hash: 'refresh-hash',
       ip_address: '127.0.0.1',
       user_agent: 'vitest',
       expires_at: expiresAt,

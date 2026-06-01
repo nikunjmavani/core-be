@@ -24,12 +24,27 @@ const environmentSchema = z.object({
 const perEnvironmentString = z.record(z.string(), z.string());
 const perEnvironmentNumber = z.record(z.string(), z.number());
 
+const projectArtifactsSchema = z.object({
+  apiImage: z.string().min(1),
+  workerImage: z.string().min(1),
+  dockerLocalApiTag: z.string().min(1),
+  ghcrCacheScopeApi: z.string().min(1),
+  ghcrCacheScopeWorker: z.string().min(1),
+});
+
+const projectGitSchema = z.object({
+  protectedBranches: z.array(z.string().min(1)).min(1).optional(),
+  defaultBranch: z.string().min(1).optional(),
+});
+
 export const setupConfigSchema = z.object({
   project: z.object({
     name: z.string().min(1),
     displayName: z.string().min(1),
     organization: z.string().min(1),
+    artifacts: projectArtifactsSchema.optional(),
   }),
+  git: projectGitSchema.optional(),
   environments: z.array(environmentSchema).min(1),
   providers: z.object({
     neon: z.object({
@@ -41,8 +56,15 @@ export const setupConfigSchema = z.object({
         max: z.number().min(0.25),
       }),
     }),
-    upstash: z.object({
+    railwayRedis: z.object({
       enabled: z.boolean(),
+      // Image, start command, password, and volume are managed by Railway's
+      // `redis` database template (deployed via `templateDeployV2`). The
+      // fields below are post-deploy overrides applied with
+      // `serviceInstanceUpdate`; leave them unset to inherit Railway defaults.
+      region: z.string().min(1).optional(),
+      cpuLimit: z.number().positive().optional(),
+      memoryLimitMb: z.number().int().positive().optional(),
     }),
     aws: z.object({
       enabled: z.boolean(),
@@ -91,6 +113,37 @@ export const setupConfigSchema = z.object({
 
 const CONFIG_PATH = resolve(import.meta.dirname, '../setup.config.json');
 
+type ParsedSetupConfig = z.infer<typeof setupConfigSchema>;
+
+function buildDefaultArtifacts(
+  projectSlug: string,
+): NonNullable<ParsedSetupConfig['project']['artifacts']> {
+  return {
+    apiImage: `${projectSlug}-api`,
+    workerImage: `${projectSlug}-worker`,
+    dockerLocalApiTag: projectSlug,
+    ghcrCacheScopeApi: `${projectSlug}-api`,
+    ghcrCacheScopeWorker: `${projectSlug}-worker`,
+  };
+}
+
+function normalizeLoadedConfig(config: ParsedSetupConfig): ParsedSetupConfig {
+  const artifacts = config.project.artifacts ?? buildDefaultArtifacts(config.project.name);
+  const protectedBranches =
+    config.git?.protectedBranches ?? config.environments.map((environment) => environment.branch);
+  const defaultBranch =
+    config.git?.defaultBranch ??
+    config.environments.find((environment) => environment.isDefault)?.branch ??
+    config.environments[0]?.branch ??
+    'main';
+
+  return {
+    ...config,
+    project: { ...config.project, artifacts },
+    git: { protectedBranches, defaultBranch },
+  };
+}
+
 export function getConfigPath(): string {
   return CONFIG_PATH;
 }
@@ -118,7 +171,7 @@ export function loadConfigIfExists(): z.infer<typeof setupConfigSchema> | null {
       config.providers.sentry.project = config.project.name;
     }
 
-    return config;
+    return normalizeLoadedConfig(config);
   } catch {
     return null;
   }
@@ -145,5 +198,5 @@ export function getEnvironmentNames(config: z.infer<typeof setupConfigSchema>): 
  * previously chosen values as defaults and don't have to re-enter them.
  */
 export function saveConfig(config: z.infer<typeof setupConfigSchema>): void {
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
 }

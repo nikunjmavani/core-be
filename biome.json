@@ -92,7 +92,8 @@
         "noGlobalEval": "error"
       },
       "nursery": {
-        "noImpliedEval": "error"
+        "noImpliedEval": "error",
+        "noFloatingPromises": "error"
       }
     }
   },
@@ -106,6 +107,9 @@
         "rules": {
           "suspicious": {
             "noThenProperty": "off"
+          },
+          "nursery": {
+            "noFloatingPromises": "off"
           },
           "complexity": {
             "noExcessiveLinesPerFunction": "off",
@@ -198,6 +202,22 @@
             "noExcessiveLinesPerFunction": "off"
           }
         }
+      }
+    },
+    {
+      "includes": ["tooling/setup/codegen/generate-project-identity.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/shared/constants/project-identity.constants.ts"],
+      "formatter": {
+        "enabled": false
       }
     },
     {

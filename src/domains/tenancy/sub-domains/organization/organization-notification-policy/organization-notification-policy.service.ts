@@ -1,6 +1,6 @@
 import { NotFoundError } from '@/shared/errors/index.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import type { OrganizationRepository } from '../organization.repository.js';
+import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import type { OrganizationNotificationPolicyRepository } from './organization-notification-policy.repository.js';
 import type { OrganizationNotificationPolicyOutput } from './organization-notification-policy.types.js';
 import {
@@ -9,6 +9,27 @@ import {
 } from './organization-notification-policy.validator.js';
 import { serializeOrganizationNotificationPolicy } from './organization-notification-policy.serializer.js';
 
+/**
+ * Tenancy service for organization-scoped notification-delivery policies
+ * (CRUD over `(notification_type, channel)` pairs).
+ *
+ * @remarks
+ * - **Algorithm:** every operation is wrapped in
+ *   `withOrganizationDatabaseContext` so RLS (`app.current_organization_id`)
+ *   matches the resource. Create defers to the repository's upsert which
+ *   resurrects soft-deleted rows on `(organization_id, notification_type,
+ *   channel)` conflicts. Update copies only defined fields and converts
+ *   `muted_until` ISO strings to `Date`.
+ * - **Failure modes:** `NotFoundError('Organization')` when the parent
+ *   tenant is missing or invisible under RLS;
+ *   `NotFoundError('Organization notification policy')` for unknown ids;
+ *   `ValidationError` from the DTO validators.
+ * - **Side effects:** persistent writes to
+ *   `tenancy.organization_notification_policies`; no event emission and no
+ *   external I/O.
+ * - **Notes:** soft-delete only — tombstone hard-delete is performed by the
+ *   organization-notification-policy retention worker.
+ */
 export class OrganizationNotificationPolicyService {
   constructor(
     private readonly organizationRepository: OrganizationRepository,
@@ -42,7 +63,7 @@ export class OrganizationNotificationPolicyService {
   async create(
     organization_public_id: string,
     body: unknown,
-    created_by_user_public_id: string,
+    created_by_user_public_id: string | undefined,
   ): Promise<OrganizationNotificationPolicyOutput> {
     const parsed = validateCreateOrganizationNotificationPolicy(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -68,7 +89,7 @@ export class OrganizationNotificationPolicyService {
     organization_public_id: string,
     policy_id: number,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<OrganizationNotificationPolicyOutput> {
     const parsed = validateUpdateOrganizationNotificationPolicy(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {

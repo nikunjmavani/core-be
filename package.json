@@ -1,12 +1,13 @@
 {
   "name": "core-be",
-  "version": "2.2.0",
+  "version": "3.5.1-dev.0",
   "description": "Node.js API with Fastify, Drizzle ORM, and BullMQ",
   "license": "MIT",
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24",
+    "pnpm": ">=11.1.1"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -28,8 +29,9 @@
     "validate:scripts-layout": "tsx src/scripts/validators/code/validate-scripts-layout.ts && tsx src/scripts/validators/code/validate-mcp-optional-dependency.ts",
     "validate:mcp-optional-dependency": "tsx src/scripts/validators/code/validate-mcp-optional-dependency.ts",
     "docs:check": "tsx src/scripts/codegen/check-api-docs-sync.ts",
-    "docs:lint": "markdownlint-cli2 --config .markdownlint.json \"**/*.md\"",
-    "docs:lint:fix": "markdownlint-cli2 --config .markdownlint.json --fix \"**/*.md\"",
+    "docs:lint": "markdownlint-cli2",
+    "docs:lint:fix": "markdownlint-cli2 --fix",
+    "docs:lint:changed": "bash tooling/ci/lint-changed-markdown.sh",
     "docs:links:check": "tsx src/scripts/validators/docs/check-docs-links.ts",
     "validate:github-env": "tsx tooling/setup/github/validate.ts",
     "validate:github-environments": "tsx tooling/setup/github/environments.ts --check",
@@ -52,8 +54,15 @@
     "validate:constants": "tsx src/scripts/validators/code/validate-constants-centralization.ts",
     "validate:test-api-prefix": "tsx src/scripts/validators/tests/validate-test-api-prefix.ts",
     "validate:api-docs-hub": "tsx src/scripts/validators/docs/validate-api-docs-hub.ts",
-    "ci:local": "pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:constants && pnpm routes:catalog:check && pnpm docs:check && pnpm db:migrate:lint && pnpm tool:sync-env-example && pnpm build && pnpm build:check && pnpm test",
-    "ci:quality": "pnpm deps:audit && pnpm deps:audit:prod && pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:locale-keys && pnpm validate:constants && pnpm validate:test-api-prefix && pnpm validate:api-docs-hub && pnpm test:property && pnpm test:contract && pnpm routes:catalog:check && pnpm docs:check && pnpm tool:sync-env-example && pnpm db:migrate:lint",
+    "validate:sunset-dates": "tsx src/scripts/validators/api/validate-sunset-dates.ts",
+    "validate:test-naming": "tsx src/scripts/validators/tests/validate-test-naming.ts",
+    "validate:domain:unit-matrix": "tsx src/scripts/validators/tests/validate-subdomain-unit-matrix.ts",
+    "guard:pre-commit": "tsx src/scripts/tooling/run-pre-commit-guard.ts",
+    "guard:pre-commit:list": "tsx src/scripts/tooling/run-pre-commit-guard.ts --list",
+    "guard:ci-local": "tsx src/scripts/tooling/run-ci-local-guard.ts",
+    "guard:ci-local:list": "tsx src/scripts/tooling/run-ci-local-guard.ts --list",
+    "ci:local": "pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:domain:unit-matrix && pnpm validate:constants && pnpm validate:test-naming && pnpm routes:catalog:check && pnpm tool:project-structure-tree:check && pnpm docs:check && pnpm tsdoc:check && pnpm db:migrate:lint && pnpm tool:sync-env-example && pnpm build && pnpm build:check && pnpm test",
+    "ci:quality": "pnpm deps:audit && pnpm deps:audit:prod && pnpm validate && pnpm validate:scripts-layout && pnpm validate:domain:strict && pnpm validate:domain:coverage && pnpm validate:domain:unit-matrix && pnpm validate:locale-keys && pnpm validate:constants && pnpm validate:test-api-prefix && pnpm validate:api-docs-hub && pnpm validate:sunset-dates && pnpm validate:test-naming && pnpm test:property && pnpm test:contract && pnpm routes:catalog:check && pnpm tool:project-structure-tree:check && pnpm docs:check && pnpm tsdoc:check && pnpm tool:sync-env-example && pnpm tool:generate-project-identity:check && pnpm db:migrate:lint && node tooling/ci/check-action-pins.mjs",
     "compose:up": "docker compose up -d",
     "compose:down": "docker compose down",
     "compose:wait": "bash tooling/dev/wait-for-local-postgres.sh",
@@ -85,7 +94,7 @@
     "test:security": "vitest run --project security",
     "test:chaos": "vitest run --config tooling/vitest/chaos.config.ts --no-file-parallelism",
     "test:mutation": "stryker run",
-    "test:bench": "npx autocannon -c 10 -d 10 http://localhost:3000/health",
+    "test:bench": "npx autocannon -c 10 -d 10 http://localhost:3000/readyz",
     "test:api-smoke": "tsx src/scripts/ops/api-smoke-test.ts",
     "load:health": "k6 run src/tests/load/k6/scenarios/health.js",
     "load:stress": "k6 run src/tests/load/k6/scenarios/health-stress.js",
@@ -94,6 +103,7 @@
     "load:daily-ops": "k6 run src/tests/load/k6/scenarios/daily-ops.js",
     "load:billing": "k6 run src/tests/load/k6/scenarios/billing.js",
     "load:webhooks": "k6 run src/tests/load/k6/scenarios/webhooks.js",
+    "load:rls-concurrency": "k6 run src/tests/load/k6/scenarios/rls-concurrency-beyond-pool.js",
     "load:admin": "k6 run src/tests/load/k6/scenarios/admin.js",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
@@ -115,15 +125,28 @@
     "docs:upload:hosted": "pnpm docs:upload && pnpm docs:upload:scalar",
     "routes:catalog": "tsx src/scripts/codegen/generate-route-catalog.ts",
     "routes:catalog:check": "tsx src/scripts/codegen/generate-route-catalog.ts --check",
+    "tsdoc:check": "tsx tooling/tsdoc-coverage/check-coverage.ts",
+    "tsdoc:check:report": "tsx tooling/tsdoc-coverage/check-coverage.ts --report",
+    "tsdoc:check:refresh-budget": "tsx tooling/tsdoc-coverage/check-coverage.ts --refresh-budget",
     "tool:sync-env-example": "tsx src/scripts/validators/env/sync-env-example.ts",
+    "tool:generate-project-identity": "tsx tooling/setup/codegen/generate-project-identity.ts",
+    "tool:generate-project-identity:check": "tsx tooling/setup/codegen/generate-project-identity.ts --check",
     "tool:load-test-credentials": "tsx src/scripts/admin/load-test-credentials.ts",
     "tool:admin-token": "tsx src/scripts/admin/admin-token.ts",
     "tool:worker-readiness": "tsx src/scripts/admin/worker-readiness.ts",
     "tool:project-structure-tree": "tsx src/scripts/codegen/generate-project-structure-tree.ts",
+    "tool:project-structure-tree:check": "tsx src/scripts/codegen/generate-project-structure-tree.ts --check",
+    "tool:codemod-import-paths": "tsx src/scripts/tooling/codemod-import-paths.ts",
     "tool:generate-dbdiagram": "tsx src/scripts/codegen/generate-dbdiagram.ts",
     "tool:test-report-email": "tsx src/scripts/ops/send-test-report-email.ts",
     "tool:send-load-test-results-email": "tsx src/scripts/ops/send-load-test-results-email.ts",
     "verify:base": "tsx src/scripts/ops/verify-base.ts",
+    "ops:jwt:rotate": "tsx src/scripts/ops/jwt-key-rotate.ts",
+    "ops:secrets:rotate": "tsx src/scripts/ops/secrets-key-rotate.ts",
+    "ops:stripe:reconcile": "tsx src/scripts/ops/stripe-subscription-reconcile.ts",
+    "ops:worker:drain": "tsx src/scripts/ops/worker-drain.ts",
+    "setup:local": "tsx tooling/dev/setup-local.ts",
+    "db:migrate:new": "tsx src/scripts/codegen/generate-migration.ts",
     "setup": "tsx tooling/setup/setup.ts",
     "setup:all": "tsx tooling/setup/setup.ts",
     "setup:provision": "tsx tooling/setup/setup.ts",
@@ -141,12 +164,15 @@
     "setup:infra:delete": "tsx tooling/setup/infra/infra.ts --delete",
     "setup:infra:revert": "tsx tooling/setup/infra/infra.ts --delete",
     "setup:infra:export-env": "tsx tooling/setup/setup.ts --export-env",
-    "setup:railway-domain": "tsx tooling/setup/railway/custom-domain.ts",
-    "setup:infra:railway-domain": "tsx tooling/setup/railway/custom-domain.ts",
+    "setup:domain": "tsx tooling/setup/railway/custom-domain.ts",
+    "setup:infra:domain": "tsx tooling/setup/railway/custom-domain.ts",
+    "tool:railway-deploy-image": "tsx tooling/setup/railway/deploy-image.ts",
     "setup:retention-secrets": "tsx tooling/setup/push-retention-secrets.ts",
     "setup:push-retention-secrets": "tsx tooling/setup/push-retention-secrets.ts",
     "security:secrets": "gitleaks detect --source . --verbose --redact",
     "security:sast": "semgrep --config auto src/",
+    "sbom:generate": "npx @cyclonedx/cyclonedx-npm --output-file sbom.cyclonedx.json .",
+    "sbom:verify": "npx @cyclonedx/cyclonedx-npm --validate --output-file sbom.cyclonedx.json .",
     "deps:audit": "pnpm audit",
     "deps:audit:prod": "pnpm audit --prod",
     "deps:update": "pnpm update --recursive",
@@ -165,21 +191,7 @@
     "commitlint": "commitlint",
     "prepare": "husky"
   },
-  "lint-staged": {
-    "src/**/*.ts": [
-      "biome check --write --no-errors-on-unmatched"
-    ],
-    "tooling/**/*.{ts,mjs}": [
-      "biome check --write --no-errors-on-unmatched"
-    ],
-    "*.{json,yaml,yml}": [
-      "biome format --write --no-errors-on-unmatched"
-    ],
-    "*.md": [
-      "markdownlint-cli2 --config .markdownlint.json --fix"
-    ]
-  },
-  "packageManager": "pnpm@10.28.2",
+  "packageManager": "pnpm@11.1.1+sha512.d1fdf5f73c617b64fa1a56a81c3c8dfe0e966e33a6010aa256b517ae77be21d93e05affc0de1a83b0e4f29d569f68b446ae8f068cd7247c0bb3df0fb4d7bdf9a",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",
     "@aws-sdk/s3-presigned-post": "^3.1053.0",
@@ -215,6 +227,7 @@
     "i18next-fs-backend": "^2.6.6",
     "i18next-http-middleware": "^3.9.7",
     "ioredis": "5.10.1",
+    "ipaddr.js": "^2.4.0",
     "isomorphic-dompurify": "^3.14.0",
     "jose": "^6.2.3",
     "opossum": "^9.0.0",
@@ -231,14 +244,15 @@
   },
   "devDependencies": {
     "@aws-sdk/client-iam": "^3.1053.0",
+    "@biomejs/biome": "^2.4.15",
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
     "@faker-js/faker": "^10.4.0",
+    "@microsoft/tsdoc": "^0.16.0",
     "@scalar/fastify-api-reference": "^1.57.5",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@testcontainers/postgresql": "^12.0.0",
-    "@biomejs/biome": "^2.4.15",
     "@types/node": "^25.9.1",
     "@types/opossum": "^8.1.9",
     "@vitest/coverage-v8": "^4.1.7",
@@ -258,53 +272,5 @@
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@sentry-internal/node-cpu-profiler",
-      "argon2",
-      "esbuild",
-      "msgpackr-extract"
-    ],
-    "packageExtensions": {
-      "openapi-to-postmanv2": {
-        "dependencies": {
-          "lodash": "4.17.24",
-          "js-yaml": "^4.1.1"
-        }
-      },
-      "postman-collection": {
-        "dependencies": {
-          "lodash": "4.17.24"
-        }
-      },
-      "@esbuild-kit/core-utils": {
-        "dependencies": {
-          "esbuild": "^0.25.0"
-        }
-      }
-    },
-    "overrides": {
-      "ioredis": "5.10.1",
-      "esbuild": ">=0.25.0",
-      "@esbuild-kit/core-utils>esbuild": ">=0.25.0",
-      "lodash": ">=4.17.24",
-      "js-yaml": ">=4.1.1",
-      "fast-xml-parser": ">=5.7.0",
-      "hono": ">=4.12.18",
-      "markdown-it": ">=14.1.1",
-      "minimatch": "10.2.5",
-      "micromatch>picomatch": "4.0.4",
-      "rollup": ">=4.59.0",
-      "vite": ">=7.3.2",
-      "fastify": ">=5.8.5",
-      "@fastify/static": ">=9.1.1",
-      "drizzle-orm": ">=0.45.2",
-      "i18next-fs-backend": ">=2.6.4",
-      "i18next-http-middleware": ">=3.9.3",
-      "qs": ">=6.15.2",
-      "uuid": ">=11.1.1",
-      "yaml@1.10.2": "1.10.3"
-    }
   }
 }

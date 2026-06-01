@@ -35,7 +35,7 @@ describe('metrics.middleware', () => {
     process.env.METRICS_ENABLED = 'false';
     resetEnvCacheForTests();
     const { default: metricsMiddleware } = await import(
-      '@/shared/middlewares/metrics.middleware.js'
+      '@/shared/middlewares/core/metrics.middleware.js'
     );
     const application = Fastify();
     await application.register(metricsMiddleware);
@@ -60,7 +60,7 @@ describe('metrics.middleware', () => {
       renderMetrics: () => 'process_cpu 1\n',
     }));
     const { default: metricsMiddleware } = await import(
-      '@/shared/middlewares/metrics.middleware.js'
+      '@/shared/middlewares/core/metrics.middleware.js'
     );
     const application = Fastify();
     await application.register(metricsMiddleware);
@@ -86,7 +86,7 @@ describe('metrics.middleware', () => {
       renderMetrics: async () => 'process_cpu 1\n',
     }));
     const { default: metricsMiddleware } = await import(
-      '@/shared/middlewares/metrics.middleware.js'
+      '@/shared/middlewares/core/metrics.middleware.js'
     );
     const application = Fastify();
     await application.register(metricsMiddleware);

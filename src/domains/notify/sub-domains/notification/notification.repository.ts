@@ -1,7 +1,9 @@
 import { and, count, desc, eq, isNull, type SQL } from 'drizzle-orm';
-import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
+import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
-import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database-context.js';
+import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { notifications } from '@/domains/notify/sub-domains/notification/notification.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
@@ -12,12 +14,22 @@ import {
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
 
+/** Keyset-pagination input for {@link NotificationRepository.findByUser}. */
 export interface NotificationListPagination {
   after?: string;
   limit: number;
   include_total?: boolean;
 }
 
+/** Row shape returned by {@link NotificationRepository.listForUserDataExport}. */
+export interface NotificationUserDataExportRow {
+  type: string;
+  title: string;
+  message: string;
+  created_at: Date;
+}
+
+/** Insert payload for a new notification row (consumed by {@link NotificationRepository.create}). */
 export interface CreateNotificationInput {
   user_id: number;
   organization_id?: number;
@@ -29,6 +41,12 @@ export interface CreateNotificationInput {
   action_label?: string;
 }
 
+/**
+ * Drizzle-backed data access for `notify.notifications`. Owns the SQL for the user inbox
+ * (keyset list, mark-read, unread count) and the worker dispatch projection used to build
+ * email/in-app payloads. Resolves its database handle via the shared request/worker context
+ * helper so the same class works under HTTP RLS and worker organization scopes.
+ */
 export class NotificationRepository {
   constructor(private readonly databaseHandle?: RequestScopedPostgresDatabase) {}
 
@@ -52,6 +70,11 @@ export class NotificationRepository {
       })
       .returning({ id: notifications.id });
     return rows[0]!.id;
+  }
+
+  /** Removes a notification row when post-commit BullMQ enqueue fails (rollback side effect). */
+  async deleteByInternalId(notification_id: number): Promise<void> {
+    await this.db().delete(notifications).where(eq(notifications.id, notification_id));
   }
 
   async findOrganizationPublicIdByNotificationId(notification_id: number): Promise<string | null> {
@@ -119,11 +142,7 @@ export class NotificationRepository {
       .limit(limit + 1);
 
     const countPromise = includeTotal
-      ? this.db()
-          .select({ count: count() })
-          .from(notifications)
-          .where(countWhere)
-          .then((rows) => rows[0]?.count ?? 0)
+      ? countWithCap({ database: this.db(), table: notifications, where: countWhere })
       : Promise.resolve(null);
 
     const [fetchedRows, total] = await Promise.all([rowsPromise, countPromise]);
@@ -139,6 +158,23 @@ export class NotificationRepository {
       has_more: hasMore,
       next_cursor: nextCursor,
     };
+  }
+
+  async listForUserDataExport(
+    user_id: number,
+    limit: number,
+  ): Promise<NotificationUserDataExportRow[]> {
+    return this.db()
+      .select({
+        type: notifications.type,
+        title: notifications.title,
+        message: notifications.message,
+        created_at: notifications.created_at,
+      })
+      .from(notifications)
+      .where(eq(notifications.user_id, user_id))
+      .orderBy(desc(notifications.created_at))
+      .limit(limit);
   }
 
   async findByPublicIdForUser(public_id: string, user_id: number) {
@@ -159,12 +195,16 @@ export class NotificationRepository {
     return rows[0] ?? null;
   }
 
-  async markAllReadForUser(user_id: number) {
-    return this.db()
+  async markAllReadForUser(user_id: number): Promise<number> {
+    const unreadCount = await this.countUnreadForUser(user_id);
+    if (unreadCount === 0) return 0;
+
+    await this.db()
       .update(notifications)
       .set({ is_read: true, read_at: new Date() })
-      .where(and(eq(notifications.user_id, user_id), eq(notifications.is_read, false)))
-      .returning();
+      .where(and(eq(notifications.user_id, user_id), eq(notifications.is_read, false)));
+
+    return unreadCount;
   }
 
   async countUnreadForUser(user_id: number): Promise<number> {
@@ -186,7 +226,7 @@ export class NotificationRepository {
 
 /** Worker-only factory — requires an explicit handle from `withOrganizationContext`. */
 export function createWorkerNotificationRepository(
-  databaseHandle: RequestScopedPostgresDatabase,
+  databaseHandle: WorkerDatabaseHandle,
 ): NotificationRepository {
   assertWorkerDatabaseContext(['organization', 'global_retention_cleanup']);
   return new NotificationRepository(databaseHandle);

@@ -1,0 +1,79 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
+
+const mockReturning = vi.fn().mockResolvedValue([]);
+const mockLimit = vi.fn().mockResolvedValue([]);
+const mockWhereForSelect = vi.fn(() => ({ limit: mockLimit }));
+const mockWhereForUpdate = vi.fn(() => ({ returning: mockReturning }));
+const mockFrom = vi.fn(() => ({ where: mockWhereForSelect }));
+const mockSelect = vi.fn(() => ({ from: mockFrom }));
+const mockSet = vi.fn(() => ({ where: mockWhereForUpdate }));
+const mockUpdate = vi.fn(() => ({ set: mockSet }));
+const mockValues = vi.fn(() => ({ returning: mockReturning }));
+const mockInsert = vi.fn(() => ({ values: mockValues }));
+
+vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => ({
+  getRequestDatabase: () => ({
+    select: mockSelect,
+    insert: mockInsert,
+    update: mockUpdate,
+  }),
+}));
+
+describe('VerificationTokenRepository', () => {
+  const repository = new VerificationTokenRepository();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLimit.mockReset();
+    mockReturning.mockReset();
+  });
+
+  it('create inserts verification token', async () => {
+    const created = { id: 1, token_type: 'MAGIC_LINK' };
+    mockReturning.mockResolvedValueOnce([created]);
+
+    const result = await repository.create(
+      'MAGIC_LINK',
+      10,
+      'user@example.com',
+      'hash',
+      new Date(Date.now() + 60_000),
+    );
+
+    expect(result).toEqual(created);
+  });
+
+  it('findValidByTokenHash returns row or null', async () => {
+    const token = { id: 2, token_hash: 'hash' };
+    mockLimit.mockResolvedValueOnce([token]);
+    expect(await repository.findValidByTokenHash('hash')).toEqual(token);
+
+    mockLimit.mockResolvedValueOnce([]);
+    expect(await repository.findValidByTokenHash('missing')).toBeNull();
+  });
+
+  it('consumeIfValid returns consumed row or null', async () => {
+    const consumed = { id: 3, token_type: 'PASSWORD_RESET' };
+    mockReturning.mockResolvedValueOnce([consumed]);
+    expect(await repository.consumeIfValid('hash')).toEqual(consumed);
+
+    mockReturning.mockResolvedValueOnce([]);
+    expect(await repository.consumeIfValid('missing')).toBeNull();
+  });
+
+  it('markUsed updates token by hash', async () => {
+    const used = { id: 4, used_at: new Date() };
+    mockReturning.mockResolvedValueOnce([used]);
+    expect(await repository.markUsed('hash')).toEqual(used);
+
+    mockReturning.mockResolvedValueOnce([]);
+    expect(await repository.markUsed('missing')).toBeNull();
+  });
+
+  it('invalidateAllForUser marks unused tokens used', async () => {
+    mockWhereForUpdate.mockReturnValueOnce({ returning: vi.fn().mockResolvedValue([]) });
+    await repository.invalidateAllForUser(10, 'EMAIL_VERIFICATION');
+    expect(mockUpdate).toHaveBeenCalled();
+  });
+});

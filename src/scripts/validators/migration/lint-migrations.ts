@@ -13,22 +13,27 @@ import chalk from 'chalk';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseMigrationExecutionMode } from '@/infrastructure/database/migration/migration-execution-mode.js';
 
+/** Identifiers of every rule {@link lintMigrationFileContent} can report; used for header-comment allow-lists. */
 export const migrationSafetyRuleIds = [
   'add_column_not_null_without_default',
   'add_check_without_not_valid',
   'add_foreign_key_without_not_valid',
   'add_unique_constraint_inline',
   'alter_column_type',
+  'concurrent_index_requires_non_transactional',
   'create_index_without_concurrently',
   'disable_row_security_guc',
   'drop_column',
   'drop_table',
   'missing_if_not_exists_on_create',
+  'non_transactional_statements_need_breakpoints',
   'rename_column_or_table',
   'set_not_null_on_existing_column',
 ] as const;
 
+/** String-literal union of every migration safety rule id. */
 export type MigrationSafetyRuleId = (typeof migrationSafetyRuleIds)[number];
 
 const migrationSafetyRuleIdSet = new Set<string>(migrationSafetyRuleIds);
@@ -44,6 +49,8 @@ const ruleFixHints: Record<MigrationSafetyRuleId, string> = {
     'Prefer CREATE UNIQUE INDEX CONCURRENTLY, then ADD CONSTRAINT ... UNIQUE USING INDEX (runner may need a non-transactional migration).',
   alter_column_type:
     'Add a new column with the target type, backfill, switch reads/writes, then drop the old column in a later migration.',
+  concurrent_index_requires_non_transactional:
+    'CREATE INDEX CONCURRENTLY cannot run inside a transaction. Mark this migration non-transactional by adding `-- migration-transaction: none reason="..."` in the first 20 lines, and keep the index DDL idempotent (IF NOT EXISTS).',
   create_index_without_concurrently:
     'Prefer CREATE INDEX CONCURRENTLY in a non-transactional migration. This repo runs each file inside a transaction, so CONCURRENTLY cannot run as-is; split the index into a follow-up migration that runs outside a transaction, or explicitly allow this rule with a documented reason.',
   disable_row_security_guc:
@@ -54,6 +61,8 @@ const ruleFixHints: Record<MigrationSafetyRuleId, string> = {
     'DROP TABLE is destructive: use IF EXISTS for idempotency and add a migration-safety allow with a documented reason.',
   missing_if_not_exists_on_create:
     'Add IF NOT EXISTS to CREATE TABLE / CREATE INDEX / CREATE SCHEMA for safer retries.',
+  non_transactional_statements_need_breakpoints:
+    'A `migration-transaction: none` file runs each `--> statement-breakpoint` segment as its own command. Put exactly one statement per segment (separate every statement with `--> statement-breakpoint`) — CREATE INDEX CONCURRENTLY cannot share an implicit transaction with another statement.',
   rename_column_or_table:
     'Prefer add-new + backfill + switch + drop-old instead of in-place RENAME for zero-downtime.',
   set_not_null_on_existing_column:
@@ -136,6 +145,11 @@ function skipDollarQuotedString(source: string, dollarIndex: number): number {
   return closingFoundAt + closingDelimiter.length;
 }
 
+/**
+ * Splits a SQL file into top-level statements, preserving the start offset of
+ * each so violation messages can report accurate line numbers. Handles
+ * dollar-quoted strings, line/block comments, and single-quoted literals.
+ */
 export function splitSqlStatements(source: string): { text: string; startOffset: number }[] {
   const statements: { text: string; startOffset: number }[] = [];
   let segmentStart = 0;
@@ -487,6 +501,46 @@ function emitViolationIfNotAllowed(
 const rowSecurityGucPattern =
   /\b(?:SET\s+LOCAL\s+row_security\b|SET\s+SESSION\s+row_security\b|SET\s+row_security\b|RESET\s+row_security\b)/iu;
 
+/** Splitter used by the migration runner to send each segment independently. */
+const statementBreakpointPattern = /\n--> statement-breakpoint\s*\n?/g;
+
+/**
+ * Flags non-transactional migrations whose `--> statement-breakpoint` segments
+ * contain more than one statement. The runner sends each segment to Postgres as
+ * a single command, so a segment with two statements becomes an implicit
+ * transaction — and `CREATE INDEX CONCURRENTLY` cannot run inside one. Reports
+ * each offending segment at the line of its second statement.
+ */
+function findNonTransactionalBreakpointViolations(
+  filename: string,
+  fileContent: string,
+): Violation[] {
+  const violations: Violation[] = [];
+  let searchOffset = 0;
+
+  for (const segment of fileContent.split(statementBreakpointPattern)) {
+    const segmentStart = fileContent.indexOf(segment, searchOffset);
+    searchOffset = segmentStart === -1 ? searchOffset : segmentStart + segment.length;
+
+    const statements = splitSqlStatements(segment);
+    if (statements.length <= 1) continue;
+
+    const secondStatement = statements[1];
+    const lineNumber =
+      segmentStart === -1 || !secondStatement
+        ? 1
+        : offsetToLineNumber(fileContent, segmentStart + secondStatement.startOffset);
+    violations.push({
+      filename,
+      lineNumber,
+      ruleId: 'non_transactional_statements_need_breakpoints',
+      message: ruleFixHints.non_transactional_statements_need_breakpoints,
+    });
+  }
+
+  return violations;
+}
+
 function findRowSecurityGucViolations(filename: string, fileContent: string): Violation[] {
   const violations: Violation[] = [];
   const lines = fileContent.split('\n');
@@ -505,6 +559,12 @@ function findRowSecurityGucViolations(filename: string, fileContent: string): Vi
   return violations;
 }
 
+/**
+ * Runs the full migration safety rule set against a single SQL file's text and
+ * returns every violation. Header-level `-- migration-safety: allow <ruleId>`
+ * comments suppress matching rules. Used by `pnpm db:migrate:lint` and unit
+ * tests.
+ */
 export function lintMigrationFileContent(
   filename: string,
   fileContent: string,
@@ -515,10 +575,16 @@ export function lintMigrationFileContent(
 } {
   const violations: Violation[] = [];
   const { allows, headerErrors } = parseMigrationHeader(fileContent);
+  const executionMode = parseMigrationExecutionMode(fileContent);
+  const combinedHeaderErrors = [...headerErrors, ...executionMode.headerErrors];
   const usedAllowRules = new Set<MigrationSafetyRuleId>();
 
-  if (headerErrors.length > 0) {
-    return { violations, headerErrors, usedAllowRules };
+  if (combinedHeaderErrors.length > 0) {
+    return { violations, headerErrors: combinedHeaderErrors, usedAllowRules };
+  }
+
+  if (!executionMode.transactional) {
+    violations.push(...findNonTransactionalBreakpointViolations(filename, fileContent));
   }
 
   violations.push(...findRowSecurityGucViolations(filename, fileContent));
@@ -594,6 +660,14 @@ export function lintMigrationFileContent(
 
     const createIndexInfo = parseCreateIndexPrefix(normalized);
     if (createIndexInfo.isCreateIndex) {
+      if (createIndexInfo.hasConcurrently && executionMode.transactional) {
+        violations.push({
+          filename,
+          lineNumber,
+          ruleId: 'concurrent_index_requires_non_transactional',
+          message: ruleFixHints.concurrent_index_requires_non_transactional,
+        });
+      }
       if (!createIndexInfo.hasConcurrently) {
         const violation = emitViolationIfNotAllowed(
           allows,
@@ -713,9 +787,10 @@ export function lintMigrationFileContent(
     }
   }
 
-  return { violations, headerErrors, usedAllowRules };
+  return { violations, headerErrors: combinedHeaderErrors, usedAllowRules };
 }
 
+/** A single failure from {@link lintMigrationRollbackPairing}. */
 export type RollbackViolation = {
   filename: string;
   ruleId: 'missing_required_down_migration' | 'orphan_down_migration';
@@ -725,6 +800,11 @@ export type RollbackViolation = {
 const migrationRollbackHeaderPattern =
   /--\s*migration-rollback:\s*requires\s+down\s+reason="([^"]*)"/i;
 
+/**
+ * Parses the optional `-- migration-rollback: requires down reason="..."`
+ * header from the first five lines of a migration file. The header marks an
+ * up-migration as requiring a paired `.down.sql` companion.
+ */
 export function parseMigrationRollbackHeader(fileContent: string): {
   requiresDown: boolean;
   headerErrors: string[];
@@ -748,6 +828,7 @@ function isDownMigrationFilename(filename: string): boolean {
   return filename.endsWith('.down.sql');
 }
 
+/** Identifiers of every rule {@link lintMigrationTimestamps} can report. */
 export const migrationTimestampRuleIds = [
   'migration_filename_format',
   'migration_timestamp_not_monotonic',
@@ -755,8 +836,10 @@ export const migrationTimestampRuleIds = [
   'migration_timestamp_gap',
 ] as const;
 
+/** String-literal union of every migration timestamp rule id. */
 export type MigrationTimestampRuleId = (typeof migrationTimestampRuleIds)[number];
 
+/** A single failure from {@link lintMigrationTimestamps}; `severity` controls whether CI fails or just warns. */
 export type TimestampViolation = {
   filename: string;
   ruleId: MigrationTimestampRuleId;
@@ -788,25 +871,27 @@ export function getMaxMigrationPrefix(upMigrationFilenames: string[]): string | 
   return maxPrefix;
 }
 
-/** Returns the next strictly greater 14-digit prefix (numeric increment with zero-padding). */
-export function incrementMigrationPrefix(prefix: string): string {
-  const nextValue = BigInt(prefix) + 1n;
-  const nextPrefix = nextValue.toString().padStart(14, '0');
-  if (nextPrefix.length !== 14) {
-    throw new Error(`Migration prefix overflow after incrementing ${prefix}`);
-  }
-  return nextPrefix;
-}
-
-/** Suggests the next migration prefix strictly after the current max (or UTC now when none exist). */
-export function suggestNextMigrationPrefix(upMigrationFilenames: string[]): {
+/**
+ * Suggests the next migration prefix using the real UTC wall clock.
+ *
+ * Always returns the current UTC time formatted as `YYYYMMDDHHMMSS` so
+ * concurrent developers on different branches naturally land on distinct
+ * prefixes and avoid the merge conflict that comes from incrementing a shared
+ * counter. `currentMax` is returned for display/diagnostics only; the
+ * monotonic-ordering invariant is enforced separately by
+ * `lintMigrationTimestamps` (`pnpm db:migrate:lint`).
+ *
+ * `now` is injectable for deterministic tests.
+ */
+export function suggestNextMigrationPrefix(
+  upMigrationFilenames: string[],
+  now: Date = new Date(),
+): {
   currentMax: string | null;
   nextPrefix: string;
 } {
   const currentMax = getMaxMigrationPrefix(upMigrationFilenames);
-  const nextPrefix =
-    currentMax === null ? formatTimestampPrefix(new Date()) : incrementMigrationPrefix(currentMax);
-  return { currentMax, nextPrefix };
+  return { currentMax, nextPrefix: formatTimestampPrefix(now) };
 }
 
 function parsePrefixDateUtc(prefix: string): Date {
@@ -822,7 +907,8 @@ function daysBetweenPrefixDates(previousPrefix: string, prefix: string): number 
   return Math.abs(currentDate.getTime() - previousDate.getTime()) / (24 * 60 * 60 * 1000);
 }
 
-function formatTimestampPrefix(date: Date): string {
+/** Formats a Date as a 14-digit UTC `YYYYMMDDHHMMSS` migration ordering prefix. */
+export function formatTimestampPrefix(date: Date): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const day = String(date.getUTCDate()).padStart(2, '0');
@@ -892,6 +978,12 @@ export function lintMigrationTimestamps(upMigrationFilenames: string[]): Timesta
   return violations;
 }
 
+/**
+ * Cross-checks up- and down-migration filenames: every up-migration with a
+ * `migration-rollback: requires down` header must have a paired
+ * `<prefix>_<name>.down.sql` companion, and orphan `.down.sql` files (no
+ * matching up) are reported.
+ */
 export function lintMigrationRollbackPairing(
   _migrationsFolder: string,
   upMigrationFilenames: string[],
@@ -932,6 +1024,12 @@ export function lintMigrationRollbackPairing(
   return violations;
 }
 
+/**
+ * Reads every `.sql` file in `migrationsFolder` and runs the full safety,
+ * timestamp, and rollback-pairing rule sets. Returns aggregated violations
+ * keyed by category so the CLI / CI can render a single report and exit
+ * non-zero on any error-severity finding.
+ */
 export async function lintMigrationsDirectory(migrationsFolder: string): Promise<{
   allViolations: Violation[];
   rollbackViolations: RollbackViolation[];

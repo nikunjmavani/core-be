@@ -3,14 +3,15 @@ name: pr-babysit
 description: Keep a core-be PR merge-ready — triage review comments, resolve merge conflicts, and fix CI in a loop. Use when the user asks to babysit a PR, fix CI on a PR, or get a branch merge-ready.
 ---
 
-# PR Babysit (core-be)
+# PR babysit (core-be)
 
 Get the current PR to **mergeable + green CI + review comments addressed**.
 
 ## Preconditions
 
 - Use `gh` for PR status, checks, and comments.
-- Default branch: `main` (also `dev` for CI — see `.github/workflows/ci.yml`).
+- Default branch: `main` (also `dev` for CI — see `.github/workflows/pr-ci.yml`).
+- Review rubric: **`docs/process/pr-review.md`** (human + agent checklist, severity legend).
 
 ## Workflow
 
@@ -54,6 +55,7 @@ Re-watch `gh pr checks` until green.
 
 ### 4. Review comments
 
+- Apply **`docs/process/pr-review.md`** — classify feedback as Blocker / Major / Nit; fix Blockers and Majors in scope.
 - Validate Bugbot and human feedback; fix real issues in touched files.
 - Invoke **code-smells-and-best-practices** for `src/` edits.
 - Run skills from **skill-index** when the comment implies routes, migrations, seeds, or docs drift.

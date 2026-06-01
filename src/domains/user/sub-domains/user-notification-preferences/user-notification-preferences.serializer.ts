@@ -1,5 +1,6 @@
 import type { NotificationPreferenceOutput } from './user-notification-preferences.types.js';
 
+/** Minimal row projection accepted by the preference serializers (database row → API output). */
 export interface UserNotificationPreferenceRow {
   id: number;
   notification_type: string;
@@ -8,6 +9,7 @@ export interface UserNotificationPreferenceRow {
   is_enabled: boolean;
 }
 
+/** Project a single preference row into the public {@link NotificationPreferenceOutput} shape. */
 export function serializeUserNotificationPreference(
   row: UserNotificationPreferenceRow,
 ): NotificationPreferenceOutput {
@@ -20,6 +22,7 @@ export function serializeUserNotificationPreference(
   };
 }
 
+/** Project a list of preference rows by mapping {@link serializeUserNotificationPreference}. */
 export function serializeUserNotificationPreferenceList(
   rows: UserNotificationPreferenceRow[],
 ): NotificationPreferenceOutput[] {

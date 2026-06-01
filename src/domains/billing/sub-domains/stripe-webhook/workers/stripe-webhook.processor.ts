@@ -7,6 +7,25 @@ import type { StripeWebhookJobData } from '@/domains/billing/sub-domains/stripe-
 import { stripeWebhookJobDataSchema } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.job.schema.js';
 import { STRIPE_WEBHOOK_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
 
+/**
+ * Worker entry point for jobs on the `stripe-webhook` queue: revalidates the
+ * minimal Redis payload, refetches the full event from Stripe by id, and
+ * delegates to {@link StripeWebhookService.handleEvent} for idempotent
+ * processing.
+ *
+ * @remarks
+ * - **Algorithm:** Only the `stripeEventId` is persisted in Redis, so the
+ *   processor reaches back to Stripe via {@link retrieveStripeEvent} to obtain
+ *   the verified canonical event before invoking the service. The service then
+ *   owns ledger claim, organization context, and dispatch.
+ * - **Failure modes:** Schema validation errors are surfaced via
+ *   {@link parseBullMQJobData}. Stripe API failures and service errors
+ *   propagate so BullMQ honours its retry/backoff (`stripeWebhookBackoffStrategy`).
+ * - **Side effects:** One Stripe API call per attempt; downstream service may
+ *   write to ledger and subscription tables.
+ * - **Notes:** Re-fetching keeps Redis payloads small and ensures every retry
+ *   sees the current Stripe representation of the event.
+ */
 export async function processStripeWebhookJob(
   jobData: StripeWebhookJobData,
   stripeWebhookService: StripeWebhookService,

@@ -7,8 +7,8 @@
  *   pnpm setup:github --dry-run     Preview what would be synced
  *   pnpm setup:github --status      Per-environment status dashboard
  */
-import * as logger from '../common/logger.js';
-import { loadConfig } from '../common/config.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { loadConfig } from '@tooling/setup/common/config.js';
 import { buildGitHubStatus, printGitHubStatus } from './status.js';
 
 const args = process.argv.slice(2);
@@ -47,5 +47,5 @@ async function main(): Promise<void> {
 const isMainModule = process.argv[1]?.includes('github/github');
 
 if (isMainModule) {
-  main();
+  void main();
 }

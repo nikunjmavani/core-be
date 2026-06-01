@@ -1,6 +1,11 @@
 import type { OrganizationBillingContext } from '@/domains/tenancy/sub-domains/organization/organization.types.js';
 import type { PlanRecord } from '@/domains/billing/sub-domains/plan/plan.service.js';
 
+/**
+ * Identifiers returned by {@link PaymentProvider.createSubscription}; either
+ * field may be omitted when the provider is unconfigured (no-op stub) so
+ * persistence stays optional.
+ */
 export type PaymentProviderCreateResult = {
   providerSubscriptionId?: string;
   providerCustomerId?: string;
@@ -22,14 +27,18 @@ export interface PaymentProvider {
     idempotencyKey?: string;
   }): Promise<PaymentProviderCreateResult>;
 
-  cancelSubscriptionAtPeriodEnd(providerSubscriptionId: string): Promise<void>;
+  cancelSubscriptionAtPeriodEnd(
+    providerSubscriptionId: string,
+    idempotencyKey?: string,
+  ): Promise<void>;
 
-  resumeSubscription(providerSubscriptionId: string): Promise<void>;
+  resumeSubscription(providerSubscriptionId: string, idempotencyKey?: string): Promise<void>;
 
   updateSubscriptionPrice(
     providerSubscriptionId: string,
     providerPriceId: string,
-  ): Promise<boolean>;
+    idempotencyKey?: string,
+  ): Promise<void>;
 
   compensateFailedCreate(providerSubscriptionId: string): Promise<void>;
 

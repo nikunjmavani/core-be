@@ -4,6 +4,17 @@ Single reference for what runs in CI, how deployment to Railway works, and **whi
 
 > **Prerequisite:** Infrastructure must be set up before auto-deploy works. Use [setup-automation.md](../setup/setup-automation.md) (`pnpm setup:infra`) to provision Neon, Redis, Railway, GitHub secrets first.
 
+### Project identity (branches, images, slug)
+
+Git branch names, GitHub Environment names, Docker/GHCR image names, and the product slug (`core-be` today) are declared in **`tooling/setup/setup.config.json`**. Run **`pnpm tool:generate-project-identity`** after editing that manifest; it writes:
+
+- `src/shared/constants/project-identity.constants.ts` (runtime + OpenAPI defaults)
+- `.github/sync.config.json` (slim list for `pnpm github:sync`)
+- `.github/project-identity.env` (reference for local scripts — not loaded by Actions)
+- Job-level `# BEGIN GENERATED project-identity` `env:` blocks in key workflows
+
+CI enforces drift with **`pnpm tool:generate-project-identity:check`** (in `pnpm ci:quality`) and workflow literal scans. See [add-new-environment.md](../runbooks/add-new-environment.md) when adding a hosted environment.
+
 ---
 
 ## 1. Overview
@@ -16,7 +27,10 @@ flowchart TD
   PRCI --> Unit[Unit tests]
   PRCI --> MigLint[Migration lint]
   PRCI --> BuildVerify[Build verify]
-  PRCI --> Sec[Security scan]
+  PRCI --> StaticSync[Static sync]
+  PRCI --> SecAudit[Security audit]
+  PRCI --> SecSecrets[Security secrets]
+  PRCI --> SecSAST[Security SAST]
   PRCI --> Contract[Contract + property]
 
   Merge[PR merge into dev or main] --> PostMerge[Post-merge CI]
@@ -39,7 +53,7 @@ flowchart TD
 
 ```
 
-- **PR CI** ([pr-ci.yml](../../../.github/workflows/pr-ci.yml)) runs on every **pull_request** to **main** and **dev**: seven parallel jobs (lint, typecheck, unit + global with `vitest --changed`, migration safety lint, TS + Docker build verify, security scan, contract + property). No Postgres/Redis and no GHCR push on PR.
+- **PR CI** ([pr-ci.yml](../../../.github/workflows/pr-ci.yml)) runs on every **pull_request** to **main** and **dev**: parallel jobs for lint, typecheck, static sync checks, unit + global with `vitest --changed`, migration safety lint, TS + Docker build verify, split security checks, and contract + property. No Postgres/Redis and no GHCR push on PR.
 - **Post-merge CI** ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml)) runs when a PR **merges** into `dev` or `main`. Optimized chain: `gate → (commitlint, docker, sbom, api-docs in parallel) → release-please (after docker) → release-sbom (re-uses sbom artifact) → deploy`. It does **not** re-run PR CI jobs or full DB integration/chaos suites (those are local: `pnpm test:integration`, `pnpm test:chaos`). Manual `workflow_dispatch` remains for emergency reruns.
 - **Deploy** runs inside Post-merge CI via reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml). Only the GitHub Environment differs: `dev` → **development**, `main` → **production**. Manual `workflow_dispatch` on CD remains for emergency redeploys. **When post-deploy API smoke passes, that environment is fully live** — the deploy job is the last gate before traffic.
 - Release-please runs inside Post-merge CI on both channels (`main` stable, `dev` prerelease). When it publishes a GitHub Release in the same run, **Release SBOM** attaches CycloneDX to that release.
@@ -56,10 +70,13 @@ All jobs run **in parallel** (~2–3 min target). Caching: `actions/setup-node` 
 | --- | ---- |
 | **Lint** | `pnpm lint` (Biome) |
 | **Typecheck** | `pnpm typecheck` |
+| **Static sync** | `pnpm validate:domain:strict`, `pnpm validate:domain:coverage`, `pnpm validate:scripts-layout`, route catalog, docs sync, env example sync |
 | **Unit** | `vitest --project unit --project global --changed origin/{base}` (no DB) |
 | **Migration lint** | `pnpm db:migrate:lint` (static migration safety) |
 | **Build verify** | `pnpm build` + Docker API/worker build (`load: true`, no push, no Trivy) |
-| **Security scan** | `pnpm deps:audit`, gitleaks, semgrep |
+| **Security audit** | `pnpm deps:audit`, `pnpm deps:audit:prod`, dependency review |
+| **Security secrets** | gitleaks full-history scan |
+| **Security SAST** | semgrep |
 | **Contract + property** | `pnpm test:contract`, `pnpm test:property` |
 
 ### Post-merge lane ([post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml))
@@ -74,7 +91,7 @@ Runs when a PR **merges** into `main` / `dev` (or manual dispatch). Does **not**
 | **API docs** | parallel | `src-code` or openapi paths | `pnpm docs:all`, Postman + Scalar publish |
 | **Release Please** | after Docker | Every merge | Opens/updates release PR; may publish GitHub Release |
 | **Release SBOM** | after SBOM + Release Please | Release Please published a release | Downloads `sbom` artifact and attaches it to the GitHub Release |
-| **Deploy** | last | Docker green + gates green | Reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) → resolve env → migrate → redeploy → `/health` → worker readiness → **`pnpm test:api-smoke`** → **fully live** |
+| **Deploy** | last | Docker green + gates green | Reusable [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) → resolve env → migrate → **pin Railway service to fresh GHCR image + new deployment** (`pnpm tool:railway-deploy-image`) → API `/readyz` → worker deployment SUCCESS (in-pod `Dockerfile.worker` HEALTHCHECK on `9090/readyz`) → **`pnpm test:api-smoke`** → **fully live** |
 
 **Local-only (not in CI):** `pnpm test:integration`, `pnpm test:chaos` — run before pushing when touching DB/worker paths.
 
@@ -133,75 +150,99 @@ There are **two release channels** — each tracks its own version via a dedicat
 
 | Channel        | Branch | Tag style      | Config file                                                                               | Manifest file                                                                                 | Changelog          |
 | -------------- | ------ | -------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------ |
-| **Stable**     | `main` | `v2.1.0`       | [.github/release-please/config.json](../../../.github/release-please/config.json)         | [.github/release-please/manifest.json](../../../.github/release-please/manifest.json)         | `CHANGELOG.md`     |
-| **Prerelease** | `dev`  | `v2.1.0-dev.0` | [.github/release-please/config.dev.json](../../../.github/release-please/config.dev.json) | [.github/release-please/manifest.dev.json](../../../.github/release-please/manifest.dev.json) | `CHANGELOG-dev.md` |
+| **Stable**     | `main` | `v3.1.0`       | [.github/release-please/config.json](../../../.github/release-please/config.json)         | [.github/release-please/manifest.json](../../../.github/release-please/manifest.json)         | `CHANGELOG.md`     |
+| **Prerelease** | `dev`  | `v3.1.0-dev.0` | [.github/release-please/config.dev.json](../../../.github/release-please/config.dev.json) | [.github/release-please/manifest.dev.json](../../../.github/release-please/manifest.dev.json) | `CHANGELOG-dev.md` |
 
-The dev config sets `prerelease: true` + `prerelease-type: "dev"` and writes its own `CHANGELOG-dev.md`, so a `dev → main` promotion never collides with main's `CHANGELOG.md`. Both channels publish GitHub Releases (`release: published`), so [release-sbom.yml](../../../.github/workflows/release-sbom.yml) attaches a CycloneDX SBOM in either case.
+The dev config sets `prerelease: true` + `prerelease-type: "dev"` and writes its own `CHANGELOG-dev.md`. Both channels publish GitHub Releases (`release: published`), so a release SBOM workflow attaches a CycloneDX SBOM in either case (managed via Release Please publish hooks; previous `release-sbom.yml` standalone workflow has been consolidated into the publish pipeline).
 
-> **`package.json` version on `dev`** — release-please's `node` release-type also bumps `package.json` on each dev release (e.g. `2.1.0-dev.0`). When you eventually promote `dev → main`, expect a `package.json` merge conflict on the release-PR line; resolve it by **keeping `main`'s version**. The next release-please run on `main` then bumps to the matching stable version.
+> **Prerelease prerequisite (one-time)** — release-please's `node` release-type only honors `prerelease: true` when the manifest already contains a `-dev.N` suffix. `manifest.dev.json` is seeded to `3.0.0-dev.0` so dev keeps emitting `-dev.N` going forward. Do not edit either manifest by hand for routine releases — let release-please bump them, and let the back-merge workflow (section 4.2) reseed dev after each stable release.
 
 Local commits are validated by **commitlint** via [.husky/commit-msg](../../../.husky/commit-msg); pushes to **main** and **dev** run **Commitlint** inside [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml).
 
-**Branch protection:** Require the CI and PR-check jobs listed in [branch-protection.md](branch-protection.md); apply policies via GitHub Rulesets using [`.github/rulesets/`](../../../.github/rulesets/) or the GitHub UI. On **`main`**, use **Squash and merge** only with the default squash message taken from the PR title so every commit stays conventional (PR checks validate the title; Post-merge **Commitlint** validates pushes).
+**Branch protection:** Require the CI and PR-check jobs listed in [branch-protection.md](branch-protection.md); apply policies via GitHub Rulesets using [`.github/rulesets/`](../../../.github/rulesets/) or the GitHub UI. On **`main`**, use **Squash and merge** for normal PRs (the squash subject must stay conventional); use **Merge commit** for the **promotion PR `dev → main`** so each underlying `feat:` / `fix:` survives and release-please can compute the right bump (otherwise add a `Release-As: <version>` footer in the squash commit body).
 
 | What | Where |
 | --- | --- |
 | **Runs on** | Push to **main** (stable) and **dev** (prerelease) — job inside [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) |
 | **Token** | Built-in **`github.token`** (no extra GitHub Environment secret required) |
 
-### 4.1 Release and deploy flow (feature → production)
+### 4.1 Release and deploy cycle (feature → production → back to dev)
 
 ```mermaid
 flowchart TB
   subgraph develop [Develop]
-    Feature[Feature branch]
+    Feature[Feature branch off dev]
     PR[Pull request]
     CI[CI: quality, test, security]
     Feature --> PR --> CI
   end
 
-  subgraph merge [Merge]
-    DevMerge[Merge to dev]
-    MainMerge[Merge to main]
+  subgraph onDev [On push to dev]
+    DevReleasePlease[release-please: dev release PR vX.Y.Z-dev.N]
+    DevTag[Tag vX.Y.Z-dev.N + deploy development]
+    DevReleasePlease --> DevTag
   end
 
-  subgraph on_main [On push to main]
-    ReleasePlease[Release-please: release PR]
-    MergeReleasePR[Merge release PR]
-    TagRelease[Tag and GitHub Release]
-    DeployProd[Deploy to production]
-    ReleasePlease --> MergeReleasePR --> TagRelease
-    MainMerge --> ReleasePlease
-    MainMerge --> DeployProd
+  subgraph promote [Promote dev to main]
+    PromotePR[Promotion PR dev to main as Merge commit]
+    MainReleasePlease[release-please: stable release PR vX.Y.Z]
+    MainTag[Tag vX.Y.Z + deploy production]
+    PromotePR --> MainReleasePlease --> MainTag
   end
 
-  CI --> DevMerge
-  CI --> MainMerge
-  DevMerge --> DeployDev[Deploy to dev]
+  subgraph backmerge [Post-release back-merge]
+    BackmergeWorkflow["post-release-backmerge.yml: PR main to dev"]
+    DevSeed["Reseed manifest.dev.json to next-minor-dev.0"]
+    BackmergeWorkflow --> DevSeed
+  end
+
+  CI --> DevMerge[Merge to dev]
+  DevMerge --> DevReleasePlease
+  DevTag --> PromotePR
+  MainTag --> BackmergeWorkflow
+  DevSeed --> Feature
 ```
 
 - **Feature → PR → CI:** Every PR runs quality, tests, and security. PR title must follow conventional commits (validated by PR checks).
-- **Merge to dev/main:** Each branch maps to an environment; push triggers the corresponding deploy workflow (GitHub environment secrets + Railway).
-- **On main and dev:** **Commitlint** validates commit messages on each push. **Release-please** opens or updates a **release PR** (CHANGELOG + version bump) per channel — `main` produces stable releases, `dev` produces pre-releases (`-dev.N`). Merging that PR creates the GitHub Release and tag for that channel; the SBOM workflow attaches a CycloneDX SBOM. The same push to the branch also triggers **deploy to** the matching environment.
+- **Merge to dev:** push to `dev` triggers release-please which opens or updates the **dev release PR** (`vX.Y.Z-dev.N`). Auto-merge in [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) ships it → tag → SBOM → deploy `development`.
+- **Promote dev → main:** open a PR `dev → main` titled `chore(release): promote <version> to main`. Use **Merge commit** so each `feat:` / `fix:` survives; if squash is required, add `Release-As: <version>` to the squash body. release-please then opens the stable release PR (`vX.Y.Z`) → auto-merge → tag → deploy `production`.
+- **Back-merge main → dev (automatic):** the new [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) fires on every non-prerelease GitHub Release, merges main into dev, reseeds `manifest.dev.json` to the next prerelease window (default rule: bump minor → `X.(Y+1).0-dev.0`), and opens an auto-merging PR `main → dev`. Section 4.2 covers it in detail.
 
 **Production path (steps):**
 
-1. Merge to `main` (e.g. from a release PR).
-2. Release-please creates or updates the release PR on push to `main`.
-3. Merge the release PR when ready → stable GitHub Release + tag (`v2.x.y`) → `release-sbom.yml` attaches the SBOM.
+1. Merge promotion PR to `main` (Merge commit recommended).
+2. release-please creates or updates the stable release PR.
+3. Merge the release PR → stable GitHub Release + tag (`vX.Y.Z`) → the release publish pipeline attaches the SBOM.
 4. CI `docker-build` job on `main` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (tags `:sha` and `:latest`).
-5. Deploy workflow runs on push to `main` (validate env → resolve GHCR images → migrate → `railway redeploy --image` → `/health` → worker readiness → `pnpm test:api-smoke` on the Railway API URL).
-6. Optional load check: `pnpm load:health` against the deployed base URL.
+5. Deploy workflow runs on push to `main` (validate env → log expected GHCR image refs → migrate → `pnpm tool:railway-deploy-image` pins each Railway service to the freshly scanned GHCR image and triggers `serviceInstanceDeployV2` → `/readyz` → worker readiness → `pnpm test:api-smoke` on the Railway API URL).
+6. [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) opens an auto-merging PR `main → dev` with the reseed.
+7. Optional load check: `pnpm load:health` against the deployed base URL.
 
-**Development path (steps):** identical to production but on the `dev` branch, with a few differences:
+**Development path (steps):** identical to production but on the `dev` branch:
 
 1. Merge to `dev` (e.g. from a feature PR).
-2. Release-please creates or updates the **dev release PR** on push to `dev` (`.github/release-please/config.dev.json` + `.github/release-please/manifest.dev.json`).
-3. Merge the dev release PR when ready → **prerelease** GitHub Release + tag (`v2.x.y-dev.N`) → `release-sbom.yml` attaches the SBOM.
-4. CI `docker-build` job on `dev` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (SHA-tagged only — `:latest` is reserved for `main`).
-5. Deploy workflow runs on push to `dev` (validate env → resolve GHCR images by SHA → migrate → `railway redeploy --image`) against the **development** GitHub Environment.
+2. release-please creates or updates the **dev release PR** (`.github/release-please/config.dev.json` + `.github/release-please/manifest.dev.json`).
+3. Merge the dev release PR → **prerelease** GitHub Release + tag (`vX.Y.Z-dev.N`) → the release publish pipeline attaches the SBOM. Back-merge does **not** fire (prerelease tags are filtered out).
+4. CI `docker-build` job on `dev` Trivy-scans and pushes `core-be-api` / `core-be-worker` (SHA-tagged only — `:latest` is reserved for `main`).
+5. Deploy workflow runs on push to `dev` (validate env → log expected GHCR image refs by SHA → migrate → `pnpm tool:railway-deploy-image` per service against the **development** GitHub Environment).
 
-**Hotfix:** Branch from `main` (`hotfix/*`), conventional commit, PR into `main`. Merge triggers production deploy and release-please on the same push. Branch strategy: [git-workflow.md](../../process/git-workflow.md).
+**Hotfix:** Branch from `main` (`hotfix/*`), conventional commit, PR into `main`. Merge triggers production deploy + release-please + automatic back-merge to dev. Branch strategy: [git-workflow.md](../../process/git-workflow.md).
+
+### 4.2 Post-release back-merge (main → dev)
+
+Why it exists: after main publishes `vX.Y.Z`, dev's `manifest.dev.json` is still at something like `X.Y.Z-dev.4`. The next dev commits would compute against that base and try to emit `X.Y.Z-dev.5`, but `vX.Y.Z` has already shipped. The back-merge explicitly reseeds dev so prereleases continue on a fresh window.
+
+The workflow [.github/workflows/post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) does:
+
+1. Checks out `dev`, fetches `main` at the just-released tag.
+2. Creates `release/backmerge-v<version>` off `dev` and merges `origin/main` into it (brings any direct-on-main hotfix commits).
+3. Computes the next dev seed:
+   - Default: bump minor → `X.(Y+1).0-dev.0`.
+   - Override: `workflow_dispatch` input `next_seed` (e.g. `4.0.0-dev.0` if the next cycle is breaking, or `3.1.1-dev.0` if patch-only).
+4. Edits **only** `manifest.dev.json` to the seed.
+5. Opens or updates the PR `main → dev` and enables auto-merge (`gh pr merge --auto --squash`).
+
+The PR title is `chore(release): back-merge v<version> into dev`. If the merge has conflicts, the workflow fails fast — open the PR manually, resolve conflicts, push, then re-trigger via `workflow_dispatch` with the same `version`.
 
 ### Verify release-please after changing bootstrap config
 
@@ -209,8 +250,8 @@ On GitHub, after merging a change that touches release-please files:
 
 1. Open **Actions** → **Post-merge CI** → confirm **Release Please** succeeded on **both** `main` and `dev`.
 2. Confirm a **release-please** PR exists or is updated when there are new conventional commits since the channel's manifest version (or that the workflow completes with no release until the next qualifying commit). Each channel produces its own PR.
-3. Ensure git tag **`v1.0.0`** exists at the historical 1.0.0 commit if you rely on tag-based archaeology; create it once if absent.
-4. After you **merge** an automated release PR, confirm the matching **GitHub Release** + tag exist and that `CHANGELOG.md` / `package.json` were updated by the bot — `main` → stable `v2.x.y`, `dev` → prerelease `v2.x.y-dev.N`.
+3. After you **merge** an automated release PR, confirm the matching **GitHub Release** + tag exist and that `CHANGELOG.md` / `package.json` were updated by the bot — `main` → stable `vX.Y.Z`, `dev` → prerelease `vX.Y.Z-dev.N`.
+4. After a **stable** main release: confirm [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) opened the back-merge PR within minutes and that it auto-merges into dev with `manifest.dev.json` reseeded.
 
 ---
 
@@ -221,7 +262,8 @@ sequenceDiagram
   participant Dev as Developer
   participant GH as GitHub Actions
   participant GHCR as GHCR
-  participant Railway as Railway
+  participant RailwayAPI as Railway GraphQL API
+  participant Railway as Railway runtime
 
   Dev->>GH: Push to main
   GH->>GH: CI docker-build (build, Trivy, push)
@@ -229,20 +271,29 @@ sequenceDiagram
   Dev->>GH: CI success triggers deploy
   GH->>GH: validate:github-env, db:migrate
   GH->>GH: Resolve GHCR image refs (commit SHA or secrets)
-  GH->>Railway: railway variable set + redeploy --image (API + worker)
+  GH->>GH: railway variable set (per-service runtime env vars)
+  GH->>RailwayAPI: pnpm tool:railway-deploy-image (API)
+  Note over GH,RailwayAPI: serviceInstanceUpdate → serviceInstanceDeployV2 → poll
+  RailwayAPI->>Railway: Apply pinned GHCR image and deploy
   Railway->>GHCR: Pull scanned image
-  Railway-->>GH: Deploy success
+  RailwayAPI-->>GH: Deployment SUCCESS
+  GH->>RailwayAPI: pnpm tool:railway-deploy-image (worker)
+  RailwayAPI-->>GH: Deployment SUCCESS
 ```
 
 Steps in each deploy workflow:
 
 1. Checkout code, install dependencies (migrations only — no app `pnpm build`).
 2. Run `pnpm validate:github-env` against the GitHub environment.
-3. **Resolve scanned CI images from GHCR** — default `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `core-be-worker:<commit-sha>`; optional secrets **`GHCR_API_IMAGE`** / **`GHCR_WORKER_IMAGE`** override (digest or tag).
+3. **Log expected scanned CI image refs from GHCR** — default `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `core-be-worker:<commit-sha>`; optional secrets **`GHCR_API_IMAGE`** / **`GHCR_WORKER_IMAGE`** override the logged ref. These are the exact refs the next step pins onto Railway.
 4. Run `pnpm db:migrate`, install Railway CLI, sync app env vars with `railway variable set`.
-5. Deploy API and worker with `railway redeploy --service … --image …` (no `railway up` / source build on Railway).
+5. Deploy API + worker with **`pnpm tool:railway-deploy-image --service <id> --image <ghcr-ref> --label <api|worker>`** (see [tooling/setup/railway/deploy-image.ts](../../../tooling/setup/railway/deploy-image.ts)). For each service the tool calls the Railway GraphQL API to (a) resolve the project-token scope with **`projectToken { projectId environmentId }`** using the `Project-Access-Token` header; (b) **`serviceInstanceUpdate`** with `{ source: { image } }` so the service is pinned to the freshly built, Trivy-scanned image; (c) **`serviceInstanceDeployV2(serviceId, environmentId)`** to create a brand-new deployment from the updated configuration; (d) poll `deployment(id)` until terminal status when token scope permits deployment reads. Railway project tokens can trigger the deployment but may not be allowed to read deployment status, so the workflow's API `/readyz` probe, the Railway-reported worker deployment SUCCESS (gated by the in-pod `Dockerfile.worker` HEALTHCHECK on `9090/readyz`), and the post-deploy API smoke remain the hard deploy gates. Worker readiness is **not** probed from the GitHub runner because Postgres/Redis sit on Railway's private network (`*.railway.internal`) which is unreachable from public CI hosts.
 
-**GHCR images (CI):** On push to **`main`**, the reusable [docker-build-verify.yml](../../../.github/workflows/reusable/docker-build-verify.yml) job builds API + worker images, runs Trivy (CRITICAL/HIGH, `exit-code: 1`), then pushes to GHCR. PRs build and scan only (no push).
+> **Why not `railway redeploy` / `railway up`?** The Railway CLI's `redeploy` re-runs the previous deployment object with its existing image tag (community discussion confirms `serviceInstanceRedeploy` ignores configuration changes made between deployments), and the CLI has no `--image` flag. `railway up` uploads the runner's source for Railway to build, bypassing the scanned GHCR image entirely. The GraphQL-based tool is the only reliable way to deploy the image CI just built — and the same path handles both the initial bootstrap (no prior deployment) and steady-state redeploys, so no fallback branch is needed.
+>
+> **Railway token auth:** Deploy CI uses the Railway **project token** from the GitHub Environment's `RAILWAY_TOKEN`. Project tokens are scoped to one Railway environment and must be sent to GraphQL as `Project-Access-Token`, not `Authorization: Bearer`. Account/workspace tokens may be supplied as `RAILWAY_API_TOKEN` / `RAILWAY_GRAPHQL_TOKEN` for local diagnostics; those use Bearer auth and can usually poll deployment status directly.
+
+**GHCR images (CI):** On push to **`main`**, the reusable [reusable-docker-build-trivy.yml](../../../.github/workflows/reusable-docker-build-trivy.yml) job builds API + worker images, runs Trivy (CRITICAL/HIGH, `exit-code: 1`), then pushes to GHCR. PRs build and scan only (no push).
 
 **Railway pull access:** Each Railway service must be allowed to pull from `ghcr.io` (package visibility + deploy token or linked registry). Images are public within the org or use Railway’s registry credentials for private GHCR packages.
 
@@ -269,7 +320,24 @@ Optional on Railway/GitHub only if overriding app default: **`TOMBSTONE_RETENTIO
 
 | Item | Notes |
 | --- | --- |
-| **Integration secrets** | `pnpm setup:infra` can push `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via [build-env-vars.ts](../../../tooling/setup/build-env-vars.ts), but `reusable-railway-deploy.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
+| **Integration secrets** | `pnpm setup:infra` can push `RESEND_*`, `STRIPE_*`, `OAUTH_*`, `S3_*`, etc. to GitHub via the env sync pipeline (`tooling/setup/envs/sync-github.ts`), but `reusable-railway-deploy.yml` does **not** call `railway variable set` for those keys. Set them on Railway once or add them to the CD variable loop. |
+
+### Partial re-runs and manual recovery
+
+Use **workflow_dispatch** when you need to run part of the pipeline without a full merge push.
+
+| Workflow | When to use | Key inputs |
+| --- | --- | --- |
+| [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) | Re-run publish/deploy/docs after a partial failure | `skip_tests`, `skip_security`, `skip_docker`, `skip_deploy`, `skip_docs` |
+| [reusable-railway-deploy.yml](../../../.github/workflows/reusable-railway-deploy.yml) | Redeploy a known GHCR image without rebuilding | `target`, `target_branch`, `image_override` (`:sha`, `:previous`, `:dev`, `:latest`), `debug` |
+| [bootstrap-railway-service.yml](../../../.github/workflows/bootstrap-railway-service.yml) | One-time or recovery Railway service setup | `environment`, `service` (`api` / `worker` / `both`), `dry_run` (default `true`) |
+| Reusable test/docker workflows | Ad-hoc validation on a branch tip | `merge_commit_sha`, `target_branch` on `reusable-vitest-postgres-redis.yml`, `reusable-docker-build-trivy.yml`, `reusable-chaos-toxiproxy.yml`, `reusable-openapi-postman-publish.yml` |
+
+**Bootstrap flow:** Run **Bootstrap Railway service** with `dry_run=true` first and review `pnpm setup:infra:status` / `pnpm setup:infra:dry-run` output. Flip `dry_run=false` to apply `pnpm setup:infra --yes` and trigger the first deploy via `pnpm tool:railway-deploy-image` (same path as steady-state CD). Re-running against an already-configured environment is idempotent.
+
+**Rollback:** Dispatch **Reusable — Railway deploy** with `image_override=ghcr.io/<owner>/<repo>/core-be-api:previous` (and the worker ref derived automatically when the override contains `core-be-api`).
+
+**Cleanup:** [cleanup-cache.yml](../../../.github/workflows/cleanup-cache.yml) prunes Actions caches (outcome-aware LRU; daily safety net on `dev`/`main`). [cleanup-ghcr.yml](../../../.github/workflows/cleanup-ghcr.yml) prunes stale GHCR manifests weekly while preserving `:latest`, `:previous`, `:dev`, and recent SHA tags.
 
 ---
 
@@ -335,7 +403,7 @@ flowchart TB
   subgraph deploy_env [Deploy]
     C1["GitHub environment secrets"]
     C2["Deploy workflow"]
-    C3["railway variable set + redeploy --image"]
+    C3["railway variable set + pnpm tool:railway-deploy-image"]
     C1 --> C2 --> C3
   end
 ```
@@ -455,5 +523,6 @@ gh secret set DATABASE_URL --env development --body "postgresql://..."
 | Create project/service | `railway init` then `railway add`                 | Create environments development, production in repo Settings                    |
 | Get service ID         | `railway status --json`                           | —                                                                               |
 | Set secrets            | Use dashboard for project token                   | `gh secret set NAME --env development --body "value"` or run `pnpm setup:infra` |
+| Deploy a new image     | `pnpm tool:railway-deploy-image --service <id> --image <ghcr-ref> --label <api\|worker>` (GraphQL: `serviceInstanceUpdate` + `serviceInstanceDeployV2`) | CD calls this automatically; manual redeploys can run it locally with `RAILWAY_TOKEN` exported |
 
 No Doppler. All deploy secrets live in GitHub Environments.

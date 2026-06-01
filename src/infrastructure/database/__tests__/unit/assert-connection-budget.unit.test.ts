@@ -64,7 +64,7 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(/connection budget exceeded/i);
@@ -82,7 +82,7 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
     await expect(assertPostgresConnectionBudget()).resolves.toBeUndefined();
@@ -98,7 +98,7 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(
@@ -122,7 +122,7 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
     await expect(assertPostgresConnectionBudget({ assertWorkerConcurrency: true })).rejects.toThrow(
@@ -147,7 +147,7 @@ describe('assertPostgresConnectionBudget', () => {
 
     const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
     await assertPostgresConnectionBudget({ assertWorkerConcurrency: true });
@@ -169,7 +169,7 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
     await expect(assertPostgresConnectionBudget()).resolves.toBeUndefined();
@@ -187,7 +187,7 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(/connection budget exceeded/i);
@@ -204,7 +204,7 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(/must both be set/i);
@@ -220,7 +220,7 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(/connection budget exceeded/i);
@@ -238,7 +238,7 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(
@@ -258,7 +258,7 @@ describe('assertPostgresConnectionBudget', () => {
     });
 
     const { assertPostgresConnectionBudget } = await import(
-      '@/infrastructure/database/assert-connection-budget.js'
+      '@/infrastructure/database/safety/assert-connection-budget.js'
     );
     await expect(assertPostgresConnectionBudget()).rejects.toThrow(
       /DEPLOYMENT_TOTAL_REPLICA_COUNT/i,

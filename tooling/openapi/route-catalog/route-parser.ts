@@ -31,8 +31,10 @@ export function inferSubDomainLabel(subDomain: string | undefined): string | und
 }
 
 export function inferDomainSlug(domainFolder: string, fullPath: string): string {
-  if (fullPath.startsWith('/health')) return 'health';
-  if (fullPath.startsWith('/api/v1/mcp')) return 'mcp';
+  if (fullPath.startsWith('/livez') || fullPath.startsWith('/readyz')) return 'health';
+  if (fullPath.startsWith('/api/v1/mcp') || fullPath.startsWith('/mcp')) return 'mcp';
+  if (fullPath.startsWith('/metrics')) return 'metrics';
+  if (fullPath.startsWith('/internal/ops')) return 'ops';
   const apiSegment = fullPath.split('/')[3];
   if (apiSegment === 'users') return 'user';
   if (apiSegment === 'uploads') return 'upload';
@@ -43,6 +45,7 @@ export function toRegistryAccess(access: RouteAccess): RegistryAccess {
   if (access === 'PUBLIC') return 'public';
   if (access === 'AUTH') return 'authenticated';
   if (access.startsWith('ROLE:')) return 'global-role';
+  if (access.startsWith('TOKEN:')) return 'bearer-token';
   return 'org-permission';
 }
 
@@ -63,18 +66,17 @@ function parseRouteFile(
   const subDomain = inferSubDomain(relativePath);
   const subDomainLabel = inferSubDomainLabel(subDomain);
 
-  let methodMatch: RegExpExecArray | null;
-  ROUTE_METHOD_PATTERN.lastIndex = 0;
-  while ((methodMatch = ROUTE_METHOD_PATTERN.exec(content)) !== null) {
+  for (const methodMatch of content.matchAll(ROUTE_METHOD_PATTERN)) {
     const method = methodMatch[1]?.toUpperCase();
     if (!method) continue;
 
-    const afterMethod = content.slice(methodMatch.index, methodMatch.index + 400);
+    const matchIndex = methodMatch.index ?? 0;
+    const afterMethod = content.slice(matchIndex, matchIndex + 400);
     const pathMatch = ROUTE_PATH_PATTERN.exec(afterMethod);
     const routePath = pathMatch?.[1];
     if (!routePath) continue;
 
-    const snippet = extractRouteSnippet(content, methodMatch.index);
+    const snippet = extractRouteSnippet(content, matchIndex);
     const access = classifyAccess(snippet, permissionMap);
     const normalizedPath =
       routePath === '/' ? '' : routePath.startsWith('/') ? routePath : `/${routePath}`;

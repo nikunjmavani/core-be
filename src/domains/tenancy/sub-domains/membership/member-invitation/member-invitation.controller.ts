@@ -1,9 +1,19 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
+import {
+  getRequestIdentifier,
+  requireAuth,
+  requirePrincipal,
+} from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MemberInvitationService } from './member-invitation.service.js';
 
+/**
+ * Builds the HTTP handler map for organization-scoped invitation routes
+ * (list/create/cancel/resend under `/organizations/:id/invitations`) and the
+ * cross-org user-facing routes (`/invitations/pending`,
+ * `/invitations/:invitationId/accept`, `/invitations/:invitationId/decline`).
+ */
 export function createMemberInvitationController(service: MemberInvitationService) {
   return {
     listMemberInvitations: async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -43,7 +53,7 @@ export function createMemberInvitationController(service: MemberInvitationServic
       return successResponse(data, getRequestIdentifier(request));
     },
     revokeMemberInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
-      requireAuth(request);
+      requirePrincipal(request);
       const organizationId = validatePublicIdParam(
         (request.params as { id: string }).id ?? '',
         'id',

@@ -10,7 +10,21 @@ import {
   createOpaqueCursorFromRow,
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
-import type { OrganizationApiKeyRow } from './organization-api-key.types.js';
+import type {
+  OrganizationApiKeyAuthenticationCandidate,
+  OrganizationApiKeyRow,
+} from './organization-api-key.types.js';
+
+/** Raw row shape returned by the `tenancy.resolve_api_key_for_authentication` resolver. */
+interface ApiKeyAuthenticationResolverRow {
+  public_id: string;
+  organization_id: number | string;
+  organization_public_id: string;
+  key_hash: string;
+  scopes: unknown;
+  status: string;
+  expires_at: Date | string | null;
+}
 
 interface OrganizationApiKeyListPagination {
   after?: string;
@@ -22,6 +36,12 @@ function parseScopesColumn(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === 'string');
 }
 
+/**
+ * Drizzle data-access for `tenancy.api_keys`. Stores hashed keys (never raw
+ * secrets), normalises the `scopes` jsonb column to `string[]`, supports
+ * cursor-paginated org-scoped listings, soft-delete, prefix lookup for
+ * authentication, and `last_used_at` touches.
+ */
 export class OrganizationApiKeyRepository extends BaseRepository {
   async findByOrganizationId(
     organization_id: number,
@@ -147,20 +167,30 @@ export class OrganizationApiKeyRepository extends BaseRepository {
     return (rows[0] ?? null) as OrganizationApiKeyRow | null;
   }
 
-  async findActiveByKeyPrefix(key_prefix: string): Promise<OrganizationApiKeyRow[]> {
-    const rows = await getRequestDatabase()
-      .select()
-      .from(api_keys)
-      .where(
-        and(
-          eq(api_keys.key_prefix, key_prefix),
-          eq(api_keys.status, 'ACTIVE'),
-          isNull(api_keys.deleted_at),
-        ),
-      );
-    return rows.map((row) => ({
-      ...(row as OrganizationApiKeyRow),
-      scopes: parseScopesColumn((row as { scopes?: unknown }).scopes),
+  /**
+   * Resolves active API-key candidates by prefix for the pre-session authentication phase.
+   * Delegates to the `tenancy.resolve_api_key_for_authentication` SECURITY DEFINER resolver because
+   * `tenancy.api_keys` (and `tenancy.organizations`) are FORCE RLS and the auth phase has no
+   * `app.current_organization_id` context — a plain SELECT would resolve the policy to NULL and
+   * return zero rows, rejecting every valid key in production.
+   */
+  async findActiveByKeyPrefix(
+    key_prefix: string,
+  ): Promise<OrganizationApiKeyAuthenticationCandidate[]> {
+    const rows = await getRequestDatabase().execute(
+      sql`SELECT * FROM tenancy.resolve_api_key_for_authentication(${key_prefix})`,
+    );
+    const resolverRows = (
+      Array.isArray(rows) ? rows : ((rows as { rows?: unknown[] }).rows ?? [])
+    ) as ApiKeyAuthenticationResolverRow[];
+    return resolverRows.map((row) => ({
+      public_id: row.public_id,
+      organization_id: Number(row.organization_id),
+      organization_public_id: row.organization_public_id,
+      key_hash: row.key_hash,
+      scopes: parseScopesColumn(row.scopes),
+      status: row.status,
+      expires_at: row.expires_at === null ? null : new Date(row.expires_at),
     }));
   }
 

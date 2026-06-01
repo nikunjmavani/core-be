@@ -1,10 +1,139 @@
 # Documentation system (core-be)
 
-How agents and contributors keep **skills**, **CLAUDE.md**, and **hand-written docs** aligned. Skills orchestrate; docs own the narrative.
+How agents and contributors keep **skills**, **CLAUDE.md**, **hand-written docs in `docs/`**, and **in-source documentation** aligned. Skills orchestrate; docs own the narrative; TSDoc and `OVERVIEW.md` anchor documentation to the code it describes.
 
 ---
 
-## Agent workflow
+## Two parallel systems
+
+```mermaid
+flowchart TB
+  subgraph contributor [Contributor / agent makes a change]
+    code[Edit src/]
+    docs[Edit docs/]
+  end
+  subgraph layered [In-source docs - lives in src/]
+    sysNarr[src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md]
+    overview[src/<folder>/OVERVIEW.md]
+    tsdoc[TSDoc on every public export]
+    schema[Fastify route schema]
+  end
+  subgraph handDocs [Hand-written docs - lives in docs/]
+    index[docs/README.md]
+    refs[docs/reference/, docs/process/, docs/deployment/]
+  end
+  code --> layered
+  docs --> handDocs
+  layered --> tsdocGate[pnpm tsdoc:check]
+  schema --> openapi[docs:check / OpenAPI]
+  handDocs --> linkCheck[pnpm docs:lint, docs:links:check]
+```
+
+| System | What it covers | Lives in | Owner skills | Hard gate |
+| --- | --- | --- | --- | --- |
+| **In-source docs** | Code-anchored: every public export's TSDoc, every Fastify route schema, every folder's hand-written `OVERVIEW.md`, system narrative files | TSDoc inside `*.ts`; `**/OVERVIEW.md`; `src/{OVERVIEW,PATTERNS,FLOWS,POLICIES}.md` | tsdoc-export-guard, route-schema-doc-guard, overview-doc-maintainer, system-narrative-maintainer | `pnpm tsdoc:check`, `pnpm docs:check` (OpenAPI drift) |
+| **Hand-written docs** | Narrative guides — setup, runbooks, deployment, integrations, architecture overviews | `docs/**/*.md` | docs-maintainer | `pnpm docs:lint`, `pnpm docs:links:check` |
+
+The two systems are independent and never overwrite each other.
+
+---
+
+## In-source docs — four layers, no auto-generated aggregator
+
+There is intentionally **no auto-generated `DOCS.md`** layer. The previous `tooling/feature-docs/` system was retired in favour of a smaller surface where each artifact has a single source of truth:
+
+| Layer | File(s) | Source of truth | Skill |
+| --- | --- | --- | --- |
+| **System narratives** (cross-cutting) | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | Hand-written | system-narrative-maintainer |
+| **Per-folder overviews** (hand-written narrative) | `src/<folder>/OVERVIEW.md` (~47 files at meaningful boundaries — domains, sub-domains, infra subsystems, test suites) | Hand-written | overview-doc-maintainer |
+| **Symbol-level TSDoc** (per-export documentation) | every `export <kind> <name>` declaration in `*.ts`; IDE hover, TypeDoc, and `tsdoc:check` all read this | Hand-written, in-source | tsdoc-export-guard |
+| **Fastify route schema** (route documentation) | `schema: { summary, description, tags }` on every route registration → drives `docs/openapi/openapi.json` → Postman + API hub | Inline Zod schema | route-schema-doc-guard |
+
+### File-header rule (per-folder OVERVIEW.md)
+
+Line 1 must be the bare backticked relative path:
+
+```markdown
+`src/domains/billing/sub-domains/subscription/`
+
+# Subscription
+
+## Purpose
+...
+```
+
+Required sections vary by template (domain, sub-domain, infra/shared/scripts, test suite); see the **overview-doc-maintainer** skill for the full template details.
+
+### TSDoc rule (every public export)
+
+```ts
+/**
+ * <one-line summary describing what this export does>
+ *
+ * @remarks
+ * Algorithm:
+ * 1. <step>
+ *
+ * Failure modes:
+ * - <error class> → <observable behaviour>.
+ *
+ * Side effects:
+ * - <DB writes, event emissions, cache invalidations>.
+ */
+export class FooService { ... }
+```
+
+A summary is required on every public export. `@remarks` is required on **service-like** files (`*.service.ts`, `*.worker.ts`, `*.processor.ts`) and **policy-like** files (`*.policy.ts`). It is optional elsewhere.
+
+### Fastify route schema rule
+
+```ts
+app.get(
+  '/api/v1/audit/logs',
+  {
+    schema: {
+      summary: 'List audit logs',
+      description: 'Returns paginated audit log entries for the current organization.',
+      tags: ['Audit'],
+      querystring: AuditListQueryDto,
+      response: { 200: AuditListResponseDto },
+    },
+    preHandler: [requireOrganizationPermission('audit:read')],
+  },
+  controller.list,
+);
+```
+
+The `schema` block is the **single source of truth** for OpenAPI generation. There is no parallel `routeMetadataMap` side-table and no per-directory route catalog file — Postman and the API documentation hub consume the OpenAPI export directly.
+
+---
+
+## TSDoc coverage gate
+
+`pnpm tsdoc:check` walks `src/**/*.ts`, identifies public exports, and reports two classes of missing documentation:
+
+| Token | What it flags | Fix by |
+| --- | --- | --- |
+| `MISSING_DESCRIPTION` | A public export has no TSDoc summary | tsdoc-export-guard |
+| `MISSING_REMARKS` | A service-like / policy-like export has no `@remarks` block | tsdoc-export-guard |
+
+The gate is **budget-driven**, not absolute. Counts are compared to [`tooling/tsdoc-coverage/budget.json`](../../../tooling/tsdoc-coverage/budget.json) and may **decrease** but never **increase**. PRs that lower counts run `pnpm tsdoc:check --refresh-budget` and commit the new lower budget. The eventual target is `MISSING_DESCRIPTION = 0` and `MISSING_REMARKS = 0`; the budget exists only because we are starting from a partially-documented codebase.
+
+The gate runs in pre-commit (step 4d), `ci:local`, and `ci:quality`.
+
+```bash
+pnpm tsdoc:check                    # enforce budget
+pnpm tsdoc:check --report           # also list every (file, symbol) pair
+pnpm tsdoc:check --refresh-budget   # lock in current (lower) counts
+```
+
+---
+
+## Hand-written docs (the long-standing system)
+
+Hand-written guides live in `docs/` topic subfolders; the index is `docs/README.md`. The owner is **docs-maintainer**.
+
+### Agent workflow for hand-written docs
 
 ```mermaid
 flowchart LR
@@ -20,10 +149,10 @@ flowchart LR
 2. **Read canonical docs** — use the **Reference docs (read first)** list for that type (below and in intake).
 3. **Consult** — [`.cursor/skills/skill-index/SKILL.md`](../../../.cursor/skills/skill-index/SKILL.md): triggers and command order.
 4. **Implement** — follow skills (checklists, `pnpm` commands); do not duplicate long prose from docs inside skills.
-5. **Content-sync** — if behavior or conventions changed, update the **canonical doc** for that topic (this page’s ownership table). Skip duplicating the same text in CLAUDE or skills unless a **non-negotiable** changed.
-6. **Structural** — if a doc file was renamed/moved, run **docs-maintainer** (index + cross-links). If only `src/` paths moved, run **structure-maintainer** + docs content-sync.
+5. **Content-sync** — if behavior or conventions changed, update the **canonical doc** for that topic (this page's ownership table). Skip duplicating the same text in CLAUDE or skills unless a **non-negotiable** changed.
+6. **Structural** — if a doc file was renamed/moved, run **docs-maintainer**. If only `src/` paths moved, run **structure-maintainer** + docs content-sync.
 
-**Generated artifacts** (`docs/routes.txt`, `docs/openapi/`, `docs/postman-collection.json`) are never hand-edited; regenerate via route-catalog / `pnpm docs:generate`.
+**Generated artifacts** (`docs/routes.txt`, `docs/openapi/`, `docs/postman-collection.json`) are never hand-edited; regenerate via `pnpm routes:catalog` / `pnpm docs:generate`.
 
 ---
 
@@ -31,25 +160,25 @@ flowchart LR
 
 | Topic | Canonical doc | Primary skill(s) | Update content when |
 | ----- | ------------- | ---------------- | ------------------- |
-| Sub-domains / layout | [sub-domains-layout.md](../architecture/sub-domains-layout.md) | domain-generator, structure-maintainer | New domain resource kind, import rules, test placement |
-| Layers / request flow | [project-structure-guide.md](../architecture/project-structure-guide.md) | structure-maintainer | Layer matrix, file suffixes, infra/shared layout |
-| Scripts (`src/scripts/`) | [scripts-layout.md](scripts-layout.md) | structure-maintainer | Category folders, new script placement, `validate:scripts-layout` |
-| Public API / routes | [domains-and-public-api-design.md](../architecture/domains-and-public-api-design.md) | route-catalog, openapi-route-sync, domain-generator | Route registration pattern, response shape, access control |
-| API docs hub (OpenAPI, Scalar, Postman) | [api-documentation.md](../api/api-documentation.md) | openapi-route-sync, route-catalog | Reference UI, validate/upload commands, hosted registry |
+| Sub-domains / layout | [sub-domains-layout.md](./sub-domains-layout.md) | domain-generator, structure-maintainer | New domain resource kind, import rules, test placement |
+| Layers / request flow | [project-structure-guide.md](./project-structure-guide.md) | structure-maintainer | Layer matrix, file suffixes, infra/shared layout |
+| Scripts (`src/scripts/`) | [scripts-layout.md](./scripts-layout.md) | structure-maintainer | Category folders, new script placement, `validate:scripts-layout` |
+| Public API / routes | [domains-and-public-api-design.md](./domains-and-public-api-design.md) | route-catalog, route-schema-doc-guard, domain-generator | Route registration pattern, response shape, access control |
+| API docs hub (OpenAPI, Scalar, Postman) | [api-documentation.md](../api/api-documentation.md) | route-schema-doc-guard, openapi-multilingual | Reference UI, validate/upload commands, hosted registry |
 | Events / BullMQ | [workers-and-events.md](../runtime/workers-and-events.md) | workers-events | Event names, queues, registration paths, DLQ |
 | HTTP / Vitest testing | [testing-conventions.md](../testing/testing-conventions.md) | test-generator | Pyramid, layout, naming suffixes, inject patterns |
 | Manual API smoke | [api-testing.md](../../getting-started/api-testing.md) | test-generator | Post-seed manual checklist |
 | i18n | [internationalization.md](../runtime/internationalization.md) | i18n-message-guard | Key format, locale files |
 | CSRF / sessions | [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md) | production-hardening-guard | Cookie model, Origin checks |
 | Data lifecycle | [data-lifecycle-deletion.md](../data/data-lifecycle-deletion.md) | sql-design-guard, db-migration-maintainer | Soft-delete, retention, immutable ledgers |
-| API versioning | [api-versioning.md](../api/api-versioning.md) | openapi-route-sync | Deprecation headers, version prefix |
+| API versioning | [api-versioning.md](../api/api-versioning.md) | route-schema-doc-guard | Deprecation headers, version prefix |
 | Chaos testing | [chaos-testing.md](../reliability/chaos-testing.md) | chaos-test-maintainer | Toxiproxy setup, scenarios |
 | Contract tests | [contract-tests.md](../testing/contract-tests.md) | contract-test-maintainer | Stripe/Resend/S3 fixtures |
 | Load testing | [load-testing.md](../testing/load-testing.md) | structure-maintainer | k6 scenarios, npm scripts |
 | Env / credentials | [integrations/credentials-and-env.md](../../integrations/credentials-and-env.md) | env-schema-add | User-facing env documentation |
 | Doc index / links | [docs/README.md](../../README.md) | docs-maintainer | New/renamed/moved hand-written doc |
 | New requirements | [requirement-intake.md](../../getting-started/requirement-intake.md) | skill-index | New requirement types or skill order |
-| This system | documentation-system.md | docs-maintainer, structure-maintainer | Ownership map or workflow changes |
+| **Documentation system (this page)** | [documentation-system.md](./documentation-system.md) | docs-maintainer, system-narrative-maintainer | Ownership map, in-source layers, gates |
 
 **CLAUDE.md** holds non-negotiables and command cheat sheets only; link to the rows above for detail.
 
@@ -59,21 +188,24 @@ flowchart LR
 
 Full skill triggers live in [skill-index](../../../.cursor/skills/skill-index/SKILL.md).
 
-| Code change | Update doc (if behavior/convention changed) |
-| ----------- | --------------------------------------------- |
-| `*.routes.ts`, access control | domains-and-public-api-design.md |
-| `events/`, `queues/`, `workers/` | workers-and-events.md |
-| `*.schema.ts`, migrations (retention/soft-delete) | data-lifecycle-deletion.md |
-| Test layout, `*.unit.test.ts` tiers | testing-conventions.md |
-| `env.config.ts` (user-facing) | integrations/credentials-and-env.md |
-| Auth/session middleware | csrf-and-session-cookies.md |
-| Domain/sub-domain folders | sub-domains-layout.md, project-structure-guide.md |
+| Code change | In-source skill | Hand-written doc to update (if convention/behaviour changed) |
+| ----------- | --------------- | --------------------------------------------------------------- |
+| New / changed `*.routes.ts` | route-schema-doc-guard | domains-and-public-api-design.md, api-versioning.md |
+| New `events/`, `queues/`, `workers/` | tsdoc-export-guard, overview-doc-maintainer | workers-and-events.md |
+| New / changed `*.schema.ts`, migrations (retention/soft-delete) | tsdoc-export-guard | data-lifecycle-deletion.md |
+| Test layout, `*.unit.test.ts` tiers | overview-doc-maintainer (`src/tests/<suite>/OVERVIEW.md`) | testing-conventions.md |
+| `env.config.ts` (user-facing) | tsdoc-export-guard | integrations/credentials-and-env.md |
+| Auth/session middleware | tsdoc-export-guard | csrf-and-session-cookies.md |
+| New domain or sub-domain folder | overview-doc-maintainer + system-narrative-maintainer (Domains table) | sub-domains-layout.md, project-structure-guide.md |
+| New cross-cutting pattern (idempotency, transactional outbox, etc.) | system-narrative-maintainer (`src/PATTERNS.md`) | (link from relevant reference doc) |
+| New end-to-end flow (request lifecycle, webhook ingest, etc.) | system-narrative-maintainer (`src/FLOWS.md`) | (link from relevant reference doc) |
+| New policy constant under `src/shared/constants/` | tsdoc-export-guard + system-narrative-maintainer (`src/POLICIES.md`) | (link from relevant reference doc) |
 
 ---
 
 ## Skill file template
 
-Every **domain/architecture** skill under `.cursor/skills/<name>/SKILL.md` should follow:
+Every **domain/architecture** skill under `.cursor/skills/<name>/SKILL.md` follows roughly:
 
 ```markdown
 ---
@@ -83,21 +215,23 @@ description: ...
 
 # Title
 
-## Read first
-- docs/reference/....md — what to take from it
-
-## Doc sections this skill may update
-- docs/reference/....md — § Section name (when …)
+## Purpose
+(1–2 paragraphs)
 
 ## When to use
 (triggers)
 
-## Checklist
+## Workflow / Checklist
 - [ ] Read canonical docs above
 - [ ] … implementation steps …
 - [ ] pnpm commands
 - [ ] Content-sync doc if convention changed
+
+## Related skills
+- Cross-links to skills that should run before/after.
 ```
+
+The four **in-source documentation skills** (system-narrative-maintainer, overview-doc-maintainer, route-schema-doc-guard, tsdoc-export-guard) follow this same shape.
 
 **Gate skills** (before-commit-guard, ci-investigator, pr-babysit, lint-warnings-handler) stay command-centric; they do not need a full ownership block.
 
@@ -107,27 +241,54 @@ description: ...
 
 | Mode | Trigger | Actions |
 | ---- | ------- | ------- |
-| **Structural** | Added/renamed/moved file under `docs/` | Update `docs/README.md`, deployment index, cross-links, Mermaid on flow docs |
+| **Structural** | Added / renamed / moved file under `docs/` | Update `docs/README.md`, deployment index, cross-links, Mermaid on flow docs |
 | **Content-sync** | `src/` change per ownership map; paths unchanged | Update section in canonical doc; avoid copying into skills/CLAUDE |
 
 If only behavior changed, prefer **content-sync** only. Update CLAUDE only when a non-negotiable invariant changed.
 
+**Scope boundary:** docs-maintainer covers only `docs/**/*.md`. In-source docs under `src/` (TSDoc + `OVERVIEW.md` + system narrative files) are owned by the in-source skills above.
+
 ---
 
-## Link validation
+## Link and lint validation
 
-Enforced by **`pnpm docs:links:check`** in CI (`pnpm ci:quality`), **`pnpm ci:local`**, and pre-commit when `docs/`, `.cursor/skills/**`, `.cursor/rules/**`, or key repo markdown is staged.
+Three independent gates:
+
+| Gate | Command | Scope |
+| --- | --- | --- |
+| Hand-written link drift | `pnpm docs:links:check` | `docs/**`, skills, rules, key repo markdown |
+| Markdown formatting | `pnpm docs:lint` | All `.md` (per `.markdownlint-cli2.jsonc`) |
+| TSDoc coverage | `pnpm tsdoc:check` | Every public export under `src/**/*.ts` |
+| OpenAPI drift | `pnpm docs:check` | Generated `docs/openapi/openapi.json` |
+
+All run in `ci:quality` and `ci:local`; pre-commit runs the same.
 
 ```bash
-pnpm docs:links:check
+pnpm docs:links:check     # hand-written link drift
+pnpm docs:lint            # markdown formatting
+pnpm tsdoc:check          # TSDoc coverage budget
+pnpm docs:check           # OpenAPI / Postman drift
 ```
 
-Scans `docs/`, skills, rules, and key repo markdown for stale path patterns and broken relative links. Does not validate external URLs. Run manually after large doc moves.
+---
+
+## Why the auto-generated DOCS.md aggregator was retired
+
+A previous iteration of this system included an auto-generated `DOCS.md` per directory (~124 files), built by `tooling/feature-docs/`. It was deliberately removed because:
+
+1. **TSDoc was already the source of truth.** `DOCS.md` was just a re-render — IDE hover, TypeDoc, and AI agents reading the source all read the TSDoc directly.
+2. **Routes had triple coverage.** `schema.description` → OpenAPI → Postman / API hub; the route tables in `DOCS.md` were a fourth re-render of the same content.
+3. **The generator was ~1500 lines of code** that had to stay healthy forever, plus a baseline file, plus a markdown-lint gate for its own output.
+4. **`OVERVIEW.md` already covered the only thing TSDoc could not** — design decisions, failure modes, tuning knobs, external dependencies — and survived intact.
+
+If a browsable HTML API site is ever required, [TypeDoc](https://typedoc.org/) can render one from TSDoc on demand without committing intermediate artifacts.
 
 ---
 
 ## Related
 
-- [AGENTS.md](../../../AGENTS.md) — PR gate, parallel agents
-- [CLAUDE.md](../../../CLAUDE.md) — architecture invariants
+- [AGENTS.md](../../../AGENTS.md) — PR gate, parallel agents, in-source docs callout
+- [CLAUDE.md](../../../CLAUDE.md) — architecture invariants, in-source docs subsection
 - [CONTRIBUTING.md](../../../CONTRIBUTING.md) — human contributor workflow
+- [`src/OVERVIEW.md`](../../../src/OVERVIEW.md) — top of the system narrative tree
+- [`tooling/tsdoc-coverage/README.md`](../../../tooling/tsdoc-coverage/README.md) — gate internals

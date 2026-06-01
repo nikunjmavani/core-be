@@ -82,7 +82,7 @@ below show where the value comes from; the runbook above shows the workflow.
 | .env variable        | Where to get it                            |
 | -------------------- | ------------------------------------------ |
 | `RESEND_API_KEY`     | Resend API key.                            |
-| `EMAIL_FROM_ADDRESS` | Sender email (must be verified in Resend). |
+| `EMAIL_FROM_ADDRESS` | Sender email (required when `RESEND_API_KEY` is set; must be verified in Resend — no hardcoded fallback). |
 | `EMAIL_FROM_NAME`    | Sender display name.                       |
 
 **Steps:**
@@ -93,7 +93,7 @@ below show where the value comes from; the runbook above shows the workflow.
 4. For sandbox: use `onboarding@resend.dev` as sender (see Resend docs).
 5. In `.env`:  
    `RESEND_API_KEY=re_xxxx`  
-   `EMAIL_FROM_ADDRESS=noreply@albetrios.com` (or your verified address; default is `noreply@albetrios.com`)  
+   `EMAIL_FROM_ADDRESS=noreply@yourdomain.com` (required whenever `RESEND_API_KEY` is set)  
    `EMAIL_FROM_NAME=YourApp`
 
 **CLI:** Resend has no official credential CLI; use the dashboard.

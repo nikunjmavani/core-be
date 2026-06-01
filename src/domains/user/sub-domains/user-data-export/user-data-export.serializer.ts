@@ -1,6 +1,11 @@
 import type { UserDataExportOutput } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
 import type { UserDataExportRow } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
 
+/**
+ * Project a `user_data_exports` row into the public {@link UserDataExportOutput} shape.
+ * The presigned `download_url` is supplied by the caller (the service mints it only when COMPLETED
+ * and not yet past `expires_at`); timestamps are emitted as ISO-8601 strings.
+ */
 export function serializeUserDataExport(
   row: UserDataExportRow,
   options?: { download_url?: string | null },

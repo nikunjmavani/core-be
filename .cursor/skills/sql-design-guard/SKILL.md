@@ -3,7 +3,7 @@ name: sql-design-guard
 description: Enforces the PostgreSQL senior-level design style guide whenever Drizzle schema files are created or modified — auto-suggesting indexes, partitioning strategies, constraint names, and formatting all SQL objects according to production-ready conventions.
 ---
 
-# SQL Design Guard (core-be)
+# SQL design guard (core-be)
 
 Enforces production-ready PostgreSQL design conventions on every Drizzle schema change. Run the checklist top-to-bottom whenever a `*.schema.ts` file is created or modified under `src/domains/`.
 
@@ -319,12 +319,12 @@ For domains requiring audit trails, follow the pattern in `src/domains/audit/aud
 2. **Always index FK columns** (see section D.1)
 3. **Choose ON DELETE deliberately**:
 
-| Relationship                          | ON DELETE action            | Example                         |
-| ------------------------------------- | --------------------------- | ------------------------------- |
-| Parent owns children (cascade delete) | `CASCADE`                   | `webhook_delivery_attempts` → `webhooks` |
-| Child references critical parent      | `RESTRICT`                  | `subscriptions` → `plans`                |
-| Optional reference                    | `SET NULL`                  | `logs.actor_user_id` → `users`  |
-| Soft-delete parent                    | `NO ACTION` (handle in app) | `memberships` → `organizations` |
+   | Relationship                          | ON DELETE action            | Example                         |
+   | ------------------------------------- | --------------------------- | ------------------------------- |
+   | Parent owns children (cascade delete) | `CASCADE`                   | `webhook_delivery_attempts` → `webhooks` |
+   | Child references critical parent      | `RESTRICT`                  | `subscriptions` → `plans`                |
+   | Optional reference                    | `SET NULL`                  | `logs.actor_user_id` → `users`  |
+   | Soft-delete parent                    | `NO ACTION` (handle in app) | `memberships` → `organizations` |
 
 4. **In Drizzle schemas**, express FK references using `.references()`:
 
@@ -391,7 +391,7 @@ When the skill runs, produce a **review block** at the end of your response with
 
 Format:
 
-````
+````markdown
 ## SQL Design Guard Review
 
 ### Naming

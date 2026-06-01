@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { SubscriptionRepository } from '@/domains/billing/sub-domains/subscription/subscription.repository.js';
 import { createWorkerSubscriptionRepository } from '@/domains/billing/sub-domains/subscription/subscription.repository.js';
-import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database-context.error.js';
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database.context.error.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';

@@ -10,7 +10,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { eq, isNotNull } from 'drizzle-orm';
 import { database, sql, closeDatabase } from '@/infrastructure/database/connection.js';
-import { mfa_methods } from '@/domains/auth/sub-domains/auth-mfa/mfa-method.schema.js';
+import { mfa_methods } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa-method.schema.js';
 import { webhooks } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import {
   decryptFieldSecret,

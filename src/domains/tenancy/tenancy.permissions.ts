@@ -1,3 +1,9 @@
+/**
+ * Canonical permission codes for tenancy-domain resources (organizations,
+ * memberships, invitations, roles, API keys, notification policies).
+ * Codes are persisted in `tenancy.permissions` and checked at request time
+ * by `requireOrganizationPermission` / the Redis-cached `AuthorizationService`.
+ */
 export const TENANCY_PERMISSIONS = {
   ORGANIZATION_READ: 'organization:read',
   ORGANIZATION_UPDATE: 'organization:update',

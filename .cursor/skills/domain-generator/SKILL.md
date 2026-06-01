@@ -5,7 +5,7 @@ description: Scaffolds and extends domains in core-be using the domain → sub-d
 
 # Domain generator (core-be)
 
-## How would you like to set up domains?
+## How would you like to set up domains
 
 Before scaffolding, confirm:
 
@@ -26,7 +26,7 @@ Before scaffolding, confirm:
 
 ## Canonical layout (domain → sub-domains → optional nested)
 
-```
+```text
 src/domains/<domain>/
   <domain>.routes.ts
   <domain>.container.ts
@@ -68,6 +68,14 @@ src/domains/<domain>/
 
 - Top-level: `@/domains/<domain>/sub-domains/<sub-domain>/...`
 - Nested: `@/domains/<domain>/sub-domains/<parent>/<nested>/...`
+- **Never** parent-relative (`../`) — same-folder `./` only for co-located layers (e.g. service → `./repository.js`).
+- Domain handlers under `handlers/` import sub-domains via `@/domains/<domain>/sub-domains/...`.
+
+Example (auth handler):
+
+```typescript
+import { createAuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+```
 
 Flat domains (`audit`, `upload`) keep all layers at domain root with no `sub-domains/`.
 
@@ -139,14 +147,20 @@ export function <domain>Routes(deps: <Domain>RoutesDeps): FastifyPluginAsync {
 5. **Add tests** (see **test-generator**):
    - Bundled routes: extend `<domain>/__tests__/<domain>.test.ts` OR add nested `__tests__/<resource>.test.ts`.
    - Validators/serializers: `__tests__/unit/` on the resource that owns the file.
-   - Event handlers: `events/__tests__/` — call leaf `register*EventHandlers()` only.
+   - Event handlers: `__tests__/unit/events/` — call leaf `register*EventHandlers()` only (never `events/__tests__/`).
 6. **Wire DI** via `<domain>.container.ts`.
 7. **Wire routes** in `<domain>.routes.ts` or sub-domain `*.routes.ts`; mount in `src/routes.ts`.
+8. **Author in-source docs** (required, gated by `pnpm tsdoc:check`):
+   - **TSDoc** on every public export — invoke **tsdoc-export-guard**.
+   - **`schema: { summary, description, tags }`** on every Fastify route — invoke **route-schema-doc-guard**.
+   - **`OVERVIEW.md`** at the new domain folder (Template A.1) and at the new sub-domain folder (Template A.2) — invoke **overview-doc-maintainer**.
+   - For a **new domain**, also update `src/OVERVIEW.md` Domains table — invoke **system-narrative-maintainer**.
+9. **Verify coverage** — run `pnpm tsdoc:check` and confirm the budget did not regress.
 
 ## Dependency boundaries
 
 - **controllers/** may import: own service(s) or container deps, `@/shared/utils/http/request.util.js`, `@/shared/utils/http/response.util.js`, shared errors.
-- **services/** may import: own repository, own validator, shared errors, `src/core/events/event-bus.ts`, `src/shared/utils/infrastructure/logger.util.js`. May import other domain **services** for cross-domain reads/writes.
+- **services/** may import: **same-domain** repository, own validator, shared errors, `src/core/events/event-bus.ts`, `src/shared/utils/infrastructure/logger.util.js`. For cross-domain reads/writes, import the other domain's **service** only — never its repository or schema.
 - **repositories/** may import: DB connection, schema, own domain types; may extend `base-repository.ts`.
 - **containers/** may import: own domain repositories, services. Accept cross-domain deps as parameters. Export services for route registration.
 - **validators/** call DTO `.safeParse()` methods and throw `ValidationError`.

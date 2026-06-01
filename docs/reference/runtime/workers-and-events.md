@@ -67,7 +67,7 @@ Event handlers read `event.requestId` and pass it to `enqueueEmail()`, `enqueueN
 
 ### Post-commit enqueue (transactional outbox)
 
-When a handler runs inside an HTTP request, BullMQ enqueue helpers are scheduled with **`eventBus.onCommit(...)`** and run only after **`eventBus.flushOnCommit()`** in [`request-context.middleware.ts`](../../../src/shared/middlewares/request-context.middleware.ts) (after the request DB transaction commits). Mail uses a durable outbox row plus deferred `dispatchOutboxEmail`; webhook delivery, notification dispatch, and user-data export defer `queue.add` the same way. Outside HTTP scope (workers, scripts), use **`runEnqueueAfterCommit()`** from [`event-bus.ts`](../../../src/core/events/event-bus.ts) — it enqueues immediately when no onCommit scope is active.
+When a handler runs inside an HTTP request, BullMQ enqueue helpers are scheduled with **`eventBus.onCommit(...)`** and run only after **`eventBus.flushOnCommit()`** in [`request-context.middleware.ts`](../../../src/shared/middlewares/core/request-context.middleware.ts) (after the request DB transaction commits). Mail uses a durable outbox row plus deferred `dispatchOutboxEmail`; webhook delivery, notification dispatch, and user-data export defer `queue.add` the same way. Outside HTTP scope (workers, scripts), use **`runEnqueueAfterCommit()`** from [`event-bus.ts`](../../../src/core/events/event-bus.ts) — it enqueues immediately when no onCommit scope is active.
 
 ### Prometheus metrics (BullMQ)
 
@@ -131,7 +131,7 @@ HTTP requests set `app.current_organization_id` via tenant middleware and an org
 
 `src/worker.ts` sets `CORE_BE_RUNTIME=worker`. Calling `getRequestDatabase()` without a pinned ALS session throws `WorkerDatabaseContextError`. Pass `databaseHandle` into `createWorker*Repository(databaseHandle)` for tenant-scoped work.
 
-FORCE RLS table list: `src/infrastructure/database/force-rls-tables.constants.ts`. Security regression: `src/tests/security/worker-rls-context.security.test.ts`.
+FORCE RLS table list: `src/infrastructure/database/force-rls-tables.constants.ts`. Security regression: `src/tests/security/rls/worker-rls-context.security.test.ts`.
 
 ---
 
@@ -146,7 +146,7 @@ Every BullMQ worker is registered exactly once in [`worker-registration.registry
 | `usesPostgres`                    | If `true`, the worker holds a Postgres pool checkout per concurrent job                                                                                                                                                                                                                 |
 | `scheduled`                       | `true` for cron-driven workers (entry exists in `scheduler.ts`); `false` for event-driven or orphan workers. Cross-checked at startup — mismatches log `worker.registry.scheduler_mismatch`                                                                                             |
 | `criticality`                     | `throughput` (drives user-visible latency), `maintenance` (cron / retention), or `observability` (metrics only)                                                                                                                                                                         |
-| `holdsConnectionDuringExternalIo` | `true` when the Postgres checkout is held during an outbound HTTP/S3/Resend/Stripe call (e.g. webhook delivery, S3-bound retention). Slow externals on these workers translate to pool starvation; surfaced in pool-pressure alerts as `workerPeakPostgresConcurrencyHoldingExternalIo` |
+| `holdsConnectionDuringExternalIo` | `true` when the Postgres checkout is held during an outbound HTTP/S3/Resend/Stripe call (e.g. S3-bound retention/export workers). Slow externals on these workers translate to pool starvation; surfaced in pool-pressure alerts as `workerPeakPostgresConcurrencyHoldingExternalIo`. Webhook delivery is **not** in this set: it claims and records in separate short transactions, so the outbound POST runs with no open checkout |
 | `resolvePostgresConcurrency()`    | Concurrency contribution to the per-process pool budget                                                                                                                                                                                                                                 |
 | `isEnabled()`                     | Optional skip (e.g. mail/Stripe disabled by env)                                                                                                                                                                                                                                        |
 | `create()`                        | Factory invoked by bootstrap                                                                                                                                                                                                                                                            |
@@ -194,6 +194,11 @@ Operational sizing per family is documented in [resource-limits.md → Worker Po
 - Workers return `{ worker, queueName, close }` (`WorkerHandle` in `bootstrap.ts`).
 - Bull Board lists each `-dlq` next to its source queue when enabled.
 - On shutdown: close workers, then `closeDeadLetterQueues()`, then Redis (`src/worker.ts`).
+- **Poison messages** (payload that fails `*.job.schema.ts` validation) never burn the retry budget: each worker entry point validates `job.data` via `parseJobDataOrDeadLetter` (`src/infrastructure/queue/dlq/poison-job.util.ts`), which records the dead-letter (Postgres + Redis mirror) and throws BullMQ `UnrecoverableError` so remaining attempts are skipped. `attachDeadLetterAndAlerting` treats `UnrecoverableError` as already-handled (logs `queue.job.unrecoverable`, no second record). The producer-side `parseBullMQJobData` still throws a plain error — enqueue is not a retry path.
+
+## Distributed tracing across the queue
+
+Every `enqueue*` helper injects the active W3C trace context (`captureTraceContextForPropagation`) into the job payload (`traceparent` / `tracestate`, shared `traceContextJobFieldsSchema`); each worker re-enters that context with `runWithPropagatedTraceContext` (`src/infrastructure/observability/tracing/trace-context.util.ts`), so the worker span is a child of the originating API request. Jobs enqueued outside an active span (or with OTEL disabled) simply omit the fields and run without a new span.
 
 ---
 
@@ -229,7 +234,7 @@ emitWebhookDeliveryRequested()  →  notify/sub-domains/webhook/events/
 webhook-delivery.event-handlers.ts  →  enqueueWebhookDeliveryByAttemptId()
 ```
 
-**Outbound webhook SSRF:** `webhook-delivery.worker` uses `createPinnedWebhookFetch()` (`src/shared/utils/security/webhook-outbound-fetch.util.ts`). DNS is resolved once per delivery via `resolveAndPinWebhookUrl()`; the HTTP client connects to the pinned public IP while sending the original `Host` / TLS SNI. `validateWebhookUrl()` at create/update time rejects private/link-local targets. Optional `WEBHOOK_URL_ALLOWLIST` (comma-separated host suffixes) further restricts hostnames in production.
+**Outbound webhook SSRF:** `webhook-delivery.worker` uses `createPinnedWebhookFetch()` (`src/shared/utils/security/webhook-outbound-fetch.util.ts`). DNS is resolved once per delivery via `resolveAndPinWebhookUrl()`; the HTTP client connects to the pinned public IP while sending the original `Host` / TLS SNI. `validateWebhookUrl()` at create/update time uses `ipaddr.js` to normalize IPv4-mapped IPv6 literals (e.g. `[::ffff:127.0.0.1]`) before range checks, and rejects private, link-local, CGNAT, loopback, and other non-routable targets. Optional `WEBHOOK_URL_ALLOWLIST` (comma-separated host suffixes) further restricts hostnames in production.
 
 `src/core/events/register-event-handlers.ts` calls each domain’s `register*EventHandlers()` from `buildApp()` before routes.
 

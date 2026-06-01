@@ -1,0 +1,152 @@
+name: Bootstrap Railway service
+
+# One-time (or recovery) Railway service bootstrap for an environment.
+# Idempotent: re-running against an already-configured environment is safe.
+# Steady-state CD remains in post-merge-ci → reusable-railway-deploy (SHA-pinned).
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment / Railway target
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+      service:
+        description: Railway service(s) to bootstrap
+        required: true
+        type: choice
+        options:
+          - api
+          - worker
+          - both
+      dry_run:
+        description: Preview only (skip setup:infra apply and deploy)
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: bootstrap-railway-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
+
+jobs:
+  bootstrap:
+    name: Bootstrap (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ inputs.environment }}
+    env:
+      # BEGIN GENERATED project-identity
+      PROJECT_SLUG: core-be
+      PROJECT_DISPLAY_NAME: core-be
+      API_IMAGE: core-be-api
+      WORKER_IMAGE: core-be-worker
+      DOCKER_LOCAL_API_TAG: core-be
+      GHCR_CACHE_SCOPE_API: core-be-api
+      GHCR_CACHE_SCOPE_WORKER: core-be-worker
+      GIT_DEFAULT_BRANCH: dev
+      GIT_PRODUCTION_BRANCH: main
+      GIT_NON_PRODUCTION_BRANCH: dev
+      PROTECTED_BRANCHES_JSON: '["dev","main"]'
+      BRANCH_ENV_MAP_JSON: '{"dev":"development","main":"production"}'
+      # END GENERATED project-identity
+      ENVIRONMENT: ${{ inputs.environment }}
+      BOOTSTRAP_SERVICE: ${{ inputs.service }}
+      GH_SECRETS_JSON: ${{ toJSON(secrets) }}
+      GH_VARS_JSON: ${{ toJSON(vars) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export GitHub Environment to runner
+        run: |
+          set -euo pipefail
+          jq -nrj \
+            --argjson vars "$GH_VARS_JSON" \
+            --argjson secrets "$GH_SECRETS_JSON" \
+            '($vars + $secrets)
+              | to_entries
+              | map(select(.value != null and .value != ""))
+              | .[]
+              | "\(.key)=\(.value)\u0000"' \
+          | while IFS= read -r -d '' kv; do
+              key="${kv%%=*}"
+              value="${kv#*=}"
+              delimiter="GHENV_$(openssl rand -hex 8)"
+              {
+                printf '%s<<%s\n' "$key" "$delimiter"
+                printf '%s\n' "$value"
+                printf '%s\n' "$delimiter"
+              } >> "$GITHUB_ENV"
+            done
+
+      - name: Railway infra status
+        run: pnpm setup:infra:status
+
+      - name: Railway infra dry-run
+        run: pnpm setup:infra:dry-run
+
+      - name: Apply Railway infra (non-dry-run only)
+        if: inputs.dry_run != true
+        run: pnpm setup:infra --yes
+
+      - name: Deploy selected services
+        if: inputs.dry_run != true
+        env:
+          RAILWAY_GIT_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          API_IMAGE="ghcr.io/${{ github.repository }}/${{ env.API_IMAGE }}:${RAILWAY_GIT_COMMIT_SHA}"
+          WORKER_IMAGE="ghcr.io/${{ github.repository }}/${{ env.WORKER_IMAGE }}:${RAILWAY_GIT_COMMIT_SHA}"
+          deploy_one() {
+            local service_id="$1"
+            local image="$2"
+            local label="$3"
+            pnpm tool:railway-deploy-image \
+              --service "$service_id" \
+              --image "$image" \
+              --label "$label"
+          }
+          case "${BOOTSTRAP_SERVICE}" in
+            api)
+              deploy_one "$RAILWAY_SERVICE_ID" "$API_IMAGE" "api"
+              ;;
+            worker)
+              deploy_one "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"
+              ;;
+            both)
+              deploy_one "$RAILWAY_SERVICE_ID" "$API_IMAGE" "api"
+              deploy_one "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"
+              ;;
+            *)
+              echo "::error::Unsupported service selection: ${BOOTSTRAP_SERVICE}"
+              exit 1
+              ;;
+          esac
+
+      - name: Bootstrap summary
+        run: |
+          {
+            echo "## Railway bootstrap summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "| ----- | ----- |"
+            echo "| Environment | ${ENVIRONMENT} |"
+            echo "| Service selection | ${BOOTSTRAP_SERVICE} |"
+            echo "| Dry run | ${{ inputs.dry_run }} |"
+            echo "| Commit SHA | ${RAILWAY_GIT_COMMIT_SHA:-n/a (dry-run)} |"
+          } >> "$GITHUB_STEP_SUMMARY"

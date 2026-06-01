@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import responseFormatMiddleware from '@/shared/middlewares/response-format.middleware.js';
+import responseFormatMiddleware from '@/shared/middlewares/core/response-format.middleware.js';
 
 async function createResponseFormatApp() {
   const application = Fastify({ logger: false });

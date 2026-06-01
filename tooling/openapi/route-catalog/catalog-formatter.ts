@@ -4,7 +4,7 @@ import type { ParsedRoute, RouteAccess } from './types.js';
 function formatRouteLine(method: string, path: string, access: RouteAccess): string {
   const methodColumn = method.padEnd(6, ' ');
   const pathColumn = path.padEnd(55, ' ');
-  return `  ${methodColumn}${pathColumn}${access}`;
+  return `  ${methodColumn} ${pathColumn} ${access}`;
 }
 
 export function buildCatalogContent(routes: ParsedRoute[]): string {
@@ -31,6 +31,7 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
     '  AUTH    = JWT authentication required',
     '  ROLE    = Global role required (super_admin, admin, user)',
     '  PERM    = Organization-scoped permission required',
+    '  TOKEN   = Non-JWT bearer token required',
     '',
   ];
 
@@ -70,6 +71,7 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
   const authCount = sortedRoutes.filter((route) => route.access === 'AUTH').length;
   const roleCount = sortedRoutes.filter((route) => route.access.startsWith('ROLE:')).length;
   const permCount = sortedRoutes.filter((route) => route.access.startsWith('PERM:')).length;
+  const tokenCount = sortedRoutes.filter((route) => route.access.startsWith('TOKEN:')).length;
 
   lines.push(
     '================================================================================',
@@ -81,6 +83,7 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
     `  Authenticated   : ${authCount}`,
     `  Role-guarded    : ${roleCount}`,
     `  Perm-guarded    : ${permCount}`,
+    `  Token-guarded   : ${tokenCount}`,
     '',
     '================================================================================',
     '  IDEMPOTENCY (Idempotency-Key header)',

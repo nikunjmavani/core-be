@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
-import errorHandlerMiddleware from '@/shared/middlewares/error-handler.middleware.js';
+import errorHandlerMiddleware from '@/shared/middlewares/core/error-handler.middleware.js';
 
 async function createErrorHandlerApplication() {
   const application = Fastify({ logger: false });

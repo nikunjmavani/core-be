@@ -13,6 +13,11 @@ import type {
   TransferOwnershipInput,
 } from './membership.dto.js';
 
+/**
+ * Validates a `POST /organizations/:id/memberships` body against
+ * {@link createMembershipDto}; throws `ValidationError('errors:invalidInput')`
+ * with per-field details on failure.
+ */
 export function validateCreateMembership(data: unknown): CreateMembershipInput {
   const result = createMembershipDto.safeParse(data);
   if (!result.success) {
@@ -21,6 +26,11 @@ export function validateCreateMembership(data: unknown): CreateMembershipInput {
   return result.data;
 }
 
+/**
+ * Validates a `PATCH /organizations/:id/memberships/:membershipId` body
+ * against {@link updateMembershipDto}; throws
+ * `ValidationError('errors:invalidInput')` on failure.
+ */
 export function validateUpdateMembership(data: unknown): UpdateMembershipInput {
   const result = updateMembershipDto.safeParse(data);
   if (!result.success) {
@@ -29,6 +39,11 @@ export function validateUpdateMembership(data: unknown): UpdateMembershipInput {
   return result.data;
 }
 
+/**
+ * Validates the `GET /organizations/:id/memberships` query string. Rejects
+ * legacy page-number pagination first, then parses against
+ * {@link listMembershipsQueryDto}.
+ */
 export function validateListMembershipsQuery(data: unknown): ListMembershipsQueryInput {
   ensureCursorOnlyPagination(data);
   const result = listMembershipsQueryDto.safeParse(data);
@@ -42,6 +57,11 @@ export function validateListMembershipsQuery(data: unknown): ListMembershipsQuer
   return result.data;
 }
 
+/**
+ * Validates a `POST /organizations/:id/transfer-ownership` body against
+ * {@link transferOwnershipDto}; throws `ValidationError('errors:invalidInput')`
+ * on failure.
+ */
 export function validateTransferOwnership(data: unknown): TransferOwnershipInput {
   const result = transferOwnershipDto.safeParse(data);
   if (!result.success) {

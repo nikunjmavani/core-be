@@ -8,6 +8,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken, generateSuperAdminToken } from '@/tests/helpers/test-auth.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 describe('Audit Domain — Integration', () => {
   let app: FastifyInstance;
@@ -29,7 +30,7 @@ describe('Audit Domain — Integration', () => {
 
   describe('GET /api/v1/audit/logs', () => {
     it('should return 401 without authentication', async () => {
-      const response = await injectUnauthenticated(app, { url: '/api/v1/audit/logs' });
+      const response = await injectUnauthenticated(app, { url: testApiPath('/audit/logs') });
       expect(response.statusCode).toBe(401);
     });
 
@@ -37,7 +38,7 @@ describe('Audit Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id, role: 'user' });
       const response = await injectAuthenticated(app, {
-        url: '/api/v1/audit/logs',
+        url: testApiPath('/audit/logs'),
         token,
       });
       expect(response.statusCode).toBe(403);
@@ -47,7 +48,7 @@ describe('Audit Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateSuperAdminToken(user.public_id);
       const response = await injectAuthenticated(app, {
-        url: '/api/v1/audit/logs',
+        url: testApiPath('/audit/logs'),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -59,7 +60,7 @@ describe('Audit Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id, role: 'admin' });
       const response = await injectAuthenticated(app, {
-        url: '/api/v1/audit/logs',
+        url: testApiPath('/audit/logs'),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -69,7 +70,7 @@ describe('Audit Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateSuperAdminToken(user.public_id);
       const response = await injectAuthenticated(app, {
-        url: '/api/v1/audit/logs',
+        url: testApiPath('/audit/logs'),
         token,
         query: { limit: '5' },
       });

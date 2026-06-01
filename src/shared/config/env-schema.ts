@@ -16,6 +16,30 @@ const booleanString = (defaultValue: 'true' | 'false') =>
     .default(defaultValue)
     .transform((value) => value === 'true' || value === '1');
 
+const MAX_TRUST_PROXY_HOPS = 10;
+
+const trustProxyHopCountSchema = z
+  .string()
+  .optional()
+  .transform((value, context) => {
+    const normalizedValue = value?.trim().toLowerCase();
+    if (!normalizedValue || normalizedValue === 'false' || normalizedValue === '0') {
+      return false;
+    }
+
+    const hopCount = Number(normalizedValue);
+    if (Number.isInteger(hopCount) && hopCount >= 1 && hopCount <= MAX_TRUST_PROXY_HOPS) {
+      return hopCount;
+    }
+
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'TRUST_PROXY must be false/0 or an integer proxy hop count from 1 to 10; do not use bare true',
+    });
+    return z.NEVER;
+  });
+
 const envSchemaBase = z.object({
   // Server
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
@@ -23,11 +47,8 @@ const envSchemaBase = z.object({
   HTTP_BIND_HOST: z.string().min(1).default('0.0.0.0'),
   NODE_ENV: nodeEnvSchema,
   LOG_LEVEL: z.string().min(1).default('info'),
-  /** When true, Fastify trusts X-Forwarded-* from the reverse proxy (required behind LB). */
-  TRUST_PROXY: z
-    .string()
-    .optional()
-    .transform((value) => value === 'true' || value === '1'),
+  /** Number of reverse-proxy hops Fastify may trust for X-Forwarded-* headers. */
+  TRUST_PROXY: trustProxyHopCountSchema,
   FASTIFY_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
   FASTIFY_HEADERS_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
   /** Fastify request timeout (ms). Default: 30000. */
@@ -41,7 +62,12 @@ const envSchemaBase = z.object({
 
   // Redis (managed service)
   REDIS_URL: z.string().min(1),
-  /** BullMQ queues — defaults to REDIS_URL when unset. */
+  /**
+   * Dedicated Redis endpoint for BullMQ queues. Recommended in production so a queue
+   * backlog (e.g. during a worker outage) cannot exhaust the write-critical cache /
+   * idempotency / rate-limit store on REDIS_URL. Defaults to REDIS_URL when unset
+   * (single-instance local development).
+   */
   REDIS_BULLMQ_URL: z.string().min(1).optional(),
   /**
    * Redis key prefix for cache, idempotency, rate limits, and BullMQ (default `core:<NODE_ENV>:`).
@@ -62,6 +88,13 @@ const envSchemaBase = z.object({
   JWT_PUBLIC_KEY: z.string().min(1),
   /** Key id in JWT header when signing with RS256 (default: `default`). */
   JWT_SIGNING_KID: z.string().min(1).optional().default('default'),
+  /**
+   * Optional `kid`→PEM verification keyring (JSON object) enabling zero-downtime RS256
+   * rotation. When set, a token is verified against the public key whose `kid` matches the
+   * token header (current + previous keys during an overlap window). Unset preserves the
+   * single `JWT_PUBLIC_KEY` path exactly. Public key material → GitHub Variable.
+   */
+  JWT_PUBLIC_KEYS: z.string().min(1).optional(),
   /** Comma-separated emails that receive super_admin in JWT on login/refresh (platform ops). */
   GLOBAL_ADMIN_EMAILS: z.string().optional(),
   /** Shorter access-token TTL (seconds) for GLOBAL_ADMIN_EMAILS super_admin JWTs. Default 300 (5 min). */
@@ -86,7 +119,6 @@ const envSchemaBase = z.object({
 
   // Rate limiting
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
-  RATE_LIMIT_ORG_MAX: z.coerce.number().int().min(1).default(200),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(60_000),
   /** Comma-separated hostnames allowed for outbound webhooks (optional; empty = no extra restriction). */
   WEBHOOK_URL_ALLOWLIST: z.string().optional(),
@@ -172,9 +204,9 @@ const envSchemaBase = z.object({
   WORKER_CONCURRENCY_NOTIFY: z.coerce.number().int().min(1).max(20).optional(),
   WORKER_CONCURRENCY_WEBHOOK: z.coerce.number().int().min(1).max(20).optional(),
   WORKER_CONCURRENCY_STRIPE: z.coerce.number().int().min(1).max(20).optional(),
-  /** HTTP port for worker GET /health, /health, and optional /metrics (default 9090). */
+  /** HTTP port for worker GET /livez, /readyz, and optional /metrics (default 9090). */
   WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(9090),
-  /** Max age of throughput queue heartbeats before /health returns 503 (default 5 min). */
+  /** Max age of throughput queue heartbeats before /readyz returns 503 (default 5 min). */
   WORKER_HEALTH_STALL_TIMEOUT_MS: z.coerce
     .number()
     .int()
@@ -213,32 +245,11 @@ const envSchemaBase = z.object({
   /** Per-connection statement_timeout (ms). Caps runaway queries; 0 disables. Default: 30000. */
   DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
   /**
-   * Per-request SET LOCAL statement_timeout (ms) for HTTP handlers (org RLS and non-org pinned tx).
-   * Tighter than DATABASE_STATEMENT_TIMEOUT_MS to release pool slots faster. Default: 5000. 0 disables SET LOCAL.
+   * Connection-level statement_timeout (ms) for HTTP handlers. Scoped RLS contexts hold
+   * checkouts only for the unit-of-work, so this caps runaway autocommit queries. Default: 5000.
+   * 0 falls back to `DATABASE_STATEMENT_TIMEOUT_MS`.
    */
   DATABASE_HTTP_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(0).default(5_000),
-  /**
-   * Rollout flag for scoped RLS contexts (item 2 of the production hardening plan). When true,
-   * the per-HTTP-request `organization-rls-transaction` + `request-statement-timeout` pinning
-   * is disabled and services are expected to wrap their unit-of-work calls in
-   * `withOrganizationDatabaseContext(...)` or `withUserDatabaseContext(...)`. When false,
-   * the legacy request-pinned transaction model stays in place.
-   *
-   * Prerequisites for safely enabling `true` in an environment:
-   *   1. Apply migration `20260520000004_organization_discovery_and_invitation_lookup_rls.sql`
-   *      (adds `organizations_user_discovery` + `memberships_user_self_discovery` policies and
-   *      the `tenancy.resolve_member_invitation_lookup_by_public_id` /
-   *      `tenancy.list_pending_member_invitations_for_email` SECURITY DEFINER helpers).
-   *   2. Confirm services on the deployment wrap cross-org reads in
-   *      `withUserDatabaseContext` (organization list/getByPublicId/getBySlug/create) and that
-   *      invitation accept/decline/listPending resolve the owning org via the SECURITY DEFINER
-   *      lookup before writing.
-   *
-   * Roll out per-environment by flipping the env var; the schema default remains `true` so new
-   * environments inherit the post-migration mode. See
-   * `docs/deployment/runbooks/resource-limits.md` for the full rollout sequence.
-   */
-  DATABASE_RLS_SCOPED_CONTEXTS: z.coerce.boolean().default(true),
   /** Per-connection idle_in_transaction_session_timeout (ms). Caps stuck transactions; 0 disables. Default: 30000. */
   DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(0).optional(),
   /** Warn when in-process org RLS checkouts reach this fraction of DATABASE_POOL_MAX (default 0.8). */
@@ -282,6 +293,7 @@ const envSchemaBase = z.object({
   /** Interpret cron patterns in this IANA timezone; omit for server default. */
   SCHEDULER_TIMEZONE: z.string().min(1).optional(),
   AUDIT_RETENTION_CRON: z.string().min(1).optional(),
+  NOTIFICATION_RETENTION_CRON: z.string().min(1).optional(),
   AUTH_SESSION_CLEANUP_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RETENTION_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
@@ -296,6 +308,13 @@ const envSchemaBase = z.object({
   AUDIT_EXPORT_BATCH_SIZE: z.coerce.number().int().min(100).max(50_000).default(5_000),
   AUDIT_EXPORT_CRON: z.string().min(1).optional(),
   MAIL_OUTBOX_SWEEP_PENDING_MINUTES: z.coerce.number().int().min(1).default(15),
+  /**
+   * Minimum age (minutes) before a row stuck in `sending` is reclaimed to
+   * `pending`. Must sit comfortably above worst-case Resend delivery time
+   * (BullMQ retry/backoff + circuit cooldown) so a still-in-flight send is not
+   * reclaimed prematurely; Resend idempotency keys de-duplicate any overlap.
+   */
+  MAIL_OUTBOX_RECLAIM_SENDING_MINUTES: z.coerce.number().int().min(1).default(30),
   MAIL_OUTBOX_SWEEP_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
   MAIL_OUTBOX_SWEEPER_CRON: z.string().min(1).optional(),
   WEBHOOK_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
@@ -324,6 +343,32 @@ const envSchemaBase = z.object({
   /** Alert when a dead-letter queue has at least this many waiting + failed jobs. */
   DLQ_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(10),
   DLQ_DEPTH_CRON: z.string().min(1).optional(),
+
+  /** When true, the `dlq-auto-retry` sweeper re-enqueues replayable ledger rows after cooldown. */
+  DLQ_AUTO_RETRY_ENABLED: z.coerce.boolean().default(true),
+  /** Maximum automated replays per `audit.dead_letter_jobs` row (Redis counter). */
+  DLQ_AUTO_RETRY_MAX_COUNT: z.coerce.number().int().min(0).default(3),
+  /** Minimum minutes between failure (or last auto-retry) and the next automated replay. */
+  DLQ_AUTO_RETRY_COOLDOWN_MINUTES: z.coerce.number().int().min(1).default(30),
+  /** Maximum ledger rows inspected per sweeper tick. */
+  DLQ_AUTO_RETRY_BATCH_SIZE: z.coerce.number().int().min(1).default(20),
+  DLQ_AUTO_RETRY_CRON: z.string().min(1).optional(),
+
+  /**
+   * Alert when a single BullMQ source queue's waiting + delayed backlog reaches this many
+   * jobs. A growing backlog (e.g. a worker outage) on a shared Redis can fill memory and,
+   * with `maxmemory-policy=noeviction`, reject the write-critical store — so the backlog is
+   * sampled alongside DLQ depth. See docs/deployment/runbooks/redis-topology.md.
+   */
+  QUEUE_WAITING_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(1000),
+  /**
+   * Warn / critical `used_memory / maxmemory` ratios for the cache Redis (0–1). The
+   * observability tick samples `INFO memory` + `CONFIG GET maxmemory`; a high ratio under
+   * `noeviction` means writes (idempotency/rate-limit) are about to start failing.
+   * Skipped when Redis reports `maxmemory=0` (unbounded).
+   */
+  REDIS_MEMORY_WARN_RATIO: z.coerce.number().min(0).max(1).default(0.85),
+  REDIS_MEMORY_CRITICAL_RATIO: z.coerce.number().min(0).max(1).default(0.95),
   ENABLE_QUEUE_DASHBOARD: z
     .string()
     .optional()
@@ -347,13 +392,6 @@ const envSchemaBase = z.object({
    * Ignored in production.
    */
   CAPTCHA_BYPASS_HEADER: z.string().min(1).optional(),
-  /**
-   * Production safety acknowledgement. CAPTCHA fail-closes on public auth routes, so a
-   * production deploy with CAPTCHA_PROVIDER=disabled (the default) would turn login and
-   * recovery into 401s. Boot fails in that case unless this is explicitly set to true,
-   * which also switches the middleware to fail-open (skip CAPTCHA) instead of 401.
-   */
-  CAPTCHA_DISABLED_ACK: booleanString('false'),
 
   // MCP server (Model Context Protocol) at POST /api/v1/mcp — exposes APIs as tools for frontends/agents
   ENABLE_MCP_SERVER: z
@@ -379,12 +417,44 @@ const envSchemaBase = z.object({
   SECRETS_ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-f]{64}$/i, 'SECRETS_ENCRYPTION_KEY must be 64 hex characters (32 bytes)'),
+  /**
+   * Optional version→hex keyring (JSON object, e.g. `{"v1":"<hex>","v2":"<hex>"}`) enabling
+   * zero-downtime rotation of field-secret encryption keys. Stored values decrypt by their own
+   * version prefix; unset preserves the single `SECRETS_ENCRYPTION_KEY` (`v1`) path exactly.
+   */
+  SECRETS_ENCRYPTION_KEYS: z.string().min(1).optional(),
+  /**
+   * Field-secret version used when ENCRYPTING new secrets (default `v1`). Decryption always uses
+   * the stored value's own version prefix, so this only selects the write key during rotation.
+   */
+  SECRETS_ENCRYPTION_CURRENT_VERSION: z.enum(['v1', 'v2']).optional().default('v1'),
 
   // Monthly database restore drill (GitHub Actions only — not loaded by API/worker at runtime)
   /** Neon API key for scheduled monthly PITR restore drill. GitHub Environment secret via `pnpm github:sync`. */
   MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY: z.string().min(1).optional(),
+
+  // Railway deploy (GitHub Actions only — consumed by .github/workflows/reusable-railway-deploy.yml)
+  /** Railway project token used by the deploy job to call `railway redeploy`. GitHub Environment secret via `pnpm github:sync`. */
+  RAILWAY_TOKEN: z.string().min(1).optional(),
+  /** Railway API service ID for the `core-be-api` service (target of `railway redeploy --service`). */
+  RAILWAY_SERVICE_ID: z.string().min(1).optional(),
+  /** Railway worker service ID for the `core-be-worker` service (target of `railway redeploy --service`). */
+  RAILWAY_WORKER_SERVICE_ID: z.string().min(1).optional(),
+
+  // Postman API documentation publishing (GitHub Actions only — consumed by .github/workflows/reusable-openapi-postman-publish.yml and `pnpm docs:upload`)
+  /** Postman API key used by `pnpm docs:upload` to push the generated collection. GitHub Environment secret via `pnpm github:sync`. */
+  POSTMAN_API_KEY: z.string().min(1).optional(),
+  /** Postman workspace ID where the API documentation collection is published. GitHub Environment secret via `pnpm github:sync`. */
+  POSTMAN_WORKSPACE_ID: z.string().min(1).optional(),
 });
 
+/**
+ * Process environment Zod schema. Refines `envSchemaBase` with cross-field invariants
+ * (idempotency threshold ordering, METRICS_ENABLED → token, CAPTCHA configuration,
+ * production Turnstile requirement, Redis topology, and FRONTEND_URL protocol) so
+ * the API/worker boot fails fast on misconfiguration instead of surfacing partial
+ * failures at runtime.
+ */
 export const envSchema = envSchemaBase
   .refine(
     (data) =>
@@ -396,6 +466,10 @@ export const envSchema = envSchemaBase
       path: ['IDEMPOTENCY_CARDINALITY_CRITICAL_THRESHOLD'],
     },
   )
+  .refine((data) => data.REDIS_MEMORY_CRITICAL_RATIO >= data.REDIS_MEMORY_WARN_RATIO, {
+    message: 'REDIS_MEMORY_CRITICAL_RATIO must be >= REDIS_MEMORY_WARN_RATIO',
+    path: ['REDIS_MEMORY_CRITICAL_RATIO'],
+  })
   .refine(
     (data) => {
       if (data.METRICS_ENABLED) {
@@ -425,15 +499,29 @@ export const envSchema = envSchemaBase
       if (data.NODE_ENV !== 'production') {
         return true;
       }
-      if (data.CAPTCHA_PROVIDER === 'turnstile') {
-        return true;
-      }
-      return data.CAPTCHA_DISABLED_ACK === true;
+      return data.CAPTCHA_PROVIDER === 'turnstile' && Boolean(data.CAPTCHA_SECRET);
     },
     {
       message:
-        'In production, configure CAPTCHA (CAPTCHA_PROVIDER=turnstile + CAPTCHA_SECRET) or set CAPTCHA_DISABLED_ACK=true to explicitly run with CAPTCHA disabled (fail-open on auth routes)',
+        'In production, CAPTCHA_PROVIDER=turnstile and CAPTCHA_SECRET are required on public auth routes',
       path: ['CAPTCHA_PROVIDER'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      // Reject placeholder / low-entropy keys (e.g. the all-zero .env.example template) that
+      // would silently defeat encryption-at-rest for MFA TOTP seeds and webhook signing secrets.
+      // A real `openssl rand -hex 32` key effectively always contains far more than 8 distinct
+      // hex digits, while all-zeros / single-character placeholders contain one.
+      return new Set(data.SECRETS_ENCRYPTION_KEY.toLowerCase()).size >= 8;
+    },
+    {
+      message:
+        'In production, SECRETS_ENCRYPTION_KEY must be a high-entropy 32-byte key (generate with `openssl rand -hex 32`); placeholder/low-entropy values are rejected',
+      path: ['SECRETS_ENCRYPTION_KEY'],
     },
   )
   .refine(
@@ -442,7 +530,7 @@ export const envSchema = envSchemaBase
     },
     {
       message:
-        'REDIS_BULLMQ_URL must be unset or point to the same Redis endpoint as REDIS_URL (see docs/deployment/runbooks/redis-topology.md)',
+        'REDIS_BULLMQ_URL, when set, must be a valid redis:// or rediss:// URL (a dedicated BullMQ endpoint is supported; see docs/deployment/runbooks/redis-topology.md)',
       path: ['REDIS_BULLMQ_URL'],
     },
   )
@@ -468,6 +556,67 @@ export const envSchema = envSchemaBase
     {
       message: 'FRONTEND_URL must be a valid http(s) URL.',
       path: ['FRONTEND_URL'],
+    },
+  )
+  .refine(
+    (data) => {
+      const origins = data.ALLOWED_ORIGINS.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+      // A literal `*` would make CORS reflect any origin and silently defeat the
+      // session-cookie Origin/Referer checks — never allow it as an entry.
+      if (origins.includes('*')) {
+        return false;
+      }
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      // In production every origin must be an absolute https:// URL. Plaintext http
+      // origins would let cross-site requests ride over an unencrypted channel and
+      // weaken the cookie-origin defenses that compare against this allowlist.
+      return origins.every((origin) => {
+        try {
+          return new URL(origin).protocol === 'https:';
+        } catch {
+          return false;
+        }
+      });
+    },
+    {
+      message:
+        'ALLOWED_ORIGINS must not contain `*`; in production every entry must be an absolute https:// origin.',
+      path: ['ALLOWED_ORIGINS'],
+    },
+  )
+  .refine(
+    (data) => {
+      // When Resend is configured, EMAIL_FROM_ADDRESS must be set explicitly. There is no
+      // hardcoded sender fallback: a default `from` on an unverified domain is silently
+      // rejected by Resend, so auth mail (magic link, verification, invitations) never arrives.
+      if (!data.RESEND_API_KEY) {
+        return true;
+      }
+      return Boolean(data.EMAIL_FROM_ADDRESS);
+    },
+    {
+      message: 'EMAIL_FROM_ADDRESS is required when RESEND_API_KEY is set.',
+      path: ['EMAIL_FROM_ADDRESS'],
+    },
+  )
+  .refine(
+    (data) => {
+      // In production, session + CSRF cookies must carry the Secure attribute so they are
+      // never transmitted over plaintext HTTP. COOKIE_SECURE=false is only valid for local
+      // plaintext loops (non-production); allowing it in production would expose the session
+      // cookie to network interception.
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      return data.COOKIE_SECURE === true;
+    },
+    {
+      message: 'COOKIE_SECURE must be true in production (cookies sent over HTTPS only).',
+      path: ['COOKIE_SECURE'],
     },
   );
 
@@ -504,12 +653,12 @@ export const envSchemaConditionallyRequiredKeys: ReadonlyArray<{
   },
   {
     key: 'CAPTCHA_SECRET',
-    condition: 'CAPTCHA_PROVIDER=turnstile (schema default is `disabled`)',
+    condition:
+      'CAPTCHA_PROVIDER=turnstile (schema default is `disabled`; required in NODE_ENV=production)',
   },
   {
-    key: 'CAPTCHA_DISABLED_ACK',
-    condition:
-      'NODE_ENV=production with CAPTCHA_PROVIDER=disabled (must be true to acknowledge fail-open auth routes)',
+    key: 'EMAIL_FROM_ADDRESS',
+    condition: 'RESEND_API_KEY is set (no hardcoded sender fallback)',
   },
 ];
 

@@ -50,10 +50,12 @@ export function parseHttpDate(headerValue: string): Date | null {
   return new Date(timestamp);
 }
 
+/** Returns true when the current (or supplied `now`) instant is at or after the surface's sunset. */
 export function isPastSunset(sunset: Date, now: Date = new Date()): boolean {
   return now.getTime() >= sunset.getTime();
 }
 
+/** Context for {@link alertDeprecatedUsagePastSunset}; `surface` is the throttle key and Sentry tag. */
 export type DeprecatedUsagePastSunsetContext = {
   surface: string;
   sunset: Date;
@@ -103,6 +105,7 @@ export function applyPublicApiVersionHeader(
   reply.header(PUBLIC_API_VERSION_HEADER, versionValue);
 }
 
+/** Options for {@link applyDeprecatedEndpointHeaders}; controls the `Sunset`, `Deprecation`, and `Link` response headers. */
 export type ApplyDeprecatedEndpointHeadersOptions = {
   /** Last date after which the resource may be removed (RFC 8594 `Sunset`). */
   sunset: Date;

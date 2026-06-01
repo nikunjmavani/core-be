@@ -25,9 +25,9 @@
     "rootDir": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@tooling/openapi/*": ["./tooling/openapi/*"]
+      "@tooling/*": ["./tooling/*"]
     }
   },
-  "include": ["src/**/*.ts", "tooling/openapi/**/*.ts"],
+  "include": ["src/**/*.ts", "tooling/**/*.ts"],
   "exclude": ["node_modules", "dist", "migrations"]
 }

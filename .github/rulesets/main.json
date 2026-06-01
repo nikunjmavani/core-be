@@ -4,7 +4,8 @@
   "enforcement": "active",
   "conditions": {
     "ref_name": {
-      "include": ["refs/heads/main"]
+      "include": ["refs/heads/main"],
+      "exclude": []
     }
   },
   "rules": [
@@ -43,6 +44,9 @@
             "context": "PR CI / Typecheck"
           },
           {
+            "context": "PR CI / Static sync"
+          },
+          {
             "context": "PR CI / Unit + global (pull_request)"
           },
           {
@@ -52,7 +56,13 @@
             "context": "PR CI / Build verify"
           },
           {
-            "context": "PR CI / Security scan"
+            "context": "PR CI / Security audit"
+          },
+          {
+            "context": "PR CI / Security secrets"
+          },
+          {
+            "context": "PR CI / Security SAST"
           },
           {
             "context": "PR CI / Contract + property"

@@ -3,6 +3,7 @@ import { AuthMethodRepository } from '@/domains/auth/sub-domains/auth-method/aut
 
 const mockReturning = vi.fn().mockResolvedValue([]);
 const mockLimit = vi.fn().mockResolvedValue([]);
+const mockExecute = vi.fn().mockResolvedValue([]);
 const mockWhereForSelect = vi.fn(() => ({ limit: mockLimit }));
 const mockWhereForUpdate = vi.fn(() => ({ returning: mockReturning }));
 const mockFrom = vi.fn(() => ({ where: mockWhereForSelect }));
@@ -17,6 +18,7 @@ vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => 
     select: mockSelect,
     insert: mockInsert,
     update: mockUpdate,
+    execute: mockExecute,
   }),
 }));
 
@@ -27,6 +29,7 @@ describe('AuthMethodRepository', () => {
     vi.clearAllMocks();
     mockLimit.mockReset();
     mockReturning.mockReset();
+    mockExecute.mockReset();
     mockFrom.mockImplementation(() => ({ where: mockWhereForSelect }));
   });
 
@@ -62,13 +65,25 @@ describe('AuthMethodRepository', () => {
     expect(await repository.findByIdForUser(99, 10)).toBeNull();
   });
 
-  it('findByIdForUser and findByProviderUserId return row or null', async () => {
+  it('findByIdForUser returns row or null', async () => {
     const method = { id: 4, provider: 'google' };
     mockLimit.mockResolvedValueOnce([method]);
     expect(await repository.findByIdForUser(4, 10)).toEqual(method);
 
     mockLimit.mockResolvedValueOnce([]);
+    expect(await repository.findByIdForUser(4, 10)).toBeNull();
+  });
+
+  it('findByProviderUserId resolves via the SECURITY DEFINER resolver and coerces bigint ids', async () => {
+    mockExecute.mockResolvedValueOnce([]);
     expect(await repository.findByProviderUserId('google', 'gid')).toBeNull();
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+
+    mockExecute.mockResolvedValueOnce([
+      { id: '4', user_id: '10', user_public_id: 'usr_pub', provider: 'google' },
+    ]);
+    const resolved = await repository.findByProviderUserId('google', 'gid');
+    expect(resolved).toMatchObject({ id: 4, user_id: 10, user_public_id: 'usr_pub' });
   });
 
   it('create inserts and returns auth method', async () => {

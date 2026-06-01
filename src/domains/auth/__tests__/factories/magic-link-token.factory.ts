@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { database } from '@/infrastructure/database/connection.js';
-import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token.schema.js';
+import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.schema.js';
 import {
   MAGIC_LINK_EXPIRES_IN_MINUTES,
   MILLISECONDS_PER_MINUTE,

@@ -3,14 +3,18 @@ import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/erro
 import { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodRepository } from '@/domains/auth/sub-domains/auth-method/auth-method.repository.js';
-import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token.repository.js';
+import type { VerificationTokenRepository } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.repository.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type * as EventBusModule from '@/core/events/event-bus.js';
 
 vi.mock('@/core/events/event-bus.js', async (importOriginal) => {
   const original = await importOriginal<typeof EventBusModule>();
   return {
     ...original,
-    eventBus: { emit: vi.fn().mockResolvedValue(undefined) },
+    eventBus: {
+      emit: vi.fn().mockResolvedValue(undefined),
+      emitStrict: vi.fn().mockResolvedValue(undefined),
+    },
   };
 });
 
@@ -23,12 +27,23 @@ vi.mock('@/shared/utils/text/email.util.js', () => ({
   isDisposableEmailBlocked: vi.fn(() => false),
 }));
 
+vi.mock('@/shared/utils/security/anti-enumeration.util.js', () => ({
+  enforceMinimumDuration: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
+    callback(),
+  ),
+}));
+
 const user = {
   id: 1,
   public_id: 'user_public',
   email: 'user@example.com',
   password_hash: 'hash',
   is_email_verified: false,
+  status: 'ACTIVE',
 };
 
 describe('AuthMethodService', () => {
@@ -60,10 +75,16 @@ describe('AuthMethodService', () => {
     markUsed: vi.fn(),
   } as unknown as VerificationTokenRepository;
 
+  const authSessionService = {
+    revokeAllSessions: vi.fn().mockResolvedValue(undefined),
+    revokeAllSessionsExceptCurrent: vi.fn().mockResolvedValue(undefined),
+  } as unknown as AuthSessionService;
+
   const service = new AuthMethodService(
     userService,
     authMethodRepository,
     verificationTokenRepository,
+    authSessionService,
   );
 
   beforeEach(() => {
@@ -76,9 +97,7 @@ describe('AuthMethodService', () => {
     await expect(service.list('missing')).rejects.toBeInstanceOf(NotFoundError);
     await expect(
       service.create('missing', {
-        method_type: 'OAUTH',
-        provider: 'google',
-        provider_user_id: 'gid',
+        method_type: 'MAGIC_LINK',
         is_primary: true,
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -92,14 +111,36 @@ describe('AuthMethodService', () => {
   it('lists and mutates auth methods for user', async () => {
     await service.list('user_public');
     await service.create('user_public', {
-      method_type: 'OAUTH',
-      provider: 'google',
-      provider_user_id: 'gid',
+      method_type: 'MAGIC_LINK',
       is_primary: true,
     });
     await service.delete('user_public', 2);
     await service.revokeAllForUser('user_public');
     expect(authMethodRepository.create).toHaveBeenCalled();
+  });
+
+  it('does not persist user-supplied provider identity fields on manual create', async () => {
+    await service.create('user_public', { method_type: 'MAGIC_LINK' });
+    const createArgs = vi.mocked(authMethodRepository.create).mock.calls.at(-1)?.[0];
+    expect(createArgs).not.toHaveProperty('provider');
+    expect(createArgs).not.toHaveProperty('provider_user_id');
+  });
+
+  it('rejects manual OAUTH linking (account-takeover guard)', async () => {
+    await expect(service.create('user_public', { method_type: 'OAUTH' })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(authMethodRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects manual provider identity binding via strict DTO', async () => {
+    await expect(
+      service.create('user_public', {
+        method_type: 'OAUTH',
+        provider: 'google',
+        provider_user_id: 'victim-sub',
+      } as never),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('forgotPassword creates reset token when user exists', async () => {
@@ -112,6 +153,18 @@ describe('AuthMethodService', () => {
     vi.mocked(userService.findByEmail).mockResolvedValue(null);
     const result = await service.forgotPassword({ email: 'missing@example.com' });
     expect(result.messageKey).toBe('success:passwordResetEmailSent');
+    expect(verificationTokenRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('forgotPassword enforces a constant-time floor on both account-existence branches', async () => {
+    const { enforceMinimumDuration } = await import(
+      '@/shared/utils/security/anti-enumeration.util.js'
+    );
+    await service.forgotPassword({ email: user.email });
+    vi.mocked(userService.findByEmail).mockResolvedValue(null);
+    await service.forgotPassword({ email: 'missing@example.com' });
+    // The known- and unknown-account paths both run the floor so latency cannot be an oracle.
+    expect(vi.mocked(enforceMinimumDuration)).toHaveBeenCalledTimes(2);
   });
 
   it('resetPassword updates password for valid token', async () => {
@@ -121,6 +174,7 @@ describe('AuthMethodService', () => {
     } as never);
     await service.resetPassword({ token: 'reset-token', password: 'NewPassword123!' });
     expect(userService.updatePassword).toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessions).toHaveBeenCalledWith(user.public_id);
   });
 
   it('resetPassword rejects invalid token', async () => {
@@ -130,12 +184,30 @@ describe('AuthMethodService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
-  it('changePassword verifies current password', async () => {
+  it('changePassword verifies current password and revokes other sessions', async () => {
+    await service.changePassword(
+      'user_public',
+      {
+        current_password: 'old',
+        new_password: 'NewPassword123!',
+      },
+      { currentAccessToken: 'current-bearer-token' },
+    );
+    expect(userService.updatePassword).toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessionsExceptCurrent).toHaveBeenCalledWith({
+      userPublicId: user.public_id,
+      currentAccessToken: 'current-bearer-token',
+    });
+    expect(authSessionService.revokeAllSessions).not.toHaveBeenCalled();
+  });
+
+  it('changePassword revokes all sessions when no current token is supplied', async () => {
     await service.changePassword('user_public', {
       current_password: 'old',
       new_password: 'NewPassword123!',
     });
-    expect(userService.updatePassword).toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessionsExceptCurrent).not.toHaveBeenCalled();
+    expect(authSessionService.revokeAllSessions).toHaveBeenCalledWith(user.public_id);
   });
 
   it('changePassword rejects when password auth disabled', async () => {
@@ -277,16 +349,19 @@ describe('AuthMethodService', () => {
 
     vi.mocked(authMethodRepository.findByProviderUserId).mockResolvedValue(null);
     await service.findByProviderUserId('google', 'gid');
-    await service.linkOAuthProviderIfMissing(oauthData);
+    await service.linkOAuthProviderIfMissing({ ownerPublicId: user.public_id, data: oauthData });
     expect(authMethodRepository.create).toHaveBeenCalledWith(oauthData);
 
     vi.mocked(authMethodRepository.findByProviderUserId).mockResolvedValue({ id: 9 } as never);
-    await service.linkOAuthProviderIfMissing(oauthData);
+    await service.linkOAuthProviderIfMissing({ ownerPublicId: user.public_id, data: oauthData });
     expect(authMethodRepository.create).toHaveBeenCalledTimes(1);
 
     await service.linkOAuthProviderIfMissing({
-      user_id: user.id,
-      method_type: 'PASSWORD',
+      ownerPublicId: user.public_id,
+      data: {
+        user_id: user.id,
+        method_type: 'PASSWORD',
+      },
     });
     await service.findTotpByUserId(user.id);
     await service.createAuthMethodRecord(oauthData);

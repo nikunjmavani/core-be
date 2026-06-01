@@ -52,6 +52,7 @@ function buildService() {
 
   const planService = {
     requirePlanRecordByPublicId: vi.fn().mockResolvedValue(plan),
+    requireActivePlanByPublicId: vi.fn().mockResolvedValue(plan),
     requirePlanRecordByInternalId: vi.fn().mockResolvedValue(plan),
   } as unknown as PlanService;
 
@@ -70,7 +71,7 @@ function buildService() {
     createSubscription: vi.fn().mockResolvedValue({ providerSubscriptionId: 'sub_provider' }),
     cancelSubscriptionAtPeriodEnd: vi.fn().mockResolvedValue(undefined),
     resumeSubscription: vi.fn().mockResolvedValue(undefined),
-    updateSubscriptionPrice: vi.fn().mockResolvedValue(true),
+    updateSubscriptionPrice: vi.fn().mockResolvedValue(undefined),
     compensateFailedCreate: vi.fn().mockResolvedValue(undefined),
     compensatePlanChange: vi.fn().mockResolvedValue(undefined),
   } satisfies PaymentProvider;
@@ -97,7 +98,10 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
 
     await service.cancel('org_public', 'sub_public');
 
-    expect(paymentProvider.cancelSubscriptionAtPeriodEnd).toHaveBeenCalledWith('sub_provider');
+    expect(paymentProvider.cancelSubscriptionAtPeriodEnd).toHaveBeenCalledWith(
+      'sub_provider',
+      undefined,
+    );
     expect(repository.update).toHaveBeenCalledWith(
       'sub_public',
       organization.id,
@@ -119,7 +123,7 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
 
     await service.resume('org_public', 'sub_public');
 
-    expect(paymentProvider.resumeSubscription).toHaveBeenCalledWith('sub_provider');
+    expect(paymentProvider.resumeSubscription).toHaveBeenCalledWith('sub_provider', undefined);
     expect(repository.update).toHaveBeenCalledWith(
       'sub_public',
       organization.id,

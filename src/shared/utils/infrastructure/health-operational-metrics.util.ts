@@ -3,6 +3,10 @@ import { getTotalDeadLetterJobCount } from '@/infrastructure/observability/dlq-d
 import { countPendingMailOutbox } from '@/infrastructure/mail/mail-outbox.repository.js';
 import { MONITORED_BULLMQ_QUEUE_NAMES } from '@/infrastructure/observability/metrics/bullmq-metrics.js';
 import {
+  getWorkerQueueOperationalManifest,
+  type WorkerQueueOperationalManifestEntry,
+} from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
+import {
   readWorkerQueueHeartbeats,
   type WorkerQueueHeartbeat,
 } from '@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js';
@@ -11,12 +15,14 @@ import { isApplicationDraining } from '@/shared/utils/infrastructure/application
 
 const OPERATIONAL_METRICS_CACHE_TTL_MILLISECONDS = MILLISECONDS_PER_MINUTE;
 
+/** Operational health snapshot returned by {@link getCachedHealthOperationalMetrics} and surfaced on `/readyz`. */
 export type HealthOperationalMetrics = {
   migration_version: string | null;
   mail_outbox_pending: number;
   dlq_depth: number;
   draining: boolean;
   worker_queues: WorkerQueueHeartbeat[];
+  worker_queue_manifest: readonly WorkerQueueOperationalManifestEntry[];
 };
 
 let cachedOperationalMetrics: {
@@ -25,7 +31,7 @@ let cachedOperationalMetrics: {
 } | null = null;
 
 /**
- * Operational signals for `/health` (cached 60s to limit DB/Redis load).
+ * Operational signals for `/readyz` (cached 60s to limit DB/Redis load).
  */
 export async function getCachedHealthOperationalMetrics(): Promise<HealthOperationalMetrics> {
   const now = Date.now();
@@ -46,6 +52,7 @@ export async function getCachedHealthOperationalMetrics(): Promise<HealthOperati
     dlq_depth,
     draining: isApplicationDraining(),
     worker_queues,
+    worker_queue_manifest: getWorkerQueueOperationalManifest(),
   };
   cachedOperationalMetrics = {
     value,

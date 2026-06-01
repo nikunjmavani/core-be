@@ -1,8 +1,9 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
-import type { AuthMethodCreateData } from './auth-method.types.js';
+import type { AuthMethodCreateData, AuthMethodProviderLookup } from './auth-method.types.js';
 
+/** Drizzle repository for the {@link auth_methods} table; reads and writes use the request-scoped database handle so Postgres RLS enforces organization isolation. Soft-deletes via `revoked_at` rather than physical deletion. */
 export class AuthMethodRepository {
   async listByUserId(userId: number) {
     return getRequestDatabase()
@@ -63,19 +64,29 @@ export class AuthMethodRepository {
     return rows[0] ?? null;
   }
 
-  async findByProviderUserId(provider: string, providerUserId: string) {
-    const rows = await getRequestDatabase()
-      .select()
-      .from(auth_methods)
-      .where(
-        and(
-          eq(auth_methods.provider, provider),
-          eq(auth_methods.provider_user_id, providerUserId),
-          isNull(auth_methods.revoked_at),
-        ),
-      )
-      .limit(1);
-    return rows[0] ?? null;
+  /**
+   * Resolves a linked credential by `(provider, provider_user_id)` for the pre-session OAuth
+   * callback via the `auth.resolve_auth_method_by_provider` SECURITY DEFINER resolver. `auth_methods`
+   * is FORCE RLS and the callback has no `app.current_user_id` yet, so a plain SELECT would resolve
+   * the owner policy to NULL and return zero rows. Returns the row plus the owning `user_public_id`.
+   */
+  async findByProviderUserId(
+    provider: string,
+    providerUserId: string,
+  ): Promise<AuthMethodProviderLookup | null> {
+    const result = await getRequestDatabase().execute(
+      sql`SELECT * FROM auth.resolve_auth_method_by_provider(${provider}, ${providerUserId})`,
+    );
+    const rows = (
+      Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])
+    ) as Record<string, unknown>[];
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      ...(row as unknown as AuthMethodProviderLookup),
+      id: Number((row as { id: unknown }).id),
+      user_id: Number((row as { user_id: unknown }).user_id),
+    };
   }
 
   async create(data: AuthMethodCreateData) {

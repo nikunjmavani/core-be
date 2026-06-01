@@ -45,7 +45,8 @@ describe('SubscriptionRepository', () => {
 
     const result = await repository.listByOrganization(10, 5);
 
-    expect(mockLimit).toHaveBeenCalledWith(5);
+    // capListWithWarning fetches limit+1 to detect truncation without returning an extra row.
+    expect(mockLimit).toHaveBeenCalledWith(6);
     expect(result).toEqual([subscription]);
   });
 

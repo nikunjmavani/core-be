@@ -7,7 +7,7 @@
 import { execSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import * as logger from '../common/logger.js';
+import * as logger from '@tooling/setup/common/logger.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '../../..');
 

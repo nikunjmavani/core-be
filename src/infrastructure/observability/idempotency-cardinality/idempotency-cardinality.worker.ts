@@ -11,8 +11,18 @@ import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
- * BullMQ worker that samples Redis idempotency key cardinality on a schedule.
- * Repeatable schedule is registered in `src/infrastructure/queue/scheduler.ts`.
+ * Creates the BullMQ worker that drives {@link sampleIdempotencyCardinality}
+ * on the repeatable scheduler tick.
+ *
+ * @remarks
+ * - **Algorithm:** one job per tick at `RETENTION_WORKER_CONCURRENCY`; logs the
+ *   observed key count and truncation flag on every completion.
+ * - **Failure modes:** sampler errors propagate to BullMQ retry then DLQ; stalled
+ *   jobs log at warn via the `stalled` listener.
+ * - **Side effects:** see {@link sampleIdempotencyCardinality} — Redis SCAN,
+ *   counter SET, optional Sentry alerts.
+ * - **Notes:** repeatable schedule is registered in
+ *   `src/infrastructure/queue/scheduler.ts`.
  */
 export function createIdempotencyCardinalityWorker(): WorkerHandle {
   const worker = new Worker(

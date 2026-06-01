@@ -1,3 +1,4 @@
+/** Discriminator for {@link AppError} subclasses; mapped to wire-format codes via {@link ERROR_CODE_TO_SNAKE}. */
 export type AppErrorCode =
   | 'VALIDATION_ERROR'
   | 'NOT_FOUND'
@@ -28,6 +29,12 @@ export const ERROR_CODE_TO_SNAKE: Record<AppErrorCode, string> = {
   NOT_IMPLEMENTED: 'not_implemented',
 };
 
+/**
+ * Base class for every typed application error. Carries an HTTP status code,
+ * an i18n `messageKey`, optional `messageParams` for interpolation, and a
+ * fallback English message used when no i18n context is available. The error
+ * handler middleware translates `messageKey` via `request.t()`.
+ */
 export class AppError extends Error {
   readonly code: AppErrorCode;
   readonly statusCode: number;

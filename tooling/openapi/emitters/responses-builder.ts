@@ -1,5 +1,5 @@
 import { EXTERNAL_ERROR_MESSAGE } from '@/shared/constants/index.js';
-import { routeResponseMap } from '@tooling/openapi/response-map.js';
+import { routeResponseMap } from '@tooling/openapi/response-map/index.js';
 
 const errorResponseSchema = {
   type: 'object',

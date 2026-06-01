@@ -7,15 +7,40 @@ import {
   IDEMPOTENCY_CLAIM_COUNTER_LOGICAL_KEY,
 } from '@/shared/utils/idempotency/idempotency-key.util.js';
 
+/**
+ * Result of {@link sampleIdempotencyCardinality} — approximate Redis SCAN count
+ * for idempotency keys plus a `scanTruncated` flag set when the bounded scan
+ * gave up before exhausting the keyspace.
+ *
+ * @remarks
+ * - **Algorithm:** `observedCount` is summed across SCAN pages with COUNT=1000;
+ *   `scanTruncated = true` indicates the count is a lower bound capped at
+ *   `IDEMPOTENCY_CARDINALITY_SCAN_MAX`.
+ * - **Failure modes:** never returned on scan failure (the sampler throws);
+ *   counter-sync failures still allow the result to be returned.
+ * - **Side effects:** none from the type itself.
+ * - **Notes:** consumed by the worker for structured logging.
+ */
 export interface IdempotencyCardinalitySampleResult {
   observedCount: number;
   scanTruncated: boolean;
 }
 
 /**
- * Samples the approximate cardinality of idempotency cache keys in Redis (SCAN),
- * optionally alerts when crossing configured thresholds, and resets the
- * Approximate-claim counter so it tracks the last observed SCAN count.
+ * Bounded Redis SCAN over idempotency cache keys that resets the claim counter
+ * and raises Sentry alerts when growth crosses warn/critical thresholds.
+ *
+ * @remarks
+ * - **Algorithm:** iterates `SCAN MATCH IDEMPOTENCY_CACHE_KEY_MATCH_PATTERN COUNT 1000`
+ *   until cursor returns to `'0'` or `observedCount >= IDEMPOTENCY_CARDINALITY_SCAN_MAX`,
+ *   then writes the observed total to `IDEMPOTENCY_CLAIM_COUNTER_LOGICAL_KEY`.
+ * - **Failure modes:** scan errors are logged and rethrown (so BullMQ retries);
+ *   counter-sync failures are logged at warn but do NOT abort the sample.
+ * - **Side effects:** Redis `SCAN` pages; `SET` on the claim counter key;
+ *   Sentry `captureMessage` with `level: 'error'` or `'warning'` when over
+ *   `IDEMPOTENCY_CARDINALITY_CRITICAL_THRESHOLD` / `_WARN_THRESHOLD`.
+ * - **Notes:** the scan is bounded to keep Redis CPU predictable; treat
+ *   `scanTruncated === true` as "alert may underestimate".
  */
 export async function sampleIdempotencyCardinality(): Promise<IdempotencyCardinalitySampleResult> {
   const maxKeys = env.IDEMPOTENCY_CARDINALITY_SCAN_MAX;

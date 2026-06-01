@@ -7,11 +7,34 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { StripeWebhookEventRepository } from './stripe-webhook-event.repository.js';
 import { runStripeWebhookHandlerWithOrganizationContext } from './stripe-webhook-organization.util.js';
-import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database-context.js';
+import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 
 /**
  * Processes Stripe webhook events and syncs subscription state.
  * Plans are managed offline via admin panel — subscription lifecycle events only.
+ *
+ * @remarks
+ * - **Algorithm:** Signature verification has already happened upstream in
+ *   `stripeWebhookIngressPlugin` (raw-body HMAC check); this service then
+ *   1) claims the event id in {@link StripeWebhookEventRepository.tryClaimEvent}
+ *      to enforce at-least-once idempotency, 2) resolves tenancy scope via
+ *      {@link runStripeWebhookHandlerWithOrganizationContext} (reads
+ *      `organization_id` metadata or `billing.resolve_organization_public_id_for_stripe_subscription`)
+ *      so RLS sees `app.current_organization_id`, 3) dispatches by event type
+ *      and updates the local subscription row via a worker-scoped repository,
+ *      and 4) marks the ledger row `processed`.
+ * - **Failure modes:** Returns silently on `processed_duplicate`; throws
+ *   {@link ConflictError} on `still_processing_within_lease` so BullMQ retries;
+ *   any thrown error marks the ledger row `failed` (truncated reason, up to
+ *   2,000 chars) before rethrowing so the worker honours its retry/backoff.
+ *   Subscription updates use the `last_stripe_event_created_at` watermark to
+ *   discard out-of-order events.
+ * - **Side effects:** Writes to `billing.stripe_webhook_events` (always) and
+ *   `billing.subscriptions` (on subscription lifecycle events). Logs each
+ *   stage; unhandled event types are logged and skipped.
+ * - **Notes:** Runs inside {@link withSystemTableWorkerContext} so the ledger
+ *   write happens without an organization GUC; the subscription write then
+ *   switches into {@link withOrganizationContext} for RLS-safe mutation.
  */
 export class StripeWebhookService {
   constructor(

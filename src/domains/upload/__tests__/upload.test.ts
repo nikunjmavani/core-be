@@ -8,6 +8,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import type { FastifyInstance } from 'fastify';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 describe('Upload Domain — Integration', () => {
   let app: FastifyInstance;
@@ -29,7 +30,7 @@ describe('Upload Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: '/api/v1/uploads',
+        url: testApiPath('/uploads'),
         payload: {},
       });
       expect(response.statusCode).toBe(401);
@@ -40,7 +41,7 @@ describe('Upload Domain — Integration', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: '/api/v1/uploads',
+        url: testApiPath('/uploads'),
         token,
         payload: {},
       });
@@ -52,7 +53,7 @@ describe('Upload Domain — Integration', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: '/api/v1/uploads',
+        url: testApiPath('/uploads'),
         token,
         payload: {
           purpose: 'invalid-purpose',
@@ -71,7 +72,7 @@ describe('Upload Domain — Integration', () => {
 
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: `/api/v1/uploads/${unknownUploadPublicId}`,
+        url: testApiPath(`/uploads/${unknownUploadPublicId}`),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -80,7 +81,7 @@ describe('Upload Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
-        url: `/api/v1/uploads/${unknownUploadPublicId}`,
+        url: testApiPath(`/uploads/${unknownUploadPublicId}`),
         token,
       });
       expect(response.statusCode).toBe(404);
@@ -93,7 +94,7 @@ describe('Upload Domain — Integration', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: `/api/v1/uploads/${unknownUploadPublicId}`,
+        url: testApiPath(`/uploads/${unknownUploadPublicId}`),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -103,7 +104,7 @@ describe('Upload Domain — Integration', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: `/api/v1/uploads/${unknownUploadPublicId}`,
+        url: testApiPath(`/uploads/${unknownUploadPublicId}`),
         token,
       });
       expect(response.statusCode).toBe(404);

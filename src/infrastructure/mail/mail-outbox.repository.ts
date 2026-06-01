@@ -3,10 +3,15 @@ import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/conte
 import {
   assertWorkerDatabaseContext,
   isWorkerRuntime,
-} from '@/infrastructure/database/contexts/worker-database-context.js';
+} from '@/infrastructure/database/contexts/worker-database.context.js';
 import { mail_outbox } from '@/infrastructure/mail/mail-outbox.schema.js';
 import type { MailEnqueueInput } from '@/infrastructure/mail/queues/mail.queue.js';
 
+/**
+ * Outcome of {@link tryClaimPendingMailOutbox}: `claimed` when this caller owns the
+ * row, `in_flight` when another worker holds it (status `sending`), `already_sent`
+ * when delivery completed, or `not_found` when the outbox row was deleted/expired.
+ */
 export type MailOutboxClaimResult = 'claimed' | 'in_flight' | 'already_sent' | 'not_found';
 
 function mailOutboxDatabase() {
@@ -16,6 +21,12 @@ function mailOutboxDatabase() {
   return resolveRepositoryDatabaseHandle(undefined);
 }
 
+/**
+ * Inserts a `pending` row into `auth.mail_outbox` (transactional outbox pattern) —
+ * enrolls in the active request transaction when present so the row commits only
+ * if the surrounding business write succeeds. Returns the generated `id` used as
+ * the BullMQ job payload.
+ */
 export async function insertMailOutbox(data: MailEnqueueInput): Promise<number> {
   const toAddresses = Array.isArray(data.to) ? data.to : [data.to];
   const rows = await mailOutboxDatabase()
@@ -37,6 +48,7 @@ export async function insertMailOutbox(data: MailEnqueueInput): Promise<number> 
   return mailOutboxId;
 }
 
+/** Loads one outbox row by id, or `null` when the row has been retention-pruned. */
 export async function findMailOutboxById(mailOutboxId: number) {
   const rows = await mailOutboxDatabase()
     .select()
@@ -118,6 +130,10 @@ export async function findStalePendingMailOutboxIds(
   return rows.map((row) => row.id);
 }
 
+/**
+ * Finalises a row as `sent`, stamping the Resend message id and `sent_at` —
+ * called after a successful Resend `emails.send` in {@link processMailOutboxJob}.
+ */
 export async function markMailOutboxSent(
   mailOutboxId: number,
   resendMessageId: string,
@@ -133,6 +149,10 @@ export async function markMailOutboxSent(
     .where(eq(mail_outbox.id, mailOutboxId));
 }
 
+/**
+ * Marks the row `failed` after BullMQ has exhausted all attempts — terminal state,
+ * the DLQ hook captures the final-failure event for operator follow-up.
+ */
 export async function markMailOutboxFailed(mailOutboxId: number): Promise<void> {
   await mailOutboxDatabase()
     .update(mail_outbox)
@@ -148,6 +168,7 @@ export async function releaseMailOutboxClaim(mailOutboxId: number): Promise<void
     .where(and(eq(mail_outbox.id, mailOutboxId), eq(mail_outbox.status, 'sending')));
 }
 
+/** Pending-row gauge for health/observability endpoints and the outbox sweeper. */
 export async function countPendingMailOutbox(): Promise<number> {
   const rows = await mailOutboxDatabase()
     .select({ count: count() })

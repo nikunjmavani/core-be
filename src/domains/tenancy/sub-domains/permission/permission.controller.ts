@@ -5,6 +5,11 @@ import { getRequestIdentifier } from '@/shared/utils/http/request.util.js';
 import type { PermissionService } from './permission.service.js';
 import { serializePermission } from './permission.serializer.js';
 
+/**
+ * Builds the HTTP handler map for `GET /permissions`. The list is a static
+ * catalog so the response is annotated for HTTP caching via
+ * {@link applyCatalogCacheHeaders}.
+ */
 export function createPermissionController(service: PermissionService) {
   return {
     listPermissions: async (request: FastifyRequest, reply: FastifyReply) => {

@@ -24,6 +24,9 @@ import { UPLOAD_PURPOSES, UPLOAD_TARGETS } from '@/domains/upload/upload.constan
 import { injectAuthenticated } from '@/tests/helpers/test-http-inject.helper.js';
 import type { FastifyInstance } from 'fastify';
 
+const SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY = 'tenant-isolation-subscription-mutation-key';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+
 const TENANCY_READ_PERMISSIONS = [
   TENANCY_PERMISSIONS.ORGANIZATION_READ,
   TENANCY_PERMISSIONS.MEMBERSHIP_READ,
@@ -74,7 +77,7 @@ describe('Security: Tenant isolation', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: `/api/v1/tenancy/organizations/${orgB.organization.public_id}/settings`,
+      url: testApiPath(`/tenancy/organizations/${orgB.organization.public_id}/settings`),
       token: orgA.token,
       organizationPublicId: orgB.organization.public_id,
     });
@@ -88,7 +91,7 @@ describe('Security: Tenant isolation', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: `/api/v1/tenancy/organizations/${orgB.organization.public_id}/memberships`,
+      url: testApiPath(`/tenancy/organizations/${orgB.organization.public_id}/memberships`),
       token: orgA.token,
     });
 
@@ -101,7 +104,7 @@ describe('Security: Tenant isolation', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: `/api/v1/notify/organizations/${orgB.organization.public_id}/webhooks`,
+      url: testApiPath(`/notify/organizations/${orgB.organization.public_id}/webhooks`),
       token: orgA.token,
       organizationPublicId: orgB.organization.public_id,
     });
@@ -114,7 +117,7 @@ describe('Security: Tenant isolation', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: `/api/v1/tenancy/organizations/${organization.public_id}/settings`,
+      url: testApiPath(`/tenancy/organizations/${organization.public_id}/settings`),
       token,
       organizationPublicId: organization.public_id,
     });
@@ -129,7 +132,7 @@ describe('Security: Tenant isolation', () => {
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: `/api/v1/tenancy/organizations/${organization.public_id}/settings`,
+      url: testApiPath(`/tenancy/organizations/${organization.public_id}/settings`),
       token: outsiderToken,
     });
 
@@ -149,7 +152,7 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: `/api/v1/billing/organizations/${fixture.organizationB.public_id}/subscriptions`,
+        url: testApiPath(`/billing/organizations/${fixture.organizationB.public_id}/subscriptions`),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationB.public_id,
       });
@@ -162,7 +165,9 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: `/api/v1/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}`,
+        url: testApiPath(
+          `/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}`,
+        ),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationB.public_id,
       });
@@ -175,7 +180,9 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'PATCH',
-        url: `/api/v1/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}`,
+        url: testApiPath(
+          `/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}`,
+        ),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationB.public_id,
         payload: { cancel_at_period_end: true },
@@ -196,9 +203,12 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: `/api/v1/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}/cancel`,
+        url: testApiPath(
+          `/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}/cancel`,
+        ),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationB.public_id,
+        headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: {},
       });
 
@@ -210,9 +220,12 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: `/api/v1/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}/change-plan`,
+        url: testApiPath(
+          `/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}/change-plan`,
+        ),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationB.public_id,
+        headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: { plan_id: fixture.plan.public_id },
       });
 
@@ -225,9 +238,12 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: `/api/v1/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}/resume`,
+        url: testApiPath(
+          `/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}/resume`,
+        ),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationB.public_id,
+        headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: {},
       });
 
@@ -239,7 +255,7 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: `/api/v1/billing/organizations/${fixture.organizationB.public_id}/subscriptions`,
+        url: testApiPath(`/billing/organizations/${fixture.organizationB.public_id}/subscriptions`),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationA.public_id,
         payload: { plan_id: fixture.plan.public_id, billing_cycle: 'monthly' },
@@ -270,7 +286,9 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: `/api/v1/tenancy/organizations/${orgB.organization.public_id}/notification-policies`,
+        url: testApiPath(
+          `/tenancy/organizations/${orgB.organization.public_id}/notification-policies`,
+        ),
         token: orgA.token,
         organizationPublicId: orgB.organization.public_id,
       });
@@ -284,7 +302,7 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: `/api/v1/tenancy/organizations/${orgB.organization.public_id}/api-keys`,
+        url: testApiPath(`/tenancy/organizations/${orgB.organization.public_id}/api-keys`),
         token: orgA.token,
         organizationPublicId: orgB.organization.public_id,
       });
@@ -298,7 +316,7 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: `/api/v1/tenancy/organizations/${orgB.organization.public_id}/roles`,
+        url: testApiPath(`/tenancy/organizations/${orgB.organization.public_id}/roles`),
         token: orgA.token,
         organizationPublicId: orgB.organization.public_id,
       });
@@ -312,7 +330,7 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: `/api/v1/notify/organizations/${orgB.organization.public_id}/webhook-events`,
+        url: testApiPath(`/notify/organizations/${orgB.organization.public_id}/webhook-events`),
         token: orgA.token,
         organizationPublicId: orgB.organization.public_id,
       });
@@ -327,7 +345,7 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: '/api/v1/uploads',
+        url: testApiPath('/uploads'),
         token: fixture.userA.token,
         organizationPublicId: fixture.organizationA.public_id,
         payload: {
@@ -343,7 +361,7 @@ describe('Security: Tenant isolation', () => {
       expect(response.statusCode).toBe(403);
     });
 
-    it('returns 404 when GET targets an upload owned by another user', async () => {
+    it('returns 403 when GET targets an upload in another organization', async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
       const uploadInB = await seedUploadForOrganization({
         userId: fixture.userB.id,
@@ -352,17 +370,17 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: `/api/v1/uploads/${uploadInB.public_id}`,
+        url: testApiPath(`/uploads/${uploadInB.public_id}`),
         token: fixture.userA.token,
       });
 
-      expect(response.statusCode).toBe(404);
+      expect(response.statusCode).toBe(403);
       expect(response.json()).not.toMatchObject({
         data: expect.objectContaining({ publicId: uploadInB.public_id }),
       });
     });
 
-    it('returns 404 when DELETE targets an upload owned by another user and row remains', async () => {
+    it('returns 403 when DELETE targets an upload in another organization and row remains', async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
       const uploadInB = await seedUploadForOrganization({
         userId: fixture.userB.id,
@@ -371,11 +389,11 @@ describe('Security: Tenant isolation', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: `/api/v1/uploads/${uploadInB.public_id}`,
+        url: testApiPath(`/uploads/${uploadInB.public_id}`),
         token: fixture.userA.token,
       });
 
-      expect(response.statusCode).toBe(404);
+      expect(response.statusCode).toBe(403);
 
       const [row] = await database
         .select({ deleted_at: uploads.deleted_at })

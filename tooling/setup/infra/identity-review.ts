@@ -12,9 +12,9 @@
  *   4. On edit, walk through prompts (each pre-filled with the current value).
  *   5. Persist back to setup.config.json.
  */
-import * as logger from '../common/logger.js';
-import { loadConfigIfExists, saveConfig } from '../common/config.js';
-import { createReadline, questionWithDefault } from '../common/prompts.js';
+import * as logger from '@tooling/setup/common/logger.js';
+import { loadConfigIfExists, saveConfig } from '@tooling/setup/common/config.js';
+import { createReadline, questionWithDefault } from '@tooling/setup/common/prompts.js';
 import {
   DEFAULT_DISPLAY_NAME,
   DEFAULT_ENVIRONMENTS,
@@ -27,9 +27,23 @@ import {
   isProductionEnvironmentName,
   labelForEnvironmentName,
 } from './init-wizard.js';
-import type { SetupConfig } from '../common/types.js';
+import type { SetupConfig } from '@tooling/setup/common/types.js';
 
-export const SETUP_SERVICE_NAMES = ['api', 'worker'];
+/**
+ * State keys for Railway services expected in each environment after setup.
+ * `api` and `worker` are created by the Railway provider as blank shells;
+ * `redis` is provisioned by the Railway Redis provider from Railway's `redis`
+ * database template (template-managed image, password, and volume).
+ */
+export const SETUP_SERVICE_NAMES = ['api', 'worker', 'redis'];
+
+export function formatSetupServiceName(serviceName: string): string {
+  return serviceName === 'redis' ? 'redis (database template)' : serviceName;
+}
+
+export function formatSetupServiceNames(serviceNames: readonly string[]): string {
+  return serviceNames.map(formatSetupServiceName).join(', ');
+}
 
 export interface IdentityReviewOptions {
   assumeYes?: boolean;
@@ -57,7 +71,7 @@ function printIdentitySummary(config: SetupConfig): void {
   for (const environment of config.environments) {
     const defaultMark = environment.isDefault ? ' (default)' : '';
     logger.info(
-      `    Environment         : ${environment.name} (${environment.label}) — branch "${environment.branch}" — services: ${SETUP_SERVICE_NAMES.join(', ')}${defaultMark}`,
+      `    Environment         : ${environment.name} (${environment.label}) — branch "${environment.branch}" — services: ${formatSetupServiceNames(SETUP_SERVICE_NAMES)}${defaultMark}`,
     );
   }
   logger.blank();

@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
@@ -19,14 +19,32 @@ interface OrganizationListPagination {
   limit: number;
 }
 
+/**
+ * Drizzle data-access for the `tenancy.organizations` table. Honours
+ * soft-delete (`deleted_at IS NULL`) on every read; supports cursor-based
+ * listings (global and per-user via memberships join), slug + Stripe customer
+ * lookups, owner transfer, and soft-delete. Insert paths use
+ * {@link runInsertWithPublicIdentifierRetry} to recover from rare public-id
+ * collisions.
+ */
 export class OrganizationRepository extends BaseRepository {
-  async resolveUserIdByPublicId(public_id: string): Promise<number | null> {
+  async resolveUserIdByPublicId(public_id: string | undefined): Promise<number | null> {
+    if (!public_id) return null;
     const rows = await getRequestDatabase()
       .select({ id: authUsers.id })
       .from(authUsers)
       .where(and(eq(authUsers.public_id, public_id), isNull(authUsers.deleted_at)))
       .limit(1);
     return rows[0]?.id ?? null;
+  }
+
+  async resolveUserPublicIdByInternalId(user_id: number): Promise<string | null> {
+    const rows = await getRequestDatabase()
+      .select({ public_id: authUsers.public_id })
+      .from(authUsers)
+      .where(and(eq(authUsers.id, user_id), isNull(authUsers.deleted_at)))
+      .limit(1);
+    return rows[0]?.public_id ?? null;
   }
 
   async findById(identifier: number): Promise<Organization | null> {
@@ -255,11 +273,26 @@ export class OrganizationRepository extends BaseRepository {
     return (rows[0] ?? null) as Organization | null;
   }
 
+  async markDeletionStarted(public_id: string): Promise<Organization | null> {
+    const rows = await getRequestDatabase()
+      .update(organizations)
+      .set({ deletion_started_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .where(and(eq(organizations.public_id, public_id), isNull(organizations.deleted_at)))
+      .returning();
+    return (rows[0] ?? null) as Organization | null;
+  }
+
   async softDelete(public_id: string): Promise<Organization | null> {
     const rows = await getRequestDatabase()
       .update(organizations)
       .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
-      .where(and(eq(organizations.public_id, public_id), isNull(organizations.deleted_at)))
+      .where(
+        and(
+          eq(organizations.public_id, public_id),
+          isNull(organizations.deleted_at),
+          isNotNull(organizations.deletion_started_at),
+        ),
+      )
       .returning();
     return (rows[0] ?? null) as Organization | null;
   }

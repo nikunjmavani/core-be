@@ -1,6 +1,6 @@
 ---
 description: Auto-triggers structure-maintainer skill when project documentation, rules, or skill files change.
-globs: CLAUDE.md, README.md, .cursor/rules/**/*.mdc, .cursor/skills/**/SKILL.md
+globs: AGENTS.md, CLAUDE.md, README.md, .cursor/rules/**/*.mdc, .cursor/skills/**/SKILL.md, .cursor/agents/**/*.md
 alwaysApply: false
 ---
 
@@ -9,3 +9,4 @@ When any matching file is created or modified, read and follow the structure-mai
 - Run the sync checklist to ensure CLAUDE.md, README.md, and all rules/skills are consistent
 - Verify domain structure tables match the actual directory layout
 - Check that new domains/sub-domains are reflected in documentation
+- When `.cursor/agents/` changes, ensure **AGENTS.md** custom subagents section stays in sync

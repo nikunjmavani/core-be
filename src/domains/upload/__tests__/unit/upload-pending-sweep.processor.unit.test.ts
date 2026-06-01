@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const headObjectMock = vi.fn();
+const getObjectMock = vi.fn();
 const deleteObjectMock = vi.fn();
 
 vi.mock('@/infrastructure/storage/storage.service.js', () => ({
   headObject: (...arguments_: unknown[]) => headObjectMock(...arguments_),
+  getObjectLeadingBytes: (...arguments_: unknown[]) => getObjectMock(...arguments_),
   deleteObject: (...arguments_: unknown[]) => deleteObjectMock(...arguments_),
 }));
 
@@ -57,9 +59,12 @@ function makeRow(overrides: Partial<PendingUploadSweepRow>): PendingUploadSweepR
   };
 }
 
+const validPngBody = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+
 describe('upload-pending-sweep.processor', () => {
   beforeEach(() => {
     headObjectMock.mockReset();
+    getObjectMock.mockReset();
     deleteObjectMock.mockReset();
     findPendingUploadsOlderThanMock.mockReset();
     setUploadStatusByInternalIdMock.mockReset();
@@ -89,6 +94,7 @@ describe('upload-pending-sweep.processor', () => {
     const row = makeRow({ id: 1, file_key: 'avatars/owner/match.png', file_size: 2048 });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
     headObjectMock.mockResolvedValueOnce({ contentType: 'image/png', contentLength: 2048 });
+    getObjectMock.mockResolvedValueOnce({ body: validPngBody });
     const databaseHandle = {} as never;
 
     const result = await runUploadPendingSweepJob(databaseHandle);
@@ -104,10 +110,25 @@ describe('upload-pending-sweep.processor', () => {
     const row = makeRow({ id: 5, file_size: 999 });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
     headObjectMock.mockResolvedValueOnce({ contentType: undefined, contentLength: 999 });
+    getObjectMock.mockResolvedValueOnce({ body: validPngBody });
 
     const result = await runUploadPendingSweepJob({} as never);
 
     expect(result.autoConfirmedCount).toBe(1);
+  });
+
+  it('marks rows FAILED when magic bytes do not match declared content type', async () => {
+    const row = makeRow({ id: 6, file_key: 'avatars/owner/spoof.png', file_size: 100 });
+    findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
+    headObjectMock.mockResolvedValueOnce({ contentType: 'image/png', contentLength: 100 });
+    getObjectMock.mockResolvedValueOnce({ body: Buffer.from('%PDF-1.4') });
+    const databaseHandle = {} as never;
+
+    const result = await runUploadPendingSweepJob(databaseHandle);
+
+    expect(setUploadStatusByInternalIdMock).toHaveBeenCalledWith(databaseHandle, 6, 'FAILED');
+    expect(result.failedCount).toBe(1);
+    expect(result.autoConfirmedCount).toBe(0);
   });
 
   it('marks rows FAILED when the S3 object content length does not match', async () => {
@@ -167,6 +188,7 @@ describe('upload-pending-sweep.processor', () => {
       .mockResolvedValueOnce({ contentType: undefined, contentLength: 100 })
       .mockResolvedValueOnce({ contentType: undefined, contentLength: 999 })
       .mockResolvedValueOnce(null);
+    getObjectMock.mockResolvedValueOnce({ body: validPngBody });
     deleteObjectMock.mockResolvedValueOnce(true);
     hardDeleteUploadsByInternalIdsMock.mockResolvedValueOnce(1);
 

@@ -8,12 +8,16 @@ import {
 } from './sub-domains/notification/notification-dispatch.service.js';
 import { NotificationRepository } from './sub-domains/notification/notification.repository.js';
 import { WebhookRepository } from './sub-domains/webhook/webhook.repository.js';
-import { WebhookDeliveryAttemptRepository } from './sub-domains/webhook/webhook-delivery-attempt.repository.js';
+import { WebhookDeliveryAttemptRepository } from './sub-domains/webhook/webhook-delivery/webhook-delivery-attempt.repository.js';
 import { WebhookEventRepository } from './sub-domains/webhook/webhook-event/webhook-event.repository.js';
 import { NotificationService } from './sub-domains/notification/notification.service.js';
 import { WebhookService } from './sub-domains/webhook/webhook.service.js';
 import { WebhookEventService } from './sub-domains/webhook/webhook-event/webhook-event.service.js';
 
+/**
+ * Public surface of the notify domain container — services and repositories the rest of the
+ * application is allowed to consume (decorated onto Fastify as `app.notifyDomain`).
+ */
 export type NotifyContainer = {
   notificationService: NotificationService;
   webhookService: WebhookService;
@@ -21,6 +25,11 @@ export type NotifyContainer = {
   webhookDeliveryAttemptRepository: WebhookDeliveryAttemptRepository;
 };
 
+/**
+ * Wire the notify-domain dependency graph: instantiate repositories, build services with their
+ * cross-domain collaborators, configure the in-process notification dispatch singleton, and
+ * register notify event handlers. Returns the public {@link NotifyContainer} surface.
+ */
 export function createNotifyContainer(
   organizationService: OrganizationService,
   userService: UserService,
@@ -49,6 +58,11 @@ export function createNotifyContainer(
   };
 }
 
+/**
+ * Fastify plugin entry point — pulls cross-domain services off `application.tenancyDomain` /
+ * `application.userDomain` and decorates the resulting {@link NotifyContainer} as
+ * `application.notifyDomain` for routes and other plugins to consume.
+ */
 export function registerNotifyContainer(application: FastifyInstance): void {
   const { organizationService } = application.tenancyDomain;
   const { userService } = application.userDomain;

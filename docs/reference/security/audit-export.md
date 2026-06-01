@@ -68,3 +68,8 @@ The worker does **not** push directly to a SIEM. Ingest is **pull-based from S3*
    Production SIEM connector wiring remains an ops step outside this repo.
 
 **Out of scope for v1 (explicit deferrals):** Apache Parquet, per-org HTTPS webhook push, admin presigned download (`audit:export` permission). NDJSON gzip + manifest + tests satisfy operational accept criteria.
+
+## Related
+
+- [`src/domains/audit/OVERVIEW.md`](../../../src/domains/audit/OVERVIEW.md) — audit domain invariants (append-only, best-effort writes, actor-scoped RLS, read-restricted)
+- [`src/PATTERNS.md`](../../../src/PATTERNS.md) § Audit Emission — the cross-cutting pattern that funnels writes through `recordAuditEvent`

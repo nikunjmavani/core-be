@@ -2,6 +2,7 @@ import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
@@ -18,7 +19,45 @@ interface MembershipListPagination {
   limit: number;
 }
 
+/** Row shape returned by {@link MembershipRepository.listOrganizationsForUserDataExport}. */
+export interface MembershipOrganizationUserDataExportRow {
+  name: string;
+  slug: string;
+  status: string;
+  created_at: Date;
+}
+
+/**
+ * Drizzle data access for `tenancy.memberships`. Active rows are filtered via
+ * `deleted_at IS NULL` (soft-delete semantics) and a partial unique index
+ * keeps the `(user_id, organization_id)` pair unique among active rows.
+ * Listing uses a `(created_at, id)` keyset cursor; `update` flips
+ * `joined_at` to `now()` when the status transitions to `ACTIVE`.
+ */
 export class MembershipRepository extends BaseRepository {
+  async listOrganizationsForUserDataExport(
+    user_id: number,
+    limit: number,
+  ): Promise<MembershipOrganizationUserDataExportRow[]> {
+    return getRequestDatabase()
+      .select({
+        name: organizations.name,
+        slug: organizations.slug,
+        status: memberships.status,
+        created_at: memberships.created_at,
+      })
+      .from(memberships)
+      .innerJoin(organizations, eq(memberships.organization_id, organizations.id))
+      .where(
+        and(
+          eq(memberships.user_id, user_id),
+          isNull(memberships.deleted_at),
+          isNull(organizations.deleted_at),
+        ),
+      )
+      .limit(limit);
+  }
+
   async findByOrganizationId(organization_id: number, pagination: MembershipListPagination) {
     const { after, limit } = pagination;
     const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
@@ -139,6 +178,32 @@ export class MembershipRepository extends BaseRepository {
       .where(
         and(
           eq(memberships.public_id, public_id),
+          eq(memberships.organization_id, organization_id),
+          isNull(memberships.deleted_at),
+        ),
+      )
+      .returning();
+    return (rows[0] ?? null) as MembershipRow | null;
+  }
+
+  /**
+   * Activates a membership as part of accepting its invitation: flips the
+   * status to `ACTIVE` and stamps `joined_at` only when the row is still
+   * pending (`status <> 'ACTIVE'`). Scoped by internal membership id +
+   * organization id so it runs inside the invitation-accept transaction
+   * (shared `withOrganizationDatabaseContext` unit of work) and stays
+   * idempotent for a membership that is already active.
+   */
+  async activateForInvitationAccept(
+    membership_id: number,
+    organization_id: number,
+  ): Promise<MembershipRow | null> {
+    const rows = await getRequestDatabase()
+      .update(memberships)
+      .set({ status: 'ACTIVE', joined_at: new Date(), updated_at: databaseNowTimestamp })
+      .where(
+        and(
+          eq(memberships.id, membership_id),
           eq(memberships.organization_id, organization_id),
           isNull(memberships.deleted_at),
         ),

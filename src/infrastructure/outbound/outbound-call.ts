@@ -19,6 +19,12 @@ import {
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
+/**
+ * Looser form of {@link OutboundCallOptions} that allows explicit `undefined` on each
+ * optional field so callers can spread partial values without tripping
+ * `exactOptionalPropertyTypes`. Pipe through {@link buildOutboundCallOptions} to drop
+ * the `undefined` keys before invoking {@link outboundCall}.
+ */
 export type OutboundCallOptionsInput<T> = {
   name: OutboundIntegrationName;
   operation: (signal: AbortSignal) => Promise<T>;
@@ -30,12 +36,20 @@ export type OutboundCallOptionsInput<T> = {
   rethrowIf?: ((error: unknown) => boolean) | undefined;
 };
 
+/**
+ * Strips `undefined` properties from {@link OutboundCallOptionsInput} so the resulting
+ * object is assignable to {@link OutboundCallOptions} under strict optional-property typing.
+ */
 export function buildOutboundCallOptions<T>(
   options: OutboundCallOptionsInput<T>,
 ): OutboundCallOptions<T> {
   return omitUndefined(options) as OutboundCallOptions<T>;
 }
 
+/**
+ * Retry policy for {@link outboundCall} — exponential backoff with jitter applied inside
+ * a single circuit-breaker `execute()` so retries do not multiply the failure count.
+ */
 export interface OutboundCallRetryOptions {
   maxAttempts: number;
   baseDelayMs: number;
@@ -44,6 +58,10 @@ export interface OutboundCallRetryOptions {
   shouldRetry?: (error: unknown) => boolean;
 }
 
+/**
+ * Resolved options consumed by {@link outboundCall}. Use {@link buildOutboundCallOptions}
+ * to construct one from the looser {@link OutboundCallOptionsInput} shape.
+ */
 export interface OutboundCallOptions<T> {
   name: OutboundIntegrationName;
   timeoutMs?: number;

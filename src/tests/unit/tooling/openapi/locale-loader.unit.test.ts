@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  getOpenApiLocale,
-  loadOpenApiStrings,
-} from '../../../../../tooling/openapi/extractors/locale-loader.js';
+import { getOpenApiLocale, loadOpenApiStrings } from '@tooling/openapi/extractors/locale-loader.js';
 
 describe('locale-loader', () => {
   it('getOpenApiLocale defaults to en', () => {

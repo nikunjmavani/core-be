@@ -2,11 +2,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  getRailwayExcludeRegex,
+  isRailwaySyncSchemaDriven,
   metricsDeploySyncHasErrors,
   metricsEnvironmentVariableNames,
-  parseRailwaySyncVariableNames,
   validateMetricsDeploySync,
-} from '../../../../tooling/setup/github/deploy-sync.js';
+} from '@tooling/setup/github/deploy-sync.js';
 
 const DEPLOY_WORKFLOW_PATH = resolve(
   import.meta.dirname,
@@ -21,31 +22,51 @@ describe('deploy-env-sync.util', () => {
     expect(names.every((name) => name.startsWith('METRICS_'))).toBe(true);
   });
 
-  it('parses Railway sync variable names from deploy workflow', () => {
+  it('deploy workflow uses schema-driven Railway sync (toJSON(secrets) + toJSON(vars))', () => {
     const workflowContent = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf-8');
-    const railwayVariables = parseRailwaySyncVariableNames(workflowContent);
-    expect(railwayVariables).toContain('METRICS_ENABLED');
-    expect(railwayVariables).toContain('METRICS_SCRAPE_TOKEN');
-    expect(railwayVariables).toContain('DATABASE_URL');
+    expect(isRailwaySyncSchemaDriven(workflowContent)).toBe(true);
+  });
+
+  it('deploy workflow exclude_regex skips infra/CI keys but not METRICS_*', () => {
+    const workflowContent = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf-8');
+    const excludeRegex = getRailwayExcludeRegex(workflowContent);
+    expect(excludeRegex).not.toBeNull();
+    expect(excludeRegex?.test('RAILWAY_TOKEN')).toBe(true);
+    expect(excludeRegex?.test('GITHUB_TOKEN')).toBe(true);
+    expect(excludeRegex?.test('METRICS_ENABLED')).toBe(false);
+    expect(excludeRegex?.test('METRICS_SCRAPE_TOKEN')).toBe(false);
   });
 
   it('keeps METRICS_* in sync between env schema and deploy workflow', () => {
     const workflowContent = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf-8');
     const validation = validateMetricsDeploySync(workflowContent);
     expect(metricsDeploySyncHasErrors(validation)).toBe(false);
-    expect(validation.missingFromRailwaySyncLoop).toEqual([]);
-    expect(validation.unknownMetricsInRailwaySyncLoop).toEqual([]);
-    expect(validation.missingFromWorkflowSecrets).toEqual([]);
+    expect(validation.workflowIsSchemaDriven).toBe(true);
+    expect(validation.metricsExcludedFromSync).toEqual([]);
   });
 
-  it('detects METRICS_* missing from Railway sync loop', () => {
-    const workflowContent = `
+  it('flags a deploy workflow that reverts to an enumerated sync loop', () => {
+    const enumeratedLoopWorkflow = `
       for var in METRICS_ENABLED AUDIT_RETENTION_DAYS; do
         val="\${!var:-}"
       done
     `;
-    const validation = validateMetricsDeploySync(workflowContent);
-    expect(validation.missingFromRailwaySyncLoop).toContain('METRICS_SCRAPE_TOKEN');
+    const validation = validateMetricsDeploySync(enumeratedLoopWorkflow);
+    expect(validation.workflowIsSchemaDriven).toBe(false);
+    expect(metricsDeploySyncHasErrors(validation)).toBe(true);
+  });
+
+  it('flags METRICS_* keys that fall under the Railway exclude_regex', () => {
+    const workflowWithMetricsExcluded = `
+      env:
+        GH_SECRETS_JSON: \${{ toJSON(secrets) }}
+        GH_VARS_JSON: \${{ toJSON(vars) }}
+      run: |
+        exclude_regex='^(METRICS_.*|RAILWAY_TOKEN)$'
+    `;
+    const validation = validateMetricsDeploySync(workflowWithMetricsExcluded);
+    expect(validation.workflowIsSchemaDriven).toBe(true);
+    expect(validation.metricsExcludedFromSync).toContain('METRICS_ENABLED');
     expect(metricsDeploySyncHasErrors(validation)).toBe(true);
   });
 

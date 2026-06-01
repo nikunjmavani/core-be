@@ -31,6 +31,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(projectRoot, 'src'),
+      '@tooling': resolve(projectRoot, 'tooling'),
     },
   },
 });

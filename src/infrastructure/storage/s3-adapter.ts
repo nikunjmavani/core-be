@@ -4,6 +4,7 @@ import {
   HeadObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
@@ -45,6 +46,14 @@ function requireBucket(): string {
 
 /** Default S3 implementation of {@link ObjectStoragePort}. */
 export class S3ObjectStorageAdapter implements ObjectStoragePort {
+  /**
+   * Presigned PUT URL bound to an exact `Content-Length`. `content-length` is forced into
+   * the SigV4 signed headers so S3 rejects any request whose body length differs from the
+   * value declared (and validated `<= UPLOAD_PURPOSE_CONFIG.maxSize`) at create time — this
+   * is the strongest size constraint a presigned PUT supports. For an explicit min/max range
+   * prefer the presigned POST flow (`UPLOAD_USE_PRESIGNED_POST=true`, recommended for
+   * production); see {@link createPresignedUploadPost}.
+   */
   async createPresignedUploadUrl(options: {
     key: string;
     contentType: string;
@@ -59,7 +68,10 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
       ContentLength: options.contentLength,
     });
 
-    return getSignedUrl(getS3Client(), command, { expiresIn: options.expiresInSeconds });
+    return getSignedUrl(getS3Client(), command, {
+      expiresIn: options.expiresInSeconds,
+      signableHeaders: new Set(['content-length', 'content-type', 'host']),
+    });
   }
 
   async createPresignedUploadPost(options: {
@@ -213,6 +225,30 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
     });
   }
 
+  async copyObject(options: {
+    sourceKey: string;
+    destinationKey: string;
+    contentType: string;
+  }): Promise<void> {
+    const bucket = requireBucket();
+    await outboundCall({
+      name: 's3',
+      operation: async (signal) => {
+        await getS3Client().send(
+          new CopyObjectCommand({
+            Bucket: bucket,
+            // CopySource is `<bucket>/<key>`; our keys use only URL-safe path characters.
+            CopySource: `${bucket}/${options.sourceKey}`,
+            Key: options.destinationKey,
+            ContentType: options.contentType,
+            MetadataDirective: 'REPLACE',
+          }),
+          { abortSignal: signal },
+        );
+      },
+    });
+  }
+
   async deleteObject(key: string): Promise<boolean> {
     const bucket = requireBucket();
 
@@ -239,6 +275,11 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
 
 let defaultAdapter: S3ObjectStorageAdapter | null = null;
 
+/**
+ * Returns the process-wide {@link S3ObjectStorageAdapter} singleton (instantiated on
+ * first call). DI containers should depend on {@link ObjectStoragePort} and accept this
+ * factory as the production binding; tests can supply a fake port instead.
+ */
 export function getDefaultS3ObjectStorageAdapter(): S3ObjectStorageAdapter {
   if (!defaultAdapter) {
     defaultAdapter = new S3ObjectStorageAdapter();

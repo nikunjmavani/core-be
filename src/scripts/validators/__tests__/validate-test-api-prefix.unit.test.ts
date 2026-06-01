@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { findInjectUrlViolations } from '../tests/validate-test-api-prefix.js';
+import { findInjectUrlViolations } from '@/scripts/validators/tests/validate-test-api-prefix.js';
 
 describe('validate-test-api-prefix', () => {
   it('passes when inject urls use testApiPath', () => {

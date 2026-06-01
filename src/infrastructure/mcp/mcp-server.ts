@@ -14,16 +14,20 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Response as LightMyRequestResponse } from 'light-my-request';
-import { z } from 'zod';
 import type { FastifyInstance, InjectOptions } from 'fastify';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { GLOBAL_ROLES } from '@/shared/constants/index.js';
+import {
+  MCP_OPENAPI_RESOURCE_URI,
+  MCP_RESOURCES,
+  MCP_ROUTES_RESOURCE_URI,
+  MCP_TOOLS,
+  callApiInputSchema,
+} from '@/infrastructure/mcp/mcp-capabilities.js';
 import { requireRole } from '@/shared/utils/auth/authorization.util.js';
 
-const ROUTES_RESOURCE_URI = 'core-be://routes';
 const ROUTES_CATALOG_PATH = join(process.cwd(), 'docs', 'routes.txt');
-const OPENAPI_RESOURCE_URI = 'core-be://openapi';
 const OPENAPI_SPEC_PATH = join(process.cwd(), 'docs', 'openapi', 'openapi.json');
 
 type McpSdk = {
@@ -68,16 +72,11 @@ function loadOpenApiSpec(): string {
   }
 }
 
-const callApiInputSchema = z.object({
-  method: z.enum(['GET', 'POST', 'PATCH', 'PUT', 'DELETE']).describe('HTTP method'),
-  path: z.string().describe('API path (must start with /api/v1/)'),
-  body: z.record(z.string(), z.unknown()).optional().describe('Request body for POST/PATCH/PUT'),
-  headers: z
-    .record(z.string(), z.string())
-    .optional()
-    .describe('Optional headers (e.g. Authorization, X-Organization-Id)'),
-});
-
+/**
+ * Construction parameters for {@link createMcpServer}. `inject` is the in-process HTTP
+ * back-channel (Fastify `app.inject`) the `call_api` tool uses to invoke real route
+ * handlers without an external network hop.
+ */
 export type CreateMcpServerOptions = {
   name: string;
   version: string;
@@ -89,7 +88,9 @@ export type CreateMcpServerOptions = {
   }) => Promise<{ statusCode: number; payload: unknown; headers: Record<string, string> }>;
 };
 
+/** Concrete instance type of the lazily-loaded `@modelcontextprotocol/sdk` `McpServer`. */
 export type McpServerInstance = InstanceType<McpSdk['McpServer']>;
+/** Concrete instance type of the lazily-loaded `StreamableHTTPServerTransport`. */
 export type McpTransportInstance = InstanceType<McpSdk['StreamableHTTPServerTransport']>;
 
 /**
@@ -112,19 +113,27 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
     },
   );
 
+  const openApiResource = MCP_RESOURCES.find(
+    (resource) => resource.uri === MCP_OPENAPI_RESOURCE_URI,
+  );
+  const routesResource = MCP_RESOURCES.find((resource) => resource.uri === MCP_ROUTES_RESOURCE_URI);
+  const callApiTool = MCP_TOOLS.find((tool) => tool.name === 'call_api');
+  if (!(openApiResource && routesResource && callApiTool)) {
+    throw new Error('MCP resource/tool catalog is incomplete');
+  }
+
   server.registerResource(
-    'core-be-openapi',
-    OPENAPI_RESOURCE_URI,
+    openApiResource.name,
+    MCP_OPENAPI_RESOURCE_URI,
     {
-      title: 'core-be OpenAPI spec',
-      description:
-        'OpenAPI 3.0 spec (paths, schemas, request/response). Use this to discover and validate API calls. Generate with pnpm docs:generate.',
-      mimeType: 'application/json',
+      title: openApiResource.title,
+      description: openApiResource.description,
+      mimeType: openApiResource.mimeType,
     },
     async () => ({
       contents: [
         {
-          uri: OPENAPI_RESOURCE_URI,
+          uri: MCP_OPENAPI_RESOURCE_URI,
           mimeType: 'application/json',
           text: openApiSpec,
         },
@@ -133,18 +142,17 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
   );
 
   server.registerResource(
-    'core-be-routes',
-    ROUTES_RESOURCE_URI,
+    routesResource.name,
+    MCP_ROUTES_RESOURCE_URI,
     {
-      title: 'core-be API routes',
-      description:
-        'List of all API routes (method, path, access). Use with core-be://openapi to discover endpoints before calling call_api.',
-      mimeType: 'text/plain',
+      title: routesResource.title,
+      description: routesResource.description,
+      mimeType: routesResource.mimeType,
     },
     async () => ({
       contents: [
         {
-          uri: ROUTES_RESOURCE_URI,
+          uri: MCP_ROUTES_RESOURCE_URI,
           mimeType: 'text/plain',
           text: routesCatalog,
         },
@@ -153,11 +161,10 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
   );
 
   server.registerTool(
-    'call_api',
+    callApiTool.name,
     {
-      title: 'Call core-be API',
-      description:
-        'Call any core-be REST API endpoint. Path must start with /api/v1/. Pass Authorization and X-Organization-Id in headers for authenticated/tenant-scoped calls. Use core-be://openapi or core-be://routes to discover available endpoints.',
+      title: callApiTool.title,
+      description: callApiTool.description,
       inputSchema: callApiInputSchema,
     },
     async (args) => {
@@ -169,9 +176,15 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
         };
       }
       const data = parsed.data;
-      if (!(data.path.startsWith('/api/v1/') || data.path.startsWith('/health'))) {
+      if (
+        !(
+          data.path.startsWith('/api/v1/') ||
+          data.path.startsWith('/livez') ||
+          data.path.startsWith('/readyz')
+        )
+      ) {
         return {
-          content: [{ type: 'text', text: 'Path must start with /api/v1/ or /health' }],
+          content: [{ type: 'text', text: 'Path must start with /api/v1/, /livez, or /readyz' }],
           isError: true,
         };
       }
@@ -208,6 +221,10 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
   return server;
 }
 
+/**
+ * Pair of MCP server + transport that must be created together: stateless mode requires
+ * a fresh transport per request, so callers cannot reuse them across requests.
+ */
 export type McpTransportAndServer = {
   transport: McpTransportInstance;
   server: McpServerInstance;
@@ -302,15 +319,37 @@ export async function registerMcpRouteHandlers(
     await transport.handleRequest(nodeRequest, nodeResponse, parsedBody);
   }
 
-  app.get('/api/v1/mcp', async (request, reply) => {
-    reply.hijack();
-    await handleMcpRequest(request.raw, reply.raw, undefined);
-  });
+  app.get(
+    '/api/v1/mcp',
+    {
+      schema: {
+        summary: 'MCP streamable HTTP (GET)',
+        description:
+          'Model Context Protocol endpoint when `ENABLE_MCP_SERVER=true`. Exposes resources `core-be://openapi` and `core-be://routes`, plus the `call_api` tool for in-process API invocation. Requires JWT with global `admin` or `super_admin` role. See docs/integrations/cursor-backend-mcp.md.',
+        tags: ['MCP'],
+      },
+    },
+    async (request, reply) => {
+      reply.hijack();
+      await handleMcpRequest(request.raw, reply.raw, undefined);
+    },
+  );
 
-  app.post('/api/v1/mcp', async (request, reply) => {
-    reply.hijack();
-    await handleMcpRequest(request.raw, reply.raw, request.body as unknown);
-  });
+  app.post(
+    '/api/v1/mcp',
+    {
+      schema: {
+        summary: 'MCP streamable HTTP (POST)',
+        description:
+          'Primary MCP transport for Cursor and other MCP clients. Same auth and capabilities as GET. Request and response bodies follow the MCP streamable HTTP specification.',
+        tags: ['MCP'],
+      },
+    },
+    async (request, reply) => {
+      reply.hijack();
+      await handleMcpRequest(request.raw, reply.raw, request.body as unknown);
+    },
+  );
 
   // Alias without /api/v1 so clients using base URL with path /mcp do not get 404
   app.get('/mcp', async (request, reply) => {

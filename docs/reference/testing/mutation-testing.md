@@ -36,7 +36,7 @@ Configuration: [`stryker.config.json`](../../../stryker.config.json), [`tooling/
 
 ## CI
 
-Workflow: [.github/workflows/mutation-testing.yml](../../../.github/workflows/mutation-testing.yml)
+Workflow: [.github/workflows/scheduled-stryker-mutation.yml](../../../.github/workflows/scheduled-stryker-mutation.yml)
 
 - **Schedule:** Sundays 03:30 UTC
 - **Manual:** `workflow_dispatch`

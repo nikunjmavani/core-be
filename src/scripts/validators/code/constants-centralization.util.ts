@@ -17,6 +17,7 @@ function getConstantsRoot(): string {
 const ALLOWED_DUPLICATE_NUMBERS = new Set([
   10, // parseInt radix, deciles
   16, // hex
+  20, // small independent thresholds (migration header scan limit, rejection burst threshold)
   24, // hours per day (non-TTL context)
   60, // seconds per minute in expressions
   100, // percentages, env defaults
@@ -59,12 +60,18 @@ const SKIP_PATH_SEGMENTS = [
   '/tests/',
 ] as const;
 
+/** A single source location where a duplicated numeric literal was assigned at module scope. */
 export interface DuplicateLiteralOccurrence {
   readonly file: string;
   readonly line: number;
   readonly snippet: string;
 }
 
+/**
+ * One numeric value found at module-level `const` assignments in two or more
+ * files outside `src/shared/constants/`. Reported by
+ * {@link findDuplicateLiteralViolations}.
+ */
 export interface DuplicateLiteralViolation {
   readonly value: number;
   readonly occurrences: readonly DuplicateLiteralOccurrence[];
@@ -85,8 +92,11 @@ function evaluateNumericExpression(expression: string): number | undefined {
     return undefined;
   }
   try {
-    // biome-ignore lint/nursery/noImpliedEval: evaluates only the numeric-expression allowlist above in a repository validator.
-    const result = new Function(`return (${trimmed});`)() as unknown;
+    // Evaluates a strictly validated numeric expression (digits, whitespace, `_`, `*+().`) in a
+    // repository validator — never attacker-controlled input. The regex above is the security
+    // boundary; do not relax it without revisiting this call site.
+    const numericExpressionEvaluator = new Function(`return (${trimmed});`);
+    const result = numericExpressionEvaluator() as unknown;
     return typeof result === 'number' && Number.isFinite(result) ? result : undefined;
   } catch {
     return undefined;
@@ -193,6 +203,13 @@ export function loadCanonicalConstantValues(): Set<number> {
   return values;
 }
 
+/**
+ * Walks the `domains/`, `infrastructure/`, `shared/`, and `core/` source roots
+ * and returns numeric literals declared at module scope in two or more files,
+ * excluding values listed in {@link ALLOWED_DUPLICATE_NUMBERS} or already
+ * exported from `src/shared/constants/`. Used by the constants-centralization
+ * lint script to enforce a single source of truth for cross-file magic numbers.
+ */
 export function findDuplicateLiteralViolations(): DuplicateLiteralViolation[] {
   const occurrencesByValue = new Map<number, DuplicateLiteralOccurrence[]>();
 

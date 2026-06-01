@@ -1,11 +1,16 @@
-import { and, asc, count, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, count, eq, gt, inArray, isNull, lt, sql as drizzleSql } from 'drizzle-orm';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { uploads } from '@/domains/upload/upload.schema.js';
+import {
+  UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE,
+  UPLOAD_STATUS,
+} from '@/domains/upload/upload.constants.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 
+/** Drizzle-inferred select row shape for the `upload.uploads` table. */
 export type UploadRow = typeof uploads.$inferSelect;
 
 /** Subset returned to the PENDING sweeper; avoids hauling unused metadata columns. */
@@ -14,6 +19,7 @@ export type PendingUploadSweepRow = Pick<
   'id' | 'public_id' | 'user_id' | 'file_key' | 'mime_type' | 'file_size' | 'created_at'
 >;
 
+/** Insert payload for {@link UploadRepository.create}; status defaults to `PENDING` when omitted. */
 export interface UploadCreateData {
   user_id: number;
   organization_id?: number | null;
@@ -27,6 +33,12 @@ export interface UploadCreateData {
   created_by_user_id?: number;
 }
 
+/**
+ * Data-access layer for `upload.uploads`. Owner-scoped reads/writes go through
+ * the request database handle (RLS enforces user/organization isolation);
+ * inserts retry on public-id collisions and lifecycle transitions are limited
+ * to soft-delete + status updates so the row history stays auditable.
+ */
 export class UploadRepository {
   async create(data: UploadCreateData): Promise<UploadRow> {
     return runInsertWithPublicIdentifierRetry(async () => {
@@ -99,6 +111,15 @@ export class UploadRepository {
     return rows[0] ?? null;
   }
 
+  async softDeleteByPublicId(public_id: string): Promise<UploadRow | null> {
+    const rows = await getRequestDatabase()
+      .update(uploads)
+      .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .where(and(eq(uploads.public_id, public_id), isNull(uploads.deleted_at)))
+      .returning();
+    return rows[0] ?? null;
+  }
+
   async markStatus(public_id: string, user_id: number, status: string): Promise<UploadRow | null> {
     const rows = await getRequestDatabase()
       .update(uploads)
@@ -112,6 +133,43 @@ export class UploadRepository {
       )
       .returning();
     return rows[0] ?? null;
+  }
+
+  async markStatusByPublicId(public_id: string, status: string): Promise<UploadRow | null> {
+    const rows = await getRequestDatabase()
+      .update(uploads)
+      .set({ status, updated_at: databaseNowTimestamp })
+      .where(and(eq(uploads.public_id, public_id), isNull(uploads.deleted_at)))
+      .returning();
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Transitions a PENDING upload to UPLOADED and repoints `file_key` to the final (immutable) key
+   * the confirm step published the verified bytes to. One atomic update so the row never points at
+   * the still-overwritable pending key once it is servable.
+   */
+  async markConfirmedByPublicId(public_id: string, file_key: string): Promise<UploadRow | null> {
+    const rows = await getRequestDatabase()
+      .update(uploads)
+      .set({ status: UPLOAD_STATUS.UPLOADED, file_key, updated_at: databaseNowTimestamp })
+      .where(and(eq(uploads.public_id, public_id), isNull(uploads.deleted_at)))
+      .returning();
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Takes a transaction-scoped advisory lock that serializes concurrent PENDING-quota
+   * reservations for a single user. The lock is released automatically at COMMIT/ROLLBACK,
+   * so it must be acquired inside the same transaction as the subsequent
+   * {@link UploadRepository.countPendingByUserId} + {@link UploadRepository.create}
+   * (e.g. within `withUserDatabaseContext`). This closes the race where concurrent
+   * create-upload requests each pass the pending-count check before any row is inserted.
+   */
+  async acquirePendingUploadQuotaLock(user_id: number): Promise<void> {
+    await getRequestDatabase().execute(
+      drizzleSql`SELECT pg_advisory_xact_lock(${UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE}::int, ${user_id}::int)`,
+    );
   }
 
   /** Number of in-flight PENDING uploads for a user (active, not soft-deleted). */
@@ -134,6 +192,26 @@ export class UploadRepository {
       .select({ id: uploads.id, file_key: uploads.file_key })
       .from(uploads)
       .where(and(eq(uploads.user_id, user_id), isNull(uploads.deleted_at)));
+  }
+
+  /**
+   * Active uploads for a user with `id > after_id`, ascending by id, capped at
+   * `limit`. Used to stream a user's uploads in bounded keyset batches during
+   * offboarding so object deletion never loads an unbounded result set.
+   */
+  async findActiveByUserIdAfter(
+    user_id: number,
+    after_id: number,
+    limit: number,
+  ): Promise<Pick<UploadRow, 'id' | 'file_key'>[]> {
+    return getRequestDatabase()
+      .select({ id: uploads.id, file_key: uploads.file_key })
+      .from(uploads)
+      .where(
+        and(eq(uploads.user_id, user_id), gt(uploads.id, after_id), isNull(uploads.deleted_at)),
+      )
+      .orderBy(asc(uploads.id))
+      .limit(limit);
   }
 
   async findActiveByOrganizationId(

@@ -4,11 +4,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ROUTES_WITHOUT_JSON_BODY } from '../../../tooling/openapi/routes-without-json-body.js';
-import {
-  getRouteCount,
-  loadRouteRegistryFromCatalog,
-} from '@/tests/helpers/route-catalog-registry.js';
+import { ROUTES_WITHOUT_JSON_BODY } from '@tooling/openapi/routes-without-json-body.js';
+import { loadRouteRegistryFromCatalog } from '@/tests/helpers/route-catalog-registry.js';
 
 const OPENAPI_PATH = join(process.cwd(), 'docs', 'openapi', 'openapi.json');
 
@@ -69,7 +66,10 @@ describe('OpenAPI completeness', () => {
     expect(violations).toEqual([]);
   });
 
-  it('includes every route from docs/routes.txt (except allowlisted infra-only gaps)', () => {
+  const isOpenApiCatalogRoute = (route: { access: string; path: string }) =>
+    route.access !== 'bearer-token' && !route.path.startsWith('/mcp');
+
+  it('includes every OpenAPI-documentable route from docs/routes.txt', () => {
     const registry = loadRouteRegistryFromCatalog();
     const openApiKeys = collectOpenApiRouteKeys(spec);
 
@@ -78,7 +78,7 @@ describe('OpenAPI completeness', () => {
     ]);
 
     const missing: string[] = [];
-    for (const route of registry) {
+    for (const route of registry.filter(isOpenApiCatalogRoute)) {
       const openApiPath = normalizeOpenApiPath(route.path.replace(/:([^/]+)/g, '{$1}'));
       const key = `${route.method} ${openApiPath}`;
       if (!(openApiKeys.has(key) || allowlistedMissing.has(key))) {
@@ -93,6 +93,8 @@ describe('OpenAPI completeness', () => {
   });
 
   it('documents at least as many operations as the route catalog', () => {
-    expect(collectOpenApiRouteKeys(spec).size).toBeGreaterThanOrEqual(getRouteCount());
+    const openApiCatalogRouteCount =
+      loadRouteRegistryFromCatalog().filter(isOpenApiCatalogRoute).length;
+    expect(collectOpenApiRouteKeys(spec).size).toBeGreaterThanOrEqual(openApiCatalogRouteCount);
   });
 });

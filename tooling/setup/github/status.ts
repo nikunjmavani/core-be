@@ -66,7 +66,7 @@ export function buildGitHubStatus(
 export function printGitHubStatus(statuses: EnvStatus[]): void {
   console.log('');
   console.log('  GitHub Environment Status');
-  console.log('  ' + '─'.repeat(70));
+  console.log(`  ${'─'.repeat(70)}`);
   console.log('');
   console.log(
     '  ' +
@@ -78,7 +78,7 @@ export function printGitHubStatus(statuses: EnvStatus[]): void {
       'Secrets'.padEnd(10) +
       'Vars',
   );
-  console.log('  ' + '─'.repeat(70));
+  console.log(`  ${'─'.repeat(70)}`);
 
   for (const s of statuses) {
     console.log(

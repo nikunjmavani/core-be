@@ -1,6 +1,6 @@
 {
   "info": {
-    "title": "API core-be",
+    "title": "core-be API",
     "description": "API backend para la plataforma Core. Incluye autenticación, gestión de organizaciones multi-tenant, facturación, notificaciones, webhooks y operaciones de administración.\n\nTodos los endpoints autenticados requieren un token JWT Bearer en el encabezado Authorization. Los endpoints con ámbito de organización requieren además el permiso correspondiente."
   },
   "servers": {

@@ -3,7 +3,7 @@ name: seed-maintainer
 description: Keeps domain seed data and orchestration scripts aligned with schemas and routes. Use after route, schema, or seed script changes.
 ---
 
-# Seed Maintainer
+# Seed maintainer (core-be)
 
 ## Purpose
 

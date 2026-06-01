@@ -5,29 +5,30 @@ name: Docs lane
 # code-only PRs.
 on:
   pull_request:
-    branches: [main, dev]
+    branches: [dev, main]
     paths:
       - '**/*.md'
       - '.markdownlint.json'
-      - '.markdownlintignore'
+      - '.markdownlint-cli2.jsonc'
 
 concurrency:
-  group: pr-docs-lane-${{ github.ref }}
+  group: pr-docs-lane-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   markdown:
     name: Markdown lint + links
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
@@ -38,7 +39,7 @@ jobs:
           files="$(git diff --name-only --diff-filter=ACMRT \
             "${{ github.event.pull_request.base.sha }}" \
             "${{ github.event.pull_request.head.sha }}" \
-            -- '*.md')"
+            -- '*.md' || true)"
           if [ -z "${files}" ]; then
             echo "has-files=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -52,14 +53,14 @@ jobs:
 
       - name: Lint changed markdown files
         if: steps.changed-markdown.outputs.has-files == 'true'
-        uses: DavidAnson/markdownlint-cli2-action@v23
+        uses: DavidAnson/markdownlint-cli2-action@1628d9b2c73e580b4cb9b6b34303457a72478c5e # v23
         with:
           config: '.markdownlint.json'
           globs: ${{ steps.changed-markdown.outputs.files }}
 
       - name: Check links in changed markdown files (lychee)
         if: steps.changed-markdown.outputs.has-files == 'true'
-        uses: lycheeverse/lychee-action@v2
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2
         with:
           args: >-
             --no-progress

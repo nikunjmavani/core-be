@@ -1,6 +1,14 @@
 # Development-oriented image for Cursor cloud agents and similar full-repo workflows.
 # Installs all npm dependencies (including devDependencies). Not used for production;
 # see Dockerfile for the production multi-stage build.
+#
+# This image deliberately avoids `RUN --mount=type=cache,id=pnpm-store,...` so it
+# stays portable across builders. Some BuildKit-based platforms (Railway, certain
+# managed CI runners) require cache-mount IDs to embed a service-scoped prefix
+# (e.g. `id=s/<service-id>-pnpm-store`) and reject the unscoped form with
+# "missing the cacheKey prefix". Docker layer caching (the `COPY pnpm-lock` step
+# below) already gives us "rebuild only when lockfile changes", which is the
+# dominant speed-up.
 
 ARG NODE_VERSION=24.13.0
 
@@ -12,11 +20,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends git openssh-client ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 RUN corepack enable \
-  && corepack prepare pnpm@10.28.2 --activate
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-  pnpm install --frozen-lockfile
+  && corepack prepare pnpm@11.1.1 --activate
+RUN pnpm install --frozen-lockfile
 
 COPY . .

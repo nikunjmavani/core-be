@@ -1,5 +1,9 @@
 import type { UserOutput } from './user.types.js';
 
+/**
+ * Project a `users` row into the public {@link UserOutput} shape: surfaces the `public_id` as `id`,
+ * emits timestamps as ISO-8601, and intentionally drops credential / lockout fields.
+ */
 export const UserSerializer = {
   one(row: {
     public_id: string;

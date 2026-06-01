@@ -1,5 +1,5 @@
-import { eventBus, type DomainEvent } from '@/core/events/event-bus.js';
-import { dispatchOutboxEmail, recordOutboxEmail } from '@/infrastructure/mail/queues/mail.queue.js';
+import { eventBus, scheduleCommitDispatch, type DomainEvent } from '@/core/events/event-bus.js';
+import { recordOutboxEmail } from '@/infrastructure/mail/queues/mail.queue.js';
 import { invitationTemplate } from '@/infrastructure/mail/templates/invitation.template.js';
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { env } from '@/shared/config/env.config.js';
@@ -9,7 +9,10 @@ import {
   type MemberInvitationEmailPayload,
 } from './member-invitation.events.js';
 
-async function handleMemberInvitationEmail(payload: MemberInvitationEmailPayload): Promise<void> {
+async function handleMemberInvitationEmail(
+  payload: MemberInvitationEmailPayload,
+  requestId?: string,
+): Promise<void> {
   if (!isMailConfigured()) {
     logger.warn({ email: payload.email }, 'Mail not configured — invitation email skipped');
     return;
@@ -31,13 +34,16 @@ async function handleMemberInvitationEmail(payload: MemberInvitationEmailPayload
     html,
     tags: [{ name: 'category', value: 'invitation' }],
   });
-  eventBus.onCommit(() => dispatchOutboxEmail(mailOutboxId));
+  await scheduleCommitDispatch(
+    { type: 'mail_outbox', mailOutboxId },
+    requestId !== undefined ? { requestId } : undefined,
+  );
 }
 
 async function onMemberInvitationEmailEvent(event: DomainEvent): Promise<void> {
   const payload = event.payload as MemberInvitationEmailPayload;
   try {
-    await handleMemberInvitationEmail(payload);
+    await handleMemberInvitationEmail(payload, event.requestId);
   } catch (error) {
     logger.warn(
       { error, eventType: event.type, email: payload.email },
@@ -49,6 +55,11 @@ async function onMemberInvitationEmailEvent(event: DomainEvent): Promise<void> {
 
 let memberInvitationHandlersRegistered = false;
 
+/**
+ * Subscribes the invitation email handler to {@link MEMBER_INVITATION_EVENT}
+ * `CREATED` and `RESENT`. Idempotent: re-invocation is a no-op so the API and
+ * worker bootstraps can both call it without double-wiring listeners.
+ */
 export function registerMemberInvitationEventHandlers(): void {
   if (memberInvitationHandlersRegistered) return;
   memberInvitationHandlersRegistered = true;

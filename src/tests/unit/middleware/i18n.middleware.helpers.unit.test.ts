@@ -6,7 +6,7 @@ import {
   attachRequestI18nHelpers,
   resolveRequestLanguageFromHeader,
   verifyLocalesAvailable,
-} from '@/shared/middlewares/i18n.middleware.js';
+} from '@/shared/middlewares/core/i18n.middleware.js';
 
 vi.mock('i18next', () => ({
   default: {

@@ -119,7 +119,7 @@ function main(): void {
       '# Synced from env schema (add description/placeholder as needed)',
       ...added.map((key) => `# ${key}=`),
     ].join('\n');
-    writeFileSync(envExamplePath, content.trimEnd() + appendix + '\n', 'utf-8');
+    writeFileSync(envExamplePath, `${content.trimEnd() + appendix}\n`, 'utf-8');
     console.log(`Appended ${added.length} missing key(s) to .env.example.`);
     fixed = true;
   }
