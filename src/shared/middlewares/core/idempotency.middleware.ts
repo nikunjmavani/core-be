@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest, RouteOptions } from 'fastify';
 import fp from 'fastify-plugin';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
@@ -25,6 +26,31 @@ import {
 } from '@/shared/constants/index.js';
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/** Throttle window for the degraded-mode Sentry alert so a Redis outage cannot flood Sentry. */
+const IDEMPOTENCY_STORE_UNAVAILABLE_ALERT_INTERVAL_MS = 30_000;
+let lastIdempotencyStoreUnavailableAlertAtMs = 0;
+
+/**
+ * Surfaces the idempotency store (Redis) being unavailable as a throttled Sentry event so a
+ * Redis outage — during which required-idempotency writes fail closed with 503 — actually pages
+ * operations instead of only appearing in logs. Throttled to one event per
+ * {@link IDEMPOTENCY_STORE_UNAVAILABLE_ALERT_INTERVAL_MS} so a sustained outage does not flood Sentry.
+ */
+function alertIdempotencyStoreUnavailable(error: unknown): void {
+  const now = Date.now();
+  if (
+    now - lastIdempotencyStoreUnavailableAlertAtMs <
+    IDEMPOTENCY_STORE_UNAVAILABLE_ALERT_INTERVAL_MS
+  ) {
+    return;
+  }
+  lastIdempotencyStoreUnavailableAlertAtMs = now;
+  captureMessage('idempotency.cache.unavailable', {
+    level: 'error',
+    extra: { error: error instanceof Error ? error.message : String(error) },
+  });
+}
 
 interface CompletedIdempotencyEntry {
   state: 'completed';
@@ -280,6 +306,7 @@ async function idempotencyClaimPreHandler(
      * (no double-processing) while turning a write outage into a brief, self-healing retry.
      */
     logger.warn({ error, idempotencyKey }, 'idempotency.cache.unavailable');
+    alertIdempotencyStoreUnavailable(error);
     const detail = translateRequestMessage(
       request,
       'errors:serviceUnavailable',

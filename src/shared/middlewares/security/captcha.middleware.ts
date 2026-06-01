@@ -1,8 +1,32 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import { UnauthorizedError } from '@/shared/errors/index.js';
 import { verifyTurnstileToken } from '@/shared/utils/security/turnstile-verifier.util.js';
+
+/** Throttle window for the degraded-mode Sentry alert so a captcha-provider outage cannot flood Sentry. */
+const CAPTCHA_PROVIDER_UNAVAILABLE_ALERT_INTERVAL_MS = 30_000;
+let lastCaptchaProviderUnavailableAlertAtMs = 0;
+
+/**
+ * Surfaces the captcha provider (Cloudflare Turnstile) being unavailable as a throttled Sentry
+ * event. In production the captcha pre-handler fails closed, so a Turnstile outage blocks every
+ * captcha-gated auth route (login, signup, password reset); this makes that page operations rather
+ * than only appearing as a spike of 401s. Throttled to one event per
+ * {@link CAPTCHA_PROVIDER_UNAVAILABLE_ALERT_INTERVAL_MS} so a sustained outage does not flood Sentry.
+ */
+function alertCaptchaProviderUnavailable(reason: string): void {
+  const now = Date.now();
+  if (
+    now - lastCaptchaProviderUnavailableAlertAtMs <
+    CAPTCHA_PROVIDER_UNAVAILABLE_ALERT_INTERVAL_MS
+  ) {
+    return;
+  }
+  lastCaptchaProviderUnavailableAlertAtMs = now;
+  captureMessage('captcha.provider_unavailable', { level: 'error', extra: { reason } });
+}
 
 function firstHeaderValue(rawHeader: string | string[] | undefined): string | undefined {
   if (rawHeader === undefined || rawHeader === '') {
@@ -50,6 +74,7 @@ export async function captchaPreHandler(
     if (isCaptchaFailOpen()) {
       return;
     }
+    alertCaptchaProviderUnavailable('not_configured');
     throw new UnauthorizedError('errors:captchaProviderUnavailable');
   }
 
@@ -76,11 +101,13 @@ export async function captchaPreHandler(
       throw error;
     }
     if (error instanceof CircuitBreakerOpenError) {
+      alertCaptchaProviderUnavailable('breaker_open');
       throw new UnauthorizedError('errors:captchaProviderUnavailable');
     }
     if (isCaptchaFailOpen()) {
       return;
     }
+    alertCaptchaProviderUnavailable('verify_error');
     throw new UnauthorizedError('errors:captchaProviderUnavailable');
   }
 }
