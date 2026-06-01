@@ -93,36 +93,46 @@ interface RequestWithIdempotency extends FastifyRequest {
  * does not explicitly carry `state: 'completed'` as `in_flight` so a rolling deployment
  * does not replay 202 placeholders as real responses.
  */
+function parseCompletedIdempotencyEntry(
+  parsed: Record<string, unknown>,
+): CompletedIdempotencyEntry | null {
+  const completed = parsed as Partial<CompletedIdempotencyEntry>;
+  if (
+    typeof completed.statusCode === 'number' &&
+    typeof completed.body === 'string' &&
+    completed.headers !== null &&
+    typeof completed.headers === 'object'
+  ) {
+    return {
+      state: 'completed',
+      statusCode: completed.statusCode,
+      body: completed.body,
+      headers: completed.headers,
+      ...(typeof completed.fingerprint === 'string' ? { fingerprint: completed.fingerprint } : {}),
+    };
+  }
+  return null;
+}
+
+function parseInFlightIdempotencyEntry(parsed: Record<string, unknown>): InFlightIdempotencyEntry {
+  const inFlight = parsed as Partial<InFlightIdempotencyEntry>;
+  return {
+    state: 'in_flight',
+    claimedAt: typeof inFlight.claimedAt === 'number' ? inFlight.claimedAt : 0,
+    ...(typeof inFlight.requestId === 'string' ? { requestId: inFlight.requestId } : {}),
+    ...(typeof inFlight.fingerprint === 'string' ? { fingerprint: inFlight.fingerprint } : {}),
+  };
+}
+
 function parseIdempotencyEntry(raw: string): IdempotencyEntry {
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (parsed && typeof parsed === 'object' && parsed.state === 'completed') {
-      const completed = parsed as Partial<CompletedIdempotencyEntry>;
-      if (
-        typeof completed.statusCode === 'number' &&
-        typeof completed.body === 'string' &&
-        completed.headers !== null &&
-        typeof completed.headers === 'object'
-      ) {
-        return {
-          state: 'completed',
-          statusCode: completed.statusCode,
-          body: completed.body,
-          headers: completed.headers,
-          ...(typeof completed.fingerprint === 'string'
-            ? { fingerprint: completed.fingerprint }
-            : {}),
-        };
-      }
+      const completed = parseCompletedIdempotencyEntry(parsed);
+      if (completed) return completed;
     }
     if (parsed && typeof parsed === 'object' && parsed.state === 'in_flight') {
-      const inFlight = parsed as Partial<InFlightIdempotencyEntry>;
-      return {
-        state: 'in_flight',
-        claimedAt: typeof inFlight.claimedAt === 'number' ? inFlight.claimedAt : 0,
-        ...(typeof inFlight.requestId === 'string' ? { requestId: inFlight.requestId } : {}),
-        ...(typeof inFlight.fingerprint === 'string' ? { fingerprint: inFlight.fingerprint } : {}),
-      };
+      return parseInFlightIdempotencyEntry(parsed);
     }
     return { state: 'in_flight', claimedAt: 0 };
   } catch {
@@ -268,16 +278,12 @@ async function idempotencyClaimPreHandler(
   try {
     cached = await redisConnection.get(cacheKey);
     if (cached !== null) {
-      const entry = parseIdempotencyEntry(cached);
-      // Same key, different payload → reject (do not execute a divergent second operation).
-      // Entries written before this rollout carry no fingerprint; skip the check for them.
-      if (entry.fingerprint !== undefined && entry.fingerprint !== requestFingerprint) {
-        return sendIdempotencyKeyReuseConflict(request, reply);
-      }
-      if (entry.state === 'completed') {
-        return sendCachedIdempotencyResponse(reply, entry);
-      }
-      return sendInFlightConflict(request, reply);
+      return serveIdempotencyCacheHit(
+        request,
+        reply,
+        parseIdempotencyEntry(cached),
+        requestFingerprint,
+      );
     }
 
     const inFlightEntry: InFlightIdempotencyEntry = {
@@ -294,68 +300,11 @@ async function idempotencyClaimPreHandler(
       'NX',
     );
   } catch (error) {
-    /**
-     * Degraded mode (fail closed, but cleanly retryable): with Redis degraded we cannot
-     * guarantee at-most-once execution, so we must not run the handler. Rather than a bare
-     * 503 that clients may treat as a hard failure, we advertise an explicit `Retry-After`
-     * and flag the error as retryable so well-behaved clients re-issue the same
-     * `Idempotency-Key` once the transient Redis blip clears — preserving correctness
-     * (no double-processing) while turning a write outage into a brief, self-healing retry.
-     */
-    logger.warn({ error, idempotencyKey }, 'idempotency.cache.unavailable');
-    alertIdempotencyStoreUnavailable(error);
-    const detail = translateRequestMessage(
-      request,
-      'errors:serviceUnavailable',
-      'Idempotency store unavailable',
-    );
-    reply.header('Retry-After', String(IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS));
-    reply.status(503);
-    reply.send({
-      error: {
-        type: 'service_error',
-        code: 'service_unavailable',
-        detail,
-        retryable: true,
-        retryAfterSeconds: IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS,
-      },
-    });
-    return;
+    return respondIdempotencyStoreUnavailable(request, reply, error, idempotencyKey);
   }
 
   if (!claimed) {
-    /**
-     * Lost the SETNX race: another concurrent claim landed between our GET miss and SETNX.
-     * Re-read so we can tell apart "still computing" (409 in_flight) from "already completed"
-     * (replay).
-     */
-    let raceEntry: IdempotencyEntry | null = null;
-    try {
-      const rawRace = await redisConnection.get(cacheKey);
-      if (rawRace !== null) raceEntry = parseIdempotencyEntry(rawRace);
-    } catch (raceError) {
-      logger.warn({ error: raceError, idempotencyKey }, 'idempotency.cache.race.read.failed');
-    }
-    if (raceEntry?.fingerprint !== undefined && raceEntry.fingerprint !== requestFingerprint) {
-      return sendIdempotencyKeyReuseConflict(request, reply);
-    }
-    if (raceEntry?.state === 'completed') {
-      return sendCachedIdempotencyResponse(reply, raceEntry);
-    }
-    const detail = translateRequestMessage(
-      request,
-      'errors:idempotencyKeyConflict',
-      'Concurrent request with same idempotency key',
-    );
-    reply.status(409);
-    reply.send({
-      error: {
-        type: 'request_error',
-        code: 'conflict',
-        detail,
-      },
-    });
-    return;
+    return handleIdempotencyClaimRace(request, reply, cacheKey, requestFingerprint, idempotencyKey);
   }
 
   requestWithIdempotency._idempotencyClaimed = true;
@@ -370,6 +319,103 @@ async function idempotencyClaimPreHandler(
   } catch (counterError) {
     logger.warn({ error: counterError }, 'idempotency.claim.counter.incr.failed');
   }
+}
+
+/** Replays/cached-conflicts a hit: fingerprint mismatch → 422, completed → replay, else in-flight 409. */
+function serveIdempotencyCacheHit(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  entry: IdempotencyEntry,
+  requestFingerprint: string,
+): FastifyReply {
+  // Same key, different payload → reject (do not execute a divergent second operation).
+  // Entries written before this rollout carry no fingerprint; skip the check for them.
+  if (entry.fingerprint !== undefined && entry.fingerprint !== requestFingerprint) {
+    sendIdempotencyKeyReuseConflict(request, reply);
+    return reply;
+  }
+  if (entry.state === 'completed') {
+    sendCachedIdempotencyResponse(reply, entry);
+    return reply;
+  }
+  sendInFlightConflict(request, reply);
+  return reply;
+}
+
+/**
+ * Degraded mode (fail closed, but cleanly retryable): with Redis degraded we cannot guarantee
+ * at-most-once execution, so we must not run the handler. Advertise an explicit `Retry-After`
+ * and flag the error retryable so well-behaved clients re-issue the same `Idempotency-Key` once
+ * the transient Redis blip clears — preserving correctness while turning a write outage into a
+ * brief, self-healing retry.
+ */
+function respondIdempotencyStoreUnavailable(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  error: unknown,
+  idempotencyKey: string,
+): FastifyReply {
+  logger.warn({ error, idempotencyKey }, 'idempotency.cache.unavailable');
+  alertIdempotencyStoreUnavailable(error);
+  const detail = translateRequestMessage(
+    request,
+    'errors:serviceUnavailable',
+    'Idempotency store unavailable',
+  );
+  reply.header('Retry-After', String(IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS));
+  reply.status(503);
+  reply.send({
+    error: {
+      type: 'service_error',
+      code: 'service_unavailable',
+      detail,
+      retryable: true,
+      retryAfterSeconds: IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS,
+    },
+  });
+  return reply;
+}
+
+/**
+ * Lost the SETNX race: another concurrent claim landed between our GET miss and SETNX. Re-read
+ * so we can tell apart "still computing" (409 in_flight) from "already completed" (replay).
+ */
+async function handleIdempotencyClaimRace(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  cacheKey: string,
+  requestFingerprint: string,
+  idempotencyKey: string,
+): Promise<FastifyReply> {
+  let raceEntry: IdempotencyEntry | null = null;
+  try {
+    const rawRace = await redisConnection.get(cacheKey);
+    if (rawRace !== null) raceEntry = parseIdempotencyEntry(rawRace);
+  } catch (raceError) {
+    logger.warn({ error: raceError, idempotencyKey }, 'idempotency.cache.race.read.failed');
+  }
+  if (raceEntry?.fingerprint !== undefined && raceEntry.fingerprint !== requestFingerprint) {
+    sendIdempotencyKeyReuseConflict(request, reply);
+    return reply;
+  }
+  if (raceEntry?.state === 'completed') {
+    sendCachedIdempotencyResponse(reply, raceEntry);
+    return reply;
+  }
+  const detail = translateRequestMessage(
+    request,
+    'errors:idempotencyKeyConflict',
+    'Concurrent request with same idempotency key',
+  );
+  reply.status(409);
+  reply.send({
+    error: {
+      type: 'request_error',
+      code: 'conflict',
+      detail,
+    },
+  });
+  return reply;
 }
 
 async function idempotencyOnRequest(request: FastifyRequest, _reply: FastifyReply): Promise<void> {

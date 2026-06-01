@@ -14,34 +14,45 @@ import {
 
 let initialized = false;
 
+/** Redacts secrets from each breadcrumb's `data` payload in place. */
+function redactSentryBreadcrumbsInPlace(
+  breadcrumbs: NonNullable<Sentry.ErrorEvent['breadcrumbs']>,
+): void {
+  for (const breadcrumb of breadcrumbs) {
+    if (breadcrumb.data) {
+      breadcrumb.data = redactSensitive(breadcrumb.data);
+    }
+  }
+}
+
+function redactSentryRequestInPlace(request: NonNullable<Sentry.ErrorEvent['request']>): void {
+  if (request.headers) {
+    request.headers = redactSensitive(request.headers);
+  }
+  if (request.cookies) {
+    request.cookies = redactSensitive(request.cookies);
+  }
+  if (request.data !== undefined) {
+    request.data = redactSensitive(request.data);
+  }
+  if (request.query_string !== undefined) {
+    request.query_string = redactSensitive(request.query_string);
+  }
+  if (request.url !== undefined) {
+    request.url = redactSensitive(request.url);
+  }
+}
+
 /**
  * Scrubs secrets from a Sentry error event before it is sent upstream.
  * Shared by `beforeSend` and unit tests.
  */
 export function redactSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
   if (event.breadcrumbs) {
-    for (const breadcrumb of event.breadcrumbs) {
-      if (breadcrumb.data) {
-        breadcrumb.data = redactSensitive(breadcrumb.data);
-      }
-    }
+    redactSentryBreadcrumbsInPlace(event.breadcrumbs);
   }
   if (event.request) {
-    if (event.request.headers) {
-      event.request.headers = redactSensitive(event.request.headers);
-    }
-    if (event.request.cookies) {
-      event.request.cookies = redactSensitive(event.request.cookies);
-    }
-    if (event.request.data !== undefined) {
-      event.request.data = redactSensitive(event.request.data);
-    }
-    if (event.request.query_string !== undefined) {
-      event.request.query_string = redactSensitive(event.request.query_string);
-    }
-    if (event.request.url !== undefined) {
-      event.request.url = redactSensitive(event.request.url);
-    }
+    redactSentryRequestInPlace(event.request);
   }
   if (event.extra) {
     event.extra = redactSensitive(event.extra);
