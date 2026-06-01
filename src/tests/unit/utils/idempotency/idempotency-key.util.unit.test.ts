@@ -118,14 +118,14 @@ describe('idempotency claim counter sharding', () => {
     expect(buildIdempotencyClaimCounterShardKey(3)).toBe('idempotency-claim-counter:shard:3');
   });
 
-  it('selects a shard key within the configured shard range', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
-    expect(selectIdempotencyClaimCounterShardKey()).toBe(
-      `idempotency-claim-counter:shard:${IDEMPOTENCY_CLAIM_COUNTER_SHARD_COUNT - 1}`,
-    );
-
-    vi.spyOn(Math, 'random').mockReturnValue(0);
-    expect(selectIdempotencyClaimCounterShardKey()).toBe('idempotency-claim-counter:shard:0');
+  it('selects shard keys within the configured shard range', () => {
+    // crypto.randomInt(COUNT) always yields an integer in [0, COUNT); sample many to confirm.
+    for (let attempt = 0; attempt < 256; attempt += 1) {
+      const shard = Number(selectIdempotencyClaimCounterShardKey().split(':').pop());
+      expect(Number.isInteger(shard)).toBe(true);
+      expect(shard).toBeGreaterThanOrEqual(0);
+      expect(shard).toBeLessThan(IDEMPOTENCY_CLAIM_COUNTER_SHARD_COUNT);
+    }
   });
 
   it('never selects a shard outside the namespace prefix', () => {
