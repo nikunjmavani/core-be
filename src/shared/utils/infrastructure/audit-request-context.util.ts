@@ -33,7 +33,7 @@ export async function resolveOrganizationIdForAudit(
   if (!organizationService) {
     return null;
   }
-  const userPublicId = request.auth?.userId;
+  const userPublicId = request.auth?.kind === 'user' ? request.auth.userId : undefined;
   if (typeof userPublicId === 'string' && userPublicId.length > 0) {
     const organization = await withUserDatabaseContext(userPublicId, () =>
       organizationService.findOrganizationByPublicId(organizationPublicId),

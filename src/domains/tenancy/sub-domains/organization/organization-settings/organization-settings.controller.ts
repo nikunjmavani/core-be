@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requirePrincipal } from '@/shared/utils/http/request.util.js';
+import {
+  getActingUserPublicId,
+  getRequestIdentifier,
+  requirePrincipal,
+} from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationSettingsService } from './organization-settings.service.js';
 
@@ -25,7 +29,7 @@ export function createOrganizationSettingsController(service: OrganizationSettin
         (request.params as { id: string }).id ?? '',
         'id',
       );
-      const data = await service.update(organizationId, request.body, auth.userId);
+      const data = await service.update(organizationId, request.body, getActingUserPublicId(auth));
       return successResponse(data, getRequestIdentifier(request));
     },
   };

@@ -248,7 +248,7 @@ export async function registerQueueDashboard(
 
           const userAgent = request.headers['user-agent'] ?? null;
 
-          const actorUserPublicId = request.auth?.userId;
+          const actorUserPublicId = request.auth?.kind === 'user' ? request.auth.userId : undefined;
           if (!actorUserPublicId) return;
 
           await deps.auditService.record({

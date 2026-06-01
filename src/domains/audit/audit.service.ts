@@ -45,7 +45,7 @@ export class AuditService {
    *
    * @remarks
    * Algorithm:
-   * 1. Resolve `input.actorUserPublicId` → internal user id inside
+   * 1. Resolve `actorUserPublicId` → internal user id inside
    *    `withUserDatabaseContext`. Returning `null` means the actor was deleted
    *    between event emission and audit recording; row is skipped.
    * 2. INSERT the row inside the same context so RLS attributes it correctly.
@@ -57,6 +57,14 @@ export class AuditService {
    * Side effects: one INSERT; no event emitted.
    */
   async record(input: AuditLogRecordInput): Promise<void> {
+    const actorUserPublicId = input.actorUserPublicId;
+    if (!actorUserPublicId) {
+      // No acting user to attribute this row to (e.g. an organization API-key principal).
+      // Skip rather than write a null actor; first-class API-key audit attribution is handled
+      // separately via the api-key actor column.
+      logger.warn({ action: input.action }, 'audit.record.missingActor');
+      return;
+    }
     if (input.organization_id) {
       const organization = await this.organizationService.findOrganizationByInternalId(
         input.organization_id,
@@ -69,10 +77,10 @@ export class AuditService {
         return;
       }
       return withOrganizationDatabaseContext(organization.public_id, async () => {
-        const user = await this.userService.findUserRecordByPublicId(input.actorUserPublicId);
+        const user = await this.userService.findUserRecordByPublicId(actorUserPublicId);
         if (!user) {
           logger.warn(
-            { actorUserPublicId: input.actorUserPublicId },
+            { actorUserPublicId: actorUserPublicId },
             'audit.record.unknownActorUserPublicId',
           );
           return;
@@ -92,18 +100,18 @@ export class AuditService {
       });
     }
 
-    const user = await withUserDatabaseContext(input.actorUserPublicId, () =>
-      this.userService.findUserRecordByPublicId(input.actorUserPublicId),
+    const user = await withUserDatabaseContext(actorUserPublicId, () =>
+      this.userService.findUserRecordByPublicId(actorUserPublicId),
     );
     if (!user) {
       logger.warn(
-        { actorUserPublicId: input.actorUserPublicId },
+        { actorUserPublicId: actorUserPublicId },
         'audit.record.unknownActorUserPublicId',
       );
       return;
     }
 
-    await withUserDatabaseContext(input.actorUserPublicId, () =>
+    await withUserDatabaseContext(actorUserPublicId, () =>
       this.repository.insert({
         actor_user_id: user.id,
         action: input.action,

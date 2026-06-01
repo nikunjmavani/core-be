@@ -93,12 +93,12 @@ describe('rate-limit-presets', () => {
     const attackerKey = await keyGenerator?.({
       ip: '203.0.113.7',
       organizationId: 'victim-org',
-      auth: { userId: 'attacker-user' },
+      auth: { kind: 'user', userId: 'attacker-user' },
     } as never);
     const memberKey = await keyGenerator?.({
       ip: '198.51.100.4',
       organizationId: 'victim-org',
-      auth: { userId: 'member-user' },
+      auth: { kind: 'user', userId: 'member-user' },
     } as never);
 
     expect(attackerKey).toBe('organization:victim-org:actor:attacker-user');
@@ -112,16 +112,19 @@ describe('rate-limit-presets', () => {
     );
     const keyGenerator = ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config.rateLimit.keyGenerator;
 
+    // Production shape: an API-key principal carries `kind: 'apiKey'` and no `userId`. The old
+    // `userId ?? apiKeyPublicId` returned the empty-string user sentinel here, collapsing the
+    // bucket to `ip:` (finding D); the actor helper now resolves the api-key public id.
     const apiKeyActor = await keyGenerator?.({
       ip: '203.0.113.7',
       organizationId: 'org-1',
-      auth: { apiKeyPublicId: 'apikey-1' },
+      auth: { kind: 'apiKey', apiKeyPublicId: 'apikey-1' },
     } as never);
     expect(apiKeyActor).toBe('organization:org-1:actor:apikey-1');
 
     const noOrgContext = await keyGenerator?.({
       ip: '203.0.113.7',
-      auth: { userId: 'user-1' },
+      auth: { kind: 'user', userId: 'user-1' },
     } as never);
     expect(noOrgContext).toBe('actor:user-1');
 

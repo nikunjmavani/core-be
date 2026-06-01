@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
 import {
+  getActingUserPublicId,
   getRequestIdentifier,
   requireAuth,
   requirePrincipal,
@@ -43,7 +44,7 @@ export function createMembershipController(service: MembershipService) {
         (request.params as { id: string }).id ?? '',
         'id',
       );
-      const data = await service.create(organizationId, request.body, auth.userId);
+      const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
       reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },
@@ -53,7 +54,12 @@ export function createMembershipController(service: MembershipService) {
         id: string;
         membershipId: string;
       }) ?? { id: '', membershipId: '' };
-      const data = await service.update(organizationId, membershipId, request.body, auth.userId);
+      const data = await service.update(
+        organizationId,
+        membershipId,
+        request.body,
+        getActingUserPublicId(auth),
+      );
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteMembership: async (request: FastifyRequest, reply: FastifyReply) => {

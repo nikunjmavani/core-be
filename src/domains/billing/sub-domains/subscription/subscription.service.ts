@@ -105,7 +105,7 @@ export class SubscriptionService {
   async create(
     organization_public_id: string,
     body: unknown,
-    created_by_user_public_id: string,
+    created_by_user_public_id: string | undefined,
     idempotencyKey?: string,
   ) {
     const parsed = validateCreateSubscription(body);

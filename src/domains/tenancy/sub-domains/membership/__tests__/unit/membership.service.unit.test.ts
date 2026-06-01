@@ -207,11 +207,13 @@ describe('MembershipService', () => {
         ...organization,
         owner_user_id: 99,
       }),
-      resolveUserInternalIdByPublicId: vi.fn().mockImplementation(async (publicId: string) => {
-        if (publicId === 'owner_public') return 99;
-        if (publicId === 'new_owner_public') return 10;
-        return null;
-      }),
+      resolveUserInternalIdByPublicId: vi
+        .fn()
+        .mockImplementation(async (publicId: string | undefined) => {
+          if (publicId === 'owner_public') return 99;
+          if (publicId === 'new_owner_public') return 10;
+          return null;
+        }),
       transferOrganizationOwnership,
     } as unknown as OrganizationService;
 
@@ -243,7 +245,7 @@ describe('MembershipService', () => {
 
   it('update passes null updater when user id cannot be resolved', async () => {
     vi.mocked(organizationService.resolveUserInternalIdByPublicId).mockImplementation(
-      async (publicId: string) => (publicId === 'missing_updater' ? null : 10),
+      async (publicId: string | undefined) => (publicId === 'missing_updater' ? null : 10),
     );
     await service.update('org_public', 'mem_public', { status: 'SUSPENDED' }, 'missing_updater');
     expect(membershipRepository.update).toHaveBeenCalledWith(
@@ -339,7 +341,7 @@ describe('MembershipService', () => {
 
   it('create allows null inviter when inviter public id cannot be resolved', async () => {
     vi.mocked(organizationService.resolveUserInternalIdByPublicId).mockImplementation(
-      async (publicId: string) => {
+      async (publicId: string | undefined) => {
         if (publicId === 'user_public') return 10;
         if (publicId === 'missing_inviter') return null;
         return 10;

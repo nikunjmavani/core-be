@@ -72,7 +72,7 @@ describe('auth.middleware', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ userId: userPublicId, role: 'user' });
+    expect(response.json()).toEqual({ kind: 'user', userId: userPublicId, role: 'user' });
   });
 
   it('omits role on request.auth when JWT payload has no role', async () => {
@@ -88,7 +88,7 @@ describe('auth.middleware', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ userId: userPublicId, role: undefined });
+    expect(response.json()).toEqual({ kind: 'user', userId: userPublicId, role: undefined });
   });
 
   it('rejects bearer when session is revoked or missing in database', async () => {

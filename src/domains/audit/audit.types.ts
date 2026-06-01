@@ -26,7 +26,7 @@ export type NewAuditLog = AuditLogInsert;
  * Server-internal audit input: resolves `actor_user_id` from the user's public id.
  */
 export interface AuditLogRecordInput {
-  actorUserPublicId: string;
+  actorUserPublicId?: string | undefined;
   action: string;
   resource_type: string;
   resource_id?: number | null;

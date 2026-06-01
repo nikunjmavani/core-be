@@ -17,7 +17,7 @@ const mockedResolvePermissions = vi.mocked(resolveUserOrganizationPermissions);
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    auth: { userId: 'user-1', role: GLOBAL_ROLES.USER },
+    auth: { kind: 'user' as const, userId: 'user-1', role: GLOBAL_ROLES.USER },
     params: { organizationId: 'org-public' },
     ...overrides,
   } as FastifyRequest;
@@ -34,14 +34,24 @@ describe('authorization.util', () => {
     it('allows user with matching global role', async () => {
       const handler = requireRole(GLOBAL_ROLES.USER);
       await expect(
-        handler(mockRequest({ auth: { userId: 'user-1', role: GLOBAL_ROLES.USER } }), mockReply),
+        handler(
+          mockRequest({
+            auth: { kind: 'user' as const, userId: 'user-1', role: GLOBAL_ROLES.USER },
+          }),
+          mockReply,
+        ),
       ).resolves.toBeUndefined();
     });
 
     it('throws ForbiddenError when role is not allowed', async () => {
       const handler = requireRole(GLOBAL_ROLES.SUPER_ADMIN);
       await expect(
-        handler(mockRequest({ auth: { userId: 'user-1', role: GLOBAL_ROLES.USER } }), mockReply),
+        handler(
+          mockRequest({
+            auth: { kind: 'user' as const, userId: 'user-1', role: GLOBAL_ROLES.USER },
+          }),
+          mockReply,
+        ),
       ).rejects.toThrow(ForbiddenError);
     });
 
@@ -92,7 +102,7 @@ describe('authorization.util', () => {
       const handler = requireOrganizationPermission('membership:read');
       const request = mockRequest({
         auth: {
-          userId: '',
+          kind: 'apiKey' as const,
           apiKeyPublicId: 'key-1',
           apiKeyScopes: ['membership:read'],
           organizationPublicId: 'org-public',
@@ -105,7 +115,7 @@ describe('authorization.util', () => {
       const handler = requireOrganizationPermission('membership:read');
       const request = mockRequest({
         auth: {
-          userId: '',
+          kind: 'apiKey' as const,
           apiKeyPublicId: 'key-1',
           apiKeyScopes: ['membership:read'],
           organizationPublicId: 'other-org',
@@ -114,13 +124,14 @@ describe('authorization.util', () => {
       await expect(handler(request, mockReply)).rejects.toThrow(ForbiddenError);
     });
 
-    it('fails closed when an API-key principal carries no organization (no truthiness short-circuit)', async () => {
+    it('fails closed when an API-key principal carries an empty organization', async () => {
       const handler = requireOrganizationPermission('membership:read');
       const request = mockRequest({
         auth: {
-          userId: '',
+          kind: 'apiKey' as const,
           apiKeyPublicId: 'key-1',
           apiKeyScopes: ['membership:read'],
+          organizationPublicId: '',
         },
       } as Partial<FastifyRequest>);
       await expect(handler(request, mockReply)).rejects.toThrow(ForbiddenError);

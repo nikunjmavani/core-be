@@ -48,7 +48,7 @@ export function requireRole(
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const auth = request.auth;
-    if (!auth?.userId) throw new UnauthorizedError();
+    if (!auth || auth.kind !== 'user') throw new UnauthorizedError();
     if (!(auth.role && allowedRoles.includes(auth.role))) {
       throw new ForbiddenError('errors:insufficientRolePrivileges');
     }
@@ -73,7 +73,7 @@ export function requireOrganizationPermission(
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const auth = request.auth;
-    if (!(auth?.userId || auth?.apiKeyPublicId)) throw new UnauthorizedError();
+    if (!auth) throw new UnauthorizedError();
 
     const params = request.params as Record<string, string>;
     // eslint-disable-next-line security/detect-object-injection -- paramName is a function argument with a typed default.
@@ -82,15 +82,14 @@ export function requireOrganizationPermission(
       throw new ForbiddenError('errors:organizationContextRequired');
     }
 
-    if (auth.apiKeyPublicId) {
-      // Fail closed: an API-key principal MUST carry its owning organization and it must equal
-      // the route's organization. The previous truthiness guard skipped the check entirely when
-      // organizationPublicId was falsy, which would accept an org-less key against any :id.
-      if (!auth.organizationPublicId || auth.organizationPublicId !== organizationId) {
+    if (auth.kind === 'apiKey') {
+      // Fail closed: an API-key principal is pinned to exactly one organization and it must equal
+      // the route's organization. The union guarantees a non-empty organizationPublicId + scopes,
+      // so a key scoped to another org (or lacking the permission) is rejected here.
+      if (auth.organizationPublicId !== organizationId) {
         throw new ForbiddenError('errors:insufficientOrganizationPermissions');
       }
-      const scopes = auth.apiKeyScopes ?? [];
-      if (!scopes.includes(permissionCode)) {
+      if (!auth.apiKeyScopes.includes(permissionCode)) {
         throw new ForbiddenError('errors:insufficientOrganizationPermissions');
       }
       return;

@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requirePrincipal } from '@/shared/utils/http/request.util.js';
+import {
+  getActingUserPublicId,
+  getRequestIdentifier,
+  requirePrincipal,
+} from '@/shared/utils/http/request.util.js';
 import {
   cursorPaginationSchema,
   ensureCursorOnlyPagination,
@@ -46,9 +50,9 @@ export function createMemberRoleController(service: MemberRoleService) {
         (request.params as { id: string }).id ?? '',
         'id',
       );
-      const data = await service.create(organizationId, request.body, auth.userId);
+      const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
       await recordScopedAuditEvent(request, {
-        actorUserPublicId: auth.userId,
+        actorUserPublicId: getActingUserPublicId(auth),
         action: 'tenancy.role.create',
         resource_type: 'role',
         organizationPublicId: organizationId,
@@ -63,9 +67,14 @@ export function createMemberRoleController(service: MemberRoleService) {
         id: string;
         roleId: string;
       }) ?? { id: '', roleId: '' };
-      const data = await service.update(organizationId, roleId, request.body, auth.userId);
+      const data = await service.update(
+        organizationId,
+        roleId,
+        request.body,
+        getActingUserPublicId(auth),
+      );
       await recordScopedAuditEvent(request, {
-        actorUserPublicId: auth.userId,
+        actorUserPublicId: getActingUserPublicId(auth),
         action: 'tenancy.role.update',
         resource_type: 'role',
         organizationPublicId: organizationId,
@@ -81,7 +90,7 @@ export function createMemberRoleController(service: MemberRoleService) {
       }) ?? { id: '', roleId: '' };
       await service.delete(organizationId, roleId);
       await recordScopedAuditEvent(request, {
-        actorUserPublicId: auth.userId,
+        actorUserPublicId: getActingUserPublicId(auth),
         action: 'tenancy.role.delete',
         resource_type: 'role',
         organizationPublicId: organizationId,

@@ -28,7 +28,8 @@ interface OrganizationListPagination {
  * collisions.
  */
 export class OrganizationRepository extends BaseRepository {
-  async resolveUserIdByPublicId(public_id: string): Promise<number | null> {
+  async resolveUserIdByPublicId(public_id: string | undefined): Promise<number | null> {
+    if (!public_id) return null;
     const rows = await getRequestDatabase()
       .select({ id: authUsers.id })
       .from(authUsers)

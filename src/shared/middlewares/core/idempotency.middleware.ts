@@ -121,9 +121,9 @@ function resolveIdempotencyScope(request: FastifyRequest): {
       : organizationIdFromHeader;
 
   return omitUndefined({
-    userId: authentication?.userId,
+    userId: authentication?.kind === 'user' ? authentication.userId : undefined,
     organizationId,
-    apiKeyPublicId: authentication?.apiKeyPublicId,
+    apiKeyPublicId: authentication?.kind === 'apiKey' ? authentication.apiKeyPublicId : undefined,
   });
 }
 

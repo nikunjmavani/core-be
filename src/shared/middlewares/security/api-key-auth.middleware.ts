@@ -69,7 +69,7 @@ export async function applyApiKeyAuthentication(request: FastifyRequest): Promis
   }
 
   const authContext: AuthContext = {
-    userId: '',
+    kind: 'apiKey',
     apiKeyPublicId: match.public_id,
     apiKeyScopes: match.scopes,
     organizationPublicId: match.organization_public_id,

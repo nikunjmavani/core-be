@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
-import { getRequestIdentifier, requirePrincipal } from '@/shared/utils/http/request.util.js';
+import {
+  getActingUserPublicId,
+  getRequestIdentifier,
+  requirePrincipal,
+} from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import { validatePolicyIdParam } from './organization-notification-policy.validator.js';
 import type { OrganizationNotificationPolicyService } from './organization-notification-policy.service.js';
@@ -37,7 +41,7 @@ export function createOrganizationNotificationPolicyController(
         (request.params as { id: string }).id ?? '',
         'id',
       );
-      const data = await service.create(organizationId, request.body, auth.userId);
+      const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
       reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },
@@ -48,7 +52,12 @@ export function createOrganizationNotificationPolicyController(
         policyId: string;
       }) ?? { id: '', policyId: '' };
       const policyIdNumber = validatePolicyIdParam(policyId);
-      const data = await service.update(organizationId, policyIdNumber, request.body, auth.userId);
+      const data = await service.update(
+        organizationId,
+        policyIdNumber,
+        request.body,
+        getActingUserPublicId(auth),
+      );
       return successResponse(data, getRequestIdentifier(request));
     },
     deletePolicy: async (request: FastifyRequest, reply: FastifyReply) => {

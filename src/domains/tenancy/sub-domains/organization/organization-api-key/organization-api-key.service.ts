@@ -141,7 +141,7 @@ export class OrganizationApiKeyService {
     organization_public_id: string,
     api_key_public_id: string,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<OrganizationApiKeyOutput> {
     const parsed = validateUpdateOrganizationApiKey(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {

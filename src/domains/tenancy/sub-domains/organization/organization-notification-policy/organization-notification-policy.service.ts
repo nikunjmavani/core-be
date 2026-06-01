@@ -63,7 +63,7 @@ export class OrganizationNotificationPolicyService {
   async create(
     organization_public_id: string,
     body: unknown,
-    created_by_user_public_id: string,
+    created_by_user_public_id: string | undefined,
   ): Promise<OrganizationNotificationPolicyOutput> {
     const parsed = validateCreateOrganizationNotificationPolicy(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -89,7 +89,7 @@ export class OrganizationNotificationPolicyService {
     organization_public_id: string,
     policy_id: number,
     body: unknown,
-    updated_by_user_public_id: string,
+    updated_by_user_public_id: string | undefined,
   ): Promise<OrganizationNotificationPolicyOutput> {
     const parsed = validateUpdateOrganizationNotificationPolicy(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {

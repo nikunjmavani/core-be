@@ -53,7 +53,7 @@ export class OrganizationSettingsService {
   async update(
     organization_public_id: string,
     body: unknown,
-    _updated_by_user_public_id: string,
+    _updated_by_user_public_id: string | undefined,
   ): Promise<OrganizationSettingsOutput> {
     const parsed = validateUpdateOrganizationSettings(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
