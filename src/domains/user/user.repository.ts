@@ -178,7 +178,7 @@ export class UserRepository {
   async findMany(pagination: UserListPagination) {
     const { after, limit, status, search } = pagination;
     const includeTotal = pagination.include_total === true;
-    const filterConditions: SQL[] = [isNull(users.deleted_at)!];
+    const filterConditions: SQL[] = [isNull(users.deleted_at)];
     if (status) {
       filterConditions.push(eq(users.status, status));
     }

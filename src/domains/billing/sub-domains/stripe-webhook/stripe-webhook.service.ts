@@ -101,7 +101,7 @@ export class StripeWebhookService {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
         await this.handleSubscriptionUpdated(
-          event.data.object as Stripe.Subscription,
+          event.data.object,
           stripeEventCreatedAt,
           subscriptionRepository,
         );
@@ -109,7 +109,7 @@ export class StripeWebhookService {
 
       case 'customer.subscription.deleted':
         await this.handleSubscriptionDeleted(
-          event.data.object as Stripe.Subscription,
+          event.data.object,
           stripeEventCreatedAt,
           subscriptionRepository,
         );
@@ -144,11 +144,11 @@ export class StripeWebhookService {
     const rawSubscription = stripeSubscription as unknown as Record<string, unknown>;
     const periodStart =
       typeof rawSubscription.current_period_start === 'number'
-        ? new Date((rawSubscription.current_period_start as number) * 1000)
+        ? new Date(rawSubscription.current_period_start * 1000)
         : new Date();
     const periodEnd =
       typeof rawSubscription.current_period_end === 'number'
-        ? new Date((rawSubscription.current_period_end as number) * 1000)
+        ? new Date(rawSubscription.current_period_end * 1000)
         : new Date();
 
     const row = await this.subscriptionService.syncFromStripeProviderSubscription(

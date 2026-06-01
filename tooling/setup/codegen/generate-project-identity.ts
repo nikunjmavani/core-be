@@ -67,13 +67,13 @@ function renderConstants(snapshot: ReturnType<typeof buildProjectIdentitySnapsho
   const escapedDisplay = displayName.replace(/'/g, "\\'");
   return `${GENERATED_BANNER}
 /** Canonical project slug (Neon, Sentry, JWT issuer, MCP URI scheme). */
-export const PROJECT_SLUG = '${slug}' as const;
+export const PROJECT_SLUG = '${slug}';
 
 /** Human-facing product name for OpenAPI and emails. */
-export const PROJECT_DISPLAY_NAME = '${escapedDisplay}' as const;
+export const PROJECT_DISPLAY_NAME = '${escapedDisplay}';
 
 /** Default OpenAPI \`info.title\` when locale strings omit a title. */
-export const PROJECT_OPENAPI_TITLE = '${escapedDisplay} API' as const;
+export const PROJECT_OPENAPI_TITLE = '${escapedDisplay} API';
 
 /** JWT \`iss\` claim — changing this invalidates outstanding tokens. */
 export const JWT_ISSUER = PROJECT_SLUG;
@@ -85,52 +85,52 @@ export const TOTP_ISSUER = PROJECT_SLUG;
 export const WEBAUTHN_RP_NAME_DEFAULT = PROJECT_SLUG;
 
 /** MCP resource URI scheme prefix (\`{slug}://\`). */
-export const MCP_URI_SCHEME = '${slug}' as const;
+export const MCP_URI_SCHEME = '${slug}';
 
 /** MCP resource URI for the bundled OpenAPI document. */
-export const MCP_OPENAPI_RESOURCE_URI = '${slug}://openapi' as const;
+export const MCP_OPENAPI_RESOURCE_URI = '${slug}://openapi';
 
 /** MCP resource URI for the route catalog. */
-export const MCP_ROUTES_RESOURCE_URI = '${slug}://routes' as const;
+export const MCP_ROUTES_RESOURCE_URI = '${slug}://routes';
 
 /** OpenTelemetry service name for the API process. */
-export const OTEL_SERVICE_NAME_API = '${artifacts.apiImage}' as const;
+export const OTEL_SERVICE_NAME_API = '${artifacts.apiImage}';
 
 /** OpenTelemetry service name for the worker process. */
-export const OTEL_SERVICE_NAME_WORKER = '${artifacts.workerImage}' as const;
+export const OTEL_SERVICE_NAME_WORKER = '${artifacts.workerImage}';
 
 /** OpenTelemetry tracer instrumentation scope name. */
 export const OTEL_TRACER_NAME = PROJECT_SLUG;
 
 /** Local Docker image tag for API smoke and PR verify builds. */
-export const DOCKER_LOCAL_API_TAG = '${artifacts.dockerLocalApiTag}' as const;
+export const DOCKER_LOCAL_API_TAG = '${artifacts.dockerLocalApiTag}';
 
 /** Local Docker image tag for worker images in compose and CI. */
-export const DOCKER_LOCAL_WORKER_TAG = '${artifacts.workerImage}' as const;
+export const DOCKER_LOCAL_WORKER_TAG = '${artifacts.workerImage}';
 
 /** GHCR image repository name for the API container. */
-export const GHCR_API_IMAGE_NAME = '${artifacts.apiImage}' as const;
+export const GHCR_API_IMAGE_NAME = '${artifacts.apiImage}';
 
 /** GHCR image repository name for the worker container. */
-export const GHCR_WORKER_IMAGE_NAME = '${artifacts.workerImage}' as const;
+export const GHCR_WORKER_IMAGE_NAME = '${artifacts.workerImage}';
 
 /** GHCR Actions cache scope key for API image layers. */
-export const GHCR_CACHE_SCOPE_API = '${artifacts.ghcrCacheScopeApi}' as const;
+export const GHCR_CACHE_SCOPE_API = '${artifacts.ghcrCacheScopeApi}';
 
 /** GHCR Actions cache scope key for worker image layers. */
-export const GHCR_CACHE_SCOPE_WORKER = '${artifacts.ghcrCacheScopeWorker}' as const;
+export const GHCR_CACHE_SCOPE_WORKER = '${artifacts.ghcrCacheScopeWorker}';
 
 /** Git branches that receive protected CI + deploy pipelines. */
 export const PROTECTED_GIT_BRANCHES = [${[...git.protectedBranches].map((branch) => `'${branch}'`).join(', ')}] as const;
 
 /** Default git branch for new clones and PR bases (typically \`dev\`). */
-export const GIT_DEFAULT_BRANCH = '${git.defaultBranch}' as const;
+export const GIT_DEFAULT_BRANCH = '${git.defaultBranch}';
 
 /** Production deploy branch (maps to production GitHub Environment). */
-export const GIT_PRODUCTION_BRANCH = '${git.productionBranch}' as const;
+export const GIT_PRODUCTION_BRANCH = '${git.productionBranch}';
 
 /** Non-production deploy branch (maps to development GitHub Environment). */
-export const GIT_NON_PRODUCTION_BRANCH = '${git.nonProductionBranch}' as const;
+export const GIT_NON_PRODUCTION_BRANCH = '${git.nonProductionBranch}';
 
 /** Maps git branch ref → hosted environment name (GitHub Environment / NODE_ENV). */
 export const BRANCH_TO_ENVIRONMENT_MAP: Readonly<Record<string, string>> = {

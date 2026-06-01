@@ -68,7 +68,7 @@ export class MemberInvitationRepository {
     const includeTotal = pagination.include_total === true;
     const filterConditions: SQL[] = [
       eq(memberships.organization_id, organization_id),
-      isNull(memberships.deleted_at)!,
+      isNull(memberships.deleted_at),
     ];
     const countWhere = and(...filterConditions);
     const cursorCondition = buildAscendingCreatedAtIdCursorCondition(

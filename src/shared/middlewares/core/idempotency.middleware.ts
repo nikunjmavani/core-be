@@ -108,7 +108,7 @@ function parseIdempotencyEntry(raw: string): IdempotencyEntry {
           state: 'completed',
           statusCode: completed.statusCode,
           body: completed.body,
-          headers: completed.headers as Record<string, string>,
+          headers: completed.headers,
           ...(typeof completed.fingerprint === 'string'
             ? { fingerprint: completed.fingerprint }
             : {}),

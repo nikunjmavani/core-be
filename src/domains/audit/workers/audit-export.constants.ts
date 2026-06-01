@@ -4,7 +4,7 @@ export const AUDIT_EXPORT_QUEUE_NAME = 'audit-export';
 /** Filename used for the per-export manifest sidecar uploaded next to the NDJSON parts. */
 export const AUDIT_EXPORT_MANIFEST_FILENAME = 'manifest.json';
 /** Manifest schema version literal — bump when the manifest shape changes incompatibly. */
-export const AUDIT_EXPORT_SCHEMA_VERSION = '1' as const;
+export const AUDIT_EXPORT_SCHEMA_VERSION = '1';
 
 /** One uploaded object entry inside an {@link AuditExportManifest} (single NDJSON.gz part). */
 export interface AuditExportManifestObject {
