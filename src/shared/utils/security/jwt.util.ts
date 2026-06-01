@@ -8,7 +8,7 @@ import { getEnv } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
 const JWT_AUDIENCE = 'core-api';
-const JWT_ALGORITHM = 'RS256' as const;
+const JWT_ALGORITHM = 'RS256';
 
 let _signingKey: CryptoKey | null = null;
 let _verifyKey: CryptoKey | null = null;

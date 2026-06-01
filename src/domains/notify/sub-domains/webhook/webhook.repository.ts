@@ -35,7 +35,7 @@ export class WebhookRepository {
     const includeTotal = pagination.include_total === true;
     const filterConditions: SQL[] = [
       eq(webhooks.organization_id, organization_id),
-      isNull(webhooks.deleted_at)!,
+      isNull(webhooks.deleted_at),
     ];
     const countWhere = and(...filterConditions);
     const cursorCondition = buildAscendingCreatedAtIdCursorCondition(
@@ -84,7 +84,7 @@ export class WebhookRepository {
       eq(webhooks.organization_id, organization_id),
       eq(webhooks.is_enabled, true),
       subscribedEventFilter,
-      isNull(webhooks.deleted_at)!,
+      isNull(webhooks.deleted_at),
     ];
     const allRows: WebhookRow[] = [];
     let after: string | undefined;

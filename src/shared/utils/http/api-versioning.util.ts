@@ -3,13 +3,13 @@ import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js'
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /** Major path segment for the current stable public HTTP API (e.g. `/api/v1/...`). */
-export const PUBLIC_API_VERSION_SEGMENT_V1 = 'v1' as const;
+export const PUBLIC_API_VERSION_SEGMENT_V1 = 'v1';
 
 /** Response header exposing the major API version for `/api/v1` traffic (RFC 7231 field name). */
-export const PUBLIC_API_VERSION_HEADER = 'API-Version' as const;
+export const PUBLIC_API_VERSION_HEADER = 'API-Version';
 
 /** Value for {@link PUBLIC_API_VERSION_HEADER} on current stable major version responses. */
-export const PUBLIC_API_VERSION_VALUE_V1 = '1' as const;
+export const PUBLIC_API_VERSION_VALUE_V1 = '1';
 
 /**
  * When non-null, every `/api/v1` response receives `Sunset` / `Deprecation` headers during the

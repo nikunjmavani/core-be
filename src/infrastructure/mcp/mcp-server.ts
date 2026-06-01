@@ -13,7 +13,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Response as LightMyRequestResponse } from 'light-my-request';
 import type { FastifyInstance, InjectOptions } from 'fastify';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -279,7 +278,7 @@ export async function registerMcpRouteHandlers(
     if (opts.payload !== undefined) {
       injectOptions.payload = opts.payload as NonNullable<InjectOptions['payload']>;
     }
-    const response = (await app.inject(injectOptions)) as LightMyRequestResponse;
+    const response = await app.inject(injectOptions);
     let payload: unknown;
     try {
       payload = response.json();
@@ -347,7 +346,7 @@ export async function registerMcpRouteHandlers(
     },
     async (request, reply) => {
       reply.hijack();
-      await handleMcpRequest(request.raw, reply.raw, request.body as unknown);
+      await handleMcpRequest(request.raw, reply.raw, request.body);
     },
   );
 
@@ -359,7 +358,7 @@ export async function registerMcpRouteHandlers(
 
   app.post('/mcp', async (request, reply) => {
     reply.hijack();
-    await handleMcpRequest(request.raw, reply.raw, request.body as unknown);
+    await handleMcpRequest(request.raw, reply.raw, request.body);
   });
 }
 
