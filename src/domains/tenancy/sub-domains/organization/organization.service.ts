@@ -107,7 +107,10 @@ export class OrganizationService {
         'organization.offboarding.logoDeleteFailed',
       );
     }
-    await this.repository.update(public_id, { logo_url: null }, null);
+    const updated = await withOrganizationDatabaseContext(public_id, () =>
+      this.repository.update(public_id, { logo_url: null }, null),
+    );
+    if (!updated) throw new NotFoundError('Organization');
   }
 
   async requireOrganizationByPublicId(public_id: string): Promise<OrganizationBillingContext> {
@@ -361,7 +364,7 @@ export class OrganizationService {
       }
       return found;
     });
-    // External I/O (S3) and the upload-service tombstone run outside the DB context.
+    // External I/O (S3) and the upload-service tombstone run outside the deletion transaction.
     await this.clearOrganizationLogoStorage(public_id, organization.logo_url);
     if (this.offboardingDependencies) {
       await this.offboardingDependencies.uploadService.tombstoneAllByOrganizationId(

@@ -112,7 +112,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     schema: {
       summary: 'Initiate OAuth flow',
       description:
-        'Redirects the user to the OAuth provider authorization page to begin the login flow.',
+        'Returns the OAuth provider authorization URL and nonce cookie for a browser client to begin the login flow.',
       tags: ['Auth', 'OAuth'],
       params: oauthProviderParamsDto,
     },

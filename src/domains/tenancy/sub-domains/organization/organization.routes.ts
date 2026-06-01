@@ -272,7 +272,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         schema: {
           summary: 'Create API key',
           description:
-            'Creates a new API key. The full key value is only returned once in the creation response. Requires API_KEY_MANAGE permission.',
+            'Creates a new API key. The full key value is only returned once in the creation response. Requires a user principal with API_KEY_MANAGE permission.',
           tags: ['Organization', 'API Key'],
           body: createOrganizationApiKeyDto,
         },
@@ -317,7 +317,7 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
         schema: {
           summary: 'Rotate API key',
           description:
-            'Regenerates the API key secret. The old key is immediately invalidated. Requires API_KEY_MANAGE permission.',
+            'Regenerates the API key secret. The old key is immediately invalidated. Requires a user principal with API_KEY_MANAGE permission.',
           tags: ['Organization', 'API Key'],
         },
       },

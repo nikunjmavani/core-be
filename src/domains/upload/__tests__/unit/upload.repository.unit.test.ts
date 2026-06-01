@@ -77,6 +77,17 @@ describe('UploadRepository', () => {
     expect(await repository.softDelete('missing', 1)).toBeNull();
   });
 
+  it('softDeleteByPublicId returns null when upload missing', async () => {
+    mockReturning.mockResolvedValue([]);
+    expect(await repository.softDeleteByPublicId('missing')).toBeNull();
+  });
+
+  it('markStatusByPublicId returns updated row', async () => {
+    const row = { public_id: 'upload_public_test', status: 'UPLOADED' };
+    mockReturning.mockResolvedValue([row]);
+    expect(await repository.markStatusByPublicId('upload_public_test', 'UPLOADED')).toEqual(row);
+  });
+
   it('findActiveByUserId and findActiveByOrganizationId return active rows', async () => {
     const activeRows = [{ id: 1, file_key: 'avatars/key.png' }];
     mockWhere.mockReturnValueOnce({ limit: mockLimit, returning: mockReturning });

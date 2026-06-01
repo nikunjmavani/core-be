@@ -15,7 +15,7 @@ interface RateLimitChildOptions {
 }
 
 const DEFAULT_KEY_PREFIX = 'fastify-rate-limit-';
-const LOCAL_COUNTER_PRUNE_THRESHOLD = 10_000;
+const LOCAL_COUNTER_MAX_KEYS = 10_000;
 const FAILOVER_LOG_INTERVAL_MS = 5_000;
 
 let lastFailoverLogAtMs = 0;
@@ -40,8 +40,8 @@ function logRedisFailover(error: unknown): void {
  *   presets keep isolated buckets.
  * - **Failure modes:** none surfaced to the caller — Redis errors are caught and converted into
  *   local enforcement, so the limiter never throws (and never has to fail fully open).
- * - **Side effects:** writes Redis keys; maintains a bounded in-memory counter map (pruned past
- *   {@link LOCAL_COUNTER_PRUNE_THRESHOLD}); emits a rate-limited `rate_limit.redis_failover.local`
+ * - **Side effects:** writes Redis keys; maintains a bounded in-memory counter map capped at
+ *   {@link LOCAL_COUNTER_MAX_KEYS}; emits a rate-limited `rate_limit.redis_failover.local`
  *   warning while degraded.
  * - **Notes:** the local fallback caps throughput per process (not cluster-wide), so a Redis
  *   outage degrades precision but — unlike `skipOnError` alone — does not leave the API unmetered.
@@ -78,14 +78,27 @@ class RedisFallbackRateLimitStore {
     const now = Date.now();
     const existing = this.localCounters.get(fullKey);
     if (!existing || existing.expiresAtMs <= now) {
-      if (this.localCounters.size >= LOCAL_COUNTER_PRUNE_THRESHOLD) {
-        this.pruneExpiredLocalCounters(now);
-      }
+      this.ensureLocalCounterCapacity(now);
       this.localCounters.set(fullKey, { count: 1, expiresAtMs: now + timeWindow });
       return { current: 1, ttl: timeWindow };
     }
     existing.count += 1;
     return { current: existing.count, ttl: existing.expiresAtMs - now };
+  }
+
+  private ensureLocalCounterCapacity(now: number): void {
+    if (this.localCounters.size < LOCAL_COUNTER_MAX_KEYS) {
+      return;
+    }
+
+    this.pruneExpiredLocalCounters(now);
+    while (this.localCounters.size >= LOCAL_COUNTER_MAX_KEYS) {
+      const oldestKey = this.localCounters.keys().next().value;
+      if (oldestKey === undefined) {
+        return;
+      }
+      this.localCounters.delete(oldestKey);
+    }
   }
 
   private pruneExpiredLocalCounters(now: number): void {

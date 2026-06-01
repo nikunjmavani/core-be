@@ -9,6 +9,16 @@ import { buildFastifyServerOptions } from '@/shared/utils/http/fastify-server.ut
 
 const API_SERVER_NAME = 'core-be';
 const API_SERVER_VERSION = '1.0.0';
+const RAW_BODY_CAPTURE_PATHS = new Set([
+  '/api/v1/billing/webhook',
+  '/api/v1/billing/stripe/webhook',
+]);
+const STRIPE_SIGNATURE_HEADER = 'stripe-signature';
+
+function shouldCaptureRawBody(request: { url: string; headers: Record<string, unknown> }): boolean {
+  const path = request.url.split('?')[0] ?? request.url;
+  return RAW_BODY_CAPTURE_PATHS.has(path) && request.headers[STRIPE_SIGNATURE_HEADER] !== undefined;
+}
 
 /**
  * Shape captured by `BuildAppOptions.captureRegisteredRoutes` — one entry per
@@ -56,10 +66,12 @@ export async function buildApp(options?: BuildAppOptions) {
   app.server.keepAliveTimeout = keepAliveTimeoutMs;
   app.server.headersTimeout = headersTimeoutMs;
 
-  // Capture raw body for webhook signature verification (Stripe, etc.)
+  // Capture raw body only for signed Stripe webhook requests.
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (request, body, done) => {
     const buffer = typeof body === 'string' ? Buffer.from(body) : body;
-    (request as unknown as { rawBody: Buffer }).rawBody = buffer;
+    if (shouldCaptureRawBody(request)) {
+      (request as unknown as { rawBody: Buffer }).rawBody = buffer;
+    }
     try {
       const json = JSON.parse(buffer.toString()) as unknown;
       done(null, json);

@@ -304,15 +304,36 @@ export class UploadService {
     }
   }
 
-  async getUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
-    const validatedPublicId = validateUploadPublicIdParam(public_id);
-    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+  private async loadUploadForUserAction(input: {
+    public_id: string;
+    userPublicId: string;
+    userInternalId: number;
+  }): Promise<UploadRow> {
+    const { public_id, userPublicId, userInternalId } = input;
     const row = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.findByPublicIdForUser(validatedPublicId, user.id),
+      this.repository.findByPublicId(public_id),
     );
     if (!row) throw new NotFoundError('Upload');
 
+    if (row.organization_id === null) {
+      if (row.user_id !== userInternalId) {
+        throw new NotFoundError('Upload');
+      }
+      return row;
+    }
+
     await this.assertUserCanAccessOrgScopedUpload(row, userPublicId);
+    return row;
+  }
+
+  async getUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
+    const validatedPublicId = validateUploadPublicIdParam(public_id);
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    const row = await this.loadUploadForUserAction({
+      public_id: validatedPublicId,
+      userPublicId,
+      userInternalId: user.id,
+    });
 
     return this.toUploadDetail(row, userPublicId);
   }
@@ -328,12 +349,11 @@ export class UploadService {
   async confirmUpload(public_id: string, userPublicId: string): Promise<UploadDetailOutput> {
     const validatedPublicId = validateUploadPublicIdParam(public_id);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
-    const row = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.findByPublicIdForUser(validatedPublicId, user.id),
-    );
-    if (!row) throw new NotFoundError('Upload');
-
-    await this.assertUserCanAccessOrgScopedUpload(row, userPublicId);
+    const row = await this.loadUploadForUserAction({
+      public_id: validatedPublicId,
+      userPublicId,
+      userInternalId: user.id,
+    });
 
     if (row.status === UPLOAD_STATUS.UPLOADED) {
       return this.toUploadDetail(row, userPublicId);
@@ -377,9 +397,8 @@ export class UploadService {
     }
 
     const updated = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.markStatus(
+      this.repository.markStatusByPublicId(
         validatedPublicId,
-        user.id,
         verified ? UPLOAD_STATUS.UPLOADED : UPLOAD_STATUS.FAILED,
       ),
     );
@@ -449,12 +468,11 @@ export class UploadService {
   async deleteUpload(public_id: string, userPublicId: string): Promise<void> {
     const validatedPublicId = validateUploadPublicIdParam(public_id);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
-    const row = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.findByPublicIdForUser(validatedPublicId, user.id),
-    );
-    if (!row) throw new NotFoundError('Upload');
-
-    await this.assertUserCanAccessOrgScopedUpload(row, userPublicId);
+    const row = await this.loadUploadForUserAction({
+      public_id: validatedPublicId,
+      userPublicId,
+      userInternalId: user.id,
+    });
 
     // S3 delete runs outside the DB context.
     const objectDeleted = await this.objectStorage.deleteObject(row.file_key);
@@ -466,7 +484,7 @@ export class UploadService {
     }
 
     const deleted = await withUserDatabaseContext(userPublicId, () =>
-      this.repository.softDelete(validatedPublicId, user.id),
+      this.repository.softDeleteByPublicId(validatedPublicId),
     );
     if (!deleted) throw new NotFoundError('Upload');
   }

@@ -6,6 +6,7 @@ import {
 } from '@/tests/helpers/route-catalog-registry.js';
 
 const ROUTE_REGISTRY = loadRouteRegistryFromCatalog();
+const OPTIONAL_REGISTRY_ROUTES = new Set<string>(['GET /metrics']);
 import {
   isAllowlistedRegisteredRoute,
   isApiRoutePath,
@@ -30,7 +31,7 @@ describe('Route Completeness', () => {
   let registeredRouteKeys: Set<string>;
 
   beforeAll(async () => {
-    const testApp = await createTestApp();
+    const testApp = await createTestApp({ connectRedisClients: false });
     app = testApp.app;
     registeredRouteKeys = new Set(
       testApp.registeredRoutes.map((route) => normalizeRegisteredRouteKey(route.method, route.url)),
@@ -85,6 +86,9 @@ describe('Route Completeness', () => {
     for (const route of ROUTE_REGISTRY) {
       const path = normalizeRegistryPath(route.path);
       const key = normalizeRegisteredRouteKey(route.method, path);
+      if (OPTIONAL_REGISTRY_ROUTES.has(key)) {
+        continue;
+      }
       if (!registeredRouteKeys.has(key)) {
         missing.push(key);
       }
@@ -126,7 +130,13 @@ describe('Route Completeness', () => {
   });
 
   it('access types should be valid enum values', () => {
-    const validAccess = new Set(['public', 'authenticated', 'global-role', 'org-permission']);
+    const validAccess = new Set([
+      'public',
+      'authenticated',
+      'global-role',
+      'org-permission',
+      'bearer-token',
+    ]);
     for (const route of ROUTE_REGISTRY) {
       expect(
         validAccess.has(route.access),

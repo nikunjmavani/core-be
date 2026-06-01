@@ -19,6 +19,7 @@ const corsMiddleware: FastifyPluginAsync = async (app) => {
       'Content-Type',
       'Authorization',
       'X-Organization-Id',
+      'X-Captcha-Token',
       'Idempotency-Key',
       'X-Request-Id',
     ],

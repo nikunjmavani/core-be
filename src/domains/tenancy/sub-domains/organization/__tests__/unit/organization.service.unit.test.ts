@@ -389,6 +389,18 @@ describe('OrganizationService', () => {
     expect(repository.update).toHaveBeenCalled();
   });
 
+  it('delete fails when logo clear update cannot see the organization in RLS context', async () => {
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(true);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: `organization-logos/${organizationRow.public_id}/logo.png`,
+    } as never);
+    vi.mocked(repository.update).mockResolvedValueOnce(null);
+
+    await expect(service.delete(organizationRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+    expect(repository.softDelete).not.toHaveBeenCalled();
+  });
+
   it('deleteLogo skips storage head check when logo url has no extractable key', async () => {
     vi.mocked(objectStorage.headObject).mockClear();
     vi.mocked(repository.findByPublicId).mockResolvedValue({

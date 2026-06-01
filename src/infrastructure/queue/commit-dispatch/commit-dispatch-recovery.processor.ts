@@ -3,10 +3,9 @@ import {
   consumeCommitDispatchTasks,
   listStaleCommitDispatchRequestIds,
 } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js';
+import { DEFAULT_COMMIT_DISPATCH_RECOVERY_BATCH_SIZE } from '@/shared/constants/limits.constants.js';
 import { executeCommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.executor.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-
-const DEFAULT_RECOVERY_BATCH_SIZE = 50;
 
 /**
  * Outcome counters for one commit-dispatch recovery sweeper pass.
@@ -34,7 +33,7 @@ export type CommitDispatchRecoveryJobResult = {
 export async function runCommitDispatchRecoveryJob(): Promise<CommitDispatchRecoveryJobResult> {
   const staleRequestIds = await listStaleCommitDispatchRequestIds({
     olderThanMs: COMMIT_DISPATCH_RECOVERY_AFTER_MS,
-    limit: DEFAULT_RECOVERY_BATCH_SIZE,
+    limit: DEFAULT_COMMIT_DISPATCH_RECOVERY_BATCH_SIZE,
   });
 
   let executedCount = 0;
