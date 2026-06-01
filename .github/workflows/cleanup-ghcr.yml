@@ -1,0 +1,90 @@
+name: Cleanup GHCR images
+
+# Weekly prune of stale GHCR manifests. Preserves floating convenience tags
+# (:latest, :previous, :dev) and the most recent SHA-tagged images per branch class.
+
+on:
+  schedule:
+    - cron: '30 5 * * 0'
+  workflow_dispatch:
+    inputs:
+      retain_sha_count:
+        description: Number of SHA-tagged images to retain per repository
+        required: false
+        default: '30'
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
+  RETAIN_SHA_COUNT: ${{ inputs.retain_sha_count || '30' }}
+
+jobs:
+  cleanup:
+    name: Prune GHCR manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        package:
+          - core-be-api
+          - core-be-worker
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Prune stale manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ matrix.package }}
+          REPOSITORY: ${{ github.repository }}
+          RETAIN: ${{ env.RETAIN_SHA_COUNT }}
+        run: |
+          set -euo pipefail
+          package_type="$(gh api "/users/${{ github.repository_owner }}/packages/container/${PACKAGE}" --jq '.package_type' 2>/dev/null || echo container)"
+          echo "Cleaning ${PACKAGE} (${package_type}) — retaining ${RETAIN} SHA tags plus :latest/:previous/:dev/:deploy-failed-*"
+
+          versions="$(
+            gh api "/users/${{ github.repository_owner }}/packages/container/${PACKAGE}/versions?per_page=100" \
+              --paginate \
+              --jq '.[] | select(.metadata.container.tags | length > 0) | {id: .id, tags: (.metadata.container.tags | join(","))}' \
+              | jq -s '.'
+          )"
+
+          if [ "$(jq 'length' <<< "${versions}")" -eq 0 ]; then
+            echo "No tagged versions found for ${PACKAGE}."
+            exit 0
+          fi
+
+          protected_regex='(^|,)(latest|previous|dev|deploy-failed-[^,]+)(,|$)'
+          deleted=0
+          kept_sha=0
+
+          while IFS= read -r row; do
+            version_id="$(jq -r '.id' <<< "$row")"
+            tags="$(jq -r '.tags' <<< "$row")"
+            if echo "$tags" | grep -Eq "${protected_regex}"; then
+              echo "Keeping protected tags: ${tags}"
+              continue
+            fi
+            if echo "$tags" | grep -Eq '(^|,)[0-9a-f]{40}(,|$)'; then
+              if [ "$kept_sha" -lt "$RETAIN" ]; then
+                kept_sha=$((kept_sha + 1))
+                echo "Keeping SHA tag set: ${tags}"
+                continue
+              fi
+            fi
+            echo "Deleting version ${version_id} (${tags})"
+            gh api \
+              --method DELETE \
+              "/users/${{ github.repository_owner }}/packages/container/${PACKAGE}/versions/${version_id}" || true
+            deleted=$((deleted + 1))
+          done < <(jq -c '.[]' <<< "${versions}")
+
+          echo "Cleanup complete for ${PACKAGE}: deleted=${deleted}, kept_sha=${kept_sha}"

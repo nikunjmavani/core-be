@@ -1,7 +1,16 @@
 /** Production defaults aligned with production-readiness checklist #66 / #91. */
 export const PRODUCTION_TRACES_SAMPLE_RATE = 0.05;
+/**
+ * Production default for Sentry continuous profiling — fraction of traced
+ * sessions that also collect a V8 CPU profile (10%).
+ */
 export const PRODUCTION_PROFILE_SESSION_SAMPLE_RATE = 0.1;
 
+/**
+ * Sampling context passed from Sentry's `tracesSampler` callback. Shape mirrors
+ * the subset of `Sentry.SamplingContext` we actually inspect (transaction name,
+ * HTTP attributes, parent-sampled flag, and the inherit-or-sample escape hatch).
+ */
 export type TracesSamplingContext = {
   name?: string;
   attributes?: Record<string, unknown>;
@@ -9,6 +18,10 @@ export type TracesSamplingContext = {
   inheritOrSampleWith?: (fallbackRate: number) => number;
 };
 
+/**
+ * Shape of a finished transaction inspected by tail sampling. Mirrors the
+ * `event`/`transaction` fields Sentry's `beforeSendTransaction` hook receives.
+ */
 export type TransactionTailInput = {
   event_id?: string;
   transaction?: string;
@@ -18,21 +31,22 @@ export type TransactionTailInput = {
   contexts?: Record<string, Record<string, unknown> | undefined>;
 };
 
+/** Output of {@link resolveTailTransactionDecision} — `keep` sends to Sentry, `drop` discards. */
 export type TailTransactionDecision = 'drop' | 'keep';
 
-const HEALTH_TRANSACTION_MARKERS = ['/health', 'GET /health'] as const;
+const HEALTH_TRANSACTION_MARKERS = ['/livez', 'GET /livez', '/readyz', 'GET /readyz'] as const;
 
+/** Recognises liveness/readiness probe transaction names so they can be dropped from Sentry sampling. */
 export function isHealthCheckTransaction(transactionName: string): boolean {
-  if (HEALTH_TRANSACTION_MARKERS.some((marker) => transactionName === marker)) {
-    return true;
-  }
-  return transactionName.includes('/health/');
+  return HEALTH_TRANSACTION_MARKERS.some((marker) => transactionName === marker);
 }
 
+/** Matches billing API or Stripe webhook routes so they are always kept (revenue-critical). */
 export function isBillingOrWebhookTransaction(transactionName: string): boolean {
   return /\/api\/v1\/billing\b/i.test(transactionName) || /stripe\/webhook/i.test(transactionName);
 }
 
+/** Heuristic for error-marked transaction names (e.g. `error.handler`) — always sampled at head + tail. */
 export function isErrorLikeTransactionName(transactionName: string): boolean {
   return /error/i.test(transactionName);
 }
@@ -75,6 +89,10 @@ export function extractHttpResponseStatusCode(input: TransactionTailInput): numb
   return undefined;
 }
 
+/**
+ * Computes transaction duration in milliseconds from Sentry's seconds-precision
+ * `start_timestamp`/`timestamp` pair; returns `undefined` when either is missing.
+ */
 export function getTransactionDurationMs(input: TransactionTailInput): number | undefined {
   const start = input.start_timestamp;
   const end = input.timestamp;
@@ -178,6 +196,12 @@ function deterministicTailKeep(eventKey: string, baselineTracesSampleRate: numbe
   return (hash % 10_000) / 10_000 < normalizedRate;
 }
 
+/**
+ * Final keep/drop decision for a finished transaction in
+ * `beforeSendTransaction` — drops health checks, keeps errors/slow/billing
+ * traffic, and otherwise applies a deterministic hash of the event id so the
+ * baseline rate is honoured without per-event randomness drift.
+ */
 export function resolveTailTransactionDecision(
   input: TransactionTailInput,
   baselineTracesSampleRate: number,

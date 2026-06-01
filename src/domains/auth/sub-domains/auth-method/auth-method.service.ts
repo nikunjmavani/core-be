@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
+import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
 import { hashPassword, verifyPassword } from '@/shared/utils/security/password.util.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -10,76 +11,129 @@ import {
   type PasswordResetEmailPayload,
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
+import { AUTH_METHOD_TYPE } from './auth-method.constants.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
-import type { VerificationTokenRepository } from './verification-token.repository.js';
+import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
+import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import {
   validateCreateAuthMethod,
   validateForgotPassword,
   validateResetPassword,
   validateChangePassword,
   validateVerifyEmail,
-} from '../../auth.validator.js';
+} from '@/domains/auth/auth.validator.js';
 
 const PASSWORD_RESET_EXPIRES_IN_MINUTES = 60;
 const EMAIL_VERIFICATION_EXPIRES_IN_HOURS = 24;
 
+/**
+ * Owns the lifecycle of {@link auth_methods} rows and the password/email
+ * verification flows that share the unified verification-token table.
+ *
+ * @remarks
+ * - **Algorithm:** authenticated callers manage their linked auth methods
+ *   (PASSWORD / OAUTH / MAGIC_LINK / MFA_TOTP) via `list` / `create` / `delete`.
+ *   Password reset and email verification mint a random 32-byte token, persist
+ *   its SHA-256 hash with a TTL ({@link PASSWORD_RESET_EXPIRES_IN_MINUTES} or
+ *   {@link EMAIL_VERIFICATION_EXPIRES_IN_HOURS}), and atomically consume it via
+ *   {@link VerificationTokenRepository.consumeIfValid} to guard against replay.
+ * - **Failure modes:** disposable-email submissions throw `ValidationError`;
+ *   unknown users surface `NotFoundError`; bad/expired tokens or wrong current
+ *   password throw `UnauthorizedError` with i18n keys.
+ * - **Side effects:** invalidates outstanding tokens before issuing new ones;
+ *   emits `AUTH_EVENT.PASSWORD_RESET_REQUESTED` and `AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED`
+ *   (mail enqueue happens in the auth-method event handlers); rehashes user
+ *   passwords via {@link UserService.updatePassword}. A password reset revokes
+ *   all of the user's sessions; an authenticated change revokes every session
+ *   except the caller's current one (or all sessions when no current token is
+ *   supplied) via {@link AuthSessionService}.
+ * - **Notes:** the forgot-password flow always returns the same success message
+ *   even when the email is unknown, to prevent account enumeration. OAuth
+ *   linkage is idempotent via {@link AuthMethodService.linkOAuthProviderIfMissing}.
+ */
 export class AuthMethodService {
   constructor(
     private readonly userService: UserService,
     private readonly authMethodRepository: AuthMethodRepository,
     private readonly verificationTokenRepository: VerificationTokenRepository,
+    private readonly authSessionService: AuthSessionService,
   ) {}
 
   async list(userPublicId: string) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    return this.authMethodRepository.listByUserId(user.id);
+    // auth.auth_methods is FORCE RLS (audit #7); pin the owner context so the owner policy authorizes
+    // the read for this user's own credentials.
+    return withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.listByUserId(user.id),
+    );
   }
 
   async create(userPublicId: string, body: unknown) {
     const parsed = validateCreateAuthMethod(body);
+    // OAuth credentials prove possession of an external identity and may only be written by the
+    // verified OAuth callback (linkOAuthProviderIfMissing). Allowing a manual OAUTH link here would
+    // let a user bind an arbitrary provider account — and be logged in as its real owner.
+    if (parsed.method_type === AUTH_METHOD_TYPE.OAUTH) {
+      throw new ValidationError('errors:invalidInput', undefined, undefined, [
+        { field: 'method_type', messageKey: 'errors:oauthLinkNotManual' },
+      ]);
+    }
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    return this.authMethodRepository.create(
-      omitUndefined({
-        user_id: user.id,
-        method_type: parsed.method_type,
-        provider: parsed.provider,
-        provider_user_id: parsed.provider_user_id,
-        is_primary: parsed.is_primary,
-        created_by_user_id: user.id,
-      }),
+    return withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.create(
+        omitUndefined({
+          user_id: user.id,
+          method_type: parsed.method_type,
+          is_primary: parsed.is_primary,
+          created_by_user_id: user.id,
+        }),
+      ),
     );
   }
 
   async delete(userPublicId: string, methodId: number) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    const revoked = await this.authMethodRepository.revoke(methodId, user.id);
+    const revoked = await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.revoke(methodId, user.id),
+    );
     if (!revoked) throw new NotFoundError('Auth method');
   }
 
   async revokeAllForUser(userPublicId: string): Promise<void> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    await this.authMethodRepository.revokeAllByUserId(user.id);
+    await withUserDatabaseContext(userPublicId, () =>
+      this.authMethodRepository.revokeAllByUserId(user.id),
+    );
   }
 
   async findByProviderUserId(provider: string, provider_user_id: string) {
     return this.authMethodRepository.findByProviderUserId(provider, provider_user_id);
   }
 
-  async linkOAuthProviderIfMissing(data: AuthMethodCreateData): Promise<void> {
+  async linkOAuthProviderIfMissing({
+    ownerPublicId,
+    data,
+  }: {
+    ownerPublicId: string;
+    data: AuthMethodCreateData;
+  }): Promise<void> {
     if (!(data.provider && data.provider_user_id)) {
       return;
     }
+    // findByProviderUserId goes through the SECURITY DEFINER resolver (pre-session safe); the INSERT
+    // must satisfy the owner WITH CHECK, so pin the owner context for the linkage write.
     const existing = await this.authMethodRepository.findByProviderUserId(
       data.provider,
       data.provider_user_id,
     );
     if (!existing) {
-      await this.authMethodRepository.create(data);
+      await withUserDatabaseContext(ownerPublicId, () => this.authMethodRepository.create(data));
     }
   }
 
@@ -114,6 +168,7 @@ export class AuthMethodService {
     body: unknown,
     _context?: { requestId?: string },
   ): Promise<{ messageKey: string; messageParams?: Record<string, string | number> }> {
+    const startedAtMillis = Date.now();
     const parsed = validateForgotPassword(body);
     if (isDisposableEmailBlocked(parsed.email)) {
       throw new ValidationError('errors:disposableEmail', undefined, undefined, [
@@ -121,8 +176,16 @@ export class AuthMethodService {
       ]);
     }
 
-    const user = await this.userService.findByEmail(parsed.email);
-    if (!user) return { messageKey: 'success:passwordResetEmailSent' };
+    await this.issuePasswordResetIfUserExists(parsed.email);
+    // Both branches return the same body; hold them to a common minimum duration so the extra
+    // token-issuing writes on the known-account path cannot leak existence via response latency.
+    await enforceMinimumDuration(startedAtMillis);
+    return { messageKey: 'success:passwordResetEmailSent' };
+  }
+
+  private async issuePasswordResetIfUserExists(email: string): Promise<void> {
+    const user = await this.userService.findByEmail(email);
+    if (!user) return;
 
     // Invalidate any existing password reset tokens
     await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
@@ -140,7 +203,7 @@ export class AuthMethodService {
       expiresAt,
     );
 
-    await eventBus.emit({
+    await eventBus.emitStrict({
       type: AUTH_EVENT.PASSWORD_RESET_REQUESTED,
       payload: {
         email: user.email,
@@ -149,8 +212,6 @@ export class AuthMethodService {
       } satisfies PasswordResetEmailPayload,
       timestamp: new Date(),
     });
-
-    return { messageKey: 'success:passwordResetEmailSent' };
   }
 
   async resetPassword(body: unknown): Promise<void> {
@@ -171,9 +232,17 @@ export class AuthMethodService {
     await this.userService.updatePassword(user.public_id, passwordHash);
 
     await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
+
+    // A reset is the recovery path for a potentially compromised account, so every
+    // existing session is revoked (cache invalidation makes revocation immediate).
+    await this.authSessionService.revokeAllSessions(user.public_id);
   }
 
-  async changePassword(userPublicId: string, body: unknown): Promise<void> {
+  async changePassword(
+    userPublicId: string,
+    body: unknown,
+    options?: { currentAccessToken?: string },
+  ): Promise<void> {
     const parsed = validateChangePassword(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
@@ -183,6 +252,36 @@ export class AuthMethodService {
     const passwordHash = await hashPassword(parsed.new_password);
     const updatedUser = await this.userService.updatePassword(user.public_id, passwordHash);
     if (!updatedUser) throw new NotFoundError('User');
+
+    // An authenticated change keeps the caller's current session and terminates
+    // every other device. Without a current token we cannot single one out, so
+    // fall back to revoking all sessions.
+    if (options?.currentAccessToken) {
+      await this.authSessionService.revokeAllSessionsExceptCurrent({
+        userPublicId: user.public_id,
+        currentAccessToken: options.currentAccessToken,
+      });
+    } else {
+      await this.authSessionService.revokeAllSessions(user.public_id);
+    }
+  }
+
+  /**
+   * Re-verifies the caller's password for a step-up ("sudo") re-authentication, without
+   * mutating any state. Used by `POST /auth/step-up` so password users can open a short
+   * recent-step-up window before a sensitive credential mutation. Throws on a missing user,
+   * a passwordless account, or an incorrect password.
+   */
+  async verifyPasswordForStepUp(options: {
+    userPublicId: string;
+    password: string;
+  }): Promise<void> {
+    const { userPublicId, password } = options;
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new NotFoundError('User');
+    if (!user.password_hash) throw new UnauthorizedError('errors:passwordAuthNotEnabled');
+    const { valid } = await verifyPassword(password, user.password_hash);
+    if (!valid) throw new UnauthorizedError('errors:currentPasswordIncorrect');
   }
 
   // ── Email Verification ────────────────────────────────────────
@@ -233,7 +332,7 @@ export class AuthMethodService {
       expiresAt,
     );
 
-    await eventBus.emit({
+    await eventBus.emitStrict({
       type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
       payload: {
         email: user.email,

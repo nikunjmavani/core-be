@@ -6,8 +6,8 @@ import {
 } from '@/shared/errors/index.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
-import type { OrganizationRepository } from '../../organization/organization.repository.js';
-import type { MembershipRepository } from '../membership.repository.js';
+import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
+import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { MemberInvitationRepository } from './member-invitation.repository.js';
 import type { MemberInvitationOutput } from './member-invitation.types.js';
@@ -19,20 +19,93 @@ import {
 } from './member-invitation.validator.js';
 import { serializeMemberInvitation } from './member-invitation.serializer.js';
 import { hashInvitationToken, generateInvitationToken } from './member-invitation.token.js';
+import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { eventBus } from '@/core/events/event-bus.js';
 import {
   MEMBER_INVITATION_EVENT,
   type MemberInvitationEmailPayload,
 } from '@/domains/tenancy/sub-domains/membership/member-invitation/events/member-invitation.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import type { MemberInvitationRow } from './member-invitation.types.js';
 
 const MEMBER_INVITATION_RESOURCE = 'Member invitation';
 
+function assertInvitationAcceptable(row: MemberInvitationRow, now: Date): void {
+  if (row.revoked_at) {
+    throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
+  }
+  if (row.accepted_at) {
+    throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
+  }
+  if (now > row.expires_at) {
+    throw new ValidationError('errors:validation.invitationExpired', undefined, {});
+  }
+}
+
+function throwInvitationAcceptFailure(current: MemberInvitationRow | null, now: Date): never {
+  if (!current) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+  assertInvitationAcceptable(current, now);
+  throw new ValidationError('errors:validation.invalidToken', undefined, {
+    token: ['Invalid or expired'],
+  });
+}
+
+/**
+ * Inputs to {@link MemberInvitationService.list}: the organization to scope
+ * to plus the raw (unvalidated) query string carrying cursor pagination and
+ * the optional `include_total` flag.
+ *
+ * @remarks
+ * - **Algorithm:** the service validates `query` via the listing DTO, applies
+ *   the cursor + limit, and joins through `MemberInvitationRepository`.
+ * - **Failure modes:** invalid query shapes throw `ValidationError`; a missing
+ *   organization throws `NotFoundError`.
+ * - **Side effects:** none — read-only path.
+ * - **Notes:** `query` is intentionally `unknown` so the boundary parses with
+ *   Zod once inside the service.
+ */
 export interface MemberInvitationListOptions {
   organization_public_id: string;
   query: unknown;
 }
 
+/**
+ * Application service for organization-member invitations: create, list,
+ * accept, decline, resend, and revoke.
+ *
+ * @remarks
+ * - **Algorithm:** invitations carry a single-use opaque token. On create/resend
+ *   {@link generateInvitationToken} produces a 64-char hex secret; only the
+ *   SHA-256 hash from {@link hashInvitationToken} is persisted as `token_hash`.
+ *   Org-scoped methods run inside {@link withOrganizationDatabaseContext} so
+ *   RLS sees the right `app.current_organization_id`. Public/user-facing
+ *   accept and decline routes have no org context up front — they call the
+ *   SECURITY DEFINER lookup `lookupOrganizationByInvitationPublicId` to
+ *   resolve the owning org, then wrap the actual UPDATE in
+ *   `withOrganizationDatabaseContext`.
+ * - **Failure modes:** `NotFoundError` for missing org/membership/invitation;
+ *   `ValidationError` (i18n keys `errors:validation.invalidToken`,
+ *   `invitationRevoked`, `invitationAlreadyAccepted`, `invitationExpired`,
+ *   `errors:disposableEmail`) for state and input violations;
+ *   `ForbiddenError('errors:declineOwnInvitationOnly')` when a user tries to
+ *   decline somebody else's invitation; `ConfigurationError` if the optional
+ *   `UserService` is required but not wired by the container.
+ * - **Side effects:** writes to `tenancy.member_invitations`; `accept`
+ *   additionally activates the linked `tenancy.memberships` row
+ *   (`status = 'ACTIVE'`, `joined_at = now()`) in the same transaction and
+ *   purges the member's Redis permission cache so access is granted
+ *   immediately. Emits {@link MEMBER_INVITATION_EVENT.CREATED} / `RESENT` on
+ *   the in-process event bus, which the invitation email handler turns into a
+ *   mail-outbox row dispatched on commit. The raw token is only returned to
+ *   the API caller and embedded in the outgoing email — it never leaves the
+ *   service in any other form.
+ * - **Notes:** invitations have mutually-exclusive terminal states
+ *   (`accepted_at` vs `revoked_at`); resend regenerates the token and pushes
+ *   `expires_at`. {@link listPendingInvitations} is intentionally
+ *   cross-organization (a user may have invites from many orgs); decline is
+ *   modeled as a revoke from the user's side and rejected if the email does
+ *   not match the authenticated user.
+ */
 export class MemberInvitationService {
   constructor(
     private readonly organizationRepository: OrganizationRepository,
@@ -137,18 +210,31 @@ export class MemberInvitationService {
       const row = await this.invitationRepository.findByPublicId(invitation_public_id);
       if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
       const tokenHash = hashInvitationToken(parsed.token);
-      if (row.token_hash !== tokenHash)
-        throw new ValidationError('errors:validation.invalidToken', undefined, {
-          token: ['Invalid or expired'],
-        });
-      if (row.revoked_at)
-        throw new ValidationError('errors:validation.invitationRevoked', undefined, {});
-      if (row.accepted_at)
-        throw new ValidationError('errors:validation.invitationAlreadyAccepted', undefined, {});
-      if (new Date() > row.expires_at)
-        throw new ValidationError('errors:validation.invitationExpired', undefined, {});
-      const updated = await this.invitationRepository.accept(invitation_public_id);
-      if (!updated) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      const now = new Date();
+      assertInvitationAcceptable(row, now);
+      const updated = await this.invitationRepository.accept(invitation_public_id, tokenHash, now);
+      if (!updated) {
+        const current = await this.invitationRepository.findByPublicId(invitation_public_id);
+        throwInvitationAcceptFailure(current, now);
+      }
+      /**
+       * Atomically activate the membership in the same transaction so accepting
+       * the token actually grants access (permission resolution requires
+       * `memberships.status = 'ACTIVE'`). Without this the invitation flow set
+       * `accepted_at` but left the membership `INVITED`, so the user appeared
+       * to have no access until a manager separately PATCHed the status.
+       */
+      const activatedMembership = await this.membershipRepository.activateForInvitationAccept(
+        lookup.membership_id,
+        lookup.organization_id,
+      );
+      if (!activatedMembership) throw new NotFoundError('Membership');
+      const memberUserPublicId = await this.organizationRepository.resolveUserPublicIdByInternalId(
+        activatedMembership.user_id,
+      );
+      if (memberUserPublicId) {
+        await invalidatePermissions(memberUserPublicId, lookup.organization_public_id);
+      }
       return serializeMemberInvitation(updated, lookup.membership_public_id);
     });
   }

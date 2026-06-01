@@ -10,6 +10,15 @@ import '@/shared/config/load-env-files.js';
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_SSL_ENABLED = 'false';
 /**
+ * Mirror CI (which leaves this unset → schema default `true`). `.env.development` pins it to
+ * `false` for the legacy request-pinned RLS transaction mode used by `pnpm dev`, but that mode
+ * commits the per-request transaction in an `onResponse` hook — i.e. AFTER `fastify.inject()`
+ * resolves. Tests that assert a DB side effect (e.g. an audit row) immediately after an
+ * authenticated org request then race the deferred commit and flake. Forcing the scoped-context
+ * mode (inline `withOrganizationDatabaseContext` commits) makes local runs deterministic and
+ * match CI, the source of truth.
+ */
+/**
  * Feature flags asserted by route registration and auth tests. `.env.development` sets
  * several of these to `'false'` for local dev ergonomics, but the test harness needs the
  * corresponding routes/handlers wired so each suite can assert its real-world behavior.
@@ -139,6 +148,7 @@ if (process.env.CONTRACT_TESTS_ONLY === 'true') {
   process.env.STRIPE_WEBHOOK_SECRET =
     'whsec_test_contract_fixture_webhook_signing_must_be_minimum_32characters';
   process.env.RESEND_API_KEY = 're_test_contract_fixture_key';
+  process.env.EMAIL_FROM_ADDRESS = 'noreply@example.com';
   process.env.S3_BUCKET = 'contract-test-bucket';
   process.env.S3_REGION = 'us-east-1';
   process.env.S3_ACCESS_KEY_ID = 'AKIAIOSFODNN7EXAMPLE';
@@ -152,6 +162,9 @@ process.env.STRIPE_SECRET_KEY ??= 'sk_test_contract_fixture_key';
 process.env.STRIPE_WEBHOOK_SECRET ??=
   'whsec_test_contract_fixture_secret_minimum_length_32_chars_xx';
 process.env.RESEND_API_KEY ??= 're_test_contract_fixture_key';
+// EMAIL_FROM_ADDRESS is required by env-schema whenever RESEND_API_KEY is set (no hardcoded
+// sender fallback in mail.service); provide a baseline so the parsed `env` validates in tests.
+process.env.EMAIL_FROM_ADDRESS ??= 'noreply@example.com';
 process.env.S3_BUCKET ??= 'contract-test-bucket';
 process.env.S3_REGION ??= 'us-east-1';
 process.env.S3_ACCESS_KEY_ID ??= 'AKIAIOSFODNN7EXAMPLE';

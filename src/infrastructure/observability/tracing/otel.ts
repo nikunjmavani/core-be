@@ -44,6 +44,10 @@ export function initOpenTelemetry(serviceName: string): void {
   logger.info({ serviceName: resolvedServiceName, otlpEndpoint }, 'OpenTelemetry initialized');
 }
 
+/**
+ * Flushes pending OTLP spans and tears down the `NodeSDK` instance. Called from
+ * the graceful shutdown middleware; safe to call when OTEL was never initialised.
+ */
 export async function shutdownOpenTelemetry(): Promise<void> {
   if (!sdk) return;
   await sdk.shutdown();

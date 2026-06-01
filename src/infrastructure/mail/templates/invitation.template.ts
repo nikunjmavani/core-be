@@ -1,5 +1,7 @@
 import { baseTemplate } from './base.template.js';
+import { escapeHtml } from './escape-html.util.js';
 
+/** Template variables for {@link invitationTemplate} — inviter, target org, accept URL, and TTL. */
 export interface InvitationTemplateData {
   inviterName: string;
   organizationName: string;
@@ -7,13 +9,27 @@ export interface InvitationTemplateData {
   expiresInDays: number;
 }
 
+/**
+ * Renders the member-invitation HTML email (wrapped in `baseTemplate`). Emitted
+ * from `member-invitation.events` handlers; the `acceptUrl` must already include
+ * the signed invitation token so the recipient can complete acceptance.
+ *
+ * @remarks
+ * `inviterName` and `organizationName` are user/tenant-controlled (set via the
+ * organization and user profile DTOs, which permit `< > " '`). Both are passed
+ * through {@link escapeHtml} before interpolation so a malicious display name
+ * cannot inject markup into a DKIM-signed email from our domain (audit #9).
+ */
 export function invitationTemplate(data: InvitationTemplateData): string {
+  const inviterName = escapeHtml(data.inviterName);
+  const organizationName = escapeHtml(data.organizationName);
+
   return baseTemplate({
-    title: `You're invited to join ${data.organizationName}`,
-    preheader: `${data.inviterName} invited you to join ${data.organizationName}.`,
+    title: `You're invited to join ${organizationName}`,
+    preheader: `${inviterName} invited you to join ${organizationName}.`,
     body: `
       <h1>You've been invited</h1>
-      <p><strong>${data.inviterName}</strong> has invited you to join <strong>${data.organizationName}</strong>.</p>
+      <p><strong>${inviterName}</strong> has invited you to join <strong>${organizationName}</strong>.</p>
       <p>Click the button below to accept the invitation. This link expires in ${data.expiresInDays} days.</p>
       <p style="text-align: center; margin: 32px 0;">
         <a href="${data.acceptUrl}" class="button">Accept Invitation</a>

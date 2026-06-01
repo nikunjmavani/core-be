@@ -13,7 +13,15 @@ import {
 import { auditSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
+import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
 
+/**
+ * Drizzle definition for `audit.logs` — the append-only ledger of actor/resource
+ * actions. RLS tenant-isolation policy scopes rows to the current organization
+ * (or to retention-cleanup workers that set `app.global_retention_cleanup`, or
+ * the cross-tenant admin escape hatch `app.global_admin` used by the admin
+ * audit-log listing via `withGlobalAdminDatabaseContext`).
+ */
 export const logs = auditSchema
   .table(
     'logs',
@@ -22,6 +30,13 @@ export const logs = auditSchema
       actor_user_id: bigint('actor_user_id', { mode: 'number' }).references(() => users.id, {
         onDelete: 'set null',
       }),
+      // Set instead of actor_user_id when the action was performed by an organization API key
+      // (which has no acting user). Nullable + ON DELETE SET NULL like actor_user_id; the app
+      // guarantees at least one of the two actor columns is set at write time.
+      actor_api_key_id: bigint('actor_api_key_id', { mode: 'number' }).references(
+        () => api_keys.id,
+        { onDelete: 'set null' },
+      ),
       target_user_id: bigint('target_user_id', { mode: 'number' }).references(() => users.id, {
         onDelete: 'set null',
       }),
@@ -61,10 +76,22 @@ export const logs = auditSchema
             SELECT id FROM tenancy.organizations
             WHERE public_id = current_setting('app.current_organization_id', true)
           )
-          OR current_setting('app.global_retention_cleanup', true) = 'true'`,
+          OR current_setting('app.global_retention_cleanup', true) = 'true'
+          OR current_setting('app.global_admin', true) = 'true'`,
+      }),
+      pgPolicy('audit_logs_user_export_select', {
+        as: 'permissive',
+        for: 'select',
+        to: 'public',
+        using: sql`${table.actor_user_id} = (
+            SELECT id FROM auth.users
+            WHERE public_id = current_setting('app.current_user_id', true)
+              AND deleted_at IS NULL
+          )`,
       }),
     ],
   )
   .enableRLS();
 
+/** Drizzle-inferred insert row shape for {@link logs}. */
 export type AuditLogInsert = typeof logs.$inferInsert;

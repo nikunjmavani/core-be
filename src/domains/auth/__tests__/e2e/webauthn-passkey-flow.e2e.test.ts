@@ -9,6 +9,7 @@ import {
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestTokenWithActiveSession } from '@/tests/helpers/test-auth.js';
+import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { webauthn_credentials } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.schema.js';
 import type { FastifyInstance } from 'fastify';
@@ -43,6 +44,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
 
   it('registers a passkey while authenticated, then signs in with WebAuthn', async () => {
     const user = await createTestUser({ email: 'webauthn-passkey-flow@example.com' });
+    await seedRecentStepUpForTestUser(user.public_id);
     const token = await generateTestTokenWithActiveSession(app, user.public_id);
     const credentialId = 'e2e-test-credential-id';
     const publicKeyBytes = Buffer.from('e2e-test-public-key');

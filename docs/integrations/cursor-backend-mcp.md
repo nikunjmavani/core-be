@@ -61,9 +61,11 @@ If you work in the **frontend** repo in Cursor and want the AI to see and call c
 ## Backend setup
 
 1. Set in `.env`:
+
    ```env
    ENABLE_MCP_SERVER=true
    ```
+
 2. Start the server: `pnpm dev`
 3. MCP endpoint: **`POST {API_BASE}/api/v1/mcp`**  
    Example: `http://localhost:3000/api/v1/mcp`

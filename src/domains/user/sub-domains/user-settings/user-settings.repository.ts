@@ -3,6 +3,11 @@ import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-tim
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { user_settings } from '@/domains/user/sub-domains/user-settings/user-settings.schema.js';
 
+/**
+ * Drizzle data-access for `auth.user_settings`. Implements an upsert-merge for the singleton
+ * row keyed by `user_id`: missing fields fall back to the existing row, then to the platform
+ * factory defaults (light mode, notifications on, `en` language, `['en']` preferred locales).
+ */
 export class UserSettingsRepository {
   async getByUserId(user_id: number) {
     const rows = await getRequestDatabase()

@@ -1,4 +1,8 @@
 import '@/shared/config/load-env-files.js';
+import {
+  PROJECT_DISPLAY_NAME,
+  PROJECT_SLUG,
+} from '@/shared/constants/project-identity.constants.js';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { sendEmail, isMailConfigured } from '@/infrastructure/mail/mail.service.js';
@@ -61,7 +65,7 @@ function buildTextBody(
 ): string {
   const lines: string[] = [];
 
-  lines.push(`core-be CI Test Report — ${status.toUpperCase()}`);
+  lines.push(`${PROJECT_DISPLAY_NAME} CI Test Report — ${status.toUpperCase()}`);
   lines.push('');
 
   lines.push(`Status  : ${status.toUpperCase()}`);
@@ -231,7 +235,7 @@ function buildHtmlBody(
       <tr>
         <td style="padding: 20px 24px; border-bottom: 1px solid #e5e7eb;">
           <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">
-            core-be CI Test Report
+            ${PROJECT_DISPLAY_NAME} CI Test Report
           </h1>
           <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">
             ${workflowName}${options.branch ? ` • ${options.branch}` : ''}${
@@ -327,7 +331,7 @@ async function main(): Promise<void> {
   const actor = process.env.GITHUB_ACTOR;
   const dateTime = new Date().toISOString();
 
-  const subject = `core-be ${workflowName} tests: ${status.toUpperCase()}`;
+  const subject = `${PROJECT_SLUG} ${workflowName} tests: ${status.toUpperCase()}`;
   const reportContext = omitUndefined({
     runUrl,
     workflowName,

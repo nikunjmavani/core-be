@@ -14,6 +14,21 @@ import { MEMBER_ROLE_TOMBSTONE_RETENTION_QUEUE_NAME } from './member-role-tombst
 /**
  * Hard-delete roles tombstoned longer than TOMBSTONE_RETENTION_DAYS.
  * tenancy.role_permissions rows cascade via FK ON DELETE CASCADE.
+ *
+ * @remarks
+ * - **Algorithm:** constructs a BullMQ `Worker` for the
+ *   `MEMBER_ROLE_TOMBSTONE_RETENTION_QUEUE_NAME` queue that runs
+ *   {@link runMemberRoleTombstoneRetentionJob} under
+ *   {@link withGlobalRetentionCleanupDatabaseContext} so the cleanup bypasses
+ *   per-organization RLS.
+ * - **Failure modes:** processor exceptions trigger BullMQ retry/backoff;
+ *   stalled jobs are logged via the `stalled` listener; the queue's DLQ
+ *   captures permanently failed jobs.
+ * - **Side effects:** opens a BullMQ Redis connection; takes a dedicated
+ *   Postgres handle for each job; emits info/warn logs.
+ * - **Notes:** registered in the worker registry rather than wired directly in
+ *   `bootstrap.ts`; concurrency and stall settings come from
+ *   {@link getRetentionWorkerOptions} and {@link RETENTION_WORKER_CONCURRENCY}.
  */
 export function createMemberRoleTombstoneRetentionWorker(): WorkerHandle {
   const worker = new Worker(

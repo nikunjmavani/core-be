@@ -12,6 +12,12 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
+const invalidateOrganizationPermissionsMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', () => ({
+  invalidateOrganizationPermissions: (...parameters: unknown[]) =>
+    invalidateOrganizationPermissionsMock(...parameters),
+}));
+
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
@@ -47,6 +53,7 @@ describe('OrganizationService', () => {
     create: vi.fn().mockResolvedValue(organizationRow),
     update: vi.fn().mockResolvedValue(organizationRow),
     softDelete: vi.fn().mockResolvedValue(organizationRow),
+    markDeletionStarted: vi.fn().mockResolvedValue(organizationRow),
     resolveUserIdByPublicId: vi.fn().mockResolvedValue(10),
     updateOwner: vi.fn().mockResolvedValue(undefined),
     updateStripeCustomerId: vi.fn().mockResolvedValue(undefined),
@@ -81,6 +88,7 @@ describe('OrganizationService', () => {
     vi.mocked(repository.resolveUserIdByPublicId).mockResolvedValue(10);
     vi.mocked(repository.update).mockResolvedValue(organizationRow as never);
     vi.mocked(repository.softDelete).mockResolvedValue(organizationRow as never);
+    vi.mocked(repository.markDeletionStarted).mockResolvedValue(organizationRow as never);
     vi.mocked(repository.userCanAccessOrganization).mockResolvedValue(true);
   });
 
@@ -140,6 +148,17 @@ describe('OrganizationService', () => {
     service.wireOffboardingUploadService(uploadService as never);
     await service.delete(organizationRow.public_id);
     expect(uploadService.tombstoneAllByOrganizationId).toHaveBeenCalledWith(organizationRow.id);
+  });
+
+  it('delete invalidates the organization permission cache so access stops immediately', async () => {
+    await service.delete(organizationRow.public_id);
+    expect(invalidateOrganizationPermissionsMock).toHaveBeenCalledWith(organizationRow.public_id);
+  });
+
+  it('delete does not invalidate the permission cache when soft delete fails', async () => {
+    vi.mocked(repository.softDelete).mockResolvedValue(null);
+    await expect(service.delete(organizationRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+    expect(invalidateOrganizationPermissionsMock).not.toHaveBeenCalled();
   });
 
   it('uploadLogo validates key prefix and updates logo url', async () => {
@@ -212,6 +231,16 @@ describe('OrganizationService', () => {
     vi.mocked(repository.findBySlug).mockResolvedValue(organizationRow as never);
     await expect(
       service.create({ name: 'Dup', slug: organizationRow.slug }, 'owner_public'),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it('create maps a slug unique_violation race to ConflictError instead of 500', async () => {
+    vi.mocked(repository.findBySlug).mockResolvedValue(null);
+    vi.mocked(repository.create).mockRejectedValueOnce(
+      Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' }),
+    );
+    await expect(
+      service.create({ name: 'Race', slug: 'race-slug' }, 'owner_public'),
     ).rejects.toBeInstanceOf(ConflictError);
   });
 
@@ -358,6 +387,18 @@ describe('OrganizationService', () => {
     } as never);
     await service.delete(organizationRow.public_id);
     expect(repository.update).toHaveBeenCalled();
+  });
+
+  it('delete fails when logo clear update cannot see the organization in RLS context', async () => {
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(true);
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...organizationRow,
+      logo_url: `organization-logos/${organizationRow.public_id}/logo.png`,
+    } as never);
+    vi.mocked(repository.update).mockResolvedValueOnce(null);
+
+    await expect(service.delete(organizationRow.public_id)).rejects.toBeInstanceOf(NotFoundError);
+    expect(repository.softDelete).not.toHaveBeenCalled();
   });
 
   it('deleteLogo skips storage head check when logo url has no extractable key', async () => {

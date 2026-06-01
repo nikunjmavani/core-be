@@ -1,7 +1,7 @@
 import type Stripe from 'stripe';
 import { sql } from '@/infrastructure/database/connection.js';
-import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
-import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-context.js';
+import type { WorkerContextDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
+import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const SUBSCRIPTION_STRIPE_EVENT_TYPES = new Set([
@@ -48,16 +48,21 @@ export async function resolveOrganizationPublicIdForStripeEvent(
   const stripeObject = event.data.object as Stripe.Subscription;
 
   const fromMetadata = readOrganizationPublicIdFromStripeMetadata(stripeObject.metadata);
-  if (fromMetadata !== undefined) {
-    return fromMetadata;
-  }
+  if (stripeEventRequiresOrganizationContext(event.type)) {
+    const fromSubscription = await resolveOrganizationPublicIdByProviderSubscriptionId(
+      stripeObject.id,
+    );
+    if (
+      fromMetadata !== undefined &&
+      fromSubscription !== undefined &&
+      fromMetadata !== fromSubscription
+    ) {
+      throw new Error(
+        `Stripe webhook event ${event.id} (${event.type}) has mismatched organization metadata for subscription ${stripeObject.id}`,
+      );
+    }
 
-  if (
-    event.type === 'customer.subscription.created' ||
-    event.type === 'customer.subscription.updated' ||
-    event.type === 'customer.subscription.deleted'
-  ) {
-    return resolveOrganizationPublicIdByProviderSubscriptionId(stripeObject.id);
+    return fromMetadata ?? fromSubscription;
   }
 
   return undefined;
@@ -68,14 +73,21 @@ export async function resolveOrganizationPublicIdForStripeEvent(
  */
 export async function runWithOrganizationPublicIdForStripeWebhook<T>(
   organizationPublicId: string,
-  callback: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,
+  callback: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
 ): Promise<T> {
   return withOrganizationContext(organizationPublicId, callback);
 }
 
+/**
+ * Resolves the organization scope for `event` and runs `handler` inside that
+ * RLS context, returning `undefined` for events that legitimately have no
+ * organization (e.g. unhandled global event types). Throws when the event type
+ * requires tenancy (subscription lifecycle) but no organization could be found,
+ * so the caller marks the ledger row failed instead of silently skipping.
+ */
 export async function runStripeWebhookHandlerWithOrganizationContext<T>(
   event: Stripe.Event,
-  handler: (databaseHandle: RequestScopedPostgresDatabase) => Promise<T>,
+  handler: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
 ): Promise<T | undefined> {
   const organizationPublicId = await resolveOrganizationPublicIdForStripeEvent(event);
   if (organizationPublicId === undefined) {

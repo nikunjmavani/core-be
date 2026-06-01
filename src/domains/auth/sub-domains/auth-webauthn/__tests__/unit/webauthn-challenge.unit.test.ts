@@ -10,14 +10,12 @@ import {
 describe('webauthn-challenge', () => {
   const redis = {
     set: vi.fn(),
-    get: vi.fn(),
-    del: vi.fn(),
+    getdel: vi.fn(),
   } as unknown as Redis;
 
   beforeEach(() => {
     vi.mocked(redis.set).mockReset();
-    vi.mocked(redis.get).mockReset();
-    vi.mocked(redis.del).mockReset();
+    vi.mocked(redis.getdel).mockReset();
   });
 
   it('createWebauthnChallenge stores JSON payload with TTL', async () => {
@@ -51,27 +49,25 @@ describe('webauthn-challenge', () => {
     await expect(consumeWebauthnChallenge(redis, '', 'registration')).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
-    expect(redis.get).not.toHaveBeenCalled();
+    expect(redis.getdel).not.toHaveBeenCalled();
   });
 
   it('consumeWebauthnChallenge rejects expired/missing Redis entry', async () => {
-    vi.mocked(redis.get).mockResolvedValue(null);
+    vi.mocked(redis.getdel).mockResolvedValue(null);
     await expect(
       consumeWebauthnChallenge(redis, 'token-abc', 'registration'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(redis.del).not.toHaveBeenCalled();
   });
 
   it('consumeWebauthnChallenge rejects malformed JSON payload', async () => {
-    vi.mocked(redis.get).mockResolvedValue('{not-json');
+    vi.mocked(redis.getdel).mockResolvedValue('{not-json');
     await expect(
       consumeWebauthnChallenge(redis, 'token-abc', 'registration'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(redis.del).toHaveBeenCalled();
   });
 
   it('consumeWebauthnChallenge rejects when kind does not match expected', async () => {
-    vi.mocked(redis.get).mockResolvedValue(
+    vi.mocked(redis.getdel).mockResolvedValue(
       JSON.stringify({
         kind: 'authentication',
         user_public_id: 'user_public_abc',
@@ -81,12 +77,12 @@ describe('webauthn-challenge', () => {
     await expect(
       consumeWebauthnChallenge(redis, 'token-abc', 'registration'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    // Still deletes the token to prevent reuse
-    expect(redis.del).toHaveBeenCalled();
+    // GETDEL already removed the token, so a mismatched kind cannot be reused
+    expect(redis.getdel).toHaveBeenCalled();
   });
 
-  it('consumeWebauthnChallenge deletes the token on successful consume', async () => {
-    vi.mocked(redis.get).mockResolvedValue(
+  it('consumeWebauthnChallenge atomically reads-and-deletes the token on successful consume', async () => {
+    vi.mocked(redis.getdel).mockResolvedValue(
       JSON.stringify({
         kind: 'authentication',
         user_public_id: 'user_public_abc',
@@ -96,11 +92,11 @@ describe('webauthn-challenge', () => {
     const payload = await consumeWebauthnChallenge(redis, 'token-success', 'authentication');
     expect(payload.user_public_id).toBe('user_public_abc');
     expect(payload.challenge).toBe('c1');
-    expect(redis.del).toHaveBeenCalledWith(`${WEBAUTHN_CHALLENGE_KEY_PREFIX}token-success`);
+    expect(redis.getdel).toHaveBeenCalledWith(`${WEBAUTHN_CHALLENGE_KEY_PREFIX}token-success`);
   });
 
   it('consumeWebauthnChallenge rejects replayed token after first successful consume', async () => {
-    vi.mocked(redis.get).mockResolvedValueOnce(
+    vi.mocked(redis.getdel).mockResolvedValueOnce(
       JSON.stringify({
         kind: 'registration',
         user_public_id: 'user_public_abc',
@@ -113,9 +109,32 @@ describe('webauthn-challenge', () => {
       challenge: 'c1',
     });
 
-    vi.mocked(redis.get).mockResolvedValueOnce(null);
+    vi.mocked(redis.getdel).mockResolvedValueOnce(null);
     await expect(
       consumeWebauthnChallenge(redis, 'replay-token', 'registration'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('consumeWebauthnChallenge lets exactly one of two concurrent consumes succeed (atomic GETDEL)', async () => {
+    let consumed = false;
+    vi.mocked(redis.getdel).mockImplementation(async () => {
+      if (consumed) return null;
+      consumed = true;
+      return JSON.stringify({
+        kind: 'authentication',
+        user_public_id: 'user_public_abc',
+        challenge: 'c1',
+      });
+    });
+
+    const results = await Promise.allSettled([
+      consumeWebauthnChallenge(redis, 'race-token', 'authentication'),
+      consumeWebauthnChallenge(redis, 'race-token', 'authentication'),
+    ]);
+
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
   });
 });

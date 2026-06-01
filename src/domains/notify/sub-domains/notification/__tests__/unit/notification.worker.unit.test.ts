@@ -5,13 +5,25 @@ import type { NotificationRepository } from '@/domains/notify/sub-domains/notifi
 const recordOutboxEmailMock = vi.fn();
 const dispatchOutboxEmailMock = vi.fn();
 const isMailConfiguredMock = vi.fn();
+const claimNotificationEmailDispatchMock = vi.fn();
+const releaseNotificationEmailDispatchMock = vi.fn();
 
 vi.mock('@/infrastructure/mail/queues/mail.queue.js', () => ({
   recordOutboxEmail: (...parameters: unknown[]) => recordOutboxEmailMock(...parameters),
   dispatchOutboxEmail: (...parameters: unknown[]) => dispatchOutboxEmailMock(...parameters),
 }));
 
-vi.mock('@/infrastructure/database/contexts/worker-database-context.js', () => ({
+vi.mock(
+  '@/domains/notify/sub-domains/notification/workers/notification-email-idempotency.js',
+  () => ({
+    claimNotificationEmailDispatch: (...parameters: unknown[]) =>
+      claimNotificationEmailDispatchMock(...parameters),
+    releaseNotificationEmailDispatch: (...parameters: unknown[]) =>
+      releaseNotificationEmailDispatchMock(...parameters),
+  }),
+);
+
+vi.mock('@/infrastructure/database/contexts/worker-database.context.js', () => ({
   withSystemTableWorkerContext: (callback: () => Promise<unknown>) => callback(),
 }));
 
@@ -47,9 +59,13 @@ describe('notification.worker', () => {
     recordOutboxEmailMock.mockReset();
     dispatchOutboxEmailMock.mockReset();
     isMailConfiguredMock.mockReset();
+    claimNotificationEmailDispatchMock.mockReset();
+    releaseNotificationEmailDispatchMock.mockReset();
     isMailConfiguredMock.mockReturnValue(true);
     recordOutboxEmailMock.mockResolvedValue(501);
     dispatchOutboxEmailMock.mockResolvedValue(undefined);
+    claimNotificationEmailDispatchMock.mockResolvedValue(true);
+    releaseNotificationEmailDispatchMock.mockResolvedValue(undefined);
   });
 
   it('queues email and returns in-app channel result when both channels are requested', async () => {
@@ -71,6 +87,64 @@ describe('notification.worker', () => {
     );
     expect(dispatchOutboxEmailMock).toHaveBeenCalledWith(501, { requestId: 'request-1' });
     expect(result).toEqual({ channels: ['email:queued', 'in_app:persisted'] });
+  });
+
+  it('does not enqueue a duplicate email when a prior attempt already claimed dispatch', async () => {
+    claimNotificationEmailDispatchMock.mockResolvedValue(false);
+    const repository = createNotificationRepository(buildNotificationRow());
+
+    const result = await processNotificationDispatchJob(
+      10,
+      'organization_public_id',
+      { id: 'job-retry', requestId: 'request-1' },
+      repository,
+    );
+
+    expect(claimNotificationEmailDispatchMock).toHaveBeenCalledWith({
+      notificationId: 10,
+      recipient: 'user@example.com',
+    });
+    expect(recordOutboxEmailMock).not.toHaveBeenCalled();
+    expect(dispatchOutboxEmailMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ channels: ['email:deduplicated', 'in_app:persisted'] });
+  });
+
+  it('releases the dispatch claim and rethrows when enqueue fails so a retry can re-send', async () => {
+    dispatchOutboxEmailMock.mockRejectedValueOnce(new Error('redis down'));
+    const repository = createNotificationRepository(buildNotificationRow());
+
+    await expect(
+      processNotificationDispatchJob(10, 'organization_public_id', { id: 'job-1' }, repository),
+    ).rejects.toThrow('redis down');
+
+    expect(releaseNotificationEmailDispatchMock).toHaveBeenCalledWith({
+      notificationId: 10,
+      recipient: 'user@example.com',
+    });
+  });
+
+  it('escapes untrusted notification fields and drops unsafe action URLs in the email HTML', async () => {
+    const repository = createNotificationRepository(
+      buildNotificationRow({
+        title: '<script>alert(1)</script>',
+        message: 'Hello <img src=x onerror=alert(1)>',
+        actionUrl: 'javascript:alert(document.cookie)',
+      }),
+    );
+
+    await processNotificationDispatchJob(
+      10,
+      'organization_public_id',
+      { id: 'job-1', requestId: 'request-1' },
+      repository,
+    );
+
+    const emailPayload = recordOutboxEmailMock.mock.calls[0]?.[0] as { html: string };
+    expect(emailPayload.html).not.toContain('<script>alert(1)</script>');
+    expect(emailPayload.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(emailPayload.html).not.toContain('<img src=x');
+    expect(emailPayload.html).not.toContain('href="javascript:');
+    expect(emailPayload.html).not.toContain('class="button"');
   });
 
   it('skips email channel when mail is not configured', async () => {

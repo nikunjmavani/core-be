@@ -11,8 +11,23 @@ import { STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME } from '@/domains/billing/sub-d
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
- * Sweeps failed or stuck-processing Stripe webhook ledger rows and re-enqueues jobs.
- * Repeatable schedule: `src/infrastructure/queue/scheduler.ts`.
+ * Sweeps failed or stuck-processing Stripe webhook ledger rows and re-enqueues
+ * follow-up jobs so abandoned deliveries get retried.
+ *
+ * @remarks
+ * - **Algorithm:** Creates a single BullMQ {@link Worker} for the reclaim queue
+ *   that delegates each job to {@link runStripeWebhookEventReclaimJob}. The
+ *   processor performs the actual lock flip
+ *   (`failed` → `processing` or `processing` past lease → `processing`) and
+ *   the requeue.
+ * - **Failure modes:** Stalled jobs are logged via the `stalled` listener;
+ *   processor errors fall back to BullMQ's default retry/backoff for the
+ *   reclaim queue.
+ * - **Side effects:** Holds a Redis worker connection until the returned
+ *   {@link WorkerHandle} is closed during shutdown.
+ * - **Notes:** Schedule cadence and concurrency live in
+ *   `src/infrastructure/queue/scheduler.ts` and
+ *   `worker-runtime/worker-options.ts` (retention worker tier).
  */
 export function createStripeWebhookEventReclaimWorker(): WorkerHandle {
   const worker = new Worker(

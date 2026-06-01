@@ -18,8 +18,15 @@ export const EXCLUDED_RELATIVE_PATHS = new Set([
   'src/scripts/validators/__tests__/route-http-coverage-validation.unit.test.ts',
 ]);
 
+/** A single test file × line that hardcodes a `/api/vN/` prefix in an inject URL. */
 export type InjectUrlViolation = { file: string; line: number };
 
+/**
+ * Walks every `*.test.ts` file under `sourceRoot/src/` and returns lines whose
+ * `url:` property uses a hardcoded `/api/vN/` prefix instead of the
+ * `testApiPath()` helper. Files in {@link EXCLUDED_RELATIVE_PATHS} are
+ * skipped because they intentionally embed literal inject URLs.
+ */
 export function findInjectUrlViolations(
   sourceRoot: string,
   projectRoot: string = process.cwd(),

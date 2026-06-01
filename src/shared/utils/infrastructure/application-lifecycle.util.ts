@@ -4,10 +4,12 @@
  */
 let applicationDraining = false;
 
+/** Toggles the process-wide drain flag; called from the SIGTERM/SIGINT handler. */
 export function setApplicationDraining(draining: boolean): void {
   applicationDraining = draining;
 }
 
+/** Returns true once {@link setApplicationDraining} has been called with `true`; readiness probes use this to flip status to `draining`. */
 export function isApplicationDraining(): boolean {
   return applicationDraining;
 }

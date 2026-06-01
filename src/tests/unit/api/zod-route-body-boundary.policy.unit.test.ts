@@ -120,7 +120,7 @@ describe('Zod route body boundary policy', () => {
 
   it('registers fastify-type-provider-zod globally', () => {
     const middlewareSource = readFileSync(
-      join(PROJECT_ROOT, 'src/shared/middlewares/zod-type-provider.middleware.ts'),
+      join(PROJECT_ROOT, 'src/shared/middlewares/core/zod-type-provider.middleware.ts'),
       'utf8',
     );
     expect(middlewareSource).toContain('validatorCompiler');

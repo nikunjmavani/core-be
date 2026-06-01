@@ -3,7 +3,7 @@ name: path-to-production-gate
 description: Run a full codebase review for production readiness, produce a plan, and require user review of that plan before any path-to-production action (release, deploy). Invoke this skill before executing path-to-production steps.
 ---
 
-# Skill: Path to Production Gate
+# Path to production gate (core-be)
 
 ## Purpose
 

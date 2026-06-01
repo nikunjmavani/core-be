@@ -5,6 +5,12 @@ import { successResponse } from '@/shared/utils/http/response.util.js';
 import { enqueueStripeWebhook } from './queues/stripe-webhook.queue.js';
 import { serializeStripeWebhookAcknowledgement } from './stripe-webhook.serializer.js';
 
+/**
+ * Builds the Stripe webhook ingress handler. Signature verification has already
+ * run in `stripeWebhookIngressPlugin` and exposed the parsed event on
+ * `request.stripeWebhookEvent`; this handler only enqueues the event for the
+ * BullMQ worker and returns a `200 { received: true }` acknowledgement.
+ */
 export function createStripeWebhookController() {
   return {
     /**

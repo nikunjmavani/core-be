@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { enrichSchema } from '../../../../../tooling/openapi/enrichers/schema-enricher.js';
+import { enrichSchema } from '@tooling/openapi/enrichers/schema-enricher.js';
 
 describe('schema-enricher', () => {
   it('enrichSchema adds descriptions and examples to object properties', () => {

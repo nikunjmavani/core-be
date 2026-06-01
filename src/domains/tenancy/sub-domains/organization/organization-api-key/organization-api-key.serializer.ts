@@ -3,6 +3,12 @@ import type {
   OrganizationApiKeyOutput,
 } from './organization-api-key.types.js';
 
+/**
+ * Maps an {@link OrganizationApiKeyRow} to the public
+ * {@link OrganizationApiKeyOutput}. Drops the secret hash, scopes, and
+ * audit columns; exposes only the displayable `key_prefix`, ISO timestamps,
+ * and the organization's public id.
+ */
 export function serializeOrganizationApiKey(
   row: OrganizationApiKeyRow,
   organization_public_id: string,

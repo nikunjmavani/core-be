@@ -11,9 +11,10 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { eq } from 'drizzle-orm';
 import { createTestUser, createTestUserWithPassword } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { users } from '@/domains/user/user.schema.js';
-import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token.schema.js';
+import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.schema.js';
 import type { FastifyInstance } from 'fastify';
 
 const AUTH_LOGIN_PATH = '/auth/login';
@@ -704,6 +705,7 @@ describe('Auth Domain — Integration', () => {
 
     it('should change password for authenticated user with valid current password', async () => {
       const { user, password } = await createTestUserWithPassword();
+      await seedRecentStepUpForTestUser(user.public_id);
       const token = await generateTestToken({ userId: user.public_id });
       const newPassword = 'ChangedPassword789!';
       const response = await injectAuthenticated(app, {

@@ -74,30 +74,50 @@ describe('createSubscriptionController', () => {
     expect(service.update).toHaveBeenCalled();
   });
 
-  it('changePlan delegates to service', async () => {
+  it('changePlan passes idempotency key to service', async () => {
     await controller.changePlan(
       mockRequest({
         params: { id: organizationPublicId, subscriptionId: subscriptionPublicId },
         body: { plan_id: generatePublicId() },
+        headers: { 'idempotency-key': 'idem-key-123456789012' },
       }),
       mockReply(),
     );
-    expect(service.changePlan).toHaveBeenCalled();
+    expect(service.changePlan).toHaveBeenCalledWith(
+      organizationPublicId,
+      subscriptionPublicId,
+      expect.anything(),
+      'idem-key-123456789012',
+    );
   });
 
-  it('cancelSubscription delegates to service', async () => {
+  it('cancelSubscription passes idempotency key to service', async () => {
     await controller.cancelSubscription(
-      mockRequest({ params: { id: organizationPublicId, subscriptionId: subscriptionPublicId } }),
+      mockRequest({
+        params: { id: organizationPublicId, subscriptionId: subscriptionPublicId },
+        headers: { 'idempotency-key': 'idem-key-123456789012' },
+      }),
       mockReply(),
     );
-    expect(service.cancel).toHaveBeenCalled();
+    expect(service.cancel).toHaveBeenCalledWith(
+      organizationPublicId,
+      subscriptionPublicId,
+      'idem-key-123456789012',
+    );
   });
 
-  it('resumeSubscription delegates to service', async () => {
+  it('resumeSubscription passes idempotency key to service', async () => {
     await controller.resumeSubscription(
-      mockRequest({ params: { id: organizationPublicId, subscriptionId: subscriptionPublicId } }),
+      mockRequest({
+        params: { id: organizationPublicId, subscriptionId: subscriptionPublicId },
+        headers: { 'idempotency-key': 'idem-key-123456789012' },
+      }),
       mockReply(),
     );
-    expect(service.resume).toHaveBeenCalled();
+    expect(service.resume).toHaveBeenCalledWith(
+      organizationPublicId,
+      subscriptionPublicId,
+      'idem-key-123456789012',
+    );
   });
 });

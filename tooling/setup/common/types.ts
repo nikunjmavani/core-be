@@ -73,6 +73,11 @@ export interface EnvironmentVariables {
   S3_REGION?: string;
   S3_ACCESS_KEY_ID?: string;
   S3_SECRET_ACCESS_KEY?: string;
+  RAILWAY_TOKEN?: string;
+  RAILWAY_SERVICE_ID?: string;
+  RAILWAY_WORKER_SERVICE_ID?: string;
+  POSTMAN_API_KEY?: string;
+  POSTMAN_WORKSPACE_ID?: string;
 }
 
 export interface GuideStep {

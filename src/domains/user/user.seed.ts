@@ -8,6 +8,7 @@ import { users } from './user.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { hashPassword } from '@/shared/utils/security/password.util.js';
 
+/** Payload for {@link seedUser}; `password_hash` is optional so OAuth-style users can be seeded without credentials. */
 export interface SeedUserPayload {
   email: string;
   first_name: string;
@@ -16,6 +17,11 @@ export interface SeedUserPayload {
   status?: string;
 }
 
+/**
+ * Insert a single user row for dev/demo seeding (`pnpm db:seed`, `pnpm db:seed:full`).
+ * Sets `is_email_verified = true`, generates a fresh `public_id`, and computes the
+ * lowercased SHA-256 `email_hash` so case-insensitive lookups work post-seed.
+ */
 export async function seedUser(payload: SeedUserPayload) {
   const emailHash = createHash('sha256').update(payload.email.toLowerCase()).digest('hex');
   const [row] = await getRequestDatabase()

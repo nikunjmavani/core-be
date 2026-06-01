@@ -13,6 +13,7 @@ import { CHAOS_REDIS_PROXY_NAME } from '@/tests/chaos/chaos.constants.js';
 import { createListeningChaosTestApplicationHarness } from '@/tests/chaos/helpers/chaos-app.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
 describe('Chaos resilience: Redis idempotency', () => {
   let chaosFastifyApplicationInstance: FastifyInstance;
@@ -45,7 +46,7 @@ describe('Chaos resilience: Redis idempotency', () => {
 
     const firstHttpResponseAwaitingIsolation = await chaosFastifyApplicationInstance.inject({
       method: 'POST',
-      url: '/api/v1/tenancy/organizations',
+      url: testApiPath('/tenancy/organizations'),
       headers: {
         authorization: `Bearer ${authenticationTokenWaitingForIsolation}`,
         'idempotency-key': idempotencyKeyWaitingForIsolation,
@@ -74,7 +75,7 @@ describe('Chaos resilience: Redis idempotency', () => {
     try {
       const secondHttpResponseAwaitingIsolation = await chaosFastifyApplicationInstance.inject({
         method: 'POST',
-        url: '/api/v1/tenancy/organizations',
+        url: testApiPath('/tenancy/organizations'),
         headers: {
           authorization: `Bearer ${authenticationTokenWaitingForIsolation}`,
           'idempotency-key': idempotencyKeyWaitingForIsolation,
@@ -105,7 +106,7 @@ describe('Chaos resilience: Redis idempotency', () => {
 
         const httpResponseAwaitingIsolation = await chaosFastifyApplicationInstance.inject({
           method: 'POST',
-          url: '/api/v1/tenancy/organizations',
+          url: testApiPath('/tenancy/organizations'),
           headers: {
             authorization: `Bearer ${authenticationTokenWaitingForIsolation}`,
             'idempotency-key': uniqueIdempotencyKeyForChaosScenario('redis-downidem'),

@@ -25,6 +25,7 @@ async function persistActiveSessionForToken(userPublicId: string, token: string)
   await sessionRepository.create({
     user_id: user.id,
     token_hash: tokenHash,
+    refresh_token_hash: createHash('sha256').update(`${tokenHash}:refresh`).digest('hex'),
     ip_address: '127.0.0.1',
     user_agent: 'vitest',
     expires_at: expiresAt,

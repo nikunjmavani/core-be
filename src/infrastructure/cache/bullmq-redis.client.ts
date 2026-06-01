@@ -1,19 +1,29 @@
 import { Redis } from 'ioredis';
+import { buildRedisTlsOptions } from '@/infrastructure/cache/redis-url.parse.util.js';
 import {
   resolveBullMqRedisUrl,
   usesSeparateBullMqRedisDatabase,
 } from '@/infrastructure/cache/redis-url.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+const bullMqRedisUrl = resolveBullMqRedisUrl();
+
 /**
  * Dedicated Redis connection for BullMQ health probes when an override endpoint is configured.
  * BullMQ queues use {@link getBullMQConnectionOptions} — not this client's keyPrefix.
  */
-export const bullmqRedisConnection = new Redis(resolveBullMqRedisUrl(), {
+export const bullmqRedisConnection = new Redis(bullMqRedisUrl, {
   maxRetriesPerRequest: null,
   lazyConnect: true,
   enableReadyCheck: true,
   enableOfflineQueue: false,
+  /**
+   * Dual-stack DNS lookup (IPv4 + IPv6). Required for Railway private networking
+   * which exposes services over IPv6-only `.railway.internal` hostnames.
+   */
+  family: 0,
+  /** Explicit TLS cert verification when the BullMQ URL is rediss:// (no-op for plaintext redis://). */
+  ...buildRedisTlsOptions(bullMqRedisUrl),
   retryStrategy(times: number) {
     const delay = Math.min(times * 200, 5_000);
     logger.warn({ attempt: times, delayMs: delay }, 'redis.bullmq.reconnecting');
@@ -37,7 +47,11 @@ export async function connectBullMqRedis(): Promise<void> {
     return;
   }
 
-  if (bullmqRedisConnection.status === 'wait') {
+  if (
+    bullmqRedisConnection.status === 'wait' ||
+    bullmqRedisConnection.status === 'end' ||
+    bullmqRedisConnection.status === 'close'
+  ) {
     await bullmqRedisConnection.connect();
     return;
   }
@@ -60,6 +74,11 @@ export async function connectBullMqRedis(): Promise<void> {
   });
 }
 
+/**
+ * Closes the dedicated BullMQ Redis client during graceful shutdown. No-op when BullMQ
+ * shares the cache Redis endpoint (closing the cache client is sufficient). Races a 5s
+ * timeout so a misbehaving Redis cannot stall process exit.
+ */
 export async function closeBullMqRedis(): Promise<void> {
   if (!usesSeparateBullMqRedisDatabase()) {
     return;

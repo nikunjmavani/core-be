@@ -1,0 +1,52 @@
+name: Scheduled chaos (Toxiproxy)
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-chaos-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
+
+jobs:
+  resolve-target:
+    name: Resolve target
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      merge_commit_sha: ${{ steps.target.outputs.merge_commit_sha }}
+      target_branch: ${{ steps.target.outputs.target_branch }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - name: Resolve merge SHA
+        id: target
+        run: |
+          set -euo pipefail
+          branch="${{ github.ref_name }}"
+          case "$branch" in
+            dev|main) ;;
+            *) branch="dev" ;;
+          esac
+          git fetch origin "${branch}" --depth=1
+          sha="$(git rev-parse "origin/${branch}")"
+          echo "merge_commit_sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "target_branch=${branch}" >> "$GITHUB_OUTPUT"
+
+  run-chaos:
+    name: Toxiproxy chaos
+    needs: resolve-target
+    uses: ./.github/workflows/reusable-chaos-toxiproxy.yml
+    with:
+      merge_commit_sha: ${{ needs.resolve-target.outputs.merge_commit_sha }}
+      target_branch: ${{ needs.resolve-target.outputs.target_branch }}

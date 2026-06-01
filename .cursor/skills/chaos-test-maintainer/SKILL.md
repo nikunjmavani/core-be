@@ -3,7 +3,7 @@ name: chaos-test-maintainer
 description: Maintains Toxiproxy chaos tests under src/tests/chaos/. Use when adding fault-injection scenarios or changing chaos CI/provision scripts.
 ---
 
-# Chaos Test Maintainer (core-be)
+# Chaos test maintainer (core-be)
 
 Keeps **Toxiproxy** fault-injection tests and provision scripts aligned. See `docs/reference/reliability/chaos-testing.md`.
 

@@ -7,8 +7,14 @@ import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session
 
 vi.mock('@/domains/auth/sub-domains/auth-method/oauth/oauth-state.js', () => ({
   assertOAuthProviderSupported: vi.fn((provider: string) => provider),
-  createOAuthState: vi.fn().mockResolvedValue('oauth-state'),
-  consumeOAuthState: vi.fn().mockResolvedValue('google'),
+  createOAuthState: vi
+    .fn()
+    .mockResolvedValue({ state: 'oauth-state', codeVerifier: 'verifier', nonce: 'nonce' }),
+  consumeOAuthState: vi.fn().mockResolvedValue({ provider: 'google', codeVerifier: 'verifier' }),
+}));
+
+vi.mock('@/domains/auth/sub-domains/auth-method/oauth/oauth-pkce.js', () => ({
+  derivePkceCodeChallengeS256: vi.fn().mockReturnValue('code-challenge'),
 }));
 
 vi.mock('@/domains/auth/sub-domains/auth-method/oauth/providers/google-oauth.provider.js', () => ({
@@ -41,7 +47,18 @@ describe('OAuthService', () => {
   const userService = {} as UserService;
   const authMethodService = {} as AuthMethodService;
   const authSessionService = {} as AuthSessionService;
-  const service = new OAuthService(userService, authMethodService, authSessionService, redis);
+  const organizationSettingsService = {
+    userHasOrganizationRequiringMfa: vi.fn().mockResolvedValue(false),
+  } as never;
+  const mfaService = { createMfaSession: vi.fn() } as never;
+  const service = new OAuthService(
+    userService,
+    authMethodService,
+    authSessionService,
+    redis,
+    organizationSettingsService,
+    mfaService,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -52,16 +69,16 @@ describe('OAuthService', () => {
     expect(result.providers.length).toBeGreaterThan(0);
   });
 
-  it('getRedirectUrl returns Google redirect', async () => {
+  it('getRedirectUrl returns Google redirect plus a browser nonce', async () => {
     const result = await service.getRedirectUrl('google');
     expect(result.redirect_url).toContain('google');
+    expect(result.nonce).toBe('nonce');
   });
 
   it('getRedirectUrl returns GitHub redirect', async () => {
-    const { consumeOAuthState, createOAuthState } = await import(
+    const { createOAuthState } = await import(
       '@/domains/auth/sub-domains/auth-method/oauth/oauth-state.js'
     );
-    vi.mocked(consumeOAuthState).mockResolvedValue('github');
     const result = await service.getRedirectUrl('github');
     expect(result.redirect_url).toContain('github');
     expect(createOAuthState).toHaveBeenCalled();
@@ -72,7 +89,9 @@ describe('OAuthService', () => {
       provider: 'google',
       code: 'auth-code',
       state: 'oauth-state',
+      nonce: 'nonce',
     });
+    if (!('access_token' in result)) throw new Error('expected oauth session');
     expect(result.access_token).toBe('oauth-access');
     expect(result.session_public_id).toBe('session_oauth');
   });
@@ -85,6 +104,7 @@ describe('OAuthService', () => {
       provider: 'google',
       code: 'auth-code',
       state: 'oauth-state',
+      nonce: 'nonce',
     });
     expect(completeOAuthUserSession).toHaveBeenCalledWith(
       expect.objectContaining({ ipAddress: '127.0.0.1' }),
@@ -95,16 +115,21 @@ describe('OAuthService', () => {
     const { consumeOAuthState } = await import(
       '@/domains/auth/sub-domains/auth-method/oauth/oauth-state.js'
     );
-    vi.mocked(consumeOAuthState).mockResolvedValue('github');
+    vi.mocked(consumeOAuthState).mockResolvedValue({
+      provider: 'github',
+      codeVerifier: 'verifier',
+    });
 
     const result = await service.handleCallback({
       provider: 'github',
       code: 'auth-code',
       state: 'oauth-state',
+      nonce: 'nonce',
       ipAddress: '10.0.0.1',
       userAgent: 'vitest-agent',
     });
 
+    if (!('access_token' in result)) throw new Error('expected oauth session');
     expect(result.access_token).toBe('oauth-access');
   });
 
@@ -128,24 +153,36 @@ describe('OAuthService', () => {
       '@/domains/auth/sub-domains/auth-method/oauth/providers/google-oauth.provider.js'
     );
 
-    vi.mocked(consumeOAuthState).mockResolvedValue('google');
+    vi.mocked(consumeOAuthState).mockResolvedValue({
+      provider: 'google',
+      codeVerifier: 'gverifier',
+    });
     await service.handleCallback({
       provider: 'google',
       code: 'google-code',
       state: 'oauth-state',
+      nonce: 'nonce',
       requestId: 'req-google',
     });
     expect(exchangeGoogleOAuthCode).toHaveBeenCalledWith({
       code: 'google-code',
+      codeVerifier: 'gverifier',
       requestId: 'req-google',
     });
 
-    vi.mocked(consumeOAuthState).mockResolvedValue('github');
+    vi.mocked(consumeOAuthState).mockResolvedValue({
+      provider: 'github',
+      codeVerifier: 'hverifier',
+    });
     await service.handleCallback({
       provider: 'github',
       code: 'github-code',
       state: 'oauth-state',
+      nonce: 'nonce',
     });
-    expect(exchangeGitHubOAuthCode).toHaveBeenCalledWith({ code: 'github-code' });
+    expect(exchangeGitHubOAuthCode).toHaveBeenCalledWith({
+      code: 'github-code',
+      codeVerifier: 'hverifier',
+    });
   });
 });

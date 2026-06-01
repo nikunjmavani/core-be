@@ -9,8 +9,6 @@ const ENV_SETUP_PATH = resolve(PROJECT_ROOT, '.env.setup');
 const TOKEN_URLS: Record<string, string> = {
   NEON_API_KEY: 'https://console.neon.tech/app/settings/api-keys',
   NEON_ORG_ID: 'https://console.neon.tech/app/settings (Organization → General → Organization ID)',
-  UPSTASH_EMAIL: 'https://console.upstash.com/account/api',
-  UPSTASH_API_KEY: 'https://console.upstash.com/account/api',
   AWS_ACCESS_KEY_ID: 'https://console.aws.amazon.com/iam/home#/users',
   AWS_SECRET_ACCESS_KEY: 'https://console.aws.amazon.com/iam/home#/users',
   SENTRY_AUTH_TOKEN: 'https://sentry.io/settings/auth-tokens/new-token/',
@@ -22,18 +20,16 @@ const TOKEN_URLS: Record<string, string> = {
 };
 
 const SIMPLE_VARS: Array<[string, string]> = [
-  ['NEON_API_KEY', TOKEN_URLS.NEON_API_KEY],
-  ['NEON_ORG_ID', TOKEN_URLS.NEON_ORG_ID],
-  ['UPSTASH_EMAIL', TOKEN_URLS.UPSTASH_EMAIL],
-  ['UPSTASH_API_KEY', TOKEN_URLS.UPSTASH_API_KEY],
-  ['AWS_ACCESS_KEY_ID', TOKEN_URLS.AWS_ACCESS_KEY_ID],
-  ['AWS_SECRET_ACCESS_KEY', TOKEN_URLS.AWS_SECRET_ACCESS_KEY],
-  ['SENTRY_AUTH_TOKEN', TOKEN_URLS.SENTRY_AUTH_TOKEN],
-  ['RESEND_API_KEY', TOKEN_URLS.RESEND_API_KEY],
-  ['GITHUB_TOKEN', TOKEN_URLS.GITHUB_TOKEN],
-  ['RAILWAY_TOKEN', TOKEN_URLS.RAILWAY_TOKEN],
-  ['POSTMAN_API_KEY', TOKEN_URLS.POSTMAN_API_KEY],
-  ['POSTMAN_WORKSPACE_ID', TOKEN_URLS.POSTMAN_WORKSPACE_ID],
+  ['NEON_API_KEY', TOKEN_URLS.NEON_API_KEY ?? ''],
+  ['NEON_ORG_ID', TOKEN_URLS.NEON_ORG_ID ?? ''],
+  ['AWS_ACCESS_KEY_ID', TOKEN_URLS.AWS_ACCESS_KEY_ID ?? ''],
+  ['AWS_SECRET_ACCESS_KEY', TOKEN_URLS.AWS_SECRET_ACCESS_KEY ?? ''],
+  ['SENTRY_AUTH_TOKEN', TOKEN_URLS.SENTRY_AUTH_TOKEN ?? ''],
+  ['RESEND_API_KEY', TOKEN_URLS.RESEND_API_KEY ?? ''],
+  ['GITHUB_TOKEN', TOKEN_URLS.GITHUB_TOKEN ?? ''],
+  ['RAILWAY_TOKEN', TOKEN_URLS.RAILWAY_TOKEN ?? ''],
+  ['POSTMAN_API_KEY', TOKEN_URLS.POSTMAN_API_KEY ?? ''],
+  ['POSTMAN_WORKSPACE_ID', TOKEN_URLS.POSTMAN_WORKSPACE_ID ?? ''],
 ];
 
 // ─── Zod schemas ────────────────────────────────────────────────────────────
@@ -54,10 +50,6 @@ export const setupSecretsSchema = z.object({
     apiKey: z.string(),
     orgId: z.string().optional(),
   }),
-  upstash: z.object({
-    email: z.string(),
-    apiKey: z.string(),
-  }),
   aws: z.object({
     accessKeyId: z.string(),
     secretAccessKey: z.string(),
@@ -75,7 +67,7 @@ export const setupSecretsSchema = z.object({
       github: z.record(z.string(), oauthEnvironmentSchema).optional().default({}),
     })
     .optional()
-    .default({}),
+    .default({ google: {}, github: {} }),
   railway: z.object({
     token: z.string(),
   }),
@@ -120,7 +112,13 @@ function getEnvSource(): Record<string, string> {
       // ignore read errors
     }
   }
-  return { ...fromFile, ...process.env };
+  const merged: Record<string, string> = { ...fromFile };
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === 'string') {
+      merged[key] = value;
+    }
+  }
+  return merged;
 }
 
 function get(source: Record<string, string>, key: string): string {
@@ -163,10 +161,6 @@ export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
 
   return {
     neon: { apiKey: get(source, 'NEON_API_KEY'), orgId: get(source, 'NEON_ORG_ID') || undefined },
-    upstash: {
-      email: get(source, 'UPSTASH_EMAIL'),
-      apiKey: get(source, 'UPSTASH_API_KEY'),
-    },
     aws: {
       accessKeyId: get(source, 'AWS_ACCESS_KEY_ID'),
       secretAccessKey: get(source, 'AWS_SECRET_ACCESS_KEY'),
@@ -228,7 +222,7 @@ export function setEnvSetupVariable(key: string, value: string): void {
     content = content.replace(lineRegex, `$1${value}`);
   } else {
     const comment = TOKEN_URLS[key as keyof typeof TOKEN_URLS] ?? key;
-    content = content.trimEnd() + `\n\n# ${comment}\n${key}=${value}\n`;
+    content = `${content.trimEnd()}\n\n# ${comment}\n${key}=${value}\n`;
   }
   writeFileSync(ENV_SETUP_PATH, content, 'utf-8');
 }
@@ -245,7 +239,6 @@ export function hasAnyEnvSecret(environmentNames: string[]): boolean {
     typeof value === 'string' && value.trim().length > 0;
   return (
     filled(secrets.neon.apiKey) ||
-    filled(secrets.upstash.apiKey) ||
     filled(secrets.aws.accessKeyId) ||
     filled(secrets.sentry.authToken) ||
     filled(secrets.resend.apiKey) ||
@@ -351,7 +344,7 @@ export function appendMissingEnvSetupVariables(config: SetupConfig): string[] {
   if (blocks.length === 0) return [];
   const trimmed = content.trimEnd();
   const suffix = trimmed.endsWith('\n') ? '' : '\n';
-  writeFileSync(ENV_SETUP_PATH, trimmed + suffix + '\n' + blocks.join('\n\n') + '\n', 'utf-8');
+  writeFileSync(ENV_SETUP_PATH, `${trimmed + suffix}\n${blocks.join('\n\n')}\n`, 'utf-8');
   return appended;
 }
 
@@ -378,8 +371,7 @@ export function updateEnvSetupHeader(config: SetupConfig): boolean {
   if (prefixIndex === -1) {
     const insertAfter = content.indexOf('\n\n');
     const insertAt = insertAfter === -1 ? content.length : insertAfter + 2;
-    content =
-      content.slice(0, insertAt) + '\n' + newHeaderLines.join('\n') + content.slice(insertAt);
+    content = `${content.slice(0, insertAt)}\n${newHeaderLines.join('\n')}${content.slice(insertAt)}`;
   } else {
     const lineStart = content.lastIndexOf('\n', prefixIndex) + 1;
     const endMarkerIndex = content.indexOf(ENV_SETUP_HEADER_END, prefixIndex);

@@ -4,7 +4,8 @@ Core-be records security-relevant mutations in `audit.logs` via `recordScopedAud
 
 ## Query API
 
-- `GET /api/v1/tenancy/organizations/:id/audit-logs` — requires `audit-log:read`, scoped by organization.
+- `GET /api/v1/tenancy/organizations/:id/audit-logs` — requires `audit-log:read`, scoped by organization (`withOrganizationDatabaseContext`).
+- `GET /api/v1/audit/logs` — global admin only (`SUPER_ADMIN` / `ADMIN`); cross-tenant listing runs under `withGlobalAdminDatabaseContext` (`app.global_admin = true`) so FORCE RLS / `core_be_app` see all tenants explicitly.
 
 ## Action naming
 
@@ -61,5 +62,5 @@ Daily NDJSON export to S3 is documented in [audit-export.md](./audit-export.md).
 
 ## Tests
 
-- `src/tests/security/mutation-audit.security.test.ts` — login, logout, org settings.
-- `src/tests/security/queue-dashboard-audit.security.test.ts` — Bull Board mutations.
+- `src/tests/security/infrastructure/mutation-audit.security.test.ts` — login, logout, org settings.
+- `src/tests/security/infrastructure/queue-dashboard-audit.security.test.ts` — Bull Board mutations.

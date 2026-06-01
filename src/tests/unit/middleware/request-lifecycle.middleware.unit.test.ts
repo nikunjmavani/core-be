@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { OrganizationRlsTransactionSettlementOutcome } from '@/shared/middlewares/organization-rls-transaction.middleware.js';
+import type { OrganizationRlsTransactionSettlementOutcome } from '@/shared/middlewares/tenant/organization-rls-transaction.middleware.js';
 
 /**
  * Regression test for production hardening item #1 — hook-order lifecycle.
@@ -32,14 +32,14 @@ const flushOnCommitMock = vi.fn(async () => {
   callOrder.push('outbox_flush');
 });
 
-vi.mock('@/shared/middlewares/organization-rls-transaction.middleware.js', () => ({
+vi.mock('@/shared/middlewares/tenant/organization-rls-transaction.middleware.js', () => ({
   default: async () => {
     /* coordinator does not register the underlying plugin in this test */
   },
   settleAndAwaitOrganizationRlsTransaction: settleAndAwaitOrganizationRlsTransactionMock,
 }));
 
-vi.mock('@/shared/middlewares/idempotency.middleware.js', () => ({
+vi.mock('@/shared/middlewares/core/idempotency.middleware.js', () => ({
   default: async () => {
     /* not registered in this test */
   },
@@ -71,7 +71,7 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
 
   it('runs settle → idempotency → outbox-flush in that order on successful commit', async () => {
     const { default: requestLifecycleMiddleware } = await import(
-      '@/shared/middlewares/request-lifecycle.middleware.js'
+      '@/shared/middlewares/core/request-lifecycle.middleware.js'
     );
     const application = Fastify({ logger: false });
     await application.register(requestLifecycleMiddleware);
@@ -102,7 +102,7 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
     });
 
     const { default: requestLifecycleMiddleware } = await import(
-      '@/shared/middlewares/request-lifecycle.middleware.js'
+      '@/shared/middlewares/core/request-lifecycle.middleware.js'
     );
     const application = Fastify({ logger: false });
     await application.register(requestLifecycleMiddleware);
@@ -127,7 +127,7 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
     });
 
     const { default: requestLifecycleMiddleware } = await import(
-      '@/shared/middlewares/request-lifecycle.middleware.js'
+      '@/shared/middlewares/core/request-lifecycle.middleware.js'
     );
     const application = Fastify({ logger: false });
     await application.register(requestLifecycleMiddleware);
@@ -152,7 +152,7 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
     });
 
     const { default: requestLifecycleMiddleware } = await import(
-      '@/shared/middlewares/request-lifecycle.middleware.js'
+      '@/shared/middlewares/core/request-lifecycle.middleware.js'
     );
     const application = Fastify({ logger: false });
     await application.register(requestLifecycleMiddleware);
@@ -177,7 +177,7 @@ describe('request-lifecycle middleware: onResponse step ordering', () => {
     });
 
     const { default: requestLifecycleMiddleware } = await import(
-      '@/shared/middlewares/request-lifecycle.middleware.js'
+      '@/shared/middlewares/core/request-lifecycle.middleware.js'
     );
     const application = Fastify({ logger: false });
     await application.register(requestLifecycleMiddleware);

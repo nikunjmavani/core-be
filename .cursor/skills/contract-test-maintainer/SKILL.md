@@ -3,7 +3,7 @@ name: contract-test-maintainer
 description: Maintains outbound HTTP contract tests (Stripe, Resend, S3) under src/tests/contract/. Use when changing payment/mail/storage clients or adding nock fixtures.
 ---
 
-# Contract Test Maintainer (core-be)
+# Contract test maintainer (core-be)
 
 Keeps **nock + fixture** contract tests aligned with outbound integrations. See `docs/reference/testing/contract-tests.md`.
 

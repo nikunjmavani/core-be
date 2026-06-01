@@ -10,7 +10,7 @@ vi.mock('@/shared/config/env.config.js', () => ({
   },
 }));
 
-import { requireAllowedSourceOriginForCookieSessionRoute } from '@/shared/middlewares/cookie-session-origin.pre-handler.js';
+import { requireAllowedSourceOriginForCookieSessionRoute } from '@/shared/middlewares/session/cookie-session-origin.pre-handler.js';
 
 describe('cookie-session-origin.pre-handler', () => {
   it('rejects when both Origin and Referer are absent', () => {
@@ -92,7 +92,7 @@ describe('cookie-session-origin.pre-handler (empty allowlist)', () => {
       env: { ALLOWED_ORIGINS: '', NODE_ENV: 'development' },
     }));
     const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(
-      '@/shared/middlewares/cookie-session-origin.pre-handler.js'
+      '@/shared/middlewares/session/cookie-session-origin.pre-handler.js'
     );
     expect(() =>
       requireSourceOrigin({
@@ -112,7 +112,7 @@ describe('cookie-session-origin.pre-handler (production)', () => {
       },
     }));
     const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(
-      '@/shared/middlewares/cookie-session-origin.pre-handler.js'
+      '@/shared/middlewares/session/cookie-session-origin.pre-handler.js'
     );
     try {
       requireSourceOrigin({
@@ -134,7 +134,7 @@ describe('cookie-session-origin.pre-handler (production)', () => {
       },
     }));
     const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(
-      '@/shared/middlewares/cookie-session-origin.pre-handler.js'
+      '@/shared/middlewares/session/cookie-session-origin.pre-handler.js'
     );
     try {
       requireSourceOrigin({
@@ -156,7 +156,7 @@ describe('cookie-session-origin.pre-handler (production)', () => {
       },
     }));
     const { requireAllowedSourceOriginForCookieSessionRoute: requireSourceOrigin } = await import(
-      '@/shared/middlewares/cookie-session-origin.pre-handler.js'
+      '@/shared/middlewares/session/cookie-session-origin.pre-handler.js'
     );
     const csrfToken = 'matching-csrf-token-value';
     expect(() =>

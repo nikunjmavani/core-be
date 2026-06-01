@@ -1,9 +1,37 @@
 # Reusable Railway deploy (called from post-merge-ci.yml) or manual workflow_dispatch.
-# Gate sequence: migrate → redeploy API/worker → /health → worker readiness → API smoke.
-# When post-deploy API smoke succeeds, the environment is fully live for traffic.
-# Production API and worker run scanned CI images from GHCR (Trivy gate in docker-build job).
-# Optional environment secrets GHCR_API_IMAGE / GHCR_WORKER_IMAGE override the commit SHA tag
-# (for example digest pinning). See docs/deployment/ci-cd/cicd-and-deployment.md
+# Gate sequence: migrate → deploy API → API /readyz → deploy worker.
+# When the worker deploy reaches Railway terminal SUCCESS the environment is
+# fully live for traffic.
+#
+# Worker deploy gating: the worker service is internal-only on Railway (no
+# public domain) and DATABASE_URL / REDIS_URL in the GitHub Environment point
+# at `*.railway.internal`, which is reachable only from other Railway services
+# — not from the GitHub Actions runner. We therefore cannot probe worker
+# `/readyz` over public HTTP, and we cannot dial Postgres/Redis from the
+# runner either. Instead we rely on `pnpm tool:railway-deploy-image` polling
+# Railway until the deployment reaches a terminal status. Railway only
+# reports SUCCESS once the container HEALTHCHECK in `Dockerfile.worker`
+# (127.0.0.1:9090/readyz inside the pod) starts returning 200, which covers
+# process-up + dependency probes + queue heartbeats. DLQ growth on a stalled
+# worker is caught by the `dlq-depth` Sentry alert.
+#
+# API and worker are deployed by `pnpm tool:railway-deploy-image`
+# (tooling/setup/railway/deploy-image.ts), which goes straight to the Railway
+# GraphQL API:
+#   1. serviceInstanceUpdate { source: { image: <ghcr-ref> } }
+#   2. serviceInstanceDeployV2(serviceId, environmentId)
+#   3. poll deployment(id) until terminal status (SUCCESS / FAILED / CRASHED)
+#
+# This is the only reliable way to deploy a freshly built GHCR image. The
+# Railway CLI's deploy paths are unsuitable: the in-place refresh command
+# re-runs the previous deployment object with its existing image tag (so it
+# silently serves the OLD image), and the source-upload command pushes the
+# runner's checked-out source for Railway to build (so it bypasses the
+# scanned GHCR image entirely). The CLI also has no `--image` flag. See
+# tooling/setup/railway/deploy-image.ts for the GraphQL details.
+#
+# The same code path handles both the initial bootstrap (no prior deployment)
+# and steady-state redeploys, so no fallback branch is needed.
 
 name: Reusable — Railway deploy
 
@@ -18,6 +46,29 @@ on:
         description: Protected branch that received the merge (main or dev)
         required: false
         type: string
+      image_override:
+        description: Optional GHCR image ref to deploy instead of the commit SHA tag
+        required: false
+        type: string
+        default: ''
+      debug:
+        description: Emit verbose Railway/GitHub Environment diagnostics
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      api_base_url:
+        description: Deployed API base URL
+        value: ${{ jobs.deploy.outputs.api_base_url }}
+      api_image:
+        description: Deployed API image reference
+        value: ${{ jobs.deploy.outputs.api_image }}
+      worker_image:
+        description: Deployed worker image reference
+        value: ${{ jobs.deploy.outputs.worker_image }}
+      deployment_environment:
+        description: GitHub Environment name used for deploy
+        value: ${{ jobs.deploy.outputs.deployment_environment }}
   workflow_dispatch:
     inputs:
       target:
@@ -27,6 +78,28 @@ on:
         options:
           - production
           - development
+      merge_commit_sha:
+        description: Commit SHA to deploy (defaults to branch tip)
+        required: false
+        type: string
+        default: ''
+      target_branch:
+        description: Branch context (main or dev)
+        required: false
+        type: choice
+        options:
+          - main
+          - dev
+      image_override:
+        description: Optional GHCR image ref to deploy instead of the commit SHA tag
+        required: false
+        type: string
+        default: ''
+      debug:
+        description: Emit verbose Railway/GitHub Environment diagnostics
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: railway-deploy-${{ inputs.target_branch || github.ref_name }}-${{ inputs.merge_commit_sha || github.sha }}
@@ -36,12 +109,13 @@ permissions:
   contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: ${{ vars.FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 || 'true' }}
 
 jobs:
   resolve-environment:
     name: Resolve environment
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       environment: ${{ steps.map.outputs.environment }}
     steps:
@@ -50,28 +124,39 @@ jobs:
         #   main → production
         #   dev  → development
         # Branch name → GitHub Environment name → NODE_ENV value must stay 1:1.
+        #
+        # All `${{ ... }}` are forwarded via the env: block below so they
+        # arrive in the shell as opaque variables (no injection via crafted
+        # branch/input names). See GitHub security hardening docs:
+        # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
         id: map
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET_INPUT: ${{ inputs.target }}
+          TARGET_BRANCH_INPUT: ${{ inputs.target_branch }}
+          PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "environment=${{ inputs.target }}" >> "$GITHUB_OUTPUT"
-          elif [ -n "${{ inputs.target_branch }}" ]; then
-            case "${{ inputs.target_branch }}" in
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "environment=$TARGET_INPUT" >> "$GITHUB_OUTPUT"
+          elif [ -n "$TARGET_BRANCH_INPUT" ]; then
+            case "$TARGET_BRANCH_INPUT" in
+              dev) echo "environment=development"  >> "$GITHUB_OUTPUT" ;;
               main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
-              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
-              *)    echo "::error::Unsupported branch for deploy: ${{ inputs.target_branch }}" && exit 1 ;;
+              *)    echo "::error::Unsupported branch for deploy: $TARGET_BRANCH_INPUT" && exit 1 ;;
             esac
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            case "${{ github.event.pull_request.base.ref }}" in
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            case "$PULL_REQUEST_BASE_REF" in
+              dev) echo "environment=development"  >> "$GITHUB_OUTPUT" ;;
               main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
-              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
-              *)    echo "::error::Unsupported base branch for deploy: ${{ github.event.pull_request.base.ref }}" && exit 1 ;;
+              *)    echo "::error::Unsupported base branch for deploy: $PULL_REQUEST_BASE_REF" && exit 1 ;;
             esac
           else
-            case "${{ github.ref_name }}" in
+            case "$REF_NAME" in
+              dev) echo "environment=development"  >> "$GITHUB_OUTPUT" ;;
               main) echo "environment=production"  >> "$GITHUB_OUTPUT" ;;
-              dev)  echo "environment=development" >> "$GITHUB_OUTPUT" ;;
-              *)    echo "::error::Unsupported branch for deploy: ${{ github.ref_name }}" && exit 1 ;;
+              *)    echo "::error::Unsupported branch for deploy: $REF_NAME" && exit 1 ;;
             esac
           fi
 
@@ -79,77 +164,238 @@ jobs:
     name: Deploy (${{ needs.resolve-environment.outputs.environment }})
     needs: resolve-environment
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: ${{ needs.resolve-environment.outputs.environment }}
+    permissions:
+      contents: read
+      packages: write
     outputs:
       api_base_url: ${{ steps.api_health.outputs.api_base_url }}
+      api_image: ${{ steps.ghcr_images.outputs.api_image }}
+      worker_image: ${{ steps.ghcr_images.outputs.worker_image }}
+      deployment_environment: ${{ needs.resolve-environment.outputs.environment }}
+    # Job-level env block — every step inherits these. Steps only declare an
+    # `env:` block when they need something extra (e.g. db:migrate forwards
+    # DATABASE_URL alongside). Defining each value once here makes the file
+    # DRY: rotating a Railway token only needs one edit, not six.
+    env:
+      # BEGIN GENERATED project-identity
+      PROJECT_SLUG: core-be
+      PROJECT_DISPLAY_NAME: core-be
+      API_IMAGE: core-be-api
+      WORKER_IMAGE: core-be-worker
+      DOCKER_LOCAL_API_TAG: core-be
+      GHCR_CACHE_SCOPE_API: core-be-api
+      GHCR_CACHE_SCOPE_WORKER: core-be-worker
+      GIT_DEFAULT_BRANCH: dev
+      GIT_PRODUCTION_BRANCH: main
+      GIT_NON_PRODUCTION_BRANCH: dev
+      PROTECTED_BRANCHES_JSON: '["dev","main"]'
+      BRANCH_ENV_MAP_JSON: '{"dev":"development","main":"production"}'
+      # END GENERATED project-identity
+      ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+      RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
+      RAILWAY_GIT_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
+      GH_SECRETS_JSON: ${{ toJSON(secrets) }}
+      GH_VARS_JSON: ${{ toJSON(vars) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ inputs.merge_commit_sha || github.sha }}
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
 
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Export GitHub Environment to runner
+        # Persist every GitHub Environment secret + variable into $GITHUB_ENV
+        # so EVERY subsequent step in this job sees them as real process.env
+        # entries. This replaces dozens of per-step `env:` mappings: anything
+        # added/removed in the GitHub Environment flows through automatically
+        # with zero workflow edits.
+        #
+        # Why $GITHUB_ENV (not just `export`): job-level `env:` only takes
+        # static expressions, and per-step `export` does not persist across
+        # steps. $GITHUB_ENV is GitHub's documented mechanism for cross-step
+        # env. GitHub continues to mask each secret value in logs.
+        #
+        # Multi-line values (e.g. JWT_PRIVATE_KEY PEM) MUST use the heredoc
+        # form: `KEY<<DELIM\n...\nDELIM`. We pick a random per-key delimiter
+        # so a value containing the literal "EOF" cannot escape the heredoc.
+        run: |
+          set -euo pipefail
+          jq -nrj \
+            --argjson vars "$GH_VARS_JSON" \
+            --argjson secrets "$GH_SECRETS_JSON" \
+            '($vars + $secrets)
+              | to_entries
+              | map(select(.value != null and .value != ""))
+              | .[]
+              | "\(.key)=\(.value)\u0000"' \
+          | while IFS= read -r -d '' kv; do
+              key="${kv%%=*}"
+              value="${kv#*=}"
+              # Always use heredoc; safe for both single- and multi-line values.
+              delimiter="GHENV_$(openssl rand -hex 8)"
+              {
+                printf '%s<<%s\n' "$key" "$delimiter"
+                printf '%s\n' "$value"
+                printf '%s\n' "$delimiter"
+              } >> "$GITHUB_ENV"
+            done
+          echo "Exported GitHub Environment to \$GITHUB_ENV for downstream steps."
+
       - name: Validate GitHub environment secrets
+        # The validator (tooling/setup/github/validate.ts) reads required keys
+        # from the Zod env schema and checks `process.env` (runtime mode).
+        # Everything is already in process.env from the previous step.
         env:
           CONFIG: ${{ needs.resolve-environment.outputs.environment }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
           GITHUB_ENV_VALIDATION_SOURCE: runtime
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
-          SECRETS_ENCRYPTION_KEY: ${{ secrets.SECRETS_ENCRYPTION_KEY }}
-          METRICS_SCRAPE_TOKEN: ${{ secrets.METRICS_SCRAPE_TOKEN }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          WEBHOOK_URL_ALLOWLIST: ${{ secrets.WEBHOOK_URL_ALLOWLIST }}
-          JWT_PUBLIC_KEY: ${{ vars.JWT_PUBLIC_KEY }}
-          JWT_SIGNING_KID: ${{ vars.JWT_SIGNING_KID }}
-          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
-          COOKIE_SECURE: ${{ vars.COOKIE_SECURE }}
-          DATABASE_SSL_ENABLED: ${{ vars.DATABASE_SSL_ENABLED }}
-          NODE_ENV: ${{ vars.NODE_ENV }}
-          PORT: ${{ vars.PORT }}
-          HTTP_BIND_HOST: ${{ vars.HTTP_BIND_HOST }}
-          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
-          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
-          RATE_LIMIT_MAX: ${{ vars.RATE_LIMIT_MAX }}
-          RATE_LIMIT_WINDOW_MS: ${{ vars.RATE_LIMIT_WINDOW_MS }}
-          SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT }}
-          SENTRY_TRACES_SAMPLE_RATE: ${{ vars.SENTRY_TRACES_SAMPLE_RATE }}
-          SENTRY_PROFILE_SAMPLE_RATE: ${{ vars.SENTRY_PROFILE_SAMPLE_RATE }}
-          AUDIT_RETENTION_DAYS: ${{ vars.AUDIT_RETENTION_DAYS }}
-          AUTH_SESSION_RETENTION_DAYS: ${{ vars.AUTH_SESSION_RETENTION_DAYS }}
-          NODE_OPTIONS: ${{ vars.NODE_OPTIONS }}
-          DEPLOYMENT_TOTAL_REPLICA_COUNT: ${{ vars.DEPLOYMENT_TOTAL_REPLICA_COUNT }}
-          DEPLOYMENT_API_REPLICA_COUNT: ${{ vars.DEPLOYMENT_API_REPLICA_COUNT }}
-          DEPLOYMENT_WORKER_REPLICA_COUNT: ${{ vars.DEPLOYMENT_WORKER_REPLICA_COUNT }}
-          DATABASE_POOL_MAX: ${{ vars.DATABASE_POOL_MAX }}
-          POSTGRES_RESERVED_CONNECTIONS: ${{ vars.POSTGRES_RESERVED_CONNECTIONS }}
-          POSTGRES_MAX_CONNECTIONS: ${{ vars.POSTGRES_MAX_CONNECTIONS }}
-          METRICS_ENABLED: ${{ vars.METRICS_ENABLED }}
-          CAPTCHA_PROVIDER: ${{ vars.CAPTCHA_PROVIDER }}
-          CAPTCHA_DISABLED_ACK: ${{ vars.CAPTCHA_DISABLED_ACK }}
         run: pnpm validate:github-env
 
-      - name: Resolve scanned CI images from GHCR
+      - name: Validate Railway deploy secrets
+        if: inputs.debug == true
+        run: |
+          set -euo pipefail
+
+          print_key_diagnostic() {
+            local name="$1"
+            local value="${!name:-}"
+            local source="process.env"
+            local secret_present="false"
+            local variable_present="false"
+
+            secret_present="$(jq -r --arg key "$name" 'has($key)' <<< "$GH_SECRETS_JSON")"
+            variable_present="$(jq -r --arg key "$name" 'has($key)' <<< "$GH_VARS_JSON")"
+
+            if [ "$secret_present" = "true" ]; then
+              source="GitHub Environment secret"
+            elif [ "$variable_present" = "true" ]; then
+              source="GitHub Environment variable"
+            fi
+
+            if [ -z "$value" ]; then
+              echo "${name}: missing (source=${source}, secrets_json=${secret_present}, vars_json=${variable_present})"
+              return
+            fi
+
+            local length
+            local fingerprint
+            length="${#value}"
+            fingerprint="$(printf '%s' "$value" | sha256sum | cut -c1-12)"
+            echo "${name}: present (source=${source}, length=${length}, sha256_12=${fingerprint}, secrets_json=${secret_present}, vars_json=${variable_present})"
+          }
+
+          echo "::group::Railway CLI diagnostics"
+          echo "railway binary: $(command -v railway || true)"
+          echo "railway version: $(railway --version 2>&1 || true)"
+          echo "github event: ${GITHUB_EVENT_NAME:-unknown}"
+          echo "github ref: ${GITHUB_REF:-unknown}"
+          echo "github sha: ${GITHUB_SHA:-unknown}"
+          echo "resolved environment: ${ENVIRONMENT}"
+          echo "deploy commit sha: ${RAILWAY_GIT_COMMIT_SHA}"
+          echo "::endgroup::"
+
+          echo "::group::GitHub Environment payload diagnostics"
+          echo "GH_SECRETS_JSON keys:"
+          jq -r 'keys | sort | join(", ")' <<< "$GH_SECRETS_JSON"
+          echo "GH_VARS_JSON keys:"
+          jq -r 'keys | sort | join(", ")' <<< "$GH_VARS_JSON"
+          echo "::endgroup::"
+
+          echo "::group::Required Railway env diagnostics"
+          print_key_diagnostic "RAILWAY_TOKEN"
+          print_key_diagnostic "RAILWAY_SERVICE_ID"
+          print_key_diagnostic "RAILWAY_WORKER_SERVICE_ID"
+          echo "::endgroup::"
+
+          missing=()
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            missing+=("RAILWAY_TOKEN")
+          fi
+          if [ -z "${RAILWAY_SERVICE_ID:-}" ]; then
+            missing+=("RAILWAY_SERVICE_ID")
+          fi
+          if [ -z "${RAILWAY_WORKER_SERVICE_ID:-}" ]; then
+            missing+=("RAILWAY_WORKER_SERVICE_ID")
+          fi
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required Railway deploy secrets in GitHub Environment '${ENVIRONMENT}': ${missing[*]}"
+            echo "::error::Set these in GitHub → Settings → Environments → ${ENVIRONMENT}. See docs/deployment/runbooks/runbook-dev-to-production.md and docs/deployment/setup/railway-github-cli-setup.md."
+            exit 1
+          fi
+          railway_token_length="${#RAILWAY_TOKEN}"
+          if [ "${railway_token_length}" -lt 16 ]; then
+            echo "::error::RAILWAY_TOKEN in GitHub Environment '${ENVIRONMENT}' is suspiciously short (${railway_token_length} chars). Rotate the Railway project token and update the GitHub Environment secret."
+            exit 1
+          fi
+
+          echo "::group::Railway authentication probe"
+          for service_name in api worker; do
+            if [ "$service_name" = "api" ]; then
+              service_id="$RAILWAY_SERVICE_ID"
+            else
+              service_id="$RAILWAY_WORKER_SERVICE_ID"
+            fi
+
+            echo "Validation command (${service_name}): railway variables --service <${service_name}-service-id> --json"
+            if ! railway_variables_output="$(railway variables --service "$service_id" --json 2>&1)"; then
+              echo "::error::Railway rejected RAILWAY_TOKEN or service id for ${service_name} service in GitHub Environment '${ENVIRONMENT}'."
+              echo "::error::Command used: railway variables --service <${service_name}-service-id> --json"
+              echo "::error::Output: ${railway_variables_output}"
+              echo "::error::Check that RAILWAY_TOKEN belongs to the same Railway project as ${service_name} service id and that the service id is current."
+              exit 1
+            fi
+            variable_count="$(jq 'length' <<< "$railway_variables_output" 2>/dev/null || echo "unknown")"
+            echo "Railway ${service_name} service authenticated; variables visible: ${variable_count}."
+          done
+          echo "::endgroup::"
+
+          echo "Railway deploy secrets present and service-scoped authentication succeeded for environment '${ENVIRONMENT}'."
+
+      - name: Validate Railway deploy secrets (minimal)
+        if: inputs.debug != true
+        run: |
+          set -euo pipefail
+          missing=()
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then missing+=("RAILWAY_TOKEN"); fi
+          if [ -z "${RAILWAY_SERVICE_ID:-}" ]; then missing+=("RAILWAY_SERVICE_ID"); fi
+          if [ -z "${RAILWAY_WORKER_SERVICE_ID:-}" ]; then missing+=("RAILWAY_WORKER_SERVICE_ID"); fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required Railway deploy secrets in GitHub Environment '${ENVIRONMENT}': ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Log expected scanned CI image refs from GHCR
         id: ghcr_images
         env:
           GHCR_API_IMAGE: ${{ secrets.GHCR_API_IMAGE }}
           GHCR_WORKER_IMAGE: ${{ secrets.GHCR_WORKER_IMAGE }}
-          RAILWAY_GIT_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
+          IMAGE_OVERRIDE: ${{ inputs.image_override }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          API_BASE="ghcr.io/${{ github.repository }}/core-be-api"
-          WORKER_BASE="ghcr.io/${{ github.repository }}/core-be-worker"
-          if [ -n "${GHCR_API_IMAGE:-}" ]; then
+          API_BASE="ghcr.io/${REPOSITORY}/${{ env.API_IMAGE }}"
+          WORKER_BASE="ghcr.io/${REPOSITORY}/${{ env.WORKER_IMAGE }}"
+          if [ -n "${IMAGE_OVERRIDE:-}" ]; then
+            api_image="${IMAGE_OVERRIDE}"
+            worker_image="${IMAGE_OVERRIDE/${{ env.API_IMAGE }}/${{ env.WORKER_IMAGE }}}"
+          elif [ -n "${GHCR_API_IMAGE:-}" ]; then
             api_image="${GHCR_API_IMAGE}"
           else
             api_image="${API_BASE}:${RAILWAY_GIT_COMMIT_SHA}"
           fi
-          if [ -n "${GHCR_WORKER_IMAGE:-}" ]; then
+          if [ -n "${IMAGE_OVERRIDE:-}" ]; then
+            :
+          elif [ -n "${GHCR_WORKER_IMAGE:-}" ]; then
             worker_image="${GHCR_WORKER_IMAGE}"
           else
             worker_image="${WORKER_BASE}:${RAILWAY_GIT_COMMIT_SHA}"
@@ -160,276 +406,254 @@ jobs:
           echo "Worker image: ${worker_image}"
 
       - name: Run database migrations
+        # `pnpm db:migrate` only needs DATABASE_URL/DATABASE_MIGRATION_URL,
+        # but the migrate script transitively imports `env.config.ts` which
+        # boot-validates the entire Zod env schema — so every required key
+        # must be present in `process.env`. The "Export GitHub Environment
+        # to runner" step has already populated all of them; we only force
+        # METRICS_ENABLED=false here so the migration runner does not start
+        # the metrics endpoint (step env: overrides $GITHUB_ENV).
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
-          JWT_PUBLIC_KEY: ${{ vars.JWT_PUBLIC_KEY }}
-          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
-          AUDIT_RETENTION_DAYS: ${{ vars.AUDIT_RETENTION_DAYS }}
-          AUTH_SESSION_RETENTION_DAYS: ${{ vars.AUTH_SESSION_RETENTION_DAYS }}
-          SECRETS_ENCRYPTION_KEY: ${{ secrets.SECRETS_ENCRYPTION_KEY }}
           METRICS_ENABLED: 'false'
         run: pnpm db:migrate
 
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
       - name: Set Railway service variables
-        # Mirror every runtime key declared in .env.example into each Railway service.
-        # Two loops (secrets, variables) keep the GitHub Secret vs Variable split visible;
-        # the env block below forwards values from the GitHub Environment to the runner
-        # process so `${!var}` can read each one. Empty values are skipped so Railway
-        # never gets blanked out by unset optional keys.
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
-
-          # --- GitHub Secrets (runtime) ---
-          CAPTCHA_SECRET: ${{ secrets.CAPTCHA_SECRET }}
-          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          METRICS_SCRAPE_TOKEN: ${{ secrets.METRICS_SCRAPE_TOKEN }}
-          OAUTH_GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
-          OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}
-          REDIS_BULLMQ_URL: ${{ secrets.REDIS_BULLMQ_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          RESPONSE_ENCRYPTION_KEY: ${{ secrets.RESPONSE_ENCRYPTION_KEY }}
-          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
-          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-          SECRETS_ENCRYPTION_KEY: ${{ secrets.SECRETS_ENCRYPTION_KEY }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-
-          # --- GitHub Variables (runtime) ---
-          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
-          API_DOCS_BASE_URL: ${{ vars.API_DOCS_BASE_URL }}
-          AUDIT_EXPORT_BATCH_SIZE: ${{ vars.AUDIT_EXPORT_BATCH_SIZE }}
-          AUDIT_EXPORT_CRON: ${{ vars.AUDIT_EXPORT_CRON }}
-          AUDIT_EXPORT_ENABLED: ${{ vars.AUDIT_EXPORT_ENABLED }}
-          AUDIT_EXPORT_S3_PREFIX: ${{ vars.AUDIT_EXPORT_S3_PREFIX }}
-          AUDIT_RETENTION_CRON: ${{ vars.AUDIT_RETENTION_CRON }}
-          AUDIT_RETENTION_DAYS: ${{ vars.AUDIT_RETENTION_DAYS }}
-          AUTH_SESSION_CLEANUP_CRON: ${{ vars.AUTH_SESSION_CLEANUP_CRON }}
-          AUTH_SESSION_MAX_AGE_DAYS: ${{ vars.AUTH_SESSION_MAX_AGE_DAYS }}
-          AUTH_SESSION_RETENTION_DAYS: ${{ vars.AUTH_SESSION_RETENTION_DAYS }}
-          BLOCK_DISPOSABLE_EMAIL: ${{ vars.BLOCK_DISPOSABLE_EMAIL }}
-          CAPTCHA_BYPASS_HEADER: ${{ vars.CAPTCHA_BYPASS_HEADER }}
-          CAPTCHA_DISABLED_ACK: ${{ vars.CAPTCHA_DISABLED_ACK }}
-          CAPTCHA_PROVIDER: ${{ vars.CAPTCHA_PROVIDER }}
-          CAPTCHA_SITE_KEY: ${{ vars.CAPTCHA_SITE_KEY }}
-          COOKIE_SECURE: ${{ vars.COOKIE_SECURE }}
-          DATABASE_POOL_MAX: ${{ vars.DATABASE_POOL_MAX }}
-          DATABASE_RLS_SCOPED_CONTEXTS: ${{ vars.DATABASE_RLS_SCOPED_CONTEXTS }}
-          DATABASE_SSL_ENABLED: ${{ vars.DATABASE_SSL_ENABLED }}
-          DATABASE_SSL_REJECT_UNAUTHORIZED: ${{ vars.DATABASE_SSL_REJECT_UNAUTHORIZED }}
-          DEPLOYMENT_API_REPLICA_COUNT: ${{ vars.DEPLOYMENT_API_REPLICA_COUNT }}
-          DEPLOYMENT_TOTAL_REPLICA_COUNT: ${{ vars.DEPLOYMENT_TOTAL_REPLICA_COUNT }}
-          DEPLOYMENT_WORKER_REPLICA_COUNT: ${{ vars.DEPLOYMENT_WORKER_REPLICA_COUNT }}
-          DLQ_DEPTH_CRON: ${{ vars.DLQ_DEPTH_CRON }}
-          EMAIL_FROM_ADDRESS: ${{ vars.EMAIL_FROM_ADDRESS }}
-          EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME }}
-          ENABLE_API_REFERENCE: ${{ vars.ENABLE_API_REFERENCE }}
-          ENABLE_MCP_SERVER: ${{ vars.ENABLE_MCP_SERVER }}
-          ENABLE_QUEUE_DASHBOARD: ${{ vars.ENABLE_QUEUE_DASHBOARD }}
-          ENABLE_QUEUE_DASHBOARD_MUTATIONS: ${{ vars.ENABLE_QUEUE_DASHBOARD_MUTATIONS }}
-          ENABLE_RESPONSE_ENCRYPTION: ${{ vars.ENABLE_RESPONSE_ENCRYPTION }}
-          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
-          GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS: ${{ vars.GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS }}
-          GLOBAL_ADMIN_EMAILS: ${{ vars.GLOBAL_ADMIN_EMAILS }}
-          HTTP_BIND_HOST: ${{ vars.HTTP_BIND_HOST }}
-          IDEMPOTENCY_CARDINALITY_CRON: ${{ vars.IDEMPOTENCY_CARDINALITY_CRON }}
-          IDEMPOTENCY_CARDINALITY_SCAN_MAX: ${{ vars.IDEMPOTENCY_CARDINALITY_SCAN_MAX }}
-          JWT_PUBLIC_KEY: ${{ vars.JWT_PUBLIC_KEY }}
-          JWT_SIGNING_KID: ${{ vars.JWT_SIGNING_KID }}
-          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
-          MAIL_OUTBOX_SWEEPER_CRON: ${{ vars.MAIL_OUTBOX_SWEEPER_CRON }}
-          MAIL_OUTBOX_SWEEP_BATCH_SIZE: ${{ vars.MAIL_OUTBOX_SWEEP_BATCH_SIZE }}
-          MAIL_OUTBOX_SWEEP_PENDING_MINUTES: ${{ vars.MAIL_OUTBOX_SWEEP_PENDING_MINUTES }}
-          MEMBERSHIP_TOMBSTONE_RETENTION_CRON: ${{ vars.MEMBERSHIP_TOMBSTONE_RETENTION_CRON }}
-          MEMBER_ROLE_TOMBSTONE_RETENTION_CRON: ${{ vars.MEMBER_ROLE_TOMBSTONE_RETENTION_CRON }}
-          METRICS_ENABLED: ${{ vars.METRICS_ENABLED }}
-          NODE_ENV: ${{ vars.NODE_ENV }}
-          NODE_OPTIONS: ${{ vars.NODE_OPTIONS }}
-          NOTIFICATION_RETENTION_DAYS: ${{ vars.NOTIFICATION_RETENTION_DAYS }}
-          OAUTH_GITHUB_CLIENT_ID: ${{ vars.OAUTH_GITHUB_CLIENT_ID }}
-          OAUTH_GITHUB_REDIRECT_URI: ${{ vars.OAUTH_GITHUB_REDIRECT_URI }}
-          OAUTH_GOOGLE_CLIENT_ID: ${{ vars.OAUTH_GOOGLE_CLIENT_ID }}
-          OAUTH_GOOGLE_REDIRECT_URI: ${{ vars.OAUTH_GOOGLE_REDIRECT_URI }}
-          OPENAPI_SPEC_PATH: ${{ vars.OPENAPI_SPEC_PATH }}
-          ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON: ${{ vars.ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON }}
-          ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_CRON: ${{ vars.ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_CRON }}
-          ORGANIZATION_TOMBSTONE_RETENTION_CRON: ${{ vars.ORGANIZATION_TOMBSTONE_RETENTION_CRON }}
-          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
-          OTEL_SERVICE_NAME: ${{ vars.OTEL_SERVICE_NAME }}
-          PORT: ${{ vars.PORT }}
-          POSTGRES_MAX_CONNECTIONS: ${{ vars.POSTGRES_MAX_CONNECTIONS }}
-          POSTGRES_RESERVED_CONNECTIONS: ${{ vars.POSTGRES_RESERVED_CONNECTIONS }}
-          RATE_LIMIT_MAX: ${{ vars.RATE_LIMIT_MAX }}
-          RATE_LIMIT_ORG_MAX: ${{ vars.RATE_LIMIT_ORG_MAX }}
-          RATE_LIMIT_WINDOW_MS: ${{ vars.RATE_LIMIT_WINDOW_MS }}
-          REDIS_KEY_PREFIX: ${{ vars.REDIS_KEY_PREFIX }}
-          S3_BUCKET: ${{ vars.S3_BUCKET }}
-          S3_MAX_ATTEMPTS: ${{ vars.S3_MAX_ATTEMPTS }}
-          S3_REGION: ${{ vars.S3_REGION }}
-          SCHEDULER_ENABLED: ${{ vars.SCHEDULER_ENABLED }}
-          SCHEDULER_TIMEZONE: ${{ vars.SCHEDULER_TIMEZONE }}
-          SENTRY_ENVIRONMENT: ${{ vars.SENTRY_ENVIRONMENT }}
-          SENTRY_PROFILE_SAMPLE_RATE: ${{ vars.SENTRY_PROFILE_SAMPLE_RATE }}
-          SENTRY_SLOW_TRANSACTION_MS: ${{ vars.SENTRY_SLOW_TRANSACTION_MS }}
-          SENTRY_TRACES_SAMPLE_RATE: ${{ vars.SENTRY_TRACES_SAMPLE_RATE }}
-          STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: ${{ vars.STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE }}
-          STRIPE_WEBHOOK_EVENT_RECLAIM_CRON: ${{ vars.STRIPE_WEBHOOK_EVENT_RECLAIM_CRON }}
-          STRIPE_WEBHOOK_EVENT_RETENTION_CRON: ${{ vars.STRIPE_WEBHOOK_EVENT_RETENTION_CRON }}
-          STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: ${{ vars.STRIPE_WEBHOOK_EVENT_RETENTION_DAYS }}
-          TOMBSTONE_RETENTION_DAYS: ${{ vars.TOMBSTONE_RETENTION_DAYS }}
-          TRUST_PROXY: ${{ vars.TRUST_PROXY }}
-          UPLOAD_ALLOW_SVG: ${{ vars.UPLOAD_ALLOW_SVG }}
-          UPLOAD_MAX_PENDING_PER_USER: ${{ vars.UPLOAD_MAX_PENDING_PER_USER }}
-          UPLOAD_PENDING_SWEEP_CRON: ${{ vars.UPLOAD_PENDING_SWEEP_CRON }}
-          UPLOAD_PENDING_SWEEP_GRACE_SECONDS: ${{ vars.UPLOAD_PENDING_SWEEP_GRACE_SECONDS }}
-          UPLOAD_TOMBSTONE_RETENTION_CRON: ${{ vars.UPLOAD_TOMBSTONE_RETENTION_CRON }}
-          UPLOAD_USE_PRESIGNED_POST: ${{ vars.UPLOAD_USE_PRESIGNED_POST }}
-          USER_TOMBSTONE_RETENTION_CRON: ${{ vars.USER_TOMBSTONE_RETENTION_CRON }}
-          WEBAUTHN_RP_ID: ${{ vars.WEBAUTHN_RP_ID }}
-          WEBAUTHN_RP_NAME: ${{ vars.WEBAUTHN_RP_NAME }}
-          WEBHOOK_TOMBSTONE_RETENTION_CRON: ${{ vars.WEBHOOK_TOMBSTONE_RETENTION_CRON }}
-          WEBHOOK_URL_ALLOWLIST: ${{ vars.WEBHOOK_URL_ALLOWLIST }}
-          WORKER_CONCURRENCY: ${{ vars.WORKER_CONCURRENCY }}
-          WORKER_CONCURRENCY_MAIL: ${{ vars.WORKER_CONCURRENCY_MAIL }}
-          WORKER_CONCURRENCY_NOTIFY: ${{ vars.WORKER_CONCURRENCY_NOTIFY }}
-          WORKER_CONCURRENCY_STRIPE: ${{ vars.WORKER_CONCURRENCY_STRIPE }}
-          WORKER_CONCURRENCY_WEBHOOK: ${{ vars.WORKER_CONCURRENCY_WEBHOOK }}
-          WORKER_HEALTH_PORT: ${{ vars.WORKER_HEALTH_PORT }}
-          WORKER_QUEUE_FAMILIES: ${{ vars.WORKER_QUEUE_FAMILIES }}
+        # Mirror the entire GitHub Environment (secrets + variables) into each
+        # Railway service. The GitHub Environment is the source of truth (kept
+        # in sync from .env.<environment> via `pnpm github:sync`), so any new
+        # runtime key flows through automatically — no workflow edit needed.
+        #
+        # Implementation: read `GH_SECRETS_JSON` / `GH_VARS_JSON` (job-level),
+        # merge in jq, drop infra-only / CI-only keys, and emit NUL-delimited
+        # KEY=VALUE pairs so multi-line values (PEM keys) survive intact.
+        # Empty/null values are skipped so Railway is never blanked out by an
+        # unset optional key. GitHub still masks each secret value in logs.
+        #
+        # NUL bytes survive only when streamed directly to the consumer — bash
+        # command substitution `$(...)` silently strips NULs (you'll see
+        # "warning: command substitution: ignored null byte in input"), so the
+        # jq pipeline is materialised to a temp file and replayed per service.
+        #
+        # All KEY=VALUE pairs are bundled into a single `railway variables
+        # --set ... --set ...` call per service. Batching collapses ~50 GraphQL
+        # mutations into one (so transient `backboard.railway.com` timeouts
+        # don't fail mid-stream) and any genuine flake is absorbed by an
+        # exponential-backoff retry loop. We pass `--skip-deploys` so this
+        # mutation only updates config — the single deploy per service is
+        # triggered later by `pnpm tool:railway-deploy-image`
+        # (serviceInstanceUpdate + serviceInstanceDeployV2 are issued back-to-
+        # back in the same process and reliably coalesced by Railway into one
+        # deployment whose id we poll for terminal status). Without
+        # `--skip-deploys`, every `railway variables`/`railway variable set`
+        # call would also queue its own redeploy, and Railway's best-effort
+        # coalescing window is shorter than the gap between these CLI calls,
+        # so we saw 2–3 extra deployments per service per CD run.
         run: |
           set -euo pipefail
+
+          # Keys that must NOT be pushed to Railway:
+          #   - RAILWAY_*       Railway already injects its own platform vars
+          #                     (RAILWAY_TOKEN, RAILWAY_SERVICE_ID,
+          #                      RAILWAY_GIT_COMMIT_SHA, RAILWAY_PRIVATE_DOMAIN,
+          #                      RAILWAY_PROJECT_ID, …). Mirroring any of them
+          #                     from the GitHub Environment would shadow
+          #                     Railway's runtime injection, so the entire
+          #                     prefix is excluded.
+          #   - GHCR_*          Image overrides consumed only by this workflow.
+          #   - SMOKE_*         Post-deploy smoke-test credentials, runner-only.
+          #   - GITHUB_TOKEN /
+          #     ACTIONS_* / CI  GitHub Actions internals.
+          # Anything else flows through to Railway as runtime config.
+          exclude_regex='^(RAILWAY_.*|GHCR_API_IMAGE|GHCR_WORKER_IMAGE|SMOKE_DEMO_EMAIL|SMOKE_DEMO_PASSWORD|GITHUB_TOKEN|ACTIONS_.*|CI)$'
+
           services="$RAILWAY_SERVICE_ID"
           if [ -n "${RAILWAY_WORKER_SERVICE_ID:-}" ]; then
             services="$services $RAILWAY_WORKER_SERVICE_ID"
           fi
+
+          # Merge vars + secrets (secrets win on the rare key-name collision)
+          # and emit "KEY=VALUE\0" pairs into a temp file. Writing to a file
+          # preserves NUL separators (a bash variable would not).
+          payload_file="$(mktemp)"
+          trap 'rm -f "$payload_file"' EXIT
+          jq -nrj \
+            --argjson vars "$GH_VARS_JSON" \
+            --argjson secrets "$GH_SECRETS_JSON" \
+            '($vars + $secrets)
+              | to_entries
+              | map(select(.value != null and .value != ""))
+              | .[]
+              | "\(.key)=\(.value)\u0000"' \
+            > "$payload_file"
+
+          payload_byte_count="$(wc -c < "$payload_file")"
+          echo "Prepared $payload_byte_count bytes of NUL-delimited KEY=VALUE pairs."
+
+          # Build a single argv batch (one --set per runtime KEY=VALUE) so we
+          # can ship every variable in a single GraphQL mutation per service.
+          # Track skipped key names so the operator can verify nothing was
+          # excluded by accident — values are never logged, only names.
+          set_args=()
+          pushed_keys=()
+          skipped_keys=()
+          while IFS= read -r -d '' kv; do
+            [ -z "$kv" ] && continue
+            key="${kv%%=*}"
+            if [[ "$key" =~ $exclude_regex ]]; then
+              skipped_keys+=("$key")
+              continue
+            fi
+            set_args+=(--set "$kv")
+            pushed_keys+=("$key")
+          done < "$payload_file"
+
+          if [ "${#skipped_keys[@]}" -gt 0 ]; then
+            echo "Skipped ${#skipped_keys[@]} keys (Railway-managed / GHCR / smoke / GitHub Actions internals — not sent to Railway service variables):"
+            printf '  - %s\n' "${skipped_keys[@]}" | LC_ALL=C sort
+          else
+            echo "No keys matched the exclude regex; pushing all runtime variables."
+          fi
+
+          push_count=${#pushed_keys[@]}
+          if [ "$push_count" -eq 0 ]; then
+            echo "::warning::No runtime variables to push to Railway (every key matched the exclude regex)."
+            exit 0
+          fi
+          echo "Pushing ${push_count} runtime variables per service:"
+          printf '  + %s\n' "${pushed_keys[@]}" | LC_ALL=C sort
+
+          # Retry the batched call to ride out transient backboard timeouts.
+          # Railway accepts the same payload idempotently (set is upsert), so
+          # retries are safe.
+          max_attempts=5
           for service in $services; do
-            for var in CAPTCHA_SECRET DATABASE_MIGRATION_URL DATABASE_URL JWT_PRIVATE_KEY JWT_SECRET METRICS_SCRAPE_TOKEN OAUTH_GITHUB_CLIENT_SECRET OAUTH_GOOGLE_CLIENT_SECRET REDIS_BULLMQ_URL REDIS_URL RESEND_API_KEY RESPONSE_ENCRYPTION_KEY S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY SECRETS_ENCRYPTION_KEY SENTRY_DSN STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET; do
-              val="${!var-}"
-              if [ -n "$val" ]; then
-                railway variable set --service "$service" "$var=$val"
+            attempt=1
+            while true; do
+              if railway variables --service "$service" --skip-deploys "${set_args[@]}"; then
+                echo "Pushed ${push_count} variables to Railway service ${service} on attempt ${attempt} (skipped ${#skipped_keys[@]} excluded keys)."
+                break
               fi
-            done
-            for var in ALLOWED_ORIGINS API_DOCS_BASE_URL AUDIT_EXPORT_BATCH_SIZE AUDIT_EXPORT_CRON AUDIT_EXPORT_ENABLED AUDIT_EXPORT_S3_PREFIX AUDIT_RETENTION_CRON AUDIT_RETENTION_DAYS AUTH_SESSION_CLEANUP_CRON AUTH_SESSION_MAX_AGE_DAYS AUTH_SESSION_RETENTION_DAYS BLOCK_DISPOSABLE_EMAIL CAPTCHA_BYPASS_HEADER CAPTCHA_DISABLED_ACK CAPTCHA_PROVIDER CAPTCHA_SITE_KEY COOKIE_SECURE DATABASE_POOL_MAX DATABASE_RLS_SCOPED_CONTEXTS DATABASE_SSL_ENABLED DATABASE_SSL_REJECT_UNAUTHORIZED DEPLOYMENT_API_REPLICA_COUNT DEPLOYMENT_TOTAL_REPLICA_COUNT DEPLOYMENT_WORKER_REPLICA_COUNT DLQ_DEPTH_CRON EMAIL_FROM_ADDRESS EMAIL_FROM_NAME ENABLE_API_REFERENCE ENABLE_MCP_SERVER ENABLE_QUEUE_DASHBOARD ENABLE_QUEUE_DASHBOARD_MUTATIONS ENABLE_RESPONSE_ENCRYPTION FRONTEND_URL GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS GLOBAL_ADMIN_EMAILS HTTP_BIND_HOST IDEMPOTENCY_CARDINALITY_CRON IDEMPOTENCY_CARDINALITY_SCAN_MAX JWT_PUBLIC_KEY JWT_SIGNING_KID LOG_LEVEL MAIL_OUTBOX_SWEEPER_CRON MAIL_OUTBOX_SWEEP_BATCH_SIZE MAIL_OUTBOX_SWEEP_PENDING_MINUTES MEMBERSHIP_TOMBSTONE_RETENTION_CRON MEMBER_ROLE_TOMBSTONE_RETENTION_CRON METRICS_ENABLED NODE_ENV NODE_OPTIONS NOTIFICATION_RETENTION_DAYS OAUTH_GITHUB_CLIENT_ID OAUTH_GITHUB_REDIRECT_URI OAUTH_GOOGLE_CLIENT_ID OAUTH_GOOGLE_REDIRECT_URI OPENAPI_SPEC_PATH ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_CRON ORGANIZATION_TOMBSTONE_RETENTION_CRON OTEL_EXPORTER_OTLP_ENDPOINT OTEL_SERVICE_NAME PORT POSTGRES_MAX_CONNECTIONS POSTGRES_RESERVED_CONNECTIONS RATE_LIMIT_MAX RATE_LIMIT_ORG_MAX RATE_LIMIT_WINDOW_MS REDIS_KEY_PREFIX S3_BUCKET S3_MAX_ATTEMPTS S3_REGION SCHEDULER_ENABLED SCHEDULER_TIMEZONE SENTRY_ENVIRONMENT SENTRY_PROFILE_SAMPLE_RATE SENTRY_SLOW_TRANSACTION_MS SENTRY_TRACES_SAMPLE_RATE STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE STRIPE_WEBHOOK_EVENT_RECLAIM_CRON STRIPE_WEBHOOK_EVENT_RETENTION_CRON STRIPE_WEBHOOK_EVENT_RETENTION_DAYS TOMBSTONE_RETENTION_DAYS TRUST_PROXY UPLOAD_ALLOW_SVG UPLOAD_MAX_PENDING_PER_USER UPLOAD_PENDING_SWEEP_CRON UPLOAD_PENDING_SWEEP_GRACE_SECONDS UPLOAD_TOMBSTONE_RETENTION_CRON UPLOAD_USE_PRESIGNED_POST USER_TOMBSTONE_RETENTION_CRON WEBAUTHN_RP_ID WEBAUTHN_RP_NAME WEBHOOK_TOMBSTONE_RETENTION_CRON WEBHOOK_URL_ALLOWLIST WORKER_CONCURRENCY WORKER_CONCURRENCY_MAIL WORKER_CONCURRENCY_NOTIFY WORKER_CONCURRENCY_STRIPE WORKER_CONCURRENCY_WEBHOOK WORKER_HEALTH_PORT WORKER_QUEUE_FAMILIES; do
-              val="${!var-}"
-              if [ -n "$val" ]; then
-                railway variable set --service "$service" "$var=$val"
+              if [ "$attempt" -ge "$max_attempts" ]; then
+                echo "::error::Railway variables push failed for service ${service} after ${max_attempts} attempts."
+                exit 1
               fi
+              sleep_seconds=$(( 2 ** attempt ))
+              echo "Railway variables push for ${service} failed (attempt ${attempt}/${max_attempts}); retrying in ${sleep_seconds}s..."
+              sleep "$sleep_seconds"
+              attempt=$((attempt + 1))
             done
           done
 
-      - name: Deploy API to Railway
-        env:
-          RAILWAY_GIT_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-        run: |
-          set -euo pipefail
-          railway variable set --service "$RAILWAY_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
-          echo "Deploying API from GHCR image: ${{ steps.ghcr_images.outputs.api_image }}"
-          railway redeploy --service "$RAILWAY_SERVICE_ID" --image "${{ steps.ghcr_images.outputs.api_image }}"
-
-      - name: Post-deploy API health check
+      - name: Deploy API and worker to Railway
         id: api_health
+        # API and worker share `deploy_service_from_image` so retries and
+        # deployment behaviour stay identical. Health gating differs:
+        #   - API: public Railway domain, so we curl `/readyz` from the runner.
+        #   - Worker: no public domain, and Postgres/Redis sit on the Railway
+        #     private network (`*.railway.internal`) which is unreachable from
+        #     the GitHub runner. Worker readiness is therefore gated only by
+        #     the Railway deployment terminal status — Railway flips a
+        #     deployment to SUCCESS once the in-pod container HEALTHCHECK in
+        #     `Dockerfile.worker` (127.0.0.1:9090/readyz) starts returning 200,
+        #     which already covers process up + dependency probes + queue
+        #     heartbeats.
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          API_IMAGE: ${{ steps.ghcr_images.outputs.api_image }}
+          WORKER_IMAGE: ${{ steps.ghcr_images.outputs.worker_image }}
         run: |
           set -euo pipefail
-          api_domain_json="$(railway domain --service "$RAILWAY_SERVICE_ID" --json)"
-          api_base_url="$(printf '%s' "$api_domain_json" | node -e "
-            const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-            const url = input.domain ?? input.domains?.[0];
-            if (!url) process.exit(1);
-            const host = String(url).replace(/\\/$/, '');
-            process.stdout.write(host.includes('://') ? host : 'https://' + host);
-          ")"
-          echo "api_base_url=${api_base_url}" >> "$GITHUB_OUTPUT"
-          deadline=$(( $(date +%s) + 300 ))
-          until curl -sfS "$api_base_url/health" -o /tmp/api-health.json; do
-            [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::API /health timeout"; exit 1; }
-            sleep 5
-          done
-          node -e "const health = require('/tmp/api-health.json'); for (const key of ['database','redis','bullmq']) if (health[key] !== 'connected') { console.error('not connected:', key); process.exit(1); }"
+          resolve_service_base_url() {
+            local service="$1"
+            local domain_json
+            domain_json="$(railway domain --service "$service" --json)"
+            printf '%s' "$domain_json" | node -e "
+              const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+              const url = input.domain ?? input.domains?.[0];
+              if (!url) process.exit(1);
+              const host = String(url).replace(/\\/$/, '');
+              process.stdout.write(host.includes('://') ? host : 'https://' + host);
+            "
+          }
 
-      - name: Require worker service for deploy
-        env:
-          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
-        run: |
+          deploy_service_from_image() {
+            local service="$1"
+            local image="$2"
+            local label="$3"
+            railway variable set --service "$service" --skip-deploys "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
+            echo "Deploying ${label} service from GHCR image: ${image}"
+            pnpm tool:railway-deploy-image \
+              --service "$service" \
+              --image "$image" \
+              --label "$label"
+          }
+
+          wait_for_service_health() {
+            local base_url="$1"
+            local label="$2"
+            local output_file="$3"
+            local health_url="${base_url}/readyz"
+            local deadline=$(( $(date +%s) + 300 ))
+            until curl -sfS "$health_url" -o "$output_file"; do
+              [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::${label} /readyz timeout"; exit 1; }
+              sleep 5
+            done
+            node -e "const health = require(process.argv[1]); if (health.status !== 'ok') { console.error('${label} health status is not ok:', health.status ?? 'unknown'); process.exit(1); }" "$output_file"
+          }
+
           if [ -z "$RAILWAY_WORKER_SERVICE_ID" ]; then
             echo "::error::RAILWAY_WORKER_SERVICE_ID must be set in this GitHub environment."
             exit 1
           fi
 
-      - name: Deploy worker to Railway
+          deploy_service_from_image "$RAILWAY_SERVICE_ID" "$API_IMAGE" "api"
+          api_base_url="$(resolve_service_base_url "$RAILWAY_SERVICE_ID")"
+          echo "api_base_url=${api_base_url}" >> "$GITHUB_OUTPUT"
+          wait_for_service_health "$api_base_url" "API" "/tmp/api-health.json"
+
+          deploy_service_from_image "$RAILWAY_WORKER_SERVICE_ID" "$WORKER_IMAGE" "worker"
+          echo "Worker deployment reached terminal SUCCESS (Railway only flips to SUCCESS once the in-pod HEALTHCHECK passes)."
+
+      - name: Retag production images as previous
+        if: success() && needs.resolve-environment.outputs.environment == 'production'
         env:
-          RAILWAY_GIT_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
+          API_IMAGE: ${{ steps.ghcr_images.outputs.api_image }}
+          WORKER_IMAGE: ${{ steps.ghcr_images.outputs.worker_image }}
         run: |
           set -euo pipefail
-          railway variable set --service "$RAILWAY_WORKER_SERVICE_ID" "RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}"
-          echo "Deploying worker from GHCR image: ${{ steps.ghcr_images.outputs.worker_image }}"
-          railway redeploy --service "$RAILWAY_WORKER_SERVICE_ID" --image "${{ steps.ghcr_images.outputs.worker_image }}"
+          npm install -g @railway/cli >/dev/null 2>&1 || true
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          API_BASE="${API_IMAGE%:*}"
+          WORKER_BASE="${WORKER_IMAGE%:*}"
+          docker pull "${API_IMAGE}"
+          docker pull "${WORKER_IMAGE}"
+          docker tag "${API_IMAGE}" "${API_BASE}:previous"
+          docker tag "${WORKER_IMAGE}" "${WORKER_BASE}:previous"
+          docker push "${API_BASE}:previous"
+          docker push "${WORKER_BASE}:previous"
+          echo "Retagged ${API_BASE}:previous and ${WORKER_BASE}:previous"
 
-      - name: Post-deploy worker health check
+      - name: Retag failed deploy images for triage
+        if: failure()
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_WORKER_SERVICE_ID: ${{ secrets.RAILWAY_WORKER_SERVICE_ID }}
-          WORKER_HEALTH_PORT: ${{ secrets.WORKER_HEALTH_PORT || '9090' }}
+          API_IMAGE: ${{ steps.ghcr_images.outputs.api_image }}
+          WORKER_IMAGE: ${{ steps.ghcr_images.outputs.worker_image }}
         run: |
           set -euo pipefail
-          worker_domain_json="$(railway domain --service "$RAILWAY_WORKER_SERVICE_ID" --json)"
-          worker_base_url="$(printf '%s' "$worker_domain_json" | node -e "
-            const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-            const url = input.domain ?? input.domains?.[0];
-            if (!url) process.exit(1);
-            const host = String(url).replace(/\\/$/, '');
-            process.stdout.write(host.includes('://') ? host : 'https://' + host);
-          ")"
-          export WORKER_HEALTH_URL="${worker_base_url%/*}:$WORKER_HEALTH_PORT"
-          echo "Probing worker readiness at $WORKER_HEALTH_URL/health"
-          pnpm tool:worker-readiness --url "$WORKER_HEALTH_URL"
-
-  api-smoke:
-    name: API smoke (${{ needs.resolve-environment.outputs.environment }})
-    needs: [resolve-environment, deploy]
-    runs-on: ubuntu-latest
-    environment: ${{ needs.resolve-environment.outputs.environment }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.merge_commit_sha || github.sha }}
-
-      - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
-
-      - name: Run post-deploy API smoke
-        env:
-          BASE_URL: ${{ needs.deploy.outputs.api_base_url }}
-          TEST_EMAIL: ${{ secrets.SMOKE_DEMO_EMAIL || vars.SMOKE_DEMO_EMAIL || 'demo@example.com' }}
-          TEST_PASSWORD: ${{ secrets.SMOKE_DEMO_PASSWORD || 'DemoPassword123!' }}
-        run: |
-          set -euo pipefail
-          echo "Running API smoke against ${BASE_URL}"
-          pnpm test:api-smoke
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin || exit 0
+          API_BASE="${API_IMAGE%:*}"
+          WORKER_BASE="${WORKER_IMAGE%:*}"
+          SHA_TAG="${API_IMAGE##*:}"
+          docker pull "${API_IMAGE}" || exit 0
+          docker pull "${WORKER_IMAGE}" || exit 0
+          docker tag "${API_IMAGE}" "${API_BASE}:deploy-failed-${SHA_TAG}"
+          docker tag "${WORKER_IMAGE}" "${WORKER_BASE}:deploy-failed-${SHA_TAG}"
+          docker push "${API_BASE}:deploy-failed-${SHA_TAG}" || true
+          docker push "${WORKER_BASE}:deploy-failed-${SHA_TAG}" || true
 
       - name: Environment fully live
+        if: success()
         env:
-          ENVIRONMENT: ${{ needs.resolve-environment.outputs.environment }}
-          API_BASE_URL: ${{ needs.deploy.outputs.api_base_url }}
+          API_BASE_URL: ${{ steps.api_health.outputs.api_base_url }}
         run: |
           set -euo pipefail
-          echo "::notice title=Fully live::${ENVIRONMENT} is fully live at ${API_BASE_URL} (migrate, health, worker readiness, and API smoke passed)."
+          echo "::notice title=Fully live::${ENVIRONMENT} is fully live at ${API_BASE_URL} (migrate, API /health, and worker terminal SUCCESS passed)."

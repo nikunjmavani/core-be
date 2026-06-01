@@ -17,6 +17,12 @@ interface MemberRoleListPagination {
   limit: number;
 }
 
+/**
+ * Drizzle data access for `tenancy.roles`. Active rows are filtered via
+ * `deleted_at IS NULL` (soft-delete semantics); listing uses a `(name, id)`
+ * keyset cursor for stable alphabetical paging. Public ids are generated and
+ * retried on collision via {@link runInsertWithPublicIdentifierRetry}.
+ */
 export class MemberRoleRepository extends BaseRepository {
   async findByOrganizationId(organization_id: number, pagination: MemberRoleListPagination) {
     const { after, limit } = pagination;

@@ -5,6 +5,17 @@ pnpm typecheck
 pnpm build
 pnpm build:check
 
+# Markdown lint on the PR diff (mirrors pr-docs-lane.yml). lint-staged only
+# touches staged files, but CI lints every changed markdown file in the PR
+# (e.g. release-please-generated CHANGELOG-dev.md inherited from a rebase).
+# Default base is origin/dev; override with LINT_BASE=origin/main.
+PUSHED_MD=$(git diff --name-only @{u}...HEAD 2>/dev/null | grep -E '\.md$' || true)
+if [ -n "$PUSHED_MD" ]; then
+  pnpm docs:lint:changed
+else
+  echo "Skipping changed-markdown lint on pre-push (no markdown changes)."
+fi
+
 # Unit tests (matches PR CI unit lane; excludes DB project)
 # Run only when pushed commits include unit-relevant files.
 PUSHED_UNIT_RELEVANT=$(git diff --name-only @{u}...HEAD 2>/dev/null | rg \

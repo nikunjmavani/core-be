@@ -3,7 +3,7 @@ name: before-commit-guard
 description: Ensures code is commit-ready. Invoked when the user runs git commit (enforced by Husky pre-commit) or when the user asks to fix a failed commit. Run the guard checks and fix any failures before committing.
 ---
 
-# Skill: Before-Commit Guard
+# Before-commit guard (core-be)
 
 ## Purpose
 
@@ -19,21 +19,28 @@ Ensure every **git commit** on this repo passes a fixed set of checks. The guard
 
 ## What Runs on Commit (Pre-Commit Hook)
 
-The hook in `.husky/pre-commit` runs these steps in order. If any step fails, the commit is aborted.
+The hook in `.husky/pre-commit` delegates to **`pnpm guard:pre-commit`** (labeled steps). If any step fails, the commit is aborted — read the **`✗ FAILED at step N/M:`** line for the failing check. List all steps: **`pnpm guard:pre-commit:list`**.
 
-| Step | Command / check                                                     | What to do if it fails                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ---- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `pnpm lint-staged`                                                  | Biome on staged `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; `markdownlint-cli2 --fix` on `*.md` (pinned `markdownlint-cli2@0.15.0` matches the GitHub Actions Docs lane). Run `pnpm lint` / `pnpm format` for code; for markdown failures run `pnpm docs:lint:fix` and re-stage. Fix per **code-smells-and-best-practices** (warning details in **lint-warnings-handler**). |
-| 2    | `pnpm typecheck`                                                    | TypeScript errors in `src/`. Run `pnpm typecheck`, fix types (no `any`, correct imports).                                                                                                                                                                                                                                                                                                                                     |
-| 3    | `pnpm validate:domain:strict`                                       | Domain structure; warnings fail. Fix per **domain-generator** and CLAUDE.md.                                                                                                                                                                                                                                                                                                                                                  |
-| 4a   | `pnpm routes:catalog` + `git add docs/routes.txt`                   | Regenerates the checked-in route catalog on every local commit; re-stages generated file so it is included in the commit that will be pushed to GitHub.                                                                                                                                                                                                                                                                       |
-| 4b   | When routes **or** OpenAPI inputs staged: `pnpm docs:check`         | OpenAPI inputs: `src/domains/**/*.routes.ts`, `src/shared/locales/*/openapi.json`, `tooling/openapi/**`, `src/scripts/codegen/generate-openapi.ts`, `src/scripts/codegen/openapi-*.ts`, `check-api-docs-sync.ts`. Verifies gitignored `docs/openapi/` and `docs/postman-collection.json`. Run `pnpm docs:all` if drift fails. See **openapi-multilingual**.                                                                   |
-| 4c   | Always: `pnpm routes:catalog:check`                                 | Fails if `docs/routes.txt` is out of sync after regeneration.                                                                                                                                                                                                                                                                                                                                                                 |
-| 5    | `pnpm db:migrate:lint` (**only when** `migrations/*.sql` is staged) | Unsafe SQL patterns (`NOT NULL` without default when adding columns, `RENAME`, destructive drops, FK/CHECK without `NOT VALID`, missing `IF NOT EXISTS`, locking indexes). Fix SQL or add a documented `-- migration-safety: allow <rule_id> reason="..."` header (first 20 lines). See **`db-migration-maintainer`**.                                                                                                        |
-| 6    | `pnpm tool:sync-env-example`                                        | `.env.example` vs env schema. Run `pnpm tool:sync-env-example --fix` if needed, add descriptions, re-commit.                                                                                                                                                                                                                                                                                                                  |
-| 7    | `gitleaks protect --staged`                                         | Secrets in staged files (skipped if gitleaks not installed locally; CI always scans). Remove secrets; use env vars or `.env.example`. Manual full-repo scan: `pnpm security:secrets`.                                                                                                                                                                                                                                         |
-| 8    | Conflict markers                                                    | Reject `<<<<<<<`, `>>>>>>>`, `=======` in staged files. Resolve merge conflicts.                                                                                                                                                                                                                                                                                                                                              |
-| 9    | Large files                                                         | Reject staged added/copied/modified/renamed files > 1MB. Unstage or add to `.gitignore`; use LFS if needed.                                                                                                                                                                                                                                                                                                                   |
+| Step | Command / check | What to do if it fails |
+| ---- | --------------- | ---------------------- |
+| 1 | `pnpm lint-staged` | Biome on staged `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; `markdownlint-cli2 --fix` on `*.md`. Run `pnpm lint` / `pnpm format`; for markdown run `pnpm docs:lint:fix`. Fix per **code-smells-and-best-practices**. |
+| 2 | `pnpm typecheck` | TypeScript errors in `src/`. Fix types (no `any`, correct imports). |
+| 3 | `pnpm validate:domain:strict` | Domain structure; warnings fail. Fix per **domain-generator** and CLAUDE.md. |
+| 4 | `pnpm validate:scripts-layout` | Scripts under `src/scripts/` layout + MCP optional dependency. Fix per **structure-maintainer** / scripts-layout docs. |
+| 5 | `pnpm routes:catalog` + stage `docs/routes.txt` | Regenerates route catalog on every commit; re-stages generated file. |
+| 6 | `pnpm routes:catalog:check` | Fails if `docs/routes.txt` drift after regeneration. |
+| 6b | When `src/**` or `tooling/**` staged: `pnpm tool:project-structure-tree` + stage `docs/reference/architecture/src-structure-tree.txt` | Regenerate committed src layout tree when layout changes. |
+| 6c | When 6b ran: `pnpm tool:project-structure-tree:check` | Fails if structure tree drift. |
+| 7 | When OpenAPI inputs staged: `pnpm docs:check` | Staged: `*.routes.ts`, locale `openapi.json`, `tooling/openapi/**`, codegen scripts. Run `pnpm docs:all` if drift. |
+| 8 | `pnpm tsdoc:check` | TSDoc coverage gate. Fix per **tsdoc-export-guard**; refresh budget when counts decrease. |
+| 9 | `pnpm validate:test-naming` (when script exists) | Test filename suffix policy. Fix per **test-generator** / testing-conventions. |
+| 10 | When `migrations/*.sql` staged: `pnpm db:migrate:lint` | Unsafe SQL. Fix per **db-migration-maintainer**. |
+| 10b | When migrations staged: `pnpm tool:generate-dbdiagram` + stage DBML | Local DBML regen (not enforced in CI). |
+| 11 | `pnpm tool:generate-project-identity:check` | Manifest ↔ constants ↔ workflows. Fix per **project-identity.mdc**. |
+| 12 | `pnpm tool:sync-env-example` | `.env.example` vs env schema. Run `pnpm tool:sync-env-example --fix` if needed. |
+| 13 | `gitleaks protect --staged` | Secrets in staged files (**required** — install gitleaks or run `pnpm setup:infra`). |
+| 14 | Conflict markers | Resolve `<<<<<<<` / `>>>>>>>` in staged files. |
+| 15 | Large files (>1MB) | Unstage or use LFS. |
 
 ## Pre-push hook (`.husky/pre-push`)
 
@@ -57,13 +64,16 @@ Full PR gate: `pnpm ci:local` or wait for CI (`quality` + `test` + `api-smoke` +
 Before committing, the user (or AI) can run:
 
 ```bash
+pnpm guard:pre-commit          # same labeled steps as the hook
+pnpm guard:pre-commit:list     # print step table without running
 pnpm validate                  # biome check + typecheck
-pnpm validate:domain:strict    # domain structure (warnings fail; same as hook step 3)
+pnpm validate:domain:strict    # domain structure (warnings fail; hook step 3)
 pnpm routes:catalog:check      # docs/routes.txt in sync
 pnpm docs:check                # OpenAPI specs in sync (when routes or openapi inputs change)
 pnpm docs:lint                 # markdownlint (same config + cli2 version as the Docs lane)
 pnpm docs:lint:fix             # auto-fix the markdown nits markdownlint can repair
 pnpm db:migrate:lint           # when editing migrations/*.sql (CI always runs full migrations/)
+pnpm tool:generate-project-identity:check  # manifest ↔ constants ↔ workflows
 pnpm tool:sync-env-example     # .env.example vs env schema
 pnpm deps:audit                # optional; CI runs this (may have known moderate in dev deps)
 ```
@@ -80,7 +90,7 @@ These one-time or ongoing practices are part of keeping the repo commit-clean:
 4. **Domain structure** — `pnpm validate:domain`; domains and sub-domains must match CLAUDE.md layout.
 5. **Dependency audit** — `pnpm audit`; use `pnpm.overrides` for transitive vulns when safe; see **dependency-security**.
 6. **Runtime/test warnings (resolved in code):**
-   - **i18next** — `showSupportNotice: false` in `src/shared/middlewares/i18n.middleware.ts` so the Locize notice is not logged.
+   - **i18next** — `showSupportNotice: false` in `src/shared/middlewares/core/i18n.middleware.ts` so the Locize notice is not logged.
    - **BullMQ Redis eviction** — In `src/tests/setup.ts`, `console.warn` is filtered for the "Eviction policy is volatile-lru" message so test output is clean; production Redis should use `noeviction` where possible.
 
 ## How to Fix When the Hook Fails

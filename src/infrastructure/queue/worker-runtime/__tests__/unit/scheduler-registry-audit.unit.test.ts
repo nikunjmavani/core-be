@@ -91,9 +91,9 @@ describe('detectSchedulerRegistryMismatches', () => {
 
   it('flags scheduled=true with no cron (orphan worker)', () => {
     pushDefinition({
-      queueName: 'partition-maintenance',
+      queueName: 'orphan-retention',
       family: 'retention',
-      logLabel: 'partition maintenance worker',
+      logLabel: 'orphan retention worker',
       usesPostgres: true,
       scheduled: true,
       criticality: 'maintenance',
@@ -101,7 +101,7 @@ describe('detectSchedulerRegistryMismatches', () => {
     });
 
     expect(detectSchedulerRegistryMismatches()).toEqual([
-      { queueName: 'partition-maintenance', issue: 'scheduled_flag_without_cron' },
+      { queueName: 'orphan-retention', issue: 'scheduled_flag_without_cron' },
     ]);
   });
 

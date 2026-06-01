@@ -5,7 +5,7 @@ const DATABASE_URL_FIXTURE = 'postgres://localhost:5432/core';
 const REDIS_URL_FIXTURE = 'redis://localhost:6379';
 
 const productionRedisTopology = {
-  REDIS_URL: 'redis://shared.example.upstash.io:6379',
+  REDIS_URL: 'redis://shared.example.railway.internal:6379',
 };
 
 const commonRequiredBase = {
@@ -16,7 +16,8 @@ const commonRequiredBase = {
   JWT_PUBLIC_KEY: 'public',
   ALLOWED_ORIGINS: 'http://localhost:3000',
   METRICS_SCRAPE_TOKEN: 'b'.repeat(32),
-  SECRETS_ENCRYPTION_KEY: 'a'.repeat(64),
+  // High-entropy 32-byte hex key — production rejects low-entropy placeholders (e.g. all-zeros).
+  SECRETS_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   AUDIT_RETENTION_DAYS: '30',
   AUTH_SESSION_RETENTION_DAYS: '30',
 };
@@ -24,8 +25,10 @@ const commonRequiredBase = {
 const productionRequiredBase = {
   ...commonRequiredBase,
   NODE_ENV: 'production',
-  // CAPTCHA fail-closes; production boot requires turnstile+secret or this explicit ack.
-  CAPTCHA_DISABLED_ACK: 'true',
+  // Production requires absolute https origins (no plaintext http / wildcard).
+  ALLOWED_ORIGINS: 'https://app.example.com',
+  CAPTCHA_PROVIDER: 'turnstile',
+  CAPTCHA_SECRET: 'turnstile-secret',
   ...productionRedisTopology,
 };
 
@@ -72,7 +75,73 @@ describe('env-schema', () => {
     }
   });
 
-  it('transforms TRUST_PROXY "1" to true', () => {
+  it('requires EMAIL_FROM_ADDRESS when RESEND_API_KEY is set', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      RESEND_API_KEY: 're_test_key',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path.includes('EMAIL_FROM_ADDRESS'))).toBe(
+        true,
+      );
+    }
+  });
+
+  it('accepts RESEND_API_KEY together with EMAIL_FROM_ADDRESS', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      RESEND_API_KEY: 're_test_key',
+      EMAIL_FROM_ADDRESS: 'noreply@example.com',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('allows EMAIL_FROM_ADDRESS to be absent when RESEND_API_KEY is unset', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects ALLOWED_ORIGINS containing a wildcard in any environment', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      ALLOWED_ORIGINS: 'https://app.example.com,*',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects plaintext http ALLOWED_ORIGINS in production', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      ALLOWED_ORIGINS: 'http://app.example.com',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('accepts https ALLOWED_ORIGINS in production', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      ALLOWED_ORIGINS: 'https://app.example.com,https://admin.example.com',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('allows http localhost ALLOWED_ORIGINS outside production', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      ALLOWED_ORIGINS: 'http://localhost:3000',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('transforms TRUST_PROXY "1" to a hop count', () => {
     const parsed = envSchema.safeParse({
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
@@ -86,12 +155,12 @@ describe('env-schema', () => {
 
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.TRUST_PROXY).toBe(true);
+      expect(parsed.data.TRUST_PROXY).toBe(1);
     }
   });
 
-  it('transforms TRUST_PROXY string values to boolean', () => {
-    const enabled = envSchema.safeParse({
+  it('rejects bare TRUST_PROXY=true', () => {
+    const parsed = envSchema.safeParse({
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
@@ -99,6 +168,14 @@ describe('env-schema', () => {
       NODE_ENV: 'test',
       TRUST_PROXY: 'true',
     });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.flatten().fieldErrors.TRUST_PROXY).toBeDefined();
+    }
+  });
+
+  it('transforms TRUST_PROXY disabled values to false', () => {
     const disabled = envSchema.safeParse({
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
@@ -108,7 +185,6 @@ describe('env-schema', () => {
       TRUST_PROXY: '0',
     });
 
-    expect(enabled.success && enabled.data.TRUST_PROXY).toBe(true);
     expect(disabled.success && disabled.data.TRUST_PROXY).toBe(false);
   });
 
@@ -248,7 +324,7 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('allows one Redis instance in production', () => {
+  it('allows a shared or dedicated BullMQ Redis endpoint in production', () => {
     const sharedWithoutBullMqUrl = envSchema.safeParse({
       ...productionRequiredBase,
       REDIS_BULLMQ_URL: undefined,
@@ -257,16 +333,24 @@ describe('env-schema', () => {
 
     const sharedWithSameBullMqUrl = envSchema.safeParse({
       ...productionRequiredBase,
-      REDIS_URL: 'redis://shared.example.upstash.io:6379',
-      REDIS_BULLMQ_URL: 'redis://shared.example.upstash.io:6379',
+      REDIS_URL: 'redis://shared.example.railway.internal:6379',
+      REDIS_BULLMQ_URL: 'redis://shared.example.railway.internal:6379',
     });
     expect(sharedWithSameBullMqUrl.success).toBe(true);
 
+    // A dedicated BullMQ endpoint is supported (recommended production isolation).
     const separateBullMqHost = envSchema.safeParse({
       ...productionRequiredBase,
-      REDIS_BULLMQ_URL: 'redis://bullmq.example.upstash.io:6379',
+      REDIS_BULLMQ_URL: 'redis://bullmq.example.railway.internal:6379',
     });
-    expect(separateBullMqHost.success).toBe(false);
+    expect(separateBullMqHost.success).toBe(true);
+
+    // A non-parseable override is rejected.
+    const invalidBullMqUrl = envSchema.safeParse({
+      ...productionRequiredBase,
+      REDIS_BULLMQ_URL: 'not a url',
+    });
+    expect(invalidBullMqUrl.success).toBe(false);
   });
 
   it('allows single Redis host when NODE_ENV is local', () => {
@@ -293,6 +377,35 @@ describe('env-schema', () => {
 
     const withKey = envSchema.safeParse(productionRequiredBase);
     expect(withKey.success).toBe(true);
+  });
+
+  it('rejects a low-entropy / placeholder SECRETS_ENCRYPTION_KEY in production', () => {
+    const allZeros = envSchema.safeParse({
+      ...productionRequiredBase,
+      SECRETS_ENCRYPTION_KEY: '0'.repeat(64),
+    });
+    expect(allZeros.success).toBe(false);
+    if (!allZeros.success) {
+      expect(
+        allZeros.error.issues.some((issue) => issue.path[0] === 'SECRETS_ENCRYPTION_KEY'),
+      ).toBe(true);
+    }
+
+    // Single-character placeholder (e.g. the test default `'a'.repeat(64)`) is also rejected.
+    const singleChar = envSchema.safeParse({
+      ...productionRequiredBase,
+      SECRETS_ENCRYPTION_KEY: 'a'.repeat(64),
+    });
+    expect(singleChar.success).toBe(false);
+  });
+
+  it('allows a low-entropy SECRETS_ENCRYPTION_KEY outside production (ephemeral test/CI keys)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'test',
+      SECRETS_ENCRYPTION_KEY: '0'.repeat(64),
+    });
+    expect(parsed.success).toBe(true);
   });
 
   it('requires METRICS_SCRAPE_TOKEN whenever METRICS_ENABLED is true', () => {
@@ -351,45 +464,71 @@ describe('env-schema', () => {
     expect(parsedLocalhost.success).toBe(true);
   });
 
-  it('rejects production boot when CAPTCHA is disabled without explicit acknowledgement', () => {
-    const { CAPTCHA_DISABLED_ACK: _ack, ...withoutAck } = productionRequiredBase;
-    void _ack;
+  it('rejects production boot when CAPTCHA is not turnstile', () => {
+    const {
+      CAPTCHA_PROVIDER: _provider,
+      CAPTCHA_SECRET: _secret,
+      ...withoutCaptcha
+    } = productionRequiredBase;
+    void _provider;
+    void _secret;
 
-    const parsed = envSchema.safeParse(withoutAck);
+    const parsed = envSchema.safeParse(withoutCaptcha);
     expect(parsed.success).toBe(false);
     if (!parsed.success) {
       expect(parsed.error.issues.some((issue) => issue.path[0] === 'CAPTCHA_PROVIDER')).toBe(true);
     }
   });
 
-  it('allows production boot with CAPTCHA disabled when explicitly acknowledged', () => {
+  it('rejects production boot when CAPTCHA_PROVIDER=disabled', () => {
     const parsed = envSchema.safeParse({
       ...productionRequiredBase,
       CAPTCHA_PROVIDER: 'disabled',
-      CAPTCHA_DISABLED_ACK: 'true',
+      CAPTCHA_SECRET: undefined,
     });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('allows production boot with configured turnstile CAPTCHA', () => {
+    const parsed = envSchema.safeParse(productionRequiredBase);
     expect(parsed.success).toBe(true);
   });
 
-  it('allows production boot with configured turnstile CAPTCHA without acknowledgement', () => {
-    const { CAPTCHA_DISABLED_ACK: _ack, ...withoutAck } = productionRequiredBase;
-    void _ack;
-
-    const parsed = envSchema.safeParse({
-      ...withoutAck,
-      CAPTCHA_PROVIDER: 'turnstile',
-      CAPTCHA_SECRET: 'turnstile-secret',
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it('does not require CAPTCHA acknowledgement outside production', () => {
+  it('does not require Turnstile CAPTCHA outside production', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
       NODE_ENV: 'development',
       CAPTCHA_PROVIDER: 'disabled',
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it('rejects production boot when COOKIE_SECURE is disabled', () => {
+    const parsed = envSchema.safeParse({
+      ...productionRequiredBase,
+      COOKIE_SECURE: 'false',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path[0] === 'COOKIE_SECURE')).toBe(true);
+    }
+  });
+
+  it('allows COOKIE_SECURE=false outside production (local plaintext loops)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'development',
+      COOKIE_SECURE: 'false',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('defaults COOKIE_SECURE to true and accepts it in production', () => {
+    const parsed = envSchema.safeParse(productionRequiredBase);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.COOKIE_SECURE).toBe(true);
+    }
   });
 
   it('rejects FRONTEND_URL that is not a valid http(s) URL', () => {

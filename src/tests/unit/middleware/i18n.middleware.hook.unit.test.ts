@@ -26,7 +26,7 @@ vi.mock('i18next-http-middleware', async (importOriginal) => {
   };
 });
 
-import i18nMiddleware from '@/shared/middlewares/i18n.middleware.js';
+import i18nMiddleware from '@/shared/middlewares/core/i18n.middleware.js';
 
 async function registerI18nForTests(application: ReturnType<typeof Fastify>): Promise<void> {
   await application.register(fp(i18nMiddleware, { name: 'i18n-middleware-hook-test' }));

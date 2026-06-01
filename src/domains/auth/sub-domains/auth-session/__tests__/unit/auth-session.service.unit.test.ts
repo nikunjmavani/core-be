@@ -27,19 +27,25 @@ const user = { id: 1, public_id: 'user_public', email: 'user@example.com' };
 describe('AuthSessionService', () => {
   const userService = {
     requireUserRecordByPublicId: vi.fn().mockResolvedValue(user),
+    findById: vi.fn().mockResolvedValue(user),
   } as unknown as UserService;
 
   const sessionRepository = {
     listByUserId: vi.fn().mockResolvedValue([{ public_id: 'session_public' }]),
     revoke: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
     revokeAllByUserId: vi.fn().mockResolvedValue([]),
+    revokeAllByUserIdExcept: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({ public_id: 'session_new' }),
     revokeByTokenHash: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
     findByPublicId: vi
       .fn()
       .mockResolvedValue({ public_id: 'session_public', token_hash: 'old-hash' }),
-    findActiveByTokenHash: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
+    findActiveByTokenHash: vi.fn().mockResolvedValue({
+      public_id: 'session_public',
+      expires_at: new Date('2026-12-31T00:00:00.000Z'),
+    }),
     rotateTokenHash: vi.fn().mockResolvedValue(undefined),
+    rotateSessionCredentials: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
   } as unknown as AuthSessionRepository;
 
   const service = new AuthSessionService(userService, sessionRepository);
@@ -47,6 +53,7 @@ describe('AuthSessionService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
+    vi.mocked(userService.findById).mockResolvedValue(user as never);
   });
 
   it('list returns sessions for user', async () => {
@@ -85,6 +92,38 @@ describe('AuthSessionService', () => {
   it('revokeAllSessions throws when user is not found', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
     await expect(service.revokeAllSessions('missing')).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('revokeAllSessionsExceptCurrent keeps the current token and invalidates revoked hashes (bug 33)', async () => {
+    vi.mocked(sessionRepository.revokeAllByUserIdExcept).mockResolvedValue([
+      { token_hash: 'revoked-hash-a' },
+      { token_hash: 'revoked-hash-b' },
+      { token_hash: null },
+    ] as never);
+    const { invalidateCachedSessionToken } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
+    await service.revokeAllSessionsExceptCurrent({
+      userPublicId: 'user_public',
+      currentAccessToken: 'current-bearer-token',
+    });
+    // The except-hash passed to the repository is the SHA-256 of the current token, never the raw token.
+    const [, exceptHash] = vi.mocked(sessionRepository.revokeAllByUserIdExcept).mock.calls[0]!;
+    expect(exceptHash).not.toBe('current-bearer-token');
+    expect(exceptHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(invalidateCachedSessionToken).toHaveBeenCalledWith('revoked-hash-a');
+    expect(invalidateCachedSessionToken).toHaveBeenCalledWith('revoked-hash-b');
+    expect(invalidateCachedSessionToken).toHaveBeenCalledTimes(2);
+  });
+
+  it('revokeAllSessionsExceptCurrent throws when user is not found', async () => {
+    vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
+    await expect(
+      service.revokeAllSessionsExceptCurrent({
+        userPublicId: 'missing',
+        currentAccessToken: 'token',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('createSessionForUser creates session under user database context', async () => {
@@ -138,14 +177,21 @@ describe('AuthSessionService', () => {
     expect(sessionRepository.findActiveByTokenHash).not.toHaveBeenCalled();
   });
 
-  it('verifyActiveAccessToken loads session and caches on miss', async () => {
+  it('verifyActiveAccessToken loads session and caches with the session expiry on miss', async () => {
+    const sessionExpiresAt = new Date('2026-12-31T00:00:00.000Z');
     const { getCachedSessionTokenValid, setCachedSessionTokenValid } = await import(
       '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
     );
     vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(false);
+    vi.mocked(sessionRepository.findActiveByTokenHash).mockResolvedValueOnce({
+      public_id: 'session_public',
+      expires_at: sessionExpiresAt,
+    } as never);
     await service.verifyActiveAccessToken('fresh-token');
     expect(sessionRepository.findActiveByTokenHash).toHaveBeenCalled();
-    expect(setCachedSessionTokenValid).toHaveBeenCalled();
+    expect(setCachedSessionTokenValid).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionExpiresAt }),
+    );
   });
 
   it('verifyActiveAccessToken throws when session is missing', async () => {
@@ -153,5 +199,57 @@ describe('AuthSessionService', () => {
     await expect(service.verifyActiveAccessToken('unknown-token')).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
+  });
+
+  it('refreshSessionCredentials rotates the secret and does not revoke the family on the happy path', async () => {
+    vi.mocked(sessionRepository.findByPublicId).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: user.id,
+      token_hash: 'old-token-hash',
+      refresh_token_hash: 'stored-refresh-hash',
+    } as never);
+    vi.mocked(sessionRepository.rotateSessionCredentials).mockResolvedValue({
+      public_id: 'session_public',
+    } as never);
+
+    const result = await service.refreshSessionCredentials({
+      sessionPublicId: 'session_public',
+      refreshSecret: 'presented-secret',
+      nextAccessToken: 'next-access-token',
+    });
+
+    expect(result.refresh_secret).toMatch(/.+/);
+    expect(sessionRepository.revokeAllByUserId).not.toHaveBeenCalled();
+  });
+
+  it('refreshSessionCredentials revokes the entire session family when an old refresh secret is replayed (reuse detection)', async () => {
+    vi.mocked(sessionRepository.findByPublicId).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: user.id,
+      token_hash: 'old-token-hash',
+      refresh_token_hash: 'already-rotated-hash',
+    } as never);
+    vi.mocked(sessionRepository.rotateSessionCredentials).mockResolvedValue(null as never);
+    vi.mocked(sessionRepository.revokeAllByUserId).mockResolvedValue([
+      { token_hash: 'family-hash-a' },
+      { token_hash: 'family-hash-b' },
+      { token_hash: null },
+    ] as never);
+    const { invalidateCachedSessionToken } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
+
+    await expect(
+      service.refreshSessionCredentials({
+        sessionPublicId: 'session_public',
+        refreshSecret: 'stolen-old-secret',
+        nextAccessToken: 'next-access-token',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+
+    expect(userService.findById).toHaveBeenCalledWith(user.id);
+    expect(sessionRepository.revokeAllByUserId).toHaveBeenCalledWith(user.id);
+    expect(invalidateCachedSessionToken).toHaveBeenCalledWith('family-hash-a');
+    expect(invalidateCachedSessionToken).toHaveBeenCalledWith('family-hash-b');
   });
 });

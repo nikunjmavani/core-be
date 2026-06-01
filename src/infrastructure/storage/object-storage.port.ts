@@ -1,3 +1,8 @@
+/**
+ * Subset of S3 `HeadObject` metadata that the upload domain trusts after a successful
+ * `verifyUploadedObject` check. Either field may be `undefined` when the object exists
+ * but the field is not surfaced (rare, e.g. some S3-compatible providers).
+ */
 export interface UploadedObjectMetadata {
   contentType: string | undefined;
   contentLength: number | undefined;
@@ -50,6 +55,18 @@ export interface ObjectStoragePort {
     body: Buffer;
     contentType: string;
     metadata?: Record<string, string>;
+  }): Promise<void>;
+
+  /**
+   * Server-side copy of an existing object to a new key (no bytes transit the app). Used by the
+   * upload confirm step to publish a verified pending object to its immutable final key so the
+   * served object can never be overwritten via the client's still-valid presigned upload URL. The
+   * destination `contentType` is set on the copy so the served object carries the verified type.
+   */
+  copyObject(options: {
+    sourceKey: string;
+    destinationKey: string;
+    contentType: string;
   }): Promise<void>;
 
   getObject(key: string): Promise<{ body: Buffer; contentType: string | undefined }>;

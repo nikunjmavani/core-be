@@ -37,14 +37,17 @@ vi.mock('bullmq', () => ({
   Queue: vi.fn(),
 }));
 
-import { getWorkerQueueRegistrationDefinitions } from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
+import {
+  getWorkerQueueOperationalManifest,
+  getWorkerQueueRegistrationDefinitions,
+} from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
 import { WORKER_QUEUE_FAMILY_NAMES } from '@/infrastructure/queue/worker-runtime/worker-queue-family.constants.js';
 
 describe('worker-registration.registry', () => {
   it('keeps complete metadata for every registered worker', () => {
     const definitions = getWorkerQueueRegistrationDefinitions();
 
-    expect(definitions).toHaveLength(25);
+    expect(definitions).toHaveLength(26);
     for (const definition of definitions) {
       expect(definition.queueName).toBeTruthy();
       expect(definition.logLabel).toBeTruthy();
@@ -67,22 +70,22 @@ describe('worker-registration.registry', () => {
     const definitions = getWorkerQueueRegistrationDefinitions();
 
     expect(definitions.filter((definition) => definition.usesPostgres)).toHaveLength(23);
-    expect(definitions.filter((definition) => definition.scheduled)).toHaveLength(18);
+    expect(definitions.filter((definition) => definition.scheduled)).toHaveLength(21);
     expect(
       definitions.filter((definition) => definition.criticality === 'throughput'),
     ).toHaveLength(5);
     expect(
       definitions.filter((definition) => definition.criticality === 'maintenance'),
-    ).toHaveLength(18);
+    ).toHaveLength(19);
     expect(
       definitions.filter((definition) => definition.criticality === 'observability'),
     ).toHaveLength(2);
     expect(
       definitions.filter((definition) => definition.holdsConnectionDuringExternalIo === true),
-    ).toHaveLength(6);
+    ).toHaveLength(5);
   });
 
-  it('documents registered workers that intentionally have no scheduler yet', () => {
+  it('has no maintenance workers left unscheduled (every retention worker has a cron)', () => {
     const orphanQueueNames = getWorkerQueueRegistrationDefinitions()
       .filter(
         (definition) => definition.criticality === 'maintenance' && definition.scheduled === false,
@@ -90,6 +93,16 @@ describe('worker-registration.registry', () => {
       .map((definition) => definition.queueName)
       .sort();
 
-    expect(orphanQueueNames).toEqual(['notification-retention', 'partition-maintenance']);
+    expect(orphanQueueNames).toEqual([]);
+  });
+
+  it('exports a serializable operational manifest without factory functions', () => {
+    const manifest = getWorkerQueueOperationalManifest();
+    expect(manifest).toHaveLength(getWorkerQueueRegistrationDefinitions().length);
+    for (const entry of manifest) {
+      expect(entry).not.toHaveProperty('create');
+      expect(entry.queueName).toBeTruthy();
+      expect(entry.family).toBeTruthy();
+    }
   });
 });

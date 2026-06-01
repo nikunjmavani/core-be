@@ -3,6 +3,7 @@ import { createCipheriv, randomBytes } from 'node:crypto';
 const ALGORITHM = 'aes-256-cbc';
 const IV_LENGTH = 16;
 
+/** AES-256-CBC ciphertext + IV, both base64-encoded; returned by {@link encryptPayload} and consumed by client-side decryption. */
 export interface EncryptedPayload {
   payload: string;
   iv: string;
@@ -15,7 +16,7 @@ export interface EncryptedPayload {
  * produce different ciphertexts.
  *
  * Client-side decryption (crypto-js, browser):
- * ```
+ * ```js
  * const key = CryptoJS.enc.Hex.parse(keyHex);
  * const iv  = CryptoJS.enc.Base64.parse(response.iv);
  * const decrypted = CryptoJS.AES.decrypt(response.payload, key, {

@@ -20,9 +20,11 @@ Set ENABLE_QUEUE_DASHBOARD → start server → super_admin JWT → /admin/queue
 ## Enable the dashboard
 
 1. Set in `.env`:
+
    ```bash
    ENABLE_QUEUE_DASHBOARD=true
    ```
+
 2. Start the API server: `pnpm dev`
 3. The dashboard is mounted at **`/admin/queues`**
 
@@ -65,10 +67,12 @@ Copy the printed token, then either:
 
 - **Browser**: Use an extension or devtools to add `Authorization: Bearer <your-token>` to requests to `http://localhost:3000/admin/queues`, or
 - **curl**:
+
   ```bash
   export ADMIN_TOKEN="<paste-token-here>"
   curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:3000/admin/queues
   ```
+
   (The UI is HTML/JS; for full UI open the URL in a browser and set the header via extension or proxy.)
 
 ## Audit logging
@@ -84,20 +88,36 @@ Successful **mutating** Bull Board HTTP calls (`POST`, `PUT`, `PATCH`, `DELETE`)
 
 ## Queues shown
 
-Source queues (Bull Board adapters):
+Source queues (Bull Board adapters) registered in [`src/infrastructure/queue/queue-dashboard.ts`](../../../src/infrastructure/queue/queue-dashboard.ts) → `SOURCE_QUEUE_NAMES`:
+
+**Work queues:**
 
 - `mail`
 - `webhook-delivery`
 - `notification`
+- `stripe-webhook`
+
+**Retention / cleanup queues:**
+
 - `audit-retention`
 - `session-cleanup`
 - `webhook-tombstone-retention`
 - `organization-notification-policy-tombstone-retention`
-- `stripe-webhook`
+- `user-tombstone-retention`
+- `organization-tombstone-retention`
+- `membership-tombstone-retention`
+- `member-role-tombstone-retention`
+- `organization-api-key-tombstone-retention`
+- `upload-tombstone-retention`
+
+**Observability queues:**
+
 - `idempotency-cardinality`
 - `dlq-depth`
 
 For each source queue, a **dead-letter** mirror named `<source-queue-name>-dlq` is also registered when the dashboard is enabled (except observability-only schedulers without DLQ consumers).
+
+When adding a new BullMQ queue, append its constant to `SOURCE_QUEUE_NAMES` in `queue-dashboard.ts` (and update this list). See **[workers-events skill](../../../.cursor/skills/workers-events/SKILL.md)** for the full registration checklist.
 
 ## Production
 

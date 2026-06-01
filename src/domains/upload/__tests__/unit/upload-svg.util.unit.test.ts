@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSvgContentType, sanitizeSvgContent } from '@/domains/upload/upload-svg.util.js';
+import { isSvgContentType, sanitizeSvgContent } from '@/domains/upload/utils/upload-svg.util.js';
 
 const CRAFTED_SVG = `<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)">
   <script>alert('xss')</script>

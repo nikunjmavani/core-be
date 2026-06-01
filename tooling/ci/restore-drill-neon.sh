@@ -2,12 +2,22 @@
 # Neon PITR branch helpers for the monthly restore drill workflow.
 # Requires: MONTHLY_DATABASE_RESTORE_DRILL_NEON_API_KEY, RESTORE_DRILL_PARENT_BRANCH_NAME
 #           (GitHub ref name for the workflow run), jq, curl.
-# Neon project ID is resolved via API from project name (default: core-be — same as setup:infra).
+# Neon project ID is resolved via API from project name (default: PROJECT_SLUG from setup manifest).
 
 set -euo pipefail
 
+SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPOSITORY_ROOT="$(cd "${SCRIPT_DIRECTORY}/../.." && pwd)"
+if [ -f "${REPOSITORY_ROOT}/.github/project-identity.env" ]; then
+  # shellcheck disable=SC1091
+  set -a
+  # shellcheck source=/dev/null
+  source "${REPOSITORY_ROOT}/.github/project-identity.env"
+  set +a
+fi
+
 NEON_API_BASE="${NEON_API_BASE:-https://console.neon.tech/api/v2}"
-NEON_PROJECT_NAME="${RESTORE_DRILL_NEON_PROJECT_NAME:-core-be}"
+NEON_PROJECT_NAME="${RESTORE_DRILL_NEON_PROJECT_NAME:-${PROJECT_SLUG:-core-be}}"
 PITR_LOOKBACK_MINUTES="${PITR_LOOKBACK_MINUTES:-15}"
 BRANCH_TTL_HOURS="${BRANCH_TTL_HOURS:-2}"
 OPERATION_POLL_INTERVAL_SECONDS="${OPERATION_POLL_INTERVAL_SECONDS:-2}"

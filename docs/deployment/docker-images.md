@@ -40,13 +40,13 @@ CI runs the same check before image builds ([`tooling/ci/check-dockerfile-sync.m
 | Arg                 | Default   | Use                                                                                     |
 | ------------------- | --------- | --------------------------------------------------------------------------------------- |
 | `NODE_VERSION`      | `24.13.0` | Pinned Node.js patch (`.nvmrc`, `.node-version`, CI)                                    |
-| `PNPM_VERSION`      | `10.28.2` | Matches `package.json` `packageManager`                                                 |
+| `PNPM_VERSION`      | `11.1.1` | Matches `package.json` `packageManager`                                                 |
 | `GENERATE_MCP_DOCS`    | `true`    | When `true`, runs `pnpm routes:catalog` + `pnpm docs:generate:multilang` in build stage |
 | `INSTALL_MCP_OPTIONAL` | `false`   | When `true`, runtime `pnpm install --prod` includes optional `@modelcontextprotocol/sdk`; default omits it (`--no-optional`) |
 | `BUILD_REVISION`       | `unknown` | OCI label `org.opencontainers.image.revision` (CI passes `github.sha`)                  |
 | `IMAGE_SOURCE`         | `unknown` | OCI label `org.opencontainers.image.source` (CI passes repo URL)                        |
 
-**pnpm cache:** Both install steps use BuildKit cache mount `id=pnpm-store` on `/root/.local/share/pnpm/store`.
+**pnpm install:** Production Dockerfiles intentionally avoid BuildKit `type=cache` mounts. Railway requires cache mount IDs to be hardcoded with a service-specific `s/<service-id>-...` prefix, which is not portable for this repo's shared API/worker Dockerfiles across multiple environments. Docker layer caching still applies to the `package.json` + `pnpm-lock.yaml` install layers.
 
 ### Build commands (manual)
 
@@ -106,7 +106,7 @@ RUN pnpm build && pnpm build:check \
 
 **MCP SDK:** `@modelcontextprotocol/sdk` is an **optional** dependency. Production images omit it by default (`INSTALL_MCP_OPTIONAL=false`). When `ENABLE_MCP_SERVER=true`, set `INSTALL_MCP_OPTIONAL=true` at image build time (or run `pnpm install` without `--no-optional` outside Docker).
 
-**Health:** `HEALTHCHECK` uses Node 24 `fetch` against `GET http://127.0.0.1:3000/health` (no extra OS packages).
+**Health:** `HEALTHCHECK` uses Node 24 `fetch` against `GET http://127.0.0.1:3000/livez` (liveness; no extra OS packages).
 
 **`.dockerignore`:** Host `docs/` is excluded from the build context; docs are **generated inside the build stage**, not copied from the host.
 
@@ -116,7 +116,7 @@ Standalone Dockerfile with the same `build` / `runtime` pattern as the root file
 
 **Health / monitoring:** No `HEALTHCHECK` in the worker image. Use orchestrator process monitoring (e.g. Railway restarts on exit, logs/metrics).
 
-**Railway:** `reusable-railway-deploy.yml` deploys the scanned GHCR worker image to the separate worker service. Set `RAILWAY_WORKER_SERVICE_ID` in the GitHub environment so CD can sync shared variables, redeploy the image, and probe worker `GET /health`.
+**Railway:** `reusable-railway-deploy.yml` deploys the scanned GHCR worker image to the separate worker service. Set `RAILWAY_WORKER_SERVICE_ID` in the GitHub environment so CD can sync shared variables and trigger the redeploy. Worker readiness is gated only by the Railway deployment terminal status — Railway flips the deployment to SUCCESS once the in-pod `Dockerfile.worker` HEALTHCHECK (`127.0.0.1:9090/readyz`) returns 200, which already covers process up + dependency probes + queue heartbeats. The runner cannot probe further: the worker has no public domain and Postgres/Redis live on `*.railway.internal`, unreachable from GitHub Actions hosts.
 
 ## Running production images locally
 
@@ -126,7 +126,7 @@ The `runtime` stage sets `ENV NODE_ENV=production`. Override at `docker run` / c
 | ------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `production` | Default in image  | Requires `JWT_PRIVATE_KEY` + `JWT_PUBLIC_KEY` (RS256), `SECRETS_ENCRYPTION_KEY`, `ALLOWED_ORIGINS`, retention vars, and full deploy secrets — see [env schema](../../src/shared/config/env-schema.ts). |
 | `local`      | Do not use        | [`logger.util.ts`](../../src/shared/utils/infrastructure/logger.util.ts) loads `pino-pretty`, which is **not** in the prod image → startup crash.                        |
-| `test`       | Smoke / CI        | Uses the same RS256 + encryption env contract, with test fixtures supplied by CI/setup — same as [CI docker-run](../../.github/workflows/ci.yml).                         |
+| `test`       | Smoke / CI        | Uses the same RS256 + encryption env contract, with test fixtures supplied by CI/setup — same as the [PR CI docker-run job](../../.github/workflows/pr-ci.yml).            |
 
 ### Compose smoke profile (recommended)
 
@@ -137,7 +137,7 @@ pnpm compose:up
 pnpm compose:wait          # optional: wait for Postgres
 pnpm db:migrate            # if DB is empty — required for connected health
 pnpm docker:smoke:up       # builds api-smoke on first run (profile smoke)
-curl -sf http://localhost:3000/health
+curl -sf http://localhost:3000/readyz
 pnpm docker:smoke:logs     # optional
 pnpm docker:smoke:down
 ```
@@ -175,14 +175,14 @@ On **every pull request and push**, the `docker-build` job:
 2. Builds `core-be:ci` (API) and `core-be-worker:ci` (`Dockerfile.worker`)
 3. Trivy-scans both images (CRITICAL/HIGH; fails the job on findings)
 4. Worker: `node --check` + native module imports
-5. API: boot container with `NODE_ENV=test`, verify `GET /health`
+5. API: boot container with `NODE_ENV=test`, verify `GET /readyz`
 
 On **push to `main`** (after scan), images are pushed to GHCR:
 
 - `ghcr.io/<owner>/<repo>/core-be-api:<commit-sha>` and `:latest`
 - `ghcr.io/<owner>/<repo>/core-be-worker:<commit-sha>` and `:latest`
 
-[reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml) deploys those refs with `railway redeploy --image` (optional `GHCR_API_IMAGE` / `GHCR_WORKER_IMAGE` secrets override the commit tag).
+[reusable-railway-deploy.yml](../../.github/workflows/reusable-railway-deploy.yml) logs the expected GHCR refs and redeploys the configured Railway API and worker services with `railway redeploy --service ... --yes`. The current Railway CLI does not support `railway redeploy --image`.
 
 Adds roughly 3–8 minutes to PR checks. See [cicd-and-deployment.md](ci-cd/cicd-and-deployment.md).
 

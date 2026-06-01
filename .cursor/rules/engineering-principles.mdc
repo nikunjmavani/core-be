@@ -15,6 +15,7 @@ Write production-grade, maintainable, scalable code. Preserve simplicity; avoid 
 2. For new requirements, use **[requirement-intake](../../docs/getting-started/requirement-intake.md)** and consult **[skill-index](../skills/skill-index/SKILL.md)** first.
 3. Reuse existing utilities, services, and patterns before creating new ones.
 4. Do not introduce duplicate abstractions.
+5. **Product slug, image names, branch/env mapping:** follow **[project-identity.mdc](project-identity.mdc)** — manifest `tooling/setup/setup.config.json` and imports from `project-identity.constants.ts`; do not hardcode `core-be` (or manifest-derived names) in `src/`, workflows, or tooling.
 
 ## Code quality
 
@@ -29,9 +30,11 @@ Write production-grade, maintainable, scalable code. Preserve simplicity; avoid 
 
 ## Architecture (brief)
 
+- **Import paths**: `@/` in `src/`, `@tooling/` in tooling; same-folder `./` only — no parent-relative `../`. See **[import-paths.mdc](import-paths.mdc)**.
 - **Controllers** coordinate only — thin handlers, no DB queries.
 - **Services** express intent — business logic, validators, events; no transaction management in services.
 - **Repositories** own DB access (Drizzle).
+- **Services** express intent; they use **same-domain repositories** and other domains' **services** for cross-domain reads/writes — never another domain's repository or schema.
 - **Postgres** is the only source of truth; workers are pull-based (BullMQ).
 
 For layout, layers, routes, events, and Drizzle conventions, follow **[core-be-src-architecture.mdc](core-be-src-architecture.mdc)** when editing `src/**/*.ts`. For naming, follow **[full-names-only.mdc](full-names-only.mdc)**.

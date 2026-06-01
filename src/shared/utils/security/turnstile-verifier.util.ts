@@ -5,6 +5,7 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
+/** Result from {@link verifyTurnstileToken}: `success` plus any error codes Cloudflare returned. */
 export type TurnstileVerifyResult = {
   success: boolean;
   errorCodes?: string[];
@@ -15,6 +16,7 @@ type TurnstileSiteVerifyResponse = {
   'error-codes'?: string[];
 };
 
+/** Inputs for {@link verifyTurnstileToken}; `remoteIp` is optional but recommended for Cloudflare's risk scoring. */
 export interface VerifyTurnstileTokenOptions {
   token: string;
   remoteIp?: string;

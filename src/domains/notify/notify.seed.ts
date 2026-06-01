@@ -8,6 +8,7 @@ import { encryptFieldSecret } from '@/shared/utils/security/field-secret-encrypt
 import { notifications } from '@/domains/notify/sub-domains/notification/notification.schema.js';
 import { webhooks } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 
+/** Input row for {@link seedNotifications} — one in-app notification to be inserted. */
 export interface SeedNotificationPayload {
   user_id: number;
   organization_id: number;
@@ -17,6 +18,7 @@ export interface SeedNotificationPayload {
   is_read?: boolean;
 }
 
+/** Bulk-insert a batch of demo notifications, auto-stamping `read_at` for read rows. */
 export async function seedNotifications(items: SeedNotificationPayload[]) {
   const inserted = [];
   for (const item of items) {
@@ -39,6 +41,10 @@ export async function seedNotifications(items: SeedNotificationPayload[]) {
   return inserted;
 }
 
+/**
+ * Canonical demo fixtures (4 notifications spanning system, billing, membership, maintenance)
+ * used by `pnpm db:seed:full` to populate a realistic inbox.
+ */
 export const DEMO_NOTIFICATION_FIXTURES: Omit<
   SeedNotificationPayload,
   'user_id' | 'organization_id'
@@ -69,6 +75,10 @@ export const DEMO_NOTIFICATION_FIXTURES: Omit<
   },
 ];
 
+/**
+ * Idempotent top-up that seeds {@link DEMO_NOTIFICATION_FIXTURES} only when the user/org pair has
+ * fewer than `minimumCount` rows — keeps repeated `db:seed:full` runs from duplicating fixtures.
+ */
 export async function seedDemoNotificationsIfBelowMinimum(
   userId: number,
   organizationId: number,
@@ -95,6 +105,7 @@ export async function seedDemoNotificationsIfBelowMinimum(
   );
 }
 
+/** Input shape for {@link seedWebhook} / {@link findOrSeedWebhook}. */
 export interface SeedWebhookPayload {
   organization_id: number;
   url: string;
@@ -102,6 +113,10 @@ export interface SeedWebhookPayload {
   created_by_user_id: number;
 }
 
+/**
+ * Insert a single demo webhook row with an encrypted placeholder secret and `is_enabled = true`.
+ * Returns the inserted row, or `null` if the insert produced no row.
+ */
 export async function seedWebhook(payload: SeedWebhookPayload) {
   const [row] = await getRequestDatabase()
     .insert(webhooks)
@@ -118,6 +133,10 @@ export async function seedWebhook(payload: SeedWebhookPayload) {
   return row ?? null;
 }
 
+/**
+ * Idempotent helper used by `db:seed:full` — returns the existing webhook for
+ * `(organization_id, url)` if one exists, otherwise creates it via {@link seedWebhook}.
+ */
 export async function findOrSeedWebhook(payload: SeedWebhookPayload) {
   const database = getRequestDatabase();
   const [existing] = await database

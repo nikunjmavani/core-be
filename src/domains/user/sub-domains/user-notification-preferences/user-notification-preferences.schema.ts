@@ -13,6 +13,12 @@ import { authSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * `auth.user_notification_preferences` — per-user opt-in/opt-out per `(notification_type, channel,
+ * organization_id?)` tuple. Row-level security ties each row to the current user (and optionally
+ * the current organization), so the user-database context is required when reading or writing.
+ * Channel values are constrained to `EMAIL`, `SMS`, `PUSH`, `IN_APP` by check constraint.
+ */
 export const user_notification_preferences = authSchema
   .table(
     'user_notification_preferences',

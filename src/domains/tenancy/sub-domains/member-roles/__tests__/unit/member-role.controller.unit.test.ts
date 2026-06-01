@@ -7,7 +7,7 @@ import type { MemberRoleService } from '@/domains/tenancy/sub-domains/member-rol
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    auth: { userId: generatePublicId(), role: 'USER' },
+    auth: { kind: 'user' as const, userId: generatePublicId(), role: 'USER' },
     params: {},
     body: {},
     query: {},

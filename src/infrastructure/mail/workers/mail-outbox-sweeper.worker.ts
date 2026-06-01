@@ -11,8 +11,19 @@ import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 
 /**
- * Re-enqueues mail_outbox rows stuck in `pending` longer than the configured threshold.
- * Repeatable schedule: `src/infrastructure/queue/scheduler.ts`.
+ * BullMQ worker wrapping {@link runMailOutboxSweeperJob} on the mail-outbox
+ * sweeper queue.
+ *
+ * @remarks
+ * - **Algorithm:** single-job-per-tick worker driven by the repeatable scheduler
+ *   in `src/infrastructure/queue/scheduler.ts`; concurrency stays at
+ *   `RETENTION_WORKER_CONCURRENCY` to avoid hammering Postgres.
+ * - **Failure modes:** processor errors propagate to BullMQ retry/DLQ; stalled
+ *   jobs are logged at warn via the `stalled` listener.
+ * - **Side effects:** see {@link runMailOutboxSweeperJob} — updates outbox rows
+ *   and enqueues mail jobs.
+ * - **Notes:** registered from the worker bootstrap; the returned `WorkerHandle`
+ *   exposes `close()` for graceful shutdown.
  */
 export function createMailOutboxSweeperWorker(): WorkerHandle {
   const worker = new Worker(MAIL_OUTBOX_SWEEPER_QUEUE_NAME, async () => runMailOutboxSweeperJob(), {

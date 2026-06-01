@@ -83,6 +83,26 @@ describe('StripeWebhookService', () => {
     expect(stripeWebhookEventRepository.markProcessed).toHaveBeenCalledWith('evt_sub');
   });
 
+  it('marks subscription canceled via subscription service', async () => {
+    vi.mocked(subscriptionService.markCanceledByStripeProviderSubscriptionId).mockResolvedValue({
+      id: 9,
+    } as never);
+
+    await service.handleEvent({
+      id: 'evt_sub_del',
+      type: 'customer.subscription.deleted',
+      created: stripeEventCreatedAtSeconds,
+      data: { object: { id: 'sub_456' } },
+    } as Stripe.Event);
+
+    expect(subscriptionService.markCanceledByStripeProviderSubscriptionId).toHaveBeenCalledWith(
+      'sub_456',
+      new Date(stripeEventCreatedAtSeconds * 1000),
+      expect.objectContaining({ databaseHandle: expect.anything() }),
+    );
+    expect(stripeWebhookEventRepository.markProcessed).toHaveBeenCalledWith('evt_sub_del');
+  });
+
   it('marks event failed when handler throws', async () => {
     vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockRejectedValue(
       new Error('database unavailable'),

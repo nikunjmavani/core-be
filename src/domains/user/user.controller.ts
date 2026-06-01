@@ -6,6 +6,11 @@ import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-requ
 import type { UserContainer } from './user.container.js';
 
 // eslint-disable-next-line max-lines-per-function -- controller aggregator: thin handler map across user / settings / notifications / admin.
+/**
+ * Build the user-domain HTTP handler map covering self-service profile, settings, notification
+ * preferences, avatar upload/delete, and admin list/get/update/suspend/unsuspend/delete. Settings
+ * mutations also emit a scoped audit event (`user.settings.update`) via the request audit context.
+ */
 export function createUserController({
   userService,
   userSettingsService,

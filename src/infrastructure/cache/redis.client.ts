@@ -1,8 +1,16 @@
 import { Redis } from 'ioredis';
 import { resolveRedisKeyPrefix } from '@/infrastructure/cache/redis-prefix.util.js';
+import { buildRedisTlsOptions } from '@/infrastructure/cache/redis-url.parse.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+/**
+ * Process-wide ioredis client used by cache, idempotency, rate limits, permission cache,
+ * circuit breaker state, and any non-BullMQ Redis access. `lazyConnect` + `enableOfflineQueue: false`
+ * fail commands fast during partitions instead of buffering them; call {@link connectRedis}
+ * once at boot before serving traffic. BullMQ uses its own connection helper (see
+ * `bullmq-redis.client.ts` and `getBullMQConnectionOptions`).
+ */
 export const redisConnection = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: null,
   lazyConnect: true,
@@ -10,6 +18,13 @@ export const redisConnection = new Redis(env.REDIS_URL, {
   enableReadyCheck: true,
   /** Fail fast when disconnected — avoids hanging HTTP handlers and chaos tests during partitions. */
   enableOfflineQueue: false,
+  /**
+   * Dual-stack DNS lookup (IPv4 + IPv6). Required for Railway private networking
+   * which exposes services over IPv6-only `.railway.internal` hostnames.
+   */
+  family: 0,
+  /** Explicit TLS cert verification when REDIS_URL is rediss:// (no-op for plaintext redis://). */
+  ...buildRedisTlsOptions(env.REDIS_URL),
   retryStrategy(times: number) {
     const delay = Math.min(times * 200, 5_000);
     logger.warn({ attempt: times, delayMs: delay }, 'redis.reconnecting');
@@ -38,7 +53,11 @@ redisConnection.on('reconnecting', () => {
 export async function connectRedis(): Promise<void> {
   if (redisConnection.status === 'ready') return;
 
-  if (redisConnection.status === 'wait') {
+  if (
+    redisConnection.status === 'wait' ||
+    redisConnection.status === 'end' ||
+    redisConnection.status === 'close'
+  ) {
     await redisConnection.connect();
     return;
   }
@@ -61,6 +80,11 @@ export async function connectRedis(): Promise<void> {
   });
 }
 
+/**
+ * Closes the shared Redis client during graceful shutdown. Races a 5s timeout so a
+ * misbehaving Redis cannot stall process exit; the timeout is logged and treated as
+ * resolved.
+ */
 export async function closeRedis(): Promise<void> {
   const timeout = new Promise<void>((resolve) => {
     setTimeout(() => {

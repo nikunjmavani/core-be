@@ -60,20 +60,18 @@ Route handlers also validate `:id` path params with the shared public-id validat
 
 ### 1. Health (no auth)
 
-| #   | Method | Path            | Expected                                                                          |
-| --- | ------ | --------------- | --------------------------------------------------------------------------------- |
-| 1.1 | GET    | `/health`   | 200, `{"status":"ok"}`                                                                                    |
-| 1.2 | GET    | `/health`  | 200, deps connected; optional `migration_version`, `mail_outbox_pending`, `dlq_depth`, `worker_queues` |
-| 1.3 | GET    | `/health`        | 200 aggregate (`live: ok` + deps); deprecated — operators only                                            |
-| 1.4 | GET    | `/health` | 200 API worker-dependency view; worker replica probe uses `WORKER_HEALTH_PORT`                          |
+| #   | Method | Path       | Expected                                                                                               |
+| --- | ------ | ---------- | ------------------------------------------------------------------------------------------------------ |
+| 1.1 | GET    | `/livez`   | 200, `{"status":"ok"}` (liveness — no dependency probes)                                               |
+| 1.2 | GET    | `/readyz`  | 200, deps connected; optional `migration_version`, `mail_outbox_pending`, `dlq_depth`, `worker_queues` |
+
+Worker replicas expose the same `/livez` and `/readyz` probes on `WORKER_HEALTH_PORT` (default `9090`).
 
 Full semantics and probe matrix: [health-checks.md](../reference/reliability/health-checks.md).
 
 ```bash
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health
-curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/health
+curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/livez
+curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/readyz
 ```
 
 ### 2. Auth — login and token

@@ -3,20 +3,21 @@ name: skill-index
 description: Master index of all project skills with trigger conditions. Use this skill FIRST to determine which other skill(s) to invoke based on what changed. Consult after any code change to check if a skill should run.
 ---
 
-# Skill Index (core-be)
+# Skill index (core-be)
 
-Master directory of all **32 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
+Master directory of all **36 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
 
 For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global-skills**.
 
-## Project skills (32)
+## Project skills (36)
 
 | Skill                          | Path                                                                      |
 | ------------------------------ | ------------------------------------------------------------------------- |
 | skill-index                    | `.cursor/skills/skill-index/SKILL.md`                                     |
 | test-generator                 | `.cursor/skills/test-generator/SKILL.md`                                  |
 | route-catalog                  | `.cursor/skills/route-catalog/SKILL.md`                                   |
-| openapi-route-sync             | `.cursor/skills/openapi-route-sync/SKILL.md`                              |
+| openapi-route-sync             | `.cursor/skills/openapi-route-sync/SKILL.md` (legacy — tag locale only; use route-schema-doc-guard for schema) |
+| route-schema-doc-guard         | `.cursor/skills/route-schema-doc-guard/SKILL.md`                          |
 | seed-maintainer                | `.cursor/skills/seed-maintainer/SKILL.md`                                 |
 | domain-generator               | `.cursor/skills/domain-generator/SKILL.md`                                |
 | schema-generator               | `.cursor/skills/schema-generator/SKILL.md`                                |
@@ -38,6 +39,9 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | ide-productivity-guard         | `.cursor/skills/ide-productivity-guard/SKILL.md`                          |
 | docs-maintainer                | `.cursor/skills/docs-maintainer/SKILL.md`                                 |
 | docs-audit                     | `.cursor/skills/docs-audit/SKILL.md`                                      |
+| system-narrative-maintainer    | `.cursor/skills/system-narrative-maintainer/SKILL.md`                     |
+| overview-doc-maintainer        | `.cursor/skills/overview-doc-maintainer/SKILL.md`                         |
+| tsdoc-export-guard             | `.cursor/skills/tsdoc-export-guard/SKILL.md`                              |
 | setup-infra-maintainer         | `.cursor/skills/setup-infra-maintainer/SKILL.md`                          |
 | pr-babysit                     | `.cursor/skills/pr-babysit/SKILL.md`                                      |
 | split-to-prs                   | `.cursor/skills/split-to-prs/SKILL.md`                                    |
@@ -50,17 +54,18 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 
 | What changed                                                                                                                                                                                                    | Skill to invoke                                                                                                    | Path                                                              |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| Added/removed/updated a route in `*.routes.ts`                                                                                                                                                                  | **route-catalog** + **openapi-route-sync** + **seed-maintainer**                                                   | route-catalog, openapi-route-sync, seed-maintainer                |
+| Changed imports or added TypeScript under `src/` / `tooling/`                                                                                                                                                   | **structure-maintainer** (import path conventions); verify `pnpm test:global` import-paths test passes | structure-maintainer                                              |
+| Added/removed/updated a route in `*.routes.ts`                                                                                                                                                                  | **route-schema-doc-guard** + **route-catalog** + **openapi-multilingual** (tags) + **seed-maintainer**             | route-schema-doc-guard, route-catalog, seed-maintainer                |
 | Created a new domain or sub-domain                                                                                                                                                                              | **domain-generator**                                                                                               | `.cursor/skills/domain-generator/SKILL.md`                        |
 | Added event emission, queue, or worker                                                                                                                                                                          | **workers-events**                                                                                                 | `.cursor/skills/workers-events/SKILL.md`                          |
-| Changed Biome rules, pre-commit hooks, or CI security                                                                                                                                                           | **code-quality-guard**                                                                                             | `.cursor/skills/code-quality-guard/SKILL.md`                      |
+| Changed Biome rules, pre-commit hooks, guard orchestrator, or CI security | **code-quality-guard** + **before-commit-guard** | `.cursor/skills/code-quality-guard/SKILL.md` |
 | Changed `package.json`, `pnpm-lock.yaml`, or dependency versions                                                                                                                                                | **dependency-security**                                                                                            | `.cursor/skills/dependency-security/SKILL.md`                     |
 | Renamed/moved files, folders, or layers                                                                                                                                                                         | **structure-maintainer**                                                                                           | `.cursor/skills/structure-maintainer/SKILL.md`                    |
 | Porting code from Supabase Edge Functions                                                                                                                                                                       | **supabase-porting**                                                                                               | `.cursor/skills/supabase-porting/SKILL.md`                        |
 | Added/changed `migrations/*.sql` or schema needs SQL migration                                                                                                                                                  | **db-migration-maintainer**                                                                                        | `.cursor/skills/db-migration-maintainer/SKILL.md`                 |
 | New/updated feature: routes, validators, serializers, utils, services, workers, or tests                                                                                                                        | **test-generator**                                                                                                 | `.cursor/skills/test-generator/SKILL.md` — unit vs domain pyramid |
 | Added/modified domain tests or test factories only                                                                                                                                                              | **test-generator**                                                                                                 | `.cursor/skills/test-generator/SKILL.md`                          |
-| Moved or added domain/sub-domain tests (`sub-domains/*/ __tests__/unit`, `events/__tests__`, `tenancy/__tests__/factories/`)                                                                                    | **test-generator** (+ **structure-maintainer** if `CLAUDE.md` layout paths change)                                 | test-generator, structure-maintainer                              |
+| Moved or added domain/sub-domain tests (`sub-domains/*/__tests__/unit`, `__tests__/unit/events/`, `tenancy/__tests__/factories/`)                                                                                    | **test-generator** (+ **structure-maintainer** if `CLAUDE.md` layout paths change)                                 | test-generator, structure-maintainer                              |
 | Changed where tests live (test layout: Vitest under `src/`, root `tests/` only for k6)                                                                                                                          | **structure-maintainer**                                                                                           | `.cursor/skills/structure-maintainer/SKILL.md`                    |
 | Added/modified Drizzle schema files                                                                                                                                                                             | **schema-generator** + **sql-design-guard** + **db-migration-maintainer**                                          | schema-generator, sql-design-guard, db-migration-maintainer       |
 | Changed seed scripts or added new seeded data                                                                                                                                                                   | **seed-maintainer**                                                                                                | `.cursor/skills/seed-maintainer/SKILL.md`                         |
@@ -72,6 +77,8 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | Added/edited user-facing message or translation key in errors, validators, services, controllers, constants, or locales                                                                                         | **i18n-message-guard**                                                                                             | `.cursor/skills/i18n-message-guard/SKILL.md`                      |
 | Added/changed OpenAPI locale files or multilingual OpenAPI (src/shared/locales/\*/openapi.json, docs:generate:multilang)                                                                                        | **openapi-multilingual**                                                                                           | `.cursor/skills/openapi-multilingual/SKILL.md`                    |
 | Changed env schema (`src/shared/config/env-schema.ts`) or `.env.example`                                                                                                                                        | **env-schema-add**                                                                                                 | `.cursor/skills/env-schema-add/SKILL.md`                          |
+| Changed `tooling/setup/setup.config.json` or project identity codegen (`tooling/setup/codegen/`)                                                                                                                | Run **`pnpm tool:generate-project-identity`**; ensure **`pnpm tool:generate-project-identity:check`** passes; update **env-schema-add** / deployment runbooks if env workflow changed | env-schema-add, docs-maintainer (if `docs/deployment/**` touched) |
+| Added/changed product slug, Docker/GHCR image names, git branches, or hosted env mapping in `src/`, `.github/workflows/`, or tooling (avoid new `'core-be'` / `core-be-api` literals) | Follow **`.cursor/rules/project-identity.mdc`**; use **`project-identity.constants.ts`**; regenerate if manifest touched | project-identity-sync rule, **openapi-multilingual** if locale openapi.json changes |
 | Changed `.vscode/extensions.json` or `.vscode/settings.json`                                                                                                                                                    | **ide-productivity-guard**                                                                                         | `.cursor/skills/ide-productivity-guard/SKILL.md`                  |
 | Added/renamed/moved a doc under `docs/` (hand-written .md); changed `docs/deployment/ci-cd/branch-protection.md` or `.github/rulesets/*.json`; or changed CI job `name:` fields referenced in branch protection | **docs-maintainer**                                                                                                | `.cursor/skills/docs-maintainer/SKILL.md`                         |
 | User asks to "review docs" or "audit documentation"                                                                                                                                                             | **docs-audit**                                                                                                     | `.cursor/skills/docs-audit/SKILL.md`                              |
@@ -83,6 +90,12 @@ For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global
 | Changed chaos tests, Toxiproxy provision, or chaos Docker profile                                                                                                                                               | **chaos-test-maintainer**                                                                                          | `.cursor/skills/chaos-test-maintainer/SKILL.md`                   |
 | Added/changed `migrations/*.sql` only (no schema file in same change)                                                                                                                                           | **db-migration-maintainer**                                                                                        | `.cursor/skills/db-migration-maintainer/SKILL.md`                 |
 | Changed domain `*.seed.ts` or `src/scripts/seed/**`                                                                                                                                                             | **seed-maintainer**                                                                                                | `.cursor/skills/seed-maintainer/SKILL.md`                         |
+| Added/renamed/removed an exported symbol under `src/`                                                                                                                                                           | **tsdoc-export-guard**                                                                                              | tsdoc-export-guard                                                |
+| Added a Fastify route in `src/**/*.routes.ts` (or the two grandfathered non-routes files)                                                                                                                       | **route-schema-doc-guard** + **route-catalog**                                                                      | route-schema-doc-guard, route-catalog                             |
+| Added a new policy constant under `src/shared/constants/`                                                                                                                                                       | **tsdoc-export-guard** + **system-narrative-maintainer**                                                            | tsdoc-export-guard, system-narrative-maintainer                   |
+| Authored or edited a folder `OVERVIEW.md` under `src/domains/`, `src/infrastructure/`, `src/shared/`, or `src/tests/`                                                                                            | **overview-doc-maintainer**                                                                                         | overview-doc-maintainer                                           |
+| Edited `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, or `src/POLICIES.md`                                                                                                                                | **system-narrative-maintainer**                                                                                     | system-narrative-maintainer                                       |
+| `pnpm tsdoc:check` reports a budget regression                                                                                                                                                                  | **tsdoc-export-guard**                                                                                              | tsdoc-export-guard                                                |
 
 ## Trigger detection rules
 
@@ -91,7 +104,7 @@ After completing any task, scan the changes and invoke matching skills:
 ### Route changes
 
 - **Trigger**: any `*.routes.ts` file was created, modified, or deleted
-- **Action**: `route-catalog` → `openapi-route-sync` → `seed-maintainer` → **test-generator** (e2e for new routes).
+- **Action**: **route-schema-doc-guard** → **openapi-multilingual** (new tags) → **route-catalog** → **seed-maintainer** → **test-generator** (e2e for new routes).
 
 ### Domain/sub-domain scaffolding
 
@@ -106,12 +119,12 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### Code quality and security pipeline
 
-- **Trigger**: changes to `biome.json`, `.biomeignore`, `.husky/pre-commit`, `lint-staged` in `package.json`, `.github/workflows/ci.yml`, `.gitleaks.toml`, `.semgrepignore`
-- **Action**: read and follow `code-quality-guard` checklist
+- **Trigger**: changes to `biome.json`, `.biomeignore`, `.husky/pre-commit`, `src/scripts/tooling/run-pre-commit-guard.ts`, `src/scripts/tooling/run-ci-local-guard.ts`, `tooling/ci/run-named-step.sh`, `lint-staged`, `guard:pre-commit`, `guard:ci-local`, `validate:domain:unit-matrix`, or `ci:local` / `ci:quality` in `package.json`, `.github/workflows/ci.yml`, `.gitleaks.toml`, `.semgrepignore`
+- **Action**: read and follow `code-quality-guard` + `before-commit-guard` checklists
 
 ### Dependency security
 
-- **Trigger**: changes to `package.json` (dependencies, devDependencies, pnpm.overrides) or `pnpm-lock.yaml`
+- **Trigger**: changes to `package.json` (dependencies, devDependencies), `pnpm-workspace.yaml` (overrides, packageExtensions), or `pnpm-lock.yaml`
 - **Action**: read and follow `dependency-security` — keep zero vulnerabilities, prefer safe updates, run audit + validate + test
 
 ### Code quality when implementing (`src/`)
@@ -141,7 +154,7 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### i18n message guard
 
-- **Trigger**: added or edited user-facing message or translation key in `src/shared/errors/**`, `src/shared/middlewares/error-handler.middleware.ts`, `src/domains/**/*.validator.ts`, `src/domains/**/*.service.ts`, `src/domains/**/*.controller.ts`, `src/shared/constants/**`, or `src/shared/locales/**`
+- **Trigger**: added or edited user-facing message or translation key in `src/shared/errors/**`, `src/shared/middlewares/core/error-handler.middleware.ts`, `src/domains/**/*.validator.ts`, `src/domains/**/*.service.ts`, `src/domains/**/*.controller.ts`, `src/shared/constants/**`, or `src/shared/locales/**`
 - **Action**: read and follow `i18n-message-guard` — use translation keys in code, add/update keys in `src/shared/locales/en/` (and other locales), no raw user-facing strings in errors or success payloads
 
 ### Path to production gate
@@ -152,7 +165,7 @@ After completing any task, scan the changes and invoke matching skills:
 ### Before commit guard
 
 - **Trigger**: user runs `git commit` and the pre-commit hook fails; or user asks to fix commit errors, pre-commit failures, or make code commit-ready; or user edits `.husky/pre-commit` or `package.json` lint-staged
-- **Action**: read and follow `before-commit-guard` — run `pnpm validate`, `pnpm validate:domain`, fix the failing step (lint, typecheck, domain structure, gitleaks, conflicts, large files) per the skill
+- **Action**: read and follow `before-commit-guard` — run **`pnpm guard:pre-commit`**, fix the failing labeled step
 
 ### OpenAPI multilingual
 
@@ -191,6 +204,16 @@ After completing any task, scan the changes and invoke matching skills:
 - **Action**: read and follow `setup-infra-maintainer` — run the full checklist so config schema, init defaults, secrets/env-secrets, orchestrator (preview, provision, check, status, rollback), guide, prerequisites, provider module, state, build-env-vars, and `docs/deployment/setup/setup-token-instructions.md` all stay in sync. Then run `pnpm typecheck` and `pnpm setup:infra:preview` to verify.
 - **Follow-up**: if `docs/deployment/setup/setup-token-instructions.md` or other deployment docs were updated, invoke **docs-maintainer** to keep the docs index and cross-links correct.
 
+### In-source docs (TSDoc, OVERVIEW.md, system narratives, route schema)
+
+- **Trigger**: any TypeScript change under `src/` (added / renamed / removed exports, new files, new routes), any change to a hand-written `OVERVIEW.md` or one of the four system narratives (`src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md`), or a `pnpm tsdoc:check` failure.
+- **Action**: route the change to the right authoring skill:
+  - Symbol added/renamed → **tsdoc-export-guard** (write summary; add `@remarks` on service / worker / processor / policy exports)
+  - Route added → **route-schema-doc-guard** (`schema: { summary, description, tags }`)
+  - Folder needs a doc → **overview-doc-maintainer**
+  - Cross-cutting pattern, flow, or policy needs a row → **system-narrative-maintainer**
+- **Hard gate**: `pnpm tsdoc:check` is a budget-driven ratchet — counts of `MISSING_DESCRIPTION` and `MISSING_REMARKS` may decrease but may not increase. After a deliberate batch reduction, refresh the lower budget with `pnpm tsdoc:check --refresh-budget` and commit [`tooling/tsdoc-coverage/budget.json`](../../../tooling/tsdoc-coverage/budget.json).
+
 ## Multi-skill scenarios
 
 Some changes trigger multiple skills. Run them in this order:
@@ -199,25 +222,43 @@ Some changes trigger multiple skills. Run them in this order:
 2. **schema-generator** + **sql-design-guard** (if new tables)
 3. **db-migration-maintainer** (SQL in `migrations/`)
 4. **workers-events** (wire events/queues if needed)
-5. **route-catalog** + **openapi-route-sync** (routes + OpenAPI metadata)
+5. **route-schema-doc-guard** + **openapi-multilingual** (new tags) + **route-catalog** (routes + OpenAPI metadata)
 6. **seed-maintainer** (when routes/APIs changed)
-7. **test-generator** (unit + domain e2e per pyramid)
-8. **code-quality-guard** (if lint/CI config changed)
-9. **structure-maintainer** (sync docs and rules last)
-10. **docs-maintainer** (when docs added/renamed/moved)
+7. **tsdoc-export-guard** (TSDoc on every public export added)
+8. **overview-doc-maintainer** (per new folder; A.1 / A.2 / A.3 / A.4)
+9. **system-narrative-maintainer** (Domains / Patterns / Flows / Policies updates)
+10. **test-generator** (unit + domain e2e per pyramid)
+11. **code-quality-guard** (if lint/CI config changed)
+12. **structure-maintainer** (sync docs and rules last)
+13. **docs-maintainer** (when hand-written `docs/` content changed)
+14. **`pnpm tsdoc:check`** (always last — confirm coverage budget is not regressed; refresh budget if counts decreased)
 
 ## Always-applied rules
 
 | Rule file                    | Scope                                                                                                                                                                   |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `engineering-principles.mdc` | Every session — general engineering behavior (simplicity, quality, security, output style). Does not invoke a skill; complements CLAUDE.md and file-scoped rules below. |
+| `project-identity.mdc`       | Every session — product slug, image names, branch/env mapping via `project-identity.constants.ts`; never hardcode manifest-derived literals in `src/`, workflows, or tooling. |
+
+## Policy rules (glob-scoped, not always-on)
+
+These attach when matching files are open or edited — detail lives in each rule file:
+
+| Rule file | Globs | Purpose |
+| --------- | ----- | ------- |
+| `core-be-src-architecture.mdc` | `src/**/*.ts` | Domain layout, layers, Drizzle, events/workers |
+| `import-paths.mdc` | `src/**/*.ts`, `tooling/**/*.ts` | `@/` / `@tooling/` aliases; no `../` |
+| `full-names-only.mdc` | `src/**/*.ts` | No abbreviations in identifiers |
+| `object-params.mdc` | `src/**/*.ts` | Options objects for 2+ params (repos exempt) |
+| `no-placeholder-files.mdc` | domain DTOs, validators, serializers | No empty placeholder files |
+| `context7-backend.mdc` | `src/**/*.ts` | Context7 for backend library docs |
 
 ## Enforcement layers (no duplicate work)
 
 | Layer          | What runs                                                                                                                                                    | Role                                                                                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | **Agent**      | Skills from this index + file-scoped `.mdc` rules                                                                                                            | Implement + fix touched files; generate artifacts once (`pnpm routes:catalog`, env sync) |
-| **Pre-commit** | `lint-staged`, `typecheck`, `validate:domain`, `routes:catalog:check`, `db:migrate:lint` (when `migrations/*.sql` staged), `tool:sync-env-example`, gitleaks | Local gate (mirrors CI sync checks)                                                      |
+| **Pre-commit** | `lint-staged`, `typecheck`, `validate:domain`, `routes:catalog:check`, `tsdoc:check`, `db:migrate:lint` (when `migrations/*.sql` staged), `tool:sync-env-example`, gitleaks | Local gate (mirrors CI sync checks)                                                      |
 | **CI**         | `pnpm ci:quality` (or individual: validate, validate:domain, routes:catalog:check, db:migrate:lint, tool:sync-env-example, deps:audit)                       | Verifies repo on PR                                                                      |
 
 Do not run the same command in agent and again manually unless fixing a failed hook/CI step.
@@ -228,19 +269,25 @@ The following `.cursor/rules/*.mdc` files auto-invoke skills based on file globs
 
 | Rule file                                 | Triggers on                                                                                                                                                                         | Invokes skill                                                              |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `domain-generator-sync.mdc`               | `src/domains/**/*.container.ts`, `*.routes.ts`, `src/routes.ts`                                                                                                                     | domain-generator + route-catalog + openapi-route-sync (when `*.routes.ts`) |
+| `domain-generator-sync.mdc`               | `src/domains/**/*.container.ts`, `*.routes.ts`, `src/routes.ts`                                                                                                                     | domain-generator + route-schema-doc-guard + route-catalog (when routes)    |
+| `route-catalog-sync.mdc`                  | `src/domains/**/*.routes.ts`                                                                                                                                                        | route-schema-doc-guard + route-catalog + openapi-multilingual (tags)       |
+| `route-schema-doc-guard-sync.mdc`         | `*.routes.ts`, `health.middleware.ts`, `mcp-server.ts`                                                                                                                              | route-schema-doc-guard                                                     |
 | `testing-conventions.mdc`                 | `src/domains/**/__tests__/**`, `src/tests/**`, validators, serializers                                                                                                              | test-generator                                                             |
 | `production-hardening.mdc`                | `src/infrastructure/**`, `src/shared/middlewares/**`, `src/shared/config/**`                                                                                                        | production-hardening-guard                                                 |
 | `workers-events-sync.mdc`                 | `src/domains/**/events/**`, `**/queues/**`, `**/workers/**`, `src/infrastructure/queue/**`, `src/core/events/**`                                                                    | workers-events                                                             |
 | `code-quality-guard-sync.mdc`             | `biome.json`, `.biomeignore`, `.husky/pre-commit`, `.github/workflows/**`, `.gitleaks.toml`, `.semgrepignore`                                                                       | code-quality-guard                                                         |
 | `dependency-security-sync.mdc`            | `package.json`, `pnpm-lock.yaml`                                                                                                                                                    | dependency-security                                                        |
-| `structure-maintainer-sync.mdc`           | `CLAUDE.md`, `README.md`, `.cursor/rules/**/*.mdc`, `.cursor/skills/**/SKILL.md`                                                                                                    | structure-maintainer                                                       |
-| `code-smells-and-best-practices-sync.mdc` | `src/**/*.ts`                                                                                                                                                                       | code-smells-and-best-practices (single quality owner)                      |
+| `structure-maintainer-sync.mdc`           | `AGENTS.md`, `CLAUDE.md`, `README.md`, `.cursor/rules/**`, `.cursor/skills/**`, `.cursor/agents/**`                                                                                 | structure-maintainer                                                       |
+| `code-smells-and-best-practices-sync.mdc` | `src/**/*.ts`                                                                                                                                                                       | code-smells-and-best-practices                                             |
+| `tsdoc-export-guard-sync.mdc`             | `src/**/*.ts`                                                                                                                                                                       | tsdoc-export-guard (new/changed public exports)                            |
+| `overview-doc-maintainer-sync.mdc`        | `src/**/OVERVIEW.md`                                                                                                                                                                | overview-doc-maintainer                                                    |
+| `system-narrative-maintainer-sync.mdc`    | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md`                                                                                                             | system-narrative-maintainer                                                |
 | `i18n-message-guard-sync.mdc`             | `src/shared/errors/**`, `error-handler.middleware.ts`, `src/domains/**/*.validator.ts`, `**/*.service.ts`, `**/*.controller.ts`, `src/shared/constants/**`, `src/shared/locales/**` | i18n-message-guard                                                         |
 | `new-requirement-intake.mdc`              | `docs/getting-started/requirement-intake.md`                                                                                                                                        | skill-index + intake doc (run skills per requirement type)                 |
 | `path-to-production-gate.mdc`             | `docs/deployment/runbooks/runbook-dev-to-production.md`                                                                                                                             | path-to-production-gate (full review, plan, user review before production) |
 | `before-commit-guard-sync.mdc`            | `.husky/pre-commit`, `package.json`; or user reports failed commit / fix pre-commit                                                                                                 | before-commit-guard (guard runs on git commit; fix failing steps)          |
 | `env-schema-add-sync.mdc`                 | `src/shared/config/env-schema.ts`, `.env.example`                                                                                                                                   | env-schema-add                                                             |
+| `project-identity-sync.mdc`               | manifest, identity codegen, workflows, constants, locale openapi                                                                                                                    | regenerate identity artifacts                                              |
 | `ide-productivity-guard-sync.mdc`         | `.vscode/extensions.json`, `.vscode/settings.json`                                                                                                                                  | ide-productivity-guard                                                     |
 | `docs-maintainer-sync.mdc`                | `docs/**/*.md` (hand-written; excludes generated openapi/postman/routes)                                                                                                            | docs-maintainer                                                            |
 | `sql-design-guard-sync.mdc`               | `src/domains/**/*.schema.ts`                                                                                                                                                        | sql-design-guard                                                           |
@@ -253,13 +300,35 @@ The following `.cursor/rules/*.mdc` files auto-invoke skills based on file globs
 
 **supabase-porting** = manual only (Supabase Edge Functions → core-be).
 
+**openapi-route-sync** = legacy (OpenAPI tag-locale workflows only); use **route-schema-doc-guard** for route `schema` blocks — do not add new references to openapi-route-sync.
+
 **pr-babysit**, **split-to-prs**, **ci-investigator**, **docs-audit** = user-requested (no file glob rule).
 
 **cursor-global-skills** = reference only (Cursor built-in skills; not for domain work).
 
+## Custom subagents
+
+Project-defined subagents in [`.cursor/agents/`](../../agents/) run in isolation (read-only) for heavy diagnostics:
+
+| Subagent | File | Use when |
+| -------- | ---- | -------- |
+| **production-reviewer** | `.cursor/agents/production-reviewer.md` | Pre-release / deploy sign-off — full readiness plan |
+| **verifier** | `.cursor/agents/verifier.md` | After claiming work complete — scoped validate/tests |
+| **ci-investigator** | `.cursor/agents/ci-investigator.md` | One failing CI check — root cause without log noise |
+
+To add a subagent, use global **create-subagent** (`~/.cursor/skills-cursor/`).
+
+## Related process docs
+
+| Doc | When to use |
+| --- | ----------- |
+| [requirement-intake.md](../../../docs/getting-started/requirement-intake.md) | New feature/API work — defaults + one-shot Plan before coding |
+| [pr-review.md](../../../docs/process/pr-review.md) | Reviewing or babysitting a PR (human + agent rubric) |
+| [branch-protection.md](../../../docs/deployment/ci-cd/branch-protection.md) | Exact required CI check names for merge |
+
 ## New requirement workflow
 
-When the user gives a **new requirement**, read **`docs/getting-started/requirement-intake.md`**, identify the requirement type, then run the **Skills to run** in order for that type. The rule **new-requirement-intake.mdc** triggers when the intake doc is referenced.
+When the user gives a **new requirement**, read **`docs/getting-started/requirement-intake.md`**, identify the requirement type, post a **Plan** once for **go**, then run the **Skills to run** in order for that type. The rule **new-requirement-intake.mdc** triggers when the intake doc is referenced.
 
 ## Maintaining this index
 

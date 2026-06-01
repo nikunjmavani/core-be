@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { lookup } from 'node:dns/promises';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
@@ -13,7 +14,18 @@ import {
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import type { FastifyInstance } from 'fastify';
 
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(),
+}));
+
 const WEBHOOK_PERMISSIONS = ['webhook:read', 'webhook:manage'];
+const mockedLookup = vi.mocked(lookup);
+
+function mockWebhookDnsLookup(): void {
+  mockedLookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }] as unknown as Awaited<
+    ReturnType<typeof lookup>
+  >);
+}
 
 describe('Notify e2e: webhook delivery', () => {
   let app: FastifyInstance;
@@ -28,6 +40,8 @@ describe('Notify e2e: webhook delivery', () => {
   });
 
   beforeEach(async () => {
+    mockedLookup.mockReset();
+    mockWebhookDnsLookup();
     await cleanupDatabase();
     await seedPermissions(WEBHOOK_PERMISSIONS);
   });

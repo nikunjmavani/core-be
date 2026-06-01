@@ -23,7 +23,7 @@ Create these in **Sentry → Alerts → Create Alert** (issue or metric alert). 
 | **Unhandled startup** | Issues | Message/tag `server_startup` or `worker_startup` | Email (page on-call manually if needed) |
 | **DLQ growth signal** | Issues | `captureMessage` from DLQ depth worker at `warning` or `error` | Email |
 | **Idempotency cardinality critical** | Issues | Message contains `idempotency cardinality` and level `error` | Email |
-| **P95 transaction regression** | Metric | `transaction.duration` p95 > 2s for 10m, exclude `/health/*` | Email |
+| **P95 transaction regression** | Metric | `transaction.duration` p95 > 2s for 10m, exclude `/livez` and `/readyz` | Email |
 | **DB pool exhaustion** | Issues | Message `database.pool.exhaustion.high` or `database.pool.exhaustion.critical` | Email + Slack |
 
 Pool exhaustion alerts are emitted by the API process when org-scoped RLS checkouts or cluster `pg_stat_activity` counts exceed configured ratios for consecutive polls (`DB_POOL_*` env vars). This path is **independent** of `METRICS_ENABLED`.
@@ -32,7 +32,7 @@ Pool exhaustion alerts are emitted by the API process when org-scoped RLS checko
 
 ## What we do not alert on in Sentry
 
-- `/health`, `/health`, `/health`, `/health` transactions (dropped in `beforeSendTransaction`).
+- `/livez` and `/readyz` transactions (dropped in `beforeSendTransaction`).
 - Expected `401` / `403` auth noise (review periodically; add inbound filters if noisy).
 - Stripe webhook signature failures from scanners (use Sentry inbound filters on user-agent or path if needed).
 

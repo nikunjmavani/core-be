@@ -19,6 +19,12 @@ import type { FastifyInstance } from 'fastify';
 
 const TENANCY_PERMISSION_CODES = Object.values(TENANCY_PERMISSIONS);
 
+/** Permissions needed to create API keys whose scopes include `api-key:read`. */
+const API_KEY_MANAGER_WITH_READ_GRANT = [
+  TENANCY_PERMISSIONS.API_KEY_MANAGE,
+  TENANCY_PERMISSIONS.API_KEY_READ,
+];
+
 describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
   let app: FastifyInstance;
 
@@ -273,9 +279,9 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should return 403 without api key manage permission', async () => {
-      const managerContext = await createAuthorizedOrganizationContext([
-        TENANCY_PERMISSIONS.API_KEY_MANAGE,
-      ]);
+      const managerContext = await createAuthorizedOrganizationContext(
+        API_KEY_MANAGER_WITH_READ_GRANT,
+      );
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
         url: apiKeysCollectionPath(managerContext.organization.public_id),
@@ -310,9 +316,9 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should return 400 when status value is invalid', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
-        TENANCY_PERMISSIONS.API_KEY_MANAGE,
-      ]);
+      const { organization, token } = await createAuthorizedOrganizationContext(
+        API_KEY_MANAGER_WITH_READ_GRANT,
+      );
 
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
@@ -334,9 +340,9 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should update api key with manage permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
-        TENANCY_PERMISSIONS.API_KEY_MANAGE,
-      ]);
+      const { organization, token } = await createAuthorizedOrganizationContext(
+        API_KEY_MANAGER_WITH_READ_GRANT,
+      );
 
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
@@ -371,9 +377,9 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should return 403 without api key manage permission', async () => {
-      const managerContext = await createAuthorizedOrganizationContext([
-        TENANCY_PERMISSIONS.API_KEY_MANAGE,
-      ]);
+      const managerContext = await createAuthorizedOrganizationContext(
+        API_KEY_MANAGER_WITH_READ_GRANT,
+      );
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
         url: apiKeysCollectionPath(managerContext.organization.public_id),
@@ -465,9 +471,9 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should return 403 without api key manage permission', async () => {
-      const managerContext = await createAuthorizedOrganizationContext([
-        TENANCY_PERMISSIONS.API_KEY_MANAGE,
-      ]);
+      const managerContext = await createAuthorizedOrganizationContext(
+        API_KEY_MANAGER_WITH_READ_GRANT,
+      );
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
         url: apiKeysCollectionPath(managerContext.organization.public_id),

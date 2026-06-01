@@ -9,6 +9,12 @@ export const DEFAULT_BATCH_DELETE_ROW_COUNT = 5_000;
 /** Default cap for unscoped repository list methods (prevents OOM on hot paths). */
 export const DEFAULT_REPOSITORY_LIST_LIMIT = 500;
 
+/** Bounded stale-request scan size for each commit-dispatch recovery pass. */
+export const DEFAULT_COMMIT_DISPATCH_RECOVERY_BATCH_SIZE = 50;
+
+/** Poll interval (milliseconds) for permission-cache lock waiters during stampede control. */
+export const PERMISSION_CACHE_STAMPEDE_POLL_MS = 50;
+
 /** Maximum rows per table included in GDPR user data export. */
 export const GDPR_EXPORT_MAX_ROWS_PER_TABLE = 1_000;
 

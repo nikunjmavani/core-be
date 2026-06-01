@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   findDuplicateLiteralViolations,
   loadCanonicalConstantValues,
-} from '../code/constants-centralization.util.js';
+} from '@/scripts/validators/code/constants-centralization.util.js';
 
 describe('constants-centralization.util', () => {
   it('loads canonical numeric values from shared constants', () => {

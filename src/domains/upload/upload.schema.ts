@@ -15,6 +15,14 @@ import { uploadSchema } from '@/infrastructure/database/pg-schemas.js';
 import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 
+/**
+ * Drizzle definition for `upload.uploads`. Stores upload metadata + lifecycle
+ * status (`PENDING` → `UPLOADED` or `FAILED`) referenced by S3 object keys.
+ * Two permissive RLS policies are layered: tenant-isolation by
+ * `app.current_organization_id` for org-scoped rows, and an owner-access
+ * policy via `app.current_user_id` for user-scoped (NULL-org) uploads such
+ * as avatars.
+ */
 export const uploads = uploadSchema
   .table(
     'uploads',
@@ -68,13 +76,14 @@ export const uploads = uploadSchema
           OR current_setting('app.global_retention_cleanup', true) = 'true'`,
       }),
       // Owner access for user-scoped (NULL-org) uploads such as avatars. Permissive → OR'd with
-      // the tenant-isolation policy, so org-scoped access is unchanged; inert until a context
-      // sets app.current_user_id (withUserDatabaseContext).
+      // the tenant-isolation policy. Org-scoped rows (organization_id IS NOT NULL) are excluded
+      // so a former uploader cannot retain access after losing org permissions.
       pgPolicy('uploads_owner_access', {
         as: 'permissive',
         for: 'all',
         to: 'public',
-        using: sql`${table.user_id} = (
+        using: sql`${table.organization_id} IS NULL
+          AND ${table.user_id} = (
             SELECT id FROM auth.users
             WHERE public_id = current_setting('app.current_user_id', true)
               AND deleted_at IS NULL

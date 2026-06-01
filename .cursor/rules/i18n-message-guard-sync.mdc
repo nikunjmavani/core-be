@@ -1,6 +1,6 @@
 ---
 description: When adding or editing user-facing messages or translation keys in errors, validators, services, controllers, constants, or locales, run the i18n-message-guard skill so messages use keys and locale files stay in sync.
-globs: src/shared/errors/**/*.ts, src/shared/middlewares/error-handler.middleware.ts, src/domains/**/*.validator.ts, src/domains/**/*.service.ts, src/domains/**/*.controller.ts, src/shared/constants/**/*.ts, src/shared/locales/**/*.json
+globs: src/shared/errors/**/*.ts, src/shared/middlewares/core/error-handler.middleware.ts, src/domains/**/*.validator.ts, src/domains/**/*.service.ts, src/domains/**/*.controller.ts, src/shared/constants/**/*.ts, src/shared/locales/**/*.json
 alwaysApply: false
 ---
 

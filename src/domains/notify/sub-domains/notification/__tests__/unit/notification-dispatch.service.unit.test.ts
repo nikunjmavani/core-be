@@ -3,7 +3,9 @@ import { enterOnCommitScope, eventBus } from '@/core/events/event-bus.js';
 import { createNotificationDispatch } from '@/domains/notify/sub-domains/notification/notification-dispatch.service.js';
 import type { NotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 
-const enqueueNotificationMock = vi.fn().mockResolvedValue(undefined);
+const { enqueueNotificationMock } = vi.hoisted(() => ({
+  enqueueNotificationMock: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('@/domains/notify/sub-domains/notification/queues/notification.queue.js', () => ({
   enqueueNotification: (...arguments_: unknown[]) => enqueueNotificationMock(...arguments_),
@@ -13,6 +15,7 @@ describe('NotificationDispatch', () => {
   const notificationRepository = {
     create: vi.fn().mockResolvedValue(42),
     findOrganizationPublicIdByOrganizationId: vi.fn().mockResolvedValue('org_public'),
+    deleteByInternalId: vi.fn().mockResolvedValue(undefined),
   } as unknown as NotificationRepository;
 
   const dispatch = createNotificationDispatch(notificationRepository);

@@ -7,7 +7,7 @@ import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retent
 import type { AuditService } from '@/domains/audit/audit.service.js';
 import { SESSION_CLEANUP_QUEUE_NAME } from '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.constants.js';
 import { NOTIFICATION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
-import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/queues/webhook-delivery.queue.js';
+import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { listDeadLetterQueueNames } from '@/infrastructure/queue/dlq/dead-letter.js';
 import { MAIL_QUEUE_NAME } from '@/infrastructure/mail/queues/mail.queue.js';
@@ -54,6 +54,12 @@ const DASHBOARD_PREFIX = '/admin/queues';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+/**
+ * Structured representation of a write-side Bull Board API call (pause, resume, retry,
+ * clean, …) destined for `audit.logs`. Produced by `parseQueueDashboardMutation` and
+ * consumed by the dashboard's `onResponse` hook so every SUPER_ADMIN action against the
+ * queue dashboard leaves a tamper-evident trail.
+ */
 export interface QueueDashboardMutationAudit {
   action: string;
   queueName?: string;
@@ -190,6 +196,11 @@ export function parseQueueDashboardMutation(
   return { action: 'queue.unknown' };
 }
 
+/**
+ * DI surface for {@link registerQueueDashboard}. The `auditService` is invoked from the
+ * dashboard's `onResponse` hook to persist {@link QueueDashboardMutationAudit} entries
+ * whenever a mutating Bull Board call returns a 2xx response.
+ */
 export interface RegisterQueueDashboardDeps {
   auditService: AuditService;
 }
@@ -237,7 +248,7 @@ export async function registerQueueDashboard(
 
           const userAgent = request.headers['user-agent'] ?? null;
 
-          const actorUserPublicId = request.auth?.userId;
+          const actorUserPublicId = request.auth?.kind === 'user' ? request.auth.userId : undefined;
           if (!actorUserPublicId) return;
 
           await deps.auditService.record({

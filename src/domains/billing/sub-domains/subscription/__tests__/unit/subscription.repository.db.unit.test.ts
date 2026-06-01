@@ -146,4 +146,33 @@ describe('SubscriptionRepository (database)', () => {
     );
     expect(staleCancel).toBeNull();
   });
+
+  it('syncFromStripeProviderSubscription ignores same-second stale updates after cancel', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+    const providerSubscriptionId = `sub_same_second_${Date.now()}`;
+    const seeded = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      providerSubscriptionId,
+    });
+
+    const eventAt = new Date('2026-05-15T12:00:00.000Z');
+    const canceled = await repository.markCanceledByProviderSubscriptionId(
+      providerSubscriptionId,
+      eventAt,
+    );
+    expect(canceled?.status).toBe('CANCELED');
+
+    const resurrectAttempt = await repository.syncFromStripeProviderSubscription(
+      providerSubscriptionId,
+      { status: 'ACTIVE' },
+      eventAt,
+    );
+    expect(resurrectAttempt).toBeNull();
+
+    const refetched = await repository.findByPublicId(seeded.public_id, organization.id);
+    expect(refetched?.status).toBe('CANCELED');
+  });
 });

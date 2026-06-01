@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { resetEnvCacheForTests } from '@/shared/config/env.config.js';
 import { UnauthorizedError } from '@/shared/errors/index.js';
-import { captchaPreHandler } from '@/shared/middlewares/captcha.middleware.js';
+import { captchaPreHandler } from '@/shared/middlewares/security/captcha.middleware.js';
 
 const verifyTurnstileTokenMock = vi.hoisted(() => vi.fn());
 
@@ -31,19 +31,7 @@ describe('captchaPreHandler', () => {
     delete process.env.CAPTCHA_PROVIDER;
     delete process.env.CAPTCHA_SECRET;
     delete process.env.CAPTCHA_BYPASS_HEADER;
-    delete process.env.CAPTCHA_DISABLED_ACK;
     resetEnvCacheForTests();
-  });
-
-  it('fails open when CAPTCHA is disabled but explicitly acknowledged', async () => {
-    // Simulate the production posture without flipping NODE_ENV (which would require the full
-    // production env): force fail-open off, then rely on the acknowledgement flag.
-    process.env.CAPTCHA_PROVIDER = 'disabled';
-    process.env.CAPTCHA_DISABLED_ACK = 'true';
-    resetEnvCacheForTests();
-
-    await expect(captchaPreHandler(buildRequest(), {} as FastifyReply)).resolves.toBeUndefined();
-    expect(verifyTurnstileTokenMock).not.toHaveBeenCalled();
   });
 
   it('skips verification when CAPTCHA is disabled in test', async () => {

@@ -7,7 +7,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestWebhook } from '@/tests/factories/webhook.factory.js';
-import { deleteInBatchesByCondition } from '@/infrastructure/database/batch-delete.util.js';
+import { deleteInBatchesByCondition } from '@/infrastructure/database/utils/batch-delete.util.js';
 import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
 import { webhooks } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import { grantCoreBeAppRoleForTests } from '@/tests/helpers/rls-matrix.helper.js';
@@ -41,7 +41,7 @@ describe('Security: retention cleanup RLS', () => {
   it('hard-deletes tombstoned webhooks under core_be_app when global_retention_cleanup is set', async () => {
     if (!migrationApplied) {
       console.warn(
-        'Skipping retention RLS test: apply migrations/20260530000001_global_retention_cleanup_rls.sql',
+        'Skipping retention RLS test: apply migrations/00000000000000_init.sql (defines the global_retention_cleanup RLS policies)',
       );
       return;
     }

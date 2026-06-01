@@ -8,7 +8,7 @@
  *   - Non-TTY or CI=true → skip the prompt, print active user + repository.
  *   - Missing / failed gh auth → exit non-zero with a hint to run `gh auth login`.
  *
- * Importable from any GitHub-touching script (github-init, github-sync, etc.).
+ * Importable from any GitHub-touching script (github/init.ts, github/sync.ts, etc.).
  */
 
 import { spawnSync } from 'node:child_process';

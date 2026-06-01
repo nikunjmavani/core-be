@@ -15,6 +15,12 @@ import { users } from '@/domains/user/user.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 
+/**
+ * Drizzle table for `billing.subscriptions` — one row per organization with the
+ * current billing state (status, period, Stripe identifiers, last-event
+ * watermark). RLS policy `subscriptions_tenant_isolation` restricts access to
+ * the organization GUC unless the global retention cleanup flag is set.
+ */
 export const subscriptions = billingSchema
   .table(
     'subscriptions',
@@ -51,7 +57,12 @@ export const subscriptions = billingSchema
     },
     (table) => [
       uniqueIndex('idx_subscriptions_public_id').on(table.public_id),
-      uniqueIndex('idx_subscriptions_org').on(table.organization_id),
+      // Partial unique index: an organization may hold at most one non-terminal
+      // subscription. CANCELED rows are excluded so re-subscription after cancel
+      // does not collide (Issue #10).
+      uniqueIndex('idx_subscriptions_org')
+        .on(table.organization_id)
+        .where(sql`${table.status} <> 'CANCELED'`),
       index('idx_subscriptions_org_status').on(table.organization_id, table.status),
       index('idx_subscriptions_plan').on(table.plan_id),
       index('idx_subscriptions_status_period').on(table.status, table.current_period_end),
@@ -60,7 +71,7 @@ export const subscriptions = billingSchema
         .where(sql`${table.provider_subscription_id} IS NOT NULL`),
       check(
         'chk_subs_status',
-        sql`${table.status} IN ('TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELED', 'PAUSED')`,
+        sql`${table.status} IN ('TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELED', 'PAUSED', 'UNPAID', 'INCOMPLETE', 'INCOMPLETE_EXPIRED')`,
       ),
       check('chk_subs_cycle', sql`${table.billing_cycle} IN ('MONTHLY', 'YEARLY')`),
       check('chk_subs_period', sql`${table.current_period_end} > ${table.current_period_start}`),

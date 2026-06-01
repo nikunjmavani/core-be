@@ -4,6 +4,7 @@ import { UserRepository } from '@/domains/user/user.repository.js';
 const mockReturning = vi.fn().mockResolvedValue([]);
 const mockOffset = vi.fn().mockResolvedValue([]);
 const mockLimit = vi.fn().mockResolvedValue([]);
+const mockExecute = vi.fn().mockResolvedValue([]);
 const mockOrderBy = vi.fn(() => ({ limit: mockLimit, offset: mockOffset }));
 const mockWhere = vi.fn(() => ({
   limit: mockLimit,
@@ -18,19 +19,12 @@ const mockUpdate = vi.fn(() => ({ set: mockSet }));
 const mockValues = vi.fn(() => ({ returning: mockReturning }));
 const mockInsert = vi.fn(() => ({ values: mockValues }));
 
-vi.mock('@/shared/utils/infrastructure/postgres-error.util.js', () => ({
-  runInsertWithPublicIdentifierRetry: async (operation: () => Promise<unknown>) => operation(),
-}));
-
-vi.mock('@/shared/utils/identity/public-id.util.js', () => ({
-  generatePublicId: () => 'user_public_test',
-}));
-
 vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => ({
   getRequestDatabase: () => ({
     select: mockSelect,
     insert: mockInsert,
     update: mockUpdate,
+    execute: mockExecute,
   }),
 }));
 
@@ -42,6 +36,7 @@ describe('UserRepository', () => {
     mockReturning.mockReset();
     mockLimit.mockReset();
     mockOffset.mockReset();
+    mockExecute.mockReset();
   });
 
   it('findByPublicId returns null when missing', async () => {
@@ -49,14 +44,34 @@ describe('UserRepository', () => {
     expect(await repository.findByPublicId('missing')).toBeNull();
   });
 
-  it('findByEmail returns null when missing', async () => {
-    mockLimit.mockResolvedValue([]);
+  it('findByEmail resolves via the SECURITY DEFINER resolver (null when missing, bigint coerced)', async () => {
+    mockExecute.mockResolvedValueOnce([]);
     expect(await repository.findByEmail('missing@example.com')).toBeNull();
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+
+    mockExecute.mockResolvedValueOnce([{ id: '7', public_id: 'usr_pub', email: 'a@example.com' }]);
+    const resolved = await repository.findByEmail('a@example.com');
+    expect(resolved).toMatchObject({ id: 7, public_id: 'usr_pub' });
   });
 
-  it('findById returns null when missing', async () => {
-    mockLimit.mockResolvedValue([]);
+  it('findById resolves via the SECURITY DEFINER resolver (null when missing, bigint coerced)', async () => {
+    mockExecute.mockResolvedValueOnce([]);
     expect(await repository.findById(999)).toBeNull();
+
+    mockExecute.mockResolvedValueOnce([{ id: '12', public_id: 'usr_pub' }]);
+    const resolved = await repository.findById(12);
+    expect(resolved).toMatchObject({ id: 12, public_id: 'usr_pub' });
+  });
+
+  it('insertOAuthUser inserts with the supplied public_id and returns the row', async () => {
+    const created = { id: 3, public_id: 'usr_oauth', email: 'oauth@example.com' };
+    mockReturning.mockResolvedValueOnce([created]);
+    const result = await repository.insertOAuthUser('usr_oauth', {
+      email: 'oauth@example.com',
+      is_email_verified: true,
+    });
+    expect(result).toEqual(created);
+    expect(mockInsert).toHaveBeenCalled();
   });
 
   it('updatePassword returns null when user missing', async () => {

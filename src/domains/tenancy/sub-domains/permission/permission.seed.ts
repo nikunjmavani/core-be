@@ -8,6 +8,12 @@
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { permissions } from './permission.schema.js';
 
+/**
+ * Canonical list of system permission codes seeded into `tenancy.permissions`.
+ * Codes must match the per-domain permission constants (e.g.
+ * {@link TENANCY_PERMISSIONS}, `BILLING_PERMISSIONS`) and `docs/routes.txt`,
+ * since route guards compare against these exact strings.
+ */
 export const SYSTEM_PERMISSIONS = [
   // Tenancy
   { code: 'organization:read', name: 'View Organization', category: 'tenancy' },
@@ -42,6 +48,12 @@ export const SYSTEM_PERMISSIONS = [
   { code: 'upload:manage', name: 'Manage Uploads', category: 'upload' },
 ] as const;
 
+/**
+ * Idempotently inserts the system permission catalog into
+ * `tenancy.permissions`. `ON CONFLICT DO NOTHING` makes the seed safe to
+ * re-run; callers may pass a custom code list for tests, otherwise
+ * {@link SYSTEM_PERMISSIONS} is used.
+ */
 export async function seedPermissions(
   codes: Array<{
     code: string;

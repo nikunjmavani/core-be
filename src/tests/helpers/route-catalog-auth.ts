@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export type RouteCatalogAccess = 'AUTH' | 'ROLE' | 'PERM';
+export type RouteCatalogAccess = 'AUTH' | 'ROLE' | 'PERM' | 'TOKEN';
 
 export type ProtectedRouteFromCatalog = {
   method: 'get' | 'post' | 'patch' | 'put' | 'delete';
@@ -11,7 +11,8 @@ export type ProtectedRouteFromCatalog = {
 
 const ROUTE_CATALOG_PATH = join(process.cwd(), 'docs', 'routes.txt');
 
-const ROUTE_LINE_PATTERN = /^\s+(GET|POST|PATCH|PUT|DELETE)\s+(\S+)\s+(PUBLIC|AUTH|ROLE:|PERM:)/;
+const ROUTE_LINE_PATTERN =
+  /^\s+(GET|POST|PATCH|PUT|DELETE)\s+(\S+)\s+(PUBLIC|AUTH|ROLE:|PERM:|TOKEN:)/;
 
 /** Placeholder for path params (21-char public_id style). */
 const PATH_PARAM_PLACEHOLDER = '000000000000000000000';
@@ -45,7 +46,13 @@ export function loadProtectedRoutesFromCatalog(
 
     const method = methodRaw.toLowerCase() as ProtectedRouteFromCatalog['method'];
     const access: RouteCatalogAccess =
-      accessToken === 'AUTH' ? 'AUTH' : accessToken.startsWith('ROLE') ? 'ROLE' : 'PERM';
+      accessToken === 'AUTH'
+        ? 'AUTH'
+        : accessToken.startsWith('ROLE')
+          ? 'ROLE'
+          : accessToken.startsWith('TOKEN')
+            ? 'TOKEN'
+            : 'PERM';
 
     const path = materializeRouteCatalogPath(rawPath);
     const key = `${method}:${path}`;

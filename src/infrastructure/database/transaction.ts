@@ -1,6 +1,7 @@
 import { sql as drizzleSql } from 'drizzle-orm';
 import { database } from '@/infrastructure/database/connection.js';
 
+/** Options passed to {@link withTransaction} — per-transaction statement timeout and isolation level. */
 export interface TransactionOptions {
   /** Transaction timeout in milliseconds. Default: 10_000 (10 seconds). */
   timeoutMs?: number;

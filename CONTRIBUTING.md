@@ -1,15 +1,17 @@
 # Contributing to core-be
 
-Thank you for improving this backend. This document stays short—use **[CLAUDE.md](CLAUDE.md)** for architecture and **[AGENTS.md](AGENTS.md)** for the full agent and CI checklist.
+Thank you for improving this backend. This document is intentionally short—use **[CLAUDE.md](CLAUDE.md)** for architecture and **[AGENTS.md](AGENTS.md)** for the full agent and CI checklist.
 
 ## Prerequisites
 
 - **Node.js** — version in [`.nvmrc`](.nvmrc) (project expects Node 24 per `package.json` `engines`)
 - **pnpm** — package manager used by this repo
 - **Docker** — Postgres and Redis (see [`docker-compose.yml`](docker-compose.yml))
-- **Environment** — new hosted env: add `NODE_ENV` in the schema and an entry in `.github/sync.config.json`, then `pnpm github:sync`. Fill in real values (defaults to `NODE_ENV=development` → `.env.development`). Push to GitHub: `pnpm github:sync <environment>`.
+- **Environment** — new hosted env: add to `tooling/setup/setup.config.json` and `NODE_ENV` in the schema, then `pnpm tool:generate-project-identity` and `pnpm github:sync`. Fill in real values (defaults to `NODE_ENV=development` → `.env.development`). Push to GitHub: `pnpm github:sync <environment>`.
 
 ## Local setup
+
+One command (Docker + env + migrate + dev): `pnpm setup:local`. Full clone-to-running guide: **[SETUP.md](SETUP.md)**. Manual steps:
 
 ```bash
 pnpm install
@@ -40,7 +42,7 @@ Committed files at the project root (not directories) group as follows:
 
 | Category           | Examples                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------- |
-| Package / Node     | `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, `.nvmrc`, `.node-version`, `.npmrc`             |
+| Package / Node     | `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.json`, `.nvmrc`, `.node-version` |
 | Quality            | `biome.json`, `.biomeignore`, `.editorconfig`, `tooling/vitest/`                                   |
 | Data               | `drizzle.config.ts`, `migrations/`                                                                 |
 | Containers         | `Dockerfile`, `Dockerfile.worker`, `Dockerfile.agent`, `docker-bake.hcl`, `docker-compose.yml`     |
@@ -75,7 +77,7 @@ Commits should follow **[Conventional Commits](https://www.conventionalcommits.o
 
 | Hook | Script | What runs |
 | --- | --- | --- |
-| **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | `lint-staged` (Biome on `src/**/*.ts` and `tooling/**/*.{ts,mjs}`; Biome format on `*.{json,yaml,yml}`; markdownlint on `*.md`), `typecheck`, `validate:domain:strict`, route catalog / OpenAPI sync when relevant files change, env-example sync, optional Gitleaks on staged files, conflict-marker and large-file guards |
+| **pre-commit** | [`.husky/pre-commit`](.husky/pre-commit) | **`pnpm guard:pre-commit`** — labeled steps (list with `pnpm guard:pre-commit:list`): lint-staged, typecheck, validate:domain:strict, validate:scripts-layout, route catalog, optional structure tree / OpenAPI / migration checks, tsdoc, project identity, env-example sync, gitleaks, conflict-marker and large-file guards. On failure, read the **`✗ FAILED at step N/M:`** line. |
 | **commit-msg** | [`.husky/commit-msg`](.husky/commit-msg) | [Conventional Commits](https://www.conventionalcommits.org/) via commitlint |
 | **pre-push** | [`.husky/pre-push`](.husky/pre-push) | `typecheck`, `build`, `build:check`, `test:unit` |
 
@@ -107,7 +109,9 @@ Details: **[CLAUDE.md](CLAUDE.md)** (Testing section).
 
 ## Before you open a pull request
 
-Run the gate described in **[AGENTS.md](AGENTS.md)** (`pnpm ci:local`, or `pnpm ci:quality` for static checks only). Adjust when your change touches migrations or environment schema only.
+**Authors:** run the gate described in **[AGENTS.md](AGENTS.md)** (`pnpm ci:local`, or `pnpm ci:quality` for static checks only). Adjust when your change touches migrations or environment schema only. Fill in [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) (Summary, Test plan, Reviewer notes).
+
+**Reviewers:** use **[docs/process/pr-review.md](docs/process/pr-review.md)** — shared human and agent checklist (architecture, security, migrations, routes, tests, doc-sync map). Required CI check names: **[docs/deployment/ci-cd/branch-protection.md](docs/deployment/ci-cd/branch-protection.md)**.
 
 ## User-facing strings
 
@@ -120,7 +124,7 @@ Errors and API messages must use i18n keys—see **[`.cursor/skills/i18n-message
 
 ## GitHub repository setup (maintainers)
 
-**Deploy secrets (per environment: `development`, `production`):** besides `RAILWAY_SERVICE_ID` (API), set `RAILWAY_WORKER_SERVICE_ID` for the BullMQ worker service and `DATABASE_MIGRATION_URL` when migrations use an elevated DB user. CD runs `pnpm db:migrate` before `railway redeploy --image`.
+**Deploy secrets (per environment: `development`, `production`):** besides `RAILWAY_SERVICE_ID` (API), set `RAILWAY_WORKER_SERVICE_ID` for the BullMQ worker service and `DATABASE_MIGRATION_URL` when migrations use an elevated DB user. CD runs `pnpm db:migrate` before `railway redeploy --service ... --yes`.
 
 Completing this once avoids broken defaults for contributors:
 

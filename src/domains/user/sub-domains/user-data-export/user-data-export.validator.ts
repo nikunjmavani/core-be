@@ -3,6 +3,11 @@ import { exportIdParamDto } from '@/domains/user/sub-domains/user-data-export/us
 
 const ERROR_KEY_INVALID_INPUT = 'errors:invalidInput';
 
+/**
+ * Validate the `:exportId` path param for `GET /users/me/data-export/:exportId`.
+ * Throws {@link ValidationError} (`errors:invalidInput`) with field-level issues when the id is
+ * missing or longer than the public-id allowance.
+ */
 export function validateExportIdParam(data: unknown): { exportId: string } {
   const parsed = exportIdParamDto.safeParse(data);
   if (!parsed.success) {

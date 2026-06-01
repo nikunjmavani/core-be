@@ -75,7 +75,7 @@ describe('Stripe webhook ingestion contract (`constructStripeWebhookEvent` + Str
       createSubscription: async () => ({}),
       cancelSubscriptionAtPeriodEnd: async () => {},
       resumeSubscription: async () => {},
-      updateSubscriptionPrice: async () => false,
+      updateSubscriptionPrice: async () => {},
       compensateFailedCreate: async () => {},
       compensatePlanChange: async () => {},
     },

@@ -73,7 +73,7 @@ export const apiKeyExample = {
 
 export const apiKeyCreatedExample = {
   ...apiKeyExample,
-  key: 'sk_live_abc123def456ghi789jkl012mno345pqr678',
+  key: 'sk_live_abc1...',
 };
 
 // ── Organization Notification Policy ──

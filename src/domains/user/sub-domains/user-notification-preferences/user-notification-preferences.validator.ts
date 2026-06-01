@@ -6,6 +6,11 @@ import {
 
 const ERROR_KEY_INVALID_INPUT = 'errors:invalidInput';
 
+/**
+ * Validate the `PUT /api/v1/users/me/notification-preferences` body against
+ * {@link PutNotificationPreferencesDto}. Throws {@link ValidationError} (`errors:invalidInput`)
+ * with flattened field errors so the global error handler can translate per-field messages.
+ */
 export function validatePutUserNotificationPreferences(
   body: unknown,
 ): PutNotificationPreferencesInput {
