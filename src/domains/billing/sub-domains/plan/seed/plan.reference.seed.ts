@@ -4,7 +4,7 @@
  */
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
-import { plans } from './plan.schema.js';
+import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 
 /** Free / Starter / Pro pricing baseline used by `pnpm db:seed`. */
 export const DEFAULT_PLANS = [
