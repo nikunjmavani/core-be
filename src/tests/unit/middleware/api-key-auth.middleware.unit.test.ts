@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import Fastify, { type FastifyRequest } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -102,6 +103,48 @@ describe('api-key-auth.middleware', () => {
       await expect(applyApiKeyAuthentication(request)).rejects.toMatchObject({
         statusCode: 401,
       });
+    });
+
+    // The timing-safe comparator (`hashesMatch`) is passed into the service and is the actual
+    // secret-comparison primitive. The other tests stub `authenticate` so it never runs, leaving
+    // it unverified; these drive it directly through the real flow.
+    const RAW_KEY = 'ak_validkey000000000000000000000000';
+    const KEY_HASH = createHash('sha256').update(RAW_KEY, 'utf8').digest('hex');
+
+    it('authenticates when the timing-safe comparator matches equal-length hashes', async () => {
+      application = await createApplication();
+      vi.mocked(
+        application.tenancyDomain.organizationApiKeyService.authenticate,
+      ).mockImplementationOnce(async (_prefix: string, candidateHash: string, compare) =>
+        compare(KEY_HASH, candidateHash)
+          ? { public_id: 'k', organization_public_id: 'o', scopes: [] }
+          : null,
+      );
+      const request = {
+        headers: { authorization: `ApiKey ${RAW_KEY}` },
+        server: application,
+      } as never;
+
+      await expect(applyApiKeyAuthentication(request)).resolves.toBe(true);
+    });
+
+    it('rejects when the timing-safe comparator sees a length mismatch (no false positive)', async () => {
+      application = await createApplication();
+      vi.mocked(
+        application.tenancyDomain.organizationApiKeyService.authenticate,
+      ).mockImplementationOnce(async (_prefix: string, candidateHash: string, compare) =>
+        // 'abcd' decodes to 2 bytes vs the 32-byte candidate → the length guard must return false
+        // before timingSafeEqual (which would otherwise throw on unequal lengths).
+        compare('abcd', candidateHash)
+          ? { public_id: 'k', organization_public_id: 'o', scopes: [] }
+          : null,
+      );
+      const request = {
+        headers: { authorization: `ApiKey ${RAW_KEY}` },
+        server: application,
+      } as never;
+
+      await expect(applyApiKeyAuthentication(request)).rejects.toMatchObject({ statusCode: 401 });
     });
   });
 });
