@@ -135,7 +135,8 @@ src/
     │   │   │   │   │   └── unit/
     │   │   │   │   │   │   ├── verification-token.replay.db.unit.test.ts
     │   │   │   │   │   │   ├── verification-token.repository.db.unit.test.ts
-    │   │   │   │   │   │   └── verification-token.repository.unit.test.ts
+    │   │   │   │   │   │   ├── verification-token.repository.unit.test.ts
+    │   │   │   │   │   │   └── verification-token.service.unit.test.ts
     │   │   │   │   ├── verification-token.repository.ts
     │   │   │   │   ├── verification-token.schema.ts
     │   │   │   │   └── verification-token.service.ts
@@ -463,6 +464,7 @@ src/
     │   │   │   ├── webhook-event/
     │   │   │       ├── __tests__/
     │   │   │       │   └── unit/
+    │   │   │       │   │   ├── webhook-event.controller.unit.test.ts
     │   │   │       │   │   ├── webhook-event.serializer.shape.unit.test.ts
     │   │   │       │   │   └── webhook-event.service.unit.test.ts
     │   │   │       ├── seed/
@@ -531,6 +533,7 @@ src/
     │   │   │   ├── member-role-permission/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   └── unit/
+    │   │   │   │   │   │   ├── member-role-permission.controller.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.serializer.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.service.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.validator.edge.unit.test.ts
@@ -584,6 +587,7 @@ src/
     │   │   │   │   │   │   ├── member-invitation.controller.unit.test.ts
     │   │   │   │   │   │   ├── member-invitation.repository.db.unit.test.ts
     │   │   │   │   │   │   ├── member-invitation.serializer.unit.test.ts
+    │   │   │   │   │   │   ├── member-invitation.service.unit.test.ts
     │   │   │   │   │   │   └── member-invitation.validator.unit.test.ts
     │   │   │   │   ├── events/
     │   │   │   │   │   ├── index.ts
@@ -659,6 +663,8 @@ src/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   ├── unit/
     │   │   │   │   │   │   ├── organization-notification-policy-tombstone-retention.processor.boundary.unit.test.ts
+    │   │   │   │   │   │   ├── organization-notification-policy.controller.unit.test.ts
+    │   │   │   │   │   │   ├── organization-notification-policy.service.unit.test.ts
     │   │   │   │   │   │   └── organization-notification-policy.validator.unit.test.ts
     │   │   │   │   │   └── organization-notification-policy.test.ts
     │   │   │   │   ├── seed/
@@ -680,6 +686,8 @@ src/
     │   │   │   ├── organization-settings/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   ├── unit/
+    │   │   │   │   │   │   ├── organization-settings.controller.unit.test.ts
+    │   │   │   │   │   │   ├── organization-settings.service.unit.test.ts
     │   │   │   │   │   │   └── organization-settings.validator.unit.test.ts
     │   │   │   │   │   └── organization-settings.test.ts
     │   │   │   │   ├── seed/
