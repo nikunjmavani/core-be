@@ -13,6 +13,7 @@ Load tests for the core-be API. Keep this doc in sync with [docs/reference/testi
 
 - `pnpm load:health` — health endpoints
 - `pnpm load:stress` — health under stress (up to 100 VUs)
+- `pnpm load:breakpoint` — capacity test: ramps arrival rate (10 → 300 req/s) until SLOs break (finds max throughput)
 - `pnpm test:bench` — Autocannon on `/readyz`
 
 **Full confidence:** Run `pnpm load:stress` (health) and `pnpm load:stress:api` (API with TEST_TOKEN + TEST_ORG_ID). See [docs/reference/testing/load-testing.md](../../../../docs/reference/testing/load-testing.md#full-confidence-recommended).
@@ -25,6 +26,7 @@ Load tests for the core-be API. Keep this doc in sync with [docs/reference/testi
 | --------------- | ------------------------------ | -------------------------------------------------------- | ------------------------------------------------- |
 | Health          | `scenarios/health.js`          | (optional `BASE_URL`)                                    | `pnpm load:health`                                |
 | Health stress   | `scenarios/health-stress.js`   | (optional `BASE_URL`)                                    | `pnpm load:stress`                                |
+| Health breakpoint | `scenarios/health-breakpoint.js` | (optional `BASE_URL`)                                | `pnpm load:breakpoint`                            |
 | API stress      | `scenarios/api-stress.js`      | `TEST_TOKEN`, `TEST_ORG_ID`                              | `pnpm load:stress:api`                            |
 | Auth onboarding | `scenarios/auth-onboarding.js` | `TEST_EMAIL`, `TEST_PASSWORD` (or use defaults)          | `pnpm load:auth`                                  |
 | Daily ops       | `scenarios/daily-ops.js`       | `TEST_TOKEN`, `TEST_ORG_ID`                              | `pnpm load:daily-ops`                             |

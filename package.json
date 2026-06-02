@@ -103,6 +103,7 @@
     "test:api-smoke": "tsx src/scripts/ops/api-smoke-test.ts",
     "load:health": "k6 run src/tests/load/k6/scenarios/health.js",
     "load:stress": "k6 run src/tests/load/k6/scenarios/health-stress.js",
+    "load:breakpoint": "k6 run src/tests/load/k6/scenarios/health-breakpoint.js",
     "load:stress:api": "k6 run src/tests/load/k6/scenarios/api-stress.js",
     "load:auth": "TEST_EMAIL=demo@example.com TEST_PASSWORD='DemoPassword123!' k6 run src/tests/load/k6/scenarios/auth-onboarding.js",
     "load:daily-ops": "k6 run src/tests/load/k6/scenarios/daily-ops.js",

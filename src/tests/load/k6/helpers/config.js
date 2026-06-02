@@ -22,6 +22,16 @@ export const STRICT_THRESHOLDS = {
 };
 
 /**
+ * Capacity / breakpoint preset. `abortOnFail` stops the ramp at the first
+ * breach so the run terminates at the system's breaking point instead of
+ * hammering a saturated server. Pair with `SCENARIOS.breakpoint`.
+ */
+export const BREAKPOINT_THRESHOLDS = {
+  http_req_duration: [{ threshold: 'p(95)<800', abortOnFail: true, delayAbortEval: '10s' }],
+  http_req_failed: [{ threshold: 'rate<0.02', abortOnFail: true, delayAbortEval: '10s' }],
+};
+
+/**
  * Standard scenario presets for reuse.
  */
 export const SCENARIOS = {
@@ -62,5 +72,22 @@ export const SCENARIOS = {
     executor: 'constant-vus',
     vus: 10,
     duration: '10m',
+  },
+  /**
+   * Capacity / breakpoint profile: ramps the *arrival rate* (requests/second,
+   * decoupled from VU count) until the system saturates. Pair with
+   * {@link BREAKPOINT_THRESHOLDS} (abortOnFail) so the run stops at the first
+   * breach — the throughput at that point is the measured breaking point.
+   */
+  breakpoint: {
+    executor: 'ramping-arrival-rate',
+    startRate: 10,
+    timeUnit: '1s',
+    preAllocatedVUs: 50,
+    maxVUs: 500,
+    stages: [
+      { duration: '30s', target: 50 },
+      { duration: '2m', target: 300 },
+    ],
   },
 };
