@@ -1611,6 +1611,7 @@ src/
     │   ├── auth/
     │   │   ├── api-key-auth.security.test.ts
     │   │   ├── auth-enforcement.security.test.ts
+    │   │   ├── auth-enumeration-parity.security.test.ts
     │   │   ├── auth-public-rate-limit.security.test.ts
     │   │   ├── jwt-attacks.security.test.ts
     │   │   ├── jwt-security.security.test.ts
