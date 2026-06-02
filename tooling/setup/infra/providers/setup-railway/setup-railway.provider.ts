@@ -10,15 +10,30 @@ import type {
 
 const RAILWAY_API_URL = 'https://backboard.railway.com/graphql/v2';
 
+/**
+ * Auth mode for a single Railway GraphQL request.
+ *
+ * - **bearer**: account / personal access token (`RAILWAY_API_TOKEN`). Required for
+ *   project lifecycle (create project, list user projects, create environments, mint
+ *   per-environment project tokens via `projectTokenCreate`). Bearer auth is also
+ *   accepted on most read paths.
+ * - **project**: project-scoped token (`RAILWAY_TOKEN`). Sent as `Project-Access-Token`.
+ *   Limited to operations on the single environment the token was minted for.
+ */
+type RailwayAuthMode = 'bearer' | 'project';
+
 async function railwayGraphQL<T>(
   token: string,
   query: string,
   variables?: Record<string, unknown>,
+  authMode: RailwayAuthMode = 'bearer',
 ): Promise<T> {
   const response = await fetch(RAILWAY_API_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...(authMode === 'project'
+        ? { 'Project-Access-Token': token }
+        : { Authorization: `Bearer ${token}` }),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ query, variables }),
@@ -43,7 +58,13 @@ async function railwayGraphQL<T>(
 async function findExistingProjectId(
   token: string,
   projectName: string,
+  authMode: RailwayAuthMode,
 ): Promise<string | undefined> {
+  // `projects` (the user-scoped collection) is only readable from a Bearer (account)
+  // token — a project token returns an empty list, which would silently make us create
+  // a duplicate project. Skip the call when only the project token is available; the
+  // caller will fall back to the project id already in setup state.
+  if (authMode !== 'bearer') return undefined;
   const result = await railwayGraphQL<{
     projects?: { edges?: Array<{ node?: { id: string; name: string } }> };
   }>(
@@ -60,6 +81,8 @@ async function findExistingProjectId(
       }
     }
   `,
+    undefined,
+    authMode,
   );
   return result.projects?.edges
     ?.map((edge) => edge.node)
@@ -78,6 +101,7 @@ interface RailwayProjectDetails {
 async function fetchProjectDetails(
   token: string,
   projectId: string,
+  authMode: RailwayAuthMode,
 ): Promise<RailwayProjectDetails> {
   const result = await railwayGraphQL<{
     project?: {
@@ -129,6 +153,7 @@ async function fetchProjectDetails(
     }
   `,
     { id: projectId },
+    authMode,
   );
 
   const environments = (result.project?.environments?.edges ?? [])
@@ -161,6 +186,7 @@ async function stageAndCommitServiceAttachments(
   environmentId: string,
   serviceIds: string[],
   commitMessage: string,
+  authMode: RailwayAuthMode,
 ): Promise<void> {
   if (serviceIds.length === 0) return;
 
@@ -179,6 +205,7 @@ async function stageAndCommitServiceAttachments(
     }
   `,
     { environmentId, input: stagePayload, merge: true },
+    authMode,
   );
 
   await railwayGraphQL<{ environmentPatchCommitStaged: string }>(
@@ -193,7 +220,50 @@ async function stageAndCommitServiceAttachments(
     }
   `,
     { environmentId, commitMessage, skipDeploys: true },
+    authMode,
   );
+}
+
+/**
+ * Mint a single project-scoped Railway token bound to one environment.
+ *
+ * Requires an account / personal access token (Bearer auth) — `projectTokenCreate`
+ * is not callable from a project-scoped token. Persisted into
+ * `state.railway.environmentTokens[<env>]` and written by `exportEnvFiles` to each
+ * `.env.<env>` as `RAILWAY_TOKEN`. Re-mint via `projectTokenCreate` if the persisted
+ * token gets rotated or revoked on Railway's side; calls to other Railway endpoints
+ * with a revoked token fail with `Not Authorized`.
+ */
+async function mintProjectToken(options: {
+  apiToken: string;
+  projectId: string;
+  environmentId: string;
+  name: string;
+}): Promise<string> {
+  const result = await railwayGraphQL<{
+    projectTokenCreate: string;
+  }>(
+    options.apiToken,
+    `
+    mutation($input: ProjectTokenCreateInput!) {
+      projectTokenCreate(input: $input)
+    }
+  `,
+    {
+      input: {
+        projectId: options.projectId,
+        environmentId: options.environmentId,
+        name: options.name,
+      },
+    },
+    'bearer',
+  );
+  if (!result.projectTokenCreate) {
+    throw new Error(
+      `projectTokenCreate returned an empty token for environment ${options.environmentId}.`,
+    );
+  }
+  return result.projectTokenCreate;
 }
 
 /**
@@ -217,15 +287,30 @@ function formatRailwayEnvironmentPlan(config: SetupConfig): string {
 
 export async function provision(
   config: SetupConfig,
-  secrets: { railway: { token: string } },
+  secrets: { railway: { token: string; apiToken?: string | undefined } },
   state: SetupState,
   environments: string[],
 ): Promise<ProviderResult> {
-  const token = secrets.railway.token;
+  // Prefer the account / personal access token (RAILWAY_API_TOKEN) for setup-time
+  // operations — it has full project lifecycle access and is required for cross-
+  // environment work like `projectTokenCreate`. Fall back to the single project
+  // token (RAILWAY_TOKEN) for environments that already have everything provisioned;
+  // it will work for read-only `check()` calls and for provisioning the one
+  // environment it is scoped to, but cannot mint per-environment tokens.
+  const apiToken = secrets.railway.apiToken?.trim();
+  const projectToken = secrets.railway.token?.trim();
+  const setupToken = apiToken || projectToken;
+  const setupAuthMode: RailwayAuthMode = apiToken ? 'bearer' : 'project';
   const projectName = config.project.name;
 
-  if (!token) {
+  if (!setupToken) {
     return { success: true, message: 'Railway: skipped (no token)' };
+  }
+  if (!apiToken) {
+    logger.warn(
+      '  RAILWAY_API_TOKEN not set; using RAILWAY_TOKEN (project-scoped) for setup. ' +
+        'Cross-environment operations (project create, per-environment token minting) will be skipped.',
+    );
   }
 
   const spinner = logger.startSpinner('Setting up Railway project...');
@@ -239,7 +324,7 @@ export async function provision(
 
     // Adopt remote project by name when local state is missing the project ID.
     if (!projectId) {
-      const existingProjectId = await findExistingProjectId(token, projectName);
+      const existingProjectId = await findExistingProjectId(setupToken, projectName, setupAuthMode);
       if (existingProjectId) {
         projectId = existingProjectId;
         logger.stopSpinner(spinner, `Railway project adopted: ${projectId}`);
@@ -248,10 +333,15 @@ export async function provision(
 
     // Create project if needed
     if (!projectId) {
+      if (setupAuthMode !== 'bearer') {
+        throw new Error(
+          'Cannot create a new Railway project without RAILWAY_API_TOKEN — projectCreate is not callable from a project-scoped token. Set RAILWAY_API_TOKEN in .env.setup and re-run.',
+        );
+      }
       const createProjectResult = await railwayGraphQL<{
         projectCreate: { id: string; name: string };
       }>(
-        token,
+        setupToken,
         `
         mutation($input: ProjectCreateInput!) {
           projectCreate(input: $input) {
@@ -263,6 +353,7 @@ export async function provision(
         {
           input: { name: projectName },
         },
+        setupAuthMode,
       );
 
       projectId = createProjectResult.projectCreate.id;
@@ -276,7 +367,7 @@ export async function provision(
     }
 
     const railwayProjectId = projectId;
-    const projectDetails = await fetchProjectDetails(token, railwayProjectId);
+    const projectDetails = await fetchProjectDetails(setupToken, railwayProjectId, setupAuthMode);
     // Railway displays environment/service names with whatever casing the
     // user (or a template) created them with. Our canonical keys
     // (RAILWAY_SERVICE_NAMES, environment.name from setup.config.json) are
@@ -328,10 +419,15 @@ export async function provision(
           const environmentSpinner = logger.startSpinner(
             `Creating Railway environment: ${environmentName}...`,
           );
+          if (setupAuthMode !== 'bearer') {
+            throw new Error(
+              `Cannot create Railway environment "${environmentName}" without RAILWAY_API_TOKEN — environmentCreate is not callable from a project-scoped token. Set RAILWAY_API_TOKEN in .env.setup and re-run.`,
+            );
+          }
           const createEnvironmentResult = await railwayGraphQL<{
             environmentCreate: { id: string };
           }>(
-            token,
+            setupToken,
             `
             mutation($input: EnvironmentCreateInput!) {
               environmentCreate(input: $input) {
@@ -340,6 +436,7 @@ export async function provision(
             }
           `,
             { input: { projectId: railwayProjectId, name: environmentName } },
+            setupAuthMode,
           );
           const environmentId = createEnvironmentResult.environmentCreate.id;
           railwayEnvironments[environmentName] = { environmentId, services: {} };
@@ -368,7 +465,7 @@ export async function provision(
             const createServiceResult = await railwayGraphQL<{
               serviceCreate: { id: string };
             }>(
-              token,
+              setupToken,
               `
               mutation($input: ServiceCreateInput!) {
                 serviceCreate(input: $input) {
@@ -377,6 +474,7 @@ export async function provision(
               }
             `,
               { input: { projectId: railwayProjectId, name: serviceName } },
+              setupAuthMode,
             );
             serviceId = createServiceResult.serviceCreate.id;
             remoteServicesByName.set(lookupKey, serviceId);
@@ -411,14 +509,67 @@ export async function provision(
         `Attaching ${pendingServices.map((service) => `"${service.serviceName}"`).join(', ')} to environment "${environmentName}"...`,
       );
       await stageAndCommitServiceAttachments(
-        token,
+        setupToken,
         environmentId,
         pendingServices.map((service) => service.serviceId),
         `setup:infra - attach ${pendingServices.map((service) => service.serviceName).join(', ')} to ${environmentName}`,
+        setupAuthMode,
       );
       logger.stopSpinner(
         attachSpinner,
         `Attached ${pendingServices.length} service(s) to environment "${environmentName}"`,
+      );
+    }
+
+    // Mint a per-environment project token for every configured environment.
+    // Idempotent across re-runs: token persisted in state is reused unless missing.
+    // Only possible with the account token — project tokens can't call projectTokenCreate.
+    const environmentTokens: Record<string, string> = state.railway?.environmentTokens
+      ? { ...state.railway.environmentTokens }
+      : {};
+    if (apiToken) {
+      for (const environmentName of environments) {
+        if (environmentTokens[environmentName]) {
+          logger.success(
+            `  Per-env Railway project token for "${environmentName}" already in state`,
+          );
+          continue;
+        }
+        const environmentId = railwayEnvironments[environmentName]?.environmentId;
+        if (!environmentId) {
+          logger.warn(
+            `  Skipping per-env token mint for "${environmentName}" — environmentId not resolved.`,
+          );
+          continue;
+        }
+        const mintSpinner = logger.startSpinner(
+          `Minting Railway project token for environment "${environmentName}"...`,
+        );
+        try {
+          const newToken = await mintProjectToken({
+            apiToken,
+            projectId: railwayProjectId,
+            environmentId,
+            name: `${projectName}-${environmentName}-setup-infra`,
+          });
+          environmentTokens[environmentName] = newToken;
+          logger.stopSpinner(
+            mintSpinner,
+            `Minted Railway project token for "${environmentName}" (persisted in state)`,
+          );
+        } catch (mintError) {
+          const message = mintError instanceof Error ? mintError.message : String(mintError);
+          logger.stopSpinner(
+            mintSpinner,
+            `Could not mint Railway project token for "${environmentName}": ${message}`,
+            'fail',
+          );
+        }
+      }
+    } else {
+      logger.warn(
+        '  Per-environment Railway project tokens not minted (RAILWAY_API_TOKEN not set). ' +
+          'Every .env.<env> will receive the single RAILWAY_TOKEN fallback, which only authenticates for one environment.',
       );
     }
 
@@ -431,6 +582,7 @@ export async function provision(
           projectId: railwayProjectId,
           services,
           environments: railwayEnvironments,
+          ...(Object.keys(environmentTokens).length > 0 ? { environmentTokens } : {}),
         },
       },
     };
@@ -442,15 +594,26 @@ export async function provision(
   }
 }
 
-export async function check(state: SetupState, token: string): Promise<boolean> {
+export async function check(
+  state: SetupState,
+  secrets: { railway: { token: string; apiToken?: string | undefined } },
+): Promise<boolean> {
   if (!state.railway?.projectId) {
     logger.error('Railway: no project in state');
+    return false;
+  }
+  const apiToken = secrets.railway.apiToken?.trim();
+  const projectToken = secrets.railway.token?.trim();
+  const checkToken = apiToken || projectToken;
+  const checkAuthMode: RailwayAuthMode = apiToken ? 'bearer' : 'project';
+  if (!checkToken) {
+    logger.error('Railway: no token available (set RAILWAY_API_TOKEN or RAILWAY_TOKEN)');
     return false;
   }
 
   try {
     await railwayGraphQL(
-      token,
+      checkToken,
       `
       query($id: String!) {
         project(id: $id) {
@@ -460,6 +623,7 @@ export async function check(state: SetupState, token: string): Promise<boolean> 
       }
     `,
       { id: state.railway.projectId },
+      checkAuthMode,
     );
 
     logger.success(`Railway project ${state.railway.projectId} — reachable`);
@@ -486,17 +650,19 @@ export const setupRailwayProvider: InfraProvider = {
   key: 'railway',
   name: 'Railway',
   isEnabled: ({ config, secrets }) =>
-    config.providers.railway.enabled && isSecretFilled(secrets.railway.token),
+    config.providers.railway.enabled &&
+    (isSecretFilled(secrets.railway.apiToken) || isSecretFilled(secrets.railway.token)),
   disabledReason: ({ config }) =>
     !config.providers.railway.enabled
       ? 'disabled in setup.config.json'
-      : 'RAILWAY_TOKEN missing in .env.setup',
+      : 'RAILWAY_API_TOKEN (preferred) or RAILWAY_TOKEN missing in .env.setup',
   preview: ({ config }) =>
     config.providers.railway.enabled
       ? {
-          detail: 'RAILWAY_TOKEN — no railway login when set (API-only)',
-          url: 'https://railway.app/account/tokens',
-          configKey: 'RAILWAY_TOKEN',
+          detail:
+            'RAILWAY_API_TOKEN (account token, preferred) or RAILWAY_TOKEN (project, fallback)',
+          url: 'https://railway.com/account/tokens',
+          configKey: 'RAILWAY_API_TOKEN',
         }
       : null,
   settingsReview: ({ config, environments }) =>
@@ -539,11 +705,11 @@ export const setupRailwayProvider: InfraProvider = {
         : 'no Railway project recorded',
     }),
     verifyLive: async () => {
-      const ok = await check(context.state, context.secrets.railway.token);
+      const ok = await check(context.state, context.secrets);
       return { ok, message: ok ? 'reachable' : 'unreachable' };
     },
   }),
-  check: ({ state, secrets }) => check(state, secrets.railway.token),
+  check: ({ state, secrets }) => check(state, secrets),
   deleteInstructions: ({ state }) => {
     if (!state.railway?.projectId) return [];
     const resources: Array<{ label: string; identifier: string }> = [

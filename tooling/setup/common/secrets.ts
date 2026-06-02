@@ -14,7 +14,8 @@ const TOKEN_URLS: Record<string, string> = {
   SENTRY_AUTH_TOKEN: 'https://sentry.io/settings/auth-tokens/new-token/',
   RESEND_API_KEY: 'https://resend.com/api-keys',
   GITHUB_TOKEN: 'https://github.com/settings/tokens',
-  RAILWAY_TOKEN: 'https://railway.app/account/tokens',
+  RAILWAY_API_TOKEN: 'https://railway.com/account/tokens',
+  RAILWAY_TOKEN: 'https://railway.com/project/<id>/settings/tokens',
   POSTMAN_API_KEY: 'https://go.postman.co/settings/me/api-keys',
   POSTMAN_WORKSPACE_ID: 'https://go.postman.co/workspaces',
 };
@@ -27,6 +28,7 @@ const SIMPLE_VARS: Array<[string, string]> = [
   ['SENTRY_AUTH_TOKEN', TOKEN_URLS.SENTRY_AUTH_TOKEN ?? ''],
   ['RESEND_API_KEY', TOKEN_URLS.RESEND_API_KEY ?? ''],
   ['GITHUB_TOKEN', TOKEN_URLS.GITHUB_TOKEN ?? ''],
+  ['RAILWAY_API_TOKEN', TOKEN_URLS.RAILWAY_API_TOKEN ?? ''],
   ['RAILWAY_TOKEN', TOKEN_URLS.RAILWAY_TOKEN ?? ''],
   ['POSTMAN_API_KEY', TOKEN_URLS.POSTMAN_API_KEY ?? ''],
   ['POSTMAN_WORKSPACE_ID', TOKEN_URLS.POSTMAN_WORKSPACE_ID ?? ''],
@@ -69,6 +71,20 @@ export const setupSecretsSchema = z.object({
     .optional()
     .default({ google: {}, github: {} }),
   railway: z.object({
+    /**
+     * Account / personal access token (Bearer auth). Preferred at setup time — gives the
+     * Railway provider full project lifecycle (create project, mint per-environment
+     * project tokens, read/write variables across environments). Set via
+     * `RAILWAY_API_TOKEN` in `.env.setup`. Stays in `.env.setup` only; never pushed to
+     * GitHub Environments or Railway service variables.
+     */
+    apiToken: z.string().optional(),
+    /**
+     * Project-scoped fallback (Project-Access-Token header). Single-environment by
+     * construction — used when `apiToken` is not available. Cross-environment provisioning
+     * and per-environment token minting are skipped on this path. Set via `RAILWAY_TOKEN`
+     * in `.env.setup`.
+     */
     token: z.string(),
   }),
   postman: z
@@ -172,7 +188,10 @@ export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
       google: oauthGoogle,
       github: oauthGithub,
     },
-    railway: { token: get(source, 'RAILWAY_TOKEN') },
+    railway: {
+      token: get(source, 'RAILWAY_TOKEN'),
+      apiToken: get(source, 'RAILWAY_API_TOKEN') || undefined,
+    },
     postman: {
       apiKey: get(source, 'POSTMAN_API_KEY'),
       workspaceId: get(source, 'POSTMAN_WORKSPACE_ID'),

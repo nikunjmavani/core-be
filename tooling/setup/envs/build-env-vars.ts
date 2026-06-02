@@ -70,12 +70,22 @@ export function buildEnvironmentVariables(
     AUTH_SESSION_RETENTION_DAYS: DEFAULT_SESSION_RETENTION_DAYS,
   };
 
-  if (config.providers.railway.enabled && secrets.railway.token) {
-    variables.RAILWAY_TOKEN = secrets.railway.token;
-    const apiServiceId = railwayEnvironment?.services.api?.serviceId;
-    const workerServiceId = railwayEnvironment?.services.worker?.serviceId;
-    if (apiServiceId) variables.RAILWAY_SERVICE_ID = apiServiceId;
-    if (workerServiceId) variables.RAILWAY_WORKER_SERVICE_ID = workerServiceId;
+  if (config.providers.railway.enabled) {
+    // Prefer the per-environment project token minted by the Railway provider via
+    // `projectTokenCreate` (persisted in state.railway.environmentTokens), falling back
+    // to the single-token slot. The fallback only authenticates for whichever environment
+    // that token was originally scoped to; downstream deploys for other environments will
+    // fail. Mint per-env tokens by populating `RAILWAY_API_TOKEN` in .env.setup and
+    // re-running `pnpm setup:infra`.
+    const perEnvironmentToken = state.railway?.environmentTokens?.[environmentName];
+    const railwayToken = perEnvironmentToken ?? secrets.railway.token;
+    if (railwayToken) {
+      variables.RAILWAY_TOKEN = railwayToken;
+      const apiServiceId = railwayEnvironment?.services.api?.serviceId;
+      const workerServiceId = railwayEnvironment?.services.worker?.serviceId;
+      if (apiServiceId) variables.RAILWAY_SERVICE_ID = apiServiceId;
+      if (workerServiceId) variables.RAILWAY_WORKER_SERVICE_ID = workerServiceId;
+    }
   }
 
   if (config.providers.postman.enabled && secrets.postman?.apiKey) {
