@@ -59,8 +59,18 @@ describe('Billing Subscription Mutations — Integration', () => {
   /**
    * Creates a user, organization, plan, subscription, role with subscription:manage
    * permission, and a membership — returns everything needed to drive a mutation test.
+   *
+   * @remarks
+   * Subscriptions default to **local-only** (`providerSubscriptionId: null`) so the
+   * fail-closed subscription service skips the external Stripe call on
+   * cancel/resume/change-plan and the endpoints exercise the database transition
+   * logic deterministically (200). Pass `providerSubscriptionId` to create a
+   * Stripe-backed subscription that drives the fail-closed 503 path (Stripe is
+   * unconfigured in CI and local test runs).
    */
-  async function createBillingMutationContext(options: { status?: string } = {}) {
+  async function createBillingMutationContext(
+    options: { status?: string; providerSubscriptionId?: string | null } = {},
+  ) {
     const user = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: user.id });
     const plan = await createTestPlan();
@@ -68,6 +78,8 @@ describe('Billing Subscription Mutations — Integration', () => {
       organizationId: organization.id,
       planId: plan.id,
       status: options.status ?? 'ACTIVE',
+      providerSubscriptionId:
+        options.providerSubscriptionId !== undefined ? options.providerSubscriptionId : null,
     });
     const role = await createRoleWithPermissions({
       organizationId: organization.id,
@@ -519,6 +531,85 @@ describe('Billing Subscription Mutations — Integration', () => {
       };
       expect(afterResumeBody.data?.cancel_at_period_end).toBe(false);
       expect(afterResumeBody.data?.status).toBe('ACTIVE');
+    });
+  });
+
+  // ─── NEGATIVE: Stripe-backed subscription, fail-closed (503) ───────────────
+  //
+  // When a subscription carries a `provider_subscription_id`, the service performs
+  // an external Stripe call before mutating local state and is fail-closed: a
+  // provider failure surfaces as ServiceUnavailableError (503) and the local row
+  // is NOT mutated. Stripe is unconfigured in CI and local test runs, so a
+  // Stripe-backed cancel/resume deterministically returns 503 here.
+  describe('Stripe-backed subscription — fail-closed when the provider is unreachable', () => {
+    it('should return 503 when cancelling a Stripe-backed subscription with Stripe unconfigured', async () => {
+      const { organization, subscription, token } = await createBillingMutationContext({
+        status: 'ACTIVE',
+        providerSubscriptionId: `sub_test_${generatePublicId()}`,
+      });
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath(
+          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': generatePublicId() },
+      });
+
+      expect(response.statusCode).toBe(503);
+    });
+
+    it('should return 503 when resuming a Stripe-backed subscription with Stripe unconfigured', async () => {
+      const { organization, subscription, token } = await createBillingMutationContext({
+        status: 'ACTIVE',
+        providerSubscriptionId: `sub_test_${generatePublicId()}`,
+      });
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath(
+          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/resume`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': generatePublicId() },
+      });
+
+      expect(response.statusCode).toBe(503);
+    });
+
+    it('should NOT mutate the local row when the Stripe cancel call fails (fail-closed)', async () => {
+      const { organization, subscription, token } = await createBillingMutationContext({
+        status: 'ACTIVE',
+        providerSubscriptionId: `sub_test_${generatePublicId()}`,
+      });
+
+      // Stripe-backed cancel fails closed → 503.
+      const cancelResponse = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath(
+          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': generatePublicId() },
+      });
+      expect(cancelResponse.statusCode).toBe(503);
+
+      // The local subscription row must remain unchanged: cancel_at_period_end=false.
+      const getResponse = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(
+          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+      });
+      expect(getResponse.statusCode).toBe(200);
+      const body = getResponse.json() as { data?: { cancel_at_period_end?: boolean } };
+      expect(body.data?.cancel_at_period_end).toBe(false);
     });
   });
 });
