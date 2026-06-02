@@ -102,6 +102,7 @@
   "uploadOrganizationIdRequired": "organizationId requerido cuando \"for\" es \"organization\"",
   "uploadContentTypeNotAllowed": "El tipo de contenido \"{{contentType}}\" no está permitido para el propósito \"{{purpose}}\". Permitidos: {{allowed}}",
   "uploadFilenameExtensionMismatch": "La extensión del archivo \"{{extension}}\" no coincide con el tipo de contenido \"{{contentType}}\". Extensiones permitidas: {{allowed}}",
+  "uploadFilenameUnsafe": "El nombre del archivo contiene separadores de ruta o caracteres de control, lo cual no está permitido",
   "uploadFileSizeExceeded": "El tamaño del archivo {{fileSize}} supera el máximo de {{maxSize}} bytes para el propósito \"{{purpose}}\"",
   "uploadPendingQuotaExceeded": "Demasiadas cargas pendientes ({{pending}} de {{limit}}). Confirma o espera a que el sweeper las reconcilie antes de solicitar otra URL de carga.",
   "uploadNotPending": "La carga no está pendiente de confirmación",
