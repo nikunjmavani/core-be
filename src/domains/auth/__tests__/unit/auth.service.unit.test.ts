@@ -6,6 +6,7 @@ import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { ACCOUNT_LOCKOUT_MINUTES, MAX_FAILED_LOGIN_ATTEMPTS } from '@/shared/constants/index.js';
 
 vi.mock('@/shared/utils/text/email.util.js', () => ({
   isDisposableEmailBlocked: vi.fn(() => false),
@@ -57,6 +58,7 @@ describe('AuthService', () => {
     findByEmail: vi.fn().mockResolvedValue(user),
     findById: vi.fn().mockResolvedValue(user),
     updateLoginAttempt: vi.fn().mockResolvedValue(undefined),
+    registerFailedLoginAttempt: vi.fn().mockResolvedValue(undefined),
     updatePassword: vi.fn().mockResolvedValue(user),
   } as unknown as UserService;
 
@@ -208,7 +210,7 @@ describe('AuthService', () => {
     expect(authSessionService.refreshSessionCredentials).toHaveBeenCalled();
   });
 
-  it('increments failed attempts without lockout below the maximum threshold', async () => {
+  it('records a failed attempt via the atomic increment (count + lock decided in SQL)', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue({
       ...user,
       failed_login_count: 3,
@@ -219,16 +221,22 @@ describe('AuthService', () => {
     await expect(
       service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(userService.updateLoginAttempt).toHaveBeenCalledWith(user.public_id, 4, null);
+    // The +1 and the lockout threshold are now evaluated atomically in the database, so the
+    // service delegates the policy rather than computing the next count itself.
+    expect(userService.registerFailedLoginAttempt).toHaveBeenCalledWith(user.public_id, {
+      maxAttempts: MAX_FAILED_LOGIN_ATTEMPTS,
+      lockoutMinutes: ACCOUNT_LOCKOUT_MINUTES,
+    });
+    expect(userService.updateLoginAttempt).not.toHaveBeenCalled();
   });
 
-  it('login increments failed attempts on bad password', async () => {
+  it('login records a failed attempt on bad password via the atomic increment', async () => {
     const { verifyPassword } = await import('@/shared/utils/security/password.util.js');
     vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
     await expect(
       service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(userService.updateLoginAttempt).toHaveBeenCalled();
+    expect(userService.registerFailedLoginAttempt).toHaveBeenCalled();
   });
 
   it('refreshToken rejects missing session', async () => {
@@ -268,7 +276,7 @@ describe('AuthService', () => {
     expect(userService.updatePassword).toHaveBeenCalled();
   });
 
-  it('login locks account after the maximum failed attempts', async () => {
+  it('login delegates the lockout decision to the atomic failed-attempt increment', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue({
       ...user,
       failed_login_count: 9,
@@ -279,11 +287,13 @@ describe('AuthService', () => {
     await expect(
       service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(userService.updateLoginAttempt).toHaveBeenCalledWith(
-      user.public_id,
-      10,
-      expect.any(Date),
-    );
+    // The threshold check (count + 1 >= max → lock) is applied atomically in SQL; the service
+    // simply hands the policy to the increment. The lockout behaviour itself is exercised against
+    // a real database in user.repository.db.unit.test.ts.
+    expect(userService.registerFailedLoginAttempt).toHaveBeenCalledWith(user.public_id, {
+      maxAttempts: MAX_FAILED_LOGIN_ATTEMPTS,
+      lockoutMinutes: ACCOUNT_LOCKOUT_MINUTES,
+    });
   });
 
   it('login rejects disposable email addresses', async () => {
@@ -358,19 +368,5 @@ describe('AuthService', () => {
     } as never);
     await service.login({ email: user.email, password: 'ValidPassword12!' }, '127.0.0.1');
     expect(userService.updateLoginAttempt).toHaveBeenCalledWith(user.public_id, 0, null);
-  });
-
-  it('login treats null failed_login_count as zero on bad password', async () => {
-    vi.mocked(userService.findByEmail).mockResolvedValue({
-      ...user,
-      failed_login_count: null,
-    } as never);
-    const { verifyPassword } = await import('@/shared/utils/security/password.util.js');
-    vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
-
-    await expect(
-      service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
-    ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(userService.updateLoginAttempt).toHaveBeenCalledWith(user.public_id, 1, null);
   });
 });

@@ -294,6 +294,35 @@ export class UserRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Atomically record one failed login: increment `failed_login_count` in SQL
+   * (`count + 1`, never a read-modify-write) and, in the same statement, set the
+   * lockout window once the new count reaches `maxAttempts`. Computing both from
+   * the live row value eliminates the lost-update race where two simultaneous
+   * failures each read the same stale count and write back the same `+1`.
+   */
+  async incrementFailedLoginAttempt(
+    publicId: string,
+    options: { maxAttempts: number; lockoutMinutes: number },
+  ) {
+    const rows = await getRequestDatabase()
+      .update(users)
+      .set({
+        // COALESCE keeps the +1 null-safe (the column is NOT NULL today, but this preserves the
+        // old `(count ?? 0) + 1` intent and is correct regardless of the row's prior value).
+        failed_login_count: sql`COALESCE(${users.failed_login_count}, 0) + 1`,
+        account_locked_until: sql`CASE
+          WHEN COALESCE(${users.failed_login_count}, 0) + 1 >= ${options.maxAttempts}
+          THEN now() + make_interval(mins => ${options.lockoutMinutes})
+          ELSE ${users.account_locked_until}
+        END`,
+        updated_at: databaseNowTimestamp,
+      })
+      .where(and(eq(users.public_id, publicId), isNull(users.deleted_at)))
+      .returning();
+    return rows[0] ?? null;
+  }
+
   async updateMfaEnabled(publicId: string, enabled: boolean) {
     const rows = await getRequestDatabase()
       .update(users)
