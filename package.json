@@ -90,6 +90,7 @@
     "test:integration": "vitest run --project integration",
     "test:coverage": "tsx tooling/vitest/run-parallel.ts --coverage",
     "test:coverage:single": "vitest run --coverage",
+    "coverage:patch": "node tooling/ci/check-patch-coverage.mjs --coverage coverage/coverage-final.json --base ${PATCH_COVERAGE_BASE:-origin/dev}",
     "test:e2e": "vitest run --project e2e",
     "test:global": "vitest run --project global",
     "test:regression": "pnpm test:global",
