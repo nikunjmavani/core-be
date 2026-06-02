@@ -103,43 +103,71 @@ describe('Security: Session invalidation', () => {
     expect([403, 404]).toContain(response.statusCode);
   });
 
-  // NEGATIVE — revoked session token must be rejected
-  it('should return 401 after a session is explicitly revoked', async () => {
-    const { token, user } = await createActiveUserWithToken();
-
-    // List sessions to obtain the session id we just created
+  /**
+   * Lists the caller's session public ids via GET /auth/me/sessions.
+   *
+   * @remarks
+   * The endpoint returns the active session rows as a plain array under `data`,
+   * each carrying a `public_id` (the id accepted by DELETE /auth/me/sessions/:id).
+   */
+  async function listSessionPublicIds(token: string): Promise<string[]> {
     const listResponse = await injectAuthenticated(app, {
       method: 'GET',
       url: testApiPath('/auth/me/sessions'),
       token,
     });
     expect(listResponse.statusCode).toBe(200);
+    const sessions = (listResponse.json() as { data: { public_id: string }[] }).data;
+    expect(Array.isArray(sessions)).toBe(true);
+    return sessions.map((session) => session.public_id);
+  }
 
-    const sessions = (listResponse.json() as { data: { sessions: { id: string }[] } }).data
-      ?.sessions;
-    expect(sessions).toBeDefined();
-    expect(sessions!.length).toBeGreaterThan(0);
+  // NEGATIVE — a revoked (non-current) session's token must be rejected.
+  //
+  // DELETE /auth/me/sessions/:id revokes OTHER devices, not the caller's current
+  // session, so we revoke a second session (device B) using device A's token and
+  // assert device B's token is then rejected while device A's still works. This
+  // proves the auth middleware enforces per-session revocation (verifyActiveAccessToken).
+  it('should return 401 when a revoked (other-device) session token is reused', async () => {
+    const { token: tokenA, user } = await createActiveUserWithToken();
 
-    const sessionId = sessions![0]!.id;
+    // Snapshot device A's session public id.
+    const idsBeforeB = await listSessionPublicIds(tokenA);
+    expect(idsBeforeB.length).toBe(1);
+    const sessionIdA = idsBeforeB[0]!;
 
-    // Revoke that specific session via the DELETE endpoint
+    // Create a second session (device B) for the same user.
+    const tokenB = await generateTestToken({ userId: user.public_id });
+
+    // Device A now sees two sessions; identify device B as the new one.
+    const idsAfterB = await listSessionPublicIds(tokenA);
+    expect(idsAfterB.length).toBe(2);
+    const sessionIdB = idsAfterB.find((id) => id !== sessionIdA);
+    expect(sessionIdB).toBeDefined();
+
+    // Device A revokes device B's session.
     const revokeResponse = await injectAuthenticated(app, {
       method: 'DELETE',
-      url: testApiPath(`/auth/me/sessions/${sessionId}`),
-      token,
+      url: testApiPath(`/auth/me/sessions/${sessionIdB}`),
+      token: tokenA,
     });
-    // 200 revoked successfully, or 404 if this was the session itself (implementation detail)
-    expect([200, 204, 404]).toContain(revokeResponse.statusCode);
-    void user;
+    expect([200, 204]).toContain(revokeResponse.statusCode);
 
-    // Now using the same token must fail — session row is revoked / Redis cache invalidated
-    const afterRevokeResponse = await injectAuthenticated(app, {
+    // Device B's token must now be rejected (session revoked, cache invalidated).
+    const afterRevokeResponseB = await injectAuthenticated(app, {
       method: 'GET',
       url: testApiPath('/auth/me/sessions'),
-      token,
+      token: tokenB,
     });
+    expect(afterRevokeResponseB.statusCode).toBe(401);
 
-    expect(afterRevokeResponse.statusCode).toBe(401);
+    // Device A (the caller's current session) must still work.
+    const stillActiveResponseA = await injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath('/auth/me/sessions'),
+      token: tokenA,
+    });
+    expect(stillActiveResponseA.statusCode).toBe(200);
   });
 
   // NEGATIVE — revokeAllSessions then use old token
