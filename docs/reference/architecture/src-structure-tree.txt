@@ -1639,6 +1639,7 @@ src/
     │   │   ├── role-name-conflict.security.test.ts
     │   │   ├── sensitive-field-leakage.security.test.ts
     │   │   ├── slug-uniqueness-race.security.test.ts
+    │   │   ├── unique-violation-conflict.security.test.ts
     │   │   └── webhook-ssrf.security.test.ts
     │   ├── input/
     │   │   ├── disposable-email-signup.security.test.ts

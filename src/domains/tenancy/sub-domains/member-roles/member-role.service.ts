@@ -136,11 +136,7 @@ export class MemberRoleService {
    */
   private mapRoleNameConflict(error: unknown, name: string | undefined): unknown {
     if (isPostgresUniqueViolation(error)) {
-      return new ConflictError(
-        'errors:roleNameExists',
-        name ? { name } : undefined,
-        'A role with this name already exists',
-      );
+      return new ConflictError('errors:roleNameExists', name ? { name } : undefined);
     }
     return error;
   }
