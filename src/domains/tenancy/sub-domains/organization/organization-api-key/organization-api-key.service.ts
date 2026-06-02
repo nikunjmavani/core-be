@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
@@ -209,7 +209,14 @@ export class OrganizationApiKeyService {
         organization.id,
       );
       if (!existing) throw new NotFoundError('API key');
-      await this.apiKeyRepository.softDelete(api_key_public_id, organization.id);
+      // Atomic guard against a concurrent-rotation race: softDelete only retires a not-yet-deleted
+      // key (WHERE deleted_at IS NULL) and returns null if another rotate/revoke already won. Only
+      // the rotation that wins the retire mints the single replacement; the loser conflicts rather
+      // than minting a duplicate replacement key.
+      const retired = await this.apiKeyRepository.softDelete(api_key_public_id, organization.id);
+      if (!retired) {
+        throw new ConflictError('errors:apiKeyRotationConflict');
+      }
       return this.create(
         organization_public_id,
         { name: existing.name, scopes: existing.scopes },
