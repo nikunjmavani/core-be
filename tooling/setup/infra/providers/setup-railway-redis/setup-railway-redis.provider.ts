@@ -466,7 +466,12 @@ export async function provision(
     };
     applyStateUpdates?.({
       redis: { subscriptionId: 0, databases },
+      // Spread the latest railway state so prior-provider fields (notably
+      // `environmentTokens` minted by the Railway provider, and `version`) are
+      // preserved when we replace projectId/services/environments here. Object.assign
+      // in the orchestrator is shallow, so a partial object would clobber the rest.
       railway: {
+        ...state.railway,
         projectId,
         services: railwayState.services ?? {},
         environments: railwayEnvironments,

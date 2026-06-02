@@ -161,10 +161,10 @@ export const setupGithubProvider: InfraProvider = {
       return result;
     },
     verifyState: () => ({
-      ok: Boolean(context.state.github?.secrets?.length),
-      message: context.state.github
-        ? `${context.state.github.secrets.length} secrets synced for ${context.state.github.repository}`
-        : 'no GitHub secrets recorded',
+      ok: Boolean(context.state.github?.repository),
+      message: context.state.github?.repository
+        ? `repository ${context.state.github.repository} verified (env-scoped secrets pushed by the GitHub sync step)`
+        : 'no GitHub repository recorded',
     }),
     verifyLive: async () => {
       const ok = await check(context.state, context.config);
