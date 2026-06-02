@@ -8,13 +8,15 @@ hosted SonarQube and no CI dependency.
 ## TL;DR
 
 ```bash
-pnpm sonar:up      # start the local SonarQube server (or let the gate auto-start it)
+pnpm compose:up    # starts the app stack AND SonarQube (SONAR=0 pnpm compose:up skips Sonar)
 pnpm sonar:scan    # scan now + print the report; exits non-zero if anything is open
 git push           # the pre-push hook runs the same gate automatically
 ```
 
-First run boots the server (~2 min) and provisions an analysis token into `.env.local`
-(gitignored). After that, a scan is ~60–90s.
+`pnpm compose:up` brings SonarQube up with the rest of the local stack — detached, so it boots in
+the background and the gate waits for readiness only when needed. First boot is ~2 min and
+provisions an analysis token into `.env.local` (gitignored); after that a scan is ~60–90s.
+`pnpm sonar:up` starts only SonarQube, and the pre-push gate auto-starts it if it is down.
 
 ## Commands (`sonar:*` namespace)
 
