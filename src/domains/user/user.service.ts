@@ -227,6 +227,21 @@ export class UserService {
     );
   }
 
+  /**
+   * Atomically record one failed login attempt (SQL `count + 1` plus a
+   * conditional lockout once the threshold is reached), so concurrent failures
+   * cannot lose increments. Delegates the lockout policy from the caller and
+   * pins the owner database context like {@link UserService.updateLoginAttempt}.
+   */
+  async registerFailedLoginAttempt(
+    public_id: string,
+    options: { maxAttempts: number; lockoutMinutes: number },
+  ): Promise<UserAuthRecord | null> {
+    return withUserDatabaseContext(public_id, () =>
+      this.repository.incrementFailedLoginAttempt(public_id, options),
+    );
+  }
+
   async updateMfaEnabled(public_id: string, enabled: boolean): Promise<UserAuthRecord | null> {
     return withUserDatabaseContext(public_id, () =>
       this.repository.updateMfaEnabled(public_id, enabled),

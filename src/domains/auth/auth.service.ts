@@ -4,11 +4,7 @@ import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { DUMMY_ARGON2_HASH, verifyPassword } from '@/shared/utils/security/password.util.js';
-import {
-  ACCOUNT_LOCKOUT_MINUTES,
-  MAX_FAILED_LOGIN_ATTEMPTS,
-  MILLISECONDS_PER_MINUTE,
-} from '@/shared/constants/index.js';
+import { ACCOUNT_LOCKOUT_MINUTES, MAX_FAILED_LOGIN_ATTEMPTS } from '@/shared/constants/index.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';
@@ -94,13 +90,13 @@ export class AuthService {
     );
 
     if (!isValid) {
-      const failedCount = (user.failed_login_count ?? 0) + 1;
-      const lockUntil =
-        failedCount >= MAX_FAILED_LOGIN_ATTEMPTS
-          ? new Date(Date.now() + ACCOUNT_LOCKOUT_MINUTES * MILLISECONDS_PER_MINUTE)
-          : null;
-
-      await this.userService.updateLoginAttempt(user.public_id, failedCount, lockUntil);
+      // Atomic SQL increment + conditional lock — never a read-modify-write — so two
+      // simultaneous wrong-password attempts cannot both read the same stale count and
+      // collapse two failures into one, which would let an attacker undercount toward lockout.
+      await this.userService.registerFailedLoginAttempt(user.public_id, {
+        maxAttempts: MAX_FAILED_LOGIN_ATTEMPTS,
+        lockoutMinutes: ACCOUNT_LOCKOUT_MINUTES,
+      });
       // Surface accountLocked only when the credential was ALSO wrong (a correct password
       // would have bypassed the lock above), so the lock status is never an oracle for a
       // valid email and the lockout cannot be weaponized against the legitimate user.
