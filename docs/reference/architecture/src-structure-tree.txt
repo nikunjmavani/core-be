@@ -1588,7 +1588,10 @@ src/
     │   │   ├── jwt-security.security.test.ts
     │   │   ├── mcp-auth.security.test.ts
     │   │   ├── mcp-disabled.security.test.ts
-    │   │   └── oauth-callback.security.test.ts
+    │   │   ├── mfa-security.security.test.ts
+    │   │   ├── oauth-callback.security.test.ts
+    │   │   ├── privilege-escalation.security.test.ts
+    │   │   └── session-invalidation.security.test.ts
     │   ├── headers/
     │   │   ├── cors.security.test.ts
     │   │   ├── csp.security.test.ts
