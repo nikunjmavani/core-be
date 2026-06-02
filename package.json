@@ -56,6 +56,7 @@
     "validate:api-docs-hub": "tsx src/scripts/validators/docs/validate-api-docs-hub.ts",
     "validate:sunset-dates": "tsx src/scripts/validators/api/validate-sunset-dates.ts",
     "validate:test-naming": "tsx src/scripts/validators/tests/validate-test-naming.ts",
+    "validate:route-http-coverage": "tsx src/scripts/validators/routes/validate-route-http-coverage.ts",
     "validate:domain:unit-matrix": "tsx src/scripts/validators/tests/validate-subdomain-unit-matrix.ts",
     "guard:pre-commit": "tsx src/scripts/tooling/run-pre-commit-guard.ts",
     "guard:pre-commit:list": "tsx src/scripts/tooling/run-pre-commit-guard.ts --list",
