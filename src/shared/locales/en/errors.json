@@ -62,6 +62,7 @@
   "invalidOrExpiredMagicLink": "Invalid or expired magic link",
   "declineOwnInvitationOnly": "You can only decline invitations sent to your email",
   "organizationSlugExists": "Organization with slug \"{{slug}}\" already exists",
+  "roleNameExists": "A role named \"{{name}}\" already exists in this organization",
   "ownerCannotLeave": "Organization owner cannot leave; transfer ownership first",
   "onlyOwnerCanTransfer": "Only the organization owner can transfer ownership",
   "membershipActivationRequiresInvitationAccept": "Membership can only be activated by accepting the invitation",

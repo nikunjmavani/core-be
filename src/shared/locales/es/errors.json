@@ -62,6 +62,7 @@
   "invalidOrExpiredMagicLink": "Enlace mágico no válido o caducado",
   "declineOwnInvitationOnly": "Solo puedes rechazar invitaciones enviadas a tu correo",
   "organizationSlugExists": "Ya existe una organización con el slug \"{{slug}}\"",
+  "roleNameExists": "Ya existe un rol con el nombre \"{{name}}\" en esta organización",
   "ownerCannotLeave": "El propietario no puede abandonar la organización; transfiere la propiedad primero",
   "onlyOwnerCanTransfer": "Solo el propietario puede transferir la propiedad",
   "membershipActivationRequiresInvitationAccept": "La membresía solo puede activarse aceptando la invitación",
