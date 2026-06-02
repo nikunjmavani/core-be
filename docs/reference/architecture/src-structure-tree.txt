@@ -726,6 +726,7 @@ src/
     │   │   │       ├── integration/
     │   │   │       │   └── permissions.integration.test.ts
     │   │   │       ├── unit/
+    │   │   │       │   ├── authorization.service.configuration.unit.test.ts
     │   │   │       │   ├── authorization.service.unit.test.ts
     │   │   │       │   ├── permission-cache-lock-order.policy.unit.test.ts
     │   │   │       │   ├── permission-cache-no-scan.policy.unit.test.ts
