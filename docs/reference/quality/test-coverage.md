@@ -51,24 +51,26 @@ Two lanes run tests, split for speed:
   only, for fast PR feedback. **Runs no coverage.**
 - **Post-merge lane** (`reusable-vitest-postgres-redis.yml`) — the DB-bound
   matrix (integration, e2e, security, unit-db, performance) with coverage,
-  sharded by domain. The `Coverage` job downloads the shard artifacts, merges
-  them, and checks thresholds.
+  sharded by domain, **plus** a `Unit coverage` job that runs the unit/global
+  projects with coverage (no Postgres, mirrors the PR unit lane). The `Coverage`
+  job downloads every `coverage-*` shard artifact — DB-bound shards and the
+  `coverage-unit` artifact — merges them, and checks thresholds.
 
 The merged gate is **`--report-only` on `dev`** (prints the result, never
 fails the build) and **blocking** when the target branch is not `dev` (the
 `dev → main` release path).
 
-### Known gap: CI measures only the DB-bound shards
+### CI now measures the true merge
 
-The post-merge `Coverage` job sees only the DB-bound matrix artifacts — the
-**pure-unit project is never run with coverage in CI**. So CI's merged number
-reflects ~70% (DB-bound in isolation), not the true ~93%. Locally,
-`pnpm test:coverage` runs **both** lanes and reports the true merged number.
+Because the post-merge lane includes the `Unit coverage` job, the `Coverage`
+gate merges **unit + DB-bound** and reports the true number (~93% lines), the
+same figure `pnpm test:coverage` produces locally. (Before this, CI saw only the
+DB-bound shards in isolation — ~70% — because the pure-unit project was never run
+with coverage in CI.)
 
-This is why the thresholds cannot simply be ratcheted today: CI cannot yet
-verify the real coverage, so raising the floor above ~70% would block the
-`main` release gate even though the codebase is at ~93%. **Fixing the
-measurement is the prerequisite for tightening the floor** (see follow-ups).
+With CI now verifying the real coverage, the global floor can be **ratcheted**
+toward the true numbers (see follow-ups) — the prerequisite ("measurement before
+enforcement") is satisfied.
 
 ## Patch (differential) coverage — `pnpm coverage:patch`
 
@@ -119,23 +121,23 @@ security-critical domains — over a blanket 90/95.
 
 ## Prioritized follow-ups
 
-1. **Measure the true merge in CI.** Add a unit-coverage job to the post-merge
-   lane that runs `--project unit --project property --project global` with
-   coverage and uploads a `coverage-unit` artifact. The `Coverage` job already
-   downloads `coverage-*` and will merge it automatically — making CI's number
-   the true ~93%.
-2. **Ratchet the floor (after #1).** With CI measuring truly, raise
-   `tooling/ci/coverage-thresholds.json` to just under the real numbers, e.g.
+1. ~~**Measure the true merge in CI.**~~ **Done** — the post-merge lane runs a
+   `Unit coverage` job that emits a `coverage-unit` artifact; the `Coverage` gate
+   merges it with the DB-bound shards (via the existing `coverage-*` download) so
+   CI now reports the true ~93%.
+2. **Ratchet the floor (next).** Now that CI measures truly, raise
+   `tooling/ci/coverage-thresholds.json` toward the real numbers, e.g.
    `lines 90, statements 90, functions 95, branches 80`. Keep branches
-   conservative.
-3. **Make patch coverage a blocking PR check (after #1).** Run
-   `pnpm coverage:patch` against the merged report on PRs and fail under 90% on
-   new code. This needs the merged report available on the PR lane (depends on
-   #1's artifact wiring).
+   conservative. Confirm the post-merge `Coverage` gate prints ~93% first, then
+   set each floor just under the figure CI reports.
+3. **Make patch coverage a blocking PR check.** Run `pnpm coverage:patch`
+   against the merged report on PRs and fail under 90% on new code. Needs the
+   merged report available on the PR lane (the `coverage-unit` artifact wiring
+   from #1 is the foundation).
 4. **Per-area floors (optional).** Extend
    `merge-coverage-and-check-thresholds.mjs` to enforce stricter per-directory
    floors (e.g. 90%) on `src/domains/auth`, `src/domains/billing`, and
    `src/domains/tenancy/sub-domains/permission` — coverage highest where a bug
    is most expensive.
 
-Items 2–4 depend on item 1: **measurement before enforcement.**
+**Measurement before enforcement** — #1 (done) unblocks #2–4.
