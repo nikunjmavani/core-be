@@ -143,7 +143,12 @@ export class OrganizationService {
     organization_public_id: string,
     new_owner_user_id: number,
   ): Promise<OrganizationMembershipContext> {
-    await this.repository.updateOwner(organization_public_id, new_owner_user_id);
+    const updated = await this.repository.updateOwner(organization_public_id, new_owner_user_id);
+    if (!updated) {
+      // updateOwner only writes when the target is still an active member (atomic EXISTS guard);
+      // a null result means a concurrent suspend/removal won the race after the caller's check.
+      throw new ConflictError('errors:ownershipTransferTargetNotActive');
+    }
     return this.requireOrganizationMembershipByPublicId(organization_public_id);
   }
 
