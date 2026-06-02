@@ -643,6 +643,7 @@ src/
     │   │   │   │   │   │   ├── organization-api-key.controller.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.serializer.no-secret.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.service.authenticate.unit.test.ts
+    │   │   │   │   │   │   ├── organization-api-key.service.lifecycle.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.validator.scopes.unit.test.ts
     │   │   │   │   │   │   └── organization-api-key.validator.unit.test.ts
     │   │   │   │   │   └── organization-api-key.test.ts
@@ -1499,6 +1500,7 @@ src/
     │   ├── rls-context-network-isolation.global.test.ts
     │   ├── route-completeness.global.test.ts
     │   ├── service-cross-domain-boundary.global.test.ts
+    │   ├── stryker-mutate-paths.global.test.ts
     │   ├── system-validation.global.test.ts
     │   └── worker-readiness.global.test.ts
     ├── helpers/
