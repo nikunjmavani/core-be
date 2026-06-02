@@ -33,15 +33,16 @@ export function serializeUploadDetail(
   row: UploadRow,
   organizationPublicId: string | null,
 ): UploadDetailOutput {
+  // `file_key` (the internal S3 object path) and `bucket` are deliberately NOT
+  // serialized — they are storage-internal, the client uses presigned URLs and
+  // never the raw key, and exposing them reveals storage layout for enumeration.
   return {
     publicId: row.public_id,
     fileName: row.file_name,
-    fileKey: row.file_key,
     mimeType: row.mime_type,
     fileSize: row.file_size,
     status: row.status,
     storageProvider: row.storage_provider,
-    bucket: row.bucket,
     organizationId: organizationPublicId,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),

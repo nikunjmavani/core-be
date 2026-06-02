@@ -29,12 +29,10 @@ export interface UploadCreateOutput {
 export interface UploadDetailOutput {
   publicId: string;
   fileName: string;
-  fileKey: string;
   mimeType: string;
   fileSize: number;
   status: string;
   storageProvider: string;
-  bucket: string;
   organizationId: string | null;
   createdAt: string;
   updatedAt: string;

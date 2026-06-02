@@ -33,6 +33,10 @@ const FORBIDDEN_FIELDS = [
   'recovery_codes',
   'mfa_secret',
   'totp_secret',
+  // Storage-internal fields — the client uses presigned URLs, never the raw key.
+  'file_key',
+  'fileKey',
+  'bucket',
 ];
 
 function expectNoSensitiveFields(body: string): void {
@@ -104,5 +108,31 @@ describe('Security: sensitive-field leakage sweep', () => {
     });
     expect(response.statusCode).toBe(200);
     expectNoSensitiveFields(response.body);
+  });
+
+  it('GET /uploads/:publicId does not leak the internal storage key or bucket', async () => {
+    const { token } = await userWithToken();
+    const createResponse = await injectAuthenticated(app, {
+      method: 'POST',
+      url: testApiPath('/uploads'),
+      token,
+      payload: {
+        purpose: 'avatar',
+        for: 'user',
+        contentType: 'image/png',
+        fileName: 'avatar.png',
+        fileSize: 1024,
+      },
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const publicId = (createResponse.json() as { data: { publicId: string } }).data.publicId;
+
+    const detailResponse = await injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath(`/uploads/${publicId}`),
+      token,
+    });
+    expect(detailResponse.statusCode).toBe(200);
+    expectNoSensitiveFields(detailResponse.body);
   });
 });
