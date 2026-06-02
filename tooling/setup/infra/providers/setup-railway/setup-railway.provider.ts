@@ -634,15 +634,28 @@ export async function check(
   }
 }
 
-function railwayAlreadyProvisioned(state: SetupState, environments: string[]): boolean {
+function railwayAlreadyProvisioned(
+  state: SetupState,
+  environments: string[],
+  hasApiToken: boolean,
+): boolean {
   if (!state.railway?.projectId) return false;
   const railwayEnvironments = state.railway.environments ?? {};
+  const environmentTokens = state.railway.environmentTokens ?? {};
   return environments.every((environmentName) => {
     const environment = railwayEnvironments[environmentName];
     if (!environment) return false;
-    return RAILWAY_SERVICE_NAMES.every((serviceName) =>
+    const servicesAttached = RAILWAY_SERVICE_NAMES.every((serviceName) =>
       Boolean(environment.services[serviceName]?.serviceId),
     );
+    if (!servicesAttached) return false;
+    // When RAILWAY_API_TOKEN is available, also require that a per-environment project
+    // token has been minted and persisted — otherwise the step would short-circuit and
+    // .env.<env> would silently keep the dev-scoped fallback. The single-token fallback
+    // mode (no apiToken) intentionally does not require env tokens since they cannot be
+    // minted on that path.
+    if (hasApiToken && !environmentTokens[environmentName]) return false;
+    return true;
   });
 }
 
@@ -685,8 +698,14 @@ export const setupRailwayProvider: InfraProvider = {
       'Will create or adopt project-level services: api, worker (redis is provisioned separately via the Railway Redis template).',
       'Will attach api + worker to every Railway environment via staged-changes.',
     ],
-    alreadyDone: () => railwayAlreadyProvisioned(context.state, context.environments),
-    alreadyDoneMessage: 'project + environments + api/worker attachments already in state',
+    alreadyDone: () =>
+      railwayAlreadyProvisioned(
+        context.state,
+        context.environments,
+        Boolean(context.secrets.railway.apiToken?.trim()),
+      ),
+    alreadyDoneMessage:
+      'project + environments + api/worker attachments + per-env tokens already in state',
     execute: async () => {
       const result = await provision(
         context.config,
