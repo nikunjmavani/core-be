@@ -1211,7 +1211,6 @@ src/
     └── validators/
     │   ├── __tests__/
     │       ├── constants-centralization.unit.test.ts
-    │       ├── route-http-coverage-validation.unit.test.ts
     │       └── validate-test-api-prefix.unit.test.ts
     │   ├── api/
     │       └── validate-sunset-dates.ts
@@ -1565,6 +1564,7 @@ src/
     │   │   ├── webhook-claim-race.integration.test.ts
     │   │   ├── webhook-delivery-race.integration.test.ts
     │   │   └── webhook-reclaim.integration.test.ts
+    │   ├── ops-route-smoke.integration.test.ts
     │   └── OVERVIEW.md
     ├── load/
     │   ├── k6/
@@ -1801,6 +1801,7 @@ src/
     │   │   ├── lint-migrations-timestamp.unit.test.ts
     │   │   ├── rotate-field-secrets.unit.test.ts
     │   │   ├── route-catalog-registry.unit.test.ts
+    │   │   ├── route-http-coverage-validation.unit.test.ts
     │   │   ├── run-ci-local-guard.unit.test.ts
     │   │   ├── run-pre-commit-guard.unit.test.ts
     │   │   └── validate-test-naming.unit.test.ts

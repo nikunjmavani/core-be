@@ -13,8 +13,23 @@ export const CATALOG_DOMAIN_TO_FOLDER: Record<string, string> = {
   uploads: 'upload',
 };
 
-/** Domains with no mutating-route body-validation matrix requirement. */
-export const DOMAINS_EXEMPT_FROM_VALIDATION_STATUS = new Set(['health', 'mcp']);
+/**
+ * Catalog domains served from `src/infrastructure` / `src/shared` rather than a
+ * `src/domains/<domain>/` folder. Their HTTP coverage lives in cross-cutting test
+ * locations, so the domain-scoped Tier-D / Tier-E scans must also read these files.
+ */
+export const INFRASTRUCTURE_DOMAIN_TEST_FILES: Record<string, string[]> = {
+  mcp: ['src/tests/security/auth/mcp-auth.security.test.ts'],
+};
+
+/**
+ * Domains with no mutating-route body-validation matrix requirement.
+ * - health: liveness/readiness probes carry no body.
+ * - mcp: JSON-RPC proxy; auth/role is the gate, not body shape.
+ * - ops: the only mutating route's sole input is a path param whose invalid value
+ *   is correctly a 404 (NotFoundError), never a body-validation 422.
+ */
+export const DOMAINS_EXEMPT_FROM_VALIDATION_STATUS = new Set(['health', 'mcp', 'ops']);
 
 /** HTTP methods treated as mutating; only these require 400/422 validation coverage in domain tests. */
 export const MUTATING_HTTP_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -105,6 +120,10 @@ export function collectDomainHttpSources(catalogDomain: string): string {
   const folder = resolveDomainFolder(catalogDomain);
   const sources: string[] = [];
   collectHttpTestSources(join(DOMAINS_DIR, folder), sources);
+  for (const relativePath of INFRASTRUCTURE_DOMAIN_TEST_FILES[catalogDomain] ?? []) {
+    const fullPath = resolve(process.cwd(), relativePath);
+    if (existsSync(fullPath)) sources.push(readFileSync(fullPath, 'utf-8'));
+  }
   return sources.join('\n');
 }
 

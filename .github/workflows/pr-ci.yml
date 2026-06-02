@@ -113,6 +113,9 @@ jobs:
       - name: Route catalog in sync
         run: pnpm routes:catalog:check
 
+      - name: Validate route HTTP coverage
+        run: pnpm validate:route-http-coverage
+
       - uses: ./.github/actions/test-env
 
       - name: OpenAPI specs in sync
