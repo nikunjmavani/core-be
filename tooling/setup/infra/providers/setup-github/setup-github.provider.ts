@@ -1,4 +1,4 @@
-import { execSync, spawnSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import * as logger from '@tooling/setup/common/logger.js';
 import { runGithubInit } from '@tooling/setup/github/init.js';
 import type {
@@ -33,52 +33,31 @@ function ghCommand(command: string): string {
   }
 }
 
-function setRepositorySecret(repository: string, secretName: string, secretValue: string): void {
-  const result = spawnSync('gh', ['secret', 'set', secretName, '--repo', repository], {
-    input: secretValue,
-    encoding: 'utf-8',
-    timeout: 15000,
-  });
-  if (result.status !== 0) {
-    const stderr = result.stderr?.trim() ?? '';
-    throw new Error(`Failed to set GitHub secret "${secretName}": ${stderr}`);
-  }
-}
-
 /**
- * Pushes only the repository-level RAILWAY_TOKEN secret. All env-scoped
- * secrets and variables (DATABASE_URL, REDIS_URL, RAILWAY_SERVICE_ID,
- * RAILWAY_WORKER_SERVICE_ID, POSTMAN_*, ALLOWED_ORIGINS, etc.) are pushed by
- * the dedicated GitHub-sync step (`buildGitHubSyncStep` →
- * `syncEnvironmentToGitHub`) which reads `.env.<environment>`, classifies
- * each key as secret-vs-variable via the central `classifyKey` rules, and
- * prunes stale items.
+ * GitHub repo-level setup is a verify-and-record step. No secrets are pushed here —
+ * the Railway provider mints per-environment project tokens, persists them in state,
+ * `exportEnvFiles` writes each into the matching `.env.<env>` as `RAILWAY_TOKEN`, and
+ * the dedicated GitHub-sync step (`buildGitHubSyncStep` → `syncEnvironmentToGitHub`)
+ * reads each `.env.<environment>`, classifies keys as secret-vs-variable via the
+ * central `classifyKey` rules, and pushes them per GitHub Environment. So
+ * `${{ secrets.RAILWAY_TOKEN }}` in the deploy workflow resolves to the env-scoped
+ * token automatically.
  *
- * Pushing env-scoped items here as well would create the same key under both
- * Secrets and Variables in a GitHub Environment (e.g. ALLOWED_ORIGINS as a
- * Secret here, then again as a Variable in the sync step).
+ * Pushing env-scoped items here as well would create the same key under both Secrets
+ * and Variables in a GitHub Environment.
  */
 export async function provision(
   config: SetupConfig,
-  secrets: SetupSecrets,
+  _secrets: SetupSecrets,
   _state: SetupState,
   _environments: string[],
 ): Promise<ProviderResult> {
   const repository = config.providers.github.repository;
-  const spinner = logger.startSpinner('Setting GitHub repository-level secrets...');
+  const spinner = logger.startSpinner('Verifying GitHub repository access...');
 
   try {
     ghCommand(`gh repo view ${repository} --json name`);
     logger.stopSpinner(spinner, `GitHub repository "${repository}" accessible`);
-
-    const setSecretNames: string[] = [];
-
-    if (secrets.railway.token) {
-      const secretSpinner = logger.startSpinner('Setting RAILWAY_TOKEN (repo)...');
-      setRepositorySecret(repository, 'RAILWAY_TOKEN', secrets.railway.token);
-      logger.stopSpinner(secretSpinner, 'RAILWAY_TOKEN set');
-      setSecretNames.push('RAILWAY_TOKEN');
-    }
 
     logger.info(
       'Environment-scoped secrets and variables will be pushed by the GitHub sync step (after .env.<environment> export).',
@@ -86,8 +65,8 @@ export async function provision(
 
     return {
       success: true,
-      message: `GitHub: ${setSecretNames.length} repo-level secret(s) set`,
-      stateUpdates: { github: { repository, secrets: setSecretNames } },
+      message: 'GitHub: repository access verified',
+      stateUpdates: { github: { repository, secrets: [] } },
     };
   } catch (provisionError) {
     const message =

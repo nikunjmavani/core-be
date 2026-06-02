@@ -419,8 +419,11 @@ export async function provision(
   environments: string[],
   applyStateUpdates?: (updates: Partial<SetupState>) => void,
 ): Promise<ProviderResult> {
-  if (!isSecretFilled(secrets.railway.token)) {
-    return { success: false, message: 'Railway Redis: RAILWAY_TOKEN must be set in .env.setup.' };
+  if (!isSecretFilled(secrets.railway.apiToken)) {
+    return {
+      success: false,
+      message: 'Railway Redis: RAILWAY_API_TOKEN must be set in .env.setup.',
+    };
   }
   if (!state.railway?.projectId) {
     return {
@@ -429,7 +432,7 @@ export async function provision(
     };
   }
 
-  const token = secrets.railway.token;
+  const token = secrets.railway.apiToken as string;
   const railwayState = state.railway;
   const projectId = railwayState.projectId;
 
@@ -642,11 +645,11 @@ export const setupRailwayRedisProvider: InfraProvider = {
   key: 'railway-redis',
   name: 'Railway Redis',
   isEnabled: ({ config, secrets }) =>
-    config.providers.railwayRedis.enabled && isSecretFilled(secrets.railway.token),
+    config.providers.railwayRedis.enabled && isSecretFilled(secrets.railway.apiToken),
   disabledReason: ({ config }) =>
     !config.providers.railwayRedis.enabled
       ? 'disabled in setup.config.json'
-      : 'RAILWAY_TOKEN missing in .env.setup',
+      : 'RAILWAY_API_TOKEN missing in .env.setup',
   preview: ({ config }) =>
     config.providers.railwayRedis.enabled
       ? {
@@ -655,8 +658,8 @@ export const setupRailwayRedisProvider: InfraProvider = {
               ? `, replica region ${config.providers.railwayRedis.region}`
               : ''
           }`,
-          url: 'https://railway.app/account/tokens',
-          configKey: 'RAILWAY_TOKEN',
+          url: 'https://railway.com/account/tokens',
+          configKey: 'RAILWAY_API_TOKEN',
         }
       : null,
   settingsReview: ({ config, environments }) =>
@@ -710,10 +713,10 @@ export const setupRailwayRedisProvider: InfraProvider = {
   }),
   detectRemote: async ({ secrets, state, environments, applyStateUpdates }) => {
     const adopted: Record<string, string> = {};
-    if (!(isSecretFilled(secrets.railway.token) && state.railway?.projectId)) {
+    if (!(isSecretFilled(secrets.railway.apiToken) && state.railway?.projectId)) {
       return adopted;
     }
-    const token = secrets.railway.token;
+    const token = secrets.railway.apiToken as string;
     const projectId = state.railway.projectId;
 
     const databases: NonNullable<SetupState['redis']>['databases'] = {
