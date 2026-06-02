@@ -1614,6 +1614,7 @@ src/
     │   │   ├── mcp-disabled.security.test.ts
     │   │   ├── mfa-security.security.test.ts
     │   │   ├── oauth-callback.security.test.ts
+    │   │   ├── open-redirect.security.test.ts
     │   │   ├── privilege-escalation.security.test.ts
     │   │   └── session-invalidation.security.test.ts
     │   ├── headers/
