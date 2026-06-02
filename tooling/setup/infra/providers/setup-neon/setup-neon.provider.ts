@@ -860,11 +860,17 @@ function allEnvironmentsHaveBranch(environments: string[], state: SetupState): b
   if (!branches) return false;
   return environments.every((environmentName) => {
     const entry = branches[environmentName];
+    const expectedRoleName = getServiceRoleName(environmentName);
+    // Require the recorded role to match the SQL-managed convention AND carry a password we
+    // can reuse. State written by the legacy REST-API role flow (`<env>_service_user` with
+    // no `serviceRolePassword`) deliberately fails this check so the provider re-runs and
+    // creates the new `<env>_app_login` role via SQL.
     return Boolean(
       entry?.branchId &&
         entry?.databaseUrl &&
         entry?.databaseMigrationUrl &&
-        entry?.serviceRoleName,
+        entry?.serviceRoleName === expectedRoleName &&
+        entry?.serviceRolePassword,
     );
   });
 }
