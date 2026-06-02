@@ -70,8 +70,16 @@ export function buildEnvironmentVariables(
     AUTH_SESSION_RETENTION_DAYS: DEFAULT_SESSION_RETENTION_DAYS,
   };
 
-  if (config.providers.railway.enabled && secrets.railway.token) {
-    variables.RAILWAY_TOKEN = secrets.railway.token;
+  if (config.providers.railway.enabled) {
+    // The per-environment project token is minted by the Railway provider via
+    // `projectTokenCreate` and persisted in `state.railway.environmentTokens`. There is no
+    // fallback: a missing entry means setup:infra hasn't yet run for this environment with
+    // RAILWAY_API_TOKEN set, so we leave RAILWAY_TOKEN blank rather than write a token
+    // scoped to the wrong environment.
+    const perEnvironmentToken = state.railway?.environmentTokens?.[environmentName];
+    if (perEnvironmentToken) {
+      variables.RAILWAY_TOKEN = perEnvironmentToken;
+    }
     const apiServiceId = railwayEnvironment?.services.api?.serviceId;
     const workerServiceId = railwayEnvironment?.services.worker?.serviceId;
     if (apiServiceId) variables.RAILWAY_SERVICE_ID = apiServiceId;

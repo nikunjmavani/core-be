@@ -50,7 +50,7 @@ const PREREQUISITES: PrerequisiteCheck[] = [
     required: false,
     enabledCheck: (config) => config.providers.railway.enabled,
     authCheck: 'railway whoami',
-    tokenEnvKey: 'RAILWAY_TOKEN',
+    tokenEnvKey: 'RAILWAY_API_TOKEN',
   },
 ];
 
