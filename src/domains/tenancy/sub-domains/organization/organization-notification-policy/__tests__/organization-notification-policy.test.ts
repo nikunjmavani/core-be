@@ -222,6 +222,23 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       expect([400, 422]).toContain(response.statusCode);
     });
 
+    it('should return 422 (not 500) when channel is outside the allowed set', async () => {
+      const { organization, token } = await createAuthorizedOrganizationContext([
+        TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
+      ]);
+
+      // An unknown channel must be rejected by the DTO, not slip through to the
+      // chk_org_notif_channel database check and surface as a 500.
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: notificationPoliciesCollectionPath(organization.public_id),
+        token,
+        payload: { notification_type: 'IN_APP', channel: 'CARRIER_PIGEON' },
+      });
+      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBeLessThan(500);
+    });
+
     it('should return 400 when body contains unknown keys', async () => {
       const { organization, token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
