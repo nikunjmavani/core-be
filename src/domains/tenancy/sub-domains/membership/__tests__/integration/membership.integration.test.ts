@@ -385,4 +385,39 @@ describe('Membership Sub-Domain — Integration', () => {
       expect(stillInvited!.joined_at).toBeNull();
     });
   });
+
+  describe('DELETE /api/v1/tenancy/organizations/:id/memberships/:membershipId', () => {
+    it('refuses to remove the organization owner (403, no orphaned org)', async () => {
+      const owner = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: owner.id });
+      const adminRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: MEMBERSHIP_PERMISSIONS,
+      });
+      const ownerMembership = await createMembership({
+        userId: owner.id,
+        organizationId: organization.id,
+        roleId: adminRole.id,
+      });
+      const token = await generateTestTokenWithActiveSession(app, owner.public_id);
+
+      // Even an admin (here, the owner) cannot remove the owner's membership — ownership must be
+      // transferred first, or the organization would be left without an owner.
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(
+          `/tenancy/organizations/${organization.public_id}/memberships/${ownerMembership.public_id}`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+      });
+      expect(response.statusCode).toBe(403);
+
+      const [stillActive] = await database
+        .select()
+        .from(memberships)
+        .where(eq(memberships.id, ownerMembership.id));
+      expect(stillActive!.deleted_at).toBeNull();
+    });
+  });
 });

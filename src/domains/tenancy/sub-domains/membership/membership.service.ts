@@ -255,11 +255,32 @@ export class MembershipService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
+      const membership = await this.membershipRepository.findByPublicId(
+        membership_public_id,
+        organization.id,
+      );
+      if (!membership) throw new NotFoundError('Membership');
+      // The owner cannot be removed — they must transfer ownership first, or the organization
+      // would be left without an owner.
+      if (organization.owner_user_id === membership.user_id) {
+        throw new ForbiddenError('errors:ownerCannotBeRemoved');
+      }
       const deleted = await this.membershipRepository.softDelete(
         membership_public_id,
         organization.id,
       );
-      if (!deleted) throw new NotFoundError('Membership');
+      if (!deleted) {
+        // The atomic owner-guard refused the delete (a concurrent transfer made this member the
+        // owner after the check above) or the row vanished — re-resolve for the precise error.
+        const current =
+          await this.organizationService.requireOrganizationMembershipByPublicId(
+            organization_public_id,
+          );
+        if (current.owner_user_id === membership.user_id) {
+          throw new ForbiddenError('errors:ownerCannotBeRemoved');
+        }
+        throw new NotFoundError('Membership');
+      }
       await this.invalidatePermissionsForMembership(deleted.user_id, organization_public_id);
     });
   }
@@ -305,7 +326,19 @@ export class MembershipService {
         membership.public_id,
         organization.id,
       );
-      if (!deleted) throw new NotFoundError('Membership');
+      if (!deleted) {
+        // The atomic owner-guard refused the delete: a concurrent transfer made this user the
+        // owner after the pre-check above (which would otherwise orphan the org), or the row
+        // vanished. Re-resolve so the race surfaces the same ownerCannotLeave as the pre-check.
+        const current =
+          await this.organizationService.requireOrganizationMembershipByPublicId(
+            organization_public_id,
+          );
+        if (current.owner_user_id === userId) {
+          throw new ForbiddenError('errors:ownerCannotLeave');
+        }
+        throw new NotFoundError('Membership');
+      }
       await invalidatePermissions(user_public_id, organization_public_id);
     });
   }

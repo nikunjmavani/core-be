@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
@@ -221,6 +221,15 @@ export class MembershipRepository extends BaseRepository {
           eq(memberships.public_id, public_id),
           eq(memberships.organization_id, organization_id),
           isNull(memberships.deleted_at),
+          // Never soft-delete the current owner's membership — neither via the member's own "leave"
+          // (which could race a concurrent transfer-to-them after its owner pre-check) nor via an
+          // admin removing a member. The owner must transfer ownership first; otherwise the row is
+          // left intact and the caller surfaces a clean Forbidden, so the org is never orphaned.
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${organizations}
+            WHERE ${organizations.id} = ${memberships.organization_id}
+              AND ${organizations.owner_user_id} = ${memberships.user_id}
+          )`,
         ),
       )
       .returning();
