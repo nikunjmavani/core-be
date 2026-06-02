@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.8.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.8.1-dev.0...v3.8.2-dev.0) (2026-06-02)
+
+
+### Fixed
+
+* **test:** make billing mutation + session-revoke integration tests deterministic ([#264](https://github.com/nikunjmavani/core-be/issues/264)) ([d031718](https://github.com/nikunjmavani/core-be/commit/d0317188babbb9c3c788e8ac59613b4a306f230a))
+
 ## [3.8.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.8.0-dev.0...v3.8.1-dev.0) (2026-06-02)
 
 
