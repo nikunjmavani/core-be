@@ -104,6 +104,7 @@
   "uploadOrganizationIdRequired": "organizationId is required when \"for\" is \"organization\"",
   "uploadContentTypeNotAllowed": "Content type \"{{contentType}}\" is not allowed for purpose \"{{purpose}}\". Allowed: {{allowed}}",
   "uploadFilenameExtensionMismatch": "Filename extension \"{{extension}}\" does not match content type \"{{contentType}}\". Allowed extensions: {{allowed}}",
+  "uploadFilenameUnsafe": "Filename contains path separators or control characters, which are not allowed",
   "uploadFileSizeExceeded": "File size {{fileSize}} exceeds maximum {{maxSize}} bytes for purpose \"{{purpose}}\"",
   "uploadPendingQuotaExceeded": "Too many pending uploads ({{pending}} of {{limit}}). Confirm or wait for the sweeper to reconcile before requesting another upload URL.",
   "uploadNotPending": "Upload is not awaiting confirmation",

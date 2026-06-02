@@ -68,6 +68,23 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
     );
   }
 
+  // Filename safety — reject path separators, parent-directory segments, and control
+  // characters. The storage key is server-generated (a UUID), so a hostile filename
+  // cannot traverse storage today; this is defense-in-depth so the stored display
+  // filename can never carry a path-traversal or control-character payload into a
+  // downstream sink (logs, headers, a client renderer).
+  const hasPathCharacters =
+    input.fileName.includes('/') || input.fileName.includes('\\') || input.fileName.includes('..');
+  const hasControlCharacters = Array.from(input.fileName).some((character) => {
+    const codePoint = character.charCodeAt(0);
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
+  if (hasPathCharacters || hasControlCharacters) {
+    throw new ValidationError('errors:uploadFilenameUnsafe', undefined, undefined, [
+      { field: 'fileName', messageKey: 'errors:uploadFilenameUnsafe' },
+    ]);
+  }
+
   // Filename extension validation — declared filename extension must match the declared
   // content type (when the filename includes an extension). Prevents misleading filenames
   // (e.g. evil.exe with contentType=image/png) from being stored against an allowed type.
