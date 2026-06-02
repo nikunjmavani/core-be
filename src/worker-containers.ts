@@ -32,9 +32,6 @@ export type DomainContainers = {
   uploadDomain: UploadContainer;
 };
 
-/** Alias for the worker process composition root. */
-export type WorkerContainers = DomainContainers;
-
 /**
  * Builds all domain containers without Fastify (API and worker processes share this wiring).
  */
@@ -101,6 +98,6 @@ export function createDomainContainers(
 }
 
 /** Worker process entry: same container graph as HTTP, without Fastify decorators. */
-export function createWorkerContainers(): WorkerContainers {
+export function createWorkerContainers(): DomainContainers {
   return createDomainContainers();
 }
