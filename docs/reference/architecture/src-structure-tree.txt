@@ -416,6 +416,7 @@ src/
     │   │   │       └── unit/
     │   │   │       │   ├── webhook-subscription.util.unit.test.ts
     │   │   │       │   ├── webhook-tombstone-retention.processor.boundary.unit.test.ts
+    │   │   │       │   ├── webhook-tombstone-retention.worker.unit.test.ts
     │   │   │       │   ├── webhook.controller.unit.test.ts
     │   │   │       │   ├── webhook.repository.db.unit.test.ts
     │   │   │       │   ├── webhook.repository.unit.test.ts
@@ -520,6 +521,7 @@ src/
     │   │   │   │   │   └── member-roles.integration.test.ts
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── member-role-tombstone-retention.processor.boundary.unit.test.ts
+    │   │   │   │   │   ├── member-role-tombstone-retention.worker.unit.test.ts
     │   │   │   │   │   ├── member-role.controller.unit.test.ts
     │   │   │   │   │   ├── member-role.repository.db.unit.test.ts
     │   │   │   │   │   ├── member-role.repository.unit.test.ts
@@ -564,6 +566,9 @@ src/
     │   │   │   │   ├── integration/
     │   │   │   │   │   └── membership.integration.test.ts
     │   │   │   │   └── unit/
+    │   │   │   │   │   ├── events/
+    │   │   │   │   │       └── worker/
+    │   │   │   │   │       │   └── membership-tombstone-retention.worker.unit.test.ts
     │   │   │   │   │   ├── membership-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   ├── membership.controller.unit.test.ts
     │   │   │   │   │   ├── membership.repository.db.unit.test.ts
@@ -617,6 +622,7 @@ src/
     │   │   │   │   │   └── organization.integration.test.ts
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── organization-tombstone-retention.processor.boundary.unit.test.ts
+    │   │   │   │   │   ├── organization-tombstone-retention.worker.unit.test.ts
     │   │   │   │   │   ├── organization.controller.unit.test.ts
     │   │   │   │   │   ├── organization.repository.db.unit.test.ts
     │   │   │   │   │   ├── organization.serializer.unit.test.ts
@@ -626,6 +632,7 @@ src/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   ├── unit/
     │   │   │   │   │   │   ├── organization-api-key-tombstone-retention.processor.boundary.unit.test.ts
+    │   │   │   │   │   │   ├── organization-api-key-tombstone-retention.worker.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.controller.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.serializer.no-secret.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.service.authenticate.unit.test.ts
@@ -744,6 +751,7 @@ src/
     │   │   │   ├── upload-pending-sweep.processor.unit.test.ts
     │   │   │   ├── upload-svg.util.unit.test.ts
     │   │   │   ├── upload-tombstone-retention.processor.boundary.unit.test.ts
+    │   │   │   ├── upload-tombstone-retention.worker.unit.test.ts
     │   │   │   ├── upload.controller.unit.test.ts
     │   │   │   ├── upload.offboarding.unit.test.ts
     │   │   │   ├── upload.repository.db.unit.test.ts
@@ -984,6 +992,8 @@ src/
     │   │   ├── invitation.template.ts
     │   │   └── magic-link.template.ts
     │   ├── workers/
+    │   │   ├── __tests__/
+    │   │   │   └── mail.worker.unit.test.ts
     │   │   ├── mail-outbox-sweeper.constants.ts
     │   │   ├── mail-outbox-sweeper.processor.ts
     │   │   ├── mail-outbox-sweeper.worker.ts
@@ -1070,6 +1080,8 @@ src/
     │   │   ├── commit-dispatch.store.ts
     │   │   └── commit-dispatch.types.ts
     │   ├── dlq/
+    │   │   ├── __tests__/
+    │   │   │   └── dlq-auto-retry.worker.unit.test.ts
     │   │   ├── dead-letter.repository.ts
     │   │   ├── dead-letter.schema.ts
     │   │   ├── dead-letter.ts
