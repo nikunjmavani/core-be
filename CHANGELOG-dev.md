@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.1.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.1.3-dev.0...v4.1.4-dev.0) (2026-06-02)
+
+
+### Fixed
+
+* map remaining unique violations to 409 instead of 500 ([#294](https://github.com/nikunjmavani/core-be/issues/294)) ([7a74b3c](https://github.com/nikunjmavani/core-be/commit/7a74b3c24cbfe90041cb51e3ba5e293110e9039f))
+
 ## [4.1.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.1.2-dev.0...v4.1.3-dev.0) (2026-06-02)
 
 
