@@ -31,10 +31,10 @@ merging both shard reports through
 
 | Metric     | Coverage | Gate threshold |
 | ---------- | -------- | -------------- |
-| Lines      | ~93%     | 80%            |
-| Statements | ~93%     | 80%            |
-| Functions  | ~96%     | 80%            |
-| Branches   | ~84%     | 70%            |
+| Lines      | ~93%     | 90%            |
+| Statements | ~93%     | 90%            |
+| Functions  | ~96%     | 94%            |
+| Branches   | ~84%     | 80%            |
 
 The codebase already sits **well above** the configured thresholds. The
 thresholds are conservative floors, not the real bar.
@@ -125,11 +125,11 @@ security-critical domains — over a blanket 90/95.
    `Unit coverage` job that emits a `coverage-unit` artifact; the `Coverage` gate
    merges it with the DB-bound shards (via the existing `coverage-*` download) so
    CI now reports the true ~93%.
-2. **Ratchet the floor (next).** Now that CI measures truly, raise
-   `tooling/ci/coverage-thresholds.json` toward the real numbers, e.g.
-   `lines 90, statements 90, functions 95, branches 80`. Keep branches
-   conservative. Confirm the post-merge `Coverage` gate prints ~93% first, then
-   set each floor just under the figure CI reports.
+2. ~~**Ratchet the floor.**~~ **Done** — with CI confirming the merged gate at
+   93.03% lines / 92.27% statements / 96.11% functions / 83.25% branches, the
+   floor in `tooling/ci/coverage-thresholds.json` was raised to
+   `lines 90, statements 90, functions 94, branches 80` (a 2–3pt buffer under the
+   real numbers so a normal dip does not block the `dev → main` release gate).
 3. **Make patch coverage a blocking PR check.** Run `pnpm coverage:patch`
    against the merged report on PRs and fail under 90% on new code. Needs the
    merged report available on the PR lane (the `coverage-unit` artifact wiring
