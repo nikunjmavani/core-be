@@ -84,7 +84,7 @@ describe('MembershipService — permission cache invalidation', () => {
   it('create invalidates user permission cache after membership is created', async () => {
     await service.create(
       'org_public_abc',
-      { user_id: 'user_public_new', role_id: 'role_public', status: 'ACTIVE' },
+      { user_id: 'user_public_new', role_id: 'role_public', status: 'INVITED' },
       'inviter_public',
     );
 
