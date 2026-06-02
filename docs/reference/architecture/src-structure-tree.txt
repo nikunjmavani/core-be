@@ -1499,6 +1499,7 @@ src/
     │   ├── rls-context-network-isolation.global.test.ts
     │   ├── route-completeness.global.test.ts
     │   ├── service-cross-domain-boundary.global.test.ts
+    │   ├── stryker-mutate-paths.global.test.ts
     │   ├── system-validation.global.test.ts
     │   └── worker-readiness.global.test.ts
     ├── helpers/
