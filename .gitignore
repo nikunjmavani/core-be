@@ -43,6 +43,9 @@ npm-debug.log*
 coverage/
 coverage-*/
 
+# SonarQube scanner working dir (analysis task metadata)
+.scannerwork/
+
 # Generated docs (run pnpm docs:generate / pnpm docs:postman to recreate)
 docs/openapi/openapi.json
 docs/openapi/openapi.*.json
