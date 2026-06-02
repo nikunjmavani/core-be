@@ -12,7 +12,8 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 import { env } from '@/shared/config/env.config.js';
-import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { ConflictError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
@@ -175,17 +176,28 @@ export class WebauthnService {
     }
 
     const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
-    const created = await withUserDatabaseContext(user.public_id, () =>
-      this.credentialRepository.createCredential({
-        user_id: user.id,
-        credential_id: credential.id,
-        public_key: Buffer.from(credential.publicKey).toString('base64url'),
-        counter: credential.counter,
-        device_type: credentialDeviceType,
-        backed_up: credentialBackedUp,
-        transports: credential.transports ?? [],
-      }),
-    );
+    let created: Awaited<ReturnType<WebauthnCredentialRepository['createCredential']>>;
+    try {
+      created = await withUserDatabaseContext(user.public_id, () =>
+        this.credentialRepository.createCredential({
+          user_id: user.id,
+          credential_id: credential.id,
+          public_key: Buffer.from(credential.publicKey).toString('base64url'),
+          counter: credential.counter,
+          device_type: credentialDeviceType,
+          backed_up: credentialBackedUp,
+          transports: credential.transports ?? [],
+        }),
+      );
+    } catch (error) {
+      // This passkey is already enrolled (webauthn_credentials_credential_id_unique).
+      // excludeCredentials is only a client-side hint, so a replayed/forced registration
+      // can still collide — surface a clean 409 rather than an unhandled 500.
+      if (isPostgresUniqueViolation(error)) {
+        throw new ConflictError('errors:webauthnCredentialExists');
+      }
+      throw error;
+    }
 
     return { verified: true, credential_id: created.credential_id };
   }

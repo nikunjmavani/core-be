@@ -65,6 +65,7 @@
   "roleNameExists": "Ya existe un rol con el nombre \"{{name}}\" en esta organización",
   "membershipAlreadyExists": "Este usuario ya es miembro de la organización",
   "webhookUrlExists": "Ya existe un webhook para \"{{url}}\" en esta organización",
+  "webauthnCredentialExists": "Esta clave de acceso ya está registrada",
   "ownerCannotLeave": "El propietario no puede abandonar la organización; transfiere la propiedad primero",
   "onlyOwnerCanTransfer": "Solo el propietario puede transferir la propiedad",
   "membershipActivationRequiresInvitationAccept": "La membresía solo puede activarse aceptando la invitación",
