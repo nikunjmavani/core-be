@@ -183,6 +183,7 @@ src/
     │   │   │   │   │   ├── auth-session.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-session.repository.expired.db.unit.test.ts
     │   │   │   │   │   ├── auth-session.repository.unit.test.ts
+    │   │   │   │   │   ├── auth-session.serializer.no-secret.unit.test.ts
     │   │   │   │   │   ├── auth-session.service.unit.test.ts
     │   │   │   │   │   ├── session-cleanup.constants.unit.test.ts
     │   │   │   │   │   ├── session-cleanup.worker.unit.test.ts
@@ -196,6 +197,7 @@ src/
     │   │   │   │   └── session-cleanup.worker.ts
     │   │   │   ├── auth-session.repository.ts
     │   │   │   ├── auth-session.schema.ts
+    │   │   │   ├── auth-session.serializer.ts
     │   │   │   ├── auth-session.service.ts
     │   │   │   ├── auth-session.types.ts
     │   │   │   ├── OVERVIEW.md
@@ -1634,6 +1636,7 @@ src/
     │   │   ├── queue-dashboard-audit.security.test.ts
     │   │   ├── queue-dashboard-readonly.security.test.ts
     │   │   ├── queue-dashboard.security.test.ts
+    │   │   ├── sensitive-field-leakage.security.test.ts
     │   │   ├── slug-uniqueness-race.security.test.ts
     │   │   └── webhook-ssrf.security.test.ts
     │   ├── input/

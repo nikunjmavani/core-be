@@ -12,6 +12,7 @@ import {
   setSessionCookie,
 } from '@/domains/auth/auth.http.util.js';
 import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import { serializeAuthSessions } from '@/domains/auth/sub-domains/auth-session/auth-session.serializer.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthSessionHandlersDependencies = Pick<AuthContainer, 'authService' | 'authSessionService'>;
@@ -55,7 +56,7 @@ export function createAuthSessionHandlers({
     listSessions: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const data = await authSessionService.list(auth.userId);
-      return successResponse(data, getRequestIdentifier(request));
+      return successResponse(serializeAuthSessions(data), getRequestIdentifier(request));
     },
     revokeSession: async (
       request: FastifyRequest<{ Params: { id: string } }>,
