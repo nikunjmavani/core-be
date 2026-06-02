@@ -162,6 +162,13 @@ export class MembershipService {
     invited_by_user_public_id: string | undefined,
   ): Promise<MembershipOutput> {
     const parsed = validateCreateMembership(body);
+    // A freshly created membership has never joined (joined_at IS NULL), so creating it
+    // directly as ACTIVE both violates chk_memberships_joined (would 500) and bypasses the
+    // invariant that initial activation comes from invitation acceptance — the same rule the
+    // PATCH path enforces. Reject it cleanly instead of letting the constraint surface a 500.
+    if (parsed.status === 'ACTIVE') {
+      throw new ForbiddenError('errors:membershipActivationRequiresInvitationAccept');
+    }
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(

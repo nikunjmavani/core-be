@@ -114,7 +114,7 @@ describe('MembershipService', () => {
   it('create adds membership for user', async () => {
     const result = await service.create(
       'org_public',
-      { user_id: 'user_public', role_id: 'role_public', status: 'ACTIVE' },
+      { user_id: 'user_public', role_id: 'role_public', status: 'INVITED' },
       'inviter_public',
     );
     expect(memberRoleService.requireRoleRecordByPublicId).toHaveBeenCalledWith(
@@ -124,6 +124,18 @@ describe('MembershipService', () => {
     expect(membershipRepository.create).toHaveBeenCalled();
     expect(invalidatePermissions).toHaveBeenCalledWith('user_public', 'org_public');
     expect(result.id).toBe('mem_public');
+  });
+
+  it('create rejects an ACTIVE status (activation requires invitation acceptance)', async () => {
+    await expect(
+      service.create(
+        'org_public',
+        { user_id: 'user_public', role_id: 'role_public', status: 'ACTIVE' },
+        'inviter_public',
+      ),
+    ).rejects.toMatchObject({ messageKey: 'errors:membershipActivationRequiresInvitationAccept' });
+    // The guard fires before any persistence — no write is attempted.
+    expect(membershipRepository.create).not.toHaveBeenCalled();
   });
 
   it('getPermissions throws when organization context is missing', async () => {
@@ -281,7 +293,7 @@ describe('MembershipService', () => {
     await expect(
       service.create(
         'org_public',
-        { user_id: 'missing_user', role_id: 'role_public', status: 'ACTIVE' },
+        { user_id: 'missing_user', role_id: 'role_public', status: 'INVITED' },
         'inviter_public',
       ),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -349,7 +361,7 @@ describe('MembershipService', () => {
     );
     await service.create(
       'org_public',
-      { user_id: 'user_public', role_id: 'role_public', status: 'ACTIVE' },
+      { user_id: 'user_public', role_id: 'role_public', status: 'INVITED' },
       'missing_inviter',
     );
     expect(membershipRepository.create).toHaveBeenCalledWith(

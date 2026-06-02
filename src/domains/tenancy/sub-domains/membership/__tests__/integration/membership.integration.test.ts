@@ -145,6 +145,57 @@ describe('Membership Sub-Domain — Integration', () => {
       expect(settingsData.language).toBe('es');
       expect(settingsData.preferred_locales).toEqual(['es']);
     });
+
+    it('rejects creating a membership directly as ACTIVE with 403 (not a 500)', async () => {
+      const admin = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: admin.id });
+      const adminRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: MEMBERSHIP_PERMISSIONS,
+      });
+      await createMembership({
+        userId: admin.id,
+        organizationId: organization.id,
+        roleId: adminRole.id,
+      });
+      const adminToken = await generateTestTokenWithActiveSession(app, admin.public_id);
+      const newMember = await createTestUser({ email: 'direct-active-member@test.com' });
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+
+      // Initial activation must come from invitation acceptance — a manager cannot mint an
+      // already-active membership. This must be a clean 403, never a chk_memberships_joined 500.
+      const activeResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/memberships`),
+        token: adminToken,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: {
+          user_id: newMember.public_id,
+          role_id: memberRole.public_id,
+          status: 'ACTIVE',
+        },
+      });
+      expect(activeResponse.statusCode).toBe(403);
+
+      // The default (INVITED) path still works — the guard is specific to ACTIVE.
+      const invitedResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/memberships`),
+        token: adminToken,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: {
+          user_id: newMember.public_id,
+          role_id: memberRole.public_id,
+          status: 'INVITED',
+        },
+      });
+      expect(invitedResponse.statusCode).toBe(201);
+    });
   });
 
   describe('GET /api/v1/tenancy/organizations/:id/invitations', () => {
