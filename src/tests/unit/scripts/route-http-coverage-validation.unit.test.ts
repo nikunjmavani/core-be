@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RouteEntry } from '@/tests/helpers/route-catalog-registry.js';
 import { join, resolve } from 'node:path';
 import {
+  DOMAINS_EXEMPT_FROM_VALIDATION_STATUS,
   domainHasForbiddenStatusCoverage,
   domainHasValidationStatusCoverage,
   evaluateRouteHttpCoverage,
@@ -28,6 +29,14 @@ const sampleRoute = (overrides: Partial<RouteEntry>): RouteEntry => ({
 });
 
 describe('route-http-coverage-validation.util', () => {
+  it('detects mcp 403 coverage from its real infrastructure test location', () => {
+    expect(domainHasForbiddenStatusCoverage('mcp')).toBe(true);
+  });
+
+  it('exempts ops from Tier-E validation (param-not-found is a 404, not a body 422)', () => {
+    expect(DOMAINS_EXEMPT_FROM_VALIDATION_STATUS.has('ops')).toBe(true);
+  });
+
   it('maps catalog domain slugs to domain folders', () => {
     expect(resolveDomainFolder('users')).toBe('user');
     expect(resolveDomainFolder('uploads')).toBe('upload');
