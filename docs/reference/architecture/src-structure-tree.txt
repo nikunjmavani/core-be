@@ -238,6 +238,7 @@ src/
     │   │   │   └── subscription.factory.ts
     │   │   ├── integration/
     │   │   │   ├── billing-route-smoke.integration.test.ts
+    │   │   │   ├── billing-subscription-mutations.integration.test.ts
     │   │   │   └── billing.integration.test.ts
     │   │   ├── unit/
     │   │   │   └── billing-ledger-immutability.unit.test.ts
