@@ -207,7 +207,8 @@ src/
     │   │   │       └── unit/
     │   │   │       │   ├── webauthn-challenge.unit.test.ts
     │   │   │       │   ├── webauthn-config.expected-origin.unit.test.ts
-    │   │   │       │   └── webauthn.service.authenticate-options.unit.test.ts
+    │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
+    │   │   │       │   └── webauthn.validator.unit.test.ts
     │   │   │   ├── seed/
     │   │   │       ├── auth-webauthn.bulk.seed.ts
     │   │   │       ├── auth-webauthn.faker.ts
@@ -664,6 +665,7 @@ src/
     │   │   │   │   │   ├── unit/
     │   │   │   │   │   │   ├── organization-notification-policy-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   │   ├── organization-notification-policy.controller.unit.test.ts
+    │   │   │   │   │   │   ├── organization-notification-policy.serializer.unit.test.ts
     │   │   │   │   │   │   ├── organization-notification-policy.service.unit.test.ts
     │   │   │   │   │   │   └── organization-notification-policy.validator.unit.test.ts
     │   │   │   │   │   └── organization-notification-policy.test.ts
@@ -687,6 +689,7 @@ src/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   ├── unit/
     │   │   │   │   │   │   ├── organization-settings.controller.unit.test.ts
+    │   │   │   │   │   │   ├── organization-settings.serializer.unit.test.ts
     │   │   │   │   │   │   ├── organization-settings.service.unit.test.ts
     │   │   │   │   │   │   └── organization-settings.validator.unit.test.ts
     │   │   │   │   │   └── organization-settings.test.ts
@@ -830,6 +833,7 @@ src/
     │   │   │   │   │   ├── user-data-export-retention.processor.unit.test.ts
     │   │   │   │   │   ├── user-data-export.controller.unit.test.ts
     │   │   │   │   │   ├── user-data-export.processor.unit.test.ts
+    │   │   │   │   │   ├── user-data-export.serializer.unit.test.ts
     │   │   │   │   │   ├── user-data-export.service.db.unit.test.ts
     │   │   │   │   │   └── user-data-export.service.unit.test.ts
     │   │   │   │   └── user-data-export.test.ts
