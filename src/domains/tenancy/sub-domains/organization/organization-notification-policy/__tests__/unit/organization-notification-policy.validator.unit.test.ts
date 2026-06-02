@@ -10,11 +10,21 @@ describe('organization-notification-policy validators', () => {
   it('validateCreateOrganizationNotificationPolicy accepts type and channel', () => {
     const result = validateCreateOrganizationNotificationPolicy({
       notification_type: 'billing',
-      channel: 'email',
+      channel: 'EMAIL',
     });
     expect(result.notification_type).toBe('billing');
     expect(result.default_enabled).toBe(true);
     expect(result.is_mandatory).toBe(false);
+  });
+
+  it('validateCreateOrganizationNotificationPolicy rejects a channel outside the allowed set', () => {
+    // An unknown channel must be a 422 at the edge, not a chk_org_notif_channel 500.
+    expect(() =>
+      validateCreateOrganizationNotificationPolicy({
+        notification_type: 'billing',
+        channel: 'CARRIER_PIGEON',
+      }),
+    ).toThrow(ValidationError);
   });
 
   it('validateUpdateOrganizationNotificationPolicy accepts partial update', () => {
@@ -27,7 +37,7 @@ describe('organization-notification-policy validators', () => {
     expect(() =>
       validateCreateOrganizationNotificationPolicy({
         notification_type: 'billing',
-        channel: 'email',
+        channel: 'EMAIL',
         muted_until: 'not-a-datetime',
       }),
     ).toThrow(ValidationError);

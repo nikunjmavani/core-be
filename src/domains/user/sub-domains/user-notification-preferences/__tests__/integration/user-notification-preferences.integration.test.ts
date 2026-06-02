@@ -47,5 +47,36 @@ describe('User Notification Preferences Sub-Domain — Integration', () => {
       });
       expect([400, 422]).toContain(response.statusCode);
     });
+
+    it('returns 422 (not 500) for a channel outside the allowed set', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      // An unknown channel must be rejected by the DTO, not slip through to the
+      // chk_user_notif_prefs_channel database check and surface as a 500.
+      const response = await injectAuthenticated(app, {
+        method: 'PUT',
+        url: testApiPath('/users/me/notification-preferences'),
+        token,
+        payload: {
+          preferences: [{ notification_type: 'billing', channel: 'TELEPATHY', is_enabled: true }],
+        },
+      });
+      expect([400, 422]).toContain(response.statusCode);
+      expect(response.statusCode).toBeLessThan(500);
+    });
+
+    it('accepts a valid uppercase channel', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        method: 'PUT',
+        url: testApiPath('/users/me/notification-preferences'),
+        token,
+        payload: {
+          preferences: [{ notification_type: 'billing', channel: 'EMAIL', is_enabled: true }],
+        },
+      });
+      expect(response.statusCode).toBe(200);
+    });
   });
 });

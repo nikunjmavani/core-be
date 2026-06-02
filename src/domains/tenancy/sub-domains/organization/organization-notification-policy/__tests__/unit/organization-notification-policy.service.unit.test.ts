@@ -17,7 +17,7 @@ const policyRow = {
   id: 1,
   organization_id: 1,
   notification_type: 'invite',
-  channel: 'email',
+  channel: 'EMAIL',
   default_enabled: true,
   is_mandatory: false,
   muted_until: null,
@@ -62,7 +62,7 @@ describe('OrganizationNotificationPolicyService', () => {
       expect(result[0]).toMatchObject({
         organization_id: 'org_public_abc',
         notification_type: 'invite',
-        channel: 'email',
+        channel: 'EMAIL',
       });
     });
 
@@ -98,7 +98,7 @@ describe('OrganizationNotificationPolicyService', () => {
   describe('create', () => {
     const body = {
       notification_type: 'invite',
-      channel: 'email',
+      channel: 'EMAIL',
       default_enabled: true,
       is_mandatory: false,
     };
@@ -109,7 +109,7 @@ describe('OrganizationNotificationPolicyService', () => {
         expect.objectContaining({
           organization_id: organization.id,
           notification_type: 'invite',
-          channel: 'email',
+          channel: 'EMAIL',
         }),
       );
       expect(result).toMatchObject({ organization_id: 'org_public_abc' });
