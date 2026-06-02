@@ -1637,6 +1637,7 @@ src/
     │   │   ├── input-validation.security.test.ts
     │   │   ├── mass-assignment.security.test.ts
     │   │   ├── path-traversal.security.test.ts
+    │   │   ├── payload-dos.security.test.ts
     │   │   └── upload-svg.security.test.ts
     │   ├── rate-limit/
     │   │   ├── cross-tenant-rate-limit.security.test.ts
