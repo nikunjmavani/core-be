@@ -349,11 +349,23 @@ export class OrganizationService {
           );
         }
       }
-      const updated = await this.repository.update(
-        public_id,
-        omitUndefined(parsed),
-        userId ?? null,
-      );
+      let updated: Awaited<ReturnType<typeof this.repository.update>>;
+      try {
+        updated = await this.repository.update(public_id, omitUndefined(parsed), userId ?? null);
+      } catch (error) {
+        // Two concurrent slug updates (on different orgs, to the same new slug) can both pass
+        // the findBySlug pre-check above; the loser hits the `idx_organizations_slug` unique
+        // index. Map the unique_violation to a 409 instead of letting it surface as a 500 —
+        // mirroring the create path.
+        if (parsed.slug && isPostgresUniqueViolation(error)) {
+          throw new ConflictError(
+            'errors:organizationSlugExists',
+            { slug: parsed.slug },
+            `Organization with slug "${parsed.slug}" already exists`,
+          );
+        }
+        throw error;
+      }
       if (!updated) throw new NotFoundError('Organization');
       return serializeOrganization(updated);
     });

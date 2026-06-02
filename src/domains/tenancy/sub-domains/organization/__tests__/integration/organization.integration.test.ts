@@ -104,5 +104,49 @@ describe('Organization Sub-Domain — Integration', () => {
       });
       expect([400, 422]).toContain(response.statusCode);
     });
+
+    it('concurrent slug updates to the same new slug resolve to one 200 + one 409 (no 5xx)', async () => {
+      // One admin who owns two organizations races both to the SAME previously-unused slug.
+      // Both requests pass the findBySlug pre-check (neither org holds it yet), so the loser
+      // hits the idx_organizations_slug unique index — which must map to 409, never a 500.
+      const user = await createTestUser();
+      const [organizationA, organizationB] = await Promise.all([
+        createTestOrganization({ ownerUserId: user.id }),
+        createTestOrganization({ ownerUserId: user.id }),
+      ]);
+      const [roleA, roleB] = await Promise.all([
+        createRoleWithPermissions({
+          organizationId: organizationA.id,
+          permissionCodes: ORGANIZATION_PERMISSIONS,
+        }),
+        createRoleWithPermissions({
+          organizationId: organizationB.id,
+          permissionCodes: ORGANIZATION_PERMISSIONS,
+        }),
+      ]);
+      await Promise.all([
+        createMembership({ userId: user.id, organizationId: organizationA.id, roleId: roleA.id }),
+        createMembership({ userId: user.id, organizationId: organizationB.id, roleId: roleB.id }),
+      ]);
+      const token = await generateTestToken({ userId: user.public_id });
+
+      const sharedSlug = 'race-shared-org-slug';
+      const patchSlug = (organizationPublicId: string) =>
+        injectAuthenticated(app, {
+          method: 'PATCH',
+          url: testApiPath(`/tenancy/organizations/${organizationPublicId}`),
+          token,
+          organizationPublicId,
+          payload: { slug: sharedSlug },
+        });
+
+      const statuses = (
+        await Promise.all([patchSlug(organizationA.public_id), patchSlug(organizationB.public_id)])
+      ).map((response) => response.statusCode);
+
+      expect(statuses.filter((status) => status >= 500)).toHaveLength(0);
+      expect(statuses.filter((status) => status === 200)).toHaveLength(1);
+      expect(statuses.filter((status) => status === 409)).toHaveLength(1);
+    });
   });
 });
