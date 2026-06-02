@@ -1,4 +1,5 @@
-import { ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
@@ -174,16 +175,26 @@ export class MembershipService {
       if (userId === null) throw new NotFoundError('User');
       const inviterId =
         await this.organizationService.resolveUserInternalIdByPublicId(invited_by_user_public_id);
-      const created = await this.membershipRepository.create(
-        omitUndefined({
-          organization_id: organization.id,
-          user_id: userId,
-          role_id: role.id,
-          status: parsed.status,
-          invited_by_user_id: inviterId,
-          created_by_user_id: inviterId,
-        }),
-      );
+      let created: Awaited<ReturnType<MembershipRepository['create']>>;
+      try {
+        created = await this.membershipRepository.create(
+          omitUndefined({
+            organization_id: organization.id,
+            user_id: userId,
+            role_id: role.id,
+            status: parsed.status,
+            invited_by_user_id: inviterId,
+            created_by_user_id: inviterId,
+          }),
+        );
+      } catch (error) {
+        // The user already belongs to this organization (idx_memberships_user_org_unique) —
+        // surface a clean 409 instead of an unhandled unique_violation 500.
+        if (isPostgresUniqueViolation(error)) {
+          throw new ConflictError('errors:membershipAlreadyExists');
+        }
+        throw error;
+      }
       await invalidatePermissions(parsed.user_id, organization_public_id);
       await this.applyOrganizationLocaleDefaults(parsed.user_id, organization_public_id);
       return serializeMembership(created, organization_public_id);
