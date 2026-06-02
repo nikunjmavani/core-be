@@ -17,7 +17,7 @@ import {
   getSelectedWorkerQueueFamilies,
   isMonolithicWorkerQueueFamilies,
 } from '@/infrastructure/queue/worker-runtime/worker-queue-family.util.js';
-import type { WorkerContainers } from '@/worker-containers.js';
+import type { DomainContainers } from '@/worker-containers.js';
 
 /**
  * Per-queue contribution to the worker's Postgres pool budget. `postgresConcurrency` is
@@ -54,7 +54,7 @@ export type WorkerPostgresPoolDemandReport = {
 
 function isRegistrationEnabled(
   definition: WorkerQueueRegistrationDefinition,
-  workerContainers: WorkerContainers | undefined,
+  workerContainers: DomainContainers | undefined,
 ): boolean {
   if (definition.isEnabled === undefined) {
     return true;
@@ -73,7 +73,7 @@ function isRegistrationEnabled(
 
 function resolvePostgresConcurrency(
   definition: WorkerQueueRegistrationDefinition,
-  workerContainers: WorkerContainers | undefined,
+  workerContainers: DomainContainers | undefined,
 ): number {
   if (!definition.usesPostgres) {
     return 0;
@@ -91,7 +91,7 @@ function resolvePostgresConcurrency(
 export function computeWorkerPostgresPoolDemand(
   options: {
     readonly families?: readonly WorkerQueueFamily[];
-    readonly workerContainers?: WorkerContainers;
+    readonly workerContainers?: DomainContainers;
   } = {},
 ): WorkerPostgresPoolDemandReport {
   const selectedFamilies = options.families ?? getSelectedWorkerQueueFamilies();
@@ -137,7 +137,7 @@ export function computeWorkerPostgresPoolDemand(
 export function resolveActiveWorkerQueueNames(
   options: {
     readonly families?: readonly WorkerQueueFamily[];
-    readonly workerContainers?: WorkerContainers;
+    readonly workerContainers?: DomainContainers;
   } = {},
 ): ReadonlySet<string> {
   const selectedFamilies = options.families ?? getSelectedWorkerQueueFamilies();
