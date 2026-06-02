@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
+import {
+  createMembership,
+  createRoleWithPermissions,
+} from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 
 describe('OrganizationRepository (database)', () => {
   const repository = new OrganizationRepository();
@@ -86,5 +90,49 @@ describe('OrganizationRepository (database)', () => {
 
     expect(await repository.update('missing_org', { name: 'X' }, owner.id)).toBeNull();
     expect(await repository.updateOwner('missing_org', owner.id)).toBeNull();
+  });
+
+  it('updateOwner transfers only to a member who is still active (atomic TOCTOU guard)', async () => {
+    const owner = await createTestUser({ email: 'transfer-owner@example.com' });
+    const organization = await repository.create({
+      name: 'Transfer Org',
+      slug: 'transfer-org',
+      owner_user_id: owner.id,
+      created_by_user_id: owner.id,
+    });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: [],
+    });
+
+    // An active member can receive ownership.
+    const activeMember = await createTestUser({ email: 'active-new-owner@example.com' });
+    await createMembership({
+      userId: activeMember.id,
+      organizationId: organization.id,
+      roleId: role.id,
+      status: 'ACTIVE',
+    });
+    const transferred = await repository.updateOwner(organization.public_id, activeMember.id);
+    expect(transferred?.owner_user_id).toBe(activeMember.id);
+
+    // A suspended member must NOT — this is the race outcome the guard blocks. updateOwner
+    // matches zero rows and the owner is left unchanged.
+    const suspendedMember = await createTestUser({ email: 'suspended-new-owner@example.com' });
+    await createMembership({
+      userId: suspendedMember.id,
+      organizationId: organization.id,
+      roleId: role.id,
+      status: 'SUSPENDED',
+    });
+    expect(await repository.updateOwner(organization.public_id, suspendedMember.id)).toBeNull();
+
+    // A non-member is likewise rejected.
+    const stranger = await createTestUser({ email: 'stranger-new-owner@example.com' });
+    expect(await repository.updateOwner(organization.public_id, stranger.id)).toBeNull();
+
+    // The owner remains the active member from the only successful transfer.
+    const finalState = await repository.findByPublicId(organization.public_id);
+    expect(finalState?.owner_user_id).toBe(activeMember.id);
   });
 });
