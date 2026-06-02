@@ -227,6 +227,58 @@ function handleUnhandledErrorResponse(
   };
 }
 
+/**
+ * Stable client-error payloads for Fastify framework errors that already carry a
+ * 4xx status — content-type-parser failures such as `FST_ERR_CTP_BODY_TOO_LARGE`
+ * (413) and `FST_ERR_CTP_UNSUPPORTED_MEDIA_TYPE` (415). Other 4xx framework codes
+ * fall back to a generic invalid-request payload.
+ */
+const FASTIFY_CLIENT_ERRORS: Record<number, { code: string; key: string; fallback: string }> = {
+  413: { code: 'payload_too_large', key: 'errors:payloadTooLarge', fallback: 'Payload too large' },
+  415: {
+    code: 'unsupported_media_type',
+    key: 'errors:invalidInput',
+    fallback: 'Unsupported media type',
+  },
+};
+
+/**
+ * Returns the 4xx status of a Fastify framework error (one that carries its own
+ * `statusCode` but is neither an {@link AppError}, a `ZodError`, nor an
+ * `FST_ERR_VALIDATION`). Used to honor the framework status instead of masking
+ * it as a 500.
+ */
+function getFastifyClientErrorStatus(error: unknown): number | undefined {
+  const statusCode = (error as { statusCode?: unknown }).statusCode;
+  if (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) {
+    return statusCode;
+  }
+  return undefined;
+}
+
+function handleFastifyClientErrorResponse(
+  error: unknown,
+  request: FastifyRequest,
+  requestId: string,
+  statusCode: number,
+): ErrorResponseBody {
+  // A client error — log at warn (not error) and do NOT capture to Sentry.
+  logger.warn(
+    { requestId, statusCode, code: (error as { code?: string }).code },
+    'request.client_error',
+  );
+  const mapped = Object.hasOwn(FASTIFY_CLIENT_ERRORS, statusCode)
+    ? FASTIFY_CLIENT_ERRORS[statusCode]
+    : undefined;
+  const detail = mapped
+    ? translateDetail(request, mapped.key, {}, mapped.fallback)
+    : translateDetail(request, 'errors:invalidInput', {}, 'Invalid request');
+  return {
+    error: buildErrorPayload('request_error', mapped?.code ?? 'invalid_request', detail),
+    meta: { request_id: requestId },
+  };
+}
+
 const errorHandlerMiddlewarePlugin: FastifyPluginAsync = async (app) => {
   app.setNotFoundHandler(async (request, reply) => {
     const requestId = getRequestId(request as { id?: string });
@@ -274,6 +326,20 @@ const errorHandlerMiddlewarePlugin: FastifyPluginAsync = async (app) => {
     if (isFastifyValidationError(error)) {
       reply.status(error.statusCode ?? 400);
       return handleFastifyValidationErrorResponse(error, request, currentRequestId);
+    }
+
+    // Fastify framework errors that already carry a 4xx status (e.g. body too
+    // large → 413, unsupported media type → 415). Honor the status instead of
+    // masking it as 500 — which would also wrongly capture a client error to Sentry.
+    const fastifyClientErrorStatus = getFastifyClientErrorStatus(error);
+    if (fastifyClientErrorStatus !== undefined) {
+      reply.status(fastifyClientErrorStatus);
+      return handleFastifyClientErrorResponse(
+        error,
+        request,
+        currentRequestId,
+        fastifyClientErrorStatus,
+      );
     }
 
     reply.status(500);
