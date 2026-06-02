@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [3.10.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.9.0-dev.0...v3.10.0-dev.0) (2026-06-02)
+
+
+### Added
+
+* **setup-railway:** support RAILWAY_API_TOKEN + mint per-environment project tokens ([#269](https://github.com/nikunjmavani/core-be/issues/269)) ([f73d0dc](https://github.com/nikunjmavani/core-be/commit/f73d0dc4b42667e50a7605637ace43060e661b38))
+
 ## [3.9.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.8.2-dev.0...v3.9.0-dev.0) (2026-06-02)
 
 
