@@ -1636,6 +1636,7 @@ src/
     │   │   ├── queue-dashboard-audit.security.test.ts
     │   │   ├── queue-dashboard-readonly.security.test.ts
     │   │   ├── queue-dashboard.security.test.ts
+    │   │   ├── role-name-conflict.security.test.ts
     │   │   ├── sensitive-field-leakage.security.test.ts
     │   │   ├── slug-uniqueness-race.security.test.ts
     │   │   └── webhook-ssrf.security.test.ts
