@@ -28,6 +28,18 @@ process.env.DATABASE_SSL_ENABLED = 'false';
 process.env.ENABLE_MCP_SERVER = 'true';
 process.env.ENABLE_QUEUE_DASHBOARD = 'true';
 process.env.ENABLE_QUEUE_DASHBOARD_MUTATIONS = 'true';
+/**
+ * Metrics mirror CI (`reusable-vitest-postgres-redis.yml`) and the env-schema default (`true`).
+ * `.env.development` pins `METRICS_ENABLED=false` for local `pnpm dev` ergonomics, which
+ * de-registers `GET /metrics`. But `docs/routes.txt` catalogues `/metrics` as a TOKEN route, so
+ * `auth-enforcement.security.test.ts` (which drives every catalogued protected route) expects it
+ * registered — and a full `pnpm test:coverage` run otherwise fails locally even though it is green
+ * in CI. Hard-override both (the token is required when metrics are enabled — see env-schema's
+ * `METRICS_ENABLED → METRICS_SCRAPE_TOKEN` refinement, min 32 chars). Tests that exercise the
+ * disabled path set `METRICS_ENABLED=false` themselves inside `beforeEach`/`beforeAll` and restore it.
+ */
+process.env.METRICS_ENABLED = 'true';
+process.env.METRICS_SCRAPE_TOKEN = 'test-metrics-token-min-32-characters';
 delete process.env.REDIS_KEY_PREFIX;
 delete process.env.WEBHOOK_URL_ALLOWLIST;
 
