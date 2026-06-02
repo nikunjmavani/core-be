@@ -643,6 +643,7 @@ src/
     │   │   │   │   │   │   ├── organization-api-key.controller.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.serializer.no-secret.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.service.authenticate.unit.test.ts
+    │   │   │   │   │   │   ├── organization-api-key.service.lifecycle.unit.test.ts
     │   │   │   │   │   │   ├── organization-api-key.validator.scopes.unit.test.ts
     │   │   │   │   │   │   └── organization-api-key.validator.unit.test.ts
     │   │   │   │   │   └── organization-api-key.test.ts
