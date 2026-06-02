@@ -31,13 +31,21 @@ merging both shard reports through
 
 | Metric     | Coverage | Gate threshold |
 | ---------- | -------- | -------------- |
-| Lines      | ~93%     | 90%            |
-| Statements | ~93%     | 90%            |
+| Lines      | ~93%     | 91%            |
+| Statements | ~93%     | 91%            |
 | Functions  | ~96%     | 94%            |
-| Branches   | ~84%     | 80%            |
+| Branches   | ~84%     | 82%            |
 
-The codebase already sits **well above** the configured thresholds. The
-thresholds are conservative floors, not the real bar.
+The codebase already sits **above** the configured thresholds. The thresholds
+are conservative floors that **ratchet upward only** (never down).
+
+**Ratchet history.** Floors started at 90/90/94/80 (lines/statements/functions/branches).
+Hardening-roadmap workstream **H6** raised lines/statements 90→91 and branches
+80→82 (each still ~2pts below the measured actual, so the merged gate stays
+green). The next H6-final step takes a fresh measured run to push branches
+toward ~88 and `functions` past 94, alongside raising the Stryker `break`
+kill-rate from 70 — both gated on the measurement so a floor never lands above
+the real number.
 
 > Do not read a single shard's report as "the coverage." The pure-unit shard
 > alone is ~80% lines; the integration/e2e/security shard alone is ~70%; their
