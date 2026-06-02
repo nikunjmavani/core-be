@@ -1578,6 +1578,7 @@ src/
     │   │   │   ├── billing-subscriptions-rls.js
     │   │   │   ├── billing.js
     │   │   │   ├── daily-ops.js
+    │   │   │   ├── health-breakpoint.js
     │   │   │   ├── health-stress.js
     │   │   │   ├── health.js
     │   │   │   ├── idempotency-storm.js
