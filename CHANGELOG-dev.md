@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.1.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.0.0-dev.0...v4.1.0-dev.0) (2026-06-02)
+
+
+### Added
+
+* **upload:** reject path-traversal / control-char filenames + upload attack tests ([#279](https://github.com/nikunjmavani/core-be/issues/279)) ([f26a1a9](https://github.com/nikunjmavani/core-be/commit/f26a1a9dd3f9f4660ab42a4f250f254d5e0b9760))
+
 ## [4.0.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v3.10.1-dev.0...v4.0.0-dev.0) (2026-06-02)
 
 
