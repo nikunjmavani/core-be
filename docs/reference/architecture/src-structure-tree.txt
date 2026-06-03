@@ -62,6 +62,7 @@ src/
     │   │   ├── factories/
     │   │   │   └── magic-link-token.factory.ts
     │   │   ├── integration/
+    │   │   │   ├── auth-recovery-atomicity.integration.test.ts
     │   │   │   ├── auth-route-smoke.integration.test.ts
     │   │   │   ├── auth.integration.test.ts
     │   │   │   ├── logout-revokes-token.integration.test.ts
