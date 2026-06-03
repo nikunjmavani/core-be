@@ -132,6 +132,21 @@ export class EventBus {
     );
   }
 
+  /**
+   * Discards the in-memory commit-dispatch marker for a request id WITHOUT running its tasks.
+   *
+   * @remarks
+   * Call this on the request paths that deliberately skip {@link flushOnCommit} — i.e. when the
+   * RLS transaction rolled back or settlement failed, so post-commit side effects must not fire.
+   * Without it, the request id added by {@link scheduleCommitDispatch} would never be removed from
+   * the module-level marker set (only `flushOnCommit` deletes it), leaking one string per such
+   * request for the lifetime of the process. The durable Redis tasks are intentionally left for
+   * the commit-dispatch recovery sweeper; only the in-memory marker is cleared here.
+   */
+  clearCommitDispatchMarker(requestId: string): void {
+    pendingCommitDispatchRequestIds.delete(requestId);
+  }
+
   async emit(event: DomainEvent): Promise<void> {
     const handlers = this.handlers.get(event.type) ?? [];
     if (handlers.length === 0) return;
