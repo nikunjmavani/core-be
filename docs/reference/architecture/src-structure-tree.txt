@@ -1159,6 +1159,7 @@ src/
     │   ├── admin-token.ts
     │   ├── audit-bcrypt-password-hashes.ts
     │   ├── dlq-replay.ts
+    │   ├── load-test-credential-pool.ts
     │   ├── load-test-credentials.ts
     │   ├── rotate-field-secrets.ts
     │   ├── stripe-webhook-replay.ts
@@ -1576,16 +1577,19 @@ src/
     │   └── OVERVIEW.md
     ├── load/
     │   ├── k6/
+    │   │   ├── data/
     │   │   ├── helpers/
     │   │   │   ├── auth.js
     │   │   │   ├── checks.js
     │   │   │   ├── config.js
-    │   │   │   └── data.js
+    │   │   │   ├── data.js
+    │   │   │   └── pool.js
     │   │   ├── scenarios/
     │   │   │   ├── admin.js
     │   │   │   ├── api-stress.js
     │   │   │   ├── audit-list.js
     │   │   │   ├── auth-onboarding.js
+    │   │   │   ├── auth-stress-server-timing.js
     │   │   │   ├── billing-subscriptions-rls.js
     │   │   │   ├── billing.js
     │   │   │   ├── daily-ops.js
@@ -1606,6 +1610,7 @@ src/
     │   │   │   ├── tenancy-role-write.js
     │   │   │   ├── upload-list.js
     │   │   │   ├── user-data-export.js
+    │   │   │   ├── user-journey.js
     │   │   │   └── webhooks.js
     │   │   └── README.md
     │   └── OVERVIEW.md
