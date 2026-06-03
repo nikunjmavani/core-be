@@ -37,7 +37,9 @@ describe('stripe-webhook.processor duplicate job delivery', () => {
       object: {
         id: 'sub_race',
         status: 'active',
-        items: { data: [{ current_period_start: 1_700_000_000, current_period_end: 1_700_086_400 }] },
+        items: {
+          data: [{ current_period_start: 1_700_000_000, current_period_end: 1_700_086_400 }],
+        },
       },
     },
   } as unknown as Stripe.Event;
