@@ -19,6 +19,8 @@ describe('membership serializer', () => {
           updated_at: updatedAt,
         },
         'org-public',
+        'user-public',
+        'role-public',
       ),
     ).toMatchObject({
       status: 'INVITED',
@@ -26,31 +28,36 @@ describe('membership serializer', () => {
     });
   });
 
-  it('serializeMembership maps row with organization public id', () => {
+  it('emits public ids for user/role/org and never the internal sequential ids', () => {
     const joinedAt = new Date('2026-01-03T00:00:00.000Z');
-    expect(
-      serializeMembership(
-        {
-          public_id: 'mem-public',
-          user_id: 1,
-          organization_id: 2,
-          role_id: 3,
-          status: 'ACTIVE',
-          joined_at: joinedAt,
-          created_at: createdAt,
-          updated_at: updatedAt,
-        },
-        'org-public',
-      ),
-    ).toEqual({
+    const serialized = serializeMembership(
+      {
+        public_id: 'mem-public',
+        user_id: 1,
+        organization_id: 2,
+        role_id: 3,
+        status: 'ACTIVE',
+        joined_at: joinedAt,
+        created_at: createdAt,
+        updated_at: updatedAt,
+      },
+      'org-public',
+      'user-public',
+      'role-public',
+    );
+
+    expect(serialized).toEqual({
       id: 'mem-public',
-      user_id: '1',
+      user_id: 'user-public',
       organization_id: 'org-public',
-      role_id: '3',
+      role_id: 'role-public',
       status: 'ACTIVE',
       joined_at: joinedAt.toISOString(),
       created_at: createdAt.toISOString(),
       updated_at: updatedAt.toISOString(),
     });
+    // The internal bigserial ids (1, 3) must never appear in the response.
+    expect(serialized.user_id).not.toBe('1');
+    expect(serialized.role_id).not.toBe('3');
   });
 });
