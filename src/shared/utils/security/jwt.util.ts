@@ -152,6 +152,12 @@ export async function signAccessToken(payload: {
 /**
  * Verify and decode an access token.
  * Validates: algorithm (RS256 only), issuer, audience, expiration.
+ *
+ * @remarks
+ * Key selection: when `JWT_PUBLIC_KEYS` keyring is active and the token carries a `kid`,
+ * only the matching keyring entry is accepted — an unknown `kid` throws so retired keys
+ * cannot be used to verify new requests. Tokens without a `kid` fall back to
+ * `JWT_PUBLIC_KEY` for backward-compat with pre-rotation issuance.
  */
 async function resolveVerifyKeyForToken(token: string): Promise<{
   key: CryptoKey;
@@ -163,11 +169,19 @@ async function resolveVerifyKeyForToken(token: string): Promise<{
   }
 
   const keyring = await getVerifyKeyring();
-  if (keyring && typeof header.kid === 'string') {
-    const keyForKid = keyring.get(header.kid);
-    if (keyForKid) {
+  if (keyring) {
+    if (typeof header.kid === 'string') {
+      const keyForKid = keyring.get(header.kid);
+      if (!keyForKid) {
+        // kid is present but unknown to the keyring — the signing key has been retired.
+        // Falling back to JWT_PUBLIC_KEY here would allow tokens signed with revoked keys to
+        // remain valid across a rotation, so we reject hard instead.
+        throw new Error(`JWT kid '${header.kid}' is not present in the active key rotation ring`);
+      }
       return { key: keyForKid, algorithm: JWT_ALGORITHM };
     }
+    // Token carries no kid — it was issued before keyring rotation was introduced.
+    // Fall through to the single legacy verify key so pre-rotation tokens keep working.
   }
 
   return getVerifyKey();
