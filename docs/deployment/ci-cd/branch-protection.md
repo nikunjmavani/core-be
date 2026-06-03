@@ -37,22 +37,22 @@ Hotfixes merge **`hotfix/* → main`** first; then sync **`main → dev`** so lo
 
 These are the **exact check names** to require in GitHub for every PR targeting **`main`** or **`dev`**.
 
-GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `name:` from the YAML file, then job `name:`). Match **including spaces and punctuation**.
+GitHub Actions reports a status-check context as the **bare job `name:`** — **not** prefixed by the workflow name. (The one exception here is the reusable unit workflow, which reports as `unit / Unit + global`.) Match **including spaces and punctuation**. A workflow-prefixed form like `PR CI / Lint` matches **no real check** and silently blocks every merge — use the exact strings in the "Required check string" column below.
 
 | Workflow file | Workflow `name:` | Job `name:` | Required check string |
 | ------------- | ---------------- | ----------- | --------------------- |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Lint` | `PR CI / Lint` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Typecheck` | `PR CI / Typecheck` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Static sync` | `PR CI / Static sync` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Unit + global (pull_request)` | `PR CI / Unit + global (pull_request)` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Migration lint` | `PR CI / Migration lint` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Build verify` | `PR CI / Build verify` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security audit` | `PR CI / Security audit` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security secrets` | `PR CI / Security secrets` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security SAST` | `PR CI / Security SAST` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Contract + property` | `PR CI / Contract + property` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `RLS security (non-superuser)` | `PR CI / RLS security (non-superuser)` |
-| [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR Governance` | `Checks` | `PR Governance / Checks` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Lint` | `Lint` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Typecheck` | `Typecheck` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Static sync` | `Static sync` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Unit + global (pull_request)` | `unit / Unit + global` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Migration lint` | `Migration lint` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Build verify` | `Build verify` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security audit` | `Security audit` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security secrets` | `Security secrets` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security SAST` | `Security SAST` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Contract + property` | `Contract + property` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `RLS security (non-superuser)` | `RLS security (non-superuser)` |
+| [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR Governance` | `Checks` | `Checks` |
 
 ### Same checks on both branches
 
@@ -170,7 +170,7 @@ Repository rulesets on **private** repos require **GitHub Pro / Team / Enterpris
 
 The sync script surfaces this message verbatim and exits non-zero. Either upgrade the account/org plan or make the repository public to apply rulesets.
 
-**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm names match **`PR CI / …`** and **`PR Governance / …`**. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
+**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm the names match the **bare check strings** in the table above (e.g. `Lint`, `RLS security (non-superuser)`, `unit / Unit + global`) — **not** a `PR CI / …` prefixed form. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
 
 ---
 
