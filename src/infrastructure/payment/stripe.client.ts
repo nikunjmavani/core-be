@@ -38,6 +38,7 @@ export function getStripeClient(): Stripe {
       : {};
 
   stripeInstance = new Stripe(secretKey, {
+    apiVersion: '2026-05-27.dahlia',
     typescript: true,
     maxNetworkRetries: 2,
     timeout: env.STRIPE_HTTP_TIMEOUT_MS,
