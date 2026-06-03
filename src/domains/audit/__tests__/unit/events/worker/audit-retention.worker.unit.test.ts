@@ -19,19 +19,34 @@ vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
 describe('audit-retention.worker', () => {
   beforeEach(() => {
     deleteInBatchesByConditionMock.mockReset();
-    deleteInBatchesByConditionMock.mockResolvedValue({ deletedCount: 4, blockedCount: 0 });
+    deleteInBatchesByConditionMock
+      .mockResolvedValueOnce({ deletedCount: 4, blockedCount: 0 })
+      .mockResolvedValueOnce({ deletedCount: 2, blockedCount: 1 });
   });
 
-  it('runAuditRetentionJob deletes audit logs older than retention window', async () => {
+  it('runAuditRetentionJob purges both audit logs and the dead-letter ledger past the window', async () => {
     const result = await runAuditRetentionJob({} as never);
 
-    expect(deleteInBatchesByConditionMock).toHaveBeenCalledOnce();
-    expect(deleteInBatchesByConditionMock).toHaveBeenCalledWith(
+    expect(deleteInBatchesByConditionMock).toHaveBeenCalledTimes(2);
+    expect(deleteInBatchesByConditionMock).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         logContext: 'audit-retention',
         tableLabel: 'audit.logs',
       }),
     );
-    expect(result).toEqual({ deletedCount: 4, blockedCount: 0 });
+    expect(deleteInBatchesByConditionMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        logContext: 'audit-retention.dead-letter',
+        tableLabel: 'audit.dead_letter_jobs',
+      }),
+    );
+    expect(result).toEqual({
+      deletedCount: 4,
+      blockedCount: 0,
+      deadLetterDeletedCount: 2,
+      deadLetterBlockedCount: 1,
+    });
   });
 });

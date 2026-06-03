@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Queue, QueueEvents } from 'bullmq';
 
 import { logs } from '@/domains/audit/audit.schema.js';
+import { dead_letter_jobs } from '@/infrastructure/queue/dlq/dead-letter.schema.js';
 import { createAuditRetentionWorker } from '@/domains/audit/workers/audit-retention.worker.js';
 import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retention.constants.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
@@ -83,6 +84,49 @@ describe('audit-retention.worker — purge', () => {
     );
     expect(remaining).toHaveLength(1);
     expect(remaining[0]?.action).toBe('user.login.recent');
+  });
+
+  it('deletes dead-letter ledger rows older than the retention cutoff (bounds unbounded growth)', async () => {
+    const retentionDays = env.AUDIT_RETENTION_DAYS;
+    const staleFailedAt = new Date();
+    staleFailedAt.setDate(staleFailedAt.getDate() - retentionDays - 1);
+    const recentFailedAt = new Date();
+
+    await withGlobalRetentionCleanupDatabaseContext(async (databaseHandle) => {
+      await databaseHandle.insert(dead_letter_jobs).values([
+        {
+          source_queue: 'mail',
+          dead_letter_queue: 'mail-dlq',
+          job_name: 'send-email',
+          payload_summary: {},
+          failed_reason: 'stale-failure',
+          attempts_made: 3,
+          max_attempts: 3,
+          failed_at: staleFailedAt,
+        },
+        {
+          source_queue: 'mail',
+          dead_letter_queue: 'mail-dlq',
+          job_name: 'send-email',
+          payload_summary: {},
+          failed_reason: 'recent-failure',
+          attempts_made: 3,
+          max_attempts: 3,
+          failed_at: recentFailedAt,
+        },
+      ]);
+    });
+
+    const jobId = `audit-retention-${randomUUID()}`;
+    const completion = waitForJobCompletion(queueEvents!, jobId);
+    await queue!.add('cleanup-old-logs', {}, { jobId, attempts: 1 });
+    await completion;
+
+    const remaining = await withGlobalRetentionCleanupDatabaseContext(async (databaseHandle) =>
+      databaseHandle.select().from(dead_letter_jobs),
+    );
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.failed_reason).toBe('recent-failure');
   });
 });
 
