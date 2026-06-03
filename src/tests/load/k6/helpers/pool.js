@@ -31,8 +31,26 @@ import { login } from './auth.js';
  */
 export const credentialPool = new SharedArray('credential-pool', () => {
   // open() is only valid in the init context (module top-level).
-  // If this fails, run: pnpm db:seed:loadtest
-  return JSON.parse(open('../data/credential-pool.json'));
+  // If this throws "no such file", generate the pool first:
+  //   pnpm db:seed:loadtest
+  let raw;
+  try {
+    raw = open('../data/credential-pool.json');
+  } catch {
+    throw new Error(
+      '[pool.js] credential-pool.json not found.\n' +
+        'Run: pnpm db:seed:loadtest\n' +
+        'This seeds 120 users into your database and writes the pool file.',
+    );
+  }
+  const pool = JSON.parse(raw);
+  if (!Array.isArray(pool) || pool.length === 0) {
+    throw new Error(
+      '[pool.js] credential-pool.json is empty or invalid.\n' +
+        'Re-run: pnpm db:seed:loadtest',
+    );
+  }
+  return pool;
 });
 
 /**
