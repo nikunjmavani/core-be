@@ -6,6 +6,17 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.4.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.0-dev.0...v4.4.1-dev.0) (2026-06-03)
+
+
+### Fixed
+
+* **auth:** remove silent params.id fallback in requireOrganizationPermission ([#346](https://github.com/nikunjmavani/core-be/issues/346)) ([17f4d83](https://github.com/nikunjmavani/core-be/commit/17f4d83fae5114820bf4f1c00940306628ea1228))
+* **billing:** correct misleading plan route OpenAPI descriptions ([#349](https://github.com/nikunjmavani/core-be/issues/349)) ([27246ce](https://github.com/nikunjmavani/core-be/commit/27246ce78082f134005ac028852c7d95233f3c8b))
+* **billing:** pin Stripe API version to 2026-05-27.dahlia ([#350](https://github.com/nikunjmavani/core-be/issues/350)) ([7c329bd](https://github.com/nikunjmavani/core-be/commit/7c329bd496bdff587f3c12748f923a2ef7267909))
+* **security:** reject JWT tokens with unknown kid when keyring is active ([#347](https://github.com/nikunjmavani/core-be/issues/347)) ([2bedfa1](https://github.com/nikunjmavani/core-be/commit/2bedfa1fc7bfe30ebe07e3529cfe8b7c8c78a15d))
+* **security:** strip privileged headers from MCP call_api and remove unversioned aliases ([#348](https://github.com/nikunjmavani/core-be/issues/348)) ([cdaf9ce](https://github.com/nikunjmavani/core-be/commit/cdaf9cef188e146b090bf411dc21e803c53ddea7))
+
 ## [4.4.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.3.0-dev.0...v4.4.0-dev.0) (2026-06-03)
 
 
