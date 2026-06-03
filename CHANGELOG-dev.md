@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.2.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.1-dev.0...v4.2.2-dev.0) (2026-06-03)
+
+
+### Fixed
+
+* **auth:** stop GET /auth/me/auth-methods leaking encrypted TOTP secret + PII ([#321](https://github.com/nikunjmavani/core-be/issues/321)) ([32cb49e](https://github.com/nikunjmavani/core-be/commit/32cb49e7b1c2039c2554adc481c2f68837720e6e))
+* **queue:** bound audit.dead_letter_jobs growth via the audit-retention purge ([#322](https://github.com/nikunjmavani/core-be/issues/322)) ([06e729d](https://github.com/nikunjmavani/core-be/commit/06e729ddba34ce6d47ac3f2f7d73ad54910800a2))
+
 ## [4.2.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.0-dev.0...v4.2.1-dev.0) (2026-06-03)
 
 
