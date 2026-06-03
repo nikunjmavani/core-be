@@ -13,6 +13,8 @@ import {
   createMembership,
 } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { createTestWebhook } from '@/tests/factories/webhook.factory.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 
 /**
  * Sensitive-field leakage sweep.
@@ -77,6 +79,36 @@ describe('Security: sensitive-field leakage sweep', () => {
     });
     expect(response.statusCode).toBe(200);
     expectNoSensitiveFields(response.body);
+  });
+
+  it('GET /auth/me/auth-methods does not leak the encrypted TOTP secret or PII', async () => {
+    const { user, token } = await userWithToken();
+    // Seed a TOTP method carrying credential material + PII that must never be serialized.
+    await database.insert(auth_methods).values({
+      user_id: user.id,
+      method_type: 'MFA_TOTP',
+      encrypted_secret: 'leaked-totp-seed-ciphertext',
+      phone_number: '+15557654321',
+      provider_user_id: 'oauth-sub-leak',
+      is_primary: true,
+      verified_at: new Date(),
+    });
+
+    const response = await injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath('/auth/me/auth-methods'),
+      token,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expectNoSensitiveFields(response.body);
+    // PII must not leak either (not in the shared secret list, asserted explicitly here).
+    expect(response.body).not.toContain('leaked-totp-seed-ciphertext');
+    expect(response.body).not.toContain('+15557654321');
+    expect(response.body).not.toContain('provider_user_id');
+    expect(response.body).not.toContain('oauth-sub-leak');
+    // Sanity: the method itself is still returned (not an empty/over-stripped response).
+    expect(response.body).toContain('MFA_TOTP');
   });
 
   it('GET /users/me does not leak password/email hashes', async () => {
