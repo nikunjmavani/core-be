@@ -12,14 +12,20 @@
 -- this class of failure: a FORCE-RLS table resolved to zero rows under this role and the code read
 -- "zero rows" as "no MFA required".
 --
--- Pin the posture explicitly so the intent is encoded in the schema, not inherited from defaults.
--- These are already the effective defaults for a freshly-created role, so this is a no-op in
--- behavior today; its value is making any future drift a visible, reviewable change. ALTER ROLE is
--- idempotent and safe to re-run.
-
-ALTER ROLE core_be_app
-  NOSUPERUSER
-  NOBYPASSRLS
-  NOCREATEDB
-  NOCREATEROLE
-  NOREPLICATION;
+-- Pin the posture explicitly so future drift is a visible, reviewable change. These are already the
+-- effective defaults for a NOLOGIN role, so this is a behavioral no-op today.
+--
+-- Neon-safety: Postgres requires the SUPERUSER attribute to ALTER another role's
+-- SUPERUSER/BYPASSRLS/REPLICATION attributes -- even when setting them to the values they already
+-- have. On managed Postgres (Neon, RDS) the migration role is NOT a superuser, so a bare
+-- `ALTER ROLE ... NOSUPERUSER` fails with SQLSTATE 42501 and blocks the deploy. Wrap it so it pins
+-- the attributes where the executing role is permitted (self-hosted / superuser) and is a safe
+-- no-op elsewhere -- the NOLOGIN defaults already hold, and the role-privileges security test
+-- verifies the end state regardless of which path ran.
+DO $$
+BEGIN
+  ALTER ROLE core_be_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'core_be_app least-privilege ALTER skipped (migration role lacks SUPERUSER); the NOLOGIN defaults already apply';
+END $$;
