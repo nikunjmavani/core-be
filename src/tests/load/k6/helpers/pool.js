@@ -46,8 +46,7 @@ export const credentialPool = new SharedArray('credential-pool', () => {
   const pool = JSON.parse(raw);
   if (!Array.isArray(pool) || pool.length === 0) {
     throw new Error(
-      '[pool.js] credential-pool.json is empty or invalid.\n' +
-        'Re-run: pnpm db:seed:loadtest',
+      '[pool.js] credential-pool.json is empty or invalid.\n' + 'Re-run: pnpm db:seed:loadtest',
     );
   }
   return pool;

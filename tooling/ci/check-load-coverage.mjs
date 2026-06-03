@@ -112,7 +112,7 @@ function staticSegments(path) {
   const tail =
     firstParam === -1 ? [] : parts.slice(firstParam + 1).filter((p) => !p.startsWith(':'));
   return {
-    prefix: '/' + prefix,
+    prefix: `/${prefix}`,
     suffix: tail.length > 0 ? tail[tail.length - 1] : null,
   };
 }
@@ -168,7 +168,7 @@ console.log(`  Total routes       : ${allRoutes.length}`);
 console.log(`  Required (testable): ${required.length}`);
 console.log(`  Covered            : ${covered.length}  ${GRN}✓${RST}`);
 console.log(
-  `  Uncovered          : ${uncovered.length}  ${uncovered.length > 0 ? YLW + '⚠' : GRN + '✓'}${RST}`,
+  `  Uncovered          : ${uncovered.length}  ${uncovered.length > 0 ? `${YLW}⚠` : `${GRN}✓`}${RST}`,
 );
 console.log(
   `  Coverage           : ${pct >= threshold ? GRN : RED}${pct}%${RST}  (threshold: ${threshold}%)`,

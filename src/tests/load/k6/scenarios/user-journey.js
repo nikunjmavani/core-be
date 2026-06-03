@@ -122,33 +122,11 @@ function parseData(response) {
 }
 
 // ---------------------------------------------------------------------------
-// Main VU function
+// Phase helpers — keeps each function within Biome's line-count limit
 // ---------------------------------------------------------------------------
 
-/**
- * One iteration = one realistic authenticated user session spanning all
- * major domains. Each VU uses its own token + org, so no cross-VU contention.
- *
- * @param {Array<{token: string, orgPublicId: string, userPublicId: string}>} tokenPool
- */
-export function userJourney(tokenPool) {
-  const entry = vuToken(tokenPool);
-  if (!entry?.token) {
-    console.error(`VU ${__VU}: no token in pool — ensure setup() succeeded`);
-    return;
-  }
-
-  const { token, orgPublicId } = entry;
-  const authed = authHeaders(token).headers;
-  const withOrg = orgHeaders(token, orgPublicId);
-  const json = { 'Content-Type': 'application/json' };
-
-  // ── Phase 1: Profile reads ──────────────────────────────────────────────
-
-  const meRes = http.get(`${API_PREFIX}/users/me`, {
-    headers: authed,
-    tags: { name: 'get-me' },
-  });
+function phaseProfile(authed) {
+  const meRes = http.get(`${API_PREFIX}/users/me`, { headers: authed, tags: { name: 'get-me' } });
   checkOk(meRes, 'get-me');
   checkResponseTime(meRes, 300, 'get-me');
   sleep(0.2);
@@ -176,9 +154,9 @@ export function userJourney(tokenPool) {
   checkOk(notifPrefsRes, 'get-notif-prefs');
   checkResponseTime(notifPrefsRes, 300, 'get-notif-prefs');
   sleep(0.3);
+}
 
-  // ── Phase 2: Org reads ───────────────────────────────────────────────────
-
+function phaseOrg(authed, withOrg, orgPublicId) {
   const listOrgsRes = http.get(`${API_PREFIX}/tenancy/organizations`, {
     headers: authed,
     tags: { name: 'list-orgs' },
@@ -226,9 +204,9 @@ export function userJourney(tokenPool) {
   checkOk(listApiKeysRes, 'list-api-keys');
   checkResponseTime(listApiKeysRes, 400, 'list-api-keys');
   sleep(0.3);
+}
 
-  // ── Phase 3: Billing reads ───────────────────────────────────────────────
-
+function phaseBillingAndNotify(authed, withOrg, orgPublicId) {
   const plansRes = http.get(`${API_PREFIX}/billing/plans`, {
     headers: authed,
     tags: { name: 'list-plans' },
@@ -244,8 +222,6 @@ export function userJourney(tokenPool) {
   checkOk(subsRes, 'list-subscriptions');
   checkResponseTime(subsRes, 500, 'list-subscriptions');
   sleep(0.3);
-
-  // ── Phase 4: Notifications ───────────────────────────────────────────────
 
   const notificationsRes = http.get(`${API_PREFIX}/notify/notifications`, {
     headers: authed,
@@ -263,7 +239,6 @@ export function userJourney(tokenPool) {
   checkResponseTime(unreadRes, 200, 'unread-count');
   sleep(0.2);
 
-  // Write: mark all notifications read
   const markReadRes = http.post(`${API_PREFIX}/notify/notifications/mark-all-read`, null, {
     headers: authed,
     tags: { name: 'mark-all-read' },
@@ -271,9 +246,9 @@ export function userJourney(tokenPool) {
   checkOk(markReadRes, 'mark-all-read');
   checkResponseTime(markReadRes, 400, 'mark-all-read');
   sleep(0.3);
+}
 
-  // ── Phase 5: Webhooks (list → create → delete) ───────────────────────────
-
+function phaseWebhooksAndWrites(authed, withOrg, orgPublicId, json) {
   const listWebhooksRes = http.get(`${API_PREFIX}/notify/organizations/${orgPublicId}/webhooks`, {
     headers: withOrg,
     tags: { name: 'list-webhooks' },
@@ -282,8 +257,8 @@ export function userJourney(tokenPool) {
   checkResponseTime(listWebhooksRes, 500, 'list-webhooks');
   sleep(0.2);
 
-  // Write: create a webhook unique per VU+iteration, then immediately delete it
-  // so the DB does not accumulate test rows across a long soak run.
+  // Create a webhook per VU+iteration then immediately delete it so the DB
+  // doesn't accumulate test rows across a long soak run.
   const suffix = `${__VU}-${__ITER}-${randomString(4)}`;
   const createWebhookRes = http.post(
     `${API_PREFIX}/notify/organizations/${orgPublicId}/webhooks`,
@@ -310,8 +285,7 @@ export function userJourney(tokenPool) {
   }
   sleep(0.3);
 
-  // ── Phase 6: Upload — presigned URL request (no actual S3 upload in k6) ──
-
+  // Upload: request presigned URL only (no actual S3 upload in k6)
   const uploadRes = http.post(
     `${API_PREFIX}/uploads`,
     JSON.stringify({
@@ -325,8 +299,7 @@ export function userJourney(tokenPool) {
   checkResponseTime(uploadRes, 600, 'request-upload');
   sleep(0.3);
 
-  // ── Phase 7: Write — user settings ───────────────────────────────────────
-
+  // Patch user settings
   const patchSettingsRes = http.patch(
     `${API_PREFIX}/users/me/settings`,
     JSON.stringify({ marketing_emails_enabled: false }),
@@ -336,8 +309,7 @@ export function userJourney(tokenPool) {
   checkResponseTime(patchSettingsRes, 500, 'patch-me-settings');
   sleep(0.2);
 
-  // ── Phase 8: Write — org settings ────────────────────────────────────────
-
+  // Patch org settings
   const patchOrgSettingsRes = http.patch(
     `${API_PREFIX}/tenancy/organizations/${orgPublicId}/settings`,
     JSON.stringify({ is_email_notifications_enabled: true }),
@@ -345,6 +317,34 @@ export function userJourney(tokenPool) {
   );
   checkOk(patchOrgSettingsRes, 'patch-org-settings');
   checkResponseTime(patchOrgSettingsRes, 600, 'patch-org-settings');
+}
+
+// ---------------------------------------------------------------------------
+// Main VU function
+// ---------------------------------------------------------------------------
+
+/**
+ * One iteration = one realistic authenticated user session spanning all
+ * major domains. Each VU uses its own token + org, so no cross-VU contention.
+ *
+ * @param {Array<{token: string, orgPublicId: string, userPublicId: string}>} tokenPool
+ */
+export function userJourney(tokenPool) {
+  const entry = vuToken(tokenPool);
+  if (!entry?.token) {
+    console.error(`VU ${__VU}: no token in pool — ensure setup() succeeded`);
+    return;
+  }
+
+  const { token, orgPublicId } = entry;
+  const authed = authHeaders(token).headers;
+  const withOrg = orgHeaders(token, orgPublicId);
+  const json = { 'Content-Type': 'application/json' };
+
+  phaseProfile(authed);
+  phaseOrg(authed, withOrg, orgPublicId);
+  phaseBillingAndNotify(authed, withOrg, orgPublicId);
+  phaseWebhooksAndWrites(authed, withOrg, orgPublicId, json);
 
   sleep(1);
 }
