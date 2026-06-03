@@ -82,9 +82,9 @@ describe('webhook-outbound-fetch.util', () => {
     const { resolveAndPinWebhookUrl } = await import(
       '@/shared/utils/security/webhook-outbound-fetch.util.js'
     );
-    await expect(
-      resolveAndPinWebhookUrl('https://allowed.example.com/path'),
-    ).rejects.toMatchObject({ messageKey: 'errors:webhookUrlNotAllowed' });
+    await expect(resolveAndPinWebhookUrl('https://allowed.example.com/path')).rejects.toMatchObject(
+      { messageKey: 'errors:webhookUrlNotAllowed' },
+    );
   });
 
   it('createPinnedWebhookFetch connects to pinned IP (no second DNS lookup on fetch)', async () => {
