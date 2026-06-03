@@ -18,6 +18,8 @@ export const redisConnection = new Redis(env.REDIS_URL, {
   enableReadyCheck: true,
   /** Fail fast when disconnected — avoids hanging HTTP handlers and chaos tests during partitions. */
   enableOfflineQueue: false,
+  /** Abort any command that has not received a reply within 3 s — guards against a connected-but-unresponsive Redis stalling HTTP request handlers indefinitely. */
+  commandTimeout: 3_000,
   /**
    * Dual-stack DNS lookup (IPv4 + IPv6). Required for Railway private networking
    * which exposes services over IPv6-only `.railway.internal` hostnames.
