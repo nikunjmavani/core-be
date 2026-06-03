@@ -102,7 +102,7 @@ These settings match the committed JSON files in [`.github/rulesets/`](../../../
 
 | Rule | `main` | `dev` |
 | ---- | ------ | ----- |
-| Required approving reviews | 1 | 1 |
+| Required approving reviews | 1 | 0 (solo maintainer — status checks still block merge) |
 | Require CODEOWNER review | Yes ([CODEOWNERS](../../../.github/CODEOWNERS)) | No |
 | Dismiss stale approvals on push | Yes | No |
 | Require approval on last push | Yes | No |
@@ -112,7 +112,7 @@ These settings match the committed JSON files in [`.github/rulesets/`](../../../
 | Require signed commits | Yes | No |
 | Block force-push (`non_fast_forward`) | Yes | Yes |
 | Block branch deletion | Yes | Yes |
-| Required status checks | PR CI (7 jobs) + PR Governance | Same |
+| Required status checks | PR CI (11 jobs incl. RLS security) + PR Governance | Same |
 
 **Signed commits on `main`:** Contributors must use [verified signatures](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification). Teams without signing enabled should temporarily relax `required_signatures` in `main.json` until onboarding is complete.
 
