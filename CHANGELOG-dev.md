@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.2.6-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.5-dev.0...v4.2.6-dev.0) (2026-06-03)
+
+
+### Fixed
+
+* **rls:** pin core_be_app to NOSUPERUSER/NOBYPASSRLS + assert RLS-binding ([#334](https://github.com/nikunjmavani/core-be/issues/334)) ([18f8b9a](https://github.com/nikunjmavani/core-be/commit/18f8b9aa6f0ae44d45208dabf270a6c5a52c60ec))
+
 ## [4.2.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.4-dev.0...v4.2.5-dev.0) (2026-06-03)
 
 
