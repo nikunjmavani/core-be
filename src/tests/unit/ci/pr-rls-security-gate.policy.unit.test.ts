@@ -18,7 +18,7 @@ describe('PR CI runs the non-superuser RLS security suite against Postgres', () 
 
   it('declares the rls-security job', () => {
     expect(prCi).toContain('rls-security:');
-    // Exact display name — the required-check context (`PR CI / RLS security (non-superuser)`)
+    // Exact display name — the required-check context (`RLS security (non-superuser)`)
     // in .github/rulesets/*.json is derived from it, so a rename here must stay in sync.
     expect(prCi).toContain('name: RLS security (non-superuser)');
   });
@@ -41,11 +41,13 @@ describe('PR CI runs the non-superuser RLS security suite against Postgres', () 
 
 /**
  * The job is only a real gate if it is also a REQUIRED status check — otherwise auto-merge ignores
- * it. The required-check context is `PR CI / <job name>`, so it must stay in lockstep with the job
- * `name:` asserted above. These assertions fail if a branch ruleset drops the RLS context (or a job
- * rename desyncs the two).
+ * it. GitHub Actions report a status-check context as the bare check-run name (the job `name:`), NOT
+ * prefixed by the workflow — so the ruleset context is `RLS security (non-superuser)`, matching the
+ * job `name:` asserted above. (Prefixing it `PR CI / …` matches no real check and silently blocks
+ * every merge — the bug this guard now pins against.) These assertions fail if a branch ruleset
+ * drops the RLS context or a job rename desyncs the two.
  */
-const REQUIRED_RLS_CONTEXT = 'PR CI / RLS security (non-superuser)';
+const REQUIRED_RLS_CONTEXT = 'RLS security (non-superuser)';
 
 interface BranchRuleset {
   rules: {
