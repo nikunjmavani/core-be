@@ -135,8 +135,6 @@ jobs:
       needs.changes.outputs.docs-only-md != 'true' &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.ci-config == 'true')
     uses: ./.github/workflows/reusable-vitest-unit-only.yml
-    with:
-      base-ref: ${{ github.event.pull_request.base.ref }}
 
   migration-lint:
     name: Migration lint
