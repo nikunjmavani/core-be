@@ -1305,6 +1305,7 @@ src/
     │   │   ├── request-lifecycle.middleware.ts
     │   │   ├── request-statement-timeout.middleware.ts
     │   │   ├── response-format.middleware.ts
+    │   │   ├── server-timing.middleware.ts
     │   │   ├── shutdown.middleware.ts
     │   │   └── zod-type-provider.middleware.ts
     │   ├── rate-limit/
@@ -1777,6 +1778,7 @@ src/
     │   │   ├── request-statement-timeout.middleware.unit.test.ts
     │   │   ├── response-format.middleware.hook.unit.test.ts
     │   │   ├── response-format.middleware.unit.test.ts
+    │   │   ├── server-timing.middleware.unit.test.ts
     │   │   ├── shutdown.middleware.unit.test.ts
     │   │   └── tenant.middleware.unit.test.ts
     │   ├── observability/

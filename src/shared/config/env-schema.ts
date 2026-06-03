@@ -55,6 +55,12 @@ const envSchemaBase = z.object({
   FASTIFY_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
   /** Fastify connection timeout (ms). Default: 10000. */
   FASTIFY_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
+  /**
+   * Emit a `Server-Timing: app;dur=<ms>` response header carrying total server-side processing
+   * time (Fastify's per-request timer). Network-independent latency for load tools (k6, curl) and
+   * browser devtools without scraping `/metrics`. Default on; set false to suppress the header.
+   */
+  HTTP_SERVER_TIMING_ENABLED: booleanString('true'),
 
   // Database (managed service)
   DATABASE_URL: z.string().min(1),
