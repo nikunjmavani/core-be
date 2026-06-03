@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.4.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.2-dev.0...v4.4.3-dev.0) (2026-06-03)
+
+
+### Fixed
+
+* **finding-46:** validate DATABASE_HTTP_STATEMENT_TIMEOUT_MS stays within permission cache lock TTL ([#356](https://github.com/nikunjmavani/core-be/issues/356)) ([47bdab4](https://github.com/nikunjmavani/core-be/commit/47bdab435f83a307cc04f4dc8274f5407aeb8ad3))
+* **finding-62:** export WEBHOOK_DELIVERY_JOB_ATTEMPTS and fix vi.mock factories ([#357](https://github.com/nikunjmavani/core-be/issues/357)) ([cd24515](https://github.com/nikunjmavani/core-be/commit/cd24515fa2acf75774da7d636ea42bc0212ec3a2))
+
 ## [4.4.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.1-dev.0...v4.4.2-dev.0) (2026-06-03)
 
 
