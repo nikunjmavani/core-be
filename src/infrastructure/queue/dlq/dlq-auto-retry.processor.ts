@@ -1,5 +1,8 @@
 import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
-import { findDeadLetterJobsForAutoRetry } from '@/infrastructure/queue/dlq/dead-letter.repository.js';
+import {
+  findDeadLetterJobsForAutoRetry,
+  markDeadLetterJobAutoRetryResolved,
+} from '@/infrastructure/queue/dlq/dead-letter.repository.js';
 import { isDeadLetterSourceQueueCircuitClosed } from '@/infrastructure/queue/dlq/dlq-auto-retry-circuit.util.js';
 import {
   getDlqAutoRetryState,
@@ -81,6 +84,10 @@ async function runDlqAutoRetryJobInner(): Promise<DlqAutoRetryJobResult> {
     const state = await getDlqAutoRetryState(ledgerRow.id);
     if ((state?.count ?? 0) >= env.DLQ_AUTO_RETRY_MAX_COUNT) {
       result.skippedBudgetCount += 1;
+      // Budget exhausted: stamp the ledger row resolved so it leaves the scan permanently. Without
+      // this it would be re-fetched at the head every tick (starving newer rows) and would replay
+      // again once the Redis budget counter's TTL expires.
+      await markDeadLetterJobAutoRetryResolved(ledgerRow.id);
       continue;
     }
     if (
