@@ -4,14 +4,25 @@ import type { WorkerContextDatabaseHandle } from '@/infrastructure/database/util
 import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
-const SUBSCRIPTION_STRIPE_EVENT_TYPES = new Set([
-  'customer.subscription.created',
-  'customer.subscription.updated',
-  'customer.subscription.deleted',
-]);
+type StripeSubscriptionEvent =
+  | Stripe.CustomerSubscriptionCreatedEvent
+  | Stripe.CustomerSubscriptionUpdatedEvent
+  | Stripe.CustomerSubscriptionDeletedEvent;
+
+function isStripeSubscriptionEvent(event: Stripe.Event): event is StripeSubscriptionEvent {
+  return (
+    event.type === 'customer.subscription.created' ||
+    event.type === 'customer.subscription.updated' ||
+    event.type === 'customer.subscription.deleted'
+  );
+}
 
 function stripeEventRequiresOrganizationContext(eventType: string): boolean {
-  return SUBSCRIPTION_STRIPE_EVENT_TYPES.has(eventType);
+  return (
+    eventType === 'customer.subscription.created' ||
+    eventType === 'customer.subscription.updated' ||
+    eventType === 'customer.subscription.deleted'
+  );
 }
 
 const ORGANIZATION_ID_METADATA_KEY = 'organization_id';
@@ -45,27 +56,28 @@ async function resolveOrganizationPublicIdByProviderSubscriptionId(
 export async function resolveOrganizationPublicIdForStripeEvent(
   event: Stripe.Event,
 ): Promise<string | undefined> {
-  const stripeObject = event.data.object as Stripe.Subscription;
-
-  const fromMetadata = readOrganizationPublicIdFromStripeMetadata(stripeObject.metadata);
-  if (stripeEventRequiresOrganizationContext(event.type)) {
-    const fromSubscription = await resolveOrganizationPublicIdByProviderSubscriptionId(
-      stripeObject.id,
-    );
-    if (
-      fromMetadata !== undefined &&
-      fromSubscription !== undefined &&
-      fromMetadata !== fromSubscription
-    ) {
-      throw new Error(
-        `Stripe webhook event ${event.id} (${event.type}) has mismatched organization metadata for subscription ${stripeObject.id}`,
-      );
-    }
-
-    return fromMetadata ?? fromSubscription;
+  if (!isStripeSubscriptionEvent(event)) {
+    return undefined;
   }
 
-  return undefined;
+  const stripeSubscription = event.data.object;
+
+  const fromMetadata = readOrganizationPublicIdFromStripeMetadata(stripeSubscription.metadata);
+  const fromSubscription = await resolveOrganizationPublicIdByProviderSubscriptionId(
+    stripeSubscription.id,
+  );
+
+  if (
+    fromMetadata !== undefined &&
+    fromSubscription !== undefined &&
+    fromMetadata !== fromSubscription
+  ) {
+    throw new Error(
+      `Stripe webhook event ${event.id} (${event.type}) has mismatched organization metadata for subscription ${stripeSubscription.id}`,
+    );
+  }
+
+  return fromMetadata ?? fromSubscription;
 }
 
 /**

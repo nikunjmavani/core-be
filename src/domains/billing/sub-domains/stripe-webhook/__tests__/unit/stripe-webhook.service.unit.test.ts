@@ -48,8 +48,9 @@ describe('StripeWebhookService', () => {
       status: 'active',
       cancel_at_period_end: false,
       canceled_at: null,
-      current_period_start: periodStartSeconds,
-      current_period_end: periodEndSeconds,
+      items: {
+        data: [{ current_period_start: periodStartSeconds, current_period_end: periodEndSeconds }],
+      },
       ...overrides,
     } as unknown as Stripe.Subscription;
   }
@@ -209,14 +210,11 @@ describe('StripeWebhookService', () => {
       );
     });
 
-    it('falls back to a valid Date when period boundaries are missing (not Invalid Date)', async () => {
+    it('falls back to a valid Date when no subscription item is present (not Invalid Date)', async () => {
       await service.handleEvent(
         buildEvent({
           data: {
-            object: buildSubscription({
-              current_period_start: undefined,
-              current_period_end: undefined,
-            }),
+            object: buildSubscription({ items: { data: [] } }),
           },
         }),
       );
