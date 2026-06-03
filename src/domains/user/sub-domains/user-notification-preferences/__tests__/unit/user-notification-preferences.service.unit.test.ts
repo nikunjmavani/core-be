@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NotFoundError } from '@/shared/errors/index.js';
+import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { UserNotificationPreferencesService } from '@/domains/user/sub-domains/user-notification-preferences/user-notification-preferences.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { UserNotificationPreferencesRepository } from '@/domains/user/sub-domains/user-notification-preferences/user-notification-preferences.repository.js';
@@ -70,30 +70,24 @@ describe('UserNotificationPreferencesService', () => {
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('put persists organization-scoped preferences from the request body', async () => {
-    await service.put('user_public', {
-      preferences: [
-        {
-          notification_type: 'SUBSCRIPTION_UPDATED',
-          channel: 'EMAIL',
-          organization_id: 1,
-          is_enabled: true,
-        },
-      ],
-    });
+  it('put rejects organization-scoped preferences (org_id is unsettable on this user-scoped endpoint)', async () => {
+    // This user-scoped endpoint has no tenant context, so a non-null organization_id can never
+    // satisfy the org RLS branch (would surface as 42501 -> 500). It must be rejected with a 400
+    // before reaching the repository.
+    await expect(
+      service.put('user_public', {
+        preferences: [
+          {
+            notification_type: 'SUBSCRIPTION_UPDATED',
+            channel: 'EMAIL',
+            organization_id: 1,
+            is_enabled: true,
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
 
-    expect(preferencesRepository.replaceAll).toHaveBeenCalledWith(
-      user.id,
-      [
-        {
-          notification_type: 'SUBSCRIPTION_UPDATED',
-          channel: 'EMAIL',
-          organization_id: 1,
-          is_enabled: true,
-        },
-      ],
-      user.id,
-    );
+    expect(preferencesRepository.replaceAll).not.toHaveBeenCalled();
   });
 
   it('put persists user-wide preferences when organization_id is omitted', async () => {
