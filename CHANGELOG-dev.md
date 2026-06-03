@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.2.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.3-dev.0...v4.2.4-dev.0) (2026-06-03)
+
+
+### Fixed
+
+* **billing:** make Stripe customer creation idempotent on retry ([#326](https://github.com/nikunjmavani/core-be/issues/326)) ([8990fb3](https://github.com/nikunjmavani/core-be/commit/8990fb32b15fa133aece4ce428182d9b1996ee93))
+* **user:** reject org-scoped notification preference with 400 (was raw 42501 -&gt; 500) ([#327](https://github.com/nikunjmavani/core-be/issues/327)) ([db1e7a7](https://github.com/nikunjmavani/core-be/commit/db1e7a77e3c8f464bd8354f1235a1f33c5c71967))
+
 ## [4.2.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.2-dev.0...v4.2.3-dev.0) (2026-06-03)
 
 
