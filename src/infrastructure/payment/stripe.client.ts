@@ -71,6 +71,7 @@ export async function createStripeCustomer(options: {
   name: string;
   metadata?: Record<string, string>;
   requestId?: string;
+  idempotencyKey?: string;
 }): Promise<Stripe.Customer> {
   return outboundCall(
     buildOutboundCallOptions({
@@ -80,12 +81,16 @@ export async function createStripeCustomer(options: {
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
       operation: async () => {
         const stripe = getStripeClient();
+        // A deterministic idempotency key prevents a retried subscription-create (which mints the
+        // customer when the org has none) from creating a SECOND Stripe customer if a prior
+        // attempt created the customer in Stripe but died before the local org row committed.
         return stripe.customers.create(
           omitUndefined({
             email: options.email,
             name: options.name,
             metadata: options.metadata,
           }),
+          options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
         );
       },
     }),
