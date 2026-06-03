@@ -54,7 +54,7 @@ describe('webhook-outbound-fetch.util', () => {
     });
   });
 
-  it('allows subdomains of WEBHOOK_URL_ALLOWLIST entries', async () => {
+  it('rejects subdomains of an allowlist entry that has no wildcard prefix', async () => {
     vi.stubEnv('WEBHOOK_URL_ALLOWLIST', 'allowed.example.com');
     mockDnsLookupAll([{ address: '93.184.216.34', family: 4 }]);
     const { resolveAndPinWebhookUrl } = await import(
@@ -62,7 +62,29 @@ describe('webhook-outbound-fetch.util', () => {
     );
     await expect(
       resolveAndPinWebhookUrl('https://hooks.allowed.example.com/path'),
+    ).rejects.toMatchObject({ messageKey: 'errors:webhookUrlNotAllowed' });
+  });
+
+  it('allows subdomains when the allowlist entry uses explicit wildcard syntax (*.domain)', async () => {
+    vi.stubEnv('WEBHOOK_URL_ALLOWLIST', '*.allowed.example.com');
+    mockDnsLookupAll([{ address: '93.184.216.34', family: 4 }]);
+    const { resolveAndPinWebhookUrl } = await import(
+      '@/shared/utils/security/webhook-outbound-fetch.util.js'
+    );
+    await expect(
+      resolveAndPinWebhookUrl('https://hooks.allowed.example.com/path'),
     ).resolves.toMatchObject({ pinnedAddress: '93.184.216.34' });
+  });
+
+  it('rejects the apex domain itself when the allowlist entry is a wildcard', async () => {
+    vi.stubEnv('WEBHOOK_URL_ALLOWLIST', '*.allowed.example.com');
+    mockDnsLookupAll([{ address: '93.184.216.34', family: 4 }]);
+    const { resolveAndPinWebhookUrl } = await import(
+      '@/shared/utils/security/webhook-outbound-fetch.util.js'
+    );
+    await expect(
+      resolveAndPinWebhookUrl('https://allowed.example.com/path'),
+    ).rejects.toMatchObject({ messageKey: 'errors:webhookUrlNotAllowed' });
   });
 
   it('createPinnedWebhookFetch connects to pinned IP (no second DNS lookup on fetch)', async () => {

@@ -45,9 +45,14 @@ function assertWebhookHostAllowed(hostname: string): void {
     return;
   }
   const normalizedHost = hostname.toLowerCase();
-  const allowed = allowlist.some(
-    (entry) => normalizedHost === entry || normalizedHost.endsWith(`.${entry}`),
-  );
+  const allowed = allowlist.some((entry) => {
+    if (entry.startsWith('*.')) {
+      // Explicit wildcard — *.example.com permits any subdomain but not the apex itself.
+      const baseDomain = entry.slice(2);
+      return normalizedHost.endsWith(`.${baseDomain}`);
+    }
+    return normalizedHost === entry;
+  });
   if (!allowed) {
     throw new ValidationError('errors:webhookUrlNotAllowed', undefined, undefined, [
       { field: 'url', messageKey: 'errors:webhookUrlNotAllowed' },
