@@ -79,7 +79,7 @@ describe('Membership Sub-Domain — Integration', () => {
       expect(response.statusCode).toBe(401);
     });
 
-    it('should return memberships with permission', async () => {
+    it('should return memberships with permission, emitting public ids (not internal sequential ids)', async () => {
       const { organization, token } = await createAuthorizedContext();
       const response = await injectAuthenticated(app, {
         method: 'GET',
@@ -88,6 +88,18 @@ describe('Membership Sub-Domain — Integration', () => {
         organizationPublicId: organization.public_id,
       });
       expect(response.statusCode).toBe(200);
+
+      const body = response.json() as {
+        data?: { user_id: string; role_id: string }[];
+      };
+      const items = body.data ?? [];
+      expect(items.length).toBeGreaterThan(0);
+      const member = items[0]!;
+      // 21-char public ids, never the internal bigserial ids ("1", "42", ...).
+      expect(member.user_id).toMatch(/^[A-Za-z0-9]{21}$/);
+      expect(member.role_id).toMatch(/^[A-Za-z0-9]{21}$/);
+      expect(member.user_id).not.toMatch(/^\d+$/);
+      expect(member.role_id).not.toMatch(/^\d+$/);
     });
   });
 

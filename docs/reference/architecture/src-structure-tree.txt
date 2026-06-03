@@ -1671,6 +1671,7 @@ src/
     │   │   ├── tenant-isolation.security.test.ts
     │   │   ├── tenant-rls-concurrency.security.test.ts
     │   │   ├── upload-rls.security.test.ts
+    │   │   ├── user-public-id-resolver.security.test.ts
     │   │   ├── worker-rls-context.security.test.ts
     │   │   └── worker-tenant-isolation.security.test.ts
     │   └── OVERVIEW.md

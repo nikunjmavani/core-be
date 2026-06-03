@@ -63,6 +63,12 @@ describe('MembershipService', () => {
     update: vi.fn().mockResolvedValue(membershipRow),
     softDelete: vi.fn().mockResolvedValue(membershipRow),
     findByUserAndOrganization: vi.fn().mockResolvedValue(membershipRow),
+    resolveUserPublicIdsByInternalIds: vi.fn(
+      async (ids: readonly number[]) => new Map(ids.map((id) => [id, `user_public_${id}`])),
+    ),
+    resolveRolePublicIdsByInternalIds: vi.fn(
+      async (ids: readonly number[]) => new Map(ids.map((id) => [id, `role_public_${id}`])),
+    ),
   } as unknown as MembershipRepository;
 
   const service = new MembershipService(

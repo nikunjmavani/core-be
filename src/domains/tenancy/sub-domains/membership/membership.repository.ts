@@ -1,8 +1,9 @@
-import { and, asc, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
+import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
 import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
@@ -86,6 +87,46 @@ export class MembershipRepository extends BaseRepository {
       has_more: hasMore,
       next_cursor: hasMore && lastItem !== undefined ? createOpaqueCursorFromRow(lastItem) : null,
     };
+  }
+
+  /**
+   * Maps internal user ids to public ids for serialization. `auth.users` is FORCE RLS
+   * (self-scoped) and these reads run under org-only context, so a plain join would match zero
+   * rows under the app role — delegate to the SECURITY DEFINER batch resolver (RLS bypass by
+   * ownership). Batched to avoid an N+1 per list page; exposes only the public id.
+   */
+  async resolveUserPublicIdsByInternalIds(
+    userInternalIds: readonly number[],
+  ): Promise<Map<number, string>> {
+    if (userInternalIds.length === 0) return new Map();
+    // Build an explicit `ARRAY[...]::bigint[]` literal — drizzle can't bind a JS array as a single
+    // parameter to the function's BIGINT[] argument.
+    const userIdValues = sql.join(
+      userInternalIds.map((userInternalId) => sql`${userInternalId}`),
+      sql`, `,
+    );
+    const result = await getRequestDatabase().execute(
+      sql`SELECT id, public_id FROM auth.resolve_user_public_ids_by_ids(ARRAY[${userIdValues}]::bigint[])`,
+    );
+    const rows = (
+      Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])
+    ) as { id: number | string; public_id: string }[];
+    return new Map(rows.map((row) => [Number(row.id), row.public_id]));
+  }
+
+  /**
+   * Maps internal role ids to public ids for serialization. `roles` is org-scoped, so a normal
+   * RLS-scoped query under the current org context is correct (no resolver needed).
+   */
+  async resolveRolePublicIdsByInternalIds(
+    roleInternalIds: readonly number[],
+  ): Promise<Map<number, string>> {
+    if (roleInternalIds.length === 0) return new Map();
+    const rows = await getRequestDatabase()
+      .select({ id: roles.id, public_id: roles.public_id })
+      .from(roles)
+      .where(inArray(roles.id, [...roleInternalIds]));
+    return new Map(rows.map((row) => [row.id, row.public_id]));
   }
 
   async findById(id: number): Promise<MembershipRow | null> {
