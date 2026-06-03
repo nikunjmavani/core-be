@@ -130,7 +130,7 @@ describe('assertPostgresConnectionBudget', () => {
     );
   });
 
-  it('warns (without throwing) when monolithic worker demand exceeds the pool', async () => {
+  it('throws when monolithic worker demand exceeds DATABASE_POOL_MAX', async () => {
     getEnvMock.mockReturnValue({
       DATABASE_POOL_MAX: 8,
       POSTGRES_RESERVED_CONNECTIONS: 10,
@@ -145,15 +145,12 @@ describe('assertPostgresConnectionBudget', () => {
       queues: [],
     });
 
-    const { logger } = await import('@/shared/utils/infrastructure/logger.util.js');
     const { assertPostgresConnectionBudget } = await import(
       '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
-    await assertPostgresConnectionBudget({ assertWorkerConcurrency: true });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ peakPostgresConcurrency: 24 }),
-      'database.connection_budget.worker_pool_pressure',
+    await expect(assertPostgresConnectionBudget({ assertWorkerConcurrency: true })).rejects.toThrow(
+      /Worker Postgres pool demand/i,
     );
   });
 

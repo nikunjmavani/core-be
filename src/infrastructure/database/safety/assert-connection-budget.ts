@@ -233,25 +233,12 @@ export async function assertPostgresConnectionBudget(
     );
 
     if (peakPostgresConcurrency > poolMaxConnections) {
-      const message =
+      throw new Error(
         `Worker Postgres pool demand (${peakPostgresConcurrency}) exceeds DATABASE_POOL_MAX (${poolMaxConnections}) ` +
-        `for WORKER_QUEUE_FAMILIES [${selectedFamilies.join(', ')}]. ` +
-        'Raise DATABASE_POOL_MAX on the worker service, lower WORKER_CONCURRENCY_* overrides, ' +
-        'or split worker services by queue family. See docs/deployment/runbooks/resource-limits.md';
-
-      if (monolithicWorker) {
-        logger.warn(
-          {
-            poolMaxConnections,
-            peakPostgresConcurrency,
-            selectedFamilies,
-            queues: queues.filter((entry) => entry.enabled && entry.postgresConcurrency > 0),
-          },
-          'database.connection_budget.worker_pool_pressure',
-        );
-      } else {
-        throw new Error(message);
-      }
+          `for WORKER_QUEUE_FAMILIES [${selectedFamilies.join(', ')}]${monolithicWorker ? ' (monolithic worker)' : ''}. ` +
+          'Raise DATABASE_POOL_MAX on the worker service, lower WORKER_CONCURRENCY_* overrides, ' +
+          'or split worker services by queue family. See docs/deployment/runbooks/resource-limits.md',
+      );
     }
   }
 }
