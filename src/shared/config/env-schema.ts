@@ -636,7 +636,10 @@ export const envSchema = envSchemaBase
       if (data.DATABASE_HTTP_STATEMENT_TIMEOUT_MS === 0) {
         return true;
       }
-      return data.DATABASE_HTTP_STATEMENT_TIMEOUT_MS < PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS * 1_000;
+      return (
+        data.DATABASE_HTTP_STATEMENT_TIMEOUT_MS <
+        PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS * 1_000
+      );
     },
     {
       message: `DATABASE_HTTP_STATEMENT_TIMEOUT_MS must be < ${PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS * 1_000} (PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS × 1000) or 0 (disabled). A longer timeout allows the recompute lock to expire mid-query, defeating the cache stampede guard.`,
