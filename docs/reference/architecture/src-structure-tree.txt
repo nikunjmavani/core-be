@@ -1719,6 +1719,8 @@ src/
     │   ├── config/
     │   │   ├── env-schema.unit.test.ts
     │   │   └── env.config.unit.test.ts
+    │   ├── database/
+    │   │   └── role-least-privilege-migration.policy.unit.test.ts
     │   ├── errors/
     │   │   ├── app.error.unit.test.ts
     │   │   ├── auth.error.unit.test.ts
