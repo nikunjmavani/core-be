@@ -6,6 +6,14 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.2.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.4-dev.0...v4.2.5-dev.0) (2026-06-03)
+
+
+### Fixed
+
+* **queue:** stop DLQ auto-retry starvation via a resolved marker on exhausted rows ([#330](https://github.com/nikunjmavani/core-be/issues/330)) ([86c3817](https://github.com/nikunjmavani/core-be/commit/86c381769b50262e30687506b0c9ebeec9a739d9))
+* **tenancy:** emit public ids (not internal bigserial ids) in membership responses ([#329](https://github.com/nikunjmavani/core-be/issues/329)) ([3aac2ac](https://github.com/nikunjmavani/core-be/commit/3aac2ac13d072c1f41bf71bd296468de63d73b3c))
+
 ## [4.2.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.3-dev.0...v4.2.4-dev.0) (2026-06-03)
 
 
