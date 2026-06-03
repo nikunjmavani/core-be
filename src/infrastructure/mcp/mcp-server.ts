@@ -367,7 +367,6 @@ export async function registerMcpRouteHandlers(
       await handleMcpRequest(request.raw, reply.raw, request.body);
     },
   );
-
 }
 
 /**
