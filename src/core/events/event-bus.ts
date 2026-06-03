@@ -5,6 +5,7 @@ import {
 } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js';
 import { executeCommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.executor.js';
 import type { CommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.types.js';
+import { captureException } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
@@ -111,6 +112,7 @@ export class EventBus {
             await executeCommitDispatchTask(task);
           } catch (error) {
             logger.error({ error, requestId, task }, 'event-bus.commit-dispatch.task.failed');
+            captureException(error, { requestId, tags: { source: 'event-bus.commit-dispatch' } });
           }
         }
       } catch (error) {
@@ -127,6 +129,7 @@ export class EventBus {
           await task();
         } catch (error) {
           logger.error({ error }, 'event-bus.on-commit.task.failed');
+          captureException(error, { tags: { source: 'event-bus.on-commit' } });
         }
       }),
     );
@@ -157,6 +160,7 @@ export class EventBus {
           await handler(event);
         } catch (error) {
           logger.error({ eventType: event.type, error }, 'Domain event handler failed');
+          captureException(error, { tags: { source: 'event-bus.emit', eventType: event.type } });
         }
       }),
     );
