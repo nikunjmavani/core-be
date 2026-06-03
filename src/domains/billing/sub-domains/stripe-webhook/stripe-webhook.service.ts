@@ -142,9 +142,7 @@ export class StripeWebhookService {
       statusMap[stripeSubscription.status] ?? stripeSubscription.status.toUpperCase();
 
     const firstItem = stripeSubscription.items.data[0];
-    const periodStart = firstItem
-      ? new Date(firstItem.current_period_start * 1000)
-      : new Date();
+    const periodStart = firstItem ? new Date(firstItem.current_period_start * 1000) : new Date();
     const periodEnd = firstItem ? new Date(firstItem.current_period_end * 1000) : new Date();
 
     const row = await this.subscriptionService.syncFromStripeProviderSubscription(
