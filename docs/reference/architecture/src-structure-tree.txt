@@ -1098,6 +1098,9 @@ src/
     │   │   └── commit-dispatch.types.ts
     │   ├── dlq/
     │   │   ├── __tests__/
+    │   │   │   ├── unit/
+    │   │   │   │   ├── dead-letter-auto-retry-scan.db.unit.test.ts
+    │   │   │   │   └── dlq-auto-retry.processor.unit.test.ts
     │   │   │   └── dlq-auto-retry.worker.unit.test.ts
     │   │   ├── dead-letter.repository.ts
     │   │   ├── dead-letter.schema.ts
