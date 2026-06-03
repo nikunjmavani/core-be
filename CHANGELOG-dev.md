@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.2.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.2-dev.0...v4.2.3-dev.0) (2026-06-03)
+
+
+### Fixed
+
+* **events:** release commit-dispatch marker on rollback (in-memory leak) ([#324](https://github.com/nikunjmavani/core-be/issues/324)) ([7e3ec55](https://github.com/nikunjmavani/core-be/commit/7e3ec559455954d9aeb489e69c4bf416801d76d3))
+
 ## [4.2.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.1-dev.0...v4.2.2-dev.0) (2026-06-03)
 
 
