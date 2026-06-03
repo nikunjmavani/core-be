@@ -82,13 +82,12 @@ describe('authorization.util', () => {
       await expect(handler(mockRequest({ params: {} }), mockReply)).rejects.toThrow(ForbiddenError);
     });
 
-    it('falls back to id param when organizationId is absent', async () => {
-      mockedResolvePermissions.mockResolvedValue(['membership:read']);
+    it('throws ForbiddenError when only a differently-named param is present (no fallback)', async () => {
       const handler = requireOrganizationPermission('membership:read', 'organizationId');
       await expect(
         handler(mockRequest({ params: { id: 'org-by-id' } as Record<string, string> }), mockReply),
-      ).resolves.toBeUndefined();
-      expect(mockedResolvePermissions).toHaveBeenCalledWith('user-1', 'org-by-id');
+      ).rejects.toThrow(ForbiddenError);
+      expect(mockedResolvePermissions).not.toHaveBeenCalled();
     });
 
     it('throws UnauthorizedError when not authenticated', async () => {
