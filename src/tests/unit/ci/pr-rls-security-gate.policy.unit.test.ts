@@ -38,3 +38,33 @@ describe('PR CI runs the non-superuser RLS security suite against Postgres', () 
     expect(prCi).toContain("needs.changes.outputs.src-code == 'true'");
   });
 });
+
+/**
+ * The job is only a real gate if it is also a REQUIRED status check — otherwise auto-merge ignores
+ * it. The required-check context is `PR CI / <job name>`, so it must stay in lockstep with the job
+ * `name:` asserted above. These assertions fail if a branch ruleset drops the RLS context (or a job
+ * rename desyncs the two).
+ */
+const REQUIRED_RLS_CONTEXT = 'PR CI / RLS security (non-superuser)';
+
+interface BranchRuleset {
+  rules: {
+    type: string;
+    parameters?: { required_status_checks?: { context: string }[] };
+  }[];
+}
+
+describe.each(['dev', 'main'])('the %s branch ruleset requires the RLS check', (branch) => {
+  it('lists the RLS context in required_status_checks', () => {
+    const ruleset = JSON.parse(
+      readFileSync(join(process.cwd(), `.github/rulesets/${branch}.json`), 'utf8'),
+    ) as BranchRuleset;
+
+    const requiredContexts = ruleset.rules
+      .find((rule) => rule.type === 'required_status_checks')
+      ?.parameters?.required_status_checks?.map((check) => check.context);
+
+    expect(requiredContexts, `${branch}.json must declare required_status_checks`).toBeDefined();
+    expect(requiredContexts).toContain(REQUIRED_RLS_CONTEXT);
+  });
+});
