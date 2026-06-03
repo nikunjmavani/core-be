@@ -11,6 +11,9 @@ import {
 /** BullMQ queue name for outbound webhook delivery (HMAC-signed POSTs to customer URLs). */
 export const WEBHOOK_DELIVERY_QUEUE_NAME = 'webhook-delivery';
 
+/** Total BullMQ job attempts (initial + retries). Worker derives its final-attempt guard from this. */
+export const WEBHOOK_DELIVERY_JOB_ATTEMPTS = 5;
+
 /** Delivery attempt id and org scope are stored in Redis; payload and secrets live in Postgres. */
 export type WebhookDeliveryJobData = WebhookDeliveryJobDataValidated;
 
@@ -23,7 +26,7 @@ function getWebhookDeliveryQueue(): Queue<WebhookDeliveryJobData> {
     defaultJobOptions: {
       removeOnComplete: { count: 2000 },
       removeOnFail: { count: 5000 },
-      attempts: 5,
+      attempts: WEBHOOK_DELIVERY_JOB_ATTEMPTS,
       backoff: { type: 'custom' },
     },
   });
