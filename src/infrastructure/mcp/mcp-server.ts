@@ -188,11 +188,29 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
         };
       }
       try {
+        // Strip headers that could override authentication or session identity.
+        // The MCP endpoint itself is admin-authenticated; the injected sub-request must not
+        // be able to impersonate a different principal via caller-supplied header overrides.
+        const BLOCKED_HEADERS = new Set([
+          'authorization',
+          'cookie',
+          'set-cookie',
+          'x-csrf-token',
+          'x-forwarded-for',
+          'x-real-ip',
+        ]);
+        const safeHeaders: Record<string, string> = {};
+        for (const [key, value] of Object.entries(data.headers ?? {})) {
+          if (!BLOCKED_HEADERS.has(key.toLowerCase())) {
+            // eslint-disable-next-line security/detect-object-injection -- key filtered via BLOCKED_HEADERS allowlist above.
+            safeHeaders[key] = value;
+          }
+        }
         const result = await inject({
           method: data.method,
           url: data.path,
           payload: data.body,
-          headers: data.headers ?? {},
+          headers: safeHeaders,
         });
         const responseBody =
           typeof result.payload === 'object' && result.payload !== null
@@ -349,17 +367,6 @@ export async function registerMcpRouteHandlers(
       await handleMcpRequest(request.raw, reply.raw, request.body);
     },
   );
-
-  // Alias without /api/v1 so clients using base URL with path /mcp do not get 404
-  app.get('/mcp', async (request, reply) => {
-    reply.hijack();
-    await handleMcpRequest(request.raw, reply.raw, undefined);
-  });
-
-  app.post('/mcp', async (request, reply) => {
-    reply.hijack();
-    await handleMcpRequest(request.raw, reply.raw, request.body);
-  });
 }
 
 /**
