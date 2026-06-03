@@ -6,6 +6,16 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.4.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.1-dev.0...v4.4.2-dev.0) (2026-06-03)
+
+
+### Fixed
+
+* **cache:** add commandTimeout to Redis client to prevent hung commands ([8cd8107](https://github.com/nikunjmavani/core-be/commit/8cd8107df573d5a8255911dc2fac8f21e676fb66))
+* **events:** capture swallowed event-bus errors in Sentry ([2a30d84](https://github.com/nikunjmavani/core-be/commit/2a30d845482dadbe97dd922a4bc54e974105655a))
+* **infra:** throw on startup when monolithic worker pool demand exceeds DATABASE_POOL_MAX ([faf2fab](https://github.com/nikunjmavani/core-be/commit/faf2fab638f0b77d1ea82dd856d3cefefa893711))
+* **security:** require explicit wildcard prefix for webhook allowlist subdomain matching ([8d79c89](https://github.com/nikunjmavani/core-be/commit/8d79c891b2a88a8a44cca1420535cfcc6a567a12))
+
 ## [4.4.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.0-dev.0...v4.4.1-dev.0) (2026-06-03)
 
 
