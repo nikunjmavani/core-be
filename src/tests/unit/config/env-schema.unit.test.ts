@@ -546,4 +546,33 @@ describe('env-schema', () => {
       expect(parsed.error.flatten().fieldErrors.FRONTEND_URL).toBeDefined();
     }
   });
+
+  it('rejects DATABASE_HTTP_STATEMENT_TIMEOUT_MS >= PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS × 1000', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      DATABASE_HTTP_STATEMENT_TIMEOUT_MS: '15000',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(
+        parsed.error.issues.some((i) => i.path[0] === 'DATABASE_HTTP_STATEMENT_TIMEOUT_MS'),
+      ).toBe(true);
+    }
+  });
+
+  it('allows DATABASE_HTTP_STATEMENT_TIMEOUT_MS = 0 (disabled) regardless of lock TTL', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      DATABASE_HTTP_STATEMENT_TIMEOUT_MS: '0',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts DATABASE_HTTP_STATEMENT_TIMEOUT_MS within the lock TTL bound', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      DATABASE_HTTP_STATEMENT_TIMEOUT_MS: '5000',
+    });
+    expect(parsed.success).toBe(true);
+  });
 });

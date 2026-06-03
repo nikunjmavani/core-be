@@ -3,6 +3,7 @@
  * (e.g. sync-env-example). Application code should use env.config.ts for getEnv() and env.
  */
 import { validateProductionRedisTopology } from '@/infrastructure/cache/redis-url.parse.util.js';
+import { PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { z } from 'zod';
 
 const nodeEnvSchema = z
@@ -623,6 +624,26 @@ export const envSchema = envSchemaBase
     {
       message: 'COOKIE_SECURE must be true in production (cookies sent over HTTPS only).',
       path: ['COOKIE_SECURE'],
+    },
+  )
+  .refine(
+    (data) => {
+      // PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS is the Redis lock held while a permission
+      // cache miss triggers a DB recompute. If the HTTP statement timeout exceeds the lock TTL,
+      // the lock can expire before the DB query finishes, causing concurrent waiters to bypass
+      // the stampede guard and all hit the database simultaneously.
+      // 0 means "no statement timeout" — in that case we cannot enforce a bound.
+      if (data.DATABASE_HTTP_STATEMENT_TIMEOUT_MS === 0) {
+        return true;
+      }
+      return (
+        data.DATABASE_HTTP_STATEMENT_TIMEOUT_MS <
+        PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS * 1_000
+      );
+    },
+    {
+      message: `DATABASE_HTTP_STATEMENT_TIMEOUT_MS must be < ${PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS * 1_000} (PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS × 1000) or 0 (disabled). A longer timeout allows the recompute lock to expire mid-query, defeating the cache stampede guard.`,
+      path: ['DATABASE_HTTP_STATEMENT_TIMEOUT_MS'],
     },
   );
 
