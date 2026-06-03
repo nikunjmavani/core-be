@@ -68,6 +68,9 @@
             "context": "PR CI / Contract + property"
           },
           {
+            "context": "PR CI / RLS security (non-superuser)"
+          },
+          {
             "context": "PR Governance / Checks"
           }
         ]

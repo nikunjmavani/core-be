@@ -51,11 +51,14 @@ GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `n
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security secrets` | `PR CI / Security secrets` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security SAST` | `PR CI / Security SAST` |
 | [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Contract + property` | `PR CI / Contract + property` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `RLS security (non-superuser)` | `PR CI / RLS security (non-superuser)` |
 | [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR Governance` | `Checks` | `PR Governance / Checks` |
 
 ### Same checks on both branches
 
-Require **all eleven** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks). Full DB integration and chaos suites are **local-only** (`pnpm test:integration`, `pnpm test:chaos`).
+Require **all twelve** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks).
+
+> **`RLS security (non-superuser)` is the one DB-backed PR check.** Every other PR-CI job is DB-less, but the RLS suite must run as the non-superuser `core_be_app` role against a real Postgres — the local/CI superuser is RLS-exempt and hides FORCE-RLS bugs (this is how the org-mandated-MFA bypass shipped). It is scoped to `src/tests/security/rls` to stay fast; the rest of `--project security` and the full DB integration and chaos suites remain post-merge / local-only (`pnpm test:integration`, `pnpm test:chaos`).
 
 ### Skipped PR CI jobs on docs-only pull requests
 
@@ -66,6 +69,7 @@ When the PR touches **src** but not only docs, these jobs may still skip individ
 | Job `name:` | Skipped when |
 | ----------- | ------------ |
 | `Unit + global (pull_request)` | No `src-code` or `ci-config` paths |
+| `RLS security (non-superuser)` | No `src-code` or `ci-config` paths |
 | `Build verify` | No `src-code`, `docker`, or `ci-config` paths |
 
 `Lint`, `Typecheck`, `Static sync`, `Migration lint`, `Security audit`, `Security secrets`, `Security SAST`, and `Contract + property` run on every non-docs-only PR.
