@@ -149,9 +149,9 @@ describe('assertPostgresConnectionBudget', () => {
       '@/infrastructure/database/safety/assert-connection-budget.js'
     );
 
-    await expect(
-      assertPostgresConnectionBudget({ assertWorkerConcurrency: true }),
-    ).rejects.toThrow(/Worker Postgres pool demand/i);
+    await expect(assertPostgresConnectionBudget({ assertWorkerConcurrency: true })).rejects.toThrow(
+      /Worker Postgres pool demand/i,
+    );
   });
 
   it('passes when split API and worker counts fit the budget', async () => {
