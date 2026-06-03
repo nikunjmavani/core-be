@@ -6,6 +6,19 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.4.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.3.0-dev.0...v4.4.0-dev.0) (2026-06-03)
+
+
+### Added
+
+* **load:** per-VU credential pool + realistic user-journey k6 scenario ([#342](https://github.com/nikunjmavani/core-be/issues/342)) ([a05a611](https://github.com/nikunjmavani/core-be/commit/a05a611ced68683c0855c65d572fbc5fc7d06bb1))
+
+
+### Fixed
+
+* **ci:** use bare check-run names as ruleset required-check contexts ([#344](https://github.com/nikunjmavani/core-be/issues/344)) ([c431a63](https://github.com/nikunjmavani/core-be/commit/c431a63a292e9dcff7dc09147c9ae0fd7eb3d5d2))
+* **migration:** make core_be_app least-privilege ALTER ROLE Neon-safe (unblocks all deploys) ([#341](https://github.com/nikunjmavani/core-be/issues/341)) ([488c793](https://github.com/nikunjmavani/core-be/commit/488c793ee93173a2b7d1cedb32879743c3136533))
+
 ## [4.3.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.6-dev.0...v4.3.0-dev.0) (2026-06-03)
 
 
