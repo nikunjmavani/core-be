@@ -1586,6 +1586,7 @@ src/
     │   │   │   ├── api-stress.js
     │   │   │   ├── audit-list.js
     │   │   │   ├── auth-onboarding.js
+    │   │   │   ├── auth-stress-server-timing.js
     │   │   │   ├── billing-subscriptions-rls.js
     │   │   │   ├── billing.js
     │   │   │   ├── daily-ops.js
