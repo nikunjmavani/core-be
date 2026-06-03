@@ -12,6 +12,11 @@ import {
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
+import { withTransaction } from '@/infrastructure/database/transaction.js';
+import {
+  runWithPinnedDatabaseHandle,
+  type RequestScopedPostgresDatabase,
+} from '@/infrastructure/database/contexts/request-database.context.js';
 import { AUTH_METHOD_TYPE } from './auth-method.constants.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
@@ -218,24 +223,35 @@ export class AuthMethodService {
     const parsed = validateResetPassword(body);
     const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
 
-    /** Atomic UPDATE prevents two concurrent resets from both succeeding. */
-    const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-    if (!record || record.token_type !== 'PASSWORD_RESET') {
-      throw new UnauthorizedError('errors:invalidOrExpiredResetToken');
-    }
-
+    // Hash the new password BEFORE opening the transaction: argon2 is CPU-bound (~100ms) and
+    // must not hold a pooled connection open inside the transaction.
     const passwordHash = await hashPassword(parsed.password);
 
-    const user = await this.userService.findById(record.user_id);
-    if (!user) throw new NotFoundError('User');
+    // Token consume, password update, token invalidation and session revocation must be atomic.
+    // A partial apply (password changed but sessions not revoked) would leave a potentially
+    // compromised account's existing sessions live after a recovery reset. One pinned
+    // transaction makes every nested `withUserDatabaseContext` call reuse it (all-or-nothing);
+    // a mid-operation failure rolls the password change back rather than committing it alone.
+    await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        // Atomic UPDATE also prevents two concurrent resets from both succeeding.
+        const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
+        if (!record || record.token_type !== 'PASSWORD_RESET') {
+          throw new UnauthorizedError('errors:invalidOrExpiredResetToken');
+        }
 
-    await this.userService.updatePassword(user.public_id, passwordHash);
+        const user = await this.userService.findById(record.user_id);
+        if (!user) throw new NotFoundError('User');
 
-    await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
+        await this.userService.updatePassword(user.public_id, passwordHash);
+        await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
 
-    // A reset is the recovery path for a potentially compromised account, so every
-    // existing session is revoked (cache invalidation makes revocation immediate).
-    await this.authSessionService.revokeAllSessions(user.public_id);
+        // A reset is the recovery path for a potentially compromised account, so every existing
+        // session is revoked. The Redis token-cache invalidation inside `revokeAllSessions` is a
+        // sub-millisecond local call; on rollback it merely causes a cache miss, never a leak.
+        await this.authSessionService.revokeAllSessions(user.public_id);
+      }),
+    );
   }
 
   async changePassword(
