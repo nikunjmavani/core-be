@@ -49,9 +49,7 @@ describe('StripeWebhookService', () => {
       cancel_at_period_end: false,
       canceled_at: null,
       items: {
-        data: [
-          { current_period_start: periodStartSeconds, current_period_end: periodEndSeconds },
-        ],
+        data: [{ current_period_start: periodStartSeconds, current_period_end: periodEndSeconds }],
       },
       ...overrides,
     } as unknown as Stripe.Subscription;
