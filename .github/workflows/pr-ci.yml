@@ -149,6 +149,73 @@ jobs:
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm db:migrate:lint
 
+  rls-security:
+    name: RLS security (non-superuser)
+    needs: [changes]
+    if: |
+      needs.changes.outputs.docs-only-md != 'true' &&
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.ci-config == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The RLS suite runs as the non-superuser `core_be_app` role (`SET LOCAL ROLE`), which is the
+    # only way to surface FORCE ROW LEVEL SECURITY bugs — the local/CI superuser is RLS-exempt and
+    # hides them (this is how the org-mandated-MFA bypass reached production). Those tests therefore
+    # need a real Postgres, so unlike the rest of PR CI this job starts a database. It stays scoped
+    # to `src/tests/security/rls` (the rest of `--project security` runs post-merge) to keep the
+    # gate fast. Required-check wiring: docs/deployment/ci-cd/branch-protection.md.
+    services:
+      postgres:
+        image: postgres:17.10-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: core
+          POSTGRES_PASSWORD: core
+          POSTGRES_DB: core
+        options: >-
+          --health-cmd="pg_isready -U core -d core"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:8.6.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://core:core@localhost:5432/core
+      REDIS_URL: redis://localhost:6379
+      DATABASE_SSL_ENABLED: 'false'
+      RATE_LIMIT_MAX: 1000
+      RATE_LIMIT_WINDOW_MS: 60000
+      RUN_DB_TESTS: 1
+      RUN_REDIS_TESTS: 1
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export shared CI test env (JWT keys + retention + secrets-encryption)
+        uses: ./.github/actions/test-env
+
+      - name: Run migrations
+        run: pnpm db:migrate
+
+      - name: Run non-superuser RLS security tests
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run --project security src/tests/security/rls
+
   build-verify:
     name: Build verify
     needs: [changes]
