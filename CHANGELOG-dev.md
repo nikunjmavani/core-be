@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.3.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.6-dev.0...v4.3.0-dev.0) (2026-06-03)
+
+
+### Added
+
+* **observability:** emit Server-Timing header for true server-side latency ([#339](https://github.com/nikunjmavani/core-be/issues/339)) ([5e78cde](https://github.com/nikunjmavani/core-be/commit/5e78cde15b30deac077cbf4e27081cf6da27e814))
+
 ## [4.2.6-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.2.5-dev.0...v4.2.6-dev.0) (2026-06-03)
 
 
