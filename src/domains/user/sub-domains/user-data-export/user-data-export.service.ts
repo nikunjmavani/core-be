@@ -415,17 +415,19 @@ export class UserDataExportService {
     const rows = await withUserDatabaseContext(userPublicId, () =>
       this.exportRepository.listByUserId(userInternalId),
     );
-    for (const row of rows) {
-      if (row.s3_key) {
-        const objectDeleted = await this.objectStorage.deleteObject(row.s3_key);
-        if (!objectDeleted) {
-          logger.warn(
-            { userInternalId, exportPublicId: row.public_id, s3Key: row.s3_key },
-            'user-data-export.offboarding.s3DeleteFailed',
-          );
-        }
-      }
-    }
+    await Promise.all(
+      rows
+        .filter((row): row is typeof row & { s3_key: string } => row.s3_key !== null)
+        .map(async (row) => {
+          const objectDeleted = await this.objectStorage.deleteObject(row.s3_key);
+          if (!objectDeleted) {
+            logger.warn(
+              { userInternalId, exportPublicId: row.public_id, s3Key: row.s3_key },
+              'user-data-export.offboarding.s3DeleteFailed',
+            );
+          }
+        }),
+    );
     const deletedCount = await withUserDatabaseContext(userPublicId, () =>
       this.exportRepository.deleteAllByUserId(userInternalId),
     );
