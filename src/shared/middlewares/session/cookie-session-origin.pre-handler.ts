@@ -75,7 +75,3 @@ export function requireAllowedSourceOriginForCookieSessionRoute(request: Fastify
 
   throw new ForbiddenError('errors:originNotAllowed');
 }
-
-/** @deprecated Use {@link requireAllowedSourceOriginForCookieSessionRoute}. */
-export const requireAllowedOriginWhenPresentForCookieSessionRoute =
-  requireAllowedSourceOriginForCookieSessionRoute;

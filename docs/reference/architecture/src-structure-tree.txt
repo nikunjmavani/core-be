@@ -1181,8 +1181,6 @@ src/
     │   ├── generate-route-catalog.ts
     │   ├── hosted-docs-upload.util.ts
     │   ├── openapi-enricher.ts
-    │   ├── openapi-response-map.ts
-    │   ├── openapi-schema-map.ts
     │   ├── project-structure-tree.constants.ts
     │   ├── upload-postman-collection.ts
     │   └── upload-scalar-registry.ts
