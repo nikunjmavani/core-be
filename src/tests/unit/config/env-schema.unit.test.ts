@@ -434,6 +434,9 @@ describe('env-schema', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
       NODE_ENV: 'staging',
+      // Staging now requires CAPTCHA (same as production) to prevent auth-endpoint bot abuse.
+      CAPTCHA_PROVIDER: 'turnstile',
+      CAPTCHA_SECRET: 'turnstile-secret',
     });
 
     expect(parsed.success).toBe(true);
