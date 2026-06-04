@@ -3,14 +3,57 @@
 **Codebase:** `core-be` (Fastify 5 / TypeScript / Drizzle ORM / BullMQ / Postgres / Redis)
 **Auditor:** Claude Sonnet 4.6 (claude-sonnet-4-6)
 **Audit date:** 2026-06-04
+**Last status update:** 2026-06-04 (post-remediation pass)
 **Scope:** Full source tree — 1,394+ TypeScript source files
 **Methodology:** Static analysis of all key files listed in the audit brief, targeted grep patterns across the codebase, and line-by-line review of security-critical modules.
 
 ---
 
-## Executive Summary
+## Remediation Status — 2026-06-04 (post-remediation)
 
-**Open findings:** 20 (1 Critical, 4 High, 7 Medium, 6 Low, 2 Informational)
+All 20 findings have been addressed across remediation batches 1–5 plus this follow-up pass. Each row below cites the verifying source file (file:line) so a future reader can confirm the fix is still in place without re-running the audit. Severity counts at audit-time appear in parens beside the totals.
+
+**Open: 0.** Findings counts as audited (now all resolved):
+
+| Severity | Audit-time | Now open |
+|---|---|---|
+| Critical | 1 | 0 |
+| High | 4 | 0 |
+| Medium | 7 | 0 |
+| Low | 6 | 0 |
+| Informational | 2 | 0 |
+| **Total** | **20** | **0** |
+
+| # | Severity | Category | Status | Resolution reference |
+|---|---|---|---|---|
+| 1 | Critical | `security_policy` unbounded JSONB | ✅ RESOLVED | `organization-settings.dto.ts:13` — `.refine(record.size <= 50)` + 100-char keys, 500-char strings, `z.union` to a bounded value set (batch1 — [#372](https://github.com/nikunjmavani/core-be/commit/1cc551d0)) |
+| 2 | High | MCP `call_api` sub-requests unauthenticated | ✅ RESOLVED | `mcp-server.ts` — caller JWT now minted and forwarded into `app.inject` ([#373](https://github.com/nikunjmavani/core-be/commit/ceee2269)) |
+| 3 | High | Auth routes missing `STRICT_AUTHED_RATE_LIMIT` | ✅ RESOLVED | `auth.routes.ts` — all session/MFA/auth-method routes now spread `...STRICT_AUTHED_RATE_LIMIT` (batch4 — [#374](https://github.com/nikunjmavani/core-be/pull/374)) |
+| 4 | High | User-Agent stored without truncation | ✅ RESOLVED | `auth.http.util.ts:142` — `USER_AGENT_MAX_LENGTH = 512` truncation at the boundary (batch4 — [#374](https://github.com/nikunjmavani/core-be/pull/374)) |
+| 5 | High | Webhook DTO accepts `http://` | ✅ RESOLVED | `webhook.dto.ts` — `https://` refinement at DTO layer (batch4 — [#374](https://github.com/nikunjmavani/core-be/pull/374)) |
+| 6 | Medium | CAPTCHA `isCaptchaFailOpen` excludes staging | ✅ RESOLVED | `captcha.middleware.ts:50–58` — staging now returns true (and `env-schema.ts:504–514` makes staging-without-turnstile reject at boot anyway) |
+| 7 | Medium | WebAuthn DTO unbounded `z.record` | ✅ RESOLVED | `webauthn.dto.ts` — typed `RegistrationResponseJSON` / `AuthenticationResponseJSON` shape (batch2 — [`6e445570`](https://github.com/nikunjmavani/core-be/commit/6e445570)) |
+| 8 | Medium | Legacy numeric cursor fallback | ✅ RESOLVED | `pagination.util.ts` — legacy integer branch removed (batch5 — [#375](https://github.com/nikunjmavani/core-be/pull/375)) |
+| 9 | Medium | No IP-level lockout | ✅ RESOLVED | `auth.service.ts:24–111` — Redis-backed per-IP failed-login counter (`auth:failed_login:ip:<sha256>`) with Sentry alert at threshold ([#373](https://github.com/nikunjmavani/core-be/commit/ceee2269)) |
+| 10 | Medium | CAPTCHA_PROVIDER default permits staging deploys without CAPTCHA | ✅ RESOLVED | `env-schema.ts:504–514` — refine now requires `turnstile + CAPTCHA_SECRET` for both `production` AND `staging` (batch1 — [#372](https://github.com/nikunjmavani/core-be/commit/1cc551d0)) |
+| 11 | Low | `after` cursor no max-length | ✅ RESOLVED | `pagination.util.ts` — `.max(512)` on `cursorPaginationSchema.after` (batch5 — [#375](https://github.com/nikunjmavani/core-be/pull/375)) |
+| 12 | Low | DLQ floating `void recordDeadLetterFailure` | ✅ RESOLVED | `dead-letter.ts:354–356` — explicit `.catch()` with logged error (batch5 — [#375](https://github.com/nikunjmavani/core-be/pull/375)) |
+| 13 | Medium | No `jobTimeout` on BullMQ workers | ⚠️ ADDRESSED (different approach) | `worker-options.ts` — batch5's `jobTimeout` field was silently dropped by BullMQ (no such option on `WorkerOptions`); replaced with a docstring documenting the real wall-clock bound (`lockDuration + maxStalledCount × stalledInterval`) and the cancellation footgun that makes a generic `Promise.race` wrapper unsafe (would leak the DB connection). True per-job cancellation lives in worker outbound I/O via `AbortSignal` (already present in `outboundCall(signal)` for webhook delivery). See [PR #379](https://github.com/nikunjmavani/core-be/pull/379). |
+| 14 | Low | Source queues count-only eviction | ✅ RESOLVED | All queues now use `count + age (7 days)` (batch5 — [#375](https://github.com/nikunjmavani/core-be/pull/375)) |
+| 15 | Medium | TOTP replay TTL not derived from constants | ✅ RESOLVED | `ttl.constants.ts:58–78` — `MFA_TOTP_CODE_REPLAY_TTL_SECONDS = (MFA_TOTP_TOLERANCE_STEPS + 2) × TOTP_STEP_SECONDS`, with `verify({ epochTolerance })` in `auth-mfa.service.ts:107,201` reading the same constants |
+| 16 | Medium | `DATABASE_POOL_MAX` no startup default | ✅ RESOLVED | `env-schema.ts:235` — `.default(10)` (explicit) |
+| 17 | Medium | Upload confirm loads full S3 object into memory | ✅ RESOLVED | `storage.service.ts:141–188` — `getObjectLeadingBytes` issues `Range: bytes=0-(maxBytes-1)`; `upload.service.ts:457` calls `getObjectFirstBytes(sourceKey, 32)` for magic-byte verification (full `getObject` only used for SVG sanitization where the whole file is needed) |
+| 18 | Low | Source vs DLQ eviction asymmetry | ✅ RESOLVED | All source queues align with DLQ age-based pattern (batch5 — [#375](https://github.com/nikunjmavani/core-be/pull/375)) |
+| 19 | Low | Mail queue retains 5000 failed jobs by count | ✅ RESOLVED | `mail.queue.ts` — `removeOnFail: { count: 500, age: 7 days }` (batch5 — [#375](https://github.com/nikunjmavani/core-be/pull/375)) |
+| 20 | Informational | WebAuthn `as unknown as` type erasure | ✅ RESOLVED | Linked to #7 — typed DTOs eliminate the `as unknown as` casts (batch2 — [`6e445570`](https://github.com/nikunjmavani/core-be/commit/6e445570)) |
+
+**Verification gaps closed by this pass:** `pnpm validate:constants` and `pnpm validate:sunset-dates` now run clean locally (centralized `AES_GCM_IV_LENGTH`, allowlisted coincidental repeats `5` and `512`, added `load-env-files` to sunset-dates) — see [PR #378](https://github.com/nikunjmavani/core-be/pull/378).
+
+---
+
+## Executive Summary (audit-time, retained for reference)
+
+**Open findings at audit-time:** 20 (1 Critical, 4 High, 7 Medium, 6 Low, 2 Informational)
 
 | Severity | Count |
 |---|---|
@@ -19,7 +62,7 @@
 | Medium | 7 |
 | Low | 6 |
 | Informational | 2 |
-| **Total open** | **20** |
+| **Total open at audit-time** | **20** |
 
 ### Resolved Prior Findings (R1–R7 + PRs)
 
