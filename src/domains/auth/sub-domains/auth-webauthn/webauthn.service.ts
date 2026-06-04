@@ -164,7 +164,7 @@ export class WebauthnService {
 
     const expectedOrigin = resolveWebauthnExpectedOrigin(requestOrigin);
     const verification = await verifyRegistrationResponse({
-      response: parsed.response as RegistrationResponseJSON,
+      response: parsed.response as unknown as RegistrationResponseJSON,
       expectedChallenge: challenge.challenge,
       expectedOrigin,
       expectedRPID: resolveWebauthnRelyingPartyId(),
@@ -299,7 +299,7 @@ export class WebauthnService {
       'authentication',
     );
 
-    const response = parsed.response as AuthenticationResponseJSON;
+    const response = parsed.response as unknown as AuthenticationResponseJSON;
     // The challenge binds this assertion to a user; auth.webauthn_credentials is FORCE RLS keyed on
     // app.current_user_id, so look the credential up inside that user's context.
     const storedCredential = await withUserDatabaseContext(challenge.user_public_id, () =>
