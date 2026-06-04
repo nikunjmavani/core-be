@@ -27,9 +27,19 @@ export const listWebhookDeliveryAttemptsQueryDto = cursorPaginationSchema
  * https URL up to 2 KB, and an optional plaintext secret that the service encrypts before
  * persisting.
  */
+const httpsUrl = z
+  .string()
+  .trim()
+  .pipe(
+    z
+      .url()
+      .max(2048)
+      .refine((url) => url.startsWith('https://'), { message: 'Webhook URL must use HTTPS' }),
+  );
+
 export const CreateWebhookDto = z
   .object({
-    url: z.string().trim().pipe(z.url().max(2048)),
+    url: httpsUrl,
     secret: trimmedString().max(255).optional(),
     events: z.array(trimmedString().max(100)).min(1).max(50),
     is_enabled: z.boolean().optional().default(true),
@@ -43,7 +53,7 @@ export const CreateWebhookDto = z
  */
 export const UpdateWebhookDto = z
   .object({
-    url: z.string().trim().pipe(z.url().max(2048)).optional(),
+    url: httpsUrl.optional(),
     secret: trimmedString().max(255).optional(),
     events: z.array(trimmedString().max(100)).min(1).max(50).optional(),
     is_enabled: z.boolean().optional(),

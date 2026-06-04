@@ -44,7 +44,13 @@ function isCaptchaEnforced(): boolean {
 
 function isCaptchaFailOpen(): boolean {
   const nodeEnvironment = getEnv().NODE_ENV;
-  return nodeEnvironment === 'test' || nodeEnvironment === 'development';
+  // Staging intentionally fails open so that a missing CAPTCHA config does not block auth in
+  // non-production environments. Staging is also protected by the env-schema enforcement that
+  // requires CAPTCHA_PROVIDER=turnstile when NODE_ENV=staging, so the fail-open path is only
+  // reached when a staging instance is intentionally running without CAPTCHA.
+  return (
+    nodeEnvironment === 'test' || nodeEnvironment === 'development' || nodeEnvironment === 'staging'
+  );
 }
 
 function isCaptchaBypassAllowed(request: FastifyRequest): boolean {
