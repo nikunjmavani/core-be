@@ -33,6 +33,7 @@ Items the team already remediated before this audit are listed in a **Remediated
 **File:** `src/domains/notify/sub-domains/webhook/webhook.dto.ts`, lines 34 and 48
 
 **Evidence:**
+
 ```typescript
 // CreateWebhookDto
 events: z.array(trimmedString().max(100)).min(1),  // no .max() on the array
@@ -52,6 +53,7 @@ events: z.array(trimmedString().max(100)).min(1).optional(),  // same omission
 **File:** `src/domains/user/sub-domains/user-notification-preferences/user-notification-preferences.dto.ts`, line 12
 
 **Evidence:**
+
 ```typescript
 preferences: z.array(
   z.object({
@@ -76,6 +78,7 @@ The outer `z.array(...)` has no `.max()` constraint.
 **File:** `src/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.dto.ts`, line 11
 
 **Evidence:**
+
 ```typescript
 permission_codes: z.array(trimmedStringMinMax(1, 100)).min(0),
 ```
@@ -93,6 +96,7 @@ No `.max()` on the array.
 **File:** `src/domains/user/sub-domains/user-settings/user-settings.dto.ts`, line 14
 
 **Evidence:**
+
 ```typescript
 preferred_locales: z.array(trimmedString().max(10)).optional(),
 ```
@@ -108,10 +112,12 @@ No `.max()` on the array.
 **#5 — Low — Email templates inject server-controlled URLs without explicit HTML escaping**
 
 **Files:**
+
 - `src/infrastructure/mail/templates/invitation.template.ts`, line 37 (`href="${data.acceptUrl}"`) and line 39 (`${data.acceptUrl}`)
 - `src/infrastructure/mail/templates/magic-link.template.ts`, line 15 (`href="${data.magicLinkUrl}"`) and line 21 (`${data.magicLinkUrl}`)
 
 **Evidence (invitation.template.ts, abbreviated):**
+
 ```typescript
 <a href="${data.acceptUrl}" class="button">Accept Invitation</a>
 ...
@@ -129,6 +135,7 @@ ${data.acceptUrl}
 **File:** `src/infrastructure/payment/stripe.client.ts`, line 323
 
 **Evidence:**
+
 ```typescript
 return stripe.webhooks.constructEvent(body, signature, webhookSecret);
 // No explicit tolerance argument; SDK default is 300 s
@@ -179,6 +186,7 @@ The following issues were identified, resolved, and confirmed fixed before this 
 **File:** `src/domains/auth/sub-domains/auth-webauthn/webauthn.service.ts`, lines 167 and 302
 
 **Evidence:**
+
 ```typescript
 // line 167 (registration)
 parsed.response as unknown as RegistrationResponseJSON
@@ -198,6 +206,7 @@ parsed.response as unknown as AuthenticationResponseJSON
 **File:** `src/domains/user/sub-domains/user-data-export/workers/user-data-export.processor.ts`, line 69
 
 **Evidence:**
+
 ```typescript
 const payload = await userDataExportService.buildExportPayload(userPublicId);
 const jsonBody = JSON.stringify(payload);
@@ -233,6 +242,7 @@ const compressedBody = await gzipBufferAsync(Buffer.from(jsonBody, 'utf8'));
 **File:** `src/domains/tenancy/sub-domains/permission/permission-cache.service.ts`, lines 221–229
 
 **Evidence:**
+
 ```typescript
 for (let attempt = 0; attempt < STAMPEDE_POLL_ATTEMPTS; attempt++) {
   await new Promise<void>((resolve) =>
@@ -256,6 +266,7 @@ for (let attempt = 0; attempt < STAMPEDE_POLL_ATTEMPTS; attempt++) {
 **File:** `src/infrastructure/database/pool/pool.constants.ts`, line 9
 
 **Evidence:**
+
 ```typescript
 export const DEFAULT_DATABASE_POOL_MAX = 10;
 ```
