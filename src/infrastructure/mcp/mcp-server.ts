@@ -325,11 +325,26 @@ export async function registerMcpRouteHandlers(
     nodeRequest: IncomingMessage,
     nodeResponse: ServerResponse,
     parsedBody: unknown,
+    callerToken: string | undefined,
   ): Promise<void> {
+    // Forward the verified MCP caller's JWT into every sub-request so that
+    // downstream route handlers authenticate as the MCP principal — without
+    // this the sub-request would arrive unauthenticated (the outer BLOCKED_HEADERS
+    // guard strips any caller-supplied `authorization` header, but we must still
+    // inject the already-verified one that app.authenticate accepted on the MCP route).
+    const requestInject: typeof inject = (opts) =>
+      inject({
+        ...opts,
+        headers: {
+          ...(callerToken ? { authorization: callerToken } : {}),
+          ...opts.headers,
+        },
+      });
+
     const { transport, server } = createMcpTransportAndServer(
       {
         ...options,
-        inject,
+        inject: requestInject,
       },
       sdk,
     );
@@ -350,7 +365,7 @@ export async function registerMcpRouteHandlers(
     },
     async (request, reply) => {
       reply.hijack();
-      await handleMcpRequest(request.raw, reply.raw, undefined);
+      await handleMcpRequest(request.raw, reply.raw, undefined, request.headers.authorization);
     },
   );
 
@@ -367,7 +382,7 @@ export async function registerMcpRouteHandlers(
     },
     async (request, reply) => {
       reply.hijack();
-      await handleMcpRequest(request.raw, reply.raw, request.body);
+      await handleMcpRequest(request.raw, reply.raw, request.body, request.headers.authorization);
     },
   );
 }
