@@ -23,9 +23,8 @@ export const listWebhookDeliveryAttemptsQueryDto = cursorPaginationSchema
   .strict();
 
 /**
- * Zod schema for the `POST /organizations/:id/webhooks` request body — at least one event,
- * https URL up to 2 KB, and an optional plaintext secret that the service encrypts before
- * persisting.
+ * Shared HTTPS-only URL validator — trims input, requires a valid URL up to 2 KB, and rejects any
+ * scheme other than `https://`. Reused by the create and update webhook DTOs.
  */
 const httpsUrl = z
   .string()
@@ -37,6 +36,11 @@ const httpsUrl = z
       .refine((url) => url.startsWith('https://'), { message: 'Webhook URL must use HTTPS' }),
   );
 
+/**
+ * Zod schema for the `POST /organizations/:id/webhooks` request body — requires at least one event
+ * and an HTTPS URL (up to 2 KB), with an optional plaintext secret the service encrypts before
+ * persisting and an `is_enabled` flag that defaults to true.
+ */
 export const CreateWebhookDto = z
   .object({
     url: httpsUrl,
