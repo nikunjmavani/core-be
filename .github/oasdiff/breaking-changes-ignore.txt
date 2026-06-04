@@ -31,3 +31,13 @@ api post /api/v1/tenancy/organizations/{id}/notification-policies request proper
 #    same enum so an unknown channel is a 422, not a 500 from the chk_user_notif_prefs_channel
 #    database check (user-notification-preferences.validator.unit.test.ts).
 api put /api/v1/users/me/notification-preferences request property `preferences/items/channel` was restricted to a list of enum values
+
+# 6. Array maxItems bounds added as a security hardening measure (audit finding #1-#4).
+#    Clients sending >50 webhook event types, >200 notification preferences,
+#    >200 permission codes, or >10 preferred locales receive a 422 instead of
+#    an oversized DB write. Legitimate payloads are unaffected.
+api post /api/v1/tenancy/organizations/{id}/webhooks request property `events` max items set to
+api patch /api/v1/tenancy/organizations/{id}/webhooks/{webhookid} request property `events` max items set to
+api put /api/v1/users/me/notification-preferences request property `preferences` max items set to
+api put /api/v1/tenancy/organizations/{id}/roles/{roleid}/permissions request property `permission_codes` max items set to
+api patch /api/v1/users/me/settings request property `preferred_locales` max items set to

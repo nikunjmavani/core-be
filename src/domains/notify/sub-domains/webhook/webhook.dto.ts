@@ -31,7 +31,7 @@ export const CreateWebhookDto = z
   .object({
     url: z.string().trim().pipe(z.url().max(2048)),
     secret: trimmedString().max(255).optional(),
-    events: z.array(trimmedString().max(100)).min(1),
+    events: z.array(trimmedString().max(100)).min(1).max(50),
     is_enabled: z.boolean().optional().default(true),
   })
   .strict();
@@ -45,7 +45,7 @@ export const UpdateWebhookDto = z
   .object({
     url: z.string().trim().pipe(z.url().max(2048)).optional(),
     secret: trimmedString().max(255).optional(),
-    events: z.array(trimmedString().max(100)).min(1).optional(),
+    events: z.array(trimmedString().max(100)).min(1).max(50).optional(),
     is_enabled: z.boolean().optional(),
   })
   .strict();

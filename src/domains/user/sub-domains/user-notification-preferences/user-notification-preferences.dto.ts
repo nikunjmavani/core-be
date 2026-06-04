@@ -9,16 +9,18 @@ import { NOTIFICATION_CHANNELS } from '@/shared/constants/index.js';
  */
 export const PutNotificationPreferencesDto = z
   .object({
-    preferences: z.array(
-      z
-        .object({
-          notification_type: trimmedString().max(50),
-          channel: z.enum(NOTIFICATION_CHANNELS),
-          organization_id: z.number().nullable().optional(),
-          is_enabled: z.boolean(),
-        })
-        .strict(),
-    ),
+    preferences: z
+      .array(
+        z
+          .object({
+            notification_type: trimmedString().max(50),
+            channel: z.enum(NOTIFICATION_CHANNELS),
+            organization_id: z.number().nullable().optional(),
+            is_enabled: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(200),
   })
   .strict();
 
