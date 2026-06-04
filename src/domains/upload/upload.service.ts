@@ -452,10 +452,10 @@ export class UploadService {
     }
     // HEAD only echoes the client-declared content-type, which is trivially spoofable (e.g. an
     // HTML/script payload uploaded as image/png). Verify the actual leading bytes before the object
-    // becomes servable.
+    // becomes servable. Ranged GET (first 32 bytes) avoids buffering the full upload.
     if (isMagicByteVerifiable(contentType)) {
-      const object = await this.objectStorage.getObject(sourceKey);
-      if (!verifyFileMagicBytes(object.body, contentType)) {
+      const header = await this.objectStorage.getObjectFirstBytes(sourceKey, 32);
+      if (!header || !verifyFileMagicBytes(header.body, contentType)) {
         return false;
       }
       if (finalKey !== sourceKey) {
