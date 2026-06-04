@@ -65,12 +65,14 @@ The audit covered the following areas through direct file reads and grep-pattern
 The `security_policy` field accepts an arbitrary JSON record with no key count limit, no key length limit, no value bounds, and no allowlist of permitted keys.
 
 **Evidence:**
+
 ```typescript
 security_policy: z.record(z.string(), z.unknown()).optional(),  // no bounds, no key allowlist
 ```
 
 **Impact:**
 An authenticated organization administrator can submit a `security_policy` payload containing thousands of keys, deeply nested objects, or megabyte-scale values. The 1 MB Fastify body limit (`bodyLimit: 1_048_576`) is the only constraint. The value is stored as JSONB in Postgres. A malicious or buggy client can:
+
 1. Bloat the `organization_settings` row beyond practical bounds, degrading reads for all members.
 2. Inject arbitrary JSONB that downstream consumers (if they key into `security_policy`) may misinterpret.
 3. Exhaust Postgres JSONB parse budget on writes with pathological nesting depth.
@@ -80,11 +82,13 @@ An org admin POSTs a `security_policy` with 5,000 keys each containing a 200-cha
 
 **Recommended Fix:**
 Replace `z.record(z.string(), z.unknown())` with a strict typed schema that enumerates permitted policy keys. If the schema must remain extensible, add at minimum:
+
 - `.max(50)` via a `refine` check on key count
 - Key name length cap (e.g., 100 chars)
 - Value depth/size cap
 
 **Safer Code Example:**
+
 ```typescript
 // Option A: strict allowlist
 security_policy: z.object({
@@ -113,6 +117,7 @@ security_policy: z.record(
 The `call_api` MCP tool strips the `authorization` header from incoming sub-requests (correctly, to prevent header injection) but does not inject the MCP caller's own JWT into the sub-request. The sub-request therefore reaches downstream route handlers as an **unauthenticated** request.
 
 **Evidence:**
+
 ```typescript
 const BLOCKED_HEADERS = new Set(['authorization', 'cookie', 'x-forwarded-for', 'x-real-ip', 'x-csrf-token', ...]);
 // safeHeaders excludes 'authorization' — no MCP caller token added
@@ -141,6 +146,7 @@ Before invoking `app.inject`, build a fresh short-lived JWT scoped to the MCP ca
 The routes listed above have `onRequest: [app.authenticate]` but do not spread `...STRICT_AUTHED_RATE_LIMIT` (10 req/60s per user). They fall through to the global IP-level rate limiter only (100 req/60s per IP by default).
 
 **Evidence:**
+
 ```typescript
 zodApplication.delete(
   '/me/sessions',
@@ -197,6 +203,7 @@ zodApplication.delete(
 `getUserAgent()` returns the raw `User-Agent` header with no truncation. The `user_agent` column is defined as `text('user_agent')` (unbounded TEXT in Postgres).
 
 **Evidence:**
+
 ```typescript
 // auth.http.util.ts line 147
 export function getUserAgent(request: FastifyRequest): string | null {
@@ -209,6 +216,7 @@ user_agent: text('user_agent'),  // unbounded TEXT column
 
 **Impact:**
 HTTP/1.1 allows `User-Agent` strings of arbitrary length (no RFC maximum). An attacker can send a `User-Agent` header of hundreds of kilobytes on any login endpoint. Each login call creates an `auth.sessions` row with the full string. At scale, this:
+
 1. Bloats the sessions table with multi-KB rows per login attempt.
 2. Affects `GET /me/sessions` response size since `user_agent` is returned to the client.
 3. The 1 MB body limit does not protect header-only attacks.
@@ -228,6 +236,7 @@ export function getUserAgent(request: FastifyRequest): string | null {
 ```
 
 And update the schema:
+
 ```typescript
 user_agent: varchar('user_agent', { length: 512 }),
 ```
@@ -245,6 +254,7 @@ user_agent: varchar('user_agent', { length: 512 }),
 The `url` field in `CreateWebhookDto` and `UpdateWebhookDto` uses `z.url()` which accepts any valid URL scheme including `http://`. The HTTPS enforcement exists only at the service layer (`assertWebhookUrlSafe`) and in a DB CHECK constraint — not in the DTO schema itself.
 
 **Evidence:**
+
 ```typescript
 // CreateWebhookDto — accepts http://
 url: z.string().trim().pipe(z.url().max(2048)),
@@ -281,6 +291,7 @@ url: z.string().trim().pipe(
 `CAPTCHA_BYPASS_HEADER` is an operator-configurable env var whose name (when set to something predictable like `x-captcha-bypass`) is visible in CI/CD configuration and can be guessed. The bypass is disallowed in `production` but is allowed in `staging` if `NODE_ENV=staging`. The `isCaptchaFailOpen()` function only returns `true` for `test` and `development` — which means in `staging` with `CAPTCHA_PROVIDER=disabled` (the default), the CAPTCHA pre-handler calls `alertCaptchaProviderUnavailable` and throws a 401 for every auth request, completely blocking auth in staging unless a bypass header or turnstile is configured.
 
 **Evidence:**
+
 ```typescript
 function isCaptchaFailOpen(): boolean {
   const nodeEnvironment = getEnv().NODE_ENV;
@@ -291,6 +302,7 @@ function isCaptchaFailOpen(): boolean {
 
 **Impact:**
 Two interacting risks:
+
 1. In staging with `CAPTCHA_PROVIDER=disabled` (default), all captcha-gated routes return 401 — auth is effectively broken in staging unless operators explicitly add a bypass header or configure Turnstile. This creates operational pressure to use a predictable bypass header name.
 2. If `CAPTCHA_BYPASS_HEADER` is set in staging and its value is leaked (via CI logs, branch config, etc.), it becomes an attack surface against the staging environment.
 
@@ -310,6 +322,7 @@ Add `'staging'` to the `isCaptchaFailOpen()` check, or document clearly that sta
 The `response` field in both `webauthnRegisterVerifyDto` and `webauthnAuthenticateVerifyDto` is declared as `z.record(z.string(), z.unknown())` with no key count, key length, or value depth constraints.
 
 **Evidence:**
+
 ```typescript
 // webauthn.dto.ts
 export const webauthnRegisterVerifyDto = z.object({
@@ -357,6 +370,7 @@ const webAuthnResponseSchema = z.object({
 `parseListCursor` falls back to parsing the `after` query parameter as a bare integer when opaque base64 decoding fails. This creates a client-controlled integer that is used directly in `WHERE id > ?` SQL conditions.
 
 **Evidence:**
+
 ```typescript
 const legacyId = Number.parseInt(after, 10);
 if (Number.isFinite(legacyId) && legacyId > 0) {
@@ -394,6 +408,7 @@ export function parseListCursor(after: string | undefined): ParsedListCursor | n
 `MAX_FAILED_LOGIN_ATTEMPTS = 10` triggers a per-user account lock after 10 failures. There is no IP-level lockout or IP-level failed-attempt counter.
 
 **Evidence:**
+
 ```typescript
 export const MAX_FAILED_LOGIN_ATTEMPTS = 10;
 export const ACCOUNT_LOCKOUT_MINUTES = 30;
@@ -418,6 +433,7 @@ Add a Redis-backed failed-login counter keyed by IP (e.g., `auth:failed_login:ip
 `CAPTCHA_PROVIDER` defaults to `'disabled'` in the Zod schema. The production refine only checks `NODE_ENV === 'production'`. A staging environment with `NODE_ENV=staging` can ship without CAPTCHA and without any startup failure.
 
 **Evidence:**
+
 ```typescript
 CAPTCHA_PROVIDER: z.enum(['turnstile', 'disabled']).default('disabled'),
 // ...
@@ -434,12 +450,14 @@ Staging environments exposed to the internet (e.g., for QA, customer demos, pene
 
 **Recommended Fix:**
 Extend the CAPTCHA enforcement refine to `staging`:
+
 ```typescript
 .refine((data) => {
   if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') return true;
   return data.CAPTCHA_PROVIDER === 'turnstile' && Boolean(data.CAPTCHA_SECRET);
 }, ...)
 ```
+
 Or document that staging must explicitly set `CAPTCHA_PROVIDER=turnstile`.
 
 ---
@@ -454,6 +472,7 @@ Or document that staging must explicitly set `CAPTCHA_PROVIDER=turnstile`.
 The `cursorPaginationSchema` defines `after: z.string().optional()` with no `.max()` constraint. Any endpoint using this schema accepts an arbitrarily long cursor string.
 
 **Evidence:**
+
 ```typescript
 export const cursorPaginationSchema = z.object({
   after: z.string().optional(),  // no max length
@@ -466,6 +485,7 @@ An attacker can send a multi-megabyte `after` query parameter. While `decodeList
 
 **Recommended Fix:**
 Add `.max(512)` to the `after` field:
+
 ```typescript
 after: z.string().max(512).optional(),
 ```
@@ -501,6 +521,7 @@ after: z.string().max(512).optional(),
 `void recordDeadLetterFailure(queueName, job, error)` is called without `.catch()` in the synchronous `failed` event listener. While `recordDeadLetterFailure` internally swallows its own errors (both the Postgres write and the Redis mirror branches catch and log), this pattern relies on the internal implementation being well-behaved. A future refactor that adds a propagating error to `recordDeadLetterFailure` would cause an unhandled promise rejection in the `failed` listener.
 
 **Evidence:**
+
 ```typescript
 worker.on('failed', (job, error) => {
   // ...
@@ -514,6 +535,7 @@ Low — because `recordDeadLetterFailure` is documented as "never rejects". The 
 
 **Recommended Fix:**
 Chain an explicit `.catch()` to make the floating promise self-documenting:
+
 ```typescript
 void recordDeadLetterFailure(queueName, job, error).catch((err) => {
   logger.error({ err, queue: queueName, jobId: job.id }, 'queue.dead_letter.record_failed');
@@ -532,6 +554,7 @@ void recordDeadLetterFailure(queueName, job, error).catch((err) => {
 `getDefaultWorkerOptions()`, `getWebhookWorkerOptions()`, and `getRetentionWorkerOptions()` all return objects without a `jobTimeout` key. BullMQ's `jobTimeout` is the maximum wall-clock time a job processor function may run before BullMQ forcibly fails the job. Without it, a processor that hangs (e.g., due to a Postgres deadlock not covered by `idle_in_transaction_session_timeout`, a DNS hang in the webhook outbound call, or an infinite retry loop) will hold its BullMQ lock indefinitely until `lockDuration` expires and the job is stalled.
 
 **Evidence:**
+
 ```typescript
 export function getWebhookWorkerOptions() {
   return {
@@ -548,6 +571,7 @@ A stuck webhook delivery job holds a BullMQ lock for up to `lockDuration` (60s) 
 
 **Recommended Fix:**
 Add `jobTimeout` to each worker option function:
+
 ```typescript
 export function getWebhookWorkerOptions() {
   return {
@@ -580,6 +604,7 @@ export function getDefaultWorkerOptions() {
 Most queue definitions set `removeOnComplete: { count: 2000 }` and `removeOnFail: { count: 5000 }`. Count-based eviction keeps the last N completed/failed jobs regardless of their age, which means completed jobs from a burst period can persist in Redis for weeks if the queue subsequently goes quiet.
 
 **Evidence (representative):**
+
 ```typescript
 // webhook-delivery queue
 defaultJobOptions: {
@@ -593,6 +618,7 @@ Under a high-volume burst followed by normal volume, the `failed` set can hold t
 
 **Recommended Fix:**
 Add an age bound alongside the count, e.g.:
+
 ```typescript
 removeOnComplete: { count: 1000, age: 7 * 24 * 3600 },  // 7 days
 removeOnFail:    { count: 1000, age: 7 * 24 * 3600 },  // 7 days (DLQ has Postgres copy)
@@ -610,6 +636,7 @@ removeOnFail:    { count: 1000, age: 7 * 24 * 3600 },  // 7 days (DLQ has Postgr
 The TOTP replay-prevention Redis key expires after 90 seconds (`MFA_TOTP_CODE_REPLAY_TTL_SECONDS`). The `otplib` library by default accepts codes from the current step and the previous step (±30 seconds), giving a maximum code validity window of up to 60 seconds. However, `otplib` may also be configured to allow ±1 step of drift, and with clock skew between server and authenticator app, the effective acceptance window can extend beyond 30 seconds.
 
 **Evidence:**
+
 ```typescript
 export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = 90;
 // otplib tolerance not explicitly configured — uses library default
@@ -658,6 +685,7 @@ export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = (MFA_TOTP_TOLERANCE_STEPS + 2) *
 `DATABASE_POOL_MAX` is defined as `z.coerce.number().int().min(1).optional()` with no `.default()`. When unset, the application falls through to the library default (`DEFAULT_DATABASE_POOL_MAX = 10`). The worker startup assertion (`computeWorkerPostgresPoolDemand`) detects when concurrency demand exceeds the pool, but no equivalent check exists for the HTTP API process.
 
 **Evidence:**
+
 ```typescript
 DATABASE_POOL_MAX: z.coerce.number().int().min(1).optional(),
 // No default — falls through to pool.constants.ts DEFAULT_DATABASE_POOL_MAX = 10
@@ -732,6 +760,7 @@ Low — the actual email content is in Postgres behind RLS, not in Redis. The Re
 
 **Recommended Fix:**
 Add age-based retention to align with the Postgres outbox retention window:
+
 ```typescript
 removeOnFail: { count: 500, age: 7 * 24 * 3600 },  // 7 days
 ```
@@ -760,6 +789,7 @@ removeOnFail: { count: 500, age: 7 * 24 * 3600 },  // 7 days
 `as unknown as RegistrationResponseJSON` and `as unknown as AuthenticationResponseJSON` are used to bridge the Zod-parsed `response: z.record(z.string(), z.unknown())` to the `@simplewebauthn/server` library's expected types. This bypasses TypeScript's structural type checker for the WebAuthn ceremony inputs.
 
 **Evidence:**
+
 ```typescript
 // line 167 (registration)
 parsed.response as unknown as RegistrationResponseJSON
