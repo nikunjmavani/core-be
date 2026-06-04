@@ -18,7 +18,15 @@ const base64URLString = z.string().min(1).max(65536);
  * Known transport types from the WebAuthn Level 3 spec plus `cable`/`hybrid`.
  * Mirrors `AuthenticatorTransportFuture` from `@simplewebauthn/server`.
  */
-const authenticatorTransport = z.enum(['ble', 'cable', 'hybrid', 'internal', 'nfc', 'smart-card', 'usb']);
+const authenticatorTransport = z.enum([
+  'ble',
+  'cable',
+  'hybrid',
+  'internal',
+  'nfc',
+  'smart-card',
+  'usb',
+]);
 
 /**
  * Subset of `AuthenticationExtensionsClientOutputs` covering the three extensions
@@ -69,7 +77,7 @@ export const webauthnRegisterVerifyDto = z
       rawId: base64URLString,
       response: attestationResponseSchema,
       authenticatorAttachment: z.enum(['cross-platform', 'platform']).optional(),
-      clientExtensionResults: clientExtensionResultsSchema.optional().default({}),
+      clientExtensionResults: clientExtensionResultsSchema.optional(),
       type: z.literal('public-key'),
     }),
   })
@@ -89,7 +97,7 @@ export const webauthnAuthenticateVerifyDto = z
       rawId: base64URLString,
       response: assertionResponseSchema,
       authenticatorAttachment: z.enum(['cross-platform', 'platform']).optional(),
-      clientExtensionResults: clientExtensionResultsSchema.optional().default({}),
+      clientExtensionResults: clientExtensionResultsSchema.optional(),
       type: z.literal('public-key'),
     }),
   })

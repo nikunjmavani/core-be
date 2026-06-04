@@ -49,7 +49,12 @@ describe('webauthn.validator', () => {
   describe('validateWebauthnRegisterVerify', () => {
     const minToken = 'a'.repeat(64);
     const maxToken = 'b'.repeat(128);
-    const validResponse = { clientDataJSON: 'data', attestationObject: 'obj' };
+    const validResponse = {
+      id: 'credential-id',
+      rawId: 'raw-id',
+      response: { clientDataJSON: 'data', attestationObject: 'obj' },
+      type: 'public-key' as const,
+    };
 
     it('accepts challenge_token exactly 64 chars (min boundary) with valid response', () => {
       const result = validateWebauthnRegisterVerify({
@@ -57,7 +62,11 @@ describe('webauthn.validator', () => {
         response: validResponse,
       });
       expect(result.challenge_token).toBe(minToken);
-      expect(result.response).toEqual(validResponse);
+      // Zod applies the clientExtensionResults default; assert on the input keys we care about.
+      expect(result.response.id).toBe(validResponse.id);
+      expect(result.response.rawId).toBe(validResponse.rawId);
+      expect(result.response.response).toEqual(validResponse.response);
+      expect(result.response.type).toBe(validResponse.type);
     });
 
     it('accepts challenge_token exactly 128 chars (max boundary)', () => {
@@ -128,7 +137,11 @@ describe('webauthn.validator', () => {
         response: validCredential,
       });
       expect(result.challenge_token).toBe(validToken);
-      expect(result.response).toEqual(validCredential);
+      // Zod applies the clientExtensionResults default; assert on the input keys we care about.
+      expect(result.response.id).toBe(validCredential.id);
+      expect(result.response.rawId).toBe(validCredential.rawId);
+      expect(result.response.response).toEqual(validCredential.response);
+      expect(result.response.type).toBe(validCredential.type);
     });
 
     it('throws ValidationError when challenge_token is missing', () => {

@@ -75,8 +75,7 @@ export const MFA_TOTP_TOLERANCE_STEPS = 1;
  * cryptographically valid, so a captured-and-replayed code cannot sneak through
  * in the final milliseconds before the Redis key expires.
  */
-export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS =
-  (MFA_TOTP_TOLERANCE_STEPS + 2) * TOTP_STEP_SECONDS;
+export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = (MFA_TOTP_TOLERANCE_STEPS + 2) * TOTP_STEP_SECONDS;
 
 /** WebAuthn ceremony challenge lifetime in Redis (seconds). */
 export const WEBAUTHN_CHALLENGE_TTL_SECONDS = MFA_SESSION_TTL_SECONDS;
