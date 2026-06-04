@@ -25,6 +25,7 @@ import {
   callApiInputSchema,
 } from '@/infrastructure/mcp/mcp-capabilities.js';
 import { requireRole } from '@/shared/utils/auth/authorization.util.js';
+import { STRICT_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 
 const ROUTES_CATALOG_PATH = join(process.cwd(), 'docs', 'routes.txt');
 const OPENAPI_SPEC_PATH = join(process.cwd(), 'docs', 'openapi', 'openapi.json');
@@ -339,6 +340,7 @@ export async function registerMcpRouteHandlers(
   app.get(
     '/api/v1/mcp',
     {
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'MCP streamable HTTP (GET)',
         description:
@@ -355,6 +357,7 @@ export async function registerMcpRouteHandlers(
   app.post(
     '/api/v1/mcp',
     {
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'MCP streamable HTTP (POST)',
         description:
