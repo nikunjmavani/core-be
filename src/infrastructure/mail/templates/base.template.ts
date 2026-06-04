@@ -1,13 +1,17 @@
+import { escapeHtml } from './escape-html.util.js';
+
 /**
  * Shared HTML email layout wrapper.
  * Provides consistent styling and branding across all transactional emails.
  *
  * @remarks
- * `title`, `preheader`, and `footerText` are interpolated as plain text and
- * `body` as trusted HTML. This wrapper performs **no** escaping — callers MUST
- * pass already-escaped values for any user/tenant-controlled data (see
- * `escapeHtml` and `invitationTemplate`). Escaping here would double-encode the
- * values templates escape at source.
+ * `title`, `preheader`, and `footerText` are HTML-escaped inside this wrapper
+ * so callers may pass raw user/tenant strings without double-encoding. `body`
+ * is treated as trusted HTML composed by the caller — any user/tenant values
+ * interpolated into `body` must still be escaped at the caller site (see
+ * `escapeHtml` and `invitationTemplate` for the established pattern).
+ *
+ * Audit reference: 2026-06-03 finding #13 (close the implicit escaping contract).
  */
 export function baseTemplate(options: {
   title: string;
@@ -17,12 +21,19 @@ export function baseTemplate(options: {
 }): string {
   const { title, preheader, body, footerText } = options;
 
+  const safeTitle = escapeHtml(title);
+  const safePreheader = preheader !== undefined ? escapeHtml(preheader) : undefined;
+  const safeFooterText =
+    footerText !== undefined
+      ? escapeHtml(footerText)
+      : 'This is an automated message. Please do not reply.';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
+  <title>${safeTitle}</title>
   <style>
     body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; background-color: #f4f4f7; }
     .container { max-width: 570px; margin: 0 auto; padding: 40px 20px; }
@@ -35,13 +46,13 @@ export function baseTemplate(options: {
   </style>
 </head>
 <body>
-  ${preheader ? `<span class="preheader">${preheader}</span>` : ''}
+  ${safePreheader ? `<span class="preheader">${safePreheader}</span>` : ''}
   <div class="container">
     <div class="card">
       ${body}
     </div>
     <div class="footer">
-      ${footerText ?? 'This is an automated message. Please do not reply.'}
+      ${safeFooterText}
     </div>
   </div>
 </body>
