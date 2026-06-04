@@ -503,14 +503,14 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      if (data.NODE_ENV !== 'production') {
+      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
         return true;
       }
       return data.CAPTCHA_PROVIDER === 'turnstile' && Boolean(data.CAPTCHA_SECRET);
     },
     {
       message:
-        'In production, CAPTCHA_PROVIDER=turnstile and CAPTCHA_SECRET are required on public auth routes',
+        'In production and staging, CAPTCHA_PROVIDER=turnstile and CAPTCHA_SECRET are required on public auth routes',
       path: ['CAPTCHA_PROVIDER'],
     },
   )
