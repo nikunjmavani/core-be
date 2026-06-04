@@ -4,9 +4,10 @@
 # Routes: pnpm routes:catalog → docs/routes.txt
 src/
 ├── core/
-    └── events/
+    ├── events/
     │   ├── event-bus.ts
     │   └── register-event-handlers.ts
+    └── OVERVIEW.md
 ├── domains/
     ├── audit/
     │   ├── __tests__/
