@@ -50,7 +50,7 @@ export async function rejectLegacyPagePagination(
  * Use `after` as the opaque cursor from the previous page's `meta.pagination.next`.
  */
 export const cursorPaginationSchema = z.object({
-  after: z.string().optional(),
+  after: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(PAGINATION.MAX_LIMIT).default(PAGINATION.DEFAULT_LIMIT),
 });
 

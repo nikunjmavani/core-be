@@ -12,6 +12,9 @@ export const MILLISECONDS_PER_HOUR = 60 * MILLISECONDS_PER_MINUTE;
 /** Seconds in one calendar day. */
 export const SECONDS_PER_DAY = 86_400;
 
+/** Seconds in seven days (BullMQ job history eviction window). */
+export const SEVEN_DAYS_SECONDS = 7 * SECONDS_PER_DAY;
+
 /** Seconds in thirty days (default long-lived Redis retention window). */
 export const THIRTY_DAYS_SECONDS = 30 * SECONDS_PER_DAY;
 
