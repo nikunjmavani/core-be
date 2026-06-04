@@ -15,6 +15,7 @@ function getConstantsRoot(): string {
 
 /** Values that legitimately repeat (HTTP status, radix, time bases, byte units). */
 const ALLOWED_DUPLICATE_NUMBERS = new Set([
+  5, // small independent counters (webhook delivery max attempts, postgres-error cause-chain depth)
   10, // parseInt radix, deciles
   16, // hex
   20, // small independent thresholds (migration header scan limit, rejection burst threshold)
@@ -36,6 +37,7 @@ const ALLOWED_DUPLICATE_NUMBERS = new Set([
   429,
   500,
   503,
+  512, // small byte windows (User-Agent truncation, S3 magic-byte ranged-GET prefix)
   1000, // Date ms conversion
   1024, // byte math
 ]);

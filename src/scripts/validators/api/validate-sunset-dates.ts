@@ -5,7 +5,13 @@
  * notice window. No-op (exit 0) while the sunset date is null.
  *
  * Usage: pnpm validate:sunset-dates
+ *
+ * The transitively imported `api-versioning.util.ts` pulls in `observability/sentry/sentry.ts`,
+ * which evaluates `getEnv()` at module load. Load `.env.<NODE_ENV>` first so this validator
+ * runs locally (`pnpm validate:sunset-dates`) without the caller pre-exporting every required
+ * env var; in CI the orchestrating workflow sets envs directly.
  */
+import '@/shared/config/load-env-files.js';
 import { PUBLIC_API_V1_SUNSET } from '@/shared/utils/http/api-versioning.util.js';
 
 const MINIMUM_SUNSET_NOTICE_DAYS = 90;
