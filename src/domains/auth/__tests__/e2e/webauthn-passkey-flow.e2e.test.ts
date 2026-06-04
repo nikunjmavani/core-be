@@ -81,7 +81,12 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
       token,
       payload: {
         challenge_token: registerOptionsBody.data.challenge_token,
-        response: { id: credentialId, type: 'public-key' },
+        response: {
+          id: credentialId,
+          rawId: credentialId,
+          response: { clientDataJSON: 'dGVzdA', attestationObject: 'dGVzdA' },
+          type: 'public-key',
+        },
       },
     });
     expect(registerVerifyResponse.statusCode).toBe(200);
@@ -115,7 +120,12 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
       url: testApiPath('/auth/webauthn/authenticate/verify'),
       payload: {
         challenge_token: authenticateOptionsBody.data.challenge_token,
-        response: { id: credentialId, type: 'public-key' },
+        response: {
+          id: credentialId,
+          rawId: credentialId,
+          response: { clientDataJSON: 'dGVzdA', authenticatorData: 'dGVzdA', signature: 'dGVzdA' },
+          type: 'public-key',
+        },
       },
     });
 
@@ -179,7 +189,12 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
         token,
         payload: {
           challenge_token: challengeToken,
-          response: { id: credentialId, type: 'public-key' },
+          response: {
+            id: credentialId,
+            rawId: credentialId,
+            response: { clientDataJSON: 'dGVzdA', attestationObject: 'dGVzdA' },
+            type: 'public-key',
+          },
         },
       });
     }

@@ -37,6 +37,11 @@ const httpsUrl = z
       .refine((url) => url.startsWith('https://'), { message: 'Webhook URL must use HTTPS' }),
   );
 
+/**
+ * Zod schema for the `POST /organizations/:id/webhooks` request body — accepts the destination
+ * URL (HTTPS-only, see {@link httpsUrl}), an optional shared signing secret, the list of subscribed
+ * event types, and an `is_enabled` toggle defaulting to `true`.
+ */
 export const CreateWebhookDto = z
   .object({
     url: httpsUrl,
