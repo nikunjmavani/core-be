@@ -351,7 +351,9 @@ export function attachDeadLetterAndAlerting(worker: Worker, queueName: string): 
       'queue.job.final_failure',
     );
 
-    void recordDeadLetterFailure(queueName, job, error);
+    void recordDeadLetterFailure(queueName, job, error).catch((err) => {
+      logger.error({ err, queue: queueName, jobId: job?.id }, 'queue.dead_letter.record_failed');
+    });
 
     captureFinalFailureInSentry(queueName, job, error);
   });

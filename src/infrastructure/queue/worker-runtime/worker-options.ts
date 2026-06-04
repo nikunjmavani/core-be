@@ -22,11 +22,13 @@ export function getDefaultWorkerOptions(): {
   lockDuration: number;
   stalledInterval: number;
   maxStalledCount: number;
+  jobTimeout: number;
 } {
   return {
     lockDuration: BULLMQ_DEFAULT_LOCK_DURATION_MS,
     stalledInterval: BULLMQ_STALLED_INTERVAL_MS,
     maxStalledCount: 1,
+    jobTimeout: BULLMQ_DEFAULT_LOCK_DURATION_MS * 2,
   };
 }
 
@@ -38,11 +40,13 @@ export function getWebhookWorkerOptions(): {
   lockDuration: number;
   stalledInterval: number;
   maxStalledCount: number;
+  jobTimeout: number;
 } {
   return {
     lockDuration: BULLMQ_WEBHOOK_LOCK_DURATION_MS,
     stalledInterval: BULLMQ_STALLED_INTERVAL_MS,
     maxStalledCount: 2,
+    jobTimeout: BULLMQ_WEBHOOK_LOCK_DURATION_MS * 2,
   };
 }
 
@@ -54,10 +58,12 @@ export function getRetentionWorkerOptions(): {
   lockDuration: number;
   stalledInterval: number;
   maxStalledCount: number;
+  jobTimeout: number;
 } {
   return {
     lockDuration: BULLMQ_RETENTION_LOCK_DURATION_MS,
     stalledInterval: BULLMQ_STALLED_INTERVAL_MS,
     maxStalledCount: 1,
+    jobTimeout: BULLMQ_RETENTION_LOCK_DURATION_MS * 2,
   };
 }
