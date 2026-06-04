@@ -310,6 +310,10 @@ export async function updateStripeSubscription(
  * Verifies the `Stripe-Signature` header against the raw body using `STRIPE_WEBHOOK_SECRET`
  * and returns the parsed `Stripe.Event`. Throws when the secret is missing or the
  * signature does not match — callers must use the raw (un-parsed) request body.
+ *
+ * @remarks
+ * The tolerance is set to 150 seconds (half of Stripe's 300 s default) to halve the
+ * replay window; legitimate deliveries from Stripe arrive within seconds of signing.
  */
 export function constructStripeWebhookEvent(
   body: string | Buffer,
@@ -320,7 +324,7 @@ export function constructStripeWebhookEvent(
   if (!webhookSecret) {
     throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
   }
-  return stripe.webhooks.constructEvent(body, signature, webhookSecret);
+  return stripe.webhooks.constructEvent(body, signature, webhookSecret, 150);
 }
 
 logger.info('Stripe client module loaded');
