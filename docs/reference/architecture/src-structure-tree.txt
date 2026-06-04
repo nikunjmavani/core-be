@@ -1331,73 +1331,74 @@ src/
     │   └── index.ts
     ├── types/
     │   └── index.ts
-    └── utils/
+    ├── utils/
     │   ├── auth/
-    │       ├── account-status.util.ts
-    │       ├── authorization.util.ts
-    │       ├── global-admin-role.util.ts
-    │       └── recent-step-up.util.ts
+    │   │   ├── account-status.util.ts
+    │   │   ├── authorization.util.ts
+    │   │   ├── global-admin-role.util.ts
+    │   │   └── recent-step-up.util.ts
     │   ├── http/
-    │       ├── __tests__/
-    │       │   └── unit/
-    │       │   │   └── http-cache.util.unit.test.ts
-    │       ├── api-versioning.util.ts
-    │       ├── fastify-server.util.ts
-    │       ├── http-cache.util.ts
-    │       ├── pagination.util.ts
-    │       ├── request.util.ts
-    │       ├── response.util.ts
-    │       └── trust-proxy.util.ts
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── http-cache.util.unit.test.ts
+    │   │   ├── api-versioning.util.ts
+    │   │   ├── fastify-server.util.ts
+    │   │   ├── http-cache.util.ts
+    │   │   ├── pagination.util.ts
+    │   │   ├── request.util.ts
+    │   │   ├── response.util.ts
+    │   │   └── trust-proxy.util.ts
     │   ├── i18n/
-    │       ├── i18n-response.util.ts
-    │       └── translate-request.util.ts
+    │   │   ├── i18n-response.util.ts
+    │   │   └── translate-request.util.ts
     │   ├── idempotency/
-    │       ├── idempotency-fingerprint.util.ts
-    │       ├── idempotency-key.util.ts
-    │       └── idempotency-required.util.ts
+    │   │   ├── idempotency-fingerprint.util.ts
+    │   │   ├── idempotency-key.util.ts
+    │   │   └── idempotency-required.util.ts
     │   ├── identity/
-    │       ├── public-id-param.util.ts
-    │       ├── public-id.util.ts
-    │       └── uuid.util.ts
+    │   │   ├── public-id-param.util.ts
+    │   │   ├── public-id.util.ts
+    │   │   └── uuid.util.ts
     │   ├── infrastructure/
-    │       ├── application-lifecycle.util.ts
-    │       ├── audit-record.util.ts
-    │       ├── audit-request-context.util.ts
-    │       ├── database-timestamp.util.ts
-    │       ├── gzip.util.ts
-    │       ├── health-operational-metrics.util.ts
-    │       ├── list-cap.util.ts
-    │       ├── logger.util.ts
-    │       ├── postgres-error.util.ts
-    │       ├── readiness-probe-timeout.util.ts
-    │       ├── readiness-probes.util.ts
-    │       └── timeout-error.util.ts
+    │   │   ├── application-lifecycle.util.ts
+    │   │   ├── audit-record.util.ts
+    │   │   ├── audit-request-context.util.ts
+    │   │   ├── database-timestamp.util.ts
+    │   │   ├── gzip.util.ts
+    │   │   ├── health-operational-metrics.util.ts
+    │   │   ├── list-cap.util.ts
+    │   │   ├── logger.util.ts
+    │   │   ├── postgres-error.util.ts
+    │   │   ├── readiness-probe-timeout.util.ts
+    │   │   ├── readiness-probes.util.ts
+    │   │   └── timeout-error.util.ts
     │   ├── security/
-    │       ├── __tests__/
-    │       │   └── unit/
-    │       │   │   └── safe-webhook-url-for-logs.util.unit.test.ts
-    │       ├── allowed-origins.util.ts
-    │       ├── anti-enumeration.util.ts
-    │       ├── bearer-token.util.ts
-    │       ├── encryption.util.ts
-    │       ├── field-secret-encryption.util.ts
-    │       ├── jwt.util.ts
-    │       ├── password.util.ts
-    │       ├── safe-webhook-url-for-logs.util.ts
-    │       ├── sensitive-redaction.util.ts
-    │       ├── turnstile-verifier.util.ts
-    │       ├── webhook-outbound-fetch.util.ts
-    │       ├── webhook-signature.util.ts
-    │       └── webhook-url.util.ts
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── safe-webhook-url-for-logs.util.unit.test.ts
+    │   │   ├── allowed-origins.util.ts
+    │   │   ├── anti-enumeration.util.ts
+    │   │   ├── bearer-token.util.ts
+    │   │   ├── encryption.util.ts
+    │   │   ├── field-secret-encryption.util.ts
+    │   │   ├── jwt.util.ts
+    │   │   ├── password.util.ts
+    │   │   ├── safe-webhook-url-for-logs.util.ts
+    │   │   ├── sensitive-redaction.util.ts
+    │   │   ├── turnstile-verifier.util.ts
+    │   │   ├── webhook-outbound-fetch.util.ts
+    │   │   ├── webhook-signature.util.ts
+    │   │   └── webhook-url.util.ts
     │   ├── text/
-    │       ├── email.util.ts
-    │       └── html-escape.util.ts
+    │   │   ├── email.util.ts
+    │   │   └── html-escape.util.ts
     │   ├── validation/
-    │       ├── bullmq-job-validation.util.ts
-    │       ├── file-magic.util.ts
-    │       ├── omit-undefined.util.ts
-    │       └── validation.util.ts
+    │   │   ├── bullmq-job-validation.util.ts
+    │   │   ├── file-magic.util.ts
+    │   │   ├── omit-undefined.util.ts
+    │   │   └── validation.util.ts
     │   └── index.ts
+    └── OVERVIEW.md
 ├── tests/
     ├── bench/
     │   ├── OVERVIEW.md
