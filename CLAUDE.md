@@ -164,41 +164,34 @@ src/infrastructure/
 ```text
 src/shared/
   config/
-    env.config.ts             # Environment validation (Zod)
+    env.config.ts             # Environment validation entry (Zod)
+    env-schema.ts             # Split Zod env schema
+    load-env-files.ts         # .env.<NODE_ENV> then .env.local override loader
+    worker-concurrency.util.ts
   errors/
     app.error.ts              # Base AppError + ERROR_CODE_TO_SNAKE
+    auth.error.ts             # NotFoundError, UnauthorizedError, ForbiddenError, etc.
     validation.error.ts       # ValidationError
-    auth.error.ts             # NotFoundError, UnauthorizedError, etc.
+    configuration.error.ts    # ConfigurationError
     index.ts                  # Re-exports all
   types/
-    index.ts                  # AuthContext, PaginatedResult
-  constants/
-    index.ts                  # PAGINATION, SLUG_REGEX, UUID_REGEX
-  utils/
-    logger.util.ts            # Pino logger
-    response.util.ts          # successResponse, paginatedResponse
-    api-versioning.util.ts    # buildPublicApiPrefix; applyDeprecatedEndpointHeaders (Sunset / Deprecation)
-    request.util.ts           # getRequestIdentifier, requireAuth (shared controller helpers)
-    authorization.util.ts     # requireRole, requireOrganizationPermission preHandlers
-    pagination.util.ts        # cursorPaginationSchema, listLimitQuerySchema
-    public-id.util.ts         # generatePublicId
-    uuid.util.ts              # uuidSchema
-  middleware/
-    compress.middleware.ts     # gzip/brotli response compression
-    auth.middleware.ts         # JWT verify, req.auth
-    tenant.middleware.ts       # X-Organization-Id → req.organizationId
-    cors.middleware.ts
-    helmet.middleware.ts
-    rate-limit.middleware.ts   # Global + per-route rate limits
-    error-handler.middleware.ts  # Error formatting + Sentry capture
-    response-format.middleware.ts
-    request-context.middleware.ts
-    idempotency.middleware.ts  # Idempotency-Key header (Redis-backed, 24h TTL)
-    health.middleware.ts
-    shutdown.middleware.ts
-    index.ts                  # registerMiddleware()
+    index.ts                  # AuthContext, PaginatedResult (minimal by design)
+  constants/                  # index.ts + billing, limits, notification, pagination,
+                              # project-identity, query-limits, roles, security, ttl
+  utils/                      # sub-categorized helpers (import full paths below)
+    auth/ http/ i18n/ idempotency/ identity/ infrastructure/ security/ text/ validation/
+    infrastructure/logger.util.ts   # Pino logger
+    http/response.util.ts           # successResponse, paginatedResponse
+    http/request.util.ts            # getRequestIdentifier, requireAuth
+    http/api-versioning.util.ts     # buildPublicApiPrefix; Sunset / Deprecation headers
+  middlewares/                # registered via middlewares/index.ts → registerMiddleware()
+    core/                     # auth, error-handler, idempotency, compression, i18n, metrics, health
+    rate-limit/               # global + per-route limits
+    security/                 # cors, helmet, captcha, api-key-auth, encryption
+    session/                  # cookie session + CSRF origin pre-handler
+    tenant/                   # X-Organization-Id → request.organizationId; RLS GUC
   locales/
-    en/, es/                  # errors.json, success.json, common.json; openapi.json for docs:generate
+    en/, es/                  # common.json, errors.json, mail.json, success.json, openapi.json
 ```
 
 ## Queue Infrastructure — Domain-Owned Jobs and Processors
