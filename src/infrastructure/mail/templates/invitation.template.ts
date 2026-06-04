@@ -27,8 +27,8 @@ export function invitationTemplate(data: InvitationTemplateData): string {
   const acceptUrl = escapeHtml(data.acceptUrl);
 
   return baseTemplate({
-    title: `You're invited to join ${organizationName}`,
-    preheader: `${inviterName} invited you to join ${organizationName}.`,
+    title: `You're invited to join ${data.organizationName}`,
+    preheader: `${data.inviterName} invited you to join ${data.organizationName}.`,
     body: `
       <h1>You've been invited</h1>
       <p><strong>${inviterName}</strong> has invited you to join <strong>${organizationName}</strong>.</p>
