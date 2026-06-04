@@ -6,6 +6,30 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.4.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.3-dev.0...v4.4.4-dev.0) (2026-06-04)
+
+
+### Fixed
+
+* **email-templates:** escape URL fields in invitation and magic-link templates ([#364](https://github.com/nikunjmavani/core-be/issues/364)) ([26c67fa](https://github.com/nikunjmavani/core-be/commit/26c67fac20bff7ccf765c6d93a6264e35ebee079))
+* **finding-13:** escape title/preheader/footerText inside baseTemplate ([8996b26](https://github.com/nikunjmavani/core-be/commit/8996b2616b52de6f55b0b16315c4a439034e3fba))
+* **finding-74:** replace unsafe Stripe object casts with proper type narrowing ([#359](https://github.com/nikunjmavani/core-be/issues/359)) ([f8f9cfe](https://github.com/nikunjmavani/core-be/commit/f8f9cfe8ae24f51ff34c92100dd31b2d1f7745fe))
+* **mcp:** apply STRICT_AUTHED_RATE_LIMIT to MCP endpoint (audit finding [#7](https://github.com/nikunjmavani/core-be/issues/7)) ([#366](https://github.com/nikunjmavani/core-be/issues/366)) ([6783141](https://github.com/nikunjmavani/core-be/commit/6783141ed14cc7009e1ec2be258386fac1706ed3))
+* **security:** add maxItems array bounds and fix WebAuthn type casts ([#363](https://github.com/nikunjmavani/core-be/issues/363)) ([ab4e7c7](https://github.com/nikunjmavani/core-be/commit/ab4e7c7c6fb65f374c458b18ef7b8b5927b0e77d))
+* **stripe:** tighten webhook replay window to 150 s (audit finding [#6](https://github.com/nikunjmavani/core-be/issues/6)) ([#365](https://github.com/nikunjmavani/core-be/issues/365)) ([848360d](https://github.com/nikunjmavani/core-be/commit/848360d739857212d1822c6e9e4564498649b5c3))
+
+
+### Performance
+
+* parallelize S3 object deletes in deleteAllExportsForUser ([#361](https://github.com/nikunjmavani/core-be/issues/361)) ([4c36173](https://github.com/nikunjmavani/core-be/commit/4c36173e703bfaa9737ed2a529f0e28e8f863046))
+
+
+### Documentation
+
+* add 2026-06-04 deep audit report (20 findings) ([6515589](https://github.com/nikunjmavani/core-be/commit/65155899935406e72781fab5348f146b20b5b8e4))
+* add deep backend audit report 2026-06-03 ([#362](https://github.com/nikunjmavani/core-be/issues/362)) ([3d7ae31](https://github.com/nikunjmavani/core-be/commit/3d7ae31779c7975b4b61d19c8f7867c8a58432a9))
+* add remediation status tracker to 2026-06-03 audit report ([93ef121](https://github.com/nikunjmavani/core-be/commit/93ef12150cd3917f3a6ecc46c9e8da4573ada94b))
+
 ## [4.4.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.2-dev.0...v4.4.3-dev.0) (2026-06-03)
 
 
