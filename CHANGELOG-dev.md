@@ -6,6 +6,17 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.4.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.4-dev.0...v4.4.5-dev.0) (2026-06-04)
+
+
+### Fixed
+
+* audit batch2 — WebAuthn typed DTOs, oasdiff SIGSEGV CI workaround ([6e44557](https://github.com/nikunjmavani/core-be/commit/6e4455700f39ed6cc6dee5ca71baf4eaddac49ed))
+* **audit:** cursor max-length, DLQ catch, jobTimeout, age-based queue eviction (batch5) ([#375](https://github.com/nikunjmavani/core-be/issues/375)) ([5882436](https://github.com/nikunjmavani/core-be/commit/588243618efe4be76f3b9e1d2b0c2aa851b06930))
+* **audit:** MCP caller JWT forwarding and IP-level failed-login counter ([#373](https://github.com/nikunjmavani/core-be/issues/373)) ([ceee226](https://github.com/nikunjmavani/core-be/commit/ceee2269da8c40bb16f1332e56de8028de24b069))
+* **audit:** rate limits, User-Agent truncation, webhook HTTPS, CAPTCHA staging (batch4) ([#374](https://github.com/nikunjmavani/core-be/issues/374)) ([4c9486a](https://github.com/nikunjmavani/core-be/commit/4c9486ac64959cea4bd308cb59c37ba858018066))
+* validators (audit follow-up) — centralize AES_GCM_IV_LENGTH, allowlist 5 and 512, env-load sunset validator ([#378](https://github.com/nikunjmavani/core-be/issues/378)) ([3bae917](https://github.com/nikunjmavani/core-be/commit/3bae917577c65d11cf771725f81392a0a62ce904))
+
 ## [4.4.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.3-dev.0...v4.4.4-dev.0) (2026-06-04)
 
 
