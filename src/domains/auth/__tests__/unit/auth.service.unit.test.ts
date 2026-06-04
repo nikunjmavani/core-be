@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Redis } from 'ioredis';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { AuthService } from '@/domains/auth/auth.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -28,6 +29,10 @@ vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
 
 vi.mock('@/shared/utils/auth/recent-step-up.util.js', () => ({
   recordRecentStepUp: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
+  captureMessage: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
@@ -86,17 +91,27 @@ describe('AuthService', () => {
     userHasOrganizationRequiringMfa: vi.fn().mockResolvedValue(false),
   } as unknown as OrganizationSettingsService;
 
+  const redis = {
+    get: vi.fn().mockResolvedValue(null),
+    incr: vi.fn().mockResolvedValue(1),
+    expire: vi.fn().mockResolvedValue(1),
+  } as unknown as Redis;
+
   const service = new AuthService(
     userService,
     authSessionService,
     mfaService,
     organizationSettingsService,
+    redis,
   );
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
     vi.mocked(organizationSettingsService.userHasOrganizationRequiringMfa).mockResolvedValue(false);
+    vi.mocked(redis.get).mockResolvedValue(null);
+    vi.mocked(redis.incr).mockResolvedValue(1);
+    vi.mocked(redis.expire).mockResolvedValue(1);
   });
 
   it('login returns mfa_required when user has MFA enabled', async () => {
@@ -302,6 +317,41 @@ describe('AuthService', () => {
     await expect(
       service.login({ email: 'temp@mailinator.com', password: 'ValidPassword12!' }, '127.0.0.1'),
     ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('login blocks an IP that has exceeded the per-IP failure threshold', async () => {
+    vi.mocked(redis.get).mockResolvedValueOnce('50');
+    await expect(
+      service.login({ email: user.email, password: 'ValidPassword12!' }, '192.168.1.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    // Should reject before even checking the user
+    expect(userService.findByEmail).not.toHaveBeenCalled();
+  });
+
+  it('login increments the per-IP counter on a failed password attempt', async () => {
+    const { verifyPassword } = await import('@/shared/utils/security/password.util.js');
+    vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
+    await expect(
+      service.login({ email: user.email, password: 'WrongPassword1!' }, '10.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(redis.incr).toHaveBeenCalled();
+  });
+
+  it('login increments the per-IP counter when the email is not found', async () => {
+    vi.mocked(userService.findByEmail).mockResolvedValue(null);
+    await expect(
+      service.login({ email: 'nobody@example.com', password: 'WrongPassword1!' }, '10.0.0.2'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(redis.incr).toHaveBeenCalled();
+  });
+
+  it('login fails open on Redis error during IP check (does not block legitimate user)', async () => {
+    vi.mocked(redis.get).mockRejectedValueOnce(new Error('redis connection refused'));
+    const result = await service.login(
+      { email: user.email, password: 'ValidPassword12!' },
+      '127.0.0.1',
+    );
+    expect('access_token' in result && result.access_token).toBe('jwt-access-token');
   });
 
   it('logout rejects unknown or already revoked tokens', async () => {

@@ -52,6 +52,7 @@ export function createAuthContainer(
     authSessionService,
     mfaService,
     organizationSettingsService,
+    redisConnection,
   );
   const magicLinkService = new MagicLinkService(
     userService,
