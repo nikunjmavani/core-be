@@ -6,6 +6,19 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.4.6-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.5-dev.0...v4.4.6-dev.0) (2026-06-04)
+
+
+### Fixed
+
+* **audit-13:** remove dead jobTimeout field from worker options — BullMQ does not enforce it ([#379](https://github.com/nikunjmavani/core-be/issues/379)) ([b393d5e](https://github.com/nikunjmavani/core-be/commit/b393d5e0add3e299de889d023056397a559b5df6))
+* **tests:** align e2e fixtures with audit batch2 (WebAuthn typed DTO) + Stripe items.period ([#384](https://github.com/nikunjmavani/core-be/issues/384)) ([b906731](https://github.com/nikunjmavani/core-be/commit/b906731f9fdfb6813303c3f25a0ce148a1e2023a))
+
+
+### Documentation
+
+* **audit-2026-06-04:** mark all 20 findings resolved with file:line citations ([#381](https://github.com/nikunjmavani/core-be/issues/381)) ([96dd4f7](https://github.com/nikunjmavani/core-be/commit/96dd4f74574b1dca6ee93190b59edc56ab414b1e))
+
 ## [4.4.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.4-dev.0...v4.4.5-dev.0) (2026-06-04)
 
 
