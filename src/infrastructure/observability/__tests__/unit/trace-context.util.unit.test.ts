@@ -54,15 +54,20 @@ describe('runWithPropagatedTraceContext — error + tracestate branches', () => 
       tracestate: 'vendor=opaque-value',
     };
     let sawActiveSpan = false;
+    let propagatedTraceState: string | undefined;
 
     await runWithPropagatedTraceContext(carrier, 'worker.with-tracestate', async () => {
       sawActiveSpan = trace.getActiveSpan() !== undefined;
+      propagatedTraceState = trace.getActiveSpan()?.spanContext().traceState?.get('vendor');
     });
 
     expect(sawActiveSpan).toBe(true);
+    // The carrier's tracestate must survive extraction, not just the traceparent's trace id.
+    expect(propagatedTraceState).toBe('opaque-value');
     const span = spanExporter
       .getFinishedSpans()
       .find((finished) => finished.name === 'worker.with-tracestate');
     expect(span?.spanContext().traceId).toBe('0af7651916cd43dd8448eb211c80319c');
+    expect(span?.spanContext().traceState?.get('vendor')).toBe('opaque-value');
   });
 });
