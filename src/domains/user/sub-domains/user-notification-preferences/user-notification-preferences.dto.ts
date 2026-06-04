@@ -18,7 +18,7 @@ export const PutNotificationPreferencesDto = z
           is_enabled: z.boolean(),
         })
         .strict(),
-    ),
+    ).max(200),
   })
   .strict();
 

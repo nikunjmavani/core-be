@@ -49,7 +49,13 @@ describe('webauthn.validator', () => {
   describe('validateWebauthnRegisterVerify', () => {
     const minToken = 'a'.repeat(64);
     const maxToken = 'b'.repeat(128);
-    const validResponse = { clientDataJSON: 'data', attestationObject: 'obj' };
+    const validResponse = {
+      id: 'cred-id',
+      rawId: 'raw-cred-id',
+      response: { clientDataJSON: 'data', attestationObject: 'obj' },
+      clientExtensionResults: {},
+      type: 'public-key' as const,
+    };
 
     it('accepts challenge_token exactly 64 chars (min boundary) with valid response', () => {
       const result = validateWebauthnRegisterVerify({
@@ -57,7 +63,7 @@ describe('webauthn.validator', () => {
         response: validResponse,
       });
       expect(result.challenge_token).toBe(minToken);
-      expect(result.response).toEqual(validResponse);
+      expect(result.response).toMatchObject({ id: 'cred-id', type: 'public-key' });
     });
 
     it('accepts challenge_token exactly 128 chars (max boundary)', () => {
@@ -102,6 +108,15 @@ describe('webauthn.validator', () => {
       ).toThrow(ValidationError);
     });
 
+    it('throws ValidationError when response is missing required id field', () => {
+      expect(() =>
+        validateWebauthnRegisterVerify({
+          challenge_token: minToken,
+          response: { clientDataJSON: 'data', attestationObject: 'obj' },
+        }),
+      ).toThrow(ValidationError);
+    });
+
     it('throws ValidationError for extra unknown field (strict mode)', () => {
       expect(() =>
         validateWebauthnRegisterVerify({
@@ -119,7 +134,8 @@ describe('webauthn.validator', () => {
       id: 'credential-id',
       rawId: 'raw-id',
       response: { clientDataJSON: 'data', authenticatorData: 'auth', signature: 'sig' },
-      type: 'public-key',
+      clientExtensionResults: {},
+      type: 'public-key' as const,
     };
 
     it('accepts a valid complete input and returns parsed data', () => {
@@ -128,7 +144,7 @@ describe('webauthn.validator', () => {
         response: validCredential,
       });
       expect(result.challenge_token).toBe(validToken);
-      expect(result.response).toEqual(validCredential);
+      expect(result.response).toMatchObject({ id: 'credential-id', type: 'public-key' });
     });
 
     it('throws ValidationError when challenge_token is missing', () => {
