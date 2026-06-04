@@ -4,7 +4,6 @@ import { computeWorkerPostgresPoolDemand } from '@/infrastructure/queue/worker-r
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
-const DEFAULT_POOL_MAX_CONNECTIONS = 10;
 /** Local docker-compose default: one API + one worker process. */
 const LOCAL_DEFAULT_API_PROCESS_COUNT = 1;
 const LOCAL_DEFAULT_WORKER_PROCESS_COUNT = 1;
@@ -28,7 +27,7 @@ type ResolvedDeploymentCounts =
     };
 
 function resolvePoolMaxConnections(): number {
-  return env.DATABASE_POOL_MAX ?? DEFAULT_POOL_MAX_CONNECTIONS;
+  return env.DATABASE_POOL_MAX;
 }
 
 /**

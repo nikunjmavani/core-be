@@ -87,13 +87,17 @@ export const listCursorPayloadSchema = z
 export type ListCursorPayload = z.infer<typeof listCursorPayloadSchema>;
 
 /**
- * Result of {@link parseListCursor}: either a validated opaque cursor payload
- * (with `Date`-typed `created_at`) or a legacy numeric id used by older
- * callers that still pass `?after=<id>`.
+ * Result of {@link parseListCursor}: a validated opaque cursor payload with
+ * `Date`-typed `created_at`. Returns `null` (first page) for any `after` value
+ * that cannot be decoded as a valid opaque cursor.
  */
-export type ParsedListCursor =
-  | { kind: 'opaque'; created_at: Date; sort_value?: string; public_id?: string; id?: number }
-  | { kind: 'legacy'; id: number };
+export type ParsedListCursor = {
+  kind: 'opaque';
+  created_at: Date;
+  sort_value?: string;
+  public_id?: string;
+  id?: number;
+};
 
 /** Encodes a cursor payload as a URL-safe base64 string. */
 export function encodeListCursor(payload: ListCursorPayload): string {
@@ -112,9 +116,10 @@ export function decodeListCursor(cursor: string): ListCursorPayload | null {
 }
 
 /**
- * Parses the `after` query parameter into a {@link ParsedListCursor}: tries
- * the opaque base64 form first, then falls back to the legacy numeric id.
- * Returns `null` when the cursor is missing or cannot be parsed.
+ * Parses the `after` query parameter into a {@link ParsedListCursor}.
+ * Returns `null` (first page) when `after` is absent, empty, or cannot be
+ * decoded as a valid opaque cursor. Legacy bare-integer `after` values are no
+ * longer accepted — they exposed internal auto-increment IDs to callers.
  */
 export function parseListCursor(after: string | undefined): ParsedListCursor | null {
   if (after === undefined || after.length === 0) {
@@ -129,10 +134,6 @@ export function parseListCursor(after: string | undefined): ParsedListCursor | n
       public_id: opaque.public_id,
       id: opaque.id,
     });
-  }
-  const legacyId = Number.parseInt(after, 10);
-  if (Number.isFinite(legacyId) && legacyId > 0) {
-    return { kind: 'legacy', id: legacyId };
   }
   return null;
 }
@@ -158,9 +159,6 @@ export function createOpaqueCursorFromRow(row: {
 export function resolveAscendingIdAfter(cursor: ParsedListCursor | null): number | undefined {
   if (cursor === null) {
     return undefined;
-  }
-  if (cursor.kind === 'legacy') {
-    return cursor.id;
   }
   return cursor.id;
 }
@@ -191,9 +189,6 @@ export function buildAscendingCreatedAtIdCursorCondition(
   if (cursor === null) {
     return undefined;
   }
-  if (cursor.kind === 'legacy') {
-    return gt(idColumn, cursor.id);
-  }
   const cursorId = cursor.id;
   if (cursorId === undefined) {
     return gt(createdAtColumn, cursor.created_at);
@@ -209,7 +204,7 @@ export function buildAscendingCreatedAtIdCursorCondition(
 /**
  * Builds a Drizzle `WHERE` clause for ascending pagination on
  * `(text_column, id)`, e.g. sort by name then id. Requires `sort_value` and
- * `id` to be present in the cursor; legacy numeric cursors fall back to id.
+ * `id` to be present in the cursor.
  */
 export function buildAscendingTextIdCursorCondition(
   textColumn: AnyColumn,
@@ -218,9 +213,6 @@ export function buildAscendingTextIdCursorCondition(
 ): SQL | undefined {
   if (cursor === null) {
     return undefined;
-  }
-  if (cursor.kind === 'legacy') {
-    return gt(idColumn, cursor.id);
   }
   const sortValue = cursor.sort_value;
   if (sortValue === undefined || cursor.id === undefined) {
@@ -241,9 +233,6 @@ export function buildDescendingCreatedAtIdCursorCondition(
 ): SQL | undefined {
   if (cursor === null) {
     return undefined;
-  }
-  if (cursor.kind === 'legacy') {
-    return lt(idColumn, cursor.id);
   }
   const cursorId = cursor.id;
   if (cursorId === undefined) {

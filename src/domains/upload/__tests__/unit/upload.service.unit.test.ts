@@ -266,7 +266,7 @@ describe('UploadService', () => {
       contentType: 'image/png',
       contentLength: 1024,
     });
-    vi.mocked(objectStorage.getObject).mockResolvedValueOnce({
+    vi.mocked(objectStorage.getObjectFirstBytes).mockResolvedValueOnce({
       body: PNG_MAGIC,
       contentType: 'image/png',
     });
@@ -304,7 +304,7 @@ describe('UploadService', () => {
       contentType: 'image/png',
       contentLength: 1024,
     });
-    vi.mocked(objectStorage.getObject).mockResolvedValueOnce({
+    vi.mocked(objectStorage.getObjectFirstBytes).mockResolvedValueOnce({
       body: PNG_MAGIC,
       contentType: 'image/png',
     });
@@ -359,7 +359,7 @@ describe('UploadService', () => {
       contentType: 'image/png',
       contentLength: 1024,
     });
-    vi.mocked(objectStorage.getObject).mockResolvedValueOnce({
+    vi.mocked(objectStorage.getObjectFirstBytes).mockResolvedValueOnce({
       body: PNG_MAGIC,
       contentType: 'image/png',
     });
@@ -389,7 +389,7 @@ describe('UploadService', () => {
       contentLength: 1024,
     });
     // HEAD says image/png, but the stored bytes are HTML — a stored-XSS / content-spoof attempt.
-    vi.mocked(objectStorage.getObject).mockResolvedValueOnce({
+    vi.mocked(objectStorage.getObjectFirstBytes).mockResolvedValueOnce({
       body: Buffer.from('<html><script>alert(1)</script></html>'),
       contentType: 'image/png',
     });

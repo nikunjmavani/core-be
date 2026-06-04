@@ -201,6 +201,39 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
     });
   }
 
+  async getObjectFirstBytes(
+    key: string,
+    byteCount: number,
+  ): Promise<{ body: Buffer; contentType: string | undefined } | null> {
+    const bucket = requireBucket();
+    try {
+      return await outboundCall({
+        name: 's3',
+        operation: async (signal) => {
+          const response = await getS3Client().send(
+            new GetObjectCommand({
+              Bucket: bucket,
+              Key: key,
+              Range: `bytes=0-${byteCount - 1}`,
+            }),
+            { abortSignal: signal },
+          );
+          const body = await response.Body?.transformToByteArray();
+          if (!body) {
+            throw new Error('upload object body empty');
+          }
+          return {
+            body: Buffer.from(body),
+            contentType: response.ContentType,
+          };
+        },
+      });
+    } catch (error) {
+      logger.error({ error, key, bucket }, 's3.getObjectFirstBytes.failed');
+      return null;
+    }
+  }
+
   async putObject(options: {
     key: string;
     body: Buffer;
