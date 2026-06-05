@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.5.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.0-dev.0...v4.5.1-dev.0) (2026-06-05)
+
+
+### Fixed
+
+* **ci:** use fetch-depth: 0 in post-merge changes job to avoid paths-filter race ([#390](https://github.com/nikunjmavani/core-be/issues/390)) ([61a2100](https://github.com/nikunjmavani/core-be/commit/61a210090ae518f75f459cc33806b10ba1442993))
+
 ## [4.5.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.7-dev.0...v4.5.0-dev.0) (2026-06-05)
 
 
