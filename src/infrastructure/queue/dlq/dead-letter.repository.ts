@@ -1,4 +1,4 @@
-import { and, asc, inArray, lte } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lte } from 'drizzle-orm';
 import { database } from '@/infrastructure/database/connection.js';
 import { dead_letter_jobs } from '@/infrastructure/queue/dlq/dead-letter.schema.js';
 
@@ -95,6 +95,10 @@ export async function findDeadLetterJobsForAutoRetry(input: {
       and(
         inArray(dead_letter_jobs.source_queue, [...input.sourceQueues]),
         lte(dead_letter_jobs.failed_at, input.failedBefore),
+        // Exclude rows already resolved (budget exhausted) so exhausted rows at the head can never
+        // starve newer replayable rows, and a poison row can't replay again after its Redis budget
+        // counter expires.
+        isNull(dead_letter_jobs.auto_retry_resolved_at),
       ),
     )
     .orderBy(asc(dead_letter_jobs.failed_at))
@@ -105,4 +109,16 @@ export async function findDeadLetterJobsForAutoRetry(input: {
         payload_summary: row.payload_summary as Record<string, unknown>,
       })),
     );
+}
+
+/**
+ * Marks a dead-letter ledger row as resolved for auto-retry, removing it from
+ * {@link findDeadLetterJobsForAutoRetry}. Called when the row's retry budget is exhausted so it
+ * can never re-enter the scan and starve newer rows. Idempotent (only stamps a NULL marker).
+ */
+export async function markDeadLetterJobAutoRetryResolved(id: number): Promise<void> {
+  await database
+    .update(dead_letter_jobs)
+    .set({ auto_retry_resolved_at: new Date() })
+    .where(and(eq(dead_letter_jobs.id, id), isNull(dead_letter_jobs.auto_retry_resolved_at)));
 }

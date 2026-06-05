@@ -2,7 +2,7 @@ import { Queue } from 'bullmq';
 import { getBullMQProducerConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { insertMailOutbox } from '@/infrastructure/mail/mail-outbox.repository.js';
 import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
-import { FIFTEEN_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
+import { FIFTEEN_SECONDS_MS, SEVEN_DAYS_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -37,8 +37,8 @@ function getMailQueue(): Queue<MailJobData> {
     // additionally bounds how long a single enqueue can wait during graceful shutdown.
     connection: getBullMQProducerConnectionOptions(),
     defaultJobOptions: {
-      removeOnComplete: { count: 1000 },
-      removeOnFail: { count: 5000 },
+      removeOnComplete: { count: 1000, age: SEVEN_DAYS_SECONDS },
+      removeOnFail: { count: 500, age: SEVEN_DAYS_SECONDS },
       attempts: MAIL_QUEUE_MAX_ATTEMPTS,
       backoff: { type: 'custom' },
     },
@@ -77,7 +77,9 @@ export async function enqueueMailOutboxJob(
         })
         .catch((error: unknown) => {
           if (deadlineTimer) clearTimeout(deadlineTimer);
-          reject(error);
+          reject(
+            error instanceof Error ? error : new Error('mail.enqueue.failed', { cause: error }),
+          );
         });
     });
   } catch (error) {

@@ -66,6 +66,10 @@ async function main() {
   await assertDatabaseRoleRlsSafety();
   registerPostgresPoolMetrics();
 
+  logger.info(
+    { DATABASE_POOL_MAX: env.DATABASE_POOL_MAX },
+    'database.pool_max configured — set DATABASE_POOL_MAX to tune per-process connection budget',
+  );
   const app = await buildApp();
   await app.listen({ port: env.PORT, host: env.HTTP_BIND_HOST });
   logger.info({ host: env.HTTP_BIND_HOST, port: env.PORT }, 'Server listening');

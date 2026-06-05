@@ -3,6 +3,7 @@ import { getBullMQProducerConnectionOptions } from '@/infrastructure/queue/conne
 import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { SEVEN_DAYS_SECONDS } from '@/shared/constants/ttl.constants.js';
 import {
   notificationJobDataSchema,
   type NotificationJobDataValidated,
@@ -21,8 +22,8 @@ function getNotificationQueue(): Queue<NotificationJobData> {
   notificationQueue = new Queue<NotificationJobData>(NOTIFICATION_QUEUE_NAME, {
     connection: getBullMQProducerConnectionOptions(),
     defaultJobOptions: {
-      removeOnComplete: { count: 2000 },
-      removeOnFail: { count: 5000 },
+      removeOnComplete: { count: 1000, age: SEVEN_DAYS_SECONDS },
+      removeOnFail: { count: 1000, age: SEVEN_DAYS_SECONDS },
       attempts: 3,
       backoff: { type: 'exponential', delay: 5_000 },
     },

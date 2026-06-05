@@ -200,8 +200,8 @@ function buildGuideSteps(config: SetupConfig): GuideStepDefinition[] {
     {
       providerName: 'Railway',
       enabledCheck: (configuration) => configuration.providers.railway.enabled,
-      secretsCheck: (secrets) => isSecretFilled(secrets.railway.token),
-      browserUrls: ['https://railway.app/account/tokens'],
+      secretsCheck: (secrets) => isSecretFilled(secrets.railway.apiToken),
+      browserUrls: ['https://railway.com/account/tokens'],
       instructions: [
         '1. Log in to Railway (or sign up at railway.app)',
         '2. You will land on the "Tokens" page',

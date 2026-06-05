@@ -113,7 +113,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ inputs.merge_commit_sha || github.sha }}
 
@@ -177,16 +177,90 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
         run: pnpm tool:test-report-email
 
+  unit-coverage:
+    # Runs the pure-unit/global projects WITH coverage so the merged gate reflects
+    # the true union (unit + DB-bound), not just the DB-bound shards. Mirrors the
+    # PR unit lane (reusable-vitest-unit-only.yml): no Postgres, VITEST_SKIP_DATABASE.
+    name: Unit coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:8.6.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      VITEST_SKIP_DATABASE: 'true'
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://core:core@localhost:5432/core
+      REDIS_URL: redis://localhost:6379
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.merge_commit_sha || github.sha }}
+
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export shared CI test env (JWT keys + retention + secrets-encryption)
+        uses: ./.github/actions/test-env
+
+      - name: Cache Vitest
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: node_modules/.vitest
+          key: vitest-unit-cov-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'tooling/vitest/**') }}
+          restore-keys: |
+            vitest-unit-cov-${{ runner.os }}-
+
+      - name: Generate OpenAPI artifact for global tests
+        run: pnpm docs:generate
+
+      - name: Run unit + global tests with coverage
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run \
+            --project unit \
+            --project global \
+            --coverage \
+            --coverage.thresholds.lines=0 \
+            --coverage.thresholds.functions=0 \
+            --coverage.thresholds.statements=0 \
+            --coverage.thresholds.branches=0 \
+            --passWithNoTests
+
+      - name: Rename coverage report
+        if: always() && hashFiles('coverage/**') != ''
+        run: mv coverage coverage-unit
+
+      - name: Upload coverage artifact
+        if: always() && hashFiles('coverage-unit/**') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-unit
+          path: coverage-unit/
+          retention-days: ${{ github.event_name == 'pull_request' && 30 || 14 }}
+
   coverage-gate:
     name: Coverage
-    needs: run
+    needs: [run, unit-coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       coverage_summary: ${{ steps.summary.outputs.coverage_summary }}
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ inputs.merge_commit_sha || github.sha }}
 

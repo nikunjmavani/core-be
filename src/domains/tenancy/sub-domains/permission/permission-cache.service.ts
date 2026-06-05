@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { PERMISSION_CACHE_STAMPEDE_POLL_MS } from '@/shared/constants/limits.constants.js';
 import {
@@ -110,7 +110,7 @@ export async function setCachedPermissions(
   try {
     const version = await getOrganizationCacheVersion(organizationId);
     /** Small jitter so many users do not expire and recompute in the same second. */
-    const jitterSeconds = Math.floor(Math.random() * 61);
+    const jitterSeconds = randomInt(61);
     await redisConnection.set(
       buildKey(version, userId, organizationId),
       JSON.stringify(codes),
@@ -151,7 +151,7 @@ async function commitCachedPermissionsIfLockHeld(
   try {
     const version = await getOrganizationCacheVersion(organizationId);
     /** Small jitter so many users do not expire and recompute in the same second. */
-    const jitterSeconds = Math.floor(Math.random() * 61);
+    const jitterSeconds = randomInt(61);
     await redisConnection.eval(
       PERMISSION_CACHE_COMMIT_IF_LOCK_HELD_LUA,
       2,

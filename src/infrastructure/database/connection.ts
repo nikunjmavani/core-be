@@ -48,7 +48,7 @@ export function buildPostgresOptions(databaseUrl: string) {
   };
 
   return {
-    max: env.DATABASE_POOL_MAX ?? DEFAULT_DATABASE_POOL_MAX,
+    max: env.DATABASE_POOL_MAX,
     idle_timeout: env.DATABASE_POOL_IDLE_TIMEOUT_SECONDS ?? 30,
     connect_timeout: env.DATABASE_POOL_CONNECT_TIMEOUT_SECONDS ?? 10,
     max_lifetime: env.DATABASE_POOL_MAX_LIFETIME_SECONDS ?? 1800,

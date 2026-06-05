@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
@@ -19,7 +20,11 @@ export function validateListWebhooksQuery(data: unknown): ListWebhooksQueryInput
   ensureCursorOnlyPagination(data);
   const result = listWebhooksQueryDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -34,7 +39,11 @@ export function validateListWebhookDeliveryAttemptsQuery(
   ensureCursorOnlyPagination(data);
   const result = listWebhookDeliveryAttemptsQueryDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -46,7 +55,11 @@ export function validateListWebhookDeliveryAttemptsQuery(
 export function validateCreateWebhook(data: unknown): CreateWebhookInput {
   const result = CreateWebhookDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -58,7 +71,11 @@ export function validateCreateWebhook(data: unknown): CreateWebhookInput {
 export function validateUpdateWebhook(data: unknown): UpdateWebhookInput {
   const result = UpdateWebhookDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }

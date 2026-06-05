@@ -37,25 +37,28 @@ Hotfixes merge **`hotfix/* → main`** first; then sync **`main → dev`** so lo
 
 These are the **exact check names** to require in GitHub for every PR targeting **`main`** or **`dev`**.
 
-GitHub Actions reports checks as **`{workflow_name} / {job_name}`** (workflow `name:` from the YAML file, then job `name:`). Match **including spaces and punctuation**.
+GitHub Actions reports a status-check context as the **bare job `name:`** — **not** prefixed by the workflow name. (The one exception here is the reusable unit workflow, which reports as `unit / Unit + global`.) Match **including spaces and punctuation**. A workflow-prefixed form like `PR CI / Lint` matches **no real check** and silently blocks every merge — use the exact strings in the "Required check string" column below.
 
 | Workflow file | Workflow `name:` | Job `name:` | Required check string |
 | ------------- | ---------------- | ----------- | --------------------- |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Lint` | `PR CI / Lint` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Typecheck` | `PR CI / Typecheck` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Static sync` | `PR CI / Static sync` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Unit + global (pull_request)` | `PR CI / Unit + global (pull_request)` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Migration lint` | `PR CI / Migration lint` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Build verify` | `PR CI / Build verify` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security audit` | `PR CI / Security audit` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security secrets` | `PR CI / Security secrets` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security SAST` | `PR CI / Security SAST` |
-| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Contract + property` | `PR CI / Contract + property` |
-| [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR Governance` | `Checks` | `PR Governance / Checks` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Lint` | `Lint` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Typecheck` | `Typecheck` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Static sync` | `Static sync` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Unit + global (pull_request)` | `unit / Unit + global` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Migration lint` | `Migration lint` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Build verify` | `Build verify` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security audit` | `Security audit` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security secrets` | `Security secrets` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Security SAST` | `Security SAST` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `Contract + property` | `Contract + property` |
+| [.github/workflows/pr-ci.yml](../../../.github/workflows/pr-ci.yml) | `PR CI` | `RLS security (non-superuser)` | `RLS security (non-superuser)` |
+| [.github/workflows/pr-governance.yml](../../../.github/workflows/pr-governance.yml) | `PR Governance` | `Checks` | `Checks` |
 
 ### Same checks on both branches
 
-Require **all eleven** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks). Full DB integration and chaos suites are **local-only** (`pnpm test:integration`, `pnpm test:chaos`).
+Require **all twelve** rows above for **`main`** and **`dev`** PRs. [`.github/workflows/pr-ci.yml`](../../../.github/workflows/pr-ci.yml) runs on `pull_request` into each branch. Post-merge Docker (Trivy + GHCR), SBOM, API docs, deploy, and release automation run from [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) when a PR merges (not required PR checks).
+
+> **`RLS security (non-superuser)` is the one DB-backed PR check.** Every other PR-CI job is DB-less, but the RLS suite must run as the non-superuser `core_be_app` role against a real Postgres — the local/CI superuser is RLS-exempt and hides FORCE-RLS bugs (this is how the org-mandated-MFA bypass shipped). It is scoped to `src/tests/security/rls` to stay fast; the rest of `--project security` and the full DB integration and chaos suites remain post-merge / local-only (`pnpm test:integration`, `pnpm test:chaos`).
 
 ### Skipped PR CI jobs on docs-only pull requests
 
@@ -66,6 +69,7 @@ When the PR touches **src** but not only docs, these jobs may still skip individ
 | Job `name:` | Skipped when |
 | ----------- | ------------ |
 | `Unit + global (pull_request)` | No `src-code` or `ci-config` paths |
+| `RLS security (non-superuser)` | No `src-code` or `ci-config` paths |
 | `Build verify` | No `src-code`, `docker`, or `ci-config` paths |
 
 `Lint`, `Typecheck`, `Static sync`, `Migration lint`, `Security audit`, `Security secrets`, `Security SAST`, and `Contract + property` run on every non-docs-only PR.
@@ -98,7 +102,7 @@ These settings match the committed JSON files in [`.github/rulesets/`](../../../
 
 | Rule | `main` | `dev` |
 | ---- | ------ | ----- |
-| Required approving reviews | 1 | 1 |
+| Required approving reviews | 1 | 0 (solo maintainer — status checks still block merge) |
 | Require CODEOWNER review | Yes ([CODEOWNERS](../../../.github/CODEOWNERS)) | No |
 | Dismiss stale approvals on push | Yes | No |
 | Require approval on last push | Yes | No |
@@ -108,7 +112,7 @@ These settings match the committed JSON files in [`.github/rulesets/`](../../../
 | Require signed commits | Yes | No |
 | Block force-push (`non_fast_forward`) | Yes | Yes |
 | Block branch deletion | Yes | Yes |
-| Required status checks | PR CI (7 jobs) + PR Governance | Same |
+| Required status checks | PR CI (11 jobs incl. RLS security) + PR Governance | Same |
 
 **Signed commits on `main`:** Contributors must use [verified signatures](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification). Teams without signing enabled should temporarily relax `required_signatures` in `main.json` until onboarding is complete.
 
@@ -166,7 +170,7 @@ Repository rulesets on **private** repos require **GitHub Pro / Team / Enterpris
 
 The sync script surfaces this message verbatim and exits non-zero. Either upgrade the account/org plan or make the repository public to apply rulesets.
 
-**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm names match **`PR CI / …`** and **`PR Governance / …`**. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
+**Verifying check names:** After at least one PR run, open the PR → **Checks** tab and confirm the names match the **bare check strings** in the table above (e.g. `Lint`, `RLS security (non-superuser)`, `unit / Unit + global`) — **not** a `PR CI / …` prefixed form. If GitHub shows a different label, align [`.github/rulesets/*.json`](../../../.github/rulesets/) and this doc.
 
 ---
 

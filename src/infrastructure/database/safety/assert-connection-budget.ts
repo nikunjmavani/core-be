@@ -4,7 +4,6 @@ import { computeWorkerPostgresPoolDemand } from '@/infrastructure/queue/worker-r
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
-const DEFAULT_POOL_MAX_CONNECTIONS = 10;
 /** Local docker-compose default: one API + one worker process. */
 const LOCAL_DEFAULT_API_PROCESS_COUNT = 1;
 const LOCAL_DEFAULT_WORKER_PROCESS_COUNT = 1;
@@ -28,7 +27,7 @@ type ResolvedDeploymentCounts =
     };
 
 function resolvePoolMaxConnections(): number {
-  return env.DATABASE_POOL_MAX ?? DEFAULT_POOL_MAX_CONNECTIONS;
+  return env.DATABASE_POOL_MAX;
 }
 
 /**
@@ -233,25 +232,12 @@ export async function assertPostgresConnectionBudget(
     );
 
     if (peakPostgresConcurrency > poolMaxConnections) {
-      const message =
+      throw new Error(
         `Worker Postgres pool demand (${peakPostgresConcurrency}) exceeds DATABASE_POOL_MAX (${poolMaxConnections}) ` +
-        `for WORKER_QUEUE_FAMILIES [${selectedFamilies.join(', ')}]. ` +
-        'Raise DATABASE_POOL_MAX on the worker service, lower WORKER_CONCURRENCY_* overrides, ' +
-        'or split worker services by queue family. See docs/deployment/runbooks/resource-limits.md';
-
-      if (monolithicWorker) {
-        logger.warn(
-          {
-            poolMaxConnections,
-            peakPostgresConcurrency,
-            selectedFamilies,
-            queues: queues.filter((entry) => entry.enabled && entry.postgresConcurrency > 0),
-          },
-          'database.connection_budget.worker_pool_pressure',
-        );
-      } else {
-        throw new Error(message);
-      }
+          `for WORKER_QUEUE_FAMILIES [${selectedFamilies.join(', ')}]${monolithicWorker ? ' (monolithic worker)' : ''}. ` +
+          'Raise DATABASE_POOL_MAX on the worker service, lower WORKER_CONCURRENCY_* overrides, ' +
+          'or split worker services by queue family. See docs/deployment/runbooks/resource-limits.md',
+      );
     }
   }
 }

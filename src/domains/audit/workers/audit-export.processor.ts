@@ -122,68 +122,13 @@ export async function runAuditExportJob(databaseHandle: WorkerDatabaseHandle): P
       continue;
     }
 
-    const batchSize = env.AUDIT_EXPORT_BATCH_SIZE;
-    let afterId = 0;
-    const manifestObjects: AuditExportManifest['objects'] = [];
-
-    while (true) {
-      const rows = await databaseHandle
-        .select({
-          id: logs.id,
-          organization_id: logs.organization_id,
-          actor_user_id: logs.actor_user_id,
-          action: logs.action,
-          resource_type: logs.resource_type,
-          resource_id: logs.resource_id,
-          severity: logs.severity,
-          metadata: logs.metadata,
-          created_at: logs.created_at,
-        })
-        .from(logs)
-        .where(
-          and(
-            eq(logs.organization_id, organizationId),
-            gte(logs.created_at, start),
-            lt(logs.created_at, end),
-            gt(logs.id, afterId),
-          ),
-        )
-        .orderBy(asc(logs.id))
-        .limit(batchSize);
-
-      if (rows.length === 0) break;
-
-      const lines = rows.map((row) => `${JSON.stringify(row)}\n`);
-      const body = await gzipBufferAsync(Buffer.from(lines.join(''), 'utf8'));
-      const sha256 = createHash('sha256').update(body).digest('hex');
-      const batchPartId = randomUUID();
-      const objectKey = buildExportKey(organizationId, dateLabel, batchPartId);
-
-      await putObjectBuffer({
-        key: objectKey,
-        body,
-        contentType: 'application/gzip',
-        metadata: {
-          format: 'ndjson',
-          schema_version: AUDIT_EXPORT_SCHEMA_VERSION,
-          export_date: dateLabel,
-          row_count: String(rows.length),
-          sha256,
-        },
-      });
-
-      manifestObjects.push({
-        key: objectKey,
-        row_count: rows.length,
-        sha256,
-        format: 'ndjson',
-        content_type: 'application/gzip',
-      });
-
-      afterId = rows.at(-1)?.id ?? afterId;
-
-      if (rows.length < batchSize) break;
-    }
+    const manifestObjects = await collectOrganizationAuditBatches({
+      databaseHandle,
+      organizationId,
+      dateLabel,
+      start,
+      end,
+    });
 
     if (manifestObjects.length === 0) {
       skipped += 1;
@@ -213,4 +158,82 @@ export async function runAuditExportJob(databaseHandle: WorkerDatabaseHandle): P
 
   logger.info({ exportedOrganizations, skipped, dateLabel }, 'audit-export.completed');
   return { exportedOrganizations, skipped };
+}
+
+/**
+ * Streams one organization's audit logs for the day window in keyset batches, gzip-uploading
+ * each batch to S3 and returning the manifest object descriptors (empty when there are no rows).
+ */
+async function collectOrganizationAuditBatches(options: {
+  databaseHandle: WorkerDatabaseHandle;
+  organizationId: number;
+  dateLabel: string;
+  start: Date;
+  end: Date;
+}): Promise<AuditExportManifest['objects']> {
+  const { databaseHandle, organizationId, dateLabel, start, end } = options;
+  const batchSize = env.AUDIT_EXPORT_BATCH_SIZE;
+  let afterId = 0;
+  const manifestObjects: AuditExportManifest['objects'] = [];
+
+  while (true) {
+    const rows = await databaseHandle
+      .select({
+        id: logs.id,
+        organization_id: logs.organization_id,
+        actor_user_id: logs.actor_user_id,
+        action: logs.action,
+        resource_type: logs.resource_type,
+        resource_id: logs.resource_id,
+        severity: logs.severity,
+        metadata: logs.metadata,
+        created_at: logs.created_at,
+      })
+      .from(logs)
+      .where(
+        and(
+          eq(logs.organization_id, organizationId),
+          gte(logs.created_at, start),
+          lt(logs.created_at, end),
+          gt(logs.id, afterId),
+        ),
+      )
+      .orderBy(asc(logs.id))
+      .limit(batchSize);
+
+    if (rows.length === 0) break;
+
+    const lines = rows.map((row) => `${JSON.stringify(row)}\n`);
+    const body = await gzipBufferAsync(Buffer.from(lines.join(''), 'utf8'));
+    const sha256 = createHash('sha256').update(body).digest('hex');
+    const batchPartId = randomUUID();
+    const objectKey = buildExportKey(organizationId, dateLabel, batchPartId);
+
+    await putObjectBuffer({
+      key: objectKey,
+      body,
+      contentType: 'application/gzip',
+      metadata: {
+        format: 'ndjson',
+        schema_version: AUDIT_EXPORT_SCHEMA_VERSION,
+        export_date: dateLabel,
+        row_count: String(rows.length),
+        sha256,
+      },
+    });
+
+    manifestObjects.push({
+      key: objectKey,
+      row_count: rows.length,
+      sha256,
+      format: 'ndjson',
+      content_type: 'application/gzip',
+    });
+
+    afterId = rows.at(-1)?.id ?? afterId;
+
+    if (rows.length < batchSize) break;
+  }
+
+  return manifestObjects;
 }

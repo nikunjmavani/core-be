@@ -11,7 +11,7 @@ export const UpdateUserSettingsDto = z
     is_dark_mode_enabled: z.boolean().optional(),
     is_notifications_enabled: z.boolean().optional(),
     language: trimmedString().max(10).optional(),
-    preferred_locales: z.array(trimmedString().max(10)).optional(),
+    preferred_locales: z.array(trimmedString().max(10)).max(10).optional(),
   })
   .strict();
 

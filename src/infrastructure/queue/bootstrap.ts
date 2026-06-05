@@ -17,7 +17,7 @@ import {
 import { getSelectedWorkerQueueFamilies } from '@/infrastructure/queue/worker-runtime/worker-queue-family.util.js';
 import { getWorkerRegistrationsForFamilies } from '@/infrastructure/queue/worker-runtime/worker-registration.registry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import type { WorkerContainers } from '@/worker-containers.js';
+import type { DomainContainers } from '@/worker-containers.js';
 
 export { closeDeadLetterQueues } from '@/infrastructure/queue/dlq/dead-letter.js';
 
@@ -82,7 +82,7 @@ function pushWorkerWithDeadLetterHook(
  * order during shutdown.
  */
 export async function registerDomainWorkers(
-  workerContainers: WorkerContainers,
+  workerContainers: DomainContainers,
 ): Promise<WorkerHandle[]> {
   const workers: WorkerHandle[] = [];
   const selectedFamilies = getSelectedWorkerQueueFamilies();

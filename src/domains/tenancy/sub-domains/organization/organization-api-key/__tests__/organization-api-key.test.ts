@@ -572,5 +572,50 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       });
       expect(rotatedKeyLookup.statusCode).toBe(200);
     });
+
+    it('rejects concurrent rotations of the same key: one replacement, rest 409, no 5xx', async () => {
+      const { organization, token } = await createAuthorizedOrganizationContext([
+        TENANCY_PERMISSIONS.API_KEY_READ,
+        TENANCY_PERMISSIONS.API_KEY_MANAGE,
+      ]);
+
+      const createResponse = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: apiKeysCollectionPath(organization.public_id),
+        token,
+        payload: { name: 'Concurrent Rotation Source', scopes: ['api-key:read'] },
+      });
+      expect(createResponse.statusCode).toBe(201);
+      const apiKeyPublicId = (createResponse.json() as { data: { api_key: { id: string } } }).data
+        .api_key.id;
+
+      const rotateOnce = () =>
+        injectAuthenticatedOrganizationMutation(app, {
+          method: 'POST',
+          url: `${apiKeysResourcePath(organization.public_id, apiKeyPublicId)}/rotate`,
+          token,
+        }).then((response) => response.statusCode);
+
+      // A single rotate must yield exactly one replacement. Without the atomic soft-delete guard,
+      // all four requests find the live key, all soft-delete it, and all mint a replacement — four
+      // keys for one rotation. With the guard, exactly one wins; the losers are a 4xx (404 if the
+      // key was already retired by the time they look it up, 409 if they lose the soft-delete race
+      // — both are timing-dependent, so we assert the invariant, not the exact split).
+      const statuses = await Promise.all([rotateOnce(), rotateOnce(), rotateOnce(), rotateOnce()]);
+      expect(statuses.filter((status) => status >= 500)).toHaveLength(0);
+      expect(statuses.filter((status) => status === 201)).toHaveLength(1);
+      expect(statuses.filter((status) => status >= 400 && status < 500)).toHaveLength(3);
+
+      // Exactly one active key remains (the single replacement); the original is retired. Without
+      // the guard this list would hold four replacements.
+      const listAfter = await injectAuthenticated(app, {
+        url: apiKeysCollectionPath(organization.public_id),
+        token,
+      });
+      expect(listAfter.statusCode).toBe(200);
+      const activeKeys = (listAfter.json() as { data: Array<{ id: string }> }).data;
+      expect(activeKeys).toHaveLength(1);
+      expect(activeKeys[0]?.id).not.toBe(apiKeyPublicId);
+    });
   });
 });

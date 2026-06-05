@@ -1,0 +1,35 @@
+/**
+ * Faker generators for the user-notification-preferences bulk seeder. Callers pass the
+ * orchestrator's seeded `faker` so output is reproducible for a given `SEED`.
+ */
+import type { Faker } from '@faker-js/faker';
+import { NOTIFICATION_CHANNELS } from '@/shared/constants/index.js';
+
+/** Generated opt-in row for `auth.user_notification_preferences`. */
+export interface BulkNotificationPreferenceProfile {
+  /** Notification type identifier (e.g. `security_alert`). */
+  notification_type: string;
+  /** Delivery channel; constrained to the schema check (`EMAIL`/`SMS`/`PUSH`/`IN_APP`). */
+  channel: string;
+  /** Whether the user opted in for this `(type, channel)` pair. */
+  is_enabled: boolean;
+}
+
+const NOTIFICATION_TYPES = [
+  'security_alert',
+  'product_update',
+  'billing_reminder',
+  'mention',
+] as const;
+const CHANNELS = NOTIFICATION_CHANNELS;
+
+/** Builds one fake notification-preference profile from the provided faker instance. */
+export function generateBulkNotificationPreference(
+  faker: Faker,
+): BulkNotificationPreferenceProfile {
+  return {
+    notification_type: faker.helpers.arrayElement(NOTIFICATION_TYPES),
+    channel: faker.helpers.arrayElement(CHANNELS),
+    is_enabled: faker.datatype.boolean({ probability: 0.75 }),
+  };
+}

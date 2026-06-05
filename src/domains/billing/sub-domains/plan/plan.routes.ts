@@ -19,7 +19,7 @@ export function planRoutes(service: PlanService): FastifyPluginAsync {
         schema: {
           summary: 'List available plans',
           description:
-            'Returns all active subscription plans with pricing and feature details. Requires authentication.',
+            'Returns all active subscription plans with pricing and feature details. No authentication required.',
           tags: ['Billing', 'Plan'],
         },
       },
@@ -31,7 +31,7 @@ export function planRoutes(service: PlanService): FastifyPluginAsync {
         schema: {
           summary: 'Get plan details',
           description:
-            'Returns a single plan with full pricing and feature information. Requires authentication.',
+            'Returns a single plan with full pricing and feature information. No authentication required.',
           tags: ['Billing', 'Plan'],
           params: getPlanParamsDto,
         },

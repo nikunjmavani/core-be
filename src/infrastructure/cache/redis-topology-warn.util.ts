@@ -3,6 +3,22 @@ import { resolveBullMqRedisUrl } from '@/infrastructure/cache/redis-url.util.js'
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
+/** Fixed mask written over a URL password before logging — a redaction marker, never a credential. */
+const URL_REDACTION_MARK = '*'.repeat(3);
+
+/** Redacts the password in a connection URL for safe logging (URL parse — no regex backtracking). */
+function redactUrlPassword(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.password) {
+      parsed.password = URL_REDACTION_MARK;
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 /**
  * Logs the resolved Redis topology at boot. When BullMQ runs on a dedicated endpoint
  * (separate host or logical database from the cache `REDIS_URL`), this records that
@@ -18,8 +34,8 @@ export function warnWhenBullMqSharesCacheRedisHost(): void {
 
   logger.info(
     {
-      cacheRedisUrl: env.REDIS_URL.replace(/:[^@]+@/, ':***@'),
-      bullMqRedisUrl: bullMqRedisUrl.replace(/:[^@]+@/, ':***@'),
+      cacheRedisUrl: redactUrlPassword(env.REDIS_URL),
+      bullMqRedisUrl: redactUrlPassword(bullMqRedisUrl),
     },
     'redis.topology.dedicated_bullmq_endpoint — BullMQ uses a dedicated Redis endpoint; queue/cache isolation is active (see docs/deployment/runbooks/redis-topology.md)',
   );

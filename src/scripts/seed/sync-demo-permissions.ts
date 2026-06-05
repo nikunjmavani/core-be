@@ -14,8 +14,8 @@ import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.sc
 import {
   seedPermissions,
   SYSTEM_PERMISSIONS,
-} from '@/domains/tenancy/sub-domains/permission/permission.seed.js';
-import { seedRolePermissions } from '@/domains/tenancy/tenancy.seed.js';
+} from '@/domains/tenancy/sub-domains/permission/seed/permission.reference.seed.js';
+import { seedRolePermissions } from '@/domains/tenancy/seed/tenancy.seed.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 

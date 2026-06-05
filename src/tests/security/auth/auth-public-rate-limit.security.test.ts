@@ -93,6 +93,42 @@ describe('Security: Auth public rate limit burst (429)', () => {
     expect(responses.filter((response) => response.statusCode === 429).length).toBeGreaterThan(0);
   });
 
+  it('cannot be bypassed by rotating X-Forwarded-For (per-IP cap still fires)', async () => {
+    const application = await createAuthStylePublicRouteApp();
+    const responses = [];
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      responses.push(
+        await application.inject({
+          method: 'POST',
+          url: '/auth/magic-link/send',
+          // Spoof a different "client IP" on every request, plus a distinct email
+          // so the per-email throttle never confounds the per-IP measurement.
+          headers: { 'x-forwarded-for': `203.0.113.${attempt}` },
+          payload: { email: `xff-${attempt}@example.com` },
+        }),
+      );
+    }
+    // The app does not trust X-Forwarded-For, so every request keys on the real
+    // connection IP — rotating the header cannot mint fresh rate-limit buckets.
+    expect(responses.filter((response) => response.statusCode === 429).length).toBeGreaterThan(0);
+  });
+
+  it('cannot be bypassed by spoofing X-Real-IP', async () => {
+    const application = await createAuthStylePublicRouteApp();
+    const responses = [];
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      responses.push(
+        await application.inject({
+          method: 'POST',
+          url: '/auth/login',
+          headers: { 'x-real-ip': `198.51.100.${attempt}` },
+          payload: { email: `xrip-${attempt}@example.com`, password: 'x' },
+        }),
+      );
+    }
+    expect(responses.filter((response) => response.statusCode === 429).length).toBeGreaterThan(0);
+  });
+
   async function createPerEmailRouteApp() {
     mockEnv.NODE_ENV = 'production';
     vi.resetModules();

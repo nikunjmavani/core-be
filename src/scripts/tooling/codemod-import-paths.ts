@@ -72,7 +72,7 @@ function main(): void {
   }
 
   console.log(`Rewrote ${changedFiles.length} file(s):`);
-  for (const file of changedFiles.sort()) {
+  for (const file of changedFiles.sort((a, b) => a.localeCompare(b))) {
     console.log(`  ${file}`);
   }
 }

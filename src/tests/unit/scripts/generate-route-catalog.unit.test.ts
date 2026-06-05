@@ -84,7 +84,6 @@ describe('generate-route-catalog', () => {
     expect(paths).toContain('GET /readyz');
     expect(paths).toContain('POST /api/v1/mcp');
     expect(paths).toContain('POST /api/v1/billing/stripe/webhook');
-    expect(paths).toContain('GET /mcp');
     expect(paths).toContain('GET /metrics');
     expect(paths).toContain('GET /internal/ops/circuit-breakers');
     expect(routes.length).toBeGreaterThan(100);

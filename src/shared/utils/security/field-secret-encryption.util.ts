@@ -1,8 +1,8 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { getEnv } from '@/shared/config/env.config.js';
+import { AES_GCM_IV_LENGTH } from '@/shared/constants/security.constants.js';
 
 const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 
 /** Supported field-secret key versions, newest last. The stored prefix is `<version>:`. */
@@ -99,7 +99,7 @@ export function encryptFieldSecret(plaintext: string): string {
   }
   const version = getEnv().SECRETS_ENCRYPTION_CURRENT_VERSION;
   const key = resolveFieldSecretEncryptionKey(version);
-  const iv = randomBytes(IV_LENGTH);
+  const iv = randomBytes(AES_GCM_IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const authTag = cipher.getAuthTag();
@@ -126,9 +126,9 @@ export function decryptFieldSecret(stored: string): string {
   }
   const key = resolveFieldSecretEncryptionKey(version);
   const data = Buffer.from(stored.slice(version.length + 1), 'base64');
-  const iv = data.subarray(0, IV_LENGTH);
-  const authTag = data.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
-  const encrypted = data.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
+  const iv = data.subarray(0, AES_GCM_IV_LENGTH);
+  const authTag = data.subarray(AES_GCM_IV_LENGTH, AES_GCM_IV_LENGTH + AUTH_TAG_LENGTH);
+  const encrypted = data.subarray(AES_GCM_IV_LENGTH + AUTH_TAG_LENGTH);
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');

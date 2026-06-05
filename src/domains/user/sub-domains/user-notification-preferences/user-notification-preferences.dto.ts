@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { trimmedString } from '@/shared/utils/validation/validation.util.js';
+import { NOTIFICATION_CHANNELS } from '@/shared/constants/index.js';
 
 /**
  * Zod schema for the `PUT /api/v1/users/me/notification-preferences` request body.
@@ -8,16 +9,18 @@ import { trimmedString } from '@/shared/utils/validation/validation.util.js';
  */
 export const PutNotificationPreferencesDto = z
   .object({
-    preferences: z.array(
-      z
-        .object({
-          notification_type: trimmedString().max(50),
-          channel: trimmedString().max(20),
-          organization_id: z.number().nullable().optional(),
-          is_enabled: z.boolean(),
-        })
-        .strict(),
-    ),
+    preferences: z
+      .array(
+        z
+          .object({
+            notification_type: trimmedString().max(50),
+            channel: z.enum(NOTIFICATION_CHANNELS),
+            organization_id: z.number().nullable().optional(),
+            is_enabled: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(200),
   })
   .strict();
 

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import type {
   LoginInput,
@@ -39,7 +40,7 @@ export function validateLogin(body: unknown): LoginInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -52,7 +53,7 @@ export function validateMagicLinkSend(body: unknown): MagicLinkSendInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -65,7 +66,7 @@ export function validateMagicLinkVerify(body: unknown): MagicLinkVerifyInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -78,7 +79,7 @@ export function validateMfaVerify(body: unknown): MfaVerifyInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -91,7 +92,7 @@ export function validateCreateAuthMethod(body: unknown): CreateAuthMethodInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -104,7 +105,7 @@ export function validateForgotPassword(body: unknown): ForgotPasswordInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -117,7 +118,7 @@ export function validateResetPassword(body: unknown): ResetPasswordInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -130,7 +131,7 @@ export function validateChangePassword(body: unknown): ChangePasswordInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -143,7 +144,7 @@ export function validateStepUpVerify(body: unknown): StepUpVerifyInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -156,7 +157,7 @@ export function validateVerifyEmail(body: unknown): VerifyEmailInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -169,7 +170,7 @@ export function validateMfaEnroll(body: unknown): MfaEnrollInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -182,7 +183,7 @@ export function validateMfaLoginVerify(body: unknown): MfaLoginVerifyInput {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;
@@ -195,7 +196,7 @@ export function validateOauthCallbackQuery(query: unknown): OauthCallbackQueryIn
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;

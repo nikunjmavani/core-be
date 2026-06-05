@@ -56,6 +56,10 @@ export class StripePaymentProvider implements PaymentProvider {
           email: `billing@${input.organization.slug}.com`,
           name: input.organization.name,
           metadata: { organization_id: input.organization.public_id },
+          // One customer per organization: keying on the org public id makes a retried create
+          // (after a crash between the Stripe call and the local org-row commit) return the same
+          // customer instead of minting a duplicate.
+          idempotencyKey: `customer-create:${input.organization.public_id}`,
         });
         stripeCustomerId = customer.id;
         await this.organizationService.updateStripeCustomerIdForOrganization(

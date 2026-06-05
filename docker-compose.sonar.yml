@@ -1,0 +1,52 @@
+# Local SonarQube instance for code quality analysis.
+# Usage:
+#   docker compose -f docker-compose.sonar.yml up -d   # start SonarQube
+#   docker compose -f docker-compose.sonar.yml run --rm scanner  # run scan
+#   docker compose -f docker-compose.sonar.yml down -v           # teardown
+#
+# Dashboard: http://localhost:9000  (admin / admin on first login)
+
+services:
+  sonarqube:
+    image: sonarqube:25.5.0.107428-community
+    container_name: core-be-sonarqube
+    ports:
+      - '9000:9000'
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: 'true'
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+      - sonarqube_extensions:/opt/sonarqube/extensions
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/api/system/status | grep -q "UP"']
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 120s
+
+  scanner:
+    image: sonarsource/sonar-scanner-cli:11
+    container_name: core-be-sonar-scanner
+    profiles: ['scan']
+    depends_on:
+      sonarqube:
+        condition: service_healthy
+    volumes:
+      - .:/usr/src
+    working_dir: /usr/src
+    environment:
+      SONAR_HOST_URL: http://sonarqube:9000
+      SONAR_TOKEN: ${SONAR_TOKEN:-}
+    command: >
+      sonar-scanner
+        -Dsonar.projectKey=core-be
+        -Dsonar.projectName="core-be"
+        -Dsonar.projectVersion=3.5.1-dev.0
+        -Dsonar.host.url=http://sonarqube:9000
+        -Dsonar.token=${SONAR_TOKEN:-admin:admin@}
+
+volumes:
+  sonarqube_data:
+  sonarqube_logs:
+  sonarqube_extensions:

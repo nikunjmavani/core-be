@@ -37,6 +37,18 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
+// resetPassword now runs inside withTransaction + runWithPinnedDatabaseHandle; invoke the
+// callbacks directly so the unit test exercises the flow without a real database/transaction.
+vi.mock('@/infrastructure/database/transaction.js', () => ({
+  withTransaction: vi.fn((callback: (transaction: unknown) => unknown) => callback({})),
+}));
+
+vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => ({
+  runWithPinnedDatabaseHandle: vi.fn((_handle: unknown, callback: () => unknown) => callback()),
+  getRequestDatabase: vi.fn(() => ({})),
+  setLocalDatabaseConfig: vi.fn().mockResolvedValue(undefined),
+}));
+
 const user = {
   id: 1,
   public_id: 'user_public',

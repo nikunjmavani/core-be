@@ -262,7 +262,9 @@ async function main() {
     const appliedSet = new Set(applied.map((row) => row.filename));
 
     const allFiles = await readdir(migrationsFolder);
-    const sqlFiles = allFiles.filter((file) => file.endsWith('.sql')).sort();
+    const sqlFiles = allFiles
+      .filter((file) => file.endsWith('.sql'))
+      .sort((a, b) => a.localeCompare(b));
 
     await baselineExistingInitialMigrationIfNeeded({ appliedSet, sqlFiles });
 

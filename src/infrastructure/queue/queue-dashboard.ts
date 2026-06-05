@@ -242,7 +242,7 @@ export async function registerQueueDashboard(
         try {
           if (reply.statusCode < 200 || reply.statusCode >= 300) return;
 
-          const pathname = (request.url.split('?')[0] ?? '') as string;
+          const pathname = request.url.split('?')[0] ?? '';
           const parsed = parseQueueDashboardMutation(pathname, request.method);
           if (!parsed) return;
 

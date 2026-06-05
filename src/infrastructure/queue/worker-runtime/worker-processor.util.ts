@@ -86,9 +86,8 @@ export function createTenantScopedBullMQWorker<TJobData extends TenantScopedJobD
     queueName,
     async (job) => {
       const { organizationPublicId, ...jobPayload } = job.data;
-      return runTenantScopedWorkerJob(
-        { organizationPublicId, ...(jobPayload as Omit<TJobData, 'organizationPublicId'>) },
-        (databaseHandle) => handler(databaseHandle, job),
+      return runTenantScopedWorkerJob({ organizationPublicId, ...jobPayload }, (databaseHandle) =>
+        handler(databaseHandle, job),
       );
     },
     workerOptions,

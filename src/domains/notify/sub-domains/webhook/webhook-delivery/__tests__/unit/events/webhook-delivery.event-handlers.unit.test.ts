@@ -6,6 +6,7 @@ const findOrganizationPublicIdByDeliveryAttemptIdMock = vi.fn();
 vi.mock(
   '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js',
   () => ({
+    WEBHOOK_DELIVERY_JOB_ATTEMPTS: 5,
     enqueueWebhookDeliveryByAttemptId: (...arguments_: unknown[]) =>
       enqueueWebhookDeliveryByAttemptIdMock(...arguments_),
   }),

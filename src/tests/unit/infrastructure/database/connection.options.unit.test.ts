@@ -3,7 +3,6 @@ import {
   buildPostgresOptions,
   isNeonPoolerConnection,
 } from '@/infrastructure/database/connection.js';
-import { DEFAULT_DATABASE_POOL_MAX } from '@/infrastructure/database/pool/pool.constants.js';
 import { env } from '@/shared/config/env.config.js';
 
 describe('postgres connection options', () => {
@@ -51,12 +50,10 @@ describe('postgres connection options', () => {
       expect(options.prepare).toBe(false);
     });
 
-    it('resolves the pool max from DATABASE_POOL_MAX or the shared default (alerter parity)', () => {
+    it('resolves the pool max from DATABASE_POOL_MAX (defaults to 10 in the env schema)', () => {
       const options = buildPostgresOptions('postgresql://user:pass@localhost:5432/core');
-      // The pool-exhaustion alerter resolves its saturation thresholds from the same
-      // DEFAULT_DATABASE_POOL_MAX constant, so the live pool size and the alert math can never
-      // silently drift apart.
-      expect(options.max).toBe(env.DATABASE_POOL_MAX ?? DEFAULT_DATABASE_POOL_MAX);
+      // DATABASE_POOL_MAX now has an explicit schema default of 10; the env is always a number.
+      expect(options.max).toBe(env.DATABASE_POOL_MAX);
     });
   });
 });

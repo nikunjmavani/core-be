@@ -60,6 +60,12 @@ describe('MembershipService — permission cache invalidation', () => {
       updated_at: new Date(),
     }),
     softDelete: vi.fn().mockResolvedValue({ public_id: 'membership_public' }),
+    resolveUserPublicIdsByInternalIds: vi.fn(
+      async (ids: readonly number[]) => new Map(ids.map((id) => [id, `user_public_${id}`])),
+    ),
+    resolveRolePublicIdsByInternalIds: vi.fn(
+      async (ids: readonly number[]) => new Map(ids.map((id) => [id, `role_public_${id}`])),
+    ),
     findByUserAndOrganization: vi.fn().mockResolvedValue({
       public_id: 'membership_public',
       user_id: 20,
@@ -84,7 +90,7 @@ describe('MembershipService — permission cache invalidation', () => {
   it('create invalidates user permission cache after membership is created', async () => {
     await service.create(
       'org_public_abc',
-      { user_id: 'user_public_new', role_id: 'role_public', status: 'ACTIVE' },
+      { user_id: 'user_public_new', role_id: 'role_public', status: 'INVITED' },
       'inviter_public',
     );
 

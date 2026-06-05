@@ -81,7 +81,12 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
       token,
       payload: {
         challenge_token: registerOptionsBody.data.challenge_token,
-        response: { id: credentialId, type: 'public-key' },
+        response: {
+          id: credentialId,
+          rawId: credentialId,
+          response: { clientDataJSON: 'dGVzdA', attestationObject: 'dGVzdA' },
+          type: 'public-key',
+        },
       },
     });
     expect(registerVerifyResponse.statusCode).toBe(200);
@@ -115,7 +120,12 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
       url: testApiPath('/auth/webauthn/authenticate/verify'),
       payload: {
         challenge_token: authenticateOptionsBody.data.challenge_token,
-        response: { id: credentialId, type: 'public-key' },
+        response: {
+          id: credentialId,
+          rawId: credentialId,
+          response: { clientDataJSON: 'dGVzdA', authenticatorData: 'dGVzdA', signature: 'dGVzdA' },
+          type: 'public-key',
+        },
       },
     });
 
@@ -138,5 +148,66 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
     expect(storedCredentials).toHaveLength(1);
     expect(storedCredentials[0]?.credential_id).toBe(credentialId);
     expect(storedCredentials[0]?.counter).toBe(1);
+  });
+
+  it('rejects re-registering an already-enrolled passkey with 409 (not a 500)', async () => {
+    const user = await createTestUser({ email: 'webauthn-duplicate-credential@example.com' });
+    const token = await generateTestTokenWithActiveSession(app, user.public_id);
+    const credentialId = 'duplicate-passkey-credential-id';
+    const publicKeyBytes = Buffer.from('duplicate-passkey-public-key');
+
+    async function registerSamePasskey() {
+      // The register ceremony is a step-up-sensitive operation; re-seed each pass so
+      // the second attempt is rejected by the unique constraint, not by a stale step-up.
+      await seedRecentStepUpForTestUser(user.public_id);
+      const optionsResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/webauthn/register/options'),
+        token,
+      });
+      expect(optionsResponse.statusCode).toBe(200);
+      const challengeToken = (optionsResponse.json() as { data: { challenge_token: string } }).data
+        .challenge_token;
+
+      vi.mocked(verifyRegistrationResponse).mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: credentialId,
+            publicKey: publicKeyBytes,
+            counter: 0,
+            transports: ['internal'],
+          },
+          credentialDeviceType: 'singleDevice',
+          credentialBackedUp: false,
+        },
+      } as unknown as Awaited<ReturnType<typeof verifyRegistrationResponse>>);
+
+      return injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/webauthn/register/verify'),
+        token,
+        payload: {
+          challenge_token: challengeToken,
+          response: {
+            id: credentialId,
+            rawId: credentialId,
+            response: { clientDataJSON: 'dGVzdA', attestationObject: 'dGVzdA' },
+            type: 'public-key',
+          },
+        },
+      });
+    }
+
+    const first = await registerSamePasskey();
+    expect(first.statusCode).toBe(200);
+
+    const second = await registerSamePasskey();
+    expect(second.statusCode).toBe(409);
+
+    // The collision must not have written a duplicate row.
+    const storedCredentials = await database.select().from(webauthn_credentials);
+    expect(storedCredentials).toHaveLength(1);
+    expect(storedCredentials[0]?.credential_id).toBe(credentialId);
   });
 });

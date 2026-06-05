@@ -1,22 +1,15 @@
 name: Reusable — Vitest unit (no DB)
 
-# Fast PR lane: unit + global Vitest projects with import-graph selection via
-# `--changed`. No Postgres/Redis services and no migrations.
+# PR gate: runs the COMPLETE unit + global Vitest projects (no Postgres/Redis, no
+# migrations). Intentionally NOT `vitest --changed`: import-graph selection under-selects
+# when a source change breaks an EXISTING test whose linkage isn't detected (e.g. `.js`
+# path-alias imports resolving to the changed `.ts`), letting the break pass the PR gate and
+# only fail post-merge (this bit #327 and #311). Running the full suite makes the gate
+# authoritative — a regression to any existing unit/global test fails the PR, not dev.
 
 on:
   workflow_call:
-    inputs:
-      base-ref:
-        description: Base branch for `vitest --changed` (e.g. dev or main)
-        required: true
-        type: string
   workflow_dispatch:
-    inputs:
-      base-ref:
-        description: Base branch for `vitest --changed`
-        required: true
-        type: string
-        default: dev
 
 permissions:
   contents: read
@@ -50,9 +43,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          fetch-depth: 0
+          # Full suite runs all unit+global files (no `vitest --changed`), so no base-ref
+          # history is needed — a shallow checkout is enough.
+          fetch-depth: 1
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -68,17 +63,12 @@ jobs:
           restore-keys: |
             vitest-unit-${{ runner.os }}-
 
-      - name: Fetch base ref for `vitest --changed`
-        run: git fetch origin ${{ inputs.base-ref }} --depth=1
-
       - name: Generate OpenAPI artifact for global tests
         run: pnpm docs:generate
 
-      - name: Run unit + global tests (changed)
+      - name: Run unit + global tests (full suite — NOT --changed; see header)
         run: |
           set -euo pipefail
           pnpm exec vitest run \
             --project unit \
-            --project global \
-            --changed "origin/${{ inputs.base-ref }}" \
-            --passWithNoTests
+            --project global

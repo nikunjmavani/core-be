@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import { listNotificationsQueryDto, type ListNotificationsQueryInput } from './notification.dto.js';
@@ -10,7 +11,11 @@ export function validateListNotificationsQuery(query: unknown): ListNotification
   ensureCursorOnlyPagination(query);
   const result = listNotificationsQueryDto.safeParse(query);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }

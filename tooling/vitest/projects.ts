@@ -184,6 +184,16 @@ export const vitestProjects = [
    * `__tests__/integration/**`. Postgres-backed; sequential.
    *
    * `include` honors `VITEST_DOMAIN_FILTER` (see top of file).
+   *
+   * `testTimeout`/`hookTimeout` 60 s — these suites exercise real Fastify routes
+   * against Postgres and Redis, so a single login can take 200 ms with
+   * co-located Postgres but 10 s+ when a contributor's `.env.local` points
+   * `DATABASE_URL` at a hosted instance (Neon, Supabase, RDS) over the
+   * internet. The 5 s vitest default surfaces as "Test timed out in 5000ms"
+   * for the slow path even though the assertion would have passed. A
+   * representative test (login → refresh → GET → verify) needs 30–40 s on
+   * a cross-region Neon database, so the budget is set to 60 s with the
+   * same value for hooks (beforeAll/beforeEach create users and orgs).
    */
   {
     extends: true,
@@ -193,6 +203,8 @@ export const vitestProjects = [
       pool: 'forks',
       fileParallelism: false,
       maxWorkers: 1,
+      testTimeout: 60_000,
+      hookTimeout: 60_000,
     },
   },
 

@@ -33,6 +33,11 @@ src/domains/<domain>/
   <domain>.container.ts       # DI container (repos → services); export services for routes/controllers
   events/                     # Optional: register<Domain>EventHandlers() aggregator
     index.ts
+  seed/                       # Optional: present when this level owns tables (see Seeding)
+    index.ts                  # Domain root: exports a DomainSeedModule (name + dependsOn)
+    <domain>.reference.seed.ts  # Idempotent reference/bootstrap data
+    <domain>.bulk.seed.ts     # Scaled rows for tables this level owns
+    <domain>.faker.ts         # Level-specific faker generators
   __tests__/                  # Domain e2e, domain-level unit, domain factories (see Testing)
     <domain>.test.ts
     factories/                # Optional: cross-sub-domain test helpers (e.g. tenancy permission.factory)
@@ -47,6 +52,11 @@ src/domains/<domain>/
       <sub-domain>.serializer.ts
       <sub-domain>.types.ts
       <sub-domain>.schema.ts  # When this resource owns tables
+      seed/                   # Optional: present when this resource owns tables
+        index.ts              # Sub-domain: exports a SeedContribution (parent composes it)
+        <sub-domain>.reference.seed.ts
+        <sub-domain>.bulk.seed.ts
+        <sub-domain>.faker.ts
       __tests__/              # Sub-domain unit, nested e2e (see Testing)
         unit/
         <sub-domain>.test.ts  # Optional: dedicated route suite (tenancy org children)
@@ -57,6 +67,7 @@ src/domains/<domain>/
       <nested-sub-domain>/    # Optional: aggregate child (lifecycle tied to parent)
         <nested-sub-domain>.controller.ts
         ...                   # Same layer files as parent sub-domain
+        seed/                 # Optional: SeedContribution when this child owns tables
         __tests__/unit/       # Tests co-located on the nested resource
 ```
 
@@ -153,41 +164,34 @@ src/infrastructure/
 ```text
 src/shared/
   config/
-    env.config.ts             # Environment validation (Zod)
+    env.config.ts             # Environment validation entry (Zod)
+    env-schema.ts             # Split Zod env schema
+    load-env-files.ts         # .env.<NODE_ENV> then .env.local override loader
+    worker-concurrency.util.ts
   errors/
     app.error.ts              # Base AppError + ERROR_CODE_TO_SNAKE
+    auth.error.ts             # NotFoundError, UnauthorizedError, ForbiddenError, etc.
     validation.error.ts       # ValidationError
-    auth.error.ts             # NotFoundError, UnauthorizedError, etc.
+    configuration.error.ts    # ConfigurationError
     index.ts                  # Re-exports all
   types/
-    index.ts                  # AuthContext, PaginatedResult
-  constants/
-    index.ts                  # PAGINATION, SLUG_REGEX, UUID_REGEX
-  utils/
-    logger.util.ts            # Pino logger
-    response.util.ts          # successResponse, paginatedResponse
-    api-versioning.util.ts    # buildPublicApiPrefix; applyDeprecatedEndpointHeaders (Sunset / Deprecation)
-    request.util.ts           # getRequestIdentifier, requireAuth (shared controller helpers)
-    authorization.util.ts     # requireRole, requireOrganizationPermission preHandlers
-    pagination.util.ts        # cursorPaginationSchema, listLimitQuerySchema
-    public-id.util.ts         # generatePublicId
-    uuid.util.ts              # uuidSchema
-  middleware/
-    compress.middleware.ts     # gzip/brotli response compression
-    auth.middleware.ts         # JWT verify, req.auth
-    tenant.middleware.ts       # X-Organization-Id → req.organizationId
-    cors.middleware.ts
-    helmet.middleware.ts
-    rate-limit.middleware.ts   # Global + per-route rate limits
-    error-handler.middleware.ts  # Error formatting + Sentry capture
-    response-format.middleware.ts
-    request-context.middleware.ts
-    idempotency.middleware.ts  # Idempotency-Key header (Redis-backed, 24h TTL)
-    health.middleware.ts
-    shutdown.middleware.ts
-    index.ts                  # registerMiddleware()
+    index.ts                  # AuthContext, PaginatedResult (minimal by design)
+  constants/                  # index.ts + billing, limits, notification, pagination,
+                              # project-identity, query-limits, roles, security, ttl
+  utils/                      # sub-categorized helpers (import full paths below)
+    auth/ http/ i18n/ idempotency/ identity/ infrastructure/ security/ text/ validation/
+    infrastructure/logger.util.ts   # Pino logger
+    http/response.util.ts           # successResponse, paginatedResponse
+    http/request.util.ts            # getRequestIdentifier, requireAuth
+    http/api-versioning.util.ts     # buildPublicApiPrefix; Sunset / Deprecation headers
+  middlewares/                # registered via middlewares/index.ts → registerMiddleware()
+    core/                     # auth, error-handler, idempotency, compression, i18n, metrics, health
+    rate-limit/               # global + per-route limits
+    security/                 # cors, helmet, captcha, api-key-auth, encryption
+    session/                  # cookie session + CSRF origin pre-handler
+    tenant/                   # X-Organization-Id → request.organizationId; RLS GUC
   locales/
-    en/, es/                  # errors.json, success.json, common.json; openapi.json for docs:generate
+    en/, es/                  # common.json, errors.json, mail.json, success.json, openapi.json
 ```
 
 ## Queue Infrastructure — Domain-Owned Jobs and Processors
@@ -266,9 +270,12 @@ See **[import-paths.mdc](.cursor/rules/import-paths.mdc)** — `@/` in `src/`, `
 
 ## Seeding
 
-- **Domain seeds**: Entity seed logic and reference data live in `src/domains/<domain>/.../*.seed.ts` (e.g. `permission.seed.ts`, `plan.seed.ts`, `user.seed.ts`, `tenancy.seed.ts`). No cross-domain insert logic inside domains.
-- **Orchestration and common flows**: `src/scripts/seed/minimal.ts` and `full.ts` only — they call domain seeds and implement cross-domain flows (add user to organization, send invite). No duplicate permission/plan lists or entity insert helpers in scripts/seed.
+- **Per-domain `seed/` dir**: Every folder that owns tables (domain, sub-domain, nested sub-domain) gets a co-located `seed/` directory holding `<name>.reference.seed.ts` (idempotent reference data), `<name>.bulk.seed.ts` (scaled rows for that level's tables), `<name>.faker.ts` (level-specific generators), and `index.ts`. Each domain still seeds **only its own tables** — no cross-domain insert logic inside domains.
+- **Seed contract** (`src/scripts/seed/seed-contract.ts`): Each `seed/index.ts` exports a `SeedContribution` (`seedReference?` / `seedBulk?` hooks) **except** a top-level domain's, which exports a `DomainSeedModule` (`SeedContribution` plus `name` + `dependsOn`). Parents fold their children up with `composeContributions(...)` (nested sub-domain → sub-domain → domain). Cross-domain parent ids (orgs/users) flow through a `SeedRegistry` on the `SeedContext`: the user/tenancy seeders append created parents; downstream domains read them. This preserves "no cross-domain insert logic inside domains" — cross-domain wiring lives only in the orchestrator/context.
+- **Orchestrator** (`src/scripts/seed/bulk.ts` + `bulk-config.ts`): Registers one `DomainSeedModule` per domain (`MODULES`), topologically orders them by `dependsOn` (`orderModules`), runs every `seedReference` first, then every `seedBulk`. Behind a production guard (`production-guard.ts`, `assertBulkSeedAllowed`); reproducible via `SEED`; idempotent (count-and-resume or `onConflictDoNothing`).
+- **Three tiers** (all share the contract/seeders): `pnpm db:seed` (minimal/reference only), `pnpm db:seed:full` (fixed demo data), `pnpm db:seed:bulk` (scaled volume via profiles). Profiles `demo` / `edge` / `load` set base counts; `SCALE` multiplies volume-bearing counts (bounded by `HARD_CAP`); per-knob env overrides `BULK_ORGS`, `BULK_USERS_PER_ORG`, `BULK_AUDIT_MONTHS`, `BULK_AUDIT_PER_ORG_PER_MONTH`. Example: `BULK_PROFILE=load SCALE=5 pnpm db:seed:bulk`.
 - **Route alignment**: Seed data should support what the API exposes. When routes are added, removed, or updated, run **route-catalog** skill (`pnpm routes:catalog`) and **seed-maintainer** so seeds stay aligned with routes.
+- **Conventions and detail**: scoped rule `.cursor/rules/seed-conventions.mdc` (auto-attaches under `src/domains/**` and `src/scripts/seed/**`); skill `.cursor/skills/seed-maintainer/SKILL.md`; overview `src/scripts/seed/OVERVIEW.md`. The domain-structure validator allows `seed/` at domain root.
 
 ## Context7 (version-wise backend docs)
 
@@ -318,7 +325,9 @@ See [docs/reference/architecture/documentation-system.md](docs/reference/archite
 
 ## Commands
 
-Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:infra:*`, `security:*`, `deps:*`. Legacy: `route-catalog`, `scripts:*`. List all: `pnpm run`.
+Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, `load:*`, `chaos:*`, `tool:*`, `setup:infra:*`, `security:*`, `sonar:*`, `deps:*`. Legacy: `route-catalog`, `scripts:*`. List all: `pnpm run`.
+
+Local SonarQube quality gate (pre-push): `pnpm sonar:up` / `sonar:scan` / `sonar:down` / `sonar:reset`. The pre-push hook blocks a push when SonarQube has any open issue on the deployed-app surface; `SKIP_SONAR=1 git push` bypasses just that gate. See **`docs/reference/quality/sonarqube-local.md`**.
 
 - `pnpm build` — compile to `dist/` (`tsc` + `tsc-alias`); `pnpm build:check` fails if `@/` aliases remain
 - `pnpm dev` — run Fastify server (tsx watch)
@@ -358,8 +367,9 @@ Script namespaces: `ci:*`, `compose:*`, `test:*`, `db:*`, `docs:*`, `routes:*`, 
 - `pnpm validate:domain` — validate domain structure (CI gate)
 - `pnpm deps:audit` — run `pnpm audit` (must pass; CI fails on any vulnerability)
 - `pnpm deps:update` — safe patch/minor updates within ranges; run audit + validate + test after
-- `pnpm db:seed` — seed minimal dev data
-- `pnpm db:seed:full` — seed full demo data
+- `pnpm db:seed` — seed minimal dev data (reference/bootstrap only)
+- `pnpm db:seed:full` — seed full demo data (fixed demo set)
+- `pnpm db:seed:bulk` — scaled bulk seed via the orchestrator; `BULK_PROFILE` (`demo`/`edge`/`load`), `SCALE`, per-knob `BULK_*` overrides (e.g. `BULK_PROFILE=load SCALE=5 pnpm db:seed:bulk`)
 - `pnpm github:sync` — consistency, scaffold, branches, rulesets, GitHub Environments, push `.env.<environment>` values; `--check` read-only; `--dry-run` preview
 - `pnpm tool:sync-env-example` — report env schema vs .env.example diff and PR snippet; use `--fix` to append missing vars (legacy: `scripts:sync-env-example`, `validate:env-example`)
 - `pnpm tool:project-structure-tree` — print `src/` directory tree to stdout (see `docs/reference/architecture/project-structure-guide.md`)

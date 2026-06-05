@@ -9,12 +9,15 @@ import {
   decryptFieldSecret,
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
-import { resolveAndPinWebhookUrl } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
+import {
+  createPinnedWebhookFetch,
+  resolveAndPinWebhookUrl,
+} from '@/shared/utils/security/webhook-outbound-fetch.util.js';
 import { invalidateWebhookOutboundCircuit } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-outbound-circuit.js';
 import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
-import { createPinnedWebhookFetch } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
 import { buildWebhookSignatureHeader } from '@/shared/utils/security/webhook-signature.util.js';
-import { NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
@@ -168,12 +171,25 @@ export class WebhookService {
         encrypted_secret:
           parsed.secret !== undefined ? encryptFieldSecret(parsed.secret) : undefined,
       });
-      const updated = await this.webhookRepository.update(
-        webhook_public_id,
-        organization.id,
-        updatePayload,
-        userId ?? undefined,
-      );
+      let updated: Awaited<ReturnType<WebhookRepository['update']>>;
+      try {
+        updated = await this.webhookRepository.update(
+          webhook_public_id,
+          organization.id,
+          updatePayload,
+          userId ?? undefined,
+        );
+      } catch (error) {
+        // A URL change that collides with another webhook in the same organization
+        // hits idx_webhooks_organization_id_url_unique — surface it as a clean 409.
+        if (isPostgresUniqueViolation(error)) {
+          throw new ConflictError(
+            'errors:webhookUrlExists',
+            parsed.url ? { url: parsed.url } : undefined,
+          );
+        }
+        throw error;
+      }
       if (!updated) throw new NotFoundError('Webhook');
       // Best-effort: drop any cached breaker so a URL/secret change does not reuse stale state.
       // Cross-process delivery workers fall back to the breaker cache's idle TTL.

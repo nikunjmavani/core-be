@@ -19,7 +19,7 @@ export function redactOutboundHeaders(
   } else {
     Object.assign(record, headers);
   }
-  return redactSensitive(record) as Record<string, string>;
+  return redactSensitive(record);
 }
 
 /**

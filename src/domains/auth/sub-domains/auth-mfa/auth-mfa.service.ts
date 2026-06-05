@@ -15,7 +15,11 @@ import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
-import { MFA_TOTP_CODE_REPLAY_TTL_SECONDS } from '@/shared/constants/index.js';
+import {
+  MFA_TOTP_CODE_REPLAY_TTL_SECONDS,
+  MFA_TOTP_TOLERANCE_STEPS,
+  TOTP_STEP_SECONDS,
+} from '@/shared/constants/index.js';
 import { TOTP_ISSUER } from '@/shared/constants/project-identity.constants.js';
 import {
   validateMfaVerify,
@@ -103,6 +107,7 @@ export class MfaService {
       const result = await verify({
         secret: decryptFieldSecret(totpMethod.encrypted_secret),
         token: parsed.totp_code,
+        epochTolerance: MFA_TOTP_TOLERANCE_STEPS * TOTP_STEP_SECONDS,
       });
       if (!result.valid) {
         throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
@@ -193,6 +198,7 @@ export class MfaService {
     const result = await verify({
       secret: decryptFieldSecret(totpMethod.encrypted_secret),
       token: parsed.code,
+      epochTolerance: MFA_TOTP_TOLERANCE_STEPS * TOTP_STEP_SECONDS,
     });
     if (!result.valid) {
       throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);

@@ -15,8 +15,8 @@ export const notificationJobDataSchema = z
     organizationPublicId: z.string().min(1).max(21).nullable(),
     requestId: z.string().min(1).max(128).optional(),
   })
-  .merge(traceContextJobFieldsSchema)
-  .merge(dlqReplayJobFieldsSchema);
+  .extend(traceContextJobFieldsSchema.shape)
+  .extend(dlqReplayJobFieldsSchema.shape);
 
 /** Type inferred from {@link notificationJobDataSchema}; what the worker receives after parsing. */
 export type NotificationJobDataValidated = z.infer<typeof notificationJobDataSchema>;

@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import CircuitBreaker from 'opossum';
 import type { WebhookDeliveryFetch } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
 import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
@@ -169,7 +170,7 @@ export function invalidateWebhookOutboundCircuit(webhookId: number | string): vo
 export function webhookDeliveryBackoffWithJitter(attemptsMade: number): number {
   const attemptIndex = Math.max(attemptsMade, 1);
   const baseDelayMs = 10_000 * 2 ** (attemptIndex - 1);
-  const jitterMs = Math.floor(Math.random() * baseDelayMs * 0.3);
+  const jitterMs = randomInt(Math.max(1, Math.floor(baseDelayMs * 0.3)));
   return baseDelayMs + jitterMs;
 }
 

@@ -53,6 +53,11 @@ const requestLifecycleMiddleware: FastifyPluginAsync = async (app) => {
     }
 
     if (!persistSideEffects) {
+      // Rollback / settle-failed: side effects must NOT fire, so flushOnCommit is skipped. But the
+      // request id added to the in-memory commit-dispatch marker set still has to be released here,
+      // otherwise it accumulates forever (only flushOnCommit deletes it). Durable Redis tasks are
+      // left for the recovery sweeper.
+      eventBus.clearCommitDispatchMarker(request.id);
       return;
     }
 

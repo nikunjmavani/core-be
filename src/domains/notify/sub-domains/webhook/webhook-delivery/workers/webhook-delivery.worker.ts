@@ -13,6 +13,7 @@ import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { webhookDeliveryJobDataSchema } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.job.schema.js';
 import {
+  WEBHOOK_DELIVERY_JOB_ATTEMPTS,
   WEBHOOK_DELIVERY_QUEUE_NAME,
   type WebhookDeliveryJobData,
 } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
@@ -36,8 +37,8 @@ import { TEN_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
 /** Maximum response-body length persisted to the delivery-attempt record (bounds storage growth). */
 const WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH = 2_000;
 
-/** Maximum BullMQ retries before delivery stops scheduling a `next_retry_at` (final attempt). */
-const WEBHOOK_DELIVERY_MAX_RETRY_ATTEMPTS = 4;
+/** Derived from queue config: `attemptsMade` at or above this value means it is the final attempt. */
+const WEBHOOK_DELIVERY_MAX_RETRY_ATTEMPTS = WEBHOOK_DELIVERY_JOB_ATTEMPTS - 1;
 
 /** Base delay (ms) for the persisted `next_retry_at` hint, doubled per attempt. */
 const WEBHOOK_DELIVERY_RETRY_BASE_DELAY_MS = TEN_SECONDS_MS;

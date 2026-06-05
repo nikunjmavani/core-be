@@ -21,7 +21,12 @@ describe('Stryker mutation testing policy (#68)', () => {
     expect(config.mutate.some((pattern) => pattern.includes('domains/billing'))).toBe(true);
     expect(config.mutate.some((pattern) => pattern.includes('domains/tenancy'))).toBe(true);
     expect(
-      config.mutate.some((pattern) => pattern.includes('middlewares/auth.middleware.ts')),
+      config.mutate.some((pattern) => pattern.includes('middlewares/core/auth.middleware.ts')),
+    ).toBe(true);
+    expect(
+      config.mutate.some((pattern) =>
+        pattern.includes('middlewares/security/api-key-auth.middleware.ts'),
+      ),
     ).toBe(true);
   });
 

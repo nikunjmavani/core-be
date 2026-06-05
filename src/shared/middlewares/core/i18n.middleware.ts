@@ -127,7 +127,7 @@ const i18nMiddleware: FastifyPluginAsync = async (app) => {
       language?: string;
       t?: (key: string, opts?: object) => string;
     };
-    const res = reply as unknown as Parameters<typeof handler>[1];
+    const res = reply;
     handler(req, res, (err?: Error) => {
       if (err) return done(err);
       attachRequestI18nHelpers(request, req);

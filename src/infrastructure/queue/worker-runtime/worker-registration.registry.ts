@@ -67,7 +67,7 @@ import {
   getWorkerConcurrencyStripe,
   getWorkerConcurrencyWebhook,
 } from '@/shared/config/worker-concurrency.util.js';
-import type { WorkerContainers } from '@/worker-containers.js';
+import type { DomainContainers } from '@/worker-containers.js';
 
 /**
  * Operational profile for a registered worker. Used by alerting (`throughput` vs
@@ -107,9 +107,9 @@ export type WorkerQueueRegistrationDefinition = {
    * operators can correlate slow externals with pool starvation.
    */
   readonly holdsConnectionDuringExternalIo?: boolean;
-  readonly resolvePostgresConcurrency?: (workerContainers: WorkerContainers | undefined) => number;
-  readonly isEnabled?: (workerContainers: WorkerContainers) => boolean;
-  readonly create: (workerContainers: WorkerContainers) => WorkerHandle;
+  readonly resolvePostgresConcurrency?: (workerContainers: DomainContainers | undefined) => number;
+  readonly isEnabled?: (workerContainers: DomainContainers) => boolean;
+  readonly create: (workerContainers: DomainContainers) => WorkerHandle;
 };
 
 /**

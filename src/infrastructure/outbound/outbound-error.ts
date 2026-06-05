@@ -121,40 +121,9 @@ export function classifyOutboundError(
   }
 
   if (error instanceof Error) {
-    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-      const category: OutboundCategory =
-        error.message.includes('aborted') && !error.message.includes('timeout')
-          ? 'aborted'
-          : 'timeout';
-      return new ExternalServiceError({
-        integration,
-        category,
-        cause: error,
-        fallbackMessage: error.message,
-      });
-    }
-
-    const statusMatch = /HTTP\s+(\d{3})/i.exec(error.message);
-    if (statusMatch) {
-      const status = Number(statusMatch[1]);
-      const category: OutboundCategory =
-        status >= 500 ? 'http_5xx' : status >= 400 ? 'http_4xx' : 'unknown';
-      return new ExternalServiceError({
-        integration,
-        category,
-        status,
-        cause: error,
-        fallbackMessage: error.message,
-      });
-    }
-
-    if (isTransientNetworkError(error)) {
-      return new ExternalServiceError({
-        integration,
-        category: 'network',
-        cause: error,
-        fallbackMessage: error.message,
-      });
+    const classified = classifyKnownErrorInstance(error, integration);
+    if (classified) {
+      return classified;
     }
   }
 
@@ -164,6 +133,67 @@ export function classifyOutboundError(
     cause: error,
     fallbackMessage: error instanceof Error ? error.message : 'Unknown outbound error',
   });
+}
+
+/** Maps an `HTTP NNN` status from an error message to its 4xx/5xx/unknown outbound category. */
+function classifyHttpStatusError(
+  error: Error,
+  integration: OutboundIntegrationName,
+  status: number,
+): ExternalServiceError {
+  let category: OutboundCategory;
+  if (status >= 500) {
+    category = 'http_5xx';
+  } else if (status >= 400) {
+    category = 'http_4xx';
+  } else {
+    category = 'unknown';
+  }
+  return new ExternalServiceError({
+    integration,
+    category,
+    status,
+    cause: error,
+    fallbackMessage: error.message,
+  });
+}
+
+/**
+ * Classifies a plain `Error` by its abort/timeout name, `HTTP NNN` message, or transient
+ * network signature; returns `null` when none match so the caller falls back to `unknown`.
+ */
+function classifyKnownErrorInstance(
+  error: Error,
+  integration: OutboundIntegrationName,
+): ExternalServiceError | null {
+  if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+    const category: OutboundCategory =
+      error.message.includes('aborted') && !error.message.includes('timeout')
+        ? 'aborted'
+        : 'timeout';
+    return new ExternalServiceError({
+      integration,
+      category,
+      cause: error,
+      fallbackMessage: error.message,
+    });
+  }
+
+  const statusMatch = /HTTP\s+(\d{3})/i.exec(error.message);
+  if (statusMatch) {
+    return classifyHttpStatusError(error, integration, Number(statusMatch[1]));
+  }
+
+  if (isTransientNetworkError(error)) {
+    return new ExternalServiceError({
+      integration,
+      category: 'network',
+      cause: error,
+      fallbackMessage: error.message,
+    });
+  }
+
+  return null;
 }
 
 /**

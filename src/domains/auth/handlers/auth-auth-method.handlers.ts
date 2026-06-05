@@ -74,7 +74,7 @@ export function createAuthAuthMethodHandlers({
     },
     changePassword: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const currentAccessToken = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      const currentAccessToken = request.headers.authorization?.match(/^Bearer\s+(\S.*)$/i)?.[1];
       await authMethodService.changePassword(
         auth.userId,
         request.body,

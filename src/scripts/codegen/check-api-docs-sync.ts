@@ -22,7 +22,7 @@ function collectJsonFiles(directory: string): string[] {
       files.push(fullPath);
     }
   }
-  return files.sort();
+  return files.sort((a, b) => a.localeCompare(b));
 }
 
 function normalizeJson(content: string): string {

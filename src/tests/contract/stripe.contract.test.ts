@@ -77,6 +77,27 @@ describe('Stripe outbound SDK contract (`stripe.client`)', () => {
     expect(createdStripeCustomerOutbound.email).toBe(customerCreateFixtureResponse.email);
   });
 
+  test('createStripeCustomer forwards the idempotency-key header when provided', async () => {
+    const outboundIdempotencyKeyForCustomerCreateFixture = `idem-contract-customer-create-${Date.now().toFixed(0)}`;
+
+    // nock only matches (and replies 200) if the Idempotency-Key header is present with this value;
+    // without the fix the header is absent, nock does not match, and the request fails.
+    nock(stripeOutboundApiHostname)
+      .post('/v1/customers')
+      .matchHeader('authorization', /^Bearer /)
+      .matchHeader('idempotency-key', outboundIdempotencyKeyForCustomerCreateFixture)
+      .reply(200, customerCreateFixtureResponse);
+
+    const createdStripeCustomerOutbound = await createStripeCustomer({
+      email: customerCreateRequestSubset.email,
+      name: customerCreateRequestSubset.name,
+      idempotencyKey: outboundIdempotencyKeyForCustomerCreateFixture,
+    });
+
+    StripeCustomerApiResponseContractSchema.parse(createdStripeCustomerOutbound);
+    expect(createdStripeCustomerOutbound.id).toBe(customerCreateFixtureResponse.id);
+  });
+
   test('createStripeSubscription sends idempotency header and maps subscription payload', async () => {
     const outboundIdempotencyKeyForSubscriptionCreateFixture = `idem-contract-subscription-create-${Date.now().toFixed(0)}`;
 

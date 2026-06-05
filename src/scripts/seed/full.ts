@@ -10,16 +10,16 @@ import { closeDatabase } from './helpers.js';
 import {
   seedPermissions,
   SYSTEM_PERMISSIONS,
-} from '@/domains/tenancy/sub-domains/permission/permission.seed.js';
-import { seedPlans } from '@/domains/billing/sub-domains/plan/plan.seed.js';
-import { seedDemoUser, seedUser } from '@/domains/user/user.seed.js';
+} from '@/domains/tenancy/sub-domains/permission/seed/permission.reference.seed.js';
+import { seedPlans } from '@/domains/billing/sub-domains/plan/seed/plan.reference.seed.js';
+import { seedDemoUser, seedUser } from '@/domains/user/seed/user.seed.js';
 import {
   seedOrganization,
   seedRole,
   seedMembership,
   seedRolePermissions,
   seedMemberInvitation,
-} from '@/domains/tenancy/tenancy.seed.js';
+} from '@/domains/tenancy/seed/tenancy.seed.js';
 import {
   initFakerSeed,
   generateUserPayload,

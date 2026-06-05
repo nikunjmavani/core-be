@@ -78,8 +78,12 @@ export function findLocaleParityMismatches(): LocaleParityMismatch[] {
 
     for (const locale of OTHER_LOCALES) {
       const localeKeys = loadLocaleLeafKeys(locale, fileName);
-      const missingInLocale = [...baseKeys].filter((key) => !localeKeys.has(key)).sort();
-      const extraInLocale = [...localeKeys].filter((key) => !baseKeys.has(key)).sort();
+      const missingInLocale = [...baseKeys]
+        .filter((key) => !localeKeys.has(key))
+        .sort((a, b) => a.localeCompare(b));
+      const extraInLocale = [...localeKeys]
+        .filter((key) => !baseKeys.has(key))
+        .sort((a, b) => a.localeCompare(b));
 
       if (missingInLocale.length > 0 || extraInLocale.length > 0) {
         mismatches.push({ fileName, locale, missingInLocale, extraInLocale });

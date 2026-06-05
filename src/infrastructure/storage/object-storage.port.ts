@@ -71,6 +71,16 @@ export interface ObjectStoragePort {
 
   getObject(key: string): Promise<{ body: Buffer; contentType: string | undefined }>;
 
+  /**
+   * Fetches the first `byteCount` bytes of an S3 object via a ranged GET. Used for magic-byte
+   * verification so large uploads are not fully buffered in the process. Returns `null` on
+   * S3 errors (logged internally); throws when `S3_BUCKET` is unset.
+   */
+  getObjectFirstBytes(
+    key: string,
+    byteCount: number,
+  ): Promise<{ body: Buffer; contentType: string | undefined } | null>;
+
   getObjectUrl(key: string): string;
 
   createPresignedDownloadUrl(options: { key: string; expiresInSeconds: number }): Promise<string>;

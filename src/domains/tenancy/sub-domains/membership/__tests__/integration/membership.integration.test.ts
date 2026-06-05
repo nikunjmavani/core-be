@@ -79,7 +79,7 @@ describe('Membership Sub-Domain — Integration', () => {
       expect(response.statusCode).toBe(401);
     });
 
-    it('should return memberships with permission', async () => {
+    it('should return memberships with permission, emitting public ids (not internal sequential ids)', async () => {
       const { organization, token } = await createAuthorizedContext();
       const response = await injectAuthenticated(app, {
         method: 'GET',
@@ -88,6 +88,18 @@ describe('Membership Sub-Domain — Integration', () => {
         organizationPublicId: organization.public_id,
       });
       expect(response.statusCode).toBe(200);
+
+      const body = response.json() as {
+        data?: { user_id: string; role_id: string }[];
+      };
+      const items = body.data ?? [];
+      expect(items.length).toBeGreaterThan(0);
+      const member = items[0]!;
+      // 21-char public ids, never the internal bigserial ids ("1", "42", ...).
+      expect(member.user_id).toMatch(/^[A-Za-z0-9]{21}$/);
+      expect(member.role_id).toMatch(/^[A-Za-z0-9]{21}$/);
+      expect(member.user_id).not.toMatch(/^\d+$/);
+      expect(member.role_id).not.toMatch(/^\d+$/);
     });
   });
 
@@ -144,6 +156,57 @@ describe('Membership Sub-Domain — Integration', () => {
       const settingsData = (settingsResponse.json() as { data: Record<string, unknown> }).data;
       expect(settingsData.language).toBe('es');
       expect(settingsData.preferred_locales).toEqual(['es']);
+    });
+
+    it('rejects creating a membership directly as ACTIVE with 403 (not a 500)', async () => {
+      const admin = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: admin.id });
+      const adminRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: MEMBERSHIP_PERMISSIONS,
+      });
+      await createMembership({
+        userId: admin.id,
+        organizationId: organization.id,
+        roleId: adminRole.id,
+      });
+      const adminToken = await generateTestTokenWithActiveSession(app, admin.public_id);
+      const newMember = await createTestUser({ email: 'direct-active-member@test.com' });
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+
+      // Initial activation must come from invitation acceptance — a manager cannot mint an
+      // already-active membership. This must be a clean 403, never a chk_memberships_joined 500.
+      const activeResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/memberships`),
+        token: adminToken,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: {
+          user_id: newMember.public_id,
+          role_id: memberRole.public_id,
+          status: 'ACTIVE',
+        },
+      });
+      expect(activeResponse.statusCode).toBe(403);
+
+      // The default (INVITED) path still works — the guard is specific to ACTIVE.
+      const invitedResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/memberships`),
+        token: adminToken,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: {
+          user_id: newMember.public_id,
+          role_id: memberRole.public_id,
+          status: 'INVITED',
+        },
+      });
+      expect(invitedResponse.statusCode).toBe(201);
     });
   });
 
@@ -332,6 +395,41 @@ describe('Membership Sub-Domain — Integration', () => {
         .where(eq(memberships.id, inviteeMembership.id));
       expect(stillInvited!.status).toBe('INVITED');
       expect(stillInvited!.joined_at).toBeNull();
+    });
+  });
+
+  describe('DELETE /api/v1/tenancy/organizations/:id/memberships/:membershipId', () => {
+    it('refuses to remove the organization owner (403, no orphaned org)', async () => {
+      const owner = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: owner.id });
+      const adminRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: MEMBERSHIP_PERMISSIONS,
+      });
+      const ownerMembership = await createMembership({
+        userId: owner.id,
+        organizationId: organization.id,
+        roleId: adminRole.id,
+      });
+      const token = await generateTestTokenWithActiveSession(app, owner.public_id);
+
+      // Even an admin (here, the owner) cannot remove the owner's membership — ownership must be
+      // transferred first, or the organization would be left without an owner.
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(
+          `/tenancy/organizations/${organization.public_id}/memberships/${ownerMembership.public_id}`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+      });
+      expect(response.statusCode).toBe(403);
+
+      const [stillActive] = await database
+        .select()
+        .from(memberships)
+        .where(eq(memberships.id, ownerMembership.id));
+      expect(stillActive!.deleted_at).toBeNull();
     });
   });
 });

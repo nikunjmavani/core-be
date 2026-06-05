@@ -56,6 +56,26 @@ Actions use dot-separated names: `<domain>.<resource>.<verb>`.
 - `organization_id` — set when the mutation is org-scoped (resolved from `X-Organization-Id` path param).
 - `metadata` — public ids and non-PII context (no passwords or tokens). The list API runs `sanitizeAuditLogMetadata` so internal numeric `*_id` keys (except `*_public_id`), underscore-prefixed keys, and credential-like fields are stripped from responses.
 
+## Storage & partitioning
+
+`audit.logs` is created by the migrations as a **plain table** (`id bigserial PRIMARY KEY`) — this
+is the committed schema, and a fresh clone or deploy reproduces it exactly.
+
+High-volume **hosted** environments may RANGE-partition `audit.logs` by `created_at` (e.g. monthly
+partitions) for cheaper retention pruning and time-windowed scans. That partitioning is applied
+**out-of-band** (infra / DBA) and is intentionally **not** in the repo migrations, because it would
+change the table shape everywhere: a partitioned table must include the partition key in its
+primary key (`(id, created_at)` instead of `id`) and needs an ongoing partition-creation mechanism.
+
+The application works with **either** shape:
+
+- Reads and writes are keyed on `created_at` + `id` (the keyset-pagination indexes already cover this).
+- Retention cleanup deletes by `created_at` window — equally valid against a plain table or by dropping old partitions.
+- The FK migration [`20260601120000_audit_logs_actor_api_key.sql`](../../../migrations/20260601120000_audit_logs_actor_api_key.sql) adds its foreign key already-validated (not `NOT VALID`), because Postgres rejects `ADD FOREIGN KEY … NOT VALID` on a partitioned table (error 42809).
+
+If you operate at a scale that needs partitioning, apply it in your environment's provisioning
+(composite PK + initial partitions + a partition-creation job); the repo does not manage it.
+
 ## Export
 
 Daily NDJSON export to S3 is documented in [audit-export.md](./audit-export.md).

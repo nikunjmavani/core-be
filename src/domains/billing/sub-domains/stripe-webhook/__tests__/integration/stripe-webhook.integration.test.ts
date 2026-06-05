@@ -78,8 +78,14 @@ describe('Stripe Webhook Sub-Domain — Integration', () => {
             id: subscription.provider_subscription_id,
             object: 'subscription',
             status: 'active',
-            current_period_start: Math.floor(Date.now() / 1000),
-            current_period_end: Math.floor(Date.now() / 1000) + 86_400,
+            items: {
+              data: [
+                {
+                  current_period_start: Math.floor(Date.now() / 1000),
+                  current_period_end: Math.floor(Date.now() / 1000) + 86_400,
+                },
+              ],
+            },
           },
         },
       };
