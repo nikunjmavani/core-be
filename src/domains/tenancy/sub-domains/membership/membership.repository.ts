@@ -138,6 +138,32 @@ export class MembershipRepository extends BaseRepository {
     return (rows[0] ?? null) as MembershipRow | null;
   }
 
+  /**
+   * Counts active memberships currently assigned to a role inside an organization.
+   *
+   * @remarks
+   * Used by `MemberRoleService.delete` (sec-T3) to refuse role deletion when active
+   * members would lose every permission. The count is exact (no LIMIT) because the
+   * value is used in a binary decision (>0 → block), and `(role_id, organization_id)`
+   * is well-indexed via the partial unique index on `(user_id, organization_id)`
+   * plus the explicit `idx_memberships_role_id` if present — at worst this is a
+   * sequential scan over a single org's membership rows, which is bounded by the
+   * org member cap.
+   */
+  async countActiveByRoleId(role_id: number, organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ count: sql<number>`count(*)::int` })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.role_id, role_id),
+          eq(memberships.organization_id, organization_id),
+          isNull(memberships.deleted_at),
+        ),
+      );
+    return rows[0]?.count ?? 0;
+  }
+
   async findByUserAndOrganization(
     user_id: number,
     organization_id: number,

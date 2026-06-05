@@ -533,9 +533,11 @@ src/
     │   │   │   │   │   ├── member-role-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   ├── member-role-tombstone-retention.worker.unit.test.ts
     │   │   │   │   │   ├── member-role.controller.unit.test.ts
+    │   │   │   │   │   ├── member-role.dto.is-system-strip.unit.test.ts
     │   │   │   │   │   ├── member-role.repository.db.unit.test.ts
     │   │   │   │   │   ├── member-role.repository.unit.test.ts
     │   │   │   │   │   ├── member-role.serializer.unit.test.ts
+    │   │   │   │   │   ├── member-role.service.delete-guards.unit.test.ts
     │   │   │   │   │   ├── member-role.service.unit.test.ts
     │   │   │   │   │   └── member-role.validator.unit.test.ts
     │   │   │   ├── member-role-permission/

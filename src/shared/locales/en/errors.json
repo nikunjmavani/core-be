@@ -7,6 +7,8 @@
   "cannotModifyOwnerRolePermissions": "Cannot modify permissions on the role currently assigned to the organization owner; transfer ownership to a different role before editing this role's permissions.",
   "mfaStepUpRequired": "Multi-factor authentication is required for this step-up; verify via the MFA endpoint instead of password.",
   "lastMfaRequiredByOrganization": "Cannot remove your last MFA method while your organization requires MFA. Disable the organization-level MFA requirement first or transfer your membership.",
+  "cannotDeleteSystemRole": "System roles cannot be deleted; they are required for the organization's default permission tiers.",
+  "roleHasActiveMembers": "Cannot delete a role that is currently assigned to one or more active members. Reassign those members to a different role first.",
   "recentStepUpRequired": "Recent step-up authentication is required for this action",
   "originNotAllowed": "Request origin is not allowed for this operation.",
   "invalidRefererOrigin": "Referer header is missing or invalid for this operation.",
