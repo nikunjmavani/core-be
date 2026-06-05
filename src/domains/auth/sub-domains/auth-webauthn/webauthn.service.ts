@@ -313,7 +313,8 @@ export class WebauthnService {
     if (!user || user.id !== storedCredential.user_id) {
       throw new UnauthorizedError('errors:webauthnInvalidChallenge');
     }
-    assertUserAccountActive(user.status);
+    // sec-U1: also rejects soft-deleted users.
+    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
     const expectedOrigin = resolveWebauthnExpectedOrigin(requestOrigin);
     const verification = await verifyAuthenticationResponse({

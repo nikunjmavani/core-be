@@ -122,6 +122,26 @@ export class AuthMethodService {
     );
   }
 
+  /**
+   * Invalidate every outstanding verification token (magic-link, password-reset, email-
+   * verify, email-change) for a user. Called by the user-offboarding sequence (sec-U1)
+   * so a token issued seconds before soft-delete cannot be redeemed to mint a session
+   * for the deleted user.
+   *
+   * @remarks
+   * Runs inside `withUserDatabaseContext` so the RLS-scoped UPDATE only touches rows
+   * owned by the target user; the operation is idempotent (already-used or expired
+   * tokens are no-ops). Safe to call at any point in the offboarding sequence — there is
+   * no rollback risk because invalidation is a strict superset of natural token expiry.
+   */
+  async invalidateAllVerificationTokensForUser(userPublicId: string): Promise<void> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new NotFoundError('User');
+    await withUserDatabaseContext(userPublicId, () =>
+      this.verificationTokenRepository.invalidateAllByUser(user.id),
+    );
+  }
+
   async findByProviderUserId(provider: string, provider_user_id: string) {
     return this.authMethodRepository.findByProviderUserId(provider, provider_user_id);
   }
