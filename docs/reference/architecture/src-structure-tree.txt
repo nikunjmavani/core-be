@@ -540,6 +540,7 @@ src/
     │   │   │   │   │   └── unit/
     │   │   │   │   │   │   ├── member-role-permission.controller.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.serializer.unit.test.ts
+    │   │   │   │   │   │   ├── member-role-permission.service.owner-role-guard.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.service.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.validator.edge.unit.test.ts
     │   │   │   │   │   │   └── member-role-permission.validator.unit.test.ts

@@ -4,6 +4,7 @@
   "unauthorized": "Unauthorized",
   "forbidden": "Forbidden",
   "cannotGrantPermissionNotHeld": "You cannot grant a permission you do not hold",
+  "cannotModifyOwnerRolePermissions": "Cannot modify permissions on the role currently assigned to the organization owner; transfer ownership to a different role before editing this role's permissions.",
   "recentStepUpRequired": "Recent step-up authentication is required for this action",
   "originNotAllowed": "Request origin is not allowed for this operation.",
   "invalidRefererOrigin": "Referer header is missing or invalid for this operation.",
