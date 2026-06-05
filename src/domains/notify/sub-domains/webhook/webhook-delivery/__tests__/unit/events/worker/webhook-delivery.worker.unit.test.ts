@@ -14,6 +14,11 @@ const { deliveryContextFixture } = vi.hoisted(() => ({
     eventType: 'webhook.test',
     payload: { ok: true },
     attemptCount: 0,
+    // sec-N1: worker re-checks the parent webhook's live state at claim time.
+    // Mark the fixture explicitly enabled / non-deleted so the happy-path
+    // tests below proceed through the claim → deliver → record sequence.
+    webhookIsEnabled: true,
+    webhookDeletedAt: null as Date | null,
   },
 }));
 

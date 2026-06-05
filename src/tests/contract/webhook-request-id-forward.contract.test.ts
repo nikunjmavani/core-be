@@ -22,12 +22,17 @@ vi.mock(
 vi.mock(
   '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.repository.js',
   () => ({
+    // sec-N1: worker re-checks `webhookIsEnabled` / `webhookDeletedAt` at claim
+    // time; the contract fixture must mark the webhook explicitly enabled so the
+    // delivery proceeds through the claim → deliver → header-forward path.
     findWebhookDeliveryAttemptWithWebhook: vi.fn().mockResolvedValue({
       webhookId: 1,
       webhookUrl: 'https://example.com/hook',
       encryptedSecret: 'v1:secret',
       eventType: 'webhook.test',
       payload: { ok: true },
+      webhookIsEnabled: true,
+      webhookDeletedAt: null,
     }),
     createWorkerWebhookDeliveryQueries: () => ({
       findWebhookDeliveryAttemptWithWebhook: vi.fn().mockResolvedValue({
@@ -36,6 +41,8 @@ vi.mock(
         encryptedSecret: 'v1:secret',
         eventType: 'webhook.test',
         payload: { ok: true },
+        webhookIsEnabled: true,
+        webhookDeletedAt: null,
       }),
     }),
     findOrganizationPublicIdByDeliveryAttemptId: (...arguments_: unknown[]) =>
