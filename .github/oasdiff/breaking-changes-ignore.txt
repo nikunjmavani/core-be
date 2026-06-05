@@ -46,4 +46,4 @@ api patch /api/v1/users/me/settings request property `preferred_locales` max ite
 #    pattern (21-char alphanumeric/_-) as a security hardening: the field flows
 #    into S3 keys and Redis cache keys, and an unconstrained 1-255-char string was
 #    a cardinality / path-traversal defense bypass (sec-UP3, upload.dto.ts).
-api post /api/v1/uploads request property `organizationid` pattern added
+added the pattern `^[a-za-z0-9_-]{21}$` to the request property `organizationid`
