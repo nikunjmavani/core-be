@@ -1688,6 +1688,7 @@ src/
     │   │   ├── rate-limit-burst.security.test.ts
     │   │   └── rate-limiting.security.test.ts
     │   ├── rls/
+    │   │   ├── audit-append-only.security.test.ts
     │   │   ├── bola-cross-tenant.security.test.ts
     │   │   ├── core-be-app-role-privileges.security.test.ts
     │   │   ├── organization-rls-session.security.test.ts

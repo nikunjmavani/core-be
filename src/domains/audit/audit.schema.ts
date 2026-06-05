@@ -74,9 +74,21 @@ export const logs = auditSchema
         'chk_audit_severity',
         sql`${table.severity} IN ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')`,
       ),
-      pgPolicy('audit_logs_tenant_isolation', {
+      // sec-U3: audit.logs is append-only at the DB layer. The old `FOR ALL`
+      // policy let any caller with `app.current_organization_id` UPDATE or
+      // DELETE audit rows for their own organization. We split into FOR
+      // SELECT + FOR INSERT + FOR DELETE so:
+      //   - SELECT / INSERT predicates are byte-identical to the old USING
+      //     (no read/write behaviour change for any context that ran today).
+      //   - DELETE is narrowed to `app.global_retention_cleanup` only
+      //     (admin is intentionally NOT on DELETE — it is a read escape
+      //     hatch, never a delete one).
+      //   - No `FOR UPDATE` policy → RLS structurally denies UPDATE; the
+      //     migration also REVOKEs UPDATE from `core_be_app` so the grant
+      //     layer surfaces tampering as `permission denied` before RLS runs.
+      pgPolicy('audit_logs_tenant_isolation_select', {
         as: 'permissive',
-        for: 'all',
+        for: 'select',
         to: 'public',
         using: sql`${table.organization_id} = (
             SELECT id FROM tenancy.organizations
@@ -84,6 +96,23 @@ export const logs = auditSchema
           )
           OR current_setting('app.global_retention_cleanup', true) = 'true'
           OR current_setting('app.global_admin', true) = 'true'`,
+      }),
+      pgPolicy('audit_logs_tenant_isolation_insert', {
+        as: 'permissive',
+        for: 'insert',
+        to: 'public',
+        withCheck: sql`${table.organization_id} = (
+            SELECT id FROM tenancy.organizations
+            WHERE public_id = current_setting('app.current_organization_id', true)
+          )
+          OR current_setting('app.global_retention_cleanup', true) = 'true'
+          OR current_setting('app.global_admin', true) = 'true'`,
+      }),
+      pgPolicy('audit_logs_tenant_isolation_delete', {
+        as: 'permissive',
+        for: 'delete',
+        to: 'public',
+        using: sql`current_setting('app.global_retention_cleanup', true) = 'true'`,
       }),
       pgPolicy('audit_logs_user_export_select', {
         as: 'permissive',

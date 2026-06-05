@@ -94,7 +94,7 @@ Table audit.logs {
 }
 
 Note audit.logs {
-  'RLS: enabled\nPolicies: audit_logs_tenant_isolation, audit_logs_user_export_select\nFORCE ROW LEVEL SECURITY'
+  'RLS: enabled\nPolicies: audit_logs_tenant_isolation, audit_logs_user_export_select, audit_logs_tenant_isolation_select, audit_logs_tenant_isolation_insert, audit_logs_tenant_isolation_delete\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.auth_methods {
