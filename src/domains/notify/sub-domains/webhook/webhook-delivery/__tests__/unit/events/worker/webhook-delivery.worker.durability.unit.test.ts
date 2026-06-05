@@ -17,6 +17,8 @@ const { activeContextFixture, disabledContextFixture, deletedContextFixture, fin
       attemptCount: 0,
       webhookIsEnabled: true,
       webhookDeletedAt: null as Date | null,
+      encryptedSecretPrevious: null as string | null,
+      secretRotatedAt: null as Date | null,
     };
     const disabledContextFixture = {
       ...activeContextFixture,

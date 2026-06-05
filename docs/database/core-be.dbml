@@ -406,11 +406,13 @@ Table notify.webhooks {
   created_by_user_id bigint
   deleted_at timestamptz
   encrypted_secret varchar(255) [not null]
+  encrypted_secret_previous varchar(255)
   events jsonb [not null]
   id bigint [pk, increment, not null]
   is_enabled boolean [not null]
   organization_id bigint [not null]
   public_id varchar(21) [not null]
+  secret_rotated_at timestamptz
   updated_at timestamptz [not null]
   updated_by_user_id bigint
   url text [not null]

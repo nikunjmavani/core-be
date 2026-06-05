@@ -34,6 +34,14 @@ export const webhooks = notifySchema
         .references(() => organizations.id, { onDelete: 'cascade' }),
       url: text('url').notNull(),
       encrypted_secret: varchar('encrypted_secret', { length: 255 }).notNull(),
+      // sec-N8: rotation overlap window. The PRIOR encrypted_secret survives
+      // a rotation so the worker can dual-sign for an env-configurable
+      // window (WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS, default 24h) while
+      // the customer rolls their verifier. After the window the worker stops
+      // sending X-Webhook-Signature-Previous; the column itself is not
+      // cleared (re-rotation overwrites it; no separate sweeper).
+      encrypted_secret_previous: varchar('encrypted_secret_previous', { length: 255 }),
+      secret_rotated_at: timestamp('secret_rotated_at', { withTimezone: true }),
       events: jsonb('events').notNull(),
       is_enabled: boolean('is_enabled').notNull().default(true),
       deleted_at: timestamp('deleted_at', { withTimezone: true }),

@@ -71,6 +71,9 @@ describe('WebhookService', () => {
     update: vi.fn().mockResolvedValue(webhook),
     softDelete: vi.fn().mockResolvedValue(webhook),
     listEnabledSubscribedToEvent: vi.fn().mockResolvedValue([]),
+    // sec-N4: service consults this before insert; default to 0 so existing
+    // happy-path tests stay below the cap.
+    countActiveByOrganization: vi.fn().mockResolvedValue(0),
   } as unknown as WebhookRepository;
 
   const deliveryAttemptRepository = {

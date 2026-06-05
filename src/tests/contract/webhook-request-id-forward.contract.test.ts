@@ -33,6 +33,8 @@ vi.mock(
       payload: { ok: true },
       webhookIsEnabled: true,
       webhookDeletedAt: null,
+      encryptedSecretPrevious: null,
+      secretRotatedAt: null,
     }),
     createWorkerWebhookDeliveryQueries: () => ({
       findWebhookDeliveryAttemptWithWebhook: vi.fn().mockResolvedValue({
@@ -43,6 +45,8 @@ vi.mock(
         payload: { ok: true },
         webhookIsEnabled: true,
         webhookDeletedAt: null,
+        encryptedSecretPrevious: null,
+        secretRotatedAt: null,
       }),
     }),
     findOrganizationPublicIdByDeliveryAttemptId: (...arguments_: unknown[]) =>

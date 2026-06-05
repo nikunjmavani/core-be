@@ -129,6 +129,21 @@ const envSchemaBase = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(60_000),
   /** Comma-separated hostnames allowed for outbound webhooks (optional; empty = no extra restriction). */
   WEBHOOK_URL_ALLOWLIST: z.string().optional(),
+  /**
+   * Per-organization cap on active webhook subscribers (sec-N4). The service
+   * rejects further creates beyond this number with a 409. The fan-out loop
+   * uses the same value as a defense-in-depth backstop so a drift between
+   * create-cap and runtime list cannot turn one event into an unbounded
+   * signed-POST amplifier.
+   */
+  WEBHOOK_MAX_PER_ORG: z.coerce.number().int().min(1).max(1000).default(25),
+  /**
+   * Window (hours) during which outbound webhook deliveries dual-sign with
+   * the previous secret too (sec-N8). After this window the worker stops
+   * sending `X-Webhook-Signature-Previous`. Default 24h covers a one-day
+   * verifier rollout for most customers.
+   */
+  WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS: z.coerce.number().int().min(1).max(720).default(24),
 
   // Email (Resend)
   RESEND_API_KEY: z.string().min(1).optional(),

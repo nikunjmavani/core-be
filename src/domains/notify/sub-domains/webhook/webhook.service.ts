@@ -24,6 +24,7 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { WEBHOOK_ORGANIZATION_FANOUT_CONCURRENCY } from '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.constants.js';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
+import { env } from '@/shared/config/env.config.js';
 
 /** Maximum response body length returned to client (prevents leaking sensitive data from target) */
 const WEBHOOK_TEST_RESPONSE_BODY_MAX_LENGTH = 500;
@@ -133,6 +134,18 @@ export class WebhookService {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      // sec-N4: enforce the per-organization webhook cap before insert. Race-
+      // safe enough for a stability cap (the per-route rate limit bounds
+      // concurrency); intentionally not a DB constraint because the failure
+      // mode of two parallel inserts both passing at N-1 is "one extra row,"
+      // not security-critical. A future hardening could add a partial
+      // composite unique to make this transactional.
+      const activeCount = await this.webhookRepository.countActiveByOrganization(organization.id);
+      if (activeCount >= env.WEBHOOK_MAX_PER_ORG) {
+        throw new ConflictError('errors:webhookMaxReached', {
+          max: env.WEBHOOK_MAX_PER_ORG,
+        });
+      }
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
       const row = await this.webhookRepository.create(
@@ -239,10 +252,23 @@ export class WebhookService {
     payload: Record<string, unknown>,
     _requestId?: string,
   ): Promise<void> {
+    // sec-N4: defense-in-depth backstop — share the same per-org cap with create().
+    // If we ever load >= cap rows the create cap and runtime list have drifted
+    // OR an operator just lifted the cap; surface the truncation so an alert
+    // can fire (Sentry log warnings, ops dashboard).
+    const fanoutCap = env.WEBHOOK_MAX_PER_ORG;
     const webhooks = await this.webhookRepository.listEnabledSubscribedToEvent(
       organization_id,
       event_type,
+      undefined,
+      fanoutCap,
     );
+    if (webhooks.length >= fanoutCap) {
+      logger.warn(
+        { organizationId: organization_id, eventType: event_type, fanoutCap },
+        'notify.webhook.fanout.cap_reached',
+      );
+    }
     if (webhooks.length === 0) return;
 
     let firstError: unknown;
