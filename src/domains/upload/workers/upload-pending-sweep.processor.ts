@@ -18,6 +18,7 @@ import {
   verifyFileMagicBytes,
 } from '@/shared/utils/validation/file-magic.util.js';
 import { UPLOAD_PENDING_SWEEP_BATCH_SIZE } from './upload-pending-sweep.constants.js';
+import { isSvgContentType } from '@/domains/upload/utils/upload-svg.util.js';
 
 /**
  * Outcome counters for one {@link runUploadPendingSweepJob} run.
@@ -140,6 +141,14 @@ type PendingUploadVerdict = 'auto_confirm' | 'fail' | 'orphan';
 async function resolvePendingUploadVerdict(
   row: PendingUploadSweepRow,
 ): Promise<PendingUploadVerdict> {
+  // sec-UP2: the sweep would auto-confirm SVG by setting status=UPLOADED
+  // WITHOUT running the publish path that DOMPurifies SVG bytes and copies
+  // them off the pending (still client-writable) key. Refuse to auto-
+  // confirm SVG; the user must explicitly call confirm (which DOES go
+  // through publishConfirmedObject + sanitizer + pending→final copy).
+  if (isSvgContentType(row.mime_type)) {
+    return 'fail';
+  }
   const metadata = await headObject(row.file_key);
   if (metadata?.contentLength === undefined) {
     return 'orphan';
