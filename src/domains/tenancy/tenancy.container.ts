@@ -97,6 +97,8 @@ export function createTenancyContainer(
     memberRoleService,
     memberRolePermissionService,
     membershipRepository,
+    authorizationService,
+    permissionRepository,
     organizationSettingsService,
     userSettingsService,
   );

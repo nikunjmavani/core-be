@@ -12,6 +12,10 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
   invalidatePermissions: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.util.js', () => ({
+  assertCallerCanGrantPermissionCodes: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 
 describe('MembershipService — permission cache invalidation', () => {
@@ -76,11 +80,20 @@ describe('MembershipService — permission cache invalidation', () => {
     }),
   };
 
+  const authorizationService = {
+    resolveUserOrganizationPermissions: vi.fn().mockResolvedValue([]),
+  };
+  const permissionRepository = {
+    findAll: vi.fn().mockResolvedValue([]),
+  };
+
   const service = new MembershipService(
     organizationService as never,
     memberRoleService as never,
     memberRolePermissionService as never,
     membershipRepository as never,
+    authorizationService as never,
+    permissionRepository as never,
   );
 
   beforeEach(() => {

@@ -10,6 +10,10 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
   invalidatePermissions: vi.fn().mockResolvedValue(undefined),
   invalidateOrganizationPermissions: vi.fn().mockResolvedValue(undefined),
 }));
+
+vi.mock('@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.util.js', () => ({
+  assertCallerCanGrantPermissionCodes: vi.fn().mockResolvedValue(undefined),
+}));
 import { ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
 import { MembershipService } from '@/domains/tenancy/sub-domains/membership/membership.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
@@ -71,11 +75,20 @@ describe('MembershipService', () => {
     ),
   } as unknown as MembershipRepository;
 
+  const authorizationService = {
+    resolveUserOrganizationPermissions: vi.fn().mockResolvedValue([]),
+  } as never;
+  const permissionRepository = {
+    findAll: vi.fn().mockResolvedValue([]),
+  } as never;
+
   const service = new MembershipService(
     organizationService,
     memberRoleService,
     memberRolePermissionService,
     membershipRepository,
+    authorizationService,
+    permissionRepository,
   );
 
   beforeEach(() => {
@@ -240,6 +253,8 @@ describe('MembershipService', () => {
       memberRoleService,
       memberRolePermissionService,
       membershipRepository,
+      authorizationService,
+      permissionRepository,
     );
 
     await transferService.transferOwnership(
