@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.4.7-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.6-dev.0...v4.4.7-dev.0) (2026-06-05)
+
+
+### Fixed
+
+* **migration:** make audit_logs_actor_api_key FK idempotent (unblock dev deploy) ([#385](https://github.com/nikunjmavani/core-be/issues/385)) ([b8cc4fb](https://github.com/nikunjmavani/core-be/commit/b8cc4fb70d3d3d13f31f4b67af35772ff5afdb7e))
+
 ## [4.4.6-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.5-dev.0...v4.4.6-dev.0) (2026-06-04)
 
 
