@@ -278,8 +278,18 @@ const envSchemaBase = z.object({
   DATABASE_POOL_ALERT_CONSECUTIVE_POLLS: z.coerce.number().int().min(1).max(10).default(2),
   /** Enable Postgres TLS by default. Set false only for plaintext local Docker/test databases. */
   DATABASE_SSL_ENABLED: booleanString('true'),
-  /** When true, Postgres client verifies server TLS certificate (strict). Ignored when DATABASE_URL uses sslmode=verify-ca|verify-full (always strict). */
-  DATABASE_SSL_REJECT_UNAUTHORIZED: z.coerce.boolean().optional(),
+  /**
+   * When true, Postgres client verifies server TLS certificate (strict). Ignored when
+   * `DATABASE_URL` uses `sslmode=verify-ca|verify-full` (always strict).
+   *
+   * @remarks Parses `"true"`/`"1"` as `true` and everything else as `false`. Uses an explicit
+   * transform — NOT `z.coerce.boolean()`, which is `Boolean(String)` and silently treats
+   * `"false"`/`"0"` as `true` (the same foot-gun as DLQ_AUTO_RETRY_ENABLED — sec-C1).
+   */
+  DATABASE_SSL_REJECT_UNAUTHORIZED: z
+    .string()
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === 'true' || value === '1')),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1).optional(),
 
   // Data retention (days to keep audit logs / revoked sessions before cleanup)
@@ -351,8 +361,16 @@ const envSchemaBase = z.object({
   DLQ_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(10),
   DLQ_DEPTH_CRON: z.string().min(1).optional(),
 
-  /** When true, the `dlq-auto-retry` sweeper re-enqueues replayable ledger rows after cooldown. */
-  DLQ_AUTO_RETRY_ENABLED: z.coerce.boolean().default(true),
+  /**
+   * When true, the `dlq-auto-retry` sweeper re-enqueues replayable ledger rows after cooldown.
+   *
+   * @remarks Uses the shared `booleanString('true')` helper so operator-facing kill-switches
+   * actually work: `"false"`/`"0"` parses to `false`. Previously used `z.coerce.boolean()`
+   * which is `Boolean(String)` and turns every non-empty string (including `"false"`) into
+   * `true` — operators trying to disable the sweeper during an incident found it kept firing
+   * (sec-C1).
+   */
+  DLQ_AUTO_RETRY_ENABLED: booleanString('true'),
   /** Maximum automated replays per `audit.dead_letter_jobs` row (Redis counter). */
   DLQ_AUTO_RETRY_MAX_COUNT: z.coerce.number().int().min(0).default(3),
   /** Minimum minutes between failure (or last auto-retry) and the next automated replay. */
