@@ -289,6 +289,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/mfa',
     {
       onRequest: [app.authenticate],
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'List enrolled MFA methods',
         description: 'Returns all MFA methods enrolled by the authenticated user.',
@@ -302,6 +303,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Remove MFA method',
         description:
@@ -316,6 +318,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/sessions',
     {
       onRequest: [app.authenticate],
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Revoke all sessions',
         description:
@@ -344,6 +347,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/auth-methods',
     {
       onRequest: [app.authenticate],
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'List my auth methods',
         description:
@@ -358,6 +362,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Add auth method',
         description:
@@ -373,6 +378,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Remove auth method',
         description:
@@ -387,6 +393,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/sessions',
     {
       onRequest: [app.authenticate],
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'List my active sessions',
         description:
@@ -400,6 +407,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/sessions/:id',
     {
       onRequest: [app.authenticate],
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Revoke a specific session',
         description:

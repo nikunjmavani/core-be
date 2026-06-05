@@ -40,12 +40,14 @@ export function buildIdempotencyRequestFingerprint(parameters: {
   body: unknown;
 }): string {
   const normalizedRoute = normalizeIdempotencyRoutePath(parameters.routePath);
-  const bodySegment =
-    parameters.body === undefined || parameters.body === null
-      ? ''
-      : typeof parameters.body === 'string'
-        ? parameters.body
-        : JSON.stringify(parameters.body);
+  let bodySegment: string;
+  if (parameters.body === undefined || parameters.body === null) {
+    bodySegment = '';
+  } else if (typeof parameters.body === 'string') {
+    bodySegment = parameters.body;
+  } else {
+    bodySegment = JSON.stringify(parameters.body);
+  }
   const canonical = `${(parameters.method ?? 'GET').toUpperCase()}:${normalizedRoute}:${bodySegment}`;
   return createHash('sha256').update(canonical, 'utf8').digest('hex').slice(0, 16);
 }

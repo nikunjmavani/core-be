@@ -55,7 +55,7 @@ describe('OrganizationService', () => {
     softDelete: vi.fn().mockResolvedValue(organizationRow),
     markDeletionStarted: vi.fn().mockResolvedValue(organizationRow),
     resolveUserIdByPublicId: vi.fn().mockResolvedValue(10),
-    updateOwner: vi.fn().mockResolvedValue(undefined),
+    updateOwner: vi.fn().mockResolvedValue(organizationRow),
     updateStripeCustomerId: vi.fn().mockResolvedValue(undefined),
     userHasActiveMembership: vi.fn().mockResolvedValue(true),
     userCanAccessOrganization: vi.fn().mockResolvedValue(true),
@@ -212,6 +212,15 @@ describe('OrganizationService', () => {
     const result = await service.transferOrganizationOwnership(organizationRow.public_id, 99);
     expect(repository.updateOwner).toHaveBeenCalledWith(organizationRow.public_id, 99);
     expect(result.public_id).toBe(organizationRow.public_id);
+  });
+
+  it('transferOrganizationOwnership rejects when the atomic owner update matches no row', async () => {
+    // A null result from updateOwner means the prospective owner was suspended/removed between the
+    // caller's status check and the write (the EXISTS guard failed) — surface a clean conflict.
+    vi.mocked(repository.updateOwner).mockResolvedValueOnce(null);
+    await expect(
+      service.transferOrganizationOwnership(organizationRow.public_id, 99),
+    ).rejects.toBeInstanceOf(ConflictError);
   });
 
   it('deleteLogo clears logo when organization has logo url', async () => {

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
@@ -20,7 +21,11 @@ export function validateListMemberInvitationsQuery(data: unknown): ListMemberInv
   ensureCursorOnlyPagination(data);
   const result = listMemberInvitationsQueryDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -33,7 +38,11 @@ export function validateListMemberInvitationsQuery(data: unknown): ListMemberInv
 export function validateCreateMemberInvitation(data: unknown): CreateMemberInvitationInput {
   const result = createMemberInvitationDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -46,7 +55,11 @@ export function validateCreateMemberInvitation(data: unknown): CreateMemberInvit
 export function validateAcceptMemberInvitation(data: unknown): AcceptMemberInvitationInput {
   const result = acceptMemberInvitationDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -58,7 +71,11 @@ export function validateAcceptMemberInvitation(data: unknown): AcceptMemberInvit
 export function validateResendMemberInvitation(data: unknown): ResendMemberInvitationInput {
   const result = resendMemberInvitationDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }

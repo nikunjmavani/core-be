@@ -5,6 +5,7 @@ import {
 } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js';
 import { executeCommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.executor.js';
 import type { CommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.types.js';
+import { captureException } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 /**
@@ -75,7 +76,7 @@ function getOrCreateOnCommitQueue(): OnCommitQueue {
  * transaction commits before they fire.
  */
 export class EventBus {
-  private handlers: Map<string, EventHandler[]> = new Map();
+  private readonly handlers: Map<string, EventHandler[]> = new Map();
 
   on(eventType: string, handler: EventHandler): void {
     const existing = this.handlers.get(eventType) ?? [];
@@ -111,6 +112,7 @@ export class EventBus {
             await executeCommitDispatchTask(task);
           } catch (error) {
             logger.error({ error, requestId, task }, 'event-bus.commit-dispatch.task.failed');
+            captureException(error, { requestId, tags: { source: 'event-bus.commit-dispatch' } });
           }
         }
       } catch (error) {
@@ -127,9 +129,25 @@ export class EventBus {
           await task();
         } catch (error) {
           logger.error({ error }, 'event-bus.on-commit.task.failed');
+          captureException(error, { tags: { source: 'event-bus.on-commit' } });
         }
       }),
     );
+  }
+
+  /**
+   * Discards the in-memory commit-dispatch marker for a request id WITHOUT running its tasks.
+   *
+   * @remarks
+   * Call this on the request paths that deliberately skip {@link flushOnCommit} — i.e. when the
+   * RLS transaction rolled back or settlement failed, so post-commit side effects must not fire.
+   * Without it, the request id added by {@link scheduleCommitDispatch} would never be removed from
+   * the module-level marker set (only `flushOnCommit` deletes it), leaking one string per such
+   * request for the lifetime of the process. The durable Redis tasks are intentionally left for
+   * the commit-dispatch recovery sweeper; only the in-memory marker is cleared here.
+   */
+  clearCommitDispatchMarker(requestId: string): void {
+    pendingCommitDispatchRequestIds.delete(requestId);
   }
 
   async emit(event: DomainEvent): Promise<void> {
@@ -142,6 +160,7 @@ export class EventBus {
           await handler(event);
         } catch (error) {
           logger.error({ eventType: event.type, error }, 'Domain event handler failed');
+          captureException(error, { tags: { source: 'event-bus.emit', eventType: event.type } });
         }
       }),
     );

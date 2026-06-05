@@ -45,9 +45,14 @@ function assertWebhookHostAllowed(hostname: string): void {
     return;
   }
   const normalizedHost = hostname.toLowerCase();
-  const allowed = allowlist.some(
-    (entry) => normalizedHost === entry || normalizedHost.endsWith(`.${entry}`),
-  );
+  const allowed = allowlist.some((entry) => {
+    if (entry.startsWith('*.')) {
+      // Explicit wildcard — *.example.com permits any subdomain but not the apex itself.
+      const baseDomain = entry.slice(2);
+      return normalizedHost.endsWith(`.${baseDomain}`);
+    }
+    return normalizedHost === entry;
+  });
   if (!allowed) {
     throw new ValidationError('errors:webhookUrlNotAllowed', undefined, undefined, [
       { field: 'url', messageKey: 'errors:webhookUrlNotAllowed' },
@@ -158,7 +163,7 @@ async function pinnedNodeFetch(
       request.end(body);
       return;
     }
-    request.end(String(body));
+    reject(new Error('webhook.fetch.unsupported_body_type'));
   });
 }
 
@@ -187,12 +192,14 @@ export async function createPinnedWebhookFetch(webhookUrl: string): Promise<Pinn
   const { pinnedAddress, port } = await resolveAndPinWebhookUrl(webhookUrl);
 
   return (input, init) => {
-    const targetUrl =
-      typeof input === 'string'
-        ? new URL(input)
-        : input instanceof URL
-          ? input
-          : new URL(input.url);
+    let targetUrl: URL;
+    if (typeof input === 'string') {
+      targetUrl = new URL(input);
+    } else if (input instanceof URL) {
+      targetUrl = input;
+    } else {
+      targetUrl = new URL(input.url);
+    }
     return pinnedNodeFetch(targetUrl, pinnedAddress, port, init);
   };
 }

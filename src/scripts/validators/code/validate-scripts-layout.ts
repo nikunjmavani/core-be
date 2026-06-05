@@ -28,10 +28,12 @@ function main(): void {
 
   if (rootFiles.length > 0) {
     console.error('src/scripts/*.ts must be empty — move scripts into a category folder:\n');
-    for (const filePath of rootFiles.sort()) {
+    for (const filePath of rootFiles.sort((a, b) => a.localeCompare(b))) {
       console.error(`  ${filePath.replace(`${process.cwd()}/`, '')}`);
     }
-    console.error(`\nAllowed categories: ${[...ALLOWED_CATEGORY_DIRECTORIES].sort().join(', ')}`);
+    console.error(
+      `\nAllowed categories: ${[...ALLOWED_CATEGORY_DIRECTORIES].sort((a, b) => a.localeCompare(b)).join(', ')}`,
+    );
     console.error('See docs/reference/architecture/scripts-layout.md');
     process.exit(1);
   }
@@ -43,7 +45,7 @@ function main(): void {
 
   if (unexpectedDirectories.length > 0) {
     console.error('Unexpected directories under src/scripts/:');
-    for (const name of unexpectedDirectories.sort()) {
+    for (const name of unexpectedDirectories.sort((a, b) => a.localeCompare(b))) {
       console.error(`  src/scripts/${name}/`);
     }
     process.exit(1);

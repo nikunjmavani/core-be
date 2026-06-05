@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
@@ -239,7 +239,24 @@ export class OrganizationRepository extends BaseRepository {
         owner_user_id,
         updated_at: databaseNowTimestamp,
       })
-      .where(and(eq(organizations.public_id, public_id), isNull(organizations.deleted_at)))
+      .where(
+        and(
+          eq(organizations.public_id, public_id),
+          isNull(organizations.deleted_at),
+          // Atomic guard against the transfer-ownership TOCTOU: only hand ownership to a user who
+          // is STILL an active member at write time. If a concurrent request suspends or removes
+          // the prospective owner between the caller's status pre-check and this update, the EXISTS
+          // fails, the UPDATE matches zero rows, and the caller surfaces a clean conflict — so the
+          // org can never end up owned by a suspended/removed member.
+          sql`EXISTS (
+            SELECT 1 FROM ${memberships}
+            WHERE ${memberships.user_id} = ${owner_user_id}
+              AND ${memberships.organization_id} = ${organizations.id}
+              AND ${memberships.status} = 'ACTIVE'
+              AND ${memberships.deleted_at} IS NULL
+          )`,
+        ),
+      )
       .returning();
     return (rows[0] ?? null) as Organization | null;
   }

@@ -12,7 +12,8 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 import { env } from '@/shared/config/env.config.js';
-import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { ConflictError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
@@ -103,7 +104,7 @@ export class WebauthnService {
 
   async generateRegistrationOptions(
     userPublicId: string,
-    requestOrigin?: string,
+    _requestOrigin?: string,
   ): Promise<WebauthnRegisterOptionsResult> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) {
@@ -138,7 +139,6 @@ export class WebauthnService {
       options.challenge,
     );
 
-    void requestOrigin;
     return { options, challenge_token: challengeToken };
   }
 
@@ -164,7 +164,7 @@ export class WebauthnService {
 
     const expectedOrigin = resolveWebauthnExpectedOrigin(requestOrigin);
     const verification = await verifyRegistrationResponse({
-      response: parsed.response as unknown as RegistrationResponseJSON,
+      response: parsed.response as RegistrationResponseJSON,
       expectedChallenge: challenge.challenge,
       expectedOrigin,
       expectedRPID: resolveWebauthnRelyingPartyId(),
@@ -176,24 +176,35 @@ export class WebauthnService {
     }
 
     const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
-    const created = await withUserDatabaseContext(user.public_id, () =>
-      this.credentialRepository.createCredential({
-        user_id: user.id,
-        credential_id: credential.id,
-        public_key: Buffer.from(credential.publicKey).toString('base64url'),
-        counter: credential.counter,
-        device_type: credentialDeviceType,
-        backed_up: credentialBackedUp,
-        transports: credential.transports ?? [],
-      }),
-    );
+    let created: Awaited<ReturnType<WebauthnCredentialRepository['createCredential']>>;
+    try {
+      created = await withUserDatabaseContext(user.public_id, () =>
+        this.credentialRepository.createCredential({
+          user_id: user.id,
+          credential_id: credential.id,
+          public_key: Buffer.from(credential.publicKey).toString('base64url'),
+          counter: credential.counter,
+          device_type: credentialDeviceType,
+          backed_up: credentialBackedUp,
+          transports: credential.transports ?? [],
+        }),
+      );
+    } catch (error) {
+      // This passkey is already enrolled (webauthn_credentials_credential_id_unique).
+      // excludeCredentials is only a client-side hint, so a replayed/forced registration
+      // can still collide — surface a clean 409 rather than an unhandled 500.
+      if (isPostgresUniqueViolation(error)) {
+        throw new ConflictError('errors:webauthnCredentialExists');
+      }
+      throw error;
+    }
 
     return { verified: true, credential_id: created.credential_id };
   }
 
   async generateAuthenticationOptions(
     body: unknown,
-    requestOrigin?: string,
+    _requestOrigin?: string,
   ): Promise<WebauthnAuthenticateOptionsResult> {
     const parsed = validateWebauthnAuthenticateOptions(body);
     if (!parsed.email) {
@@ -213,7 +224,6 @@ export class WebauthnService {
     // 200 + allowCredentials payload is indistinguishable from a genuine challenge. The
     // follow-up verify fails uniformly because no authenticator can satisfy the decoy.
     if (!user || credentials.length === 0) {
-      void requestOrigin;
       return this.buildDecoyAuthenticationOptions(parsed.email);
     }
 
@@ -233,7 +243,6 @@ export class WebauthnService {
       options.challenge,
     );
 
-    void requestOrigin;
     return { options, challenge_token: challengeToken };
   }
 
@@ -290,13 +299,13 @@ export class WebauthnService {
       'authentication',
     );
 
-    const response = parsed.response as unknown as AuthenticationResponseJSON;
+    const response = parsed.response as AuthenticationResponseJSON;
     // The challenge binds this assertion to a user; auth.webauthn_credentials is FORCE RLS keyed on
     // app.current_user_id, so look the credential up inside that user's context.
     const storedCredential = await withUserDatabaseContext(challenge.user_public_id, () =>
       this.credentialRepository.findActiveByCredentialId(response.id),
     );
-    if (!storedCredential || storedCredential.user_id === undefined) {
+    if (storedCredential?.user_id === undefined) {
       throw new UnauthorizedError('errors:webauthnCredentialNotFound');
     }
 

@@ -81,22 +81,26 @@ export class MagicLinkService {
         { field: 'email', messageKey: 'errors:disposableEmail' },
       ]);
     }
-    const result = await this.issueMagicLinkIfUserExists(parsed.email);
-    // Both the known- and unknown-account branches return the same body; hold them to a
-    // common minimum duration so the extra token-issuing writes on the known path do not
+    // Both the known- and unknown-account branches issue the same response body; hold them to
+    // a common minimum duration so the extra token-issuing writes on the known path do not
     // leak account existence through response latency.
+    await this.issueMagicLinkIfUserExists(parsed.email);
     await enforceMinimumDuration(startedAtMillis);
-    return result;
-  }
-
-  private async issueMagicLinkIfUserExists(email: string): Promise<MagicLinkSendResult> {
-    const successResult: MagicLinkSendResult = {
+    return {
       messageKey: 'success:magicLinkEmailSent',
       expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
     };
+  }
+
+  /**
+   * Issues a magic-link token for `email` only when it maps to an existing user; a no-op
+   * otherwise. Returns nothing — the caller builds the uniform (account-existence-hiding)
+   * response so a known and unknown account are indistinguishable to the client.
+   */
+  private async issueMagicLinkIfUserExists(email: string): Promise<void> {
     const user = await this.userService.findByEmail(email);
     if (!user) {
-      return successResult;
+      return;
     }
     await this.verificationTokenRepository.invalidateAllForUser(user.id, 'MAGIC_LINK');
 
@@ -121,8 +125,6 @@ export class MagicLinkService {
       } satisfies MagicLinkEmailPayload,
       timestamp: new Date(),
     });
-
-    return successResult;
   }
 
   /** Verify magic link token; returns MFA challenge or access token + session. */

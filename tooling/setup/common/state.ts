@@ -9,6 +9,14 @@ const neonBranchStateSchema = z.object({
   databaseUrl: z.string(),
   databaseMigrationUrl: z.string().optional(),
   serviceRoleName: z.string().optional(),
+  /**
+   * Password for the SQL-managed runtime role (see `ensureRuntimeRoleViaSql` in
+   * `setup-neon.provider.ts`). Persisted so re-runs reuse the same connection string
+   * across env files, GitHub Environments, and Railway. Absent for state written
+   * by the legacy REST-API role flow — its absence is the signal to re-run the
+   * Neon step and create the new `<env>_app_login` role.
+   */
+  serviceRolePassword: z.string().optional(),
 });
 
 const redisDatabaseStateSchema = z.object({
@@ -96,6 +104,16 @@ export const setupStateSchema = z.object({
       projectId: z.string(),
       services: z.record(z.string(), railwayServiceStateSchema),
       environments: z.record(z.string(), railwayEnvironmentStateSchema).optional(),
+      /**
+       * Per-environment Railway project token, minted by the Railway provider via
+       * `projectTokenCreate` when `secrets.railway.apiToken` (RAILWAY_API_TOKEN) is set.
+       * Persisted so re-runs reuse the same token, and so `exportEnvFiles` can write
+       * `RAILWAY_TOKEN=<env-scoped value>` to each `.env.<env>`. Absent when only the
+       * single-token fallback (`RAILWAY_TOKEN`) is configured — in that mode every env
+       * gets the same token, which only works for the single environment that token is
+       * scoped to.
+       */
+      environmentTokens: z.record(z.string(), z.string()).optional(),
     })
     .optional(),
   github: z

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
 import { ensureCursorOnlyPagination } from '@/shared/utils/http/pagination.util.js';
 import {
@@ -13,7 +14,11 @@ import {
 export function validateCreateOrganizationApiKey(data: unknown): CreateOrganizationApiKeyInput {
   const result = createOrganizationApiKeyDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -22,7 +27,11 @@ export function validateCreateOrganizationApiKey(data: unknown): CreateOrganizat
 export function validateUpdateOrganizationApiKey(data: unknown): UpdateOrganizationApiKeyInput {
   const result = updateOrganizationApiKeyDto.safeParse(data);
   if (!result.success) {
-    throw new ValidationError('errors:invalidInput', undefined, result.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
   }
   return result.data;
 }
@@ -42,7 +51,7 @@ export function validateListOrganizationApiKeysQuery(
     throw new ValidationError(
       'errors:validation.invalidPagination',
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
   return result.data;

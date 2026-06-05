@@ -20,7 +20,7 @@ async function main(): Promise<void> {
   const snakeSuffix = suffix
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+    .replace(/(?:^_+)|(?:_+$)/g, '');
 
   if (currentMax === null) {
     console.log('Current max: (no valid up migrations found)');

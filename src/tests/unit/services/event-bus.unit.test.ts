@@ -6,10 +6,22 @@ import {
   enterOnCommitScope,
   runEnqueueAfterCommit,
   runWithOnCommitScope,
+  scheduleCommitDispatch,
+  resetCommitDispatchPendingStateForTests,
 } from '@/core/events/event-bus.js';
 
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+const appendCommitDispatchTaskMock = vi.fn().mockResolvedValue(undefined);
+const consumeCommitDispatchTasksMock = vi.fn().mockResolvedValue([]);
+
+vi.mock('@/infrastructure/queue/commit-dispatch/commit-dispatch.store.js', () => ({
+  appendCommitDispatchTask: (...arguments_: unknown[]) =>
+    appendCommitDispatchTaskMock(...arguments_),
+  consumeCommitDispatchTasks: (...arguments_: unknown[]) =>
+    consumeCommitDispatchTasksMock(...arguments_),
 }));
 
 describe('EventBus.emit', () => {
@@ -225,5 +237,40 @@ describe('buildDomainEvent', () => {
     const fixedTime = new Date('2026-01-01T00:00:00Z');
     const event = buildDomainEvent('domain.bar', {}, { timestamp: fixedTime });
     expect(event.timestamp).toBe(fixedTime);
+  });
+});
+
+describe('EventBus.clearCommitDispatchMarker (commit-dispatch marker leak guard)', () => {
+  const task = { type: 'test.commit-dispatch' } as never;
+
+  beforeEach(() => {
+    appendCommitDispatchTaskMock.mockClear();
+    consumeCommitDispatchTasksMock.mockClear();
+    resetCommitDispatchPendingStateForTests();
+  });
+
+  it('flushOnCommit consumes durable tasks while the marker is present (control)', async () => {
+    await scheduleCommitDispatch(task, { requestId: 'req-present' });
+
+    await eventBus.flushOnCommit({ requestId: 'req-present' });
+
+    expect(consumeCommitDispatchTasksMock).toHaveBeenCalledWith({ requestId: 'req-present' });
+  });
+
+  it('clearCommitDispatchMarker removes the marker so a later flush never consumes (no leak)', async () => {
+    await scheduleCommitDispatch(task, { requestId: 'req-rolledback' });
+
+    // The rollback / settle-failed path releases the marker without running tasks.
+    eventBus.clearCommitDispatchMarker('req-rolledback');
+
+    await eventBus.flushOnCommit({ requestId: 'req-rolledback' });
+
+    // Marker gone -> the `.has()` guard short-circuits, so durable tasks are never consumed here
+    // (and, crucially, the request id is no longer retained in the module-level set).
+    expect(consumeCommitDispatchTasksMock).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent and safe for an unknown request id', () => {
+    expect(() => eventBus.clearCommitDispatchMarker('never-scheduled')).not.toThrow();
   });
 });

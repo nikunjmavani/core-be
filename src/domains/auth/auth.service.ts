@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import type { Redis } from 'ioredis';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
@@ -6,15 +8,20 @@ import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { DUMMY_ARGON2_HASH, verifyPassword } from '@/shared/utils/security/password.util.js';
 import {
   ACCOUNT_LOCKOUT_MINUTES,
+  IP_FAILED_LOGIN_THRESHOLD,
+  IP_FAILED_LOGIN_WINDOW_SECONDS,
   MAX_FAILED_LOGIN_ATTEMPTS,
-  MILLISECONDS_PER_MINUTE,
 } from '@/shared/constants/index.js';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';
 import type { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
 import { validateLogin } from './auth.validator.js';
 import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js';
+
+const IP_FAILED_LOGIN_KEY_PREFIX = 'auth:failed_login:ip:';
 
 /**
  * Discriminated result of {@link AuthService.login}: either a fresh access token + session
@@ -61,7 +68,47 @@ export class AuthService {
     private readonly authSessionService: AuthSessionService,
     private readonly mfaService: MfaService,
     private readonly organizationSettingsService: OrganizationSettingsService,
+    private readonly redis: Redis,
   ) {}
+
+  private buildIpKey(ipAddress: string): string {
+    return `${IP_FAILED_LOGIN_KEY_PREFIX}${createHash('sha256').update(ipAddress).digest('hex')}`;
+  }
+
+  private async checkIpLoginLimit(ipAddress: string): Promise<void> {
+    try {
+      const raw = await this.redis.get(this.buildIpKey(ipAddress));
+      if (raw !== null && Number(raw) >= IP_FAILED_LOGIN_THRESHOLD) {
+        throw new UnauthorizedError('errors:rateLimited');
+      }
+    } catch (error) {
+      if (error instanceof UnauthorizedError) throw error;
+      // Redis unavailable — fail open; per-user lockout and rate-limit middleware still protect.
+      logger.warn({ error }, 'auth.ip_limit.check.failed');
+    }
+  }
+
+  private async recordIpFailedLogin(ipAddress: string): Promise<void> {
+    try {
+      const key = this.buildIpKey(ipAddress);
+      const count = await this.redis.incr(key);
+      if (count === 1) {
+        await this.redis.expire(key, IP_FAILED_LOGIN_WINDOW_SECONDS);
+      }
+      if (count === IP_FAILED_LOGIN_THRESHOLD) {
+        captureMessage('auth.ip_failed_login.threshold_reached', {
+          level: 'warning',
+          extra: { ip_hash: this.buildIpKey(ipAddress), count },
+        });
+        logger.warn(
+          { ip_hash: this.buildIpKey(ipAddress), count },
+          'auth.ip_failed_login.threshold_reached',
+        );
+      }
+    } catch (error) {
+      logger.warn({ error }, 'auth.ip_limit.record.failed');
+    }
+  }
 
   async login(body: unknown, ipAddress: string, userAgent?: string): Promise<LoginResult> {
     const parsed = validateLogin(body);
@@ -70,12 +117,18 @@ export class AuthService {
         { field: 'email', messageKey: 'errors:disposableEmail' },
       ]);
     }
+
+    // Reject before expensive argon2 work when this IP has exceeded its failure budget.
+    // Fail open on Redis errors so a Redis outage never locks out legitimate users.
+    await this.checkIpLoginLimit(ipAddress);
+
     const user = await this.userService.findByEmail(parsed.email);
     if (!user?.password_hash) {
       // Run a verification against a fixed dummy hash and discard the result so
       // the "unknown email" path takes the same ~argon2 time as a wrong password,
       // preventing user enumeration via response timing.
       await verifyPassword(parsed.password, DUMMY_ARGON2_HASH);
+      await this.recordIpFailedLogin(ipAddress);
       throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
@@ -94,13 +147,14 @@ export class AuthService {
     );
 
     if (!isValid) {
-      const failedCount = (user.failed_login_count ?? 0) + 1;
-      const lockUntil =
-        failedCount >= MAX_FAILED_LOGIN_ATTEMPTS
-          ? new Date(Date.now() + ACCOUNT_LOCKOUT_MINUTES * MILLISECONDS_PER_MINUTE)
-          : null;
-
-      await this.userService.updateLoginAttempt(user.public_id, failedCount, lockUntil);
+      // Atomic SQL increment + conditional lock — never a read-modify-write — so two
+      // simultaneous wrong-password attempts cannot both read the same stale count and
+      // collapse two failures into one, which would let an attacker undercount toward lockout.
+      await this.userService.registerFailedLoginAttempt(user.public_id, {
+        maxAttempts: MAX_FAILED_LOGIN_ATTEMPTS,
+        lockoutMinutes: ACCOUNT_LOCKOUT_MINUTES,
+      });
+      await this.recordIpFailedLogin(ipAddress);
       // Surface accountLocked only when the credential was ALSO wrong (a correct password
       // would have bypassed the lock above), so the lock status is never an oracle for a
       // valid email and the lockout cannot be weaponized against the legitimate user.

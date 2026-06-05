@@ -39,4 +39,16 @@ describe('invitationTemplate HTML escaping', () => {
     expect(html).toContain('<strong>Alice Smith</strong>');
     expect(html).toContain('<strong>Acme Corporation</strong>');
   });
+
+  it('encodes & in acceptUrl as &amp; in the href attribute and text node', () => {
+    const html = invitationTemplate({
+      inviterName: 'Alice',
+      organizationName: 'Acme',
+      acceptUrl: 'https://app.example.com/invite/abc?token=t1&ref=email',
+      expiresInDays: 7,
+    });
+
+    expect(html).not.toContain('?token=t1&ref=email');
+    expect(html).toContain('?token=t1&amp;ref=email');
+  });
 });

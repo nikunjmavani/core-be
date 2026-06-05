@@ -14,7 +14,7 @@ const TOKEN_URLS: Record<string, string> = {
   SENTRY_AUTH_TOKEN: 'https://sentry.io/settings/auth-tokens/new-token/',
   RESEND_API_KEY: 'https://resend.com/api-keys',
   GITHUB_TOKEN: 'https://github.com/settings/tokens',
-  RAILWAY_TOKEN: 'https://railway.app/account/tokens',
+  RAILWAY_API_TOKEN: 'https://railway.com/account/tokens',
   POSTMAN_API_KEY: 'https://go.postman.co/settings/me/api-keys',
   POSTMAN_WORKSPACE_ID: 'https://go.postman.co/workspaces',
 };
@@ -27,7 +27,7 @@ const SIMPLE_VARS: Array<[string, string]> = [
   ['SENTRY_AUTH_TOKEN', TOKEN_URLS.SENTRY_AUTH_TOKEN ?? ''],
   ['RESEND_API_KEY', TOKEN_URLS.RESEND_API_KEY ?? ''],
   ['GITHUB_TOKEN', TOKEN_URLS.GITHUB_TOKEN ?? ''],
-  ['RAILWAY_TOKEN', TOKEN_URLS.RAILWAY_TOKEN ?? ''],
+  ['RAILWAY_API_TOKEN', TOKEN_URLS.RAILWAY_API_TOKEN ?? ''],
   ['POSTMAN_API_KEY', TOKEN_URLS.POSTMAN_API_KEY ?? ''],
   ['POSTMAN_WORKSPACE_ID', TOKEN_URLS.POSTMAN_WORKSPACE_ID ?? ''],
 ];
@@ -69,7 +69,17 @@ export const setupSecretsSchema = z.object({
     .optional()
     .default({ google: {}, github: {} }),
   railway: z.object({
-    token: z.string(),
+    /**
+     * Account / project-wide token (Bearer auth). Required at setup time when the Railway
+     * provider is enabled — gives full project lifecycle (create project, list user
+     * projects, mint per-environment project tokens via `projectTokenCreate`, read/write
+     * variables across environments). Set via `RAILWAY_API_TOKEN` in `.env.setup`. Stays
+     * in `.env.setup` only; never pushed to GitHub Environments or Railway service
+     * variables. Per-environment runtime tokens are minted from this and persisted into
+     * `state.railway.environmentTokens`, then written into each `.env.<env>` as
+     * `RAILWAY_TOKEN`.
+     */
+    apiToken: z.string().optional(),
   }),
   postman: z
     .object({
@@ -172,7 +182,9 @@ export function loadSecretsFromEnv(environmentNames: string[]): SetupSecrets {
       google: oauthGoogle,
       github: oauthGithub,
     },
-    railway: { token: get(source, 'RAILWAY_TOKEN') },
+    railway: {
+      apiToken: get(source, 'RAILWAY_API_TOKEN') || undefined,
+    },
     postman: {
       apiKey: get(source, 'POSTMAN_API_KEY'),
       workspaceId: get(source, 'POSTMAN_WORKSPACE_ID'),
@@ -242,7 +254,7 @@ export function hasAnyEnvSecret(environmentNames: string[]): boolean {
     filled(secrets.aws.accessKeyId) ||
     filled(secrets.sentry.authToken) ||
     filled(secrets.resend.apiKey) ||
-    filled(secrets.railway.token) ||
+    filled(secrets.railway.apiToken) ||
     filled(secrets.postman.apiKey)
   );
 }

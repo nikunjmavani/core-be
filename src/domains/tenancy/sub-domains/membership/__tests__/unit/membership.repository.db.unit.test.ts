@@ -113,4 +113,36 @@ describe('MembershipRepository (database)', () => {
     ).toBeNull();
     expect(await repository.softDelete('missing_membership', organization.id)).toBeNull();
   });
+
+  it('softDelete refuses to remove the organization owner (atomic owner-guard)', async () => {
+    const owner = await createTestUser({ email: 'owner-guard@test.com' });
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: [],
+    });
+    const ownerMembership = await createMembership({
+      userId: owner.id,
+      organizationId: organization.id,
+      roleId: role.id,
+    });
+    const member = await createTestUser({ email: 'regular-guard@test.com' });
+    const memberMembership = await createMembership({
+      userId: member.id,
+      organizationId: organization.id,
+      roleId: role.id,
+    });
+
+    // Removing the owner's membership would orphan the organization — the guard blocks it.
+    expect(await repository.softDelete(ownerMembership.public_id, organization.id)).toBeNull();
+    const ownerStillActive = await repository.findByPublicId(
+      ownerMembership.public_id,
+      organization.id,
+    );
+    expect(ownerStillActive?.deleted_at).toBeNull();
+
+    // A non-owner member is removed normally.
+    const deleted = await repository.softDelete(memberMembership.public_id, organization.id);
+    expect(deleted?.public_id).toBe(memberMembership.public_id);
+  });
 });

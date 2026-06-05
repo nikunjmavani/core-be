@@ -21,15 +21,17 @@ export const stripeWebhookIngressPlugin: FastifyPluginAsync = async (application
       throw new ValidationError('errors:missingStripeSignature');
     }
 
-    const rawBody =
-      request.rawBody ??
-      (Buffer.isBuffer(request.body)
-        ? request.body
-        : typeof request.body === 'string'
-          ? Buffer.from(request.body)
-          : request.body === undefined
-            ? undefined
-            : Buffer.from(JSON.stringify(request.body)));
+    let parsedBody: Buffer | undefined;
+    if (Buffer.isBuffer(request.body)) {
+      parsedBody = request.body;
+    } else if (typeof request.body === 'string') {
+      parsedBody = Buffer.from(request.body);
+    } else if (request.body === undefined) {
+      parsedBody = undefined;
+    } else {
+      parsedBody = Buffer.from(JSON.stringify(request.body));
+    }
+    const rawBody = request.rawBody ?? parsedBody;
     if (!rawBody) {
       throw new ValidationError('errors:missingRawBody');
     }

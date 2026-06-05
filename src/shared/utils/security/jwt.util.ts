@@ -8,7 +8,7 @@ import { getEnv } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 
 const JWT_AUDIENCE = 'core-api';
-const JWT_ALGORITHM = 'RS256' as const;
+const JWT_ALGORITHM = 'RS256';
 
 let _signingKey: CryptoKey | null = null;
 let _verifyKey: CryptoKey | null = null;
@@ -152,6 +152,12 @@ export async function signAccessToken(payload: {
 /**
  * Verify and decode an access token.
  * Validates: algorithm (RS256 only), issuer, audience, expiration.
+ *
+ * @remarks
+ * Key selection: when `JWT_PUBLIC_KEYS` keyring is active and the token carries a `kid`,
+ * only the matching keyring entry is accepted — an unknown `kid` throws so retired keys
+ * cannot be used to verify new requests. Tokens without a `kid` fall back to
+ * `JWT_PUBLIC_KEY` for backward-compat with pre-rotation issuance.
  */
 async function resolveVerifyKeyForToken(token: string): Promise<{
   key: CryptoKey;
@@ -165,11 +171,15 @@ async function resolveVerifyKeyForToken(token: string): Promise<{
   const keyring = await getVerifyKeyring();
   if (keyring && typeof header.kid === 'string') {
     const keyForKid = keyring.get(header.kid);
-    if (keyForKid) {
-      return { key: keyForKid, algorithm: JWT_ALGORITHM };
+    if (!keyForKid) {
+      // kid is present but unknown to the keyring — the signing key has been retired.
+      // Falling back to JWT_PUBLIC_KEY here would allow tokens signed with revoked keys to
+      // remain valid across a rotation, so we reject hard instead.
+      throw new Error(`JWT kid '${header.kid}' is not present in the active key rotation ring`);
     }
+    return { key: keyForKid, algorithm: JWT_ALGORITHM };
   }
-
+  // No kid (pre-rotation token) or no keyring — fall through to the single legacy verify key.
   return getVerifyKey();
 }
 
@@ -191,8 +201,8 @@ export async function verifyAccessToken(token: string): Promise<TokenPayload> {
   }
 
   const tokenPayload: TokenPayload = { userId: payload.sub };
-  if (payload.role !== undefined && payload.role !== null) {
-    tokenPayload.role = String(payload.role);
+  if (typeof payload.role === 'string') {
+    tokenPayload.role = payload.role;
   }
   return tokenPayload;
 }

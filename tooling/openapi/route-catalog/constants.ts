@@ -15,7 +15,6 @@ export const DOMAIN_LABELS: Record<string, string> = {
   '/api/v1/notify': 'NOTIFY',
   '/api/v1/uploads': 'UPLOAD',
   '/api/v1/mcp': 'MCP',
-  '/mcp': 'MCP',
   '/livez': 'HEALTH',
   '/metrics': 'METRICS',
   '/internal/ops': 'OPS',
@@ -51,20 +50,6 @@ export const SUPPLEMENTAL_ROUTES: ParsedRoute[] = [
     fullPath: '/api/v1/mcp',
     access: 'ROLE: super_admin, admin',
     domainKey: '/api/v1/mcp',
-    domain: 'mcp',
-  },
-  {
-    method: 'GET',
-    fullPath: '/mcp',
-    access: 'ROLE: super_admin, admin',
-    domainKey: '/mcp',
-    domain: 'mcp',
-  },
-  {
-    method: 'POST',
-    fullPath: '/mcp',
-    access: 'ROLE: super_admin, admin',
-    domainKey: '/mcp',
     domain: 'mcp',
   },
   {

@@ -3,6 +3,7 @@
  * (e.g. sync-env-example). Application code should use env.config.ts for getEnv() and env.
  */
 import { validateProductionRedisTopology } from '@/infrastructure/cache/redis-url.parse.util.js';
+import { PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { z } from 'zod';
 
 const nodeEnvSchema = z
@@ -33,7 +34,7 @@ const trustProxyHopCountSchema = z
     }
 
     context.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       message:
         'TRUST_PROXY must be false/0 or an integer proxy hop count from 1 to 10; do not use bare true',
     });
@@ -55,6 +56,12 @@ const envSchemaBase = z.object({
   FASTIFY_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
   /** Fastify connection timeout (ms). Default: 10000. */
   FASTIFY_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
+  /**
+   * Emit a `Server-Timing: app;dur=<ms>` response header carrying total server-side processing
+   * time (Fastify's per-request timer). Network-independent latency for load tools (k6, curl) and
+   * browser devtools without scraping `/metrics`. Default on; set false to suppress the header.
+   */
+  HTTP_SERVER_TIMING_ENABLED: booleanString('true'),
 
   // Database (managed service)
   DATABASE_URL: z.string().min(1),
@@ -114,8 +121,8 @@ const envSchemaBase = z.object({
   WEBAUTHN_RP_NAME: z.string().min(1).optional(),
 
   // App URLs
-  FRONTEND_URL: z.string().url().optional(),
-  API_DOCS_BASE_URL: z.string().url().optional(),
+  FRONTEND_URL: z.url().optional(),
+  API_DOCS_BASE_URL: z.url().optional(),
 
   // Rate limiting
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
@@ -127,7 +134,7 @@ const envSchemaBase = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   /** Outbound Resend API request timeout (ms). Forwarded to fetch via AbortSignal. */
   RESEND_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
-  EMAIL_FROM_ADDRESS: z.string().email().optional(),
+  EMAIL_FROM_ADDRESS: z.email().optional(),
   EMAIL_FROM_NAME: z.string().min(1).optional(),
   // Block disposable/temporary email domains (default true). Set to false to allow (e.g. for testing).
   BLOCK_DISPOSABLE_EMAIL: z
@@ -139,10 +146,10 @@ const envSchemaBase = z.object({
   // OAuth
   OAUTH_GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   OAUTH_GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
-  OAUTH_GOOGLE_REDIRECT_URI: z.string().url().optional(),
+  OAUTH_GOOGLE_REDIRECT_URI: z.url().optional(),
   OAUTH_GITHUB_CLIENT_ID: z.string().min(1).optional(),
   OAUTH_GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
-  OAUTH_GITHUB_REDIRECT_URI: z.string().url().optional(),
+  OAUTH_GITHUB_REDIRECT_URI: z.url().optional(),
 
   // Stripe
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
@@ -151,7 +158,7 @@ const envSchemaBase = z.object({
   STRIPE_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(30_000),
 
   // Sentry
-  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_DSN: z.url().optional(),
   SENTRY_ENVIRONMENT: z.string().min(1).optional(),
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
   SENTRY_PROFILE_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional(),
@@ -167,7 +174,7 @@ const envSchemaBase = z.object({
   /** Bearer token a Prometheus scraper sends when scraping /metrics. Required when METRICS_ENABLED=true (min 32 chars). */
   METRICS_SCRAPE_TOKEN: z.string().min(32).optional(),
   /** OTLP HTTP traces endpoint base URL (e.g. https://otel.example.com). Appends /v1/traces when omitted. */
-  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
   /** OpenTelemetry service.name override (defaults: core-be-api / core-be-worker). */
   OTEL_SERVICE_NAME: z.string().min(1).optional(),
 
@@ -224,8 +231,8 @@ const envSchemaBase = z.object({
    * backward-compatible env templates; startup no longer enforces this heuristic.
    */
   WORKER_BACKGROUND_POOL_SLOT_RESERVE: z.coerce.number().int().min(0).max(64).default(6),
-  /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. */
-  DATABASE_POOL_MAX: z.coerce.number().int().min(1).optional(),
+  /** Postgres pool size per Node process (postgres-js `max`). Not the cluster-wide total. Default 10. */
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
   /** Connections reserved for admin, migrations, and monitoring (subtracted from Postgres max_connections). */
   POSTGRES_RESERVED_CONNECTIONS: z.coerce.number().int().min(1).default(10),
   /** Override when SHOW max_connections is unavailable or wrong (e.g. behind pooler). */
@@ -406,7 +413,7 @@ const envSchemaBase = z.object({
     .transform((v) => v === 'true' || v === '1'),
   OPENAPI_SPEC_PATH: z.string().min(1).optional(),
 
-  // Response encryption (obfuscation layer — AES-256-CBC; hides JSON from DevTools Network tab)
+  // Response encryption (obfuscation layer — AES-256-GCM; hides JSON from DevTools Network tab)
   ENABLE_RESPONSE_ENCRYPTION: z
     .string()
     .optional()
@@ -496,14 +503,14 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      if (data.NODE_ENV !== 'production') {
+      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
         return true;
       }
       return data.CAPTCHA_PROVIDER === 'turnstile' && Boolean(data.CAPTCHA_SECRET);
     },
     {
       message:
-        'In production, CAPTCHA_PROVIDER=turnstile and CAPTCHA_SECRET are required on public auth routes',
+        'In production and staging, CAPTCHA_PROVIDER=turnstile and CAPTCHA_SECRET are required on public auth routes',
       path: ['CAPTCHA_PROVIDER'],
     },
   )
@@ -618,6 +625,26 @@ export const envSchema = envSchemaBase
       message: 'COOKIE_SECURE must be true in production (cookies sent over HTTPS only).',
       path: ['COOKIE_SECURE'],
     },
+  )
+  .refine(
+    (data) => {
+      // PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS is the Redis lock held while a permission
+      // cache miss triggers a DB recompute. If the HTTP statement timeout exceeds the lock TTL,
+      // the lock can expire before the DB query finishes, causing concurrent waiters to bypass
+      // the stampede guard and all hit the database simultaneously.
+      // 0 means "no statement timeout" — in that case we cannot enforce a bound.
+      if (data.DATABASE_HTTP_STATEMENT_TIMEOUT_MS === 0) {
+        return true;
+      }
+      return (
+        data.DATABASE_HTTP_STATEMENT_TIMEOUT_MS <
+        PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS * 1_000
+      );
+    },
+    {
+      message: `DATABASE_HTTP_STATEMENT_TIMEOUT_MS must be < ${PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS * 1_000} (PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS × 1000) or 0 (disabled). A longer timeout allows the recompute lock to expire mid-query, defeating the cache stampede guard.`,
+      path: ['DATABASE_HTTP_STATEMENT_TIMEOUT_MS'],
+    },
   );
 
 /** Ordered list of env var names from the schema (for .env.example sync and scripts). */
@@ -634,7 +661,7 @@ export const envSchemaKeys = Object.keys(envSchemaBase.shape) as (keyof z.infer<
  * required (which would also flag optional integrations like Stripe / OAuth / S3).
  */
 export const envSchemaRequiredKeys: readonly string[] = Object.entries(envSchemaBase.shape)
-  .filter(([, schema]) => !(schema as z.ZodTypeAny).isOptional())
+  .filter(([, schema]) => !(schema as z.ZodTypeAny).safeParse(undefined).success)
   .map(([key]) => key);
 
 /**

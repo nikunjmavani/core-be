@@ -62,7 +62,7 @@ export function requireRole(
  * Looks up: user -> membership -> role -> role_permissions
  *
  * @param permissionCode - The permission code to check (use domain constants, never bare strings)
- * @param paramName - The route param name for org ID (default: 'organizationId', also checks 'id')
+ * @param paramName - The route param name for org ID (default: 'organizationId')
  *
  * Usage:
  *   { preHandler: [app.authenticate, requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)] }
@@ -77,7 +77,7 @@ export function requireOrganizationPermission(
 
     const params = request.params as Record<string, string>;
     // eslint-disable-next-line security/detect-object-injection -- paramName is a function argument with a typed default.
-    const organizationId = params[paramName] ?? params.id;
+    const organizationId = params[paramName];
     if (!organizationId) {
       throw new ForbiddenError('errors:organizationContextRequired');
     }

@@ -40,8 +40,8 @@ export function buildNotificationEmailHtml(notification: {
   const safeActionUrl = sanitizeActionUrl(notification.actionUrl);
 
   const html = baseTemplate({
-    title: safeTitle,
-    preheader: safeMessage,
+    title: notification.title,
+    preheader: notification.message,
     body: `
                 <h1>${safeTitle}</h1>
                 <p>${safeMessage}</p>

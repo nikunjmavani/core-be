@@ -15,4 +15,4 @@ export const WORKER_QUEUE_FAMILY_NAMES = [
 export type WorkerQueueFamily = (typeof WORKER_QUEUE_FAMILY_NAMES)[number];
 
 /** Special token in `WORKER_QUEUE_FAMILIES` that selects every family (monolithic worker). */
-export const WORKER_QUEUE_FAMILIES_ALL_TOKEN = 'all' as const;
+export const WORKER_QUEUE_FAMILIES_ALL_TOKEN = 'all';

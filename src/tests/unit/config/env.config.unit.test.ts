@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { getEnv, resetEnvCacheForTests } from '@/shared/config/env.config.js';
 import { envSchema } from '@/shared/config/env-schema.js';
 
@@ -28,15 +29,7 @@ describe('env.config', () => {
   it('throws listing only fields that include validation messages', () => {
     const parseSpy = vi.spyOn(envSchema, 'safeParse').mockReturnValueOnce({
       success: false,
-      error: {
-        flatten: () => ({
-          fieldErrors: {
-            DATABASE_URL: ['Required'],
-            JWT_SECRET: [],
-            PORT: undefined,
-          },
-        }),
-      },
+      error: new z.ZodError([{ code: 'custom', path: ['DATABASE_URL'], message: 'Required' }]),
     } as never);
     resetEnvCacheForTests();
     let message = '';
@@ -81,17 +74,10 @@ describe('env.config', () => {
     resetEnvCacheForTests();
   });
 
-  it('ignores field error entries with undefined issue lists when building the message', () => {
+  it('omits fields without validation messages when building the message', () => {
     const parseSpy = vi.spyOn(envSchema, 'safeParse').mockReturnValue({
       success: false,
-      error: {
-        flatten: () => ({
-          fieldErrors: {
-            DATABASE_URL: ['Required'],
-            REDIS_URL: undefined,
-          },
-        }),
-      },
+      error: new z.ZodError([{ code: 'custom', path: ['DATABASE_URL'], message: 'Required' }]),
     } as never);
     resetEnvCacheForTests();
     expect(() => getEnv()).toThrow(/DATABASE_URL/);
@@ -99,21 +85,17 @@ describe('env.config', () => {
     resetEnvCacheForTests();
   });
 
-  it('ignores field error entries with empty issue lists when building the message', () => {
+  it('lists every field that has a validation message, comma-separated', () => {
     const parseSpy = vi.spyOn(envSchema, 'safeParse').mockReturnValue({
       success: false,
-      error: {
-        flatten: () => ({
-          fieldErrors: {
-            DATABASE_URL: ['Required'],
-            REDIS_URL: [],
-          },
-        }),
-      },
+      error: new z.ZodError([
+        { code: 'custom', path: ['DATABASE_URL'], message: 'Required' },
+        { code: 'custom', path: ['REDIS_URL'], message: 'Required' },
+      ]),
     } as never);
     resetEnvCacheForTests();
     expect(() => getEnv()).toThrow(/DATABASE_URL/);
-    expect(() => getEnv()).not.toThrow(/REDIS_URL/);
+    expect(() => getEnv()).toThrow(/REDIS_URL/);
     parseSpy.mockRestore();
     resetEnvCacheForTests();
   });

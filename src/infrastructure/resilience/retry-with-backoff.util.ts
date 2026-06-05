@@ -1,3 +1,5 @@
+import { randomInt } from 'node:crypto';
+
 const DEFAULT_JITTER_RATIO = 0.2;
 
 /**
@@ -46,7 +48,7 @@ export async function retryWithBackoff<T>(
         throw error;
       }
       const exponentialDelayMs = Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs);
-      const jitterMs = Math.floor(Math.random() * exponentialDelayMs * jitterRatio);
+      const jitterMs = randomInt(Math.max(1, Math.floor(exponentialDelayMs * jitterRatio)));
       await sleep(exponentialDelayMs + jitterMs);
     }
   }

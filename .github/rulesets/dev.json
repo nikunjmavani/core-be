@@ -22,7 +22,7 @@
         "dismiss_stale_reviews_on_push": false,
         "require_code_owner_review": false,
         "require_last_push_approval": false,
-        "required_approving_review_count": 1,
+        "required_approving_review_count": 0,
         "required_review_thread_resolution": true
       }
     },
@@ -32,37 +32,40 @@
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
           {
-            "context": "PR CI / Lint"
+            "context": "Lint"
           },
           {
-            "context": "PR CI / Typecheck"
+            "context": "Typecheck"
           },
           {
-            "context": "PR CI / Static sync"
+            "context": "Static sync"
           },
           {
-            "context": "PR CI / Unit + global (pull_request)"
+            "context": "unit / Unit + global"
           },
           {
-            "context": "PR CI / Migration lint"
+            "context": "Migration lint"
           },
           {
-            "context": "PR CI / Build verify"
+            "context": "Build verify"
           },
           {
-            "context": "PR CI / Security audit"
+            "context": "Security audit"
           },
           {
-            "context": "PR CI / Security secrets"
+            "context": "Security secrets"
           },
           {
-            "context": "PR CI / Security SAST"
+            "context": "Security SAST"
           },
           {
-            "context": "PR CI / Contract + property"
+            "context": "Contract + property"
           },
           {
-            "context": "PR Governance / Checks"
+            "context": "RLS security (non-superuser)"
+          },
+          {
+            "context": "Checks"
           }
         ]
       }

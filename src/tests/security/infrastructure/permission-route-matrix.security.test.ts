@@ -47,7 +47,9 @@ function payloadForPermissionRoute(
     return { key: 'organization-logos/matrix-logo.png' };
   }
   if (route.path.endsWith('/notification-policies')) {
-    return { notification_type: 'billing', channel: 'email' };
+    // `channel` must be a valid NOTIFICATION_CHANNELS member; an invalid value makes
+    // schema validation (400) preempt the permission check (403) this matrix asserts on.
+    return { notification_type: 'billing', channel: 'EMAIL' };
   }
   if (route.path.includes('/notification-policies/:policyId')) {
     return { default_enabled: false };
@@ -65,10 +67,13 @@ function payloadForPermissionRoute(
     return { expires_in_days: 7 };
   }
   if (route.path.endsWith('/memberships')) {
+    // Create must use `INVITED`: an `ACTIVE` create is rejected with 403 by the
+    // activation guard even when the caller holds the permission, which would break
+    // the "does not return 403 with <permission>" half of the matrix.
     return {
       user_id: PATH_PARAM_PLACEHOLDER,
       role_id: PATH_PARAM_PLACEHOLDER,
-      status: 'ACTIVE',
+      status: 'INVITED',
     };
   }
   if (route.path.includes('/memberships/:membershipId')) {

@@ -21,6 +21,12 @@ import { api_keys } from '@/domains/tenancy/sub-domains/organization/organizatio
  * (or to retention-cleanup workers that set `app.global_retention_cleanup`, or
  * the cross-tenant admin escape hatch `app.global_admin` used by the admin
  * audit-log listing via `withGlobalAdminDatabaseContext`).
+ *
+ * Storage: the migrations create this as a plain table (`id bigserial PRIMARY KEY`). High-volume
+ * hosted environments may RANGE-partition it by `created_at` out-of-band — that partitioning is
+ * intentionally NOT in the repo migrations (it would require a composite `(id, created_at)` PK
+ * plus partition management). App code and the FK migration `20260601120000` are written to work
+ * with both shapes. See `docs/reference/security/audit-logs.md`.
  */
 export const logs = auditSchema
   .table(

@@ -921,7 +921,7 @@ export function formatTimestampPrefix(date: Date): string {
 /** Validates up-migration filename prefixes (YYYYMMDDHHMMSS_snake_case.sql) and monotonic ordering. */
 export function lintMigrationTimestamps(upMigrationFilenames: string[]): TimestampViolation[] {
   const violations: TimestampViolation[] = [];
-  const sortedFilenames = [...upMigrationFilenames].sort();
+  const sortedFilenames = [...upMigrationFilenames].sort((a, b) => a.localeCompare(b));
   const farFutureThreshold = formatTimestampPrefix(
     new Date(Date.now() + timestampFarFutureWindowMs),
   );
@@ -1038,7 +1038,9 @@ export async function lintMigrationsDirectory(migrationsFolder: string): Promise
   headerFailureCount: number;
 }> {
   const allFiles = await readdir(migrationsFolder);
-  const sqlFiles = allFiles.filter((file) => file.endsWith('.sql')).sort();
+  const sqlFiles = allFiles
+    .filter((file) => file.endsWith('.sql'))
+    .sort((a, b) => a.localeCompare(b));
   const upMigrationFilenames = sqlFiles.filter((filename) => !isDownMigrationFilename(filename));
   const fileContentsByFilename = new Map<string, string>();
 

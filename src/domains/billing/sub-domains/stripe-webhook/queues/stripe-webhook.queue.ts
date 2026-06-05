@@ -4,6 +4,7 @@ import { getBullMQProducerConnectionOptions } from '@/infrastructure/queue/conne
 import { captureTraceContextForPropagation } from '@/infrastructure/observability/tracing/trace-context.util.js';
 import { parseBullMQJobData } from '@/shared/utils/validation/bullmq-job-validation.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { SEVEN_DAYS_SECONDS } from '@/shared/constants/ttl.constants.js';
 import {
   stripeWebhookJobDataSchema,
   type StripeWebhookJobDataValidated,
@@ -22,8 +23,8 @@ function getStripeWebhookQueue(): Queue<StripeWebhookJobData> {
   stripeWebhookQueue = new Queue<StripeWebhookJobData>(STRIPE_WEBHOOK_QUEUE_NAME, {
     connection: getBullMQProducerConnectionOptions(),
     defaultJobOptions: {
-      removeOnComplete: { count: 2000 },
-      removeOnFail: { count: 5000 },
+      removeOnComplete: { count: 1000, age: SEVEN_DAYS_SECONDS },
+      removeOnFail: { count: 1000, age: SEVEN_DAYS_SECONDS },
       attempts: 5,
       backoff: { type: 'custom' },
     },

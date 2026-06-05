@@ -31,10 +31,47 @@ describe('AuthSerializer', () => {
     expect(AuthSerializer.mfaVerified({ verified: true })).toEqual({ verified: true });
   });
 
-  it('authMethodList and authMethod are pass-through', () => {
-    const items = [{ id: '1' }];
-    expect(AuthSerializer.authMethodList(items)).toBe(items);
-    expect(AuthSerializer.authMethod(items[0]!)).toEqual({ id: '1' });
+  it('authMethodList and authMethod allowlist safe fields and strip secrets/PII/internal ids', () => {
+    const row = {
+      id: 7,
+      user_id: 42,
+      method_type: 'MFA_TOTP',
+      provider: null,
+      provider_user_id: 'google-sub-12345',
+      encrypted_secret: 'aes-gcm-ciphertext-of-totp-seed',
+      phone_number: '+15551234567',
+      is_primary: true,
+      verified_at: new Date('2026-01-01T00:00:00.000Z'),
+      last_used_at: null,
+      created_at: new Date('2026-01-02T00:00:00.000Z'),
+      revoked_at: null,
+      created_by_user_id: 42,
+    };
+
+    const expected = {
+      id: 7,
+      method_type: 'MFA_TOTP',
+      provider: null,
+      is_primary: true,
+      verified_at: new Date('2026-01-01T00:00:00.000Z'),
+      last_used_at: null,
+      created_at: new Date('2026-01-02T00:00:00.000Z'),
+    };
+
+    const [serialized] = AuthSerializer.authMethodList([row]);
+    expect(serialized).toEqual(expected);
+    expect(AuthSerializer.authMethod(row)).toEqual(expected);
+
+    // Defense-in-depth: no credential material, PII, or internal ids may ever appear.
+    for (const result of [serialized, AuthSerializer.authMethod(row)]) {
+      expect(result).not.toHaveProperty('encrypted_secret');
+      expect(result).not.toHaveProperty('phone_number');
+      expect(result).not.toHaveProperty('provider_user_id');
+      expect(result).not.toHaveProperty('user_id');
+      expect(result).not.toHaveProperty('created_by_user_id');
+      expect(JSON.stringify(result)).not.toContain('aes-gcm-ciphertext-of-totp-seed');
+      expect(JSON.stringify(result)).not.toContain('+15551234567');
+    }
   });
 
   it('message returns payload unchanged', () => {

@@ -90,7 +90,7 @@ export class OrganizationService {
     if (!logo_url) return null;
     const prefix = buildOrganizationLogoKeyPrefix(public_id);
     if (logo_url.startsWith(prefix)) return logo_url;
-    const keyMatch = logo_url.match(/organization-logos\/[^?#]+/);
+    const keyMatch = /organization-logos\/[^?#]+/.exec(logo_url);
     return keyMatch?.[0] ?? null;
   }
 
@@ -143,7 +143,12 @@ export class OrganizationService {
     organization_public_id: string,
     new_owner_user_id: number,
   ): Promise<OrganizationMembershipContext> {
-    await this.repository.updateOwner(organization_public_id, new_owner_user_id);
+    const updated = await this.repository.updateOwner(organization_public_id, new_owner_user_id);
+    if (!updated) {
+      // updateOwner only writes when the target is still an active member (atomic EXISTS guard);
+      // a null result means a concurrent suspend/removal won the race after the caller's check.
+      throw new ConflictError('errors:ownershipTransferTargetNotActive');
+    }
     return this.requireOrganizationMembershipByPublicId(organization_public_id);
   }
 
@@ -349,11 +354,23 @@ export class OrganizationService {
           );
         }
       }
-      const updated = await this.repository.update(
-        public_id,
-        omitUndefined(parsed),
-        userId ?? null,
-      );
+      let updated: Awaited<ReturnType<typeof this.repository.update>>;
+      try {
+        updated = await this.repository.update(public_id, omitUndefined(parsed), userId ?? null);
+      } catch (error) {
+        // Two concurrent slug updates (on different orgs, to the same new slug) can both pass
+        // the findBySlug pre-check above; the loser hits the `idx_organizations_slug` unique
+        // index. Map the unique_violation to a 409 instead of letting it surface as a 500 —
+        // mirroring the create path.
+        if (parsed.slug && isPostgresUniqueViolation(error)) {
+          throw new ConflictError(
+            'errors:organizationSlugExists',
+            { slug: parsed.slug },
+            `Organization with slug "${parsed.slug}" already exists`,
+          );
+        }
+        throw error;
+      }
       if (!updated) throw new NotFoundError('Organization');
       return serializeOrganization(updated);
     });
@@ -439,7 +456,7 @@ export class OrganizationService {
     });
     // External I/O (S3) runs outside the DB context.
     if (organization.logo_url) {
-      const keyMatch = organization.logo_url.match(/organization-logos\/[^?#]+/);
+      const keyMatch = /organization-logos\/[^?#]+/.exec(organization.logo_url);
       if (keyMatch) {
         const metadata = await this.objectStorage.headObject(keyMatch[0]);
         if (!metadata) {

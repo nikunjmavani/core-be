@@ -13,7 +13,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Response as LightMyRequestResponse } from 'light-my-request';
 import type { FastifyInstance, InjectOptions } from 'fastify';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -26,6 +25,7 @@ import {
   callApiInputSchema,
 } from '@/infrastructure/mcp/mcp-capabilities.js';
 import { requireRole } from '@/shared/utils/auth/authorization.util.js';
+import { STRICT_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 
 const ROUTES_CATALOG_PATH = join(process.cwd(), 'docs', 'routes.txt');
 const OPENAPI_SPEC_PATH = join(process.cwd(), 'docs', 'openapi', 'openapi.json');
@@ -189,11 +189,29 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
         };
       }
       try {
+        // Strip headers that could override authentication or session identity.
+        // The MCP endpoint itself is admin-authenticated; the injected sub-request must not
+        // be able to impersonate a different principal via caller-supplied header overrides.
+        const BLOCKED_HEADERS = new Set([
+          'authorization',
+          'cookie',
+          'set-cookie',
+          'x-csrf-token',
+          'x-forwarded-for',
+          'x-real-ip',
+        ]);
+        const safeHeaders: Record<string, string> = {};
+        for (const [key, value] of Object.entries(data.headers ?? {})) {
+          if (!BLOCKED_HEADERS.has(key.toLowerCase())) {
+            // eslint-disable-next-line security/detect-object-injection -- key filtered via BLOCKED_HEADERS allowlist above.
+            safeHeaders[key] = value;
+          }
+        }
         const result = await inject({
           method: data.method,
           url: data.path,
           payload: data.body,
-          headers: data.headers ?? {},
+          headers: safeHeaders,
         });
         const responseBody =
           typeof result.payload === 'object' && result.payload !== null
@@ -279,7 +297,7 @@ export async function registerMcpRouteHandlers(
     if (opts.payload !== undefined) {
       injectOptions.payload = opts.payload as NonNullable<InjectOptions['payload']>;
     }
-    const response = (await app.inject(injectOptions)) as LightMyRequestResponse;
+    const response = await app.inject(injectOptions);
     let payload: unknown;
     try {
       payload = response.json();
@@ -307,11 +325,26 @@ export async function registerMcpRouteHandlers(
     nodeRequest: IncomingMessage,
     nodeResponse: ServerResponse,
     parsedBody: unknown,
+    callerToken: string | undefined,
   ): Promise<void> {
+    // Forward the verified MCP caller's JWT into every sub-request so that
+    // downstream route handlers authenticate as the MCP principal — without
+    // this the sub-request would arrive unauthenticated (the outer BLOCKED_HEADERS
+    // guard strips any caller-supplied `authorization` header, but we must still
+    // inject the already-verified one that app.authenticate accepted on the MCP route).
+    const requestInject: typeof inject = (opts) =>
+      inject({
+        ...opts,
+        headers: {
+          ...(callerToken ? { authorization: callerToken } : {}),
+          ...opts.headers,
+        },
+      });
+
     const { transport, server } = createMcpTransportAndServer(
       {
         ...options,
-        inject,
+        inject: requestInject,
       },
       sdk,
     );
@@ -322,6 +355,7 @@ export async function registerMcpRouteHandlers(
   app.get(
     '/api/v1/mcp',
     {
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'MCP streamable HTTP (GET)',
         description:
@@ -331,13 +365,14 @@ export async function registerMcpRouteHandlers(
     },
     async (request, reply) => {
       reply.hijack();
-      await handleMcpRequest(request.raw, reply.raw, undefined);
+      await handleMcpRequest(request.raw, reply.raw, undefined, request.headers.authorization);
     },
   );
 
   app.post(
     '/api/v1/mcp',
     {
+      ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'MCP streamable HTTP (POST)',
         description:
@@ -347,20 +382,9 @@ export async function registerMcpRouteHandlers(
     },
     async (request, reply) => {
       reply.hijack();
-      await handleMcpRequest(request.raw, reply.raw, request.body as unknown);
+      await handleMcpRequest(request.raw, reply.raw, request.body, request.headers.authorization);
     },
   );
-
-  // Alias without /api/v1 so clients using base URL with path /mcp do not get 404
-  app.get('/mcp', async (request, reply) => {
-    reply.hijack();
-    await handleMcpRequest(request.raw, reply.raw, undefined);
-  });
-
-  app.post('/mcp', async (request, reply) => {
-    reply.hijack();
-    await handleMcpRequest(request.raw, reply.raw, request.body as unknown);
-  });
 }
 
 /**

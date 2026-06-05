@@ -13,8 +13,8 @@ export const ListAuditLogsQueryDto = cursorPaginationSchema
     actor_user_id: trimmedString().max(255).optional(),
     resource_type: trimmedString().max(50).optional(),
     action: trimmedString().max(100).optional(),
-    from: z.string().trim().datetime().optional(),
-    to: z.string().trim().datetime().optional(),
+    from: z.string().trim().pipe(z.iso.datetime()).optional(),
+    to: z.string().trim().pipe(z.iso.datetime()).optional(),
     // Opt in to the expensive count(*) only when exact totals are needed. Defaults to
     // false so the common audit-log browse path stays keyset-only.
     // Kept as a string enum (no transform) so the schema renders to JSON Schema for OpenAPI;

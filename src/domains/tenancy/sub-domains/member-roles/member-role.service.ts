@@ -1,4 +1,5 @@
-import { NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { MemberRoleRepository } from './member-role.repository.js';
@@ -128,6 +129,18 @@ export class MemberRoleService {
     });
   }
 
+  /**
+   * Translate a repository write failure into a clean conflict when it is the
+   * `(organization_id, name)` unique violation, so duplicate role names surface
+   * as 409 instead of an unhandled 500. Any other error is rethrown unchanged.
+   */
+  private mapRoleNameConflict(error: unknown, name: string | undefined): unknown {
+    if (isPostgresUniqueViolation(error)) {
+      return new ConflictError('errors:roleNameExists', name ? { name } : undefined);
+    }
+    return error;
+  }
+
   async create(
     organization_public_id: string,
     body: unknown,
@@ -141,16 +154,20 @@ export class MemberRoleService {
         );
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
-      const created = await this.memberRoleRepository.create(
-        omitUndefined({
-          organization_id: organization.id,
-          name: parsed.name,
-          description: parsed.description,
-          is_system: parsed.is_system,
-          created_by_user_id: userId ?? null,
-        }),
-      );
-      return serializeMemberRole(created);
+      try {
+        const created = await this.memberRoleRepository.create(
+          omitUndefined({
+            organization_id: organization.id,
+            name: parsed.name,
+            description: parsed.description,
+            is_system: parsed.is_system,
+            created_by_user_id: userId ?? null,
+          }),
+        );
+        return serializeMemberRole(created);
+      } catch (error) {
+        throw this.mapRoleNameConflict(error, parsed.name);
+      }
     });
   }
 
@@ -170,12 +187,17 @@ export class MemberRoleService {
       if (!role) throw new NotFoundError('Role');
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
-      const updated = await this.memberRoleRepository.update(
-        role_public_id,
-        organization.id,
-        omitUndefined(parsed),
-        userId ?? null,
-      );
+      let updated: MemberRoleRow | null;
+      try {
+        updated = await this.memberRoleRepository.update(
+          role_public_id,
+          organization.id,
+          omitUndefined(parsed),
+          userId ?? null,
+        );
+      } catch (error) {
+        throw this.mapRoleNameConflict(error, parsed.name);
+      }
       if (!updated) throw new NotFoundError('Role');
       return serializeMemberRole(updated);
     });

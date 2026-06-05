@@ -1,3 +1,5 @@
+import { randomInt } from 'node:crypto';
+
 /** Maximum length after trim; Stripe-style keys are typically shorter. */
 export const IDEMPOTENCY_KEY_MAX_LENGTH = 255;
 
@@ -82,11 +84,12 @@ export function buildIdempotencyClaimCounterShardKey(shardIndex: number): string
  * instead of contending on one hot Redis slot.
  *
  * @remarks
- * Uses `Math.random` deliberately: shard selection only needs even-ish spread for load, not
- * cryptographic unpredictability. The total claim count is the sum across all shards.
+ * Uses `crypto.randomInt` for a uniform, unbiased shard spread. Shard selection needs even
+ * distribution for load (the CSPRNG strength is incidental). The total claim count is the sum
+ * across all shards.
  */
 export function selectIdempotencyClaimCounterShardKey(): string {
-  const shardIndex = Math.floor(Math.random() * IDEMPOTENCY_CLAIM_COUNTER_SHARD_COUNT);
+  const shardIndex = randomInt(IDEMPOTENCY_CLAIM_COUNTER_SHARD_COUNT);
   return buildIdempotencyClaimCounterShardKey(shardIndex);
 }
 
@@ -102,12 +105,14 @@ export function selectIdempotencyClaimCounterShardKey(): string {
  * executing as a second, independent operation (Stripe-style key-reuse semantics).
  */
 export function buildIdempotencyCacheKey(idempotencyKey: string, scope: IdempotencyScope): string {
-  const actorSegment =
-    scope.apiKeyPublicId && scope.apiKeyPublicId.length > 0
-      ? `api-key:${scope.apiKeyPublicId}`
-      : scope.userId && scope.userId.length > 0
-        ? scope.userId
-        : 'anonymous';
+  let actorSegment: string;
+  if (scope.apiKeyPublicId && scope.apiKeyPublicId.length > 0) {
+    actorSegment = `api-key:${scope.apiKeyPublicId}`;
+  } else if (scope.userId && scope.userId.length > 0) {
+    actorSegment = scope.userId;
+  } else {
+    actorSegment = 'anonymous';
+  }
   const organizationSegment = scope.organizationId ?? 'none';
   return `idempotency:${organizationSegment}:${actorSegment}:${idempotencyKey}`;
 }

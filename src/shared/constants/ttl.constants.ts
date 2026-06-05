@@ -12,6 +12,9 @@ export const MILLISECONDS_PER_HOUR = 60 * MILLISECONDS_PER_MINUTE;
 /** Seconds in one calendar day. */
 export const SECONDS_PER_DAY = 86_400;
 
+/** Seconds in seven days (BullMQ job history eviction window). */
+export const SEVEN_DAYS_SECONDS = 7 * SECONDS_PER_DAY;
+
 /** Seconds in thirty days (default long-lived Redis retention window). */
 export const THIRTY_DAYS_SECONDS = 30 * SECONDS_PER_DAY;
 
@@ -52,13 +55,27 @@ export const IDEMPOTENCY_STORE_UNAVAILABLE_RETRY_AFTER_SECONDS = 2;
 /** MFA challenge session lifetime in Redis (seconds). */
 export const MFA_SESSION_TTL_SECONDS = 300;
 
+/** Standard RFC 6238 TOTP step duration (seconds). */
+export const TOTP_STEP_SECONDS = 30;
+
+/**
+ * otplib epochTolerance expressed as steps: ±1 step (±30 s) either side of
+ * the current step. Must stay in sync with the `epochTolerance` option passed
+ * to every `verify()` call in {@link AuthMfaService}.
+ */
+export const MFA_TOTP_TOLERANCE_STEPS = 1;
+
 /**
  * Window during which a successfully consumed TOTP code is remembered in Redis
- * to reject replay (seconds). Covers the current 30-second step plus the
- * ±1-step verification tolerance, so a captured code cannot be reused while it
- * is still cryptographically valid.
+ * to reject replay (seconds).
+ *
+ * Derivation: `(MFA_TOTP_TOLERANCE_STEPS + 2) × TOTP_STEP_SECONDS` =
+ * `(1 + 2) × 30` = 90 s. The `+1` covers the tolerance window itself and
+ * the `+1` provides a 30 s safety margin beyond the last moment the code is
+ * cryptographically valid, so a captured-and-replayed code cannot sneak through
+ * in the final milliseconds before the Redis key expires.
  */
-export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = 90;
+export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = (MFA_TOTP_TOLERANCE_STEPS + 2) * TOTP_STEP_SECONDS;
 
 /** WebAuthn ceremony challenge lifetime in Redis (seconds). */
 export const WEBAUTHN_CHALLENGE_TTL_SECONDS = MFA_SESSION_TTL_SECONDS;

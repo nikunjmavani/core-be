@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
       - uses: ./.github/actions/setup-node-pnpm
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
       - uses: ./.github/actions/setup-node-pnpm
@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
@@ -112,6 +112,9 @@ jobs:
 
       - name: Route catalog in sync
         run: pnpm routes:catalog:check
+
+      - name: Validate route HTTP coverage
+        run: pnpm validate:route-http-coverage
 
       - uses: ./.github/actions/test-env
 
@@ -132,8 +135,6 @@ jobs:
       needs.changes.outputs.docs-only-md != 'true' &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.ci-config == 'true')
     uses: ./.github/workflows/reusable-vitest-unit-only.yml
-    with:
-      base-ref: ${{ github.event.pull_request.base.ref }}
 
   migration-lint:
     name: Migration lint
@@ -142,11 +143,78 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm db:migrate:lint
+
+  rls-security:
+    name: RLS security (non-superuser)
+    needs: [changes]
+    if: |
+      needs.changes.outputs.docs-only-md != 'true' &&
+      (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.ci-config == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The RLS suite runs as the non-superuser `core_be_app` role (`SET LOCAL ROLE`), which is the
+    # only way to surface FORCE ROW LEVEL SECURITY bugs — the local/CI superuser is RLS-exempt and
+    # hides them (this is how the org-mandated-MFA bypass reached production). Those tests therefore
+    # need a real Postgres, so unlike the rest of PR CI this job starts a database. It stays scoped
+    # to `src/tests/security/rls` (the rest of `--project security` runs post-merge) to keep the
+    # gate fast. Required-check wiring: docs/deployment/ci-cd/branch-protection.md.
+    services:
+      postgres:
+        image: postgres:17.10-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: core
+          POSTGRES_PASSWORD: core
+          POSTGRES_DB: core
+        options: >-
+          --health-cmd="pg_isready -U core -d core"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:8.6.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://core:core@localhost:5432/core
+      REDIS_URL: redis://localhost:6379
+      DATABASE_SSL_ENABLED: 'false'
+      RATE_LIMIT_MAX: 1000
+      RATE_LIMIT_WINDOW_MS: 60000
+      RUN_DB_TESTS: 1
+      RUN_REDIS_TESTS: 1
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - name: Export shared CI test env (JWT keys + retention + secrets-encryption)
+        uses: ./.github/actions/test-env
+
+      - name: Run migrations
+        run: pnpm db:migrate
+
+      - name: Run non-superuser RLS security tests
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run --project security src/tests/security/rls
 
   build-verify:
     name: Build verify
@@ -177,7 +245,7 @@ jobs:
       # END GENERATED project-identity
       DOCKER_BUILDKIT: 1
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
@@ -226,7 +294,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
@@ -245,7 +313,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
@@ -277,7 +345,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
@@ -291,6 +359,63 @@ jobs:
       - name: Semgrep SAST
         run: semgrep scan --config p/default --metrics off
 
+  security-iac:
+    # Trivy config (IaC misconfiguration scan) — closes the Dockerfile/compose
+    # gap left by CodeQL/semgrep/pnpm audit, which don't inspect container
+    # build configuration. Post-merge Trivy already scans built images for OS
+    # CVEs; this job runs PR-time on Dockerfiles + compose for misconfigs
+    # (running as root, missing HEALTHCHECK, etc.) so they don't reach dev.
+    # Action + CLI versions match reusable-docker-build-trivy.yml.
+    #
+    # skip-files: Dockerfile.agent is intentionally excluded. It is a
+    # development-only image for Cursor cloud agents (see header comment in
+    # Dockerfile.agent) where the host platform manages user identity and a
+    # USER directive would conflict with the agent's apt-installed tooling
+    # workflow. Deployed images (Dockerfile, Dockerfile.worker) are scanned.
+    name: Security IaC (Trivy config)
+    needs: [changes]
+    if: needs.changes.outputs.docs-only-md != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - name: Scan IaC for misconfigurations (table — blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: 1
+          version: v0.69.2
+          skip-files: Dockerfile.agent
+
+      - name: Scan IaC for misconfigurations (SARIF — non-blocking, for Security tab)
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 0
+          version: v0.69.2
+          skip-files: Dockerfile.agent
+
+      - name: Upload IaC Trivy SARIF
+        if: always() && hashFiles('trivy-config.sarif') != ''
+        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+
   dependency-review:
     name: Dependency review
     needs: [changes]
@@ -301,12 +426,12 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
       - name: Dependency Review
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
         with:
           fail-on-severity: high
           deny-licenses: GPL-3.0, AGPL-3.0
@@ -318,12 +443,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
       - name: Run actionlint
-        uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
+        uses: rhysd/actionlint@03d0035246f3e81f36aed592ffb4bebf33a03106 # v1.7.7
 
   contract-property:
     name: Contract + property
@@ -332,7 +457,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
@@ -360,7 +485,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/core
       REDIS_URL: redis://localhost:6379
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           # Full history so the PR base commit can be checked out for the baseline spec.
           fetch-depth: 0
@@ -403,10 +528,27 @@ jobs:
         # additive/WARN changes pass. --err-ignore carries breaking changes explicitly
         # accepted for major promotions (see .github/oasdiff/breaking-changes-ignore.txt);
         # unlisted breaks still fail the gate.
+        #
+        # oasdiff 1.18.1 SIGSEGV workaround: `RequestPropertyMaxSetCheck` panics
+        # when a `max` is added to a string property that previously had no `max`
+        # (upstream bug; no `--exclude-checks` flag exists in 1.18.1). Detect the
+        # panic (exit 2 + "SIGSEGV" in output) and convert to a warning so real
+        # ERR breaking changes (exit 1) still fail the gate. When oasdiff cuts a
+        # release that fixes the panic, drop this wrapper and revert to a simple
+        # `set -euo pipefail` invocation.
         run: |
-          set -euo pipefail
-          "$RUNNER_TEMP/oasdiff" breaking \
+          set -uo pipefail
+          oasdiff_output=$("$RUNNER_TEMP/oasdiff" breaking \
             "$RUNNER_TEMP/openapi-base.json" \
             "$RUNNER_TEMP/openapi-head.json" \
             --fail-on ERR \
-            --err-ignore "$RUNNER_TEMP/breaking-ignore.txt"
+            --err-ignore "$RUNNER_TEMP/breaking-ignore.txt" 2>&1) || oasdiff_exit=$?
+          echo "$oasdiff_output"
+          if [ "${oasdiff_exit:-0}" -eq 0 ]; then
+            exit 0
+          fi
+          if [ "${oasdiff_exit:-0}" -eq 2 ] && echo "$oasdiff_output" | grep -q "SIGSEGV"; then
+            echo "::warning::oasdiff 1.18.1 SIGSEGV (upstream RequestPropertyMaxSetCheck bug) — treating as non-fatal"
+            exit 0
+          fi
+          exit "${oasdiff_exit:-1}"

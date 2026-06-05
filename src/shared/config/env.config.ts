@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import { envSchema } from './env-schema.js';
 
 export { envSchemaKeys } from './env-schema.js';
@@ -18,7 +18,7 @@ export function getEnv(): Env {
 
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
-    const details = parsed.error.flatten().fieldErrors;
+    const details = z.flattenError(parsed.error).fieldErrors;
     const missingOrInvalid = Object.entries(details)
       .filter(([, errors]) => (errors?.length ?? 0) > 0)
       .map(([key]) => key)

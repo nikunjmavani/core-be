@@ -1,4 +1,5 @@
-import { ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
@@ -12,7 +13,7 @@ import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/
 import type { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { MemberRolePermissionService } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.service.js';
 import type { MembershipRepository } from './membership.repository.js';
-import type { MembershipOutput } from './membership.types.js';
+import type { MembershipOutput, MembershipRow } from './membership.types.js';
 import {
   validateCreateMembership,
   validateUpdateMembership,
@@ -114,6 +115,29 @@ export class MembershipService {
     });
   }
 
+  /**
+   * Resolves a single membership's user + role public ids and serializes it. The internal
+   * `user_id`/`role_id` are never emitted; user ids go through the SECURITY DEFINER resolver
+   * (auth.users is FORCE RLS and unreachable by a plain join under org-only context).
+   */
+  private async resolveAndSerializeMembership(
+    membership: MembershipRow,
+    organization_public_id: string,
+  ): Promise<MembershipOutput> {
+    const userPublicIds = await this.membershipRepository.resolveUserPublicIdsByInternalIds([
+      membership.user_id,
+    ]);
+    const rolePublicIds = await this.membershipRepository.resolveRolePublicIdsByInternalIds([
+      membership.role_id,
+    ]);
+    return serializeMembership(
+      membership,
+      organization_public_id,
+      userPublicIds.get(membership.user_id) ?? String(membership.user_id),
+      rolePublicIds.get(membership.role_id) ?? String(membership.role_id),
+    );
+  }
+
   async list(organization_public_id: string, query: unknown) {
     const parsed = validateListMembershipsQuery(query);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
@@ -128,10 +152,22 @@ export class MembershipService {
           limit: parsed.limit,
         }),
       );
+      // Batch-resolve all user + role public ids for the page (one query each, no N+1).
+      const userPublicIds = await this.membershipRepository.resolveUserPublicIdsByInternalIds(
+        result.items.map((membership) => membership.user_id),
+      );
+      const rolePublicIds = await this.membershipRepository.resolveRolePublicIdsByInternalIds(
+        result.items.map((membership) => membership.role_id),
+      );
       return {
         ...result,
         items: result.items.map((membership) =>
-          serializeMembership(membership, organization_public_id),
+          serializeMembership(
+            membership,
+            organization_public_id,
+            userPublicIds.get(membership.user_id) ?? String(membership.user_id),
+            rolePublicIds.get(membership.role_id) ?? String(membership.role_id),
+          ),
         ),
       };
     });
@@ -151,7 +187,7 @@ export class MembershipService {
         organization.id,
       );
       if (!membership) throw new NotFoundError('Membership');
-      return serializeMembership(membership, organization_public_id);
+      return this.resolveAndSerializeMembership(membership, organization_public_id);
     });
   }
 
@@ -161,6 +197,13 @@ export class MembershipService {
     invited_by_user_public_id: string | undefined,
   ): Promise<MembershipOutput> {
     const parsed = validateCreateMembership(body);
+    // A freshly created membership has never joined (joined_at IS NULL), so creating it
+    // directly as ACTIVE both violates chk_memberships_joined (would 500) and bypasses the
+    // invariant that initial activation comes from invitation acceptance — the same rule the
+    // PATCH path enforces. Reject it cleanly instead of letting the constraint surface a 500.
+    if (parsed.status === 'ACTIVE') {
+      throw new ForbiddenError('errors:membershipActivationRequiresInvitationAccept');
+    }
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
@@ -174,19 +217,29 @@ export class MembershipService {
       if (userId === null) throw new NotFoundError('User');
       const inviterId =
         await this.organizationService.resolveUserInternalIdByPublicId(invited_by_user_public_id);
-      const created = await this.membershipRepository.create(
-        omitUndefined({
-          organization_id: organization.id,
-          user_id: userId,
-          role_id: role.id,
-          status: parsed.status,
-          invited_by_user_id: inviterId,
-          created_by_user_id: inviterId,
-        }),
-      );
+      let created: Awaited<ReturnType<MembershipRepository['create']>>;
+      try {
+        created = await this.membershipRepository.create(
+          omitUndefined({
+            organization_id: organization.id,
+            user_id: userId,
+            role_id: role.id,
+            status: parsed.status,
+            invited_by_user_id: inviterId,
+            created_by_user_id: inviterId,
+          }),
+        );
+      } catch (error) {
+        // The user already belongs to this organization (idx_memberships_user_org_unique) —
+        // surface a clean 409 instead of an unhandled unique_violation 500.
+        if (isPostgresUniqueViolation(error)) {
+          throw new ConflictError('errors:membershipAlreadyExists');
+        }
+        throw error;
+      }
       await invalidatePermissions(parsed.user_id, organization_public_id);
       await this.applyOrganizationLocaleDefaults(parsed.user_id, organization_public_id);
-      return serializeMembership(created, organization_public_id);
+      return this.resolveAndSerializeMembership(created, organization_public_id);
     });
   }
 
@@ -227,7 +280,7 @@ export class MembershipService {
       );
       if (!updated) throw new NotFoundError('Membership');
       await this.invalidatePermissionsForMembership(updated.user_id, organization_public_id);
-      return serializeMembership(updated, organization_public_id);
+      return this.resolveAndSerializeMembership(updated, organization_public_id);
     });
   }
 
@@ -237,11 +290,32 @@ export class MembershipService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
+      const membership = await this.membershipRepository.findByPublicId(
+        membership_public_id,
+        organization.id,
+      );
+      if (!membership) throw new NotFoundError('Membership');
+      // The owner cannot be removed — they must transfer ownership first, or the organization
+      // would be left without an owner.
+      if (organization.owner_user_id === membership.user_id) {
+        throw new ForbiddenError('errors:ownerCannotBeRemoved');
+      }
       const deleted = await this.membershipRepository.softDelete(
         membership_public_id,
         organization.id,
       );
-      if (!deleted) throw new NotFoundError('Membership');
+      if (!deleted) {
+        // The atomic owner-guard refused the delete (a concurrent transfer made this member the
+        // owner after the check above) or the row vanished — re-resolve for the precise error.
+        const current =
+          await this.organizationService.requireOrganizationMembershipByPublicId(
+            organization_public_id,
+          );
+        if (current.owner_user_id === membership.user_id) {
+          throw new ForbiddenError('errors:ownerCannotBeRemoved');
+        }
+        throw new NotFoundError('Membership');
+      }
       await this.invalidatePermissionsForMembership(deleted.user_id, organization_public_id);
     });
   }
@@ -287,7 +361,19 @@ export class MembershipService {
         membership.public_id,
         organization.id,
       );
-      if (!deleted) throw new NotFoundError('Membership');
+      if (!deleted) {
+        // The atomic owner-guard refused the delete: a concurrent transfer made this user the
+        // owner after the pre-check above (which would otherwise orphan the org), or the row
+        // vanished. Re-resolve so the race surfaces the same ownerCannotLeave as the pre-check.
+        const current =
+          await this.organizationService.requireOrganizationMembershipByPublicId(
+            organization_public_id,
+          );
+        if (current.owner_user_id === userId) {
+          throw new ForbiddenError('errors:ownerCannotLeave');
+        }
+        throw new NotFoundError('Membership');
+      }
       await invalidatePermissions(user_public_id, organization_public_id);
     });
   }
@@ -324,7 +410,7 @@ export class MembershipService {
         organization_public_id,
         newOwnerUserId,
       );
-      return serializeMembership(newOwnerMembership, organization_public_id);
+      return this.resolveAndSerializeMembership(newOwnerMembership, organization_public_id);
     });
   }
 

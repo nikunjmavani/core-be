@@ -33,6 +33,10 @@ export const dead_letter_jobs = auditSchema.table(
     max_attempts: integer('max_attempts').notNull(),
     failed_at: timestamp('failed_at', { withTimezone: true }).notNull(),
     created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // Stamped by the auto-retry sweeper once a row's retry budget is exhausted (or it is otherwise
+    // resolved). NULL = still auto-retry-eligible. Filtered out of the scan so exhausted rows can
+    // never permanently block the head of the queue or replay again after the Redis budget expires.
+    auto_retry_resolved_at: timestamp('auto_retry_resolved_at', { withTimezone: true }),
   },
   (table) => [
     index('idx_dead_letter_jobs_source_queue_failed_at').on(table.source_queue, table.failed_at),

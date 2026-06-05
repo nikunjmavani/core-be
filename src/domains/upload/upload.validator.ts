@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import path from 'node:path';
 import { ValidationError } from '@/shared/errors/index.js';
 import { createUploadDto, uploadPublicIdParamDto } from './upload.dto.js';
@@ -23,7 +24,7 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
     throw new ValidationError(
       'errors:invalidUploadInput',
       undefined,
-      result.error.flatten().fieldErrors,
+      z.flattenError(result.error).fieldErrors,
     );
   }
 
@@ -65,6 +66,23 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
         },
       ],
     );
+  }
+
+  // Filename safety — reject path separators, parent-directory segments, and control
+  // characters. The storage key is server-generated (a UUID), so a hostile filename
+  // cannot traverse storage today; this is defense-in-depth so the stored display
+  // filename can never carry a path-traversal or control-character payload into a
+  // downstream sink (logs, headers, a client renderer).
+  const hasPathCharacters =
+    input.fileName.includes('/') || input.fileName.includes('\\') || input.fileName.includes('..');
+  const hasControlCharacters = Array.from(input.fileName).some((character) => {
+    const codePoint = character.charCodeAt(0);
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
+  if (hasPathCharacters || hasControlCharacters) {
+    throw new ValidationError('errors:uploadFilenameUnsafe', undefined, undefined, [
+      { field: 'fileName', messageKey: 'errors:uploadFilenameUnsafe' },
+    ]);
   }
 
   // Filename extension validation — declared filename extension must match the declared
@@ -125,7 +143,11 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
 export function validateUploadPublicIdParam(public_id: string): string {
   const parsed = uploadPublicIdParamDto.safeParse({ publicId: public_id });
   if (!parsed.success) {
-    throw new ValidationError('errors:invalidInput', undefined, parsed.error.flatten().fieldErrors);
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(parsed.error).fieldErrors,
+    );
   }
   return validatePublicIdParam(parsed.data.publicId, 'publicId');
 }

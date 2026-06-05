@@ -1,4 +1,4 @@
-import { NotFoundError } from '@/shared/errors/index.js';
+import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { UserNotificationPreferencesRepository } from './user-notification-preferences.repository.js';
@@ -39,6 +39,17 @@ export class UserNotificationPreferencesService {
 
   async put(user_public_id: string, body: unknown): Promise<NotificationPreferenceOutput[]> {
     const parsed = validatePutUserNotificationPreferences(body);
+    // This is the user-scoped endpoint (/users/me/*) with no tenant context, so a non-null
+    // organization_id can never satisfy the org branch of the RLS WITH CHECK policy and would
+    // surface as a raw 42501 -> 500. Reject it as a 400 instead. Organization-scoped notification
+    // policy is a separate tenancy feature (organization-notification-policy); user-level prefs
+    // here are global.
+    if (parsed.preferences.some((preference) => preference.organization_id != null)) {
+      throw new ValidationError('errors:validation.invalidInput', undefined, {
+        organization_id:
+          'Organization-scoped notification preferences are not settable on this endpoint',
+      });
+    }
     const user = await this.userService.findUserRecordByPublicId(user_public_id);
     if (!user) throw new NotFoundError('User');
     const rows = await withUserDatabaseContext(user_public_id, () =>

@@ -81,4 +81,42 @@ describe('UserRepository (database)', () => {
     expect(oauthUser.email).toBe('oauth-user@example.com');
     expect(oauthUser.is_email_verified).toBe(true);
   });
+
+  it('incrementFailedLoginAttempt counts every concurrent failure (no lost updates)', async () => {
+    const user = await createTestUser({ email: 'concurrent-failed-login@example.com' });
+    const attempts = 8;
+    const maxAttempts = 10;
+
+    // Fire all failures at once. A read-modify-write would let several collapse into one
+    // (two reads of N both write N+1); the atomic `count + 1` must land all of them.
+    await Promise.all(
+      Array.from({ length: attempts }, () =>
+        repository.incrementFailedLoginAttempt(user.public_id, { maxAttempts, lockoutMinutes: 30 }),
+      ),
+    );
+
+    const after = await repository.findByPublicId(user.public_id);
+    expect(after?.failed_login_count).toBe(attempts);
+    // Below the threshold, no lock is applied.
+    expect(after?.account_locked_until).toBeNull();
+  });
+
+  it('incrementFailedLoginAttempt applies the lockout once the threshold is reached', async () => {
+    const user = await createTestUser({ email: 'lockout-threshold@example.com' });
+    const maxAttempts = 3;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      await repository.incrementFailedLoginAttempt(user.public_id, {
+        maxAttempts,
+        lockoutMinutes: 30,
+      });
+    }
+
+    const after = await repository.findByPublicId(user.public_id);
+    expect(after?.failed_login_count).toBe(maxAttempts);
+    expect(after?.account_locked_until).not.toBeNull();
+    expect(new Date(after?.account_locked_until as unknown as string).getTime()).toBeGreaterThan(
+      Date.now(),
+    );
+  });
 });
