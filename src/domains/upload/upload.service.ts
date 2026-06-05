@@ -455,7 +455,7 @@ export class UploadService {
     // becomes servable. Ranged GET (first 32 bytes) avoids buffering the full upload.
     if (isMagicByteVerifiable(contentType)) {
       const header = await this.objectStorage.getObjectFirstBytes(sourceKey, 32);
-      if (!(header && verifyFileMagicBytes(header.body, contentType))) {
+      if (!header || !verifyFileMagicBytes(header.body, contentType)) {
         return false;
       }
       if (finalKey !== sourceKey) {
