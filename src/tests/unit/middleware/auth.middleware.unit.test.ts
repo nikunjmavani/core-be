@@ -21,7 +21,9 @@ async function createAuthMiddlewareApplication() {
   const application = Fastify();
   application.decorate('authDomain', {
     authSessionService: {
-      verifyActiveAccessToken: vi.fn().mockResolvedValue(undefined),
+      // sec-A2: verifyActiveAccessToken returns { sessionPublicId } so the auth middleware
+      // can bind step-up sentinels to the session that earned them.
+      verifyActiveAccessToken: vi.fn().mockResolvedValue({ sessionPublicId: 'sess_test' }),
     },
   } as never);
   application.decorate('tenancyDomain', {
@@ -109,7 +111,12 @@ describe('auth.middleware', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ kind: 'user', userId: userPublicId, role: 'user' });
+    expect(response.json()).toEqual({
+      kind: 'user',
+      userId: userPublicId,
+      role: 'user',
+      sessionPublicId: 'sess_test',
+    });
   });
 
   it('omits role on request.auth when JWT payload has no role', async () => {
@@ -125,7 +132,12 @@ describe('auth.middleware', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ kind: 'user', userId: userPublicId, role: undefined });
+    expect(response.json()).toEqual({
+      kind: 'user',
+      userId: userPublicId,
+      role: undefined,
+      sessionPublicId: 'sess_test',
+    });
   });
 
   it('rejects bearer when session is revoked or missing in database', async () => {

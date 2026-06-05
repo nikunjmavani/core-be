@@ -11,6 +11,15 @@ export interface UserAuthContext {
   email?: string;
   role?: GlobalRole;
   organizationPublicId?: string;
+  /**
+   * Public id of the session the bearer belongs to. Set by the JWT auth middleware after
+   * `verifyActiveAccessToken` resolves the session. Used to bind the step-up sentinel to
+   * the session that earned it (sec-A2), so a stolen-session attacker cannot inherit a
+   * step-up the legitimate user performed on a different session. Optional in the type so
+   * code paths that build a synthetic `UserAuthContext` (admin scripts, tests) need not
+   * fabricate one; production HTTP requests always carry it.
+   */
+  sessionPublicId?: string;
 }
 
 /**

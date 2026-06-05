@@ -116,7 +116,7 @@ describe('Membership Sub-Domain — Integration', () => {
         organizationId: organization.id,
         roleId: adminRole.id,
       });
-      const adminToken = await generateTestTokenWithActiveSession(app, admin.public_id);
+      const { token: adminToken } = await generateTestTokenWithActiveSession(app, admin.public_id);
 
       const settingsPatch = await injectAuthenticated(app, {
         method: 'PATCH',
@@ -146,7 +146,10 @@ describe('Membership Sub-Domain — Integration', () => {
       });
       expect(createMembershipResponse.statusCode).toBe(201);
 
-      const memberToken = await generateTestTokenWithActiveSession(app, newMember.public_id);
+      const { token: memberToken } = await generateTestTokenWithActiveSession(
+        app,
+        newMember.public_id,
+      );
       const settingsResponse = await injectAuthenticated(app, {
         method: 'GET',
         url: testApiPath('/users/me/settings'),
@@ -170,7 +173,7 @@ describe('Membership Sub-Domain — Integration', () => {
         organizationId: organization.id,
         roleId: adminRole.id,
       });
-      const adminToken = await generateTestTokenWithActiveSession(app, admin.public_id);
+      const { token: adminToken } = await generateTestTokenWithActiveSession(app, admin.public_id);
       const newMember = await createTestUser({ email: 'direct-active-member@test.com' });
       const memberRole = await createRoleWithPermissions({
         organizationId: organization.id,
@@ -411,7 +414,7 @@ describe('Membership Sub-Domain — Integration', () => {
         organizationId: organization.id,
         roleId: adminRole.id,
       });
-      const token = await generateTestTokenWithActiveSession(app, owner.public_id);
+      const { token } = await generateTestTokenWithActiveSession(app, owner.public_id);
 
       // Even an admin (here, the owner) cannot remove the owner's membership — ownership must be
       // transferred first, or the organization would be left without an owner.

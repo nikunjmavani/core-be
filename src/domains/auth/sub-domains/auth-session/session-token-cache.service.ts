@@ -9,30 +9,39 @@ function buildSessionTokenCacheKey(tokenHash: string): string {
 }
 
 /**
- * Returns true when the token hash was recently validated against an active session.
+ * Returns the cached session public id when the token hash was recently validated against
+ * an active session, or `null` on cache miss.
  *
  * @remarks
- * - **Algorithm:** Redis `GET session:tok:<hash>`; presence of the sentinel `'1'` means the
- *   bearer was confirmed active within {@link SESSION_TOKEN_CACHE_TTL_SECONDS}.
+ * - **Algorithm:** Redis `GET session:tok:<hash>`; the stored value is the session's
+ *   `public_id`, allowing callers to recover the session identity from cache without
+ *   a Postgres round-trip. A cache hit means the bearer was confirmed active within
+ *   {@link SESSION_TOKEN_CACHE_TTL_SECONDS}.
  * - **Failure modes:** Redis failures are logged and swallowed — the function returns
- *   `false` so the caller falls back to the database (fail-open on availability,
+ *   `null` so the caller falls back to the database (fail-open on availability,
  *   fail-closed on staleness because the DB is the source of truth).
  * - **Side effects:** read-only Redis lookup.
  * - **Notes:** consumed by {@link AuthSessionService.verifyActiveAccessToken} to skip the
- *   `sessions` query on hot bearer-auth paths.
+ *   `sessions` query on hot bearer-auth paths. Stores the session id (not a `'1'` sentinel)
+ *   so step-up binding (sec-A2) can resolve which session a bearer belongs to without
+ *   re-reading the row.
  */
-export async function getCachedSessionTokenValid(tokenHash: string): Promise<boolean> {
+export async function getCachedSessionTokenValid(tokenHash: string): Promise<string | null> {
   try {
     const cached = await redisConnection.get(buildSessionTokenCacheKey(tokenHash));
-    return cached === '1';
+    if (cached === null || cached.length === 0) return null;
+    return cached;
   } catch (error) {
     logger.warn({ error }, 'session-token-cache.get.failed');
-    return false;
+    return null;
   }
 }
 
 /**
- * Input for {@link setCachedSessionTokenValid}: the token hash to cache plus the backing session's expiry, used to bound the cache TTL so it can never outlive the session.
+ * Input for {@link setCachedSessionTokenValid}: the token hash, the backing session's public
+ * id, and its expiry — the value stored is the public id so callers can recover session
+ * identity from cache without a Postgres round-trip; the expiry caps the cache TTL so it can
+ * never outlive the session.
  *
  * @remarks
  * - **Algorithm:** `sessionExpiresAt` is the authoritative session expiry from Postgres; the
@@ -44,6 +53,7 @@ export async function getCachedSessionTokenValid(tokenHash: string): Promise<boo
  */
 export interface SetCachedSessionTokenValidInput {
   tokenHash: string;
+  sessionPublicId: string;
   sessionExpiresAt: Date;
 }
 
@@ -67,6 +77,7 @@ export interface SetCachedSessionTokenValidInput {
  */
 export async function setCachedSessionTokenValid({
   tokenHash,
+  sessionPublicId,
   sessionExpiresAt,
 }: SetCachedSessionTokenValidInput): Promise<void> {
   const remainingSeconds = Math.floor((sessionExpiresAt.getTime() - Date.now()) / 1000);
@@ -75,7 +86,12 @@ export async function setCachedSessionTokenValid({
     return;
   }
   try {
-    await redisConnection.set(buildSessionTokenCacheKey(tokenHash), '1', 'EX', ttlSeconds);
+    await redisConnection.set(
+      buildSessionTokenCacheKey(tokenHash),
+      sessionPublicId,
+      'EX',
+      ttlSeconds,
+    );
   } catch (error) {
     logger.warn({ error }, 'session-token-cache.set.failed');
   }

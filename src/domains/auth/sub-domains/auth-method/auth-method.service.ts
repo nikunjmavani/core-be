@@ -1,5 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
 import { hashPassword, verifyPassword } from '@/shared/utils/security/password.util.js';
@@ -287,6 +292,15 @@ export class AuthMethodService {
    * mutating any state. Used by `POST /auth/step-up` so password users can open a short
    * recent-step-up window before a sensitive credential mutation. Throws on a missing user,
    * a passwordless account, or an incorrect password.
+   *
+   * @remarks
+   * MFA-enabled users are rejected with `ForbiddenError('errors:mfaStepUpRequired')` BEFORE
+   * the password hash is even compared. Without this, a transient stolen-session + known
+   * password defeats the MFA invariant — the attacker could open the step-up window with
+   * `/auth/step-up` and then immediately `DELETE /auth/mfa/:id` to convert a 15-minute
+   * stolen bearer into permanent password-only access. MFA users must step up via
+   * `/auth/mfa/verify` (which records the same recent-step-up sentinel). The check fires
+   * before `verifyPassword` to avoid a password-timing oracle for MFA users (sec-A1).
    */
   async verifyPasswordForStepUp(options: {
     userPublicId: string;
@@ -295,6 +309,9 @@ export class AuthMethodService {
     const { userPublicId, password } = options;
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
+    if (user.is_mfa_enabled) {
+      throw new ForbiddenError('errors:mfaStepUpRequired');
+    }
     if (!user.password_hash) throw new UnauthorizedError('errors:passwordAuthNotEnabled');
     const { valid } = await verifyPassword(password, user.password_hash);
     if (!valid) throw new UnauthorizedError('errors:currentPasswordIncorrect');

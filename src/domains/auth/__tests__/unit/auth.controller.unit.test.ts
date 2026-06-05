@@ -38,7 +38,12 @@ vi.mock('@/shared/config/env.config.js', () => {
 
 function mockRequest(overrides: Record<string, unknown> = {}): never {
   return {
-    auth: { kind: 'user' as const, userId: generatePublicId(), role: 'user' },
+    auth: {
+      kind: 'user' as const,
+      userId: generatePublicId(),
+      role: 'user',
+      sessionPublicId: generatePublicId(),
+    },
     params: {},
     body: {},
     query: {},

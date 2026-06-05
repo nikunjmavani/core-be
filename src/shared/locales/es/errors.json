@@ -5,6 +5,8 @@
   "forbidden": "Prohibido",
   "cannotGrantPermissionNotHeld": "No puedes otorgar un permiso que no posees",
   "cannotModifyOwnerRolePermissions": "No se pueden modificar los permisos del rol actualmente asignado al propietario de la organización; transfiere la propiedad a otro rol antes de editar los permisos de este rol.",
+  "mfaStepUpRequired": "Se requiere autenticación multifactor para esta confirmación; verifica a través del endpoint MFA en lugar de la contraseña.",
+  "lastMfaRequiredByOrganization": "No puedes eliminar tu último método MFA mientras tu organización requiere MFA. Desactiva primero el requisito de MFA a nivel de organización o transfiere tu membresía.",
   "recentStepUpRequired": "Se requiere una autenticación de confirmación reciente para esta acción",
   "originNotAllowed": "Origen de la solicitud no permitido para esta operación.",
   "invalidRefererOrigin": "El encabezado Referer falta o no es válido para esta operación.",
