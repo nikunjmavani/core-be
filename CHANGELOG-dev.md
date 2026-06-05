@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.5.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.7-dev.0...v4.5.0-dev.0) (2026-06-05)
+
+
+### Added
+
+* **ci:** add PR-time Trivy IaC misconfig scan ([#388](https://github.com/nikunjmavani/core-be/issues/388)) ([e8499e0](https://github.com/nikunjmavani/core-be/commit/e8499e04b8c8d311a14fb6ac3bdd1c4a4d151a49))
+
 ## [4.4.7-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.4.6-dev.0...v4.4.7-dev.0) (2026-06-05)
 
 
