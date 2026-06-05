@@ -101,6 +101,7 @@ src/
     │   │   │   │   │       └── auth-method.event-handlers.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.unit.test.ts
+    │   │   │   │   │   ├── auth-method.service.step-up-mfa.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.unit.test.ts
     │   │   │   │   │   ├── auth-method.validator.unit.test.ts
     │   │   │   │   │   └── magic-link.service.unit.test.ts
@@ -156,6 +157,7 @@ src/
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── auth-mfa-recovery-code.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.repository.unit.test.ts
+    │   │   │   │   │   ├── auth-mfa.service.org-policy-on-delete.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.service.unit.test.ts
     │   │   │   │   │   └── auth-mfa.validator.unit.test.ts
     │   │   │   ├── seed/
@@ -1334,6 +1336,9 @@ src/
     │   └── index.ts
     ├── utils/
     │   ├── auth/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── recent-step-up.session-binding.unit.test.ts
     │   │   ├── account-status.util.ts
     │   │   ├── authorization.util.ts
     │   │   ├── global-admin-role.util.ts

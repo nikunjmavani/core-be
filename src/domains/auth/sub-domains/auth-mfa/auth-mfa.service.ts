@@ -5,7 +5,7 @@ import {
   decryptFieldSecret,
   encryptFieldSecret,
 } from '@/shared/utils/security/field-secret-encryption.util.js';
-import { UnauthorizedError } from '@/shared/errors/index.js';
+import { ForbiddenError, UnauthorizedError } from '@/shared/errors/index.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { env } from '@/shared/config/env.config.js';
@@ -15,6 +15,7 @@ import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import {
   MFA_TOTP_CODE_REPLAY_TTL_SECONDS,
   MFA_TOTP_TOLERANCE_STEPS,
@@ -70,6 +71,7 @@ export class MfaService {
     private readonly authMethodService: AuthMethodService,
     private readonly authSessionService: AuthSessionService,
     private readonly redis: Redis,
+    private readonly organizationSettingsService?: OrganizationSettingsService,
   ) {}
 
   async createMfaSession(userPublicId: string): Promise<string> {
@@ -244,7 +246,19 @@ export class MfaService {
     };
   }
 
-  /** Delete (revoke) an MFA method for the current user. */
+  /**
+   * Delete (revoke) an MFA method for the current user.
+   *
+   * @remarks
+   * Refuses with `ForbiddenError('errors:lastMfaRequiredByOrganization')` when removing
+   * the method would leave the user with zero MFA factors AND any organization the user
+   * belongs to has `organization_settings.require_mfa = true` (sec-A4). Without this
+   * guard, a member of an MFA-required org could silently downgrade themselves to
+   * password-only authentication in direct contradiction of org policy. The check
+   * pre-computes the remaining-count by listing first, so the revoke does NOT execute
+   * when the policy would be violated. Non-last deletions and users in MFA-non-required
+   * orgs are unaffected.
+   */
   async deleteMfa(userPublicId: string, mfaMethodId: number): Promise<void> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
@@ -253,6 +267,18 @@ export class MfaService {
       if (!found) throw new UnauthorizedError('errors:mfaMethodNotFound');
       if (found.method_type !== 'MFA_TOTP') {
         throw new UnauthorizedError('errors:mfaNotTotpMethod');
+      }
+      // Pre-check: would this revoke leave zero MFA methods? If yes AND any of the user's
+      // orgs requires MFA, refuse BEFORE executing the revoke (sec-A4).
+      const currentMethods = await this.authMethodService.listMfaMethodsByUserId(user.id);
+      const wouldBeLastRemoval = currentMethods.length <= 1;
+      if (wouldBeLastRemoval && this.organizationSettingsService) {
+        const requiresMfa = await this.organizationSettingsService.userHasOrganizationRequiringMfa(
+          user.id,
+        );
+        if (requiresMfa) {
+          throw new ForbiddenError('errors:lastMfaRequiredByOrganization');
+        }
       }
       await this.authMethodService.revokeAuthMethod(mfaMethodId, user.id);
       return this.authMethodService.listMfaMethodsByUserId(user.id);

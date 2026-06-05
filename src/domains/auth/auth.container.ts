@@ -46,6 +46,7 @@ export function createAuthContainer(
     authMethodService,
     authSessionService,
     redisConnection,
+    organizationSettingsService,
   );
   const authService = new AuthService(
     userService,

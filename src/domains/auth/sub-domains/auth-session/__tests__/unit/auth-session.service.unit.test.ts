@@ -5,7 +5,9 @@ import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionRepository } from '@/domains/auth/sub-domains/auth-session/auth-session.repository.js';
 
 vi.mock('@/domains/auth/sub-domains/auth-session/session-token-cache.service.js', () => ({
-  getCachedSessionTokenValid: vi.fn().mockResolvedValue(false),
+  // Returns the session public id on cache hit, or `null` on miss (sec-A2 changed the
+  // sentinel from `'1'` to the session public id so callers can recover identity).
+  getCachedSessionTokenValid: vi.fn().mockResolvedValue(null),
   setCachedSessionTokenValid: vi.fn().mockResolvedValue(undefined),
   invalidateCachedSessionToken: vi.fn().mockResolvedValue(undefined),
 }));
@@ -172,9 +174,10 @@ describe('AuthSessionService', () => {
     const { getCachedSessionTokenValid } = await import(
       '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
     );
-    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(true);
-    await service.verifyActiveAccessToken('cached-token');
+    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce('sess_cached');
+    const result = await service.verifyActiveAccessToken('cached-token');
     expect(sessionRepository.findActiveByTokenHash).not.toHaveBeenCalled();
+    expect(result).toEqual({ sessionPublicId: 'sess_cached' });
   });
 
   it('verifyActiveAccessToken loads session and caches with the session expiry on miss', async () => {
@@ -182,16 +185,17 @@ describe('AuthSessionService', () => {
     const { getCachedSessionTokenValid, setCachedSessionTokenValid } = await import(
       '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
     );
-    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(false);
+    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(null);
     vi.mocked(sessionRepository.findActiveByTokenHash).mockResolvedValueOnce({
       public_id: 'session_public',
       expires_at: sessionExpiresAt,
     } as never);
-    await service.verifyActiveAccessToken('fresh-token');
+    const result = await service.verifyActiveAccessToken('fresh-token');
     expect(sessionRepository.findActiveByTokenHash).toHaveBeenCalled();
     expect(setCachedSessionTokenValid).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionExpiresAt }),
+      expect.objectContaining({ sessionExpiresAt, sessionPublicId: 'session_public' }),
     );
+    expect(result).toEqual({ sessionPublicId: 'session_public' });
   });
 
   it('verifyActiveAccessToken throws when session is missing', async () => {

@@ -165,14 +165,18 @@ export class AuthSessionService {
    * Ensures the bearer token matches an active, non-revoked session row.
    *
    * @remarks
-   * The positive result is cached in Redis for up to 60s, but the cache TTL is
-   * capped to the session's remaining lifetime so a cached "valid" entry can
-   * never outlive the session (see {@link setCachedSessionTokenValid}).
+   * Returns `{ sessionPublicId }` so callers (auth middleware) can attach session
+   * identity to `request.auth` for step-up binding (sec-A2). The positive result is
+   * cached in Redis for up to 60s — the cache value is the session's `public_id`, so a
+   * cache hit avoids the Postgres round-trip AND still produces the session id.
+   * The cache TTL is capped to the session's remaining lifetime so a cached "valid"
+   * entry can never outlive the session (see {@link setCachedSessionTokenValid}).
    */
-  async verifyActiveAccessToken(rawToken: string): Promise<void> {
+  async verifyActiveAccessToken(rawToken: string): Promise<{ sessionPublicId: string }> {
     const tokenHash = hashAccessToken(rawToken);
-    if (await getCachedSessionTokenValid(tokenHash)) {
-      return;
+    const cachedSessionPublicId = await getCachedSessionTokenValid(tokenHash);
+    if (cachedSessionPublicId !== null) {
+      return { sessionPublicId: cachedSessionPublicId };
     }
 
     const session = await withSessionTokenHashDatabaseContext(tokenHash, (_databaseHandle) =>
@@ -183,7 +187,12 @@ export class AuthSessionService {
       throw new UnauthorizedError('errors:invalidOrExpiredSession');
     }
 
-    await setCachedSessionTokenValid({ tokenHash, sessionExpiresAt: session.expires_at });
+    await setCachedSessionTokenValid({
+      tokenHash,
+      sessionPublicId: session.public_id,
+      sessionExpiresAt: session.expires_at,
+    });
+    return { sessionPublicId: session.public_id };
   }
 
   async findActiveSessionByPublicId(sessionPublicId: string) {

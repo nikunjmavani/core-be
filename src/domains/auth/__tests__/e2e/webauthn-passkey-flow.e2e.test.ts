@@ -44,8 +44,11 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
 
   it('registers a passkey while authenticated, then signs in with WebAuthn', async () => {
     const user = await createTestUser({ email: 'webauthn-passkey-flow@example.com' });
-    await seedRecentStepUpForTestUser(user.public_id);
-    const token = await generateTestTokenWithActiveSession(app, user.public_id);
+    const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
+      app,
+      user.public_id,
+    );
+    await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
     const credentialId = 'e2e-test-credential-id';
     const publicKeyBytes = Buffer.from('e2e-test-public-key');
 
@@ -152,14 +155,17 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
 
   it('rejects re-registering an already-enrolled passkey with 409 (not a 500)', async () => {
     const user = await createTestUser({ email: 'webauthn-duplicate-credential@example.com' });
-    const token = await generateTestTokenWithActiveSession(app, user.public_id);
+    const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
+      app,
+      user.public_id,
+    );
     const credentialId = 'duplicate-passkey-credential-id';
     const publicKeyBytes = Buffer.from('duplicate-passkey-public-key');
 
     async function registerSamePasskey() {
       // The register ceremony is a step-up-sensitive operation; re-seed each pass so
       // the second attempt is rejected by the unique constraint, not by a stale step-up.
-      await seedRecentStepUpForTestUser(user.public_id);
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
       const optionsResponse = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/webauthn/register/options'),

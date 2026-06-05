@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { ForbiddenError } from '@/shared/errors/index.js';
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
@@ -64,7 +65,11 @@ export function createAuthAuthMethodHandlers({
       const auth = requireAuth(request);
       const { password } = validateStepUpVerify(request.body);
       await authMethodService.verifyPasswordForStepUp({ userPublicId: auth.userId, password });
-      await recordRecentStepUp(redisConnection, auth.userId);
+      // Step-up sentinel is per-(user, session) (sec-A2); fail closed if session id is missing.
+      if (!auth.sessionPublicId) {
+        throw new ForbiddenError('errors:recentStepUpRequired');
+      }
+      await recordRecentStepUp(redisConnection, auth.userId, auth.sessionPublicId);
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,
         action: 'auth.step_up',

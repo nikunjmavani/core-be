@@ -35,12 +35,13 @@ async function authenticate(request: FastifyRequest, _reply: FastifyReply): Prom
       throw new UnauthorizedError('errors:validation.invalidToken');
     }
 
-    await authSessionService.verifyActiveAccessToken(token);
+    const { sessionPublicId } = await authSessionService.verifyActiveAccessToken(token);
 
     request.auth = omitUndefined({
       kind: 'user',
       userId: payload.userId,
       role: payload.role ? (payload.role as GlobalRole) : undefined,
+      sessionPublicId,
     }) as AuthContext;
   } catch (error) {
     if (error instanceof UnauthorizedError) {

@@ -32,11 +32,12 @@ describe('setCachedSessionTokenValid (bounded TTL)', () => {
     );
     await setCachedSessionTokenValid({
       tokenHash: 'hash-long',
+      sessionPublicId: 'sess_long',
       sessionExpiresAt: new Date(NOW + 60 * 60 * 1000),
     });
     expect(redisSet).toHaveBeenCalledWith(
       'session:tok:hash-long',
-      '1',
+      'sess_long',
       'EX',
       SESSION_TOKEN_CACHE_TTL_SECONDS,
     );
@@ -48,9 +49,10 @@ describe('setCachedSessionTokenValid (bounded TTL)', () => {
     );
     await setCachedSessionTokenValid({
       tokenHash: 'hash-short',
+      sessionPublicId: 'sess_short',
       sessionExpiresAt: new Date(NOW + 10_000),
     });
-    expect(redisSet).toHaveBeenCalledWith('session:tok:hash-short', '1', 'EX', 10);
+    expect(redisSet).toHaveBeenCalledWith('session:tok:hash-short', 'sess_short', 'EX', 10);
   });
 
   it('does not cache when the session has already expired', async () => {
@@ -59,6 +61,7 @@ describe('setCachedSessionTokenValid (bounded TTL)', () => {
     );
     await setCachedSessionTokenValid({
       tokenHash: 'hash-expired',
+      sessionPublicId: 'sess_expired',
       sessionExpiresAt: new Date(NOW - 1_000),
     });
     expect(redisSet).not.toHaveBeenCalled();
@@ -70,6 +73,7 @@ describe('setCachedSessionTokenValid (bounded TTL)', () => {
     );
     await setCachedSessionTokenValid({
       tokenHash: 'hash-sub-second',
+      sessionPublicId: 'sess_sub',
       sessionExpiresAt: new Date(NOW + 500),
     });
     expect(redisSet).not.toHaveBeenCalled();
@@ -83,6 +87,7 @@ describe('setCachedSessionTokenValid (bounded TTL)', () => {
     await expect(
       setCachedSessionTokenValid({
         tokenHash: 'hash-error',
+        sessionPublicId: 'sess_error',
         sessionExpiresAt: new Date(NOW + 60_000),
       }),
     ).resolves.toBeUndefined();
