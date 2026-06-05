@@ -42,6 +42,18 @@ describe('MemberRolePermissionService', () => {
   // Unused once the grant guard is stubbed, but the constructor requires them.
   const authorizationService = { resolveUserOrganizationPermissions: vi.fn() };
   const permissionRepository = { findAll: vi.fn() };
+  // Used by put() owner-role protection (sec-T2). Default to a non-matching owner role
+  // so the existing tests' control flow is unchanged.
+  const membershipRepository = {
+    findByUserAndOrganization: vi.fn().mockResolvedValue({
+      id: 99,
+      public_id: 'mem_owner',
+      user_id: 11,
+      organization_id: 1,
+      role_id: 999, // different from the role being PUT against in tests below
+      status: 'ACTIVE',
+    }),
+  };
 
   const service = new MemberRolePermissionService(
     organizationRepository,
@@ -49,6 +61,7 @@ describe('MemberRolePermissionService', () => {
     memberRolePermissionRepository,
     authorizationService as never,
     permissionRepository as never,
+    membershipRepository as never,
   );
 
   const PUT_BODY = { permission_codes: ['tenancy:read', 'tenancy:write'] };
@@ -58,6 +71,7 @@ describe('MemberRolePermissionService', () => {
     vi.mocked(organizationRepository.findByPublicId).mockResolvedValue({
       id: 1,
       public_id: 'org_public_abc',
+      owner_user_id: 11,
     } as never);
     vi.mocked(memberRoleRepository.findByPublicId).mockResolvedValue({
       id: 2,

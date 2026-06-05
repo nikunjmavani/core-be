@@ -1,7 +1,8 @@
-import { NotFoundError } from '@/shared/errors/index.js';
+import { ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import type { MemberRoleRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role.repository.js';
+import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import type { MemberRolePermissionRepository } from './member-role-permission.repository.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { validatePutMemberRolePermissions } from './member-role-permission.validator.js';
@@ -37,6 +38,7 @@ export class MemberRolePermissionService {
     private readonly memberRolePermissionRepository: MemberRolePermissionRepository,
     private readonly authorizationService: AuthorizationService,
     private readonly permissionRepository: PermissionRepository,
+    private readonly membershipRepository: MembershipRepository,
   ) {}
 
   async listPermissionCodesForRole(role_id: number): Promise<string[]> {
@@ -73,6 +75,24 @@ export class MemberRolePermissionService {
       if (!organization) throw new NotFoundError('Organization');
       const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
       if (!role) throw new NotFoundError('Role');
+      /**
+       * Owner-role protection (sec-T2): a `ROLE_MANAGE` holder must not be able to alter
+       * the permission set on the role currently assigned to the organization owner — that
+       * would strip every permission for everyone holding the role (including the owner)
+       * and lock them out of every PERM-gated route until `/transfer-ownership` is invoked.
+       * Owner-role permission changes belong to a separate elevated path (admin tooling /
+       * future "owner survival" guarantee), not the generic PUT.
+       */
+      const ownerMembership = await this.membershipRepository.findByUserAndOrganization(
+        organization.owner_user_id,
+        organization.id,
+      );
+      if (!ownerMembership) {
+        throw new NotFoundError('Owner membership');
+      }
+      if (ownerMembership.role_id === role.id) {
+        throw new ForbiddenError('errors:cannotModifyOwnerRolePermissions');
+      }
       const userId = created_by_user_public_id
         ? await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id)
         : null;
