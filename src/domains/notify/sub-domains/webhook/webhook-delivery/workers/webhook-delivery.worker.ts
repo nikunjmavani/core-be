@@ -33,6 +33,7 @@ import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 import { buildWorkerHandle } from '@/infrastructure/queue/worker-runtime/worker-close.util.js';
 import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { TEN_SECONDS_MS } from '@/shared/constants/ttl.constants.js';
+import { env } from '@/shared/config/env.config.js';
 
 /** Maximum response-body length persisted to the delivery-attempt record (bounds storage growth). */
 const WEBHOOK_DELIVERY_RESPONSE_BODY_STORED_MAX_LENGTH = 2_000;
@@ -175,11 +176,47 @@ async function deliverClaimedWebhook(options: {
     deliveryAttemptRepository,
     deliveryContext,
   } = options;
-  const { webhookId, webhookUrl, encryptedSecret, eventType, payload } = deliveryContext;
+  const {
+    webhookId,
+    webhookUrl,
+    encryptedSecret,
+    eventType,
+    payload,
+    encryptedSecretPrevious,
+    secretRotatedAt,
+  } = deliveryContext;
   const payloadString = JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000);
   const signingSecret = decryptFieldSecret(encryptedSecret);
   const signature = signPayload(signingSecret, payloadString, timestamp);
+
+  // sec-N8: dual-sign while inside the rotation overlap window so a customer
+  // who has not yet rolled their verifier still sees a matching signature.
+  // We deliberately swallow decryption errors on the previous secret — if it
+  // is corrupted or unreadable we simply drop the dual-sign header rather
+  // than fail the delivery.
+  let previousSignatureHeader: string | undefined;
+  if (
+    encryptedSecretPrevious !== null &&
+    encryptedSecretPrevious.length > 0 &&
+    secretRotatedAt !== null
+  ) {
+    const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
+    const rotatedAtMs =
+      secretRotatedAt instanceof Date ? secretRotatedAt.getTime() : Number(secretRotatedAt);
+    if (Number.isFinite(rotatedAtMs) && Date.now() < rotatedAtMs + overlapWindowMs) {
+      try {
+        const previousSecret = decryptFieldSecret(encryptedSecretPrevious);
+        const previousSignature = signPayload(previousSecret, payloadString, timestamp);
+        previousSignatureHeader = `t=${timestamp},v1=${previousSignature}`;
+      } catch (decryptError) {
+        logger.warn(
+          { webhookId, error: decryptError },
+          'webhook.delivery.previous_secret_decrypt_failed',
+        );
+      }
+    }
+  }
 
   const webhookUrlLogFields = safeWebhookUrlForLogs(webhookUrl);
 
@@ -222,6 +259,9 @@ async function deliverClaimedWebhook(options: {
                 // row) so receivers can dedupe at-least-once redeliveries even
                 // though the timestamp + signature change per attempt.
                 'X-Webhook-Delivery-Id': String(deliveryAttemptId),
+                ...(previousSignatureHeader
+                  ? { 'X-Webhook-Signature-Previous': previousSignatureHeader }
+                  : {}),
                 ...(jobContext.requestId ? { 'X-Request-Id': jobContext.requestId } : {}),
               },
               body: payloadString,

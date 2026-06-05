@@ -74,10 +74,25 @@ export class WebhookRepository {
     };
   }
 
+  /**
+   * Count active (non-deleted) webhooks for an organization. Used by the
+   * service-layer per-organization cap (sec-N4) so a single tenant cannot
+   * register an unbounded subscriber list within their rate-limit budget.
+   * Returns a plain integer suitable for comparing against `WEBHOOK_MAX_PER_ORG`.
+   */
+  async countActiveByOrganization(organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ count: count() })
+      .from(webhooks)
+      .where(and(eq(webhooks.organization_id, organization_id), isNull(webhooks.deleted_at)));
+    return Number(rows[0]?.count ?? 0);
+  }
+
   async listEnabledSubscribedToEvent(
     organization_id: number,
     event_type: string,
     page_size = DEFAULT_REPOSITORY_LIST_LIMIT,
+    maxRows?: number,
   ): Promise<WebhookRow[]> {
     const subscribedEventFilter = sql`${webhooks.events} @> ${JSON.stringify([event_type])}::jsonb`;
     const filterConditions: SQL[] = [
@@ -113,6 +128,14 @@ export class WebhookRepository {
 
       if (!hasMore) {
         break;
+      }
+
+      // sec-N4: defense-in-depth fan-out cap. The service-level create cap
+      // already prevents legitimate orgs from registering more than
+      // `WEBHOOK_MAX_PER_ORG` rows, so reaching this branch means either
+      // abuse or the two caps have drifted — caller decides which.
+      if (maxRows !== undefined && allRows.length >= maxRows) {
+        return allRows.slice(0, maxRows);
       }
 
       const lastItem = pageItems.at(-1);
@@ -177,14 +200,24 @@ export class WebhookRepository {
     data: WebhookUpdateData,
     updated_by_user_id?: number,
   ) {
+    // sec-N8: when the encrypted_secret is being rotated, atomically copy the
+    // CURRENT value into encrypted_secret_previous and stamp secret_rotated_at.
+    // We use a SQL expression for `previous` so the previous-value read happens
+    // inside the same UPDATE statement (no read-modify-write race).
+    const rotatingSecret = data.encrypted_secret !== undefined;
+    const baseSet: Record<string, unknown> = {
+      ...data,
+      events: data.events as Record<string, unknown> | undefined,
+      updated_at: databaseNowTimestamp,
+      updated_by_user_id: updated_by_user_id ?? undefined,
+    };
+    if (rotatingSecret) {
+      baseSet['encrypted_secret_previous'] = sql`${webhooks.encrypted_secret}`;
+      baseSet['secret_rotated_at'] = databaseNowTimestamp;
+    }
     const rows = await getRequestDatabase()
       .update(webhooks)
-      .set({
-        ...data,
-        events: data.events as Record<string, unknown> | undefined,
-        updated_at: databaseNowTimestamp,
-        updated_by_user_id: updated_by_user_id ?? undefined,
-      })
+      .set(baseSet)
       .where(
         and(
           eq(webhooks.public_id, public_id),

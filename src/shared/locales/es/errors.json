@@ -73,6 +73,7 @@
   "ownershipTransferTargetNotActive": "No se puede transferir la propiedad: el miembro seleccionado ya no es un miembro activo de la organización",
   "membershipAlreadyExists": "Este usuario ya es miembro de la organización",
   "webhookUrlExists": "Ya existe un webhook para \"{{url}}\" en esta organización",
+  "webhookMaxReached": "Se alcanzó el número máximo de webhooks ({{max}}) para esta organización. Elimina un webhook existente antes de agregar otro.",
   "webauthnCredentialExists": "Esta clave de acceso ya está registrada",
   "ownerCannotLeave": "El propietario no puede abandonar la organización; transfiere la propiedad primero",
   "ownerCannotBeRemoved": "No se puede eliminar al propietario de la organización; transfiere la propiedad primero",

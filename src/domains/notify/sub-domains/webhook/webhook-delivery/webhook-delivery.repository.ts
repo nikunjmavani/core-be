@@ -34,6 +34,12 @@ export interface WebhookDeliveryAttemptWithWebhook {
   attemptCount: number;
   webhookIsEnabled: boolean;
   webhookDeletedAt: Date | null;
+  // sec-N8: dual-sign window. When the previous secret is set AND
+  // `now() < secretRotatedAt + WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS`,
+  // the worker also emits `X-Webhook-Signature-Previous` so the customer
+  // can accept either signature while rolling their verifier.
+  encryptedSecretPrevious: string | null;
+  secretRotatedAt: Date | null;
 }
 
 function resolveDatabase(
@@ -118,6 +124,8 @@ export async function findWebhookDeliveryAttemptWithWebhook(
       attemptCount: webhook_delivery_attempts.attempt_count,
       webhookIsEnabled: webhooks.is_enabled,
       webhookDeletedAt: webhooks.deleted_at,
+      encryptedSecretPrevious: webhooks.encrypted_secret_previous,
+      secretRotatedAt: webhooks.secret_rotated_at,
     })
     .from(webhook_delivery_attempts)
     .innerJoin(webhooks, eq(webhook_delivery_attempts.webhook_id, webhooks.id))
@@ -143,6 +151,8 @@ export async function findWebhookDeliveryAttemptWithWebhook(
     attemptCount: row.attemptCount,
     webhookIsEnabled: row.webhookIsEnabled,
     webhookDeletedAt: row.webhookDeletedAt,
+    encryptedSecretPrevious: row.encryptedSecretPrevious,
+    secretRotatedAt: row.secretRotatedAt,
   };
 }
 

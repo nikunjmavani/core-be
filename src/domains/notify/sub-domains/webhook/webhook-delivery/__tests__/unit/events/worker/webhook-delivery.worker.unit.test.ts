@@ -19,6 +19,9 @@ const { deliveryContextFixture } = vi.hoisted(() => ({
     // tests below proceed through the claim → deliver → record sequence.
     webhookIsEnabled: true,
     webhookDeletedAt: null as Date | null,
+    // sec-N8: dual-sign fields; null means no rotation overlap → single signature only.
+    encryptedSecretPrevious: null as string | null,
+    secretRotatedAt: null as Date | null,
   },
 }));
 
