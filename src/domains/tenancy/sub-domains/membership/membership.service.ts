@@ -12,6 +12,9 @@ import type { OrganizationService } from '@/domains/tenancy/sub-domains/organiza
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { MemberRolePermissionService } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.service.js';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
+import type { PermissionRepository } from '@/domains/tenancy/sub-domains/permission/permission.repository.js';
+import { assertCallerCanGrantPermissionCodes } from '@/domains/tenancy/sub-domains/permission/assert-grantable-permissions.util.js';
 import type { MembershipRepository } from './membership.repository.js';
 import type { MembershipOutput, MembershipRow } from './membership.types.js';
 import {
@@ -83,6 +86,8 @@ export class MembershipService {
     private readonly memberRoleService: MemberRoleService,
     private readonly memberRolePermissionService: MemberRolePermissionService,
     private readonly membershipRepository: MembershipRepository,
+    private readonly authorizationService: AuthorizationService,
+    private readonly permissionRepository: PermissionRepository,
     private readonly organizationSettingsService?: OrganizationSettingsService,
     private readonly userSettingsService?: UserSettingsService,
   ) {}
@@ -213,6 +218,21 @@ export class MembershipService {
         organization_public_id,
         parsed.role_id,
       );
+      // Privilege-escalation guard: the caller must already hold every permission the assigned
+      // role would grant. Without this, a holder of `MEMBERSHIP_MANAGE` + `INVITATION_MANAGE`
+      // could mint an Admin (or any privileged) membership for a throwaway account and accept
+      // the invitation unauthenticated → full organization takeover. Runs BEFORE the row is
+      // persisted so a rejected attempt leaves no half-state.
+      const rolePermissionCodes = await this.memberRolePermissionService.listPermissionCodesForRole(
+        role.id,
+      );
+      await assertCallerCanGrantPermissionCodes({
+        authorizationService: this.authorizationService,
+        permissionRepository: this.permissionRepository,
+        callerUserPublicId: invited_by_user_public_id,
+        organizationPublicId: organization_public_id,
+        requestedPermissionCodes: rolePermissionCodes,
+      });
       const userId = await this.organizationService.resolveUserInternalIdByPublicId(parsed.user_id);
       if (userId === null) throw new NotFoundError('User');
       const inviterId =

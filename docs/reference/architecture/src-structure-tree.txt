@@ -582,6 +582,7 @@ src/
     │   │   │   │   │   ├── membership.repository.db.unit.test.ts
     │   │   │   │   │   ├── membership.serializer.unit.test.ts
     │   │   │   │   │   ├── membership.service.cache-invalidation.unit.test.ts
+    │   │   │   │   │   ├── membership.service.grantable-permissions.unit.test.ts
     │   │   │   │   │   ├── membership.service.unit.test.ts
     │   │   │   │   │   └── membership.validator.unit.test.ts
     │   │   │   ├── member-invitation/
