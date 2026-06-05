@@ -121,6 +121,18 @@ describe('AuthMethodService', () => {
   });
 
   it('lists and mutates auth methods for user', async () => {
+    // sec-A5 guard: `delete()` reads the target method then verifies that another
+    // login-capable method survives. Provide both so the happy-path mutation
+    // continues to exercise the create/delete/revokeAllForUser fan-out.
+    vi.mocked(authMethodRepository.findByIdForUser).mockResolvedValue({
+      id: 2,
+      user_id: 1,
+      method_type: 'OAUTH',
+    } as never);
+    vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([
+      { id: 2, user_id: 1, method_type: 'OAUTH' },
+      { id: 3, user_id: 1, method_type: 'PASSWORD' },
+    ] as never);
     await service.list('user_public');
     await service.create('user_public', {
       method_type: 'MAGIC_LINK',

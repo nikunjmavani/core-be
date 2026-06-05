@@ -71,6 +71,7 @@ src/
     │   │   ├── unit/
     │   │   │   ├── auth-mfa.validator.unit.test.ts
     │   │   │   ├── auth.controller.unit.test.ts
+    │   │   │   ├── auth.routes.session-revoke-stepup.unit.test.ts
     │   │   │   ├── auth.serializer.unit.test.ts
     │   │   │   ├── auth.service.unit.test.ts
     │   │   │   ├── auth.validator.oauth-callback.unit.test.ts
@@ -101,6 +102,7 @@ src/
     │   │   │   │   │       └── auth-method.event-handlers.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.unit.test.ts
+    │   │   │   │   │   ├── auth-method.service.last-method-guard.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.step-up-mfa.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.unit.test.ts
     │   │   │   │   │   ├── auth-method.validator.unit.test.ts
@@ -1774,6 +1776,7 @@ src/
     │   ├── middleware/
     │   │   ├── api-key-auth.middleware.unit.test.ts
     │   │   ├── api-versioning.middleware.unit.test.ts
+    │   │   ├── auth.middleware.super-admin-rederive.unit.test.ts
     │   │   ├── auth.middleware.unit.test.ts
     │   │   ├── captcha.middleware.unit.test.ts
     │   │   ├── cookie-session-origin.pre-handler.unit.test.ts

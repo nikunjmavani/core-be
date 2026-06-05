@@ -7,6 +7,7 @@
   "cannotModifyOwnerRolePermissions": "No se pueden modificar los permisos del rol actualmente asignado al propietario de la organización; transfiere la propiedad a otro rol antes de editar los permisos de este rol.",
   "mfaStepUpRequired": "Se requiere autenticación multifactor para esta confirmación; verifica a través del endpoint MFA en lugar de la contraseña.",
   "lastMfaRequiredByOrganization": "No puedes eliminar tu último método MFA mientras tu organización requiere MFA. Desactiva primero el requisito de MFA a nivel de organización o transfiere tu membresía.",
+  "cannotRemoveLastAuthMethod": "No puedes eliminar tu último método de inicio de sesión (contraseña, OAuth o enlace mágico). Agrega otro método primero para evitar quedarte bloqueado.",
   "cannotDeleteSystemRole": "Los roles del sistema no pueden eliminarse; son necesarios para los niveles de permisos predeterminados de la organización.",
   "roleHasActiveMembers": "No se puede eliminar un rol que está actualmente asignado a uno o más miembros activos. Primero reasigna esos miembros a otro rol.",
   "recentStepUpRequired": "Se requiere una autenticación de confirmación reciente para esta acción",

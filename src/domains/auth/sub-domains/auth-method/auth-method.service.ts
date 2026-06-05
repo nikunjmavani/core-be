@@ -17,12 +17,12 @@ import {
 } from '@/domains/auth/sub-domains/auth-method/events/auth.events.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
+import { AUTH_METHOD_TYPE } from '@/domains/auth/sub-domains/auth-method/auth-method.constants.js';
 import { withTransaction } from '@/infrastructure/database/transaction.js';
 import {
   runWithPinnedDatabaseHandle,
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
-import { AUTH_METHOD_TYPE } from './auth-method.constants.js';
 import type { AuthMethodCreateData } from './auth-method.types.js';
 import type { AuthMethodRepository } from './auth-method.repository.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
@@ -37,6 +37,18 @@ import {
 
 const PASSWORD_RESET_EXPIRES_IN_MINUTES = 60;
 const EMAIL_VERIFICATION_EXPIRES_IN_HOURS = 24;
+
+/**
+ * Auth-method types that can mint a session on their own (sec-A5). Used by
+ * {@link AuthMethodService.delete} to refuse revoking the user's last login surface.
+ * MFA types are intentionally excluded — they are second factors and never the only
+ * credential a user has.
+ */
+const LOGIN_CAPABLE_METHOD_TYPES = new Set<string>([
+  AUTH_METHOD_TYPE.PASSWORD,
+  AUTH_METHOD_TYPE.OAUTH,
+  AUTH_METHOD_TYPE.MAGIC_LINK,
+]);
 
 /**
  * Owns the lifecycle of {@link auth_methods} rows and the password/email
@@ -105,13 +117,36 @@ export class AuthMethodService {
     );
   }
 
+  /**
+   * Revokes a user's auth method.
+   *
+   * @remarks
+   * sec-A5: refuses to revoke the user's LAST login-capable credential. Login-capable
+   * types are `PASSWORD`, `OAUTH`, and `MAGIC_LINK` (server-issued auth methods of those
+   * kinds) — MFA factors (`MFA_TOTP`, `MFA_SMS`, `MFA_EMAIL`) are second factors and
+   * never grant a session on their own, so revoking the last MFA method is permitted
+   * here (the org-policy guard on `MfaService.deleteMfa` covers the MFA-required-by-org
+   * case — sec-A4). Without this guard, a user could revoke their only PASSWORD/OAUTH
+   * and lock themselves out of every login surface — recovery requires admin intervention.
+   */
   async delete(userPublicId: string, methodId: number) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
-    const revoked = await withUserDatabaseContext(userPublicId, () =>
-      this.authMethodRepository.revoke(methodId, user.id),
-    );
-    if (!revoked) throw new NotFoundError('Auth method');
+    await withUserDatabaseContext(userPublicId, async () => {
+      const existing = await this.authMethodRepository.findByIdForUser(methodId, user.id);
+      if (!existing) throw new NotFoundError('Auth method');
+      if (LOGIN_CAPABLE_METHOD_TYPES.has(existing.method_type)) {
+        const allActive = await this.authMethodRepository.listByUserId(user.id);
+        const otherLoginCapableCount = allActive.filter(
+          (method) => method.id !== methodId && LOGIN_CAPABLE_METHOD_TYPES.has(method.method_type),
+        ).length;
+        if (otherLoginCapableCount === 0) {
+          throw new ForbiddenError('errors:cannotRemoveLastAuthMethod');
+        }
+      }
+      const revoked = await this.authMethodRepository.revoke(methodId, user.id);
+      if (!revoked) throw new NotFoundError('Auth method');
+    });
   }
 
   async revokeAllForUser(userPublicId: string): Promise<void> {

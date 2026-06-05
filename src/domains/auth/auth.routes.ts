@@ -318,11 +318,16 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/sessions',
     {
       onRequest: [app.authenticate],
+      // sec-A7: a stolen bearer must not be able to kick the legitimate user out of their
+      // own browser. Requiring recent step-up forces the attacker to also possess the
+      // second factor (or password for non-MFA users — sec-A1 blocks the password-only
+      // step-up path for MFA-enabled accounts).
+      preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Revoke all sessions',
         description:
-          'Revokes all active sessions for the authenticated user except the current one.',
+          'Revokes all active sessions for the authenticated user except the current one. Requires recent step-up authentication.',
         tags: ['Auth', 'Session'],
       },
     },
@@ -407,11 +412,13 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/sessions/:id',
     {
       onRequest: [app.authenticate],
+      // sec-A7: see the comment on DELETE /me/sessions above — same threat model.
+      preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Revoke a specific session',
         description:
-          'Revokes a specific session by its ID. Cannot revoke the current session (use logout instead).',
+          'Revokes a specific session by its ID. Cannot revoke the current session (use logout instead). Requires recent step-up authentication.',
         tags: ['Auth', 'Session'],
         params: sessionIdParamsDto,
       },
