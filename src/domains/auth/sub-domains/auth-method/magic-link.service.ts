@@ -142,7 +142,10 @@ export class MagicLinkService {
     }
     const user = await this.userService.findById(record.user_id);
     if (!user) throw new UnauthorizedError('errors:userNotFound');
-    assertUserAccountActive(user.status);
+    // sec-U1: pass the row so the assertion rejects soft-deleted users (the resolver
+    // also filters `deleted_at IS NULL`, so the user would already be null; this is
+    // belt-and-suspenders against a regression in either layer).
+    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
     return completeFirstFactorAuth({
       user: {

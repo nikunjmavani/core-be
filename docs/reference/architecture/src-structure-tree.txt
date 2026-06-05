@@ -825,6 +825,7 @@ src/
     │   │   │   ├── user.repository.db.unit.test.ts
     │   │   │   ├── user.repository.unit.test.ts
     │   │   │   ├── user.serializer.unit.test.ts
+    │   │   │   ├── user.service.account-deletion-safety.unit.test.ts
     │   │   │   ├── user.service.unit.test.ts
     │   │   │   ├── user.validator.unit.test.ts
     │   │   │   └── users-email-trgm-migration.policy.unit.test.ts

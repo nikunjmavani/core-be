@@ -98,9 +98,10 @@ export async function completeOAuthUserSession(parameters: {
         },
       });
 
-      // A pre-existing account may have been suspended/locked since signup; never
-      // mint a session for it via the OAuth callback (freshly created users are ACTIVE).
-      assertUserAccountActive(user.status);
+      // A pre-existing account may have been suspended/locked/soft-deleted since signup;
+      // never mint a session for it via the OAuth callback. Passing the row (not just
+      // `status`) also rejects soft-deleted users (sec-U1 defense in depth).
+      assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
       const authResult = await completeFirstFactorAuth({
         user: {

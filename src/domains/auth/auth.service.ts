@@ -164,8 +164,9 @@ export class AuthService {
     }
 
     // First factor verified — refuse to issue (or escalate to MFA for) a session
-    // for a suspended/locked account before any token is minted.
-    assertUserAccountActive(user.status);
+    // for a suspended/locked/deleted account before any token is minted. Passing the row
+    // (not just `status`) also rejects soft-deleted users (sec-U1 defense in depth).
+    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
     // Correct password clears the failure counter and lifts any active lock so the owner is
     // never held out by attacker-driven failed attempts.

@@ -94,7 +94,8 @@ export class MfaService {
     if (!user) {
       throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
     }
-    assertUserAccountActive(user.status);
+    // sec-U1: also rejects soft-deleted users.
+    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
     let verified = false;
     if (parsed.totp_code) {

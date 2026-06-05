@@ -153,12 +153,25 @@ export class UserService {
     }
     // Persist offboarding DB effects before external cleanup. Each step uses its own per-user RLS
     // transaction (FORCE RLS keys writes on app.current_user_id), so a single wrapping transaction
-    // is not feasible — but ordering still matters: if an early DB step fails, sessions and avatar
-    // must remain intact. S3 avatar deletion runs only after soft-delete succeeds.
-    await offboarding.uploadService.tombstoneAllByUserId(user.id);
-    await offboarding.userDataExportService.deleteAllExportsForUser(user.id, public_id);
+    // is not feasible — but ordering matters for correctness:
+    //
+    //   (1) revoke sessions → kills any in-flight bearer immediately, so no concurrent request
+    //       can race the purge steps below and create orphan PENDING rows (sec-U8).
+    //   (2) revoke auth methods → no fresh login can re-mint a session.
+    //   (3) invalidate verification tokens → magic-link / password-reset issued seconds before
+    //       deletion can no longer mint a session for the soon-to-be-deleted user (sec-U1).
+    //   (4) purge data-exports + uploads → now that sessions/tokens are dead, no concurrent
+    //       writer can re-introduce rows.
+    //   (5) softDelete → flip deleted_at; this is the final DB-state mutation.
+    //   (6) clearAvatarStorage → S3 cleanup after soft-delete succeeds.
+    //
+    // If an early DB step fails, sessions and avatar must remain intact (deletion is retryable
+    // from `deletion_started_at`); S3 avatar deletion only runs after soft-delete succeeds.
     await offboarding.authSessionService.revokeAllSessions(public_id);
     await offboarding.authMethodService.revokeAllForUser(public_id);
+    await offboarding.authMethodService.invalidateAllVerificationTokensForUser(public_id);
+    await offboarding.uploadService.tombstoneAllByUserId(user.id);
+    await offboarding.userDataExportService.deleteAllExportsForUser(user.id, public_id);
     const deleted = await withUserDatabaseContext(public_id, () =>
       this.repository.softDelete(public_id),
     );
