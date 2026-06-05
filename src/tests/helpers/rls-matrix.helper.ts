@@ -74,6 +74,13 @@ export const RLS_MATRIX_SKIP_CRUD_TABLES = new Set([
   tableKey('tenancy', 'organization_settings'),
   tableKey('notify', 'webhook_delivery_attempts'),
   tableKey('auth', 'verification_tokens'),
+  // sec-U3: audit.logs is append-only — REVOKE UPDATE causes UPDATE to throw
+  // `permission denied` (instead of silently affecting 0 rows), and DELETE
+  // outside the retention context silently affects 0 rows but the matrix's
+  // SELECT-then-UPDATE-then-DELETE shape doesn't fit. The audit-append-only
+  // dedicated test file (audit-append-only.security.test.ts) covers both
+  // semantics precisely.
+  tableKey('audit', 'logs'),
 ]);
 
 export async function grantCoreBeAppRoleForTests(): Promise<void> {
