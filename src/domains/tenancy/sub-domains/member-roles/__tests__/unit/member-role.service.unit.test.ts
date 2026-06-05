@@ -10,7 +10,7 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
   invalidateOrganizationPermissions: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { NotFoundError } from '@/shared/errors/index.js';
+import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
@@ -46,7 +46,18 @@ describe('MemberRoleService', () => {
     softDelete: vi.fn().mockResolvedValue(roleRow),
   } as unknown as MemberRoleRepository;
 
-  const service = new MemberRoleService(organizationService, memberRoleRepository);
+  // sec-T3: `MemberRoleService.delete` now reads `membershipRepository.countActiveByRoleId`
+  // before soft-deleting; this test exercises the existing list/get/create/update paths
+  // (which do not touch memberships), so the default count is irrelevant.
+  const membershipRepository = {
+    countActiveByRoleId: vi.fn().mockResolvedValue(0),
+  } as never;
+
+  const service = new MemberRoleService(
+    organizationService,
+    memberRoleRepository,
+    membershipRepository,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -205,16 +216,32 @@ describe('MemberRoleService', () => {
     );
   });
 
-  it('create supports system roles and missing creator user id', async () => {
+  it('create rejects `is_system` from the client body (sec-T3: server-only flag)', async () => {
+    // sec-T3 removed `is_system` from createMemberRoleDto; clients that still send it
+    // get a ValidationError before the repository is touched.
+    await expect(
+      service.create(
+        organization.public_id,
+        { name: 'System', description: null, is_system: true },
+        'missing_creator',
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(memberRoleRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('create persists with null created_by_user_id when the creator id cannot be resolved', async () => {
     vi.mocked(organizationService.resolveUserInternalIdByPublicId).mockResolvedValue(null);
     await service.create(
       organization.public_id,
-      { name: 'System', description: null, is_system: true },
+      { name: 'Custom', description: null },
       'missing_creator',
     );
     expect(memberRoleRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ is_system: true, created_by_user_id: null }),
+      expect.objectContaining({ name: 'Custom', created_by_user_id: null }),
     );
+    // sec-T3 also: the service no longer threads `is_system` through to the repo.
+    const createPayload = vi.mocked(memberRoleRepository.create).mock.calls[0]![0];
+    expect('is_system' in createPayload).toBe(false);
   });
 
   it('getByPublicId and requireRoleRecordByPublicId throw when organization is missing', async () => {
