@@ -17,6 +17,11 @@
 ALTER TABLE audit.logs
   ADD COLUMN IF NOT EXISTS actor_api_key_id bigint;
 --> statement-breakpoint
-ALTER TABLE audit.logs
-  ADD CONSTRAINT logs_actor_api_key_id_api_keys_id_fk
-  FOREIGN KEY (actor_api_key_id) REFERENCES tenancy.api_keys(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  ALTER TABLE audit.logs
+    ADD CONSTRAINT logs_actor_api_key_id_api_keys_id_fk
+    FOREIGN KEY (actor_api_key_id) REFERENCES tenancy.api_keys(id) ON DELETE SET NULL;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
