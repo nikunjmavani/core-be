@@ -192,7 +192,7 @@ flowchart TB
 
   subgraph backmerge [Post-release back-merge]
     BackmergeWorkflow["post-release-backmerge.yml: PR main to dev"]
-    DevSeed["Reseed manifest.dev.json to next-minor-dev.0"]
+    DevSeed["Reseed dev version files to non-decreasing -dev.N"]
     BackmergeWorkflow --> DevSeed
   end
 
@@ -206,7 +206,7 @@ flowchart TB
 - **Feature → PR → CI:** Every PR runs quality, tests, and security. PR title must follow conventional commits (validated by PR checks).
 - **Merge to dev:** push to `dev` triggers release-please which opens or updates the **dev release PR** (`vX.Y.Z-dev.N`). Auto-merge in [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) ships it → tag → SBOM → deploy `development`.
 - **Promote dev → main:** open a PR `dev → main` titled `chore(release): promote <version> to main`. Use **Merge commit** so each `feat:` / `fix:` survives; if squash is required, add `Release-As: <version>` to the squash body. release-please then opens the stable release PR (`vX.Y.Z`) → auto-merge → tag → deploy `production`.
-- **Back-merge main → dev (automatic):** the new [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) fires on every non-prerelease GitHub Release, merges main into dev, reseeds `manifest.dev.json` to the next prerelease window (default rule: bump minor → `X.(Y+1).0-dev.0`), and opens an auto-merging PR `main → dev`. Section 4.2 covers it in detail.
+- **Back-merge main → dev (automatic):** [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) explicitly dispatches [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) after a stable `main` release, because releases created with `GITHUB_TOKEN` do not reliably fan out to release-triggered workflows. The back-merge workflow still also supports manual `workflow_dispatch` and direct `release: published` events. It merges main into dev, reseeds dev version files to the next non-decreasing prerelease window, and opens an auto-merging PR `main → dev`. Section 4.2 covers it in detail.
 
 **Production path (steps):**
 
@@ -215,7 +215,7 @@ flowchart TB
 3. Merge the release PR → stable GitHub Release + tag (`vX.Y.Z`) → the release publish pipeline attaches the SBOM.
 4. CI `docker-build` job on `main` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (tags `:sha` and `:latest`).
 5. Deploy workflow runs on push to `main` (validate env → log expected GHCR image refs → migrate → `pnpm tool:railway-deploy-image` pins each Railway service to the freshly scanned GHCR image and triggers `serviceInstanceDeployV2` → `/readyz` → worker readiness → `pnpm test:api-smoke` on the Railway API URL).
-6. [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) opens an auto-merging PR `main → dev` with the reseed.
+6. [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) dispatches [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml), which opens an auto-merging PR `main → dev` with the reseed.
 7. Optional load check: `pnpm load:health` against the deployed base URL.
 
 **Development path (steps):** identical to production but on the `dev` branch:
@@ -230,16 +230,16 @@ flowchart TB
 
 ### 4.2 Post-release back-merge (main → dev)
 
-Why it exists: after main publishes `vX.Y.Z`, dev's `manifest.dev.json` is still at something like `X.Y.Z-dev.4`. The next dev commits would compute against that base and try to emit `X.Y.Z-dev.5`, but `vX.Y.Z` has already shipped. The back-merge explicitly reseeds dev so prereleases continue on a fresh window.
+Why it exists: after main publishes `vX.Y.Z`, dev's `manifest.dev.json` is still at something like `X.Y.Z-dev.4`. The next dev commits would compute against that base and try to emit `X.Y.Z-dev.5`, but `vX.Y.Z` has already shipped. The back-merge explicitly reseeds dev so prereleases continue on a fresh window. When dev is already ahead of the stable line, the workflow keeps the current dev seed rather than moving it backward.
 
 The workflow [.github/workflows/post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) does:
 
 1. Checks out `dev`, fetches `main` at the just-released tag.
 2. Creates `release/backmerge-v<version>` off `dev` and merges `origin/main` into it (brings any direct-on-main hotfix commits).
 3. Computes the next dev seed:
-   - Default: bump minor → `X.(Y+1).0-dev.0`.
+   - Default: max(current dev seed, bump minor → `X.(Y+1).0-dev.0`).
    - Override: `workflow_dispatch` input `next_seed` (e.g. `4.0.0-dev.0` if the next cycle is breaking, or `3.1.1-dev.0` if patch-only).
-4. Edits **only** `manifest.dev.json` to the seed.
+4. Edits `manifest.dev.json` and `package.json` to the seed.
 5. Opens or updates the PR `main → dev` and enables auto-merge (`gh pr merge --auto --squash`).
 
 The PR title is `chore(release): back-merge v<version> into dev`. If the merge has conflicts, the workflow fails fast — open the PR manually, resolve conflicts, push, then re-trigger via `workflow_dispatch` with the same `version`.
@@ -251,7 +251,7 @@ On GitHub, after merging a change that touches release-please files:
 1. Open **Actions** → **Post-merge CI** → confirm **Release Please** succeeded on **both** `main` and `dev`.
 2. Confirm a **release-please** PR exists or is updated when there are new conventional commits since the channel's manifest version (or that the workflow completes with no release until the next qualifying commit). Each channel produces its own PR.
 3. After you **merge** an automated release PR, confirm the matching **GitHub Release** + tag exist and that `CHANGELOG.md` / `package.json` were updated by the bot — `main` → stable `vX.Y.Z`, `dev` → prerelease `vX.Y.Z-dev.N`.
-4. After a **stable** main release: confirm [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) opened the back-merge PR within minutes and that it auto-merges into dev with `manifest.dev.json` reseeded.
+4. After a **stable** main release: confirm [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) dispatched [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml), opened the back-merge PR within minutes, and auto-merges into dev with `manifest.dev.json` and `package.json` reseeded.
 
 ---
 

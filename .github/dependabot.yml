@@ -7,6 +7,7 @@ updates:
   # npm (pnpm) dependencies — lockfile + semver ranges in package.json
   - package-ecosystem: 'npm'
     directory: '/'
+    target-branch: 'dev'
     schedule:
       interval: 'weekly'
       day: 'monday'
@@ -47,6 +48,7 @@ updates:
   # GitHub Actions versions
   - package-ecosystem: 'github-actions'
     directory: '/'
+    target-branch: 'dev'
     schedule:
       interval: 'weekly'
       day: 'monday'
@@ -63,6 +65,7 @@ updates:
   # Docker base image (aligns with CI Trivy gate)
   - package-ecosystem: 'docker'
     directory: '/'
+    target-branch: 'dev'
     schedule:
       interval: 'weekly'
       day: 'monday'
