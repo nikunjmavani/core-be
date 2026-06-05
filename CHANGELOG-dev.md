@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.5.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.2-dev.0...v4.5.3-dev.0) (2026-06-05)
+
+
+### Fixed
+
+* **ci:** dispatch stable release backmerge ([be9190f](https://github.com/nikunjmavani/core-be/commit/be9190f6ff26d04905bc46127717c96fbbe57ab0))
+
 ## [4.5.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.1-dev.0...v4.5.2-dev.0) (2026-06-05)
 
 
