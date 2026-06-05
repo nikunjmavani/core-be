@@ -37,6 +37,14 @@ export function createUserController({
     deleteMe: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
       await userService.deleteMe(auth.userId);
+      // sec-U9: audit self-initiated account offboarding at WARNING so support can
+      // distinguish "user deleted their own account" from "admin deleted it".
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'user.self.delete',
+        resource_type: 'user',
+        severity: 'WARNING',
+      });
       return reply.status(204).send();
     },
 
@@ -103,38 +111,71 @@ export function createUserController({
     },
 
     updateUser: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
       const userId = validatePublicIdParam(
         (request.params as { userId: string }).userId ?? '',
         'userId',
       );
       const data = await userService.adminUpdateUser(userId, request.body);
+      // sec-U9: every admin user-management action emits an audit row so a rogue
+      // admin cannot wipe accounts without leaving a platform-visible trace.
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'user.admin.update',
+        resource_type: 'user',
+        metadata: { target_user_public_id: userId },
+      });
       return successResponse(data, getRequestIdentifier(request));
     },
 
     deleteUser: async (request: FastifyRequest, reply: FastifyReply) => {
+      const auth = requireAuth(request);
       const userId = validatePublicIdParam(
         (request.params as { userId: string }).userId ?? '',
         'userId',
       );
       await userService.deleteUser(userId);
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'user.admin.delete',
+        resource_type: 'user',
+        severity: 'WARNING',
+        metadata: { target_user_public_id: userId },
+      });
       return reply.status(204).send();
     },
 
     suspendUser: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
       const userId = validatePublicIdParam(
         (request.params as { userId: string }).userId ?? '',
         'userId',
       );
       const data = await userService.suspendUser(userId);
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'user.admin.suspend',
+        resource_type: 'user',
+        severity: 'WARNING',
+        metadata: { target_user_public_id: userId },
+      });
       return successResponse(data, getRequestIdentifier(request));
     },
 
     unsuspendUser: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
       const userId = validatePublicIdParam(
         (request.params as { userId: string }).userId ?? '',
         'userId',
       );
       const data = await userService.unsuspendUser(userId);
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'user.admin.unsuspend',
+        resource_type: 'user',
+        severity: 'WARNING',
+        metadata: { target_user_public_id: userId },
+      });
       return successResponse(data, getRequestIdentifier(request));
     },
   };

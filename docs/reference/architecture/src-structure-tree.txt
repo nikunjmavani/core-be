@@ -22,6 +22,7 @@ src/
     │   │   │   │   └── worker/
     │   │   │   │   │   └── audit-retention.worker.unit.test.ts
     │   │   │   ├── audit-export.processor.unit.test.ts
+    │   │   │   ├── audit.controller.admin-read-audit.unit.test.ts
     │   │   │   ├── audit.controller.unit.test.ts
     │   │   │   ├── audit.repository.boundary.db.unit.test.ts
     │   │   │   ├── audit.repository.db.unit.test.ts
@@ -826,6 +827,7 @@ src/
     │   │   │   │   └── worker/
     │   │   │   │   │   └── user-tombstone-retention.worker.unit.test.ts
     │   │   │   ├── tombstone-repository-reads.unit.test.ts
+    │   │   │   ├── user.controller.admin-audit.unit.test.ts
     │   │   │   ├── user.controller.unit.test.ts
     │   │   │   ├── user.repository.db.unit.test.ts
     │   │   │   ├── user.repository.unit.test.ts
@@ -1867,6 +1869,7 @@ src/
     │   │   ├── auth/
     │   │   │   ├── account-status.util.unit.test.ts
     │   │   │   ├── authorization-request-memo.policy.unit.test.ts
+    │   │   │   ├── authorization.util.permission-deny-audit.unit.test.ts
     │   │   │   ├── authorization.util.unit.test.ts
     │   │   │   └── global-admin-role.util.unit.test.ts
     │   │   ├── http/
