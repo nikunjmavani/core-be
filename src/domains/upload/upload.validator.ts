@@ -43,6 +43,15 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
       { field: 'organizationId', messageKey: 'errors:uploadOrganizationIdRequired' },
     ]);
   }
+  // sec-UP3: when present, organizationId must match the canonical public-id
+  // shape before it flows into S3 keys / Redis cache keys / RLS context.
+  // Enforced at the validator layer (not the DTO) so the OpenAPI contract
+  // stays a generic string — existing clients still send the canonical 21-
+  // char id; arbitrary 1-255-char strings are rejected with ValidationError
+  // before any downstream side effect.
+  if (input.organizationId !== undefined) {
+    validatePublicIdParam(input.organizationId, 'organizationId');
+  }
 
   // Content type validation
   if (!allowedTypes.includes(input.contentType)) {

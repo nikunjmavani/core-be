@@ -41,9 +41,3 @@ api patch /api/v1/tenancy/organizations/{id}/webhooks/{webhookid} request proper
 api put /api/v1/users/me/notification-preferences request property `preferences` max items set to
 api put /api/v1/tenancy/organizations/{id}/roles/{roleid}/permissions request property `permission_codes` max items set to
 api patch /api/v1/users/me/settings request property `preferred_locales` max items set to
-
-# 7. POST /api/v1/uploads tightened `organizationId` to the canonical PUBLIC_ID_REGEX
-#    pattern (21-char alphanumeric/_-) as a security hardening: the field flows
-#    into S3 keys and Redis cache keys, and an unconstrained 1-255-char string was
-#    a cardinality / path-traversal defense bypass (sec-UP3, upload.dto.ts).
-organizationId
