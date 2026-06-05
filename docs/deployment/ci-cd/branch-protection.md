@@ -107,8 +107,8 @@ These settings match the committed JSON files in [`.github/rulesets/`](../../../
 | Dismiss stale approvals on push | Yes | No |
 | Require approval on last push | Yes | No |
 | Require conversation resolution | Yes | Yes |
-| Allowed merge methods | Squash only | Squash + merge commit |
-| Require linear history | Yes | No |
+| Allowed merge methods | Merge commit only | Squash only |
+| Require linear history | No | No |
 | Require signed commits | Yes | No |
 | Block force-push (`non_fast_forward`) | Yes | Yes |
 | Block branch deletion | Yes | Yes |

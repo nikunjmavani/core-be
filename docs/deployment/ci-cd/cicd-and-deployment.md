@@ -159,7 +159,7 @@ The dev config sets `prerelease: true` + `prerelease-type: "dev"` and writes its
 
 Local commits are validated by **commitlint** via [.husky/commit-msg](../../../.husky/commit-msg); pushes to **main** and **dev** run **Commitlint** inside [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml).
 
-**Branch protection:** Require the CI and PR-check jobs listed in [branch-protection.md](branch-protection.md); apply policies via GitHub Rulesets using [`.github/rulesets/`](../../../.github/rulesets/) or the GitHub UI. On **`main`**, use **Squash and merge** for normal PRs (the squash subject must stay conventional); use **Merge commit** for the **promotion PR `dev → main`** so each underlying `feat:` / `fix:` survives and release-please can compute the right bump (otherwise add a `Release-As: <version>` footer in the squash commit body).
+**Branch protection:** Require the CI and PR-check jobs listed in [branch-protection.md](branch-protection.md); apply policies via GitHub Rulesets using [`.github/rulesets/`](../../../.github/rulesets/) or the GitHub UI. Use **Squash and merge** for feature/fix PRs into **`dev`**; use **Merge commit** for PRs into **`main`**, especially the promotion PR `dev → main`, so each underlying `feat:` / `fix:` survives and release-please can compute the right bump.
 
 | What | Where |
 | --- | --- |
@@ -205,12 +205,12 @@ flowchart TB
 
 - **Feature → PR → CI:** Every PR runs quality, tests, and security. PR title must follow conventional commits (validated by PR checks).
 - **Merge to dev:** push to `dev` triggers release-please which opens or updates the **dev release PR** (`vX.Y.Z-dev.N`). Auto-merge in [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) ships it → tag → SBOM → deploy `development`.
-- **Promote dev → main:** open a PR `dev → main` titled `chore(release): promote <version> to main`. Use **Merge commit** so each `feat:` / `fix:` survives; if squash is required, add `Release-As: <version>` to the squash body. release-please then opens the stable release PR (`vX.Y.Z`) → auto-merge → tag → deploy `production`.
+- **Promote dev → main:** open a PR `dev → main` titled `chore(release): promote <version> to main`. Use **Merge commit** so each `feat:` / `fix:` survives. release-please then opens the stable release PR (`vX.Y.Z`) → auto-merge → tag → deploy `production`.
 - **Back-merge main → dev (automatic):** [post-merge-ci.yml](../../../.github/workflows/post-merge-ci.yml) explicitly dispatches [post-release-backmerge.yml](../../../.github/workflows/post-release-backmerge.yml) after a stable `main` release, because releases created with `GITHUB_TOKEN` do not reliably fan out to release-triggered workflows. The back-merge workflow still also supports manual `workflow_dispatch` and direct `release: published` events. It merges main into dev, reseeds dev version files to the next non-decreasing prerelease window, and opens an auto-merging PR `main → dev`. Section 4.2 covers it in detail.
 
 **Production path (steps):**
 
-1. Merge promotion PR to `main` (Merge commit recommended).
+1. Merge promotion PR to `main` (Merge commit only).
 2. release-please creates or updates the stable release PR.
 3. Merge the release PR → stable GitHub Release + tag (`vX.Y.Z`) → the release publish pipeline attaches the SBOM.
 4. CI `docker-build` job on `main` Trivy-scans and pushes `ghcr.io/<owner>/<repo>/core-be-api` and `core-be-worker` (tags `:sha` and `:latest`).
