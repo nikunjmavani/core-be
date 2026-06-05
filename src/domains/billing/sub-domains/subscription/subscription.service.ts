@@ -154,6 +154,14 @@ export class SubscriptionService {
             provider: paymentResult.providerSubscriptionId ? 'stripe' : undefined,
             provider_subscription_id: paymentResult.providerSubscriptionId,
             provider_customer_id: paymentResult.providerCustomerId,
+            // sec-B2: stamp the watermark when Stripe accepted the subscription so a
+            // late-arriving `customer.subscription.created` event (whose `created`
+            // timestamp predates this moment) is filtered by the monotonic guard and
+            // cannot regress the row to a stale earlier state. Unset when Stripe is
+            // not configured (no webhook to reconcile, no watermark needed).
+            last_stripe_event_created_at: paymentResult.providerSubscriptionId
+              ? new Date()
+              : undefined,
           }),
         ),
       );
@@ -171,17 +179,19 @@ export class SubscriptionService {
   }
 
   async update(organization_public_id: string, subscription_public_id: string, body: unknown) {
-    const parsed = validateUpdateSubscription(body);
+    // sec-B1: validateUpdateSubscription enforces an empty-body DTO. Any client trying to
+    // PATCH `cancel_at_period_end` (or other billing-state fields) is rejected with 422
+    // and must use the dedicated /cancel and /resume routes (which DO call Stripe).
+    validateUpdateSubscription(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-      const updated = await this.repository.update(
+      const existing = await this.repository.findByPublicId(
         subscription_public_id,
         organization.id,
-        omitUndefined({ cancel_at_period_end: parsed.cancel_at_period_end }),
       );
-      if (!updated) throw new NotFoundError('Subscription');
-      return updated;
+      if (!existing) throw new NotFoundError('Subscription');
+      return existing;
     });
   }
 
@@ -235,6 +245,10 @@ export class SubscriptionService {
           plan_id: plan.id,
           current_period_start: periodStart,
           current_period_end: periodEnd,
+          // sec-B3: stamp the watermark so a stale `customer.subscription.updated` event
+          // delivered after this HTTP mutation cannot regress the plan back to its prior
+          // price (the webhook guard accepts an event only when its `created` > watermark).
+          last_stripe_event_created_at: new Date(),
         }),
       );
       if (!updated) throw new NotFoundError('Subscription');
@@ -286,6 +300,9 @@ export class SubscriptionService {
     const updated = await withOrganizationDatabaseContext(organization_public_id, async () =>
       this.repository.update(subscription_public_id, organization.id, {
         cancel_at_period_end: true,
+        // sec-B3: stamp the watermark so a stale Stripe `updated` event arriving later
+        // cannot regress `cancel_at_period_end` back to false and silently resume billing.
+        last_stripe_event_created_at: new Date(),
       }),
     );
     if (!updated) throw new NotFoundError('Subscription');
@@ -322,7 +339,16 @@ export class SubscriptionService {
     const updated = await withOrganizationDatabaseContext(organization_public_id, async () =>
       this.repository.update(subscription_public_id, organization.id, {
         cancel_at_period_end: false,
-        status: 'ACTIVE',
+        // sec-B4: do NOT force-write `status: 'ACTIVE'`. The Stripe webhook is the source
+        // of truth for status — the real value may be PAST_DUE (failed payment) or
+        // INCOMPLETE (3DS pending), and forcing ACTIVE here grants a transient
+        // entitlement window before the follow-up `customer.subscription.updated` event
+        // reconciles. The local row now only flips the cancel toggle.
+        //
+        // sec-B3: stamp the watermark so a stale Stripe `updated` event arriving later
+        // (e.g. delayed from the cancel that we are reversing) cannot re-set
+        // `cancel_at_period_end` back to true.
+        last_stripe_event_created_at: new Date(),
       }),
     );
     if (!updated) throw new NotFoundError('Subscription');

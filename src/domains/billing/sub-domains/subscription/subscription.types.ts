@@ -11,6 +11,13 @@ export interface SubscriptionCreateData {
   provider?: string;
   provider_subscription_id?: string;
   provider_customer_id?: string;
+  /**
+   * Initial watermark for the Stripe-event reconciliation guard. Set to `new Date()`
+   * by the HTTP `create()` path when Stripe accepted the subscription (sec-B2) so a
+   * late-arriving `customer.subscription.created` whose `created` timestamp is older
+   * than this value cannot clobber the row. Unset when Stripe is not configured.
+   */
+  last_stripe_event_created_at?: Date;
 }
 
 /**
@@ -27,4 +34,12 @@ export interface SubscriptionUpdateData {
   plan_id?: number;
   billing_cycle?: string;
   updated_at?: Date;
+  /**
+   * Set by HTTP-side mutations (`cancel`/`resume`/`changePlan`) to `new Date()` so a
+   * stale Stripe event delivered later cannot regress the row state (sec-B3). The
+   * webhook-driven `syncFromStripeProviderSubscription` path sets this from the event's
+   * own `created` timestamp instead — both write through the same column but only the
+   * HTTP path uses the current wall clock.
+   */
+  last_stripe_event_created_at?: Date;
 }
