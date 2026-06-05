@@ -287,6 +287,44 @@ export class UploadService {
     }
   }
 
+  /**
+   * Stronger variant of {@link assertKeyConfirmed} that also binds the row to a
+   * specific owner (sec-UP5). Callers must supply either `userInternalId`
+   * (user-scoped uploads like avatars) or `organizationInternalId` (org-scoped
+   * uploads like logos / org files). Mismatch yields a ValidationError with the
+   * same key as a missing/un-confirmed row, so callers do not leak whether the
+   * row exists.
+   *
+   * Use this in any code path that doesn't enforce ownership via key-prefix
+   * derivation from auth — particularly admin or worker contexts where RLS is
+   * bypassed. The existing `assertKeyConfirmed` remains for the legacy
+   * prefix-derived call sites, but new callers should prefer this overload.
+   */
+  async assertKeyConfirmedForOwner(options: {
+    fileKey: string;
+    userInternalId?: number;
+    organizationInternalId?: number;
+  }): Promise<void> {
+    const { fileKey, userInternalId, organizationInternalId } = options;
+    if (userInternalId === undefined && organizationInternalId === undefined) {
+      throw new ValidationError('errors:validation.uploadNotConfirmed', undefined, {
+        key: ['assertKeyConfirmedForOwner requires user or organization owner'],
+      });
+    }
+    const row = await this.repository.findByFileKey(fileKey);
+    const notConfirmed = (): ValidationError =>
+      new ValidationError('errors:validation.uploadNotConfirmed', undefined, {
+        key: ['Upload has not been confirmed'],
+      });
+    if (!row || row.status !== UPLOAD_STATUS.UPLOADED) throw notConfirmed();
+    if (userInternalId !== undefined && row.user_id !== userInternalId) {
+      throw notConfirmed();
+    }
+    if (organizationInternalId !== undefined && row.organization_id !== organizationInternalId) {
+      throw notConfirmed();
+    }
+  }
+
   private async assertUserCanAccessOrgScopedUpload(
     row: UploadRow,
     userPublicId: string,
@@ -377,6 +415,26 @@ export class UploadService {
     const sourceKey = row.file_key;
     const finalKey = stripPendingObjectKeyPrefix(sourceKey);
     const pendingKeyed = finalKey !== sourceKey;
+    // sec-UP1: refuse to confirm a row that never went through the
+    // pending-key indirection. Without it, finalKey === sourceKey and the
+    // presigned PUT URL the client used remains valid for the full TTL —
+    // an attacker can swap a same-length, same-magic-byte payload after
+    // confirm and the row stays UPLOADED with hostile content. Roll-out
+    // legacy rows are at end-of-life; refuse and require re-upload via
+    // a fresh pending key.
+    if (!pendingKeyed) {
+      const failedRow = await withUserDatabaseContext(userPublicId, () =>
+        this.repository.markStatusByPublicId(validatedPublicId, UPLOAD_STATUS.FAILED),
+      );
+      if (!failedRow) throw new NotFoundError('Upload');
+      logger.warn(
+        { publicId: validatedPublicId, fileKey: sourceKey },
+        'upload.confirm.legacyInPlaceRefused',
+      );
+      throw new ValidationError('errors:uploadVerificationFailed', undefined, {
+        file: ['Upload predates pending-key flow; re-upload to a fresh key'],
+      });
+    }
 
     let verified = false;
     try {
@@ -455,7 +513,7 @@ export class UploadService {
     // becomes servable. Ranged GET (first 32 bytes) avoids buffering the full upload.
     if (isMagicByteVerifiable(contentType)) {
       const header = await this.objectStorage.getObjectFirstBytes(sourceKey, 32);
-      if (!header || !verifyFileMagicBytes(header.body, contentType)) {
+      if (!(header && verifyFileMagicBytes(header.body, contentType))) {
         return false;
       }
       if (finalKey !== sourceKey) {
