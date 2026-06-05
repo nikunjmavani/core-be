@@ -104,6 +104,7 @@ export class SubscriptionRepository {
           provider_subscription_id: data.provider_subscription_id,
           provider_customer_id: data.provider_customer_id,
           created_by_user_id: data.created_by_user_id,
+          last_stripe_event_created_at: data.last_stripe_event_created_at,
         })
         .returning();
       return rows[0]!;

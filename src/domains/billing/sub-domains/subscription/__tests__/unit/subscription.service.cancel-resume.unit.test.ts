@@ -118,7 +118,7 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
     expect(repository.update).not.toHaveBeenCalled();
   });
 
-  it('resume calls Stripe and clears cancel_at_period_end / sets status ACTIVE', async () => {
+  it('resume calls Stripe and clears cancel_at_period_end without force-writing status (sec-B4)', async () => {
     const { service, repository, paymentProvider } = context;
 
     await service.resume('org_public', 'sub_public');
@@ -127,8 +127,13 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
     expect(repository.update).toHaveBeenCalledWith(
       'sub_public',
       organization.id,
-      expect.objectContaining({ cancel_at_period_end: false, status: 'ACTIVE' }),
+      expect.objectContaining({ cancel_at_period_end: false }),
     );
+    // sec-B4: status is no longer force-written; the Stripe webhook reconciles it.
+    // sec-B3: HTTP mutations stamp the watermark so a stale Stripe event cannot regress.
+    const updatePayload = vi.mocked(repository.update).mock.calls[0]![2];
+    expect(updatePayload.status).toBeUndefined();
+    expect(updatePayload.last_stripe_event_created_at).toBeInstanceOf(Date);
   });
 
   it('changePlan does not call paymentProvider when subscription has no provider id', async () => {
