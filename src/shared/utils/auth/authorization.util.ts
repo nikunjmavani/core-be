@@ -2,6 +2,48 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import type { GlobalRole } from '@/shared/constants/roles.constants.js';
 import { ForbiddenError, UnauthorizedError } from '@/shared/errors/index.js';
+import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
+
+/**
+ * Best-effort emit `auth.permission.denied` audit row before throwing
+ * {@link ForbiddenError} (sec-U13). Volume is already bounded by the global
+ * authenticated rate-limit middleware, so no bespoke per-(user, route)
+ * throttle is added here. The audit write is awaited (so it lands before
+ * the 403 reaches the client) but failures are swallowed — the
+ * `ForbiddenError` path is unchanged. The `auditDomain` decorator is
+ * optional-chained so callers without it (early-boot / unit tests) still
+ * deny correctly.
+ */
+async function emitPermissionDenyAudit(
+  request: FastifyRequest,
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  if (!request.server?.auditDomain?.auditService) return;
+  const auth = request.auth;
+  const actorUserPublicId = auth?.kind === 'user' ? auth.userId : undefined;
+  try {
+    await recordScopedAuditEvent(request, {
+      actorUserPublicId,
+      action: 'auth.permission.denied',
+      resource_type: 'route',
+      severity: 'WARNING',
+      metadata,
+    });
+  } catch {
+    // best-effort: a failure to record must not affect the 403 response.
+  }
+}
+
+function buildDenyMetadata(
+  request: FastifyRequest,
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    route: request.routeOptions?.url ?? request.url,
+    method: request.method,
+    ...extra,
+  };
+}
 
 /** Per-request memo: one Redis/DB resolve per (user, organization) per HTTP request. */
 const organizationPermissionResolveMemo = new WeakMap<
@@ -50,6 +92,14 @@ export function requireRole(
     const auth = request.auth;
     if (!auth || auth.kind !== 'user') throw new UnauthorizedError();
     if (!(auth.role && allowedRoles.includes(auth.role))) {
+      await emitPermissionDenyAudit(
+        request,
+        buildDenyMetadata(request, {
+          deny_reason: 'insufficient_role',
+          required_roles: allowedRoles,
+          actor_role: auth.role,
+        }),
+      );
       throw new ForbiddenError('errors:insufficientRolePrivileges');
     }
   };
@@ -87,9 +137,25 @@ export function requireOrganizationPermission(
       // the route's organization. The union guarantees a non-empty organizationPublicId + scopes,
       // so a key scoped to another org (or lacking the permission) is rejected here.
       if (auth.organizationPublicId !== organizationId) {
+        await emitPermissionDenyAudit(
+          request,
+          buildDenyMetadata(request, {
+            deny_reason: 'api_key_organization_mismatch',
+            permission_code: permissionCode,
+            requested_organization_id: organizationId,
+          }),
+        );
         throw new ForbiddenError('errors:insufficientOrganizationPermissions');
       }
       if (!auth.apiKeyScopes.includes(permissionCode)) {
+        await emitPermissionDenyAudit(
+          request,
+          buildDenyMetadata(request, {
+            deny_reason: 'api_key_scope_missing',
+            permission_code: permissionCode,
+            organization_id: organizationId,
+          }),
+        );
         throw new ForbiddenError('errors:insufficientOrganizationPermissions');
       }
       return;
@@ -101,6 +167,14 @@ export function requireOrganizationPermission(
       organizationId,
     );
     if (!permissionCodes.includes(permissionCode)) {
+      await emitPermissionDenyAudit(
+        request,
+        buildDenyMetadata(request, {
+          deny_reason: 'organization_permission_missing',
+          permission_code: permissionCode,
+          organization_id: organizationId,
+        }),
+      );
       throw new ForbiddenError('errors:insufficientOrganizationPermissions');
     }
   };
