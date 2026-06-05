@@ -187,6 +187,27 @@ export class UploadRepository {
     return rows[0]?.value ?? 0;
   }
 
+  /**
+   * Number of in-flight PENDING uploads aggregated across all members of an
+   * organization (sec-UP4). Used by the service to enforce the
+   * `UPLOAD_MAX_PENDING_PER_ORGANIZATION` cap so a single org cannot
+   * exhaust storage by piling per-user-cap-compliant PENDING rows across
+   * many member accounts.
+   */
+  async countPendingByOrganizationId(organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: count() })
+      .from(uploads)
+      .where(
+        and(
+          eq(uploads.organization_id, organization_id),
+          eq(uploads.status, 'PENDING'),
+          isNull(uploads.deleted_at),
+        ),
+      );
+    return rows[0]?.value ?? 0;
+  }
+
   async findActiveByUserId(user_id: number): Promise<Pick<UploadRow, 'id' | 'file_key'>[]> {
     return getRequestDatabase()
       .select({ id: uploads.id, file_key: uploads.file_key })

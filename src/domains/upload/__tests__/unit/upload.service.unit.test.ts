@@ -19,12 +19,14 @@ vi.mock('@/shared/config/env.config.js', () => ({
     LOG_LEVEL: 'silent',
     UPLOAD_ALLOW_SVG: false,
     UPLOAD_MAX_PENDING_PER_USER: 100,
+    UPLOAD_MAX_PENDING_PER_ORGANIZATION: 2_000,
   })),
   env: {
     S3_BUCKET: 'test-bucket',
     LOG_LEVEL: 'silent',
     UPLOAD_ALLOW_SVG: false,
     UPLOAD_MAX_PENDING_PER_USER: 100,
+    UPLOAD_MAX_PENDING_PER_ORGANIZATION: 2_000,
   },
 }));
 
@@ -69,6 +71,7 @@ describe('UploadService', () => {
     softDeleteAllByUserId: vi.fn().mockResolvedValue(1),
     softDeleteAllByOrganizationId: vi.fn().mockResolvedValue(2),
     countPendingByUserId: vi.fn().mockResolvedValue(0),
+    countPendingByOrganizationId: vi.fn().mockResolvedValue(0),
     acquirePendingUploadQuotaLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as UploadRepository;
 
@@ -92,6 +95,7 @@ describe('UploadService', () => {
       LOG_LEVEL: 'silent',
       UPLOAD_ALLOW_SVG: false,
       UPLOAD_MAX_PENDING_PER_USER: 100,
+      UPLOAD_MAX_PENDING_PER_ORGANIZATION: 2_000,
     } as ReturnType<typeof getEnv>);
     vi.mocked(repository.findByPublicId).mockResolvedValue(uploadRow as never);
     vi.mocked(repository.softDeleteByPublicId).mockResolvedValue(uploadRow as never);
@@ -123,6 +127,7 @@ describe('UploadService', () => {
       UPLOAD_ALLOW_SVG: false,
       UPLOAD_USE_PRESIGNED_POST: true,
       UPLOAD_MAX_PENDING_PER_USER: 100,
+      UPLOAD_MAX_PENDING_PER_ORGANIZATION: 2_000,
     } as ReturnType<typeof getEnv>);
     vi.mocked(objectStorage.createPresignedUploadPost).mockResolvedValueOnce({
       url: 'https://s3.example/post',
@@ -607,6 +612,7 @@ describe('UploadService', () => {
       LOG_LEVEL: 'silent',
       UPLOAD_ALLOW_SVG: false,
       UPLOAD_MAX_PENDING_PER_USER: 100,
+      UPLOAD_MAX_PENDING_PER_ORGANIZATION: 2_000,
     } as ReturnType<typeof getEnv>);
     await expect(
       service.createUpload(

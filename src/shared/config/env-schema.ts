@@ -212,6 +212,14 @@ const envSchemaBase = z.object({
    * and never calling confirm. Reconciled lazily by the PENDING sweeper worker. Default 100.
    */
   UPLOAD_MAX_PENDING_PER_USER: z.coerce.number().int().min(1).default(100),
+  /**
+   * Per-organization cap on concurrent PENDING uploads across ALL members
+   * (sec-UP4). Without this, a 200-member org sitting at the per-user cap
+   * could mint 20,000 in-flight uploads — ~200 GB per org at the 10 MB
+   * default limit. Default 2000 (4× expected 500-member org × 4 in-flight).
+   * The PENDING sweeper reconciles eventually.
+   */
+  UPLOAD_MAX_PENDING_PER_ORGANIZATION: z.coerce.number().int().min(1).max(100_000).default(2_000),
   S3_BUCKET: z.string().min(1).optional(),
   S3_REGION: z.string().min(1).optional(),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
@@ -657,6 +665,25 @@ export const envSchema = envSchemaBase
     {
       message: 'COOKIE_SECURE must be true in production (cookies sent over HTTPS only).',
       path: ['COOKIE_SECURE'],
+    },
+  )
+  .refine(
+    (data) => {
+      // sec-UP10: presigned PUT has no client-side min-size enforcement, so a
+      // zero-byte upload can occupy a row + presigned slot until the sweeper
+      // reclaims it. Presigned POST policy carries `content-length-range` that
+      // S3 evaluates at upload time, rejecting empty/oversized bodies before
+      // they cost anything. Force POST in production; PUT remains available
+      // for non-prod testing.
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      return data.UPLOAD_USE_PRESIGNED_POST === true;
+    },
+    {
+      message:
+        'UPLOAD_USE_PRESIGNED_POST must be true in production (PUT fallback has no min-size enforcement).',
+      path: ['UPLOAD_USE_PRESIGNED_POST'],
     },
   )
   .refine(

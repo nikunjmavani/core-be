@@ -209,9 +209,35 @@ export class UploadService {
       fileSize,
       bucket,
     } = params;
-    const pendingCap = getEnv().UPLOAD_MAX_PENDING_PER_USER;
+    const environment = getEnv();
+    const pendingCap = environment.UPLOAD_MAX_PENDING_PER_USER;
+    const orgPendingCap = environment.UPLOAD_MAX_PENDING_PER_ORGANIZATION;
     return withUserDatabaseContext(userPublicId, async () => {
       await this.repository.acquirePendingUploadQuotaLock(userInternalId);
+      // sec-UP4: enforce the org-level cap BEFORE the per-user cap so a single
+      // org with many members cannot pile PENDING uploads across user accounts
+      // and exhaust storage. Race-safe enough for a stability cap (the per-
+      // user advisory lock above bounds per-user concurrency; cross-user
+      // org-level concurrency falls back to "sweeper reconciles" — same
+      // posture as the user cap).
+      if (organizationInternalId !== null) {
+        const orgPendingCount =
+          await this.repository.countPendingByOrganizationId(organizationInternalId);
+        if (orgPendingCount >= orgPendingCap) {
+          throw new ValidationError(
+            'errors:uploadPendingQuotaExceeded',
+            { limit: orgPendingCap, pending: orgPendingCount },
+            undefined,
+            [
+              {
+                field: 'fileSize',
+                messageKey: 'errors:uploadPendingQuotaExceeded',
+                messageParams: { limit: orgPendingCap, pending: orgPendingCount },
+              },
+            ],
+          );
+        }
+      }
       const pendingCount = await this.repository.countPendingByUserId(userInternalId);
       if (pendingCount >= pendingCap) {
         throw new ValidationError(
