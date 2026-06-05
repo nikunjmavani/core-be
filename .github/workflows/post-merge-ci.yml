@@ -73,7 +73,12 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 1
+          # Full history avoids the dorny/paths-filter shallow-deepen race
+          # ("fatal: shallow file has changed since we read it") when it
+          # iteratively fetches to find the merge-base between main and dev.
+          # The PR-CI changes job stays at fetch-depth: 1 because it compares
+          # against the PR base SHA, not main, and never deepens.
+          fetch-depth: 0
 
       - name: Path filter
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
