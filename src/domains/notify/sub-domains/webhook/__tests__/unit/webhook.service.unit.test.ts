@@ -110,7 +110,11 @@ describe('WebhookService', () => {
     await service.get('org_public', 'webhook_public');
     await service.create(
       'org_public',
-      { url: 'https://example.com/hook', events: ['subscription.updated'], secret: 's' },
+      {
+        url: 'https://example.com/hook',
+        events: ['subscription.updated'],
+        secret: 'sixteenCharSecret',
+      },
       'user_public',
     );
     await service.update('org_public', 'webhook_public', { is_enabled: false }, 'user_public');

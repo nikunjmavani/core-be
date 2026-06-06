@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import i18next from 'i18next';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import { emitWebhookDeliveryRequested } from '@/domains/notify/sub-domains/webhook/webhook-delivery/events/webhook-delivery-emit.js';
@@ -30,6 +31,24 @@ import { env } from '@/shared/config/env.config.js';
 const WEBHOOK_TEST_RESPONSE_BODY_MAX_LENGTH = 500;
 /** Maximum response body length persisted to the delivery-attempt record (bounds storage growth). */
 const WEBHOOK_TEST_RESPONSE_BODY_STORED_MAX_LENGTH = 2_000;
+
+/**
+ * Number of CSPRNG bytes used when auto-generating a webhook signing secret. 32 bytes →
+ * 64 hex chars (well clear of the DTO's 16-char minimum) → 256 bits of entropy. Far above
+ * any practical brute-force threat against the HMAC-SHA256 signature.
+ */
+const AUTO_GENERATED_WEBHOOK_SECRET_BYTES = 32;
+
+/**
+ * Generate a fresh webhook signing secret when the caller did not supply one. sec-UP
+ * finding #8: a missing/empty secret previously round-tripped through
+ * `decryptFieldSecret('')` and produced a deterministic, attacker-reproducible
+ * `X-Webhook-Signature`. Auto-generating closes the empty-key path while preserving the
+ * ergonomic "the platform manages the secret" UX.
+ */
+function generateWebhookSigningSecret(): string {
+  return randomBytes(AUTO_GENERATED_WEBHOOK_SECRET_BYTES).toString('hex');
+}
 
 /**
  * Options forwarded from controllers into {@link WebhookService.list}.
@@ -148,11 +167,16 @@ export class WebhookService {
       }
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
+      // sec-UP #8: never persist an empty webhook secret. The DTO already refuses
+      // empty/short strings at the boundary; when the caller omits `secret`
+      // entirely (the "let the platform pick one" UX), generate a 256-bit CSPRNG
+      // value so the worker's HMAC always has a real key.
+      const effectiveSecret = parsed.secret ?? generateWebhookSigningSecret();
       const row = await this.webhookRepository.create(
         omitUndefined({
           organization_id: organization.id,
           url: parsed.url,
-          encrypted_secret: encryptFieldSecret(parsed.secret ?? ''),
+          encrypted_secret: encryptFieldSecret(effectiveSecret),
           events: parsed.events,
           is_enabled: parsed.is_enabled,
           created_by_user_id: userId ?? undefined,

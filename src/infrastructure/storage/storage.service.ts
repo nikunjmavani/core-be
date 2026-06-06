@@ -4,6 +4,7 @@ import {
   HeadObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '@/shared/config/env.config.js';
@@ -224,6 +225,48 @@ export async function putObjectBuffer(options: {
           // export, GDPR data-export, mail-outbox attachments). The bucket
           // default encryption is a defence in depth — request it directly so
           // a misconfigured bucket cannot silently land plaintext PII.
+          ServerSideEncryption: 'AES256',
+        }),
+        { abortSignal: signal },
+      );
+    },
+  });
+}
+
+/**
+ * Server-side copy from `sourceKey` to `destinationKey` within the configured bucket.
+ *
+ * @remarks
+ * - **Algorithm:** issues an S3 `CopyObject` request with `MetadataDirective: 'COPY'`
+ *   (carries the original object's metadata) and pins `ServerSideEncryption: 'AES256'`
+ *   on the destination so SSE-S3 stays in force regardless of bucket default
+ *   (mirrors `s3-adapter.ts` and the sec-UP11 invariant). `ContentType` may be
+ *   overridden by the caller — useful when the sweep auto-confirms an upload whose
+ *   content-type was discovered after the initial PUT.
+ * - **Failure modes:** propagates AWS errors to the caller (the sweep treats
+ *   copy failure as a transient error and leaves the row for the next pass).
+ * - **Side effects:** one PUT to the destination bucket; the source object is
+ *   not deleted (callers may follow up with {@link deleteObject}).
+ */
+export async function copyObject(options: {
+  sourceKey: string;
+  destinationKey: string;
+  contentType: string;
+}): Promise<void> {
+  const bucket = env.S3_BUCKET;
+  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
+
+  await outboundCall({
+    name: 's3',
+    operation: async (signal) => {
+      const client = getS3Client();
+      await client.send(
+        new CopyObjectCommand({
+          Bucket: bucket,
+          Key: options.destinationKey,
+          CopySource: `${bucket}/${options.sourceKey}`,
+          ContentType: options.contentType,
+          MetadataDirective: 'COPY',
           ServerSideEncryption: 'AES256',
         }),
         { abortSignal: signal },
