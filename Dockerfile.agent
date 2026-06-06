@@ -14,10 +14,22 @@ ARG NODE_VERSION=24.13.0
 
 FROM node:${NODE_VERSION}-bookworm-slim
 
+# sec-C8: declarative label so inventory/scanner tooling can flag this as
+# a non-production image; "comment alone" was not enough to stop an
+# accidental deploy from a CI workflow lookup.
+LABEL org.opencontainers.image.usage="development" \
+      org.opencontainers.image.description="Cursor agent / full-repo workflow image — NOT for production deployment."
+
 WORKDIR /app
 
+# sec-C8: openssh-client was installed unconditionally to enable repo
+# checkouts that require ssh remotes. The cloud-agent workflows in scope
+# clone via HTTPS, so drop it from the baseline — operators who genuinely
+# need ssh-remote support can rebuild with `--build-arg INSTALL_SSH=true`
+# (or `apt-get install` at the workflow layer) rather than ship it to
+# every developer environment.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends git openssh-client ca-certificates \
+  && apt-get install -y --no-install-recommends git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -27,3 +39,10 @@ RUN corepack enable \
 RUN pnpm install --frozen-lockfile
 
 COPY . .
+
+# sec-C8: drop root for the runtime layer. The `node` user is provided by
+# the official `node:*-bookworm-slim` base image. Files copied above are
+# owned by root; switching now matches the production Dockerfile contract
+# and prevents a runaway agent process from running as root.
+RUN chown -R node:node /app
+USER node
