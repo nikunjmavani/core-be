@@ -233,7 +233,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Request GDPR data export',
         description:
-          'Enqueues an async export of all personal data. Poll GET /users/me/data-export/{exportId} for status and a time-limited download URL (≤24h).',
+          'Enqueues an async export of all personal data. Poll GET /users/me/data-export/{exportId} for status and a time-limited download URL (15-minute lifetime).',
         tags: ['User', 'Privacy'],
       },
     },
