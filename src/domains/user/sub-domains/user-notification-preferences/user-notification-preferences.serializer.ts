@@ -2,22 +2,28 @@ import type { NotificationPreferenceOutput } from './user-notification-preferenc
 
 /** Minimal row projection accepted by the preference serializers (database row → API output). */
 export interface UserNotificationPreferenceRow {
-  id: number;
   notification_type: string;
   channel: string;
-  organization_id: number | null;
   is_enabled: boolean;
 }
 
-/** Project a single preference row into the public {@link NotificationPreferenceOutput} shape. */
+/**
+ * Project a single preference row into the public {@link NotificationPreferenceOutput} shape.
+ *
+ * @remarks
+ * sec-T finding #17: drops the internal bigserial `id` and bigint `organization_id` from
+ * the API response. Preferences are addressed by `(notification_type, channel)` — the PUT
+ * endpoint replaces the full set, so clients never need the row id as a stable identifier.
+ * Emitting the bigserial would leak internal user-id enumeration and platform preference
+ * volume to any authenticated caller; emitting the raw bigint `organization_id` advertises
+ * the internal column type even though the service explicitly rejects non-null inputs.
+ */
 export function serializeUserNotificationPreference(
   row: UserNotificationPreferenceRow,
 ): NotificationPreferenceOutput {
   return {
-    id: row.id,
     notification_type: row.notification_type,
     channel: row.channel,
-    organization_id: row.organization_id,
     is_enabled: row.is_enabled,
   };
 }
