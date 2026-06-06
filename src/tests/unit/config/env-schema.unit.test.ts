@@ -554,4 +554,97 @@ describe('env-schema', () => {
     });
     expect(parsed.success).toBe(true);
   });
+
+  // sec-B5 / sec-B6 — Stripe production guards. Without these, a typo or
+  // missing GitHub secret silently puts the system into "fictional mode"
+  // (subscriptions persist locally but never charge), and a wrong-mode key
+  // (sk_test_ in prod) silently freezes subscription state because every
+  // webhook HMAC fails.
+  describe('Stripe production guards (sec-B5 / sec-B6)', () => {
+    it('rejects production env with only STRIPE_SECRET_KEY set (half-configured)', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_live_X',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_WEBHOOK_SECRET'));
+      expect(issue).toBeDefined();
+    });
+
+    it('rejects production env with only STRIPE_WEBHOOK_SECRET set (half-configured)', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_SECRET_KEY'));
+      expect(issue).toBeDefined();
+    });
+
+    it('rejects production env with a test-mode STRIPE_SECRET_KEY (sk_test_*)', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_SECRET_KEY'));
+      expect(issue).toBeDefined();
+    });
+
+    it('rejects malformed STRIPE_SECRET_KEY everywhere (no sk_test_/sk_live_ prefix)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'not-a-stripe-key',
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_SECRET_KEY'));
+      expect(issue).toBeDefined();
+    });
+
+    it('rejects malformed STRIPE_WEBHOOK_SECRET everywhere (no whsec_ prefix)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'not-a-stripe-webhook',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_WEBHOOK_SECRET'));
+      expect(issue).toBeDefined();
+    });
+
+    it('accepts production env with both Stripe keys set in live mode', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_live_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('accepts production env with no Stripe keys at all (billing disabled)', () => {
+      const parsed = envSchema.safeParse(productionRequiredBase);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('accepts non-production with sk_test_ + whsec_ (typical dev configuration)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+      });
+      expect(parsed.success).toBe(true);
+    });
+  });
 });
