@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
 import { successResponse } from '@/shared/utils/http/response.util.js';
+import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import type { UserDataExportService } from './user-data-export.service.js';
 import { validateExportIdParam } from './user-data-export.validator.js';
 
@@ -24,12 +25,35 @@ export function createUserDataExportController(userDataExportService: UserDataEx
 
     /**
      * GET /api/v1/users/me/data-export/:exportId
+     *
+     * @remarks
+     * sec-U6: every successful URL mint (download_url non-null on the response)
+     * records a `user.data_export.url_minted` audit row. The GDPR export
+     * contains the user's sessions, IPs, memberships, notifications, and audit
+     * history — a session-token exfiltration would otherwise let the attacker
+     * mint and download repeatedly with no post-hoc trail for either the user
+     * or admins. Recording at the controller (not the service) keeps the
+     * `request` boundary clean and lets the service stay pure.
      */
     async getExportStatus(request: FastifyRequest, _reply: FastifyReply) {
       const requestId = getRequestIdentifier(request);
       const auth = requireAuth(request);
       const { exportId } = validateExportIdParam(request.params);
       const data = await userDataExportService.getExportStatus(auth.userId, exportId);
+      if (
+        data !== null &&
+        typeof data === 'object' &&
+        'download_url' in data &&
+        typeof data.download_url === 'string' &&
+        data.download_url.length > 0
+      ) {
+        await recordScopedAuditEvent(request, {
+          actorUserPublicId: auth.userId,
+          action: 'user.data_export.url_minted',
+          resource_type: 'user_data_export',
+          metadata: { export_public_id: exportId },
+        });
+      }
       return successResponse(data, requestId);
     },
   };

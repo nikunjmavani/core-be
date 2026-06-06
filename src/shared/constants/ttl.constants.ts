@@ -130,8 +130,20 @@ export const HEALTH_READINESS_PROBE_CACHE_TTL_MS = 2_000;
 /** S3 presigned URL lifetime (seconds); aligns with access token TTL. */
 export const PRESIGNED_URL_EXPIRY_SECONDS = ACCESS_TOKEN_EXPIRY_SECONDS;
 
-/** GDPR user data export download URL lifetime (seconds); max 24 hours. */
-export const USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS = SECONDS_PER_DAY;
+/**
+ * GDPR user data export download URL lifetime (seconds).
+ *
+ * @remarks
+ * sec-U6: shortened from 24h to 15 min. The previous TTL was the S3-presigned
+ * max, set defensively before sec-U6 was filed; in practice an exfiltrated
+ * session token used to be able to mint a URL with that lifetime and replay it
+ * for a full day. 15 min still gives the legitimate browser-pull plenty of
+ * headroom (the bundle is a single gzip download) while collapsing the stolen-
+ * token replay window. Adjusted in lockstep with `audit.events` recording on
+ * every mint so post-hoc forensics retain the trail even when the URL has
+ * expired.
+ */
+export const USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS = 15 * 60;
 
 /** BullMQ default worker lock duration (milliseconds). */
 export const BULLMQ_DEFAULT_LOCK_DURATION_MS = THIRTY_SECONDS_MS;
