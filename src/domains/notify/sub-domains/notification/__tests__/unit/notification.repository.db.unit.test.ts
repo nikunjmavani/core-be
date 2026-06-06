@@ -114,6 +114,40 @@ describe('NotificationRepository (database)', () => {
     expect(await repository.countUnreadForUser(user.id)).toBe(0);
   });
 
+  // sec-D10: previously implemented as SELECT-unreadCount-then-UPDATE, returning
+  // the pre-update count rather than the atomic UPDATE result. Under a race
+  // (caller creates a notification between the SELECT and the UPDATE), the two
+  // values diverge — the API would tell the client "you marked N notifications
+  // as read" while the DB just marked N+1. Switch to UPDATE...RETURNING so the
+  // count is sourced from the same atomic statement.
+  it('markAllReadForUser returns the count from the UPDATE itself (sec-D10)', async () => {
+    const user = await createTestUser({ email: 'notify-read-d10@example.com' });
+    await repository.create({
+      user_id: user.id,
+      type: 'SYSTEM',
+      title: 'A',
+      message: 'A',
+    });
+    await repository.create({
+      user_id: user.id,
+      type: 'SYSTEM',
+      title: 'B',
+      message: 'B',
+    });
+    await repository.create({
+      user_id: user.id,
+      type: 'SYSTEM',
+      title: 'C',
+      message: 'C',
+    });
+
+    const marked = await repository.markAllReadForUser(user.id);
+    // Three rows updated atomically; result is sourced from RETURNING, not from
+    // a separate pre-update SELECT.
+    expect(marked).toBe(3);
+    expect(await repository.countUnreadForUser(user.id)).toBe(0);
+  });
+
   it('findOrganizationPublicIdByOrganizationId resolves public id by internal id', async () => {
     const user = await createTestUser({ email: 'notify-resolve-org@example.com' });
     const organization = await createTestOrganization({ ownerUserId: user.id });

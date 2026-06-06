@@ -196,15 +196,21 @@ export class NotificationRepository {
   }
 
   async markAllReadForUser(user_id: number): Promise<number> {
-    const unreadCount = await this.countUnreadForUser(user_id);
-    if (unreadCount === 0) return 0;
-
-    await this.db()
+    /**
+     * sec-D10: previously a SELECT-then-UPDATE — the count was sourced from a
+     * separate `countUnreadForUser` call ahead of the atomic UPDATE, so any
+     * concurrent notification arriving between the two would leave the API
+     * reporting a different number than the row count the DB actually marked.
+     * Using `UPDATE ... RETURNING { id }` returns the count atomically from the
+     * same statement, so the caller-visible value can never drift from the DB
+     * effect.
+     */
+    const rows = await this.db()
       .update(notifications)
       .set({ is_read: true, read_at: new Date() })
-      .where(and(eq(notifications.user_id, user_id), eq(notifications.is_read, false)));
-
-    return unreadCount;
+      .where(and(eq(notifications.user_id, user_id), eq(notifications.is_read, false)))
+      .returning({ id: notifications.id });
+    return rows.length;
   }
 
   async countUnreadForUser(user_id: number): Promise<number> {
