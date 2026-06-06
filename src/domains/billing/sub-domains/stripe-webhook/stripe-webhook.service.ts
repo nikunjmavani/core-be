@@ -247,10 +247,34 @@ export class StripeWebhookService {
             })
           : false;
       if (!recovered) {
-        logger.warn(
-          { providerSubscriptionId, stripeEventCreatedAt },
-          'stripe.webhook.subscription_not_found_or_stale',
+        // sec-B finding #5: distinguish stale-event from race-condition. The sync UPDATE
+        // returns null both when the row does not exist (Stripe outran our HTTP create
+        // for `.updated`-before-`.created`) and when the row exists but the watermark
+        // already covers a newer event (stale). The prior code conflated the two and
+        // silently dropped both, which shadowed newer state when an `.updated` event
+        // reordered ahead of `.created`. We now do a separate existence check:
+        //   - row exists → stale event, no-op (the newer watermark already wins)
+        //   - row missing for a non-`.created` event → throw to retry; BullMQ's
+        //     exponential backoff carries the event past the race, and the
+        //     `attempts: 5` budget drains genuinely orphan events to the DLQ.
+        const rowExists = await this.subscriptionService.existsByStripeProviderSubscriptionId(
+          providerSubscriptionId,
+          subscriptionRepository,
         );
+        if (rowExists) {
+          logger.info(
+            { providerSubscriptionId, stripeEventCreatedAt, eventType },
+            'stripe.webhook.subscription_event_stale_skipped',
+          );
+        } else {
+          logger.warn(
+            { providerSubscriptionId, stripeEventCreatedAt, eventType },
+            'stripe.webhook.subscription_not_found_will_retry',
+          );
+          throw new Error(
+            `stripe.webhook.subscription_local_row_missing:${eventType}:${providerSubscriptionId}`,
+          );
+        }
       }
     } else {
       logger.info(

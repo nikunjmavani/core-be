@@ -327,6 +327,7 @@ src/
     │   │   │   ├── stripe-webhook-event.repository.ts
     │   │   │   ├── stripe-webhook-ingress.plugin.ts
     │   │   │   ├── stripe-webhook-organization.util.ts
+    │   │   │   ├── stripe-webhook-raw-body.registry.ts
     │   │   │   ├── stripe-webhook.container.ts
     │   │   │   ├── stripe-webhook.controller.ts
     │   │   │   ├── stripe-webhook.routes.ts

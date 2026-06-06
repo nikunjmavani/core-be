@@ -89,21 +89,26 @@ describe('StripePaymentProvider.createSubscription — sec-B11 customer email', 
     expect(args.email).not.toContain('google');
   });
 
-  it('falls back to an RFC-2606-ish reserved domain when EMAIL_FROM_ADDRESS is unset (operator misconfiguration)', async () => {
+  it('refuses to mint a Stripe customer when EMAIL_FROM_ADDRESS is unset — fail closed (sec-B #19)', async () => {
+    // The prior fallback to `@invalid` sent Stripe receipts/dunning/refund notifications
+    // to a reserved-TLD address (RFC 6761) that bounces permanently. The cross-field env-
+    // schema refine (Stripe ⇒ EMAIL_FROM_ADDRESS) is the canonical guard; this throw is
+    // the boot-time-late fallback so a future loosening of the refine still fails closed
+    // rather than silently fanning `@invalid` customers into Stripe.
     envMock.env.EMAIL_FROM_ADDRESS = undefined as never;
     const provider = makeProvider();
 
-    await provider.createSubscription({
-      organization: baseOrganization as never,
-      plan: basePlan as never,
-      billingCycle: 'monthly',
-    });
+    // createSubscription wraps the throw in ServiceUnavailableError via its catch block —
+    // both behaviours satisfy the security property (no Stripe customer is created with a
+    // bogus domain). We assert the createStripeCustomer was NEVER called.
+    await expect(
+      provider.createSubscription({
+        organization: baseOrganization as never,
+        plan: basePlan as never,
+        billingCycle: 'monthly',
+      }),
+    ).rejects.toThrow();
 
-    const [args] = stripeMocks.createStripeCustomer.mock.calls[0] as [{ email: string }];
-    // The fallback domain must NOT be the tenant slug; we deliberately route
-    // to an unowned reserved-style domain so deliverability stays our problem
-    // (visible in Stripe Dashboard as bouncing) rather than a third party's.
-    expect(args.email).toBe('billing+org_pub_abc@invalid');
-    expect(args.email).not.toContain('google');
+    expect(stripeMocks.createStripeCustomer).not.toHaveBeenCalled();
   });
 });

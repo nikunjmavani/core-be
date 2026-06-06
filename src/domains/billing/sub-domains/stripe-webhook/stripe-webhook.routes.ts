@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { WEBHOOK_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { createStripeWebhookController } from './stripe-webhook.controller.js';
 import { stripeWebhookIngressPlugin } from './stripe-webhook-ingress.plugin.js';
+import { registerStripeWebhookRawBodyRoute } from './stripe-webhook-raw-body.registry.js';
 
 /**
  * Stripe webhook receiver is registered at two paths that share the same handler:
@@ -34,11 +35,27 @@ export function stripeWebhookRoutes(): FastifyPluginAsync {
 
   return async (app) => {
     const zodApplication = app.withTypeProvider<ZodTypeProvider>();
+
+    // sec-B finding #7: register every Stripe webhook URL with the raw-body registry
+    // at route-declaration time. The content-type parser reads from this registry on
+    // every request, so a rename / restructure of the webhook URL flows through
+    // automatically and a wiring drift would fail closed at the first request rather
+    // than silently for the 3-day Stripe retry window.
+    app.addHook('onRoute', (routeOptions) => {
+      if (
+        routeOptions.config &&
+        (routeOptions.config as Record<string, unknown>).captureRawBody === true
+      ) {
+        registerStripeWebhookRawBodyRoute(routeOptions.url);
+      }
+    });
+
     await stripeWebhookIngressPlugin(app, {});
     zodApplication.post(
       '/webhook',
       {
         ...WEBHOOK_RATE_LIMIT,
+        config: { captureRawBody: true },
         schema: {
           summary: 'Stripe webhook receiver',
           description:
@@ -53,6 +70,7 @@ export function stripeWebhookRoutes(): FastifyPluginAsync {
       '/stripe/webhook',
       {
         ...WEBHOOK_RATE_LIMIT,
+        config: { captureRawBody: true },
         schema: {
           summary: 'Stripe webhook receiver',
           description:

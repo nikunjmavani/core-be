@@ -625,10 +625,13 @@ describe('env-schema', () => {
     });
 
     it('accepts production env with both Stripe keys set in live mode', () => {
+      // sec-B #19: configuring Stripe also requires EMAIL_FROM_ADDRESS so the
+      // Stripe customer email is built off a real owned domain (not @invalid).
       const parsed = envSchema.safeParse({
         ...productionRequiredBase,
         STRIPE_SECRET_KEY: 'sk_live_X',
         STRIPE_WEBHOOK_SECRET: 'whsec_X',
+        EMAIL_FROM_ADDRESS: 'billing@example.com',
       });
       expect(parsed.success).toBe(true);
     });
@@ -643,8 +646,25 @@ describe('env-schema', () => {
         ...commonRequiredBase,
         STRIPE_SECRET_KEY: 'sk_test_X',
         STRIPE_WEBHOOK_SECRET: 'whsec_X',
+        EMAIL_FROM_ADDRESS: 'billing@example.com',
       });
       expect(parsed.success).toBe(true);
+    });
+
+    it('rejects Stripe configuration without EMAIL_FROM_ADDRESS (sec-B #19)', () => {
+      // The prior fallback to `billing+<id>@invalid` silently routed Stripe
+      // receipts/dunning/refund notifications to an RFC 6761 reserved TLD that
+      // bounces permanently. Cross-field refine: Stripe ⇒ EMAIL_FROM_ADDRESS.
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('EMAIL_FROM_ADDRESS'));
+      expect(issue).toBeDefined();
     });
   });
 });

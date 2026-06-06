@@ -144,6 +144,27 @@ export class SubscriptionRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Returns true when a local row already exists for `provider_subscription_id` (regardless
+   * of organization context — this is a system-level existence check). Used by the Stripe
+   * webhook service to distinguish two failure modes of {@link syncFromStripeProviderSubscription}
+   * returning null (sec-B finding #5):
+   *   1. The row does not exist yet (Stripe outran our HTTP create — retryable race).
+   *   2. The row exists but is at a newer watermark (stale event — no-op).
+   *
+   * Case 1 must throw so BullMQ retries until the race resolves; case 2 must silently skip.
+   * The earlier code conflated the two and silently dropped both, which let an `updated`-
+   * before-`created` reorder shadow newer state.
+   */
+  async existsByProviderSubscriptionId(provider_subscription_id: string): Promise<boolean> {
+    const rows = await this.db()
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(eq(subscriptions.provider_subscription_id, provider_subscription_id))
+      .limit(1);
+    return rows.length > 0;
+  }
+
   async syncFromStripeProviderSubscription(
     provider_subscription_id: string,
     data: SubscriptionUpdateData,

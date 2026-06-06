@@ -719,6 +719,24 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
+      // sec-B finding #19: when Stripe is configured, EMAIL_FROM_ADDRESS must be set.
+      // `buildStripeCustomerEmail` derives the customer-email domain from this value;
+      // a missing setting previously fell back to `billing+<id>@invalid`, sending
+      // Stripe receipts/dunning/refund notifications to a reserved-TLD address that
+      // bounces permanently. Mirrors the Resend pairing above.
+      if (!data.STRIPE_SECRET_KEY) {
+        return true;
+      }
+      return Boolean(data.EMAIL_FROM_ADDRESS);
+    },
+    {
+      message:
+        'EMAIL_FROM_ADDRESS is required when STRIPE_SECRET_KEY is set — Stripe customer emails are derived from this address.',
+      path: ['EMAIL_FROM_ADDRESS'],
+    },
+  )
+  .refine(
+    (data) => {
       // In production, session + CSRF cookies must carry the Secure attribute so they are
       // never transmitted over plaintext HTTP. COOKIE_SECURE=false is only valid for local
       // plaintext loops (non-production); allowing it in production would expose the session

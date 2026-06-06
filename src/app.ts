@@ -6,18 +6,27 @@ import { registerMiddleware } from '@/shared/middlewares/index.js';
 import { registerEventHandlers } from '@/core/events/register-event-handlers.js';
 import { registerRoutes } from '@/routes.js';
 import { buildFastifyServerOptions } from '@/shared/utils/http/fastify-server.util.js';
+import { isStripeWebhookRawBodyRoute } from '@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-raw-body.registry.js';
 
 const API_SERVER_NAME = 'core-be';
 const API_SERVER_VERSION = '1.0.0';
-const RAW_BODY_CAPTURE_PATHS = new Set([
-  '/api/v1/billing/webhook',
-  '/api/v1/billing/stripe/webhook',
-]);
 const STRIPE_SIGNATURE_HEADER = 'stripe-signature';
 
+/**
+ * sec-B finding #7: the prior implementation used a hardcoded
+ * `RAW_BODY_CAPTURE_PATHS = new Set([...])` Set of webhook URLs, which had to stay
+ * in lockstep with `stripe-webhook.routes.ts` by string equality. Any restructure
+ * (API version bump, route move, prefix change) that didn't update both files
+ * silently broke every webhook signature verification for the 3-day Stripe retry
+ * window. We now read from `stripe-webhook-raw-body.registry.ts`, which the routes
+ * module populates at registration time via its `onRoute` hook — the URLs are
+ * authored once in the route declaration.
+ */
 function shouldCaptureRawBody(request: { url: string; headers: Record<string, unknown> }): boolean {
   const path = request.url.split('?')[0] ?? request.url;
-  return RAW_BODY_CAPTURE_PATHS.has(path) && request.headers[STRIPE_SIGNATURE_HEADER] !== undefined;
+  return (
+    isStripeWebhookRawBodyRoute(path) && request.headers[STRIPE_SIGNATURE_HEADER] !== undefined
+  );
 }
 
 /**

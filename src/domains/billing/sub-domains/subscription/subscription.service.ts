@@ -82,6 +82,20 @@ export class SubscriptionService {
   }
 
   /**
+   * sec-B finding #5: existence check on a Stripe-side subscription id, used by the
+   * webhook service to distinguish stale-event (no-op) from race-condition (retry)
+   * when the sync UPDATE returns null. Routed through the service so tests inject
+   * the worker-scoped repository the same way they do for sync/cancel.
+   */
+  async existsByStripeProviderSubscriptionId(
+    provider_subscription_id: string,
+    repositoryOverride?: SubscriptionRepository,
+  ): Promise<boolean> {
+    const repository = repositoryOverride ?? this.repository;
+    return repository.existsByProviderSubscriptionId(provider_subscription_id);
+  }
+
+  /**
    * Fallback INSERT path for `customer.subscription.created` webhook events
    * whose local row is still missing (sec-B9).
    *
