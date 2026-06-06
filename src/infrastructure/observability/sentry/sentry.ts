@@ -60,6 +60,25 @@ export function redactSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
   if (event.contexts) {
     event.contexts = redactSensitive(event.contexts);
   }
+  // sec-C6: pino redacts by KEY, so secrets interpolated into Error
+  // messages or thrown values bypass the standard redaction pipeline and
+  // ship verbatim to Sentry. Walk every textual surface here.
+  if (typeof event.message === 'string') {
+    event.message = redactSensitive(event.message);
+  }
+  if (event.user) {
+    event.user = redactSensitive(event.user);
+  }
+  if (event.tags) {
+    event.tags = redactSensitive(event.tags);
+  }
+  if (event.exception?.values) {
+    for (const value of event.exception.values) {
+      if (typeof value.value === 'string') {
+        value.value = redactSensitive(value.value);
+      }
+    }
+  }
   return event;
 }
 

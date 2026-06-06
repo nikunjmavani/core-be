@@ -47,7 +47,14 @@ const envSchemaBase = z.object({
   /** Fastify HTTP bind address (worker health server also binds here). */
   HTTP_BIND_HOST: z.string().min(1).default('0.0.0.0'),
   NODE_ENV: nodeEnvSchema,
-  LOG_LEVEL: z.string().min(1).default('info'),
+  /**
+   * sec-C9: enum-constrained so a typo (`info ` with trailing whitespace,
+   * `dbug`) is caught at boot instead of silently degrading to whatever
+   * pino reads. Default `info` matches what the runtime expects; previously
+   * `.env.example` shipped `LOG_LEVEL=debug` which would 10-100x log volume
+   * in any environment scaffolded from the template — including production.
+   */
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   /** Number of reverse-proxy hops Fastify may trust for X-Forwarded-* headers. */
   TRUST_PROXY: trustProxyHopCountSchema,
   FASTIFY_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
@@ -124,6 +131,14 @@ const envSchemaBase = z.object({
    * Default false; operator opts in once subdomain inventory is audited.
    */
   HSTS_INCLUDE_SUBDOMAINS: booleanString('false'),
+  /**
+   * sec-C4: when true, `/readyz` returns the verbose operational body
+   * (`migration_version`, `mail_outbox_pending`, `dlq_depth`,
+   * `worker_queue_manifest`). Default false — unauthenticated callers see
+   * only dependency status, not topology / patch level / queue depth.
+   * Enable only for trusted internal ingress (LB-internal probes behind ACLs).
+   */
+  HEALTH_VERBOSE_BODY_ENABLED: booleanString('false'),
 
   // CORS (comma-separated origins; required in every runtime)
   ALLOWED_ORIGINS: z.string().min(1),
@@ -202,6 +217,12 @@ const envSchemaBase = z.object({
   /** Bearer token a Prometheus scraper sends when scraping /metrics. Required when METRICS_ENABLED=true (min 32 chars). */
   METRICS_SCRAPE_TOKEN: z.string().min(32).optional(),
   /** OTLP HTTP traces endpoint base URL (e.g. https://otel.example.com). Appends /v1/traces when omitted. */
+  /**
+   * sec-C3: in production/staging the OTLP exporter MUST use https://. The
+   * runtime accepts both http:// and https://; spans carry SQL fragments,
+   * request paths, and request ids that should not traverse the network in
+   * plaintext. Refine enforced below.
+   */
   OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
   /** OpenTelemetry service.name override (defaults: core-be-api / core-be-worker). */
   OTEL_SERVICE_NAME: z.string().min(1).optional(),
@@ -731,6 +752,26 @@ export const envSchema = envSchemaBase
       message:
         'UPLOAD_USE_PRESIGNED_POST must be true in production (PUT fallback has no min-size enforcement).',
       path: ['UPLOAD_USE_PRESIGNED_POST'],
+    },
+  )
+  .refine(
+    (data) => {
+      // sec-C3: OTLP traffic carries SQL fragments, request paths, request ids.
+      // Allow plaintext http:// in dev/test (typical local collector), require
+      // https:// in production / staging — those environments must export over
+      // an encrypted channel.
+      if (data.OTEL_EXPORTER_OTLP_ENDPOINT === undefined) return true;
+      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') return true;
+      try {
+        return new URL(data.OTEL_EXPORTER_OTLP_ENDPOINT).protocol === 'https:';
+      } catch {
+        return false;
+      }
+    },
+    {
+      message:
+        'OTEL_EXPORTER_OTLP_ENDPOINT must be an https:// URL in production / staging (telemetry exporters cannot transmit SQL fragments / request paths in plaintext).',
+      path: ['OTEL_EXPORTER_OTLP_ENDPOINT'],
     },
   )
   .refine(
