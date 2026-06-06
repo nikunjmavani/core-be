@@ -34,7 +34,10 @@ vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
   logger: { warn: loggerWarnSpy, error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-import { recordLoginAuditEvent } from '@/domains/auth/shared/audit-login.util.js';
+import {
+  recordLoginAuditEvent,
+  recordLoginFailureAuditEvent,
+} from '@/domains/auth/shared/audit-login.util.js';
 import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 
 const request = { id: 'req_test' } as never;
@@ -133,5 +136,77 @@ describe('recordLoginAuditEvent (sec-A8)', () => {
     await expect(recordLoginAuditEvent(request, sessionResult, 'password')).resolves.not.toThrow();
     expect(recordScopedAuditEventSpy).not.toHaveBeenCalled();
     expect(loggerWarnSpy).toHaveBeenCalled();
+  });
+
+  // sec-A8 follow-up: closes the symmetric failure side of every login
+  // surface. recordLoginFailureAuditEvent never records actorUserPublicId —
+  // we deliberately don't know who they tried to log in as, so the row
+  // captures only source + error_code + IP/UA (the latter via the
+  // recordScopedAuditEvent network helper). Best-effort throughout: a
+  // recording failure must not break the caller's re-throw.
+  describe('recordLoginFailureAuditEvent (sec-A8 follow-up)', () => {
+    it('records auth.login_failure with source and a typed error_code from AppError messageKey', async () => {
+      class FakeAppError extends Error {
+        public readonly messageKey = 'errors:invalidEmailOrPassword';
+        constructor() {
+          super('Invalid email or password');
+          this.name = 'UnauthorizedError';
+        }
+      }
+
+      await recordLoginFailureAuditEvent(request, 'password', new FakeAppError());
+
+      expect(recordScopedAuditEventSpy).toHaveBeenCalledWith(
+        request,
+        expect.objectContaining({
+          action: 'auth.login_failure',
+          resource_type: 'session',
+          severity: 'INFO',
+          metadata: expect.objectContaining({
+            source: 'password',
+            error_code: 'errors:invalidEmailOrPassword',
+          }),
+        }),
+      );
+      // CRITICAL: failure rows must NOT name an actor — we don't trust the
+      // attacker's claim of identity, and naming a victim would leak existence.
+      const [, payload] = recordScopedAuditEventSpy.mock.calls.at(-1) ?? [];
+      expect((payload as { actorUserPublicId?: string })?.actorUserPublicId).toBeUndefined();
+    });
+
+    it('falls back to error.name when no messageKey is present (plain Error)', async () => {
+      const plainError = new Error('boom');
+
+      await recordLoginFailureAuditEvent(request, 'oauth_google', plainError);
+
+      const [, payload] = recordScopedAuditEventSpy.mock.calls.at(-1) ?? [];
+      expect((payload as { metadata?: { error_code?: string } })?.metadata?.error_code).toBe(
+        'Error',
+      );
+      expect((payload as { metadata?: { source?: string } })?.metadata?.source).toBe(
+        'oauth_google',
+      );
+    });
+
+    it('falls back to "unknown" error_code when error is a non-Error throw value', async () => {
+      await recordLoginFailureAuditEvent(request, 'webauthn', 'some-string-thrown');
+
+      const [, payload] = recordScopedAuditEventSpy.mock.calls.at(-1) ?? [];
+      expect((payload as { metadata?: { error_code?: string } })?.metadata?.error_code).toBe(
+        'unknown',
+      );
+    });
+
+    it('swallows audit-pipeline errors so the caller can re-throw the original', async () => {
+      recordScopedAuditEventSpy.mockRejectedValueOnce(new Error('audit pipeline down'));
+
+      await expect(
+        recordLoginFailureAuditEvent(request, 'magic_link', new Error('boom')),
+      ).resolves.not.toThrow();
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.any(Error) }),
+        'audit.login_failure.recording.failed',
+      );
+    });
   });
 });

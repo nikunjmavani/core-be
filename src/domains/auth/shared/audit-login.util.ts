@@ -75,3 +75,54 @@ export async function recordLoginAuditEvent(
     logger.warn({ error }, 'audit.login.recording.failed');
   }
 }
+
+/**
+ * Records a `auth.login_failure` event on the symmetric failure side of every
+ * login surface (sec-A8 follow-up).
+ *
+ * @remarks
+ * OVERVIEW.md promises "every login (success or failure) records a row".
+ * {@link recordLoginAuditEvent} covered success; this helper closes the
+ * failure side so a brute-force / credential-stuffing attempt is visible
+ * in `audit.events` as `auth.login_failure` with the originating `source`
+ * and an `error_code` that maps to the thrown class (e.g.
+ * `invalid_email_or_password`, `mfa_required`, `account_locked`).
+ *
+ * No `actorUserPublicId` is recorded — we deliberately do NOT know who they
+ * tried to log in as. The IP / user-agent captured by
+ * {@link recordScopedAuditEvent}'s network helper is enough for "failed
+ * logins from this IP in the last hour" detection without leaking which
+ * accounts the attacker enumerated.
+ *
+ * Best-effort. A failure to write the audit row must NEVER break the
+ * downstream re-throw — callers always `await recordLoginFailureAuditEvent`
+ * and then rethrow the original error.
+ */
+export async function recordLoginFailureAuditEvent(
+  request: FastifyRequest,
+  source: LoginAuditSource,
+  error: unknown,
+): Promise<void> {
+  try {
+    // Capture the i18n message key (when present on a typed AppError) as the
+    // error_code so audit rows are consistent across calls — far more useful
+    // than the raw stringified message which carries the user's locale.
+    const errorCode =
+      error !== null && typeof error === 'object' && 'messageKey' in error
+        ? (error as { messageKey?: unknown }).messageKey
+        : error !== null && typeof error === 'object' && 'name' in error
+          ? (error as { name?: unknown }).name
+          : 'unknown';
+    await recordScopedAuditEvent(request, {
+      action: 'auth.login_failure',
+      resource_type: 'session',
+      severity: 'INFO',
+      metadata: {
+        source,
+        error_code: typeof errorCode === 'string' ? errorCode : 'unknown',
+      },
+    });
+  } catch (recordingError) {
+    logger.warn({ error: recordingError }, 'audit.login_failure.recording.failed');
+  }
+}
