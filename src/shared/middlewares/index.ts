@@ -27,9 +27,19 @@ import shutdownMiddleware from './core/shutdown.middleware.js';
 /**
  * Ordered Fastify plugin list registered by {@link registerMiddleware}. Order
  * is significant: `requestLifecycleMiddleware` MUST be first to own the
- * `onResponse` orchestration, and `rateLimitMiddleware` runs before
- * `organizationRlsTransactionMiddleware` so throttled requests never open a DB
- * transaction.
+ * `onResponse` orchestration of RLS-settle → idempotency-cache → outbox-flush
+ * (Fastify `onResponse` hooks run FIFO).
+ *
+ * @remarks
+ * sec-M4: the prior version of this block said `rateLimitMiddleware` had to
+ * stay before `organizationRlsTransactionMiddleware` "so throttled requests
+ * never open a DB transaction". That justification has been stale since
+ * `organization-rls-transaction.middleware.ts` became a no-op stub that
+ * returns `'no_transaction'` immediately — no HTTP-side transaction is opened
+ * anywhere now; org-scoped work runs inside `withOrganizationDatabaseContext`.
+ * The no-op is kept registered because `request-lifecycle.middleware.ts`
+ * imports its settlement-outcome type as part of the lifecycle contract; a
+ * future drop must update both files together. See the no-op's own TSDoc.
  */
 export const middlewarePlugins = [
   // MUST be first: registers the only `onResponse` hook that orchestrates
@@ -53,10 +63,13 @@ export const middlewarePlugins = [
   zodTypeProviderMiddleware,
   authMiddleware,
   tenantMiddleware,
-  // The global limiter is keyed strictly on `request.ip` (see rate-limit.middleware.ts), so it
-  // no longer depends on tenant resolution. It MUST stay before organizationRlsTransactionMiddleware
-  // so throttled requests never open a DB transaction. tenantMiddleware stays after i18nMiddleware
-  // because it throws a translated ValidationError on header/path mismatch.
+  // `tenantMiddleware` stays AFTER `i18nMiddleware` because it throws a
+  // translated `ValidationError` on header/path mismatch.
+  // `rateLimitMiddleware` runs after auth + tenant so per-user / per-org keys
+  // are available (the global limiter is keyed on `request.ip`, so it does
+  // not strictly require either, but per-route limits do). Order is otherwise
+  // irrelevant against `organizationRlsTransactionMiddleware`, which is a
+  // no-op stub (sec-M4).
   rateLimitMiddleware,
   organizationRlsTransactionMiddleware,
   requestStatementTimeoutMiddleware,
