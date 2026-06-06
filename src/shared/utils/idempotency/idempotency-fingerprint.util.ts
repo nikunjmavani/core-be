@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isSensitiveKey } from '@/shared/utils/security/sensitive-redaction.util.js';
 
 /** Route patterns that must never participate in idempotency caching (token or secret issuance). */
 const IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS: RegExp[] = [
@@ -11,7 +12,17 @@ const IDEMPOTENCY_EXCLUDED_ROUTE_PATTERNS: RegExp[] = [
   /^\/organizations\/[^/]+\/api-keys$/,
 ];
 
-/** JSON field names whose presence in a cached response body would expose secrets. */
+/**
+ * JSON field names whose presence in a cached response body would expose secrets.
+ *
+ * @remarks
+ * sec-C/M finding #12: the prior 4-name allowlist let many secret-bearing fields slip
+ * through (`token`, `secret`, `password_reset_token`, `verification_token`,
+ * `mfa_recovery_code`, `private_key`, `csrf_token`, etc.). The fingerprint helper now
+ * pairs this allowlist with a substring-match fall-back via {@link isSensitiveKey}
+ * (same matcher Pino redaction uses), failing closed on any field whose name carries a
+ * sensitive fragment. The named allowlist is retained as a fast path / regression doc.
+ */
 const IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES = new Set([
   'access_token',
   'raw_key',
@@ -106,13 +117,38 @@ function objectContainsSecretField(value: unknown): boolean {
   }
   if (typeof value === 'object') {
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      // sec-C/M #12: layered guard. The named allowlist is the fast path /
+      // regression doc for the four most-exposed fields; `isSensitiveKey` is the
+      // broad backstop that catches `token`, `secret`, `password`, `credential`,
+      // `cookie`, `jwt`, `private_key`, and similar substrings. Failing closed
+      // on either match is the same trade-off Pino redaction already accepts.
       if (IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES.has(key)) return true;
+      if (isSensitiveKey(key)) return true;
       if (objectContainsSecretField(nested)) return true;
     }
     return false;
   }
   return false;
 }
+
+/**
+ * sec-C/M #12: substrings that indicate the body almost certainly carries a secret-bearing
+ * field when JSON parsing fails. Mirrors the broader `isSensitiveKey` matcher but operates on
+ * raw bytes — the parse-failure branch never sees parsed keys, so a coarse string search is
+ * the only available signal. Match on the JSON-quoted form (`"<fragment>"`) and on adjacent
+ * snake_case fragments (`_<fragment>"` / `<fragment>_`) to keep false positives bounded.
+ */
+const RESPONSE_BODY_SECRET_FRAGMENTS = [
+  'token',
+  'secret',
+  'password',
+  'credential',
+  'cookie',
+  'jwt',
+  'private_key',
+  'api_key',
+  'recovery_code',
+] as const;
 
 /**
  * Returns true when a serialized HTTP response body carries token or raw-secret fields and must
@@ -123,8 +159,15 @@ export function responseBodyContainsSecretFields(body: string): boolean {
     const parsed = JSON.parse(body) as unknown;
     return objectContainsSecretField(parsed);
   } catch {
-    for (const fieldName of IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES) {
-      if (body.includes(`"${fieldName}"`)) return true;
+    const lower = body.toLowerCase();
+    for (const fragment of RESPONSE_BODY_SECRET_FRAGMENTS) {
+      if (
+        lower.includes(`"${fragment}"`) ||
+        lower.includes(`_${fragment}"`) ||
+        lower.includes(`"${fragment}_`)
+      ) {
+        return true;
+      }
     }
     return false;
   }

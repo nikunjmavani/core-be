@@ -50,6 +50,31 @@ export async function registerScalarApiReference(application: FastifyInstance): 
   });
 
   application.addHook('onSend', async (request, reply, payload) => {
+    if (!request.url.startsWith(API_REFERENCE_ROUTE_PREFIX)) {
+      return payload;
+    }
+    // sec-C/M finding #30: relax the global Cross-Origin-Embedder-Policy
+    // (`require-corp`) and CSP for the `/reference` Scalar UI subtree only.
+    // Scalar's bundle loads fonts and bundle chunks from CDNs at runtime;
+    // require-corp blocks those without explicit `Cross-Origin-Resource-Policy:
+    // cross-origin` on the source, which we cannot control. Without this scope,
+    // ENABLE_API_REFERENCE=true serves an empty docs shell with CORP errors in
+    // DevTools — the operator footgun the audit flagged. The relaxation is
+    // confined to the `/reference` subtree; the API surface keeps the strict
+    // helmet defaults.
+    reply.removeHeader('Cross-Origin-Embedder-Policy');
+    reply.header(
+      'Content-Security-Policy',
+      [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data:",
+        "font-src 'self' data: https:",
+        "connect-src 'self'",
+        "worker-src 'self' blob:",
+      ].join('; '),
+    );
     if (
       environment.ENABLE_MCP_SERVER &&
       request.url === `${API_REFERENCE_ROUTE_PREFIX}/` &&

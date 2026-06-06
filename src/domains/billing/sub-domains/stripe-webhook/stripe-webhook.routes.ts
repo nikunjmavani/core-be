@@ -56,6 +56,12 @@ export function stripeWebhookRoutes(): FastifyPluginAsync {
       {
         ...WEBHOOK_RATE_LIMIT,
         config: { captureRawBody: true },
+        // sec-C/M #29: lift the per-route body limit to 5 MB. The global default is
+        // 1 MB, but line-item-heavy `invoice.finalized` events legitimately exceed
+        // that in production. A 413 here turns into "Stripe retries for 3 days then
+        // parks the event," which silently desyncs local entitlement / dunning state.
+        // 5 MB matches Stripe's recommended upper bound for webhook payloads.
+        bodyLimit: STRIPE_WEBHOOK_BODY_LIMIT_BYTES,
         schema: {
           summary: 'Stripe webhook receiver',
           description:
@@ -71,6 +77,7 @@ export function stripeWebhookRoutes(): FastifyPluginAsync {
       {
         ...WEBHOOK_RATE_LIMIT,
         config: { captureRawBody: true },
+        bodyLimit: STRIPE_WEBHOOK_BODY_LIMIT_BYTES,
         schema: {
           summary: 'Stripe webhook receiver',
           description:
@@ -82,3 +89,6 @@ export function stripeWebhookRoutes(): FastifyPluginAsync {
     );
   };
 }
+
+/** sec-C/M #29: per-route body limit for Stripe webhook receivers (5 MB). */
+const STRIPE_WEBHOOK_BODY_LIMIT_BYTES = 5 * 1024 * 1024;

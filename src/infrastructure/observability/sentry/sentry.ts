@@ -240,6 +240,30 @@ export function captureMessage(
 }
 
 /**
+ * Add a structured Sentry breadcrumb without sending a `captureMessage` event.
+ *
+ * @remarks
+ * Cheap (no rate limit, no quota consumption) and ideal for per-request signal trails
+ * (sec-C/M finding #16 — captcha misconfiguration). Breadcrumbs are attached to the next
+ * captured event automatically, so an operator opening a triggered alert sees the
+ * forensic trail without each call generating its own ingestion line.
+ */
+export function addSentryBreadcrumb(breadcrumb: {
+  category: string;
+  message: string;
+  level?: 'fatal' | 'error' | 'warning' | 'log' | 'info' | 'debug';
+  data?: Record<string, unknown>;
+}): void {
+  if (!initialized) return;
+  Sentry.addBreadcrumb({
+    category: breadcrumb.category,
+    message: breadcrumb.message,
+    level: breadcrumb.level ?? 'info',
+    ...(breadcrumb.data !== undefined ? { data: breadcrumb.data } : {}),
+  });
+}
+
+/**
  * Flush pending Sentry events (call before process.exit).
  */
 export async function flushSentry(timeoutMs = 2000): Promise<void> {

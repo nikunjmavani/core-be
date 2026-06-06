@@ -62,16 +62,46 @@ const SAFE_INBOUND_REQUEST_IDENTIFIER_PATTERN = new RegExp(
   `^[A-Za-z0-9_-]{1,${MAX_INBOUND_REQUEST_IDENTIFIER_LENGTH}}$`,
 );
 
-function isSafeInboundRequestIdentifier(candidate: string): boolean {
+/**
+ * Returns the client-supplied `x-request-id` value when it passes the strict allow-list, or
+ * undefined otherwise. Exported so the request-context middleware can attach the raw client
+ * value as a SEPARATE log field (`client_request_id`) without ever promoting it to the
+ * authoritative server-side correlation id (sec-C/M finding #27).
+ */
+export function isSafeInboundRequestIdentifier(candidate: string): boolean {
   return SAFE_INBOUND_REQUEST_IDENTIFIER_PATTERN.test(candidate);
 }
 
-function resolveIncomingRequestIdentifier(incomingMessage: IncomingMessage): string {
-  const headerValue = incomingMessage.headers['x-request-id'];
+/**
+ * Pull the client-supplied `x-request-id` from inbound request headers when it passes the
+ * strict allow-list, or return undefined. Used by the request-context middleware to expose
+ * the value as a separate `x-client-request-id` response header + `clientRequestId` log
+ * field, keeping distributed-tracing UX intact while ensuring the server-minted UUID is
+ * always the authoritative correlation id (sec-C/M finding #27).
+ */
+export function extractClientSuppliedRequestIdentifier(
+  headers: IncomingMessage['headers'],
+): string | undefined {
+  const headerValue = headers['x-request-id'];
   const candidate = Array.isArray(headerValue) ? headerValue[0] : headerValue;
   if (typeof candidate === 'string' && isSafeInboundRequestIdentifier(candidate)) {
     return candidate;
   }
+  return undefined;
+}
+
+/**
+ * sec-C/M finding #27: always mint a fresh server-side correlation id. The prior
+ * implementation accepted any well-formed inbound `x-request-id` as the PRIMARY id —
+ * which Sentry tags, Pino structured logs, and `meta.request_id` error payloads all
+ * inherit. An attacker could replay a victim's id to pollute incident triage, plant a
+ * chosen id to bait on-call into the wrong trace, or interfere with deduplication
+ * tooling. The client value is still surfaced separately via
+ * {@link extractClientSuppliedRequestIdentifier} so legitimate distributed tracing
+ * (clients that DO want their id preserved for correlation across hops) keeps working,
+ * but the server-side id is always authoritative.
+ */
+function resolveIncomingRequestIdentifier(_incomingMessage: IncomingMessage): string {
   return randomUUID();
 }
 
