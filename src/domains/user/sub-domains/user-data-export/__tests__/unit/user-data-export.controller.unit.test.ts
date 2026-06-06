@@ -1,9 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { createUserDataExportController } from '@/domains/user/sub-domains/user-data-export/user-data-export.controller.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
-import type { UserDataExportService } from '@/domains/user/sub-domains/user-data-export/user-data-export.service.js';
 import { USER_DATA_EXPORT_STATUSES } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
+
+const { recordScopedAuditEventSpy } = vi.hoisted(() => ({
+  recordScopedAuditEventSpy: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/shared/utils/infrastructure/audit-request-context.util.js', () => ({
+  recordScopedAuditEvent: recordScopedAuditEventSpy,
+}));
+
+import { createUserDataExportController } from '@/domains/user/sub-domains/user-data-export/user-data-export.controller.js';
+import type { UserDataExportService } from '@/domains/user/sub-domains/user-data-export/user-data-export.service.js';
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): never {
   return {
@@ -74,5 +83,69 @@ describe('createUserDataExportController', () => {
     expect(response).toMatchObject({
       data: { export_id: exportId, status: USER_DATA_EXPORT_STATUSES.COMPLETED },
     });
+  });
+
+  // sec-U6: GDPR bundle download URL is a sensitive material — an attacker who
+  // exfiltrates a session token can repeatedly mint fresh presigned URLs and
+  // download the user's entire data history (sessions, IPs, memberships,
+  // notifications, audit). Every URL mint must leave a row in `audit.events`
+  // so the user (and admins) can see post-hoc who pulled the bundle when.
+  it('records a user.data_export.url_minted audit event when download_url is returned', async () => {
+    const userPublicId = generatePublicId();
+    const exportId = generatePublicId();
+    recordScopedAuditEventSpy.mockClear();
+    const service = {
+      getExportStatus: vi.fn().mockResolvedValue({
+        export_id: exportId,
+        status: USER_DATA_EXPORT_STATUSES.COMPLETED,
+        download_url: 'https://s3.example.com/presigned-url',
+      }),
+    } as unknown as UserDataExportService;
+    const controller = createUserDataExportController(service);
+
+    await controller.getExportStatus(
+      mockRequest({
+        auth: { kind: 'user' as const, userId: userPublicId, role: 'user' },
+        params: { exportId },
+      }),
+      mockReply(),
+    );
+
+    expect(recordScopedAuditEventSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorUserPublicId: userPublicId,
+        action: 'user.data_export.url_minted',
+        resource_type: 'user_data_export',
+        metadata: expect.objectContaining({ export_public_id: exportId }),
+      }),
+    );
+  });
+
+  it('does NOT record an audit event when no download_url is returned (status != COMPLETED)', async () => {
+    const userPublicId = generatePublicId();
+    const exportId = generatePublicId();
+    recordScopedAuditEventSpy.mockClear();
+    const service = {
+      getExportStatus: vi.fn().mockResolvedValue({
+        export_id: exportId,
+        status: USER_DATA_EXPORT_STATUSES.PROCESSING,
+        download_url: null,
+      }),
+    } as unknown as UserDataExportService;
+    const controller = createUserDataExportController(service);
+
+    await controller.getExportStatus(
+      mockRequest({
+        auth: { kind: 'user' as const, userId: userPublicId, role: 'user' },
+        params: { exportId },
+      }),
+      mockReply(),
+    );
+
+    // Only minted URLs are auditable events. A status poll (no URL minted yet)
+    // is observability noise; recording it would dilute the signal during
+    // incident response.
+    expect(recordScopedAuditEventSpy).not.toHaveBeenCalled();
   });
 });
