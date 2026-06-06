@@ -80,11 +80,20 @@ describe('Stripe webhook ingestion contract (`constructStripeWebhookEvent` + Str
       compensatePlanChange: async () => {},
     },
   );
-  const webhookEventHandlerServiceOutbound = new StripeWebhookService(subscriptionServiceOutbound, {
-    tryClaimEvent: stripeWebhookTryClaimEventMock,
-    markProcessed: stripeWebhookMarkProcessedMock,
-    markFailed: stripeWebhookMarkFailedMock,
-  } as never);
+  const webhookEventHandlerServiceOutbound = new StripeWebhookService(
+    subscriptionServiceOutbound,
+    {
+      tryClaimEvent: stripeWebhookTryClaimEventMock,
+      markProcessed: stripeWebhookMarkProcessedMock,
+      markFailed: stripeWebhookMarkFailedMock,
+    } as never,
+    {
+      // sec-B7: plan_id resolution path. Contract test cares about Stripe
+      // signature handling, not plan mapping — return null so the handler
+      // simply omits plan_id from the sync payload (no-op behavior).
+      findByStripePriceId: async () => null,
+    } as never,
+  );
   let webhookStripeSigningSecretBaseline: string;
 
   beforeEach(() => {

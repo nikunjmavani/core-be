@@ -58,6 +58,9 @@ describe('stripe-webhook.processor duplicate job delivery', () => {
   const stripeWebhookService = new StripeWebhookService(
     subscriptionService,
     stripeWebhookEventRepository,
+    // sec-B7: processor test exercises retry / DLQ paths, never reaches
+    // plan-id resolution. Stub for type safety only.
+    { findByStripePriceId: vi.fn() } as never,
   );
 
   beforeEach(() => {
