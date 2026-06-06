@@ -220,7 +220,7 @@ Table auth.user_notification_preferences {
 }
 
 Note auth.user_notification_preferences {
-  'RLS: enabled\nPolicies: user_notification_preferences_user_org_access\nFORCE ROW LEVEL SECURITY'
+  'RLS: enabled\nPolicies: user_notification_preferences_user_org_access, user_notification_preferences_user_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.user_settings {
