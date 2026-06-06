@@ -204,7 +204,20 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
   async getObjectFirstBytes(
     key: string,
     byteCount: number,
-  ): Promise<{ body: Buffer; contentType: string | undefined } | null> {
+  ): Promise<{
+    body: Buffer;
+    contentType: string | undefined;
+    /**
+     * S3 object ETag at the time the magic-byte HEAD was read. sec-re-10:
+     * the caller threads this back into {@link copyObject} as
+     * `CopySourceIfMatch` so S3 rejects the COPY with `PreconditionFailed`
+     * when an attacker replays the presigned PUT/POST between the
+     * verify and the copy, replacing the verified bytes with hostile
+     * content. May be omitted on unversioned mocks; the caller treats a
+     * missing ETag as the legacy unprotected path.
+     */
+    eTag?: string;
+  } | null> {
     const bucket = requireBucket();
     try {
       return await outboundCall({
@@ -225,6 +238,11 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
           return {
             body: Buffer.from(body),
             contentType: response.ContentType,
+            // `exactOptionalPropertyTypes` distinguishes "key absent" from
+            // "key present with value undefined"; spread the eTag only when
+            // S3 actually returned one so the optional field stays absent
+            // for the legacy unprotected path.
+            ...(response.ETag ? { eTag: response.ETag } : {}),
           };
         },
       });
@@ -267,6 +285,15 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
     sourceKey: string;
     destinationKey: string;
     contentType: string;
+    /**
+     * Optional S3 ETag from the source object. sec-re-10: when supplied,
+     * passed to S3 as `CopySourceIfMatch` so the COPY fails with
+     * `PreconditionFailed` if the source bytes changed since the caller
+     * inspected them — closing the TOCTOU window between the magic-byte
+     * verify on `pending/<key>` and the copy to the servable key for the
+     * ~15 minutes the presigned PUT remains replayable.
+     */
+    sourceETag?: string;
   }): Promise<void> {
     const bucket = requireBucket();
     await outboundCall({
@@ -284,6 +311,7 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
             // does not bypass the encryption requirement if the bucket
             // default is misconfigured.
             ServerSideEncryption: 'AES256',
+            ...(options.sourceETag ? { CopySourceIfMatch: options.sourceETag } : {}),
           }),
           { abortSignal: signal },
         );

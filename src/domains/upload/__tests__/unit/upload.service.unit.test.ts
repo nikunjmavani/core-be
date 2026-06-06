@@ -335,6 +335,7 @@ describe('UploadService', () => {
     vi.mocked(objectStorage.getObjectFirstBytes).mockResolvedValueOnce({
       body: PNG_MAGIC,
       contentType: 'image/png',
+      eTag: '"verified-etag"',
     });
     vi.mocked(repository.markConfirmedByPublicId).mockResolvedValue({
       ...uploadRow,
@@ -346,16 +347,56 @@ describe('UploadService', () => {
 
     // Verified against the pending object, then server-side copied to the final key (no re-upload).
     expect(objectStorage.verifyUploadedObject).toHaveBeenCalledWith(pendingKey, expect.anything());
+    // sec-re-10: COPY pins the source ETag captured at HEAD so a replayed
+    // PUT between verify and copy fails the COPY with PreconditionFailed.
     expect(objectStorage.copyObject).toHaveBeenCalledWith({
       sourceKey: pendingKey,
       destinationKey: finalKey,
       contentType: 'image/png',
+      sourceETag: '"verified-etag"',
     });
     // No transforming put for a non-SVG; the row is repointed to the final key and pending removed.
     expect(objectStorage.putObject).not.toHaveBeenCalled();
     expect(repository.markConfirmedByPublicId).toHaveBeenCalledWith(uploadPublicId, finalKey);
     expect(objectStorage.deleteObject).toHaveBeenCalledWith(pendingKey);
     expect(result.status).toBe('UPLOADED');
+  });
+
+  it('sec-re-10: confirmUpload omits sourceETag when the HEAD response carries no ETag (legacy / unversioned mocks)', async () => {
+    // Defensive: pre-fix call sites returned no ETag. The fix preserves the
+    // legacy unprotected COPY when the HEAD response has no ETag — the
+    // alternative (refusing to copy) would gate publishes on a header the
+    // platform may not always supply (e.g. some MinIO test setups).
+    const finalKey = 'avatars/user_public/key2.png';
+    const pendingKey = `pending/${finalKey}`;
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...uploadRow,
+      file_key: pendingKey,
+      status: 'PENDING',
+    } as never);
+    vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
+      contentType: 'image/png',
+      contentLength: 1024,
+    });
+    vi.mocked(objectStorage.getObjectFirstBytes).mockResolvedValueOnce({
+      body: PNG_MAGIC,
+      contentType: 'image/png',
+      // No eTag → legacy unprotected path.
+    });
+    vi.mocked(repository.markConfirmedByPublicId).mockResolvedValue({
+      ...uploadRow,
+      file_key: finalKey,
+      status: 'UPLOADED',
+    } as never);
+
+    await service.confirmUpload(uploadPublicId, userPublicId);
+
+    expect(objectStorage.copyObject).toHaveBeenCalledWith({
+      sourceKey: pendingKey,
+      destinationKey: finalKey,
+      contentType: 'image/png',
+      // Note: no `sourceETag` key in the payload.
+    });
   });
 
   it('createUpload presigns a pending-namespaced key, never the final servable key', async () => {
