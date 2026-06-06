@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, lt } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { webauthn_credentials } from './webauthn-credential.schema.js';
@@ -63,6 +63,25 @@ export class WebauthnCredentialRepository {
   }
 
   async updateCounter(credentialId: string, counter: number): Promise<void> {
+    /**
+     * sec-D11: monotonicity guard for the WebAuthn signature counter (defense
+     * in depth on top of the `@simplewebauthn/server` library verifier). The
+     * spec marks a static or decreasing counter as the signal of a possibly-
+     * cloned authenticator. The library enforces strict-increase at verify
+     * time, but two concurrent verifies can both pass the in-memory check and
+     * race the UPDATE — letting the second write roll the stored counter
+     * backward. Pinning monotonicity into the SQL WHERE clause refuses any
+     * regression at the storage layer regardless of caller ordering.
+     *
+     * Zero-counter authenticators (Apple Passkeys / Windows Hello) keep
+     * `counter = 0` forever; `lt(counter, 0)` would always be false and lock
+     * every subsequent login from those credentials. Branch on `counter === 0`
+     * so the valid `0 → 0` no-op write is accepted via equality.
+     */
+    const monotonicityCondition =
+      counter === 0
+        ? eq(webauthn_credentials.counter, 0)
+        : lt(webauthn_credentials.counter, counter);
     await getRequestDatabase()
       .update(webauthn_credentials)
       .set({
@@ -73,6 +92,7 @@ export class WebauthnCredentialRepository {
         and(
           eq(webauthn_credentials.credential_id, credentialId),
           isNull(webauthn_credentials.revoked_at),
+          monotonicityCondition,
         ),
       );
   }

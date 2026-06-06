@@ -216,6 +216,7 @@ src/
     │   │   │       └── unit/
     │   │   │       │   ├── webauthn-challenge.unit.test.ts
     │   │   │       │   ├── webauthn-config.expected-origin.unit.test.ts
+    │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
     │   │   │       │   └── webauthn.validator.unit.test.ts
     │   │   │   ├── seed/
