@@ -25,9 +25,15 @@ export async function insertMfaRecoveryCodes(
     });
 }
 
-/** SHA-256 hash of a recovery code; only the hash is ever persisted in {@link mfa_recovery_codes}. */
+/**
+ * SHA-256 hash of a recovery code; only the hash is ever persisted in
+ * {@link mfa_recovery_codes}. sec-re-14: uppercases the input before hashing so a
+ * user who types their recovery code in lowercase (or mixed case) still matches
+ * the stored hash. The generator emits uppercase only, so existing hashes are
+ * unaffected.
+ */
 export function hashMfaRecoveryCode(plainCode: string): string {
-  return createHash('sha256').update(plainCode).digest('hex');
+  return createHash('sha256').update(plainCode.toUpperCase()).digest('hex');
 }
 
 /**
