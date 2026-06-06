@@ -3,6 +3,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { AuditRepository } from '@/domains/audit/audit.repository.js';
+import { ValidationError } from '@/shared/errors/index.js';
 
 describe('AuditRepository (database)', () => {
   const repository = new AuditRepository();
@@ -97,5 +98,73 @@ describe('AuditRepository (database)', () => {
     } as never);
 
     expect(listed.items.some((row) => row.action === 'user.viewed')).toBe(true);
+  });
+
+  // sec-U12: an opaque cursor minted under one filter set used to apply to ANY
+  // future request, because the cursor encoded only `(created_at, id)`. An
+  // admin could paginate with `?actor_user_id=A&after=<cursor>` and then swap
+  // to `?actor_user_id=B&after=<cursor>` and the cursor would still "work" —
+  // mixing result sets in confusing ways. Bind the normalized filter set into
+  // the cursor (SHA-256 fingerprint) and refuse a cursor whose fingerprint
+  // does not match the current request.
+  describe('cursor filter-binding (sec-U12)', () => {
+    it('rejects a cursor minted with a different filter set', async () => {
+      const actorA = await createTestUser({ email: 'audit-bind-a@example.com' });
+      const actorB = await createTestUser({ email: 'audit-bind-b@example.com' });
+
+      // Seed two rows so the first page mints a `nextCursor`.
+      for (let n = 0; n < 5; n += 1) {
+        await repository.insert({
+          actor_user_id: actorA.id,
+          action: 'user.viewed',
+          resource_type: 'user',
+          resource_id: actorA.id,
+        });
+      }
+
+      const firstPage = await repository.findWithFilters({
+        limit: 2,
+        actor_user_id: actorA.id,
+      });
+      expect(firstPage.nextCursor).toBeTruthy();
+
+      // Re-using the cursor with a different actor filter must be refused —
+      // the cursor was minted on the actorA query and cannot apply to actorB.
+      await expect(
+        repository.findWithFilters({
+          limit: 2,
+          actor_user_id: actorB.id,
+          ...(firstPage.nextCursor !== null ? { after: firstPage.nextCursor } : {}),
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('accepts a cursor whose fingerprint matches the current filter set', async () => {
+      const actor = await createTestUser({ email: 'audit-bind-match@example.com' });
+
+      for (let n = 0; n < 4; n += 1) {
+        await repository.insert({
+          actor_user_id: actor.id,
+          action: 'user.viewed',
+          resource_type: 'user',
+          resource_id: actor.id,
+        });
+      }
+
+      const firstPage = await repository.findWithFilters({
+        limit: 2,
+        actor_user_id: actor.id,
+      });
+      expect(firstPage.nextCursor).toBeTruthy();
+
+      const secondPage = await repository.findWithFilters({
+        limit: 2,
+        actor_user_id: actor.id,
+        ...(firstPage.nextCursor !== null ? { after: firstPage.nextCursor } : {}),
+      });
+      // Cursor accepted — second page returns rows (the four inserts span >2
+      // pages at limit=2).
+      expect(secondPage.items.length).toBeGreaterThan(0);
+    });
   });
 });
