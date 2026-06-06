@@ -162,6 +162,7 @@ describe('dlq-replay.util', () => {
         job_id: 'job-ledger-1',
         job_name: 'send-mail',
         payload_summary: { mail_outbox_id: 99 },
+        attempts_made: 5,
         auto_retry_count: 2,
       }),
     ).toEqual({

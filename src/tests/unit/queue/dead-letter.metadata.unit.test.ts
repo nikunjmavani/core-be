@@ -119,8 +119,10 @@ describe('enqueueDeadLetter metadata', () => {
     });
     expect(typeof data.failed_at).toBe('string');
     expect(Date.parse(String(data.failed_at))).not.toBeNaN();
+    // sec-Q: DLQ Redis jobId embeds attemptsMade so a re-failed replay produces a fresh
+    // snapshot rather than colliding with the prior failure (BullMQ duplicate semantics).
     expect(options).toMatchObject({
-      jobId: 'dlq-notification-job-metadata',
+      jobId: 'dlq-notification-job-metadata-attempt-4',
     });
   });
 

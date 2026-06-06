@@ -92,6 +92,14 @@ function getOrCreateDeadLetterQueue(deadLetterQueueName: string): Queue {
   if (existing) return existing;
   const queue = new Queue(deadLetterQueueName, {
     connection: getBullMQConnectionOptions(),
+    // Queue-level default eviction so DLQ snapshots are bounded even when they sit
+    // in `waiting` state (BullMQ `removeOn{Complete,Fail}` per-add only fires on
+    // state transition; a DLQ job that never completes/fails would otherwise grow
+    // unbounded outside any retention policy).
+    defaultJobOptions: {
+      removeOnComplete: { age: DEAD_LETTER_RETENTION_SECONDS, count: 1_000 },
+      removeOnFail: { age: DEAD_LETTER_RETENTION_SECONDS, count: 1_000 },
+    },
   });
   deadLetterQueuesByName.set(deadLetterQueueName, queue);
   return queue;
@@ -117,9 +125,14 @@ export function isFinalJobFailure(job: Job | undefined): boolean {
  *   which logs `queue.dead_letter.enqueue_failed`; the original failed job remains in
  *   BullMQ's `failed` set so operators can still inspect it.
  * - **Side effects:** writes a row to the DLQ Redis stream with 30-day retention on
- *   `removeOnComplete` and `removeOnFail`; no Postgres writes.
- * - **Notes:** stable `jobId` makes repeated DLQ inserts for the same source job idempotent,
- *   so replays that fail again do not multiply DLQ entries. Never store secrets here.
+ *   `removeOnComplete` and `removeOnFail` (and queue-level defaults that also bound
+ *   `waiting` jobs); no Postgres writes.
+ * - **Notes:** the DLQ Redis `jobId` is `dlq-<source>-<originalJobId>-attempt-<attemptsMade>`
+ *   so a replayed job that fails terminally again produces a FRESH snapshot rather than
+ *   colliding with the prior failure's `failed_reason`/`error_stack`/`failed_at` (BullMQ's
+ *   duplicate-jobId semantics would otherwise emit a `duplicated` event and keep the stale
+ *   snapshot). The durable Postgres ledger (`audit.dead_letter_jobs`) is independently
+ *   unique-keyed and remains the source of truth. Never store secrets here.
  */
 export async function enqueueDeadLetter(
   sourceQueueName: string,
@@ -144,7 +157,7 @@ export async function enqueueDeadLetter(
   });
 
   const safeOriginalJobIdentifier = job.id ?? job.opts.jobId ?? 'unknown';
-  const deadLetterJobIdentifier = `dlq-${sourceQueueName}-${String(safeOriginalJobIdentifier)}`;
+  const deadLetterJobIdentifier = `dlq-${sourceQueueName}-${String(safeOriginalJobIdentifier)}-attempt-${String(job.attemptsMade)}`;
 
   await queue.add(DEAD_LETTER_JOB_NAME, data, {
     jobId: deadLetterJobIdentifier,

@@ -109,18 +109,48 @@ describe('notification.worker', () => {
     expect(result).toEqual({ channels: ['email:deduplicated', 'in_app:persisted'] });
   });
 
-  it('releases the dispatch claim and rethrows when enqueue fails so a retry can re-send', async () => {
+  it('keeps the dispatch claim and DOES NOT throw when the BullMQ enqueue fails after the outbox row is persisted', async () => {
+    // sec-Q regression: the outbox row IS the durability commit. Releasing the claim
+    // after a dispatch failure would let a BullMQ retry of THIS notification job INSERT
+    // a SECOND outbox row whose Idempotency-Key=mail-outbox-<newId> differs from row #1's
+    // key, and Resend would accept both — duplicate email at the recipient. The mail-
+    // outbox sweeper re-enqueues stale pending rows, so the notification worker's
+    // responsibility is fulfilled the moment the Postgres row lands.
     dispatchOutboxEmailMock.mockRejectedValueOnce(new Error('redis down'));
+    const repository = createNotificationRepository(buildNotificationRow());
+
+    const result = await processNotificationDispatchJob(
+      10,
+      'organization_public_id',
+      { id: 'job-1' },
+      repository,
+    );
+
+    expect(recordOutboxEmailMock).toHaveBeenCalledTimes(1);
+    expect(dispatchOutboxEmailMock).toHaveBeenCalledTimes(1);
+    expect(releaseNotificationEmailDispatchMock).not.toHaveBeenCalled();
+    // The notification job still reports email:queued because the durability commit
+    // (outbox row) succeeded — only the BullMQ enqueue failed.
+    expect(result.channels).toContain('email:queued');
+  });
+
+  it('releases the dispatch claim and rethrows when the outbox INSERT itself fails so BullMQ can retry', async () => {
+    // The recordOutboxEmail path is the durability commit; if it fails, NO outbox row
+    // exists and the claim must be released so a BullMQ retry can try again. This is the
+    // ONLY failure regime where releasing the claim is safe.
+    recordOutboxEmailMock.mockRejectedValueOnce(new Error('postgres down'));
     const repository = createNotificationRepository(buildNotificationRow());
 
     await expect(
       processNotificationDispatchJob(10, 'organization_public_id', { id: 'job-1' }, repository),
-    ).rejects.toThrow('redis down');
+    ).rejects.toThrow('postgres down');
 
     expect(releaseNotificationEmailDispatchMock).toHaveBeenCalledWith({
       notificationId: 10,
       recipient: 'user@example.com',
     });
+    // Dispatch was never reached because the INSERT failed first.
+    expect(dispatchOutboxEmailMock).not.toHaveBeenCalled();
   });
 
   it('escapes untrusted notification fields and drops unsafe action URLs in the email HTML', async () => {

@@ -288,6 +288,21 @@ export async function registerScheduledJobs(
       : allJobs.filter((job) => options.activeQueueNames?.has(job.queueName));
   const queues: Queue[] = [];
 
+  // Group canonical scheduler ids by queue name so the reconciliation step can drop any
+  // schedulers in Redis whose id is no longer in the canonical set. Without this, a rename
+  // (or removal) of a `schedulerId` leaves the OLD scheduler firing in Redis forever
+  // alongside the new one — the in-code registry audit never reads Redis state and would
+  // not detect it.
+  const canonicalSchedulerIdsByQueueName = new Map<string, Set<string>>();
+  for (const job of jobs) {
+    const existing = canonicalSchedulerIdsByQueueName.get(job.queueName);
+    if (existing) {
+      existing.add(job.schedulerId);
+    } else {
+      canonicalSchedulerIdsByQueueName.set(job.queueName, new Set([job.schedulerId]));
+    }
+  }
+
   try {
     for (const job of jobs) {
       // sec-Q1: bounded retention on cron-driven queues. Without this,
@@ -315,6 +330,30 @@ export async function registerScheduledJobs(
         },
         'scheduler.job.registered',
       );
+    }
+
+    // Drop orphan schedulers — any Redis scheduler whose id is not in the canonical set
+    // for its queue is a rename or removal residue, and BullMQ will otherwise keep firing
+    // it forever (doubling cron rate after rename, firing into a worker-less queue after
+    // removal). We close+reopen per queue rather than holding all queues open at once.
+    for (const [queueName, canonicalIds] of canonicalSchedulerIdsByQueueName) {
+      const queueForReconcile = new Queue(queueName, {
+        connection,
+        defaultJobOptions: SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS,
+      });
+      try {
+        // getJobSchedulers takes pagination args; first 1000 schedulers per queue is
+        // far above any realistic count for this app.
+        const existingSchedulers = await queueForReconcile.getJobSchedulers(0, 1000);
+        for (const existing of existingSchedulers) {
+          if (!canonicalIds.has(existing.key)) {
+            await queueForReconcile.removeJobScheduler(existing.key);
+            logger.warn({ queueName, schedulerId: existing.key }, 'scheduler.orphan.removed');
+          }
+        }
+      } finally {
+        await queueForReconcile.close();
+      }
     }
   } catch (error) {
     await Promise.allSettled(queues.map((queue) => queue.close()));

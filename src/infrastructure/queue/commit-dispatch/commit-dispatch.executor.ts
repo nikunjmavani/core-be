@@ -5,6 +5,7 @@ import { enqueueUserDataExport } from '@/domains/user/sub-domains/user-data-expo
 import { createWorkerUserDataExportRepository } from '@/domains/user/sub-domains/user-data-export/user-data-export.repository.js';
 import { USER_DATA_EXPORT_STATUSES } from '@/domains/user/sub-domains/user-data-export/user-data-export.types.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
+import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import type { CommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.types.js';
 
@@ -34,7 +35,15 @@ export async function executeCommitDispatchTask(task: CommitDispatchTask): Promi
           { error, notificationId: task.notificationId },
           'commit-dispatch.notification.enqueue_failed',
         );
-        await new NotificationRepository().deleteByInternalId(task.notificationId);
+        // Wrap in a system-table worker context so the cleanup write succeeds when this
+        // path runs under the commit-dispatch-recovery worker, which is registered
+        // `usesPostgres: false` and would otherwise trip `assertWorkerDatabaseContext`
+        // from `resolveRepositoryDatabaseHandle(undefined)`. The outer catch in
+        // `commit-dispatch-recovery.processor.ts` would silently swallow that secondary
+        // error and leave the orphan notification row in Postgres.
+        await withSystemTableWorkerContext(() =>
+          new NotificationRepository().deleteByInternalId(task.notificationId),
+        );
       }
       return;
     case 'user_data_export':

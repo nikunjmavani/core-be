@@ -1,4 +1,3 @@
-import { randomInt } from 'node:crypto';
 import CircuitBreaker from 'opossum';
 import type { WebhookDeliveryFetch } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
 import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
@@ -166,11 +165,17 @@ export function invalidateWebhookOutboundCircuit(webhookId: number | string): vo
 
 /**
  * Exponential backoff with up to 30% jitter (BullMQ custom backoff for webhook-delivery).
+ *
+ * @remarks
+ * Uses `Math.random()` rather than `crypto.randomInt`: jitter only needs to be unpredictable
+ * across worker concurrency slots so simultaneous failures don't all retry at the same wall
+ * clock — it is NOT a security primitive. The CSPRNG draw was a sync-blocking call that
+ * accumulated event-loop cost under outages where many deliveries failed in a tight window.
  */
 export function webhookDeliveryBackoffWithJitter(attemptsMade: number): number {
   const attemptIndex = Math.max(attemptsMade, 1);
   const baseDelayMs = 10_000 * 2 ** (attemptIndex - 1);
-  const jitterMs = randomInt(Math.max(1, Math.floor(baseDelayMs * 0.3)));
+  const jitterMs = Math.floor(Math.random() * baseDelayMs * 0.3);
   return baseDelayMs + jitterMs;
 }
 
