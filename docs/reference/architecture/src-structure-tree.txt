@@ -1342,6 +1342,9 @@ src/
     │   │   ├── cookie-session-origin.pre-handler.ts
     │   │   └── cookie.middleware.ts
     │   ├── tenant/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── tenant-authorized-organization-id.unit.test.ts
     │   │   ├── organization-rls-transaction.middleware.ts
     │   │   └── tenant.middleware.ts
     │   └── index.ts
@@ -1371,6 +1374,9 @@ src/
     │   │   ├── i18n-response.util.ts
     │   │   └── translate-request.util.ts
     │   ├── idempotency/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── idempotency-fingerprint.canonical.unit.test.ts
     │   │   ├── idempotency-fingerprint.util.ts
     │   │   ├── idempotency-key.util.ts
     │   │   └── idempotency-required.util.ts

@@ -31,8 +31,47 @@ export function normalizeIdempotencyRoutePath(routePath: string): string {
 }
 
 /**
+ * sec-M6: canonicalizing JSON serializer for the fingerprint body segment.
+ *
+ * @remarks
+ * `JSON.stringify` silently drops `undefined` keys, so `{a:1, b:undefined}`
+ * and `{a:1}` collide on the same fingerprint. Today benign — Zod strips
+ * undefined before the middleware runs — but a future route that bypasses
+ * Zod (raw JSON pass-through) would let a caller weaponize the collision
+ * to replay a different body under the same idempotency key.
+ *
+ * The canonical form:
+ *   - sorts object keys lexicographically (`{b,a}` and `{a,b}` collapse),
+ *   - replaces `undefined` with the explicit marker `'__undefined__'`,
+ *   - leaves arrays in declared order (insertion semantics matter for them).
+ *
+ * Detection guarantee: any two structurally distinct bodies (including ones
+ * differing only in undefined-key presence) produce distinct fingerprints.
+ */
+function canonicalSerializeForFingerprint(value: unknown): string {
+  if (value === undefined) return '"__undefined__"';
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value) ?? '"__undefined__"';
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => canonicalSerializeForFingerprint(entry)).join(',')}]`;
+  }
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+  const segments = entries.map(
+    ([key, nested]) => `${JSON.stringify(key)}:${canonicalSerializeForFingerprint(nested)}`,
+  );
+  return `{${segments.join(',')}}`;
+}
+
+/**
  * Builds a stable SHA-256 fingerprint segment from HTTP method, normalized route, and body.
  * Two requests with the same idempotency key but different method, route, or body must not replay.
+ *
+ * @remarks
+ * sec-M6: uses {@link canonicalSerializeForFingerprint} so `undefined`
+ * values and key ordering can't produce silent collisions.
  */
 export function buildIdempotencyRequestFingerprint(parameters: {
   method: string;
@@ -46,7 +85,7 @@ export function buildIdempotencyRequestFingerprint(parameters: {
   } else if (typeof parameters.body === 'string') {
     bodySegment = parameters.body;
   } else {
-    bodySegment = JSON.stringify(parameters.body);
+    bodySegment = canonicalSerializeForFingerprint(parameters.body);
   }
   const canonical = `${(parameters.method ?? 'GET').toUpperCase()}:${normalizedRoute}:${bodySegment}`;
   return createHash('sha256').update(canonical, 'utf8').digest('hex').slice(0, 16);

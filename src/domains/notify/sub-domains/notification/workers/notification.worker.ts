@@ -85,7 +85,12 @@ export async function processNotificationDispatchJob(
 
   const dispatchData = (notificationRow.data ?? {}) as NotificationDispatchData;
   const channels = dispatchData.channels ?? ['in_app'];
-  const email = dispatchData.email ?? notificationRow.userEmail;
+  // sec-N7: never let a producer-supplied `data.email` override the
+  // authoritative recipient. `data` is `Record<string, unknown>`; the
+  // moment any domain handler reflects request input into it, an attacker
+  // could redirect system emails to a controlled inbox. Always use the
+  // notification row's joined `auth.users.email`.
+  const email = notificationRow.userEmail;
   const { type, title, message, actionUrl } = notificationRow;
 
   logger.info(
