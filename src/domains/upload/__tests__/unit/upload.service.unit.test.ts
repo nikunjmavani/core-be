@@ -61,7 +61,6 @@ describe('UploadService', () => {
     create: vi.fn().mockResolvedValue(uploadRow),
     findByPublicId: vi.fn().mockResolvedValue(uploadRow),
     findByPublicIdForUser: vi.fn().mockResolvedValue(uploadRow),
-    findActiveByUserId: vi.fn().mockResolvedValue([uploadRow]),
     findActiveByUserIdAfter: vi.fn().mockResolvedValue([uploadRow]),
     findActiveByOrganizationIdAfter: vi.fn().mockResolvedValue([]),
     markStatus: vi.fn().mockResolvedValue(uploadRow),

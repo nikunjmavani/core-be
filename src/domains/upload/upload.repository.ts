@@ -208,17 +208,16 @@ export class UploadRepository {
     return rows[0]?.value ?? 0;
   }
 
-  async findActiveByUserId(user_id: number): Promise<Pick<UploadRow, 'id' | 'file_key'>[]> {
-    return getRequestDatabase()
-      .select({ id: uploads.id, file_key: uploads.file_key })
-      .from(uploads)
-      .where(and(eq(uploads.user_id, user_id), isNull(uploads.deleted_at)));
-  }
-
   /**
    * Active uploads for a user with `id > after_id`, ascending by id, capped at
    * `limit`. Used to stream a user's uploads in bounded keyset batches during
    * offboarding so object deletion never loads an unbounded result set.
+   *
+   * @remarks
+   * sec-D12: the unbounded sibling (`findActiveByUserId` without a keyset
+   * cursor) was deleted in PR-G35. Every production caller goes through this
+   * paginated variant — re-adding the unbounded shape is a foot-gun for any
+   * caller that eventually runs on a user with thousands of uploads.
    */
   async findActiveByUserIdAfter(
     user_id: number,
@@ -235,20 +234,19 @@ export class UploadRepository {
       .limit(limit);
   }
 
-  async findActiveByOrganizationId(
-    organization_id: number,
-  ): Promise<Pick<UploadRow, 'id' | 'file_key'>[]> {
-    return getRequestDatabase()
-      .select({ id: uploads.id, file_key: uploads.file_key })
-      .from(uploads)
-      .where(and(eq(uploads.organization_id, organization_id), isNull(uploads.deleted_at)));
-  }
-
   /**
-   * sec-UP8: keyset-paginated variant of {@link findActiveByOrganizationId},
-   * mirroring {@link findActiveByUserIdAfter}. Lets the offboarding hook stream
-   * an org's uploads in bounded batches so a large-tenant tombstone never
-   * loads an unbounded set into memory or serialises a thousand S3 round-trips.
+   * Keyset-paginated stream of active uploads for an organization, mirroring
+   * {@link findActiveByUserIdAfter}. Used by the offboarding hook (sec-UP8)
+   * so a large-tenant tombstone streams in bounded batches instead of
+   * loading the entire set into memory and serialising thousands of S3
+   * round-trips.
+   *
+   * @remarks
+   * sec-D12: the unbounded sibling (`findActiveByOrganizationId` without a
+   * keyset cursor) was deleted in PR-G35. The audit flagged it as a
+   * future-trap — a caller that ran on a small org today would silently
+   * become an O(N) load once tenants grew. Re-adding the unbounded shape
+   * requires re-arguing the size bound.
    */
   async findActiveByOrganizationIdAfter(
     organization_id: number,
