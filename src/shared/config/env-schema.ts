@@ -94,8 +94,6 @@ const envSchemaBase = z.object({
     .optional(),
 
   // Auth
-  /** Deprecated: unused at runtime (RS256 only). Retained for backward-compatible deploy templates. */
-  JWT_SECRET: z.string().min(32).optional(),
   /** RS256 PEM private key. Required in every runtime; NODE_ENV is metadata only. */
   JWT_PRIVATE_KEY: z.string().min(1),
   /** RS256 PEM public key. Required in every runtime; NODE_ENV is metadata only. */
@@ -752,6 +750,24 @@ export const envSchema = envSchemaBase
       message:
         'UPLOAD_USE_PRESIGNED_POST must be true in production (PUT fallback has no min-size enforcement).',
       path: ['UPLOAD_USE_PRESIGNED_POST'],
+    },
+  )
+  .refine(
+    (data) => {
+      // sec-C11: ENABLE_RESPONSE_ENCRYPTION must be paired with
+      // RESPONSE_ENCRYPTION_KEY. Other pairings (METRICS_ENABLED, CAPTCHA_*)
+      // enforce this at the schema; this one was previously enforced at
+      // `buildApp()` runtime, so a deploy without the key would crash on
+      // first request instead of failing config validation at boot.
+      if (!data.ENABLE_RESPONSE_ENCRYPTION) return true;
+      return (
+        typeof data.RESPONSE_ENCRYPTION_KEY === 'string' && data.RESPONSE_ENCRYPTION_KEY.length > 0
+      );
+    },
+    {
+      message:
+        'RESPONSE_ENCRYPTION_KEY (64 hex chars / 32 bytes for AES-256) is required when ENABLE_RESPONSE_ENCRYPTION=true.',
+      path: ['RESPONSE_ENCRYPTION_KEY'],
     },
   )
   .refine(

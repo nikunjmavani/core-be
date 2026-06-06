@@ -136,7 +136,6 @@ process.env.DATABASE_URL ??= 'postgresql://core:core@localhost:5432/core';
 process.env.REDIS_URL ??= 'redis://localhost:6379';
 process.env.RUN_REDIS_TESTS ??= '1';
 /** Deprecated optional no-op; RS256 keys below are authoritative for JWT. */
-process.env.JWT_SECRET ??= 'test-jwt-secret-min-32-chars-xxxxxxxx';
 process.env.SECRETS_ENCRYPTION_KEY ??= 'a'.repeat(64);
 process.env.METRICS_SCRAPE_TOKEN ??= 'test-metrics-bearer-token-min-32-chars';
 process.env.COOKIE_SECURE ??= 'false';

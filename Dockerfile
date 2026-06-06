@@ -15,7 +15,6 @@ WORKDIR /app
 ENV NODE_ENV=test \
   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/core \
   REDIS_URL=redis://localhost:6379 \
-  JWT_SECRET=test-jwt-secret-min-32-chars-xxxxxxxx \
   JWT_PRIVATE_KEY=test-private-key \
   JWT_PUBLIC_KEY=test-public-key \
   ALLOWED_ORIGINS=http://localhost:3000 \
