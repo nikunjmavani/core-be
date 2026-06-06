@@ -18,7 +18,6 @@ process.env.PORT ??= '3000';
 process.env.HTTP_BIND_HOST = '127.0.0.1';
 process.env.LOG_LEVEL ??= 'warn';
 /** Deprecated optional no-op; RS256 keys come from load-env-files / test setup. */
-process.env.JWT_SECRET ||= 'test-jwt-secret-min-32-chars-xxxxxxxx';
 process.env.ALLOWED_ORIGINS ??= 'http://localhost:3000';
 process.env.FRONTEND_URL ??= 'http://localhost:3000';
 
