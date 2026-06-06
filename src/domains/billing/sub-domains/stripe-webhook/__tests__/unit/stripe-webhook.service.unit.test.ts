@@ -26,6 +26,7 @@ describe('StripeWebhookService', () => {
   const subscriptionService = {
     syncFromStripeProviderSubscription: vi.fn(),
     markCanceledByStripeProviderSubscriptionId: vi.fn(),
+    createFromStripeWebhookEvent: vi.fn(),
   } as unknown as SubscriptionService;
 
   const stripeWebhookEventRepository = {
@@ -351,6 +352,94 @@ describe('StripeWebhookService', () => {
       const [, payload] = vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mock
         .calls[0]!;
       expect((payload as Record<string, unknown>).plan_id).toBeUndefined();
+    });
+  });
+
+  // sec-B9: when `customer.subscription.created` arrives before the local
+  // row has been inserted (B2 race — Stripe answers our checkout faster
+  // than our HTTP create commits), the handler's UPDATE matches zero rows
+  // and the event silently advances to `processed`. The local row never
+  // appears and the user's first payment cycle is invisible to entitlement.
+  // Fix: on a null sync for `created` ONLY, fall back to INSERT via the
+  // service's createFromStripeWebhookEvent path with the resolved plan id.
+  describe('subscription created — fallback INSERT (sec-B9)', () => {
+    it('inserts via createFromStripeWebhookEvent when sync returns null and event is .created', async () => {
+      vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockResolvedValueOnce(
+        null as never,
+      );
+      vi.mocked(planRepository.findByStripePriceId).mockResolvedValueOnce({
+        id: 42,
+        stripe_price_monthly_id: 'price_pro_monthly',
+        stripe_price_yearly_id: null,
+      } as never);
+      vi.mocked(subscriptionService.createFromStripeWebhookEvent).mockResolvedValueOnce({
+        id: 99,
+      } as never);
+
+      await service.handleEvent(
+        buildEvent({
+          type: 'customer.subscription.created',
+          data: {
+            object: buildSubscription({
+              items: {
+                data: [
+                  {
+                    current_period_start: periodStartSeconds,
+                    current_period_end: periodEndSeconds,
+                    price: { id: 'price_pro_monthly' },
+                  },
+                ],
+              },
+            }),
+          },
+        }),
+      );
+
+      expect(subscriptionService.createFromStripeWebhookEvent).toHaveBeenCalledOnce();
+      const [args] =
+        vi.mocked(subscriptionService.createFromStripeWebhookEvent).mock.calls[0] ?? [];
+      expect(args).toMatchObject({
+        providerSubscriptionId: 'sub_123',
+        planId: 42,
+      });
+      // The fallback INSERT was logged as a recovery, not a normal sync.
+      expect(infoSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ providerSubscriptionId: 'sub_123' }),
+        'stripe.webhook.subscription_inserted_on_created',
+      );
+    });
+
+    it('does NOT fall back to INSERT when sync returns null for .updated (only created races deserve recovery)', async () => {
+      vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockResolvedValueOnce(
+        null as never,
+      );
+
+      await service.handleEvent(buildEvent({ type: 'customer.subscription.updated' }));
+
+      // A null sync on .updated still logs the existing "stale/not_found" warning
+      // (other PRs already exercise that path); the fallback INSERT must stay
+      // wired to .created only. Updated events for a non-existent row mean the
+      // row was deleted-by-cancel-then-resurrected on Stripe's side — that's a
+      // different recovery story.
+      expect(subscriptionService.createFromStripeWebhookEvent).not.toHaveBeenCalled();
+    });
+
+    it('skips the fallback INSERT on .created when plan_id cannot be resolved (catalog drift)', async () => {
+      vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockResolvedValueOnce(
+        null as never,
+      );
+      vi.mocked(planRepository.findByStripePriceId).mockResolvedValueOnce(null as never);
+
+      await service.handleEvent(buildEvent({ type: 'customer.subscription.created' }));
+
+      // Without a local plan id, inserting would violate the NOT NULL FK on
+      // billing.subscriptions.plan_id. Log a structured warning so an operator
+      // can backfill the price → plan mapping; do not insert a half-broken row.
+      expect(subscriptionService.createFromStripeWebhookEvent).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ providerSubscriptionId: 'sub_123' }),
+        'stripe.webhook.subscription_created_insert_skipped_no_plan',
+      );
     });
   });
 

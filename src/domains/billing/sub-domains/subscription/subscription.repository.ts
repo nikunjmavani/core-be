@@ -1,4 +1,5 @@
-import { and, eq, isNull, lt, lte, ne, or } from 'drizzle-orm';
+import { and, eq, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
@@ -84,6 +85,21 @@ export class SubscriptionRepository {
       )
       .limit(1);
     return rows[0] ?? null;
+  }
+
+  /**
+   * Resolves the internal organization id from the active webhook RLS context.
+   * Used by the sec-B9 fallback INSERT path so it does not have to take an
+   * `OrganizationService` dependency just to map the public id baked into the
+   * GUC by `runStripeWebhookHandlerWithOrganizationContext`.
+   */
+  async findOrganizationIdFromCurrentContext(): Promise<number | null> {
+    const rows = await this.db()
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(sql`${organizations.public_id} = current_setting('app.current_organization_id', true)`)
+      .limit(1);
+    return rows[0]?.id ?? null;
   }
 
   async create(data: SubscriptionCreateData) {
