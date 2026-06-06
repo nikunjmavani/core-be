@@ -63,13 +63,6 @@ export class MemberRolePermissionService {
     created_by_user_public_id: string | undefined,
   ) {
     const parsed = validatePutMemberRolePermissions(body);
-    await assertCallerCanGrantPermissionCodes({
-      authorizationService: this.authorizationService,
-      permissionRepository: this.permissionRepository,
-      callerUserPublicId: created_by_user_public_id,
-      organizationPublicId: organization_public_id,
-      requestedPermissionCodes: parsed.permission_codes,
-    });
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
@@ -93,6 +86,34 @@ export class MemberRolePermissionService {
       if (ownerMembership.role_id === role.id) {
         throw new ForbiddenError('errors:cannotModifyOwnerRolePermissions');
       }
+      /**
+       * Held-permissions-on-remove (sec-T2): an empty-array PUT (or partial replacement)
+       * is *also* a permission *wipe* — the diff between the role's current set and the
+       * requested set is exactly the set of codes being removed. The grant-guard must
+       * therefore verify the caller holds every code being **added** AND every code being
+       * **removed**, not just the new set. Without this, a delegated `ROLE_MANAGE` holder
+       * who does not themselves possess `subscription:manage` could still PUT a smaller
+       * set that strips `subscription:manage` from a finance role — a downgrade attack
+       * the guard would have refused for the equivalent grant. The previous behavior
+       * passed only `parsed.permission_codes` and let an empty-array PUT wipe a non-owner
+       * role's permissions entirely.
+       */
+      const currentRolePermissionRows = await this.memberRolePermissionRepository.findByRoleId(
+        role.id,
+      );
+      const affectedCodes = Array.from(
+        new Set([
+          ...parsed.permission_codes,
+          ...currentRolePermissionRows.map((row) => row.permission_code),
+        ]),
+      );
+      await assertCallerCanGrantPermissionCodes({
+        authorizationService: this.authorizationService,
+        permissionRepository: this.permissionRepository,
+        callerUserPublicId: created_by_user_public_id,
+        organizationPublicId: organization_public_id,
+        requestedPermissionCodes: affectedCodes,
+      });
       const userId = created_by_user_public_id
         ? await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id)
         : null;
