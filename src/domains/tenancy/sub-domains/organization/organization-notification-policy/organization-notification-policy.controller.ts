@@ -6,13 +6,24 @@ import {
   requirePrincipal,
 } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
-import { validatePolicyIdParam } from './organization-notification-policy.validator.js';
 import type { OrganizationNotificationPolicyService } from './organization-notification-policy.service.js';
 
 /**
  * Builds the Fastify handler map for `/organizations/:id/notification-policies`
- * routes — list, get, create, update, delete. Validates the numeric
- * `policyId` path param via {@link validatePolicyIdParam}.
+ * routes — list, get, create, update, delete. Validates BOTH the
+ * organization `id` and the `policyId` path params via
+ * {@link validatePublicIdParam}.
+ *
+ * @remarks
+ * sec-T5: this handler used to coerce `policyId` to a positive integer
+ * (`validatePolicyIdParam`), exposing the row's `bigserial` `id` in URLs
+ * and serialised responses — a convention break against the rest of the
+ * codebase (which uses 21-char base62 `public_id` strings) and a minor
+ * cross-tenant volume oracle via the auto-increment value. The schema
+ * already provisions a `public_id` column on
+ * `tenancy.organization_notification_policies`, and the unique index
+ * `idx_organization_notification_policies_public_id` makes lookups
+ * O(1). Switch both inputs and outputs to the public id.
  */
 export function createOrganizationNotificationPolicyController(
   service: OrganizationNotificationPolicyService,
@@ -31,8 +42,10 @@ export function createOrganizationNotificationPolicyController(
         id: string;
         policyId: string;
       }) ?? { id: '', policyId: '' };
-      const policyIdNumber = validatePolicyIdParam(policyId);
-      const data = await service.getById(organizationId, policyIdNumber);
+      const data = await service.getByPublicId(
+        validatePublicIdParam(organizationId, 'id'),
+        validatePublicIdParam(policyId, 'policyId'),
+      );
       return successResponse(data, getRequestIdentifier(request));
     },
     createPolicy: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -51,10 +64,9 @@ export function createOrganizationNotificationPolicyController(
         id: string;
         policyId: string;
       }) ?? { id: '', policyId: '' };
-      const policyIdNumber = validatePolicyIdParam(policyId);
       const data = await service.update(
-        organizationId,
-        policyIdNumber,
+        validatePublicIdParam(organizationId, 'id'),
+        validatePublicIdParam(policyId, 'policyId'),
         request.body,
         getActingUserPublicId(auth),
       );
@@ -66,8 +78,10 @@ export function createOrganizationNotificationPolicyController(
         id: string;
         policyId: string;
       }) ?? { id: '', policyId: '' };
-      const policyIdNumber = validatePolicyIdParam(policyId);
-      await service.delete(organizationId, policyIdNumber);
+      await service.delete(
+        validatePublicIdParam(organizationId, 'id'),
+        validatePublicIdParam(policyId, 'policyId'),
+      );
       return reply.code(204).send();
     },
   };

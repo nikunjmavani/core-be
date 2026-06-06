@@ -13,9 +13,19 @@ export interface OrganizationNotificationPolicyRow {
   updated_at: Date;
 }
 
-/** Public notification-policy shape returned by the API — produced by {@link serializeOrganizationNotificationPolicy}. */
+/**
+ * Public notification-policy shape returned by the API — produced by
+ * {@link serializeOrganizationNotificationPolicy}.
+ *
+ * @remarks
+ * sec-T5: `id` is the 21-char base62 `public_id` (string), NOT the internal
+ * `bigserial` row id. The bigserial value was previously exposed and broke
+ * the codebase-wide `public_id`-in-URLs convention; the schema's
+ * `idx_organization_notification_policies_public_id` unique index makes
+ * lookup by public id O(1).
+ */
 export interface OrganizationNotificationPolicyOutput {
-  id: number;
+  id: string;
   organization_id: string;
   notification_type: string;
   channel: string;
