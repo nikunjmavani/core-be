@@ -220,6 +220,11 @@ export async function putObjectBuffer(options: {
           Body: options.body,
           ContentType: options.contentType,
           ...(options.metadata ? { Metadata: options.metadata } : {}),
+          // sec-U11: explicit SSE-S3 on every server-side write (audit cold
+          // export, GDPR data-export, mail-outbox attachments). The bucket
+          // default encryption is a defence in depth — request it directly so
+          // a misconfigured bucket cannot silently land plaintext PII.
+          ServerSideEncryption: 'AES256',
         }),
         { abortSignal: signal },
       );

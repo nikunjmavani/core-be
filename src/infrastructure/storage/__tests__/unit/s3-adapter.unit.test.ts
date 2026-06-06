@@ -108,6 +108,38 @@ describe('S3ObjectStorageAdapter', () => {
     expect([...(signingOptions.signableHeaders ?? [])]).toContain('content-length');
   });
 
+  // sec-U11: server-side writes (worker putObject, copyObject) must request
+  // SSE-S3 (`AES256`) on every command so a misconfigured bucket (no default
+  // SSE) cannot silently land plaintext audit / data-export bundles in S3.
+  // The bucket policy is a defence in depth — not the only protection.
+  it('putObject sets ServerSideEncryption: AES256 on the underlying PutObjectCommand (sec-U11)', async () => {
+    sendMock.mockResolvedValueOnce({});
+
+    await adapter.putObject({
+      key: 'audit/export.ndjson.gz',
+      body: Buffer.from('test'),
+      contentType: 'application/x-ndjson',
+    });
+
+    expect(sendMock).toHaveBeenCalledOnce();
+    const [putCommand] = sendMock.mock.calls[0] as [{ input: { ServerSideEncryption?: string } }];
+    expect(putCommand.input.ServerSideEncryption).toBe('AES256');
+  });
+
+  it('copyObject sets ServerSideEncryption: AES256 on the underlying CopyObjectCommand (sec-U11)', async () => {
+    sendMock.mockResolvedValueOnce({});
+
+    await adapter.copyObject({
+      sourceKey: 'pending/avatars/u1.png',
+      destinationKey: 'avatars/u1.png',
+      contentType: 'image/png',
+    });
+
+    expect(sendMock).toHaveBeenCalledOnce();
+    const [copyCommand] = sendMock.mock.calls[0] as [{ input: { ServerSideEncryption?: string } }];
+    expect(copyCommand.input.ServerSideEncryption).toBe('AES256');
+  });
+
   it('headObject maps S3 metadata to port shape', async () => {
     sendMock.mockResolvedValueOnce({
       ContentType: 'image/png',

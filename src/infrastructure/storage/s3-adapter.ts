@@ -251,6 +251,11 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
             Body: options.body,
             ContentType: options.contentType,
             Metadata: options.metadata,
+            // sec-U11: explicit SSE-S3 request — bucket default encryption is
+            // a defence in depth; explicit at the call site protects against
+            // misconfigured buckets that lack a default and would otherwise
+            // store payloads (avatars, uploads, audit copies) unencrypted.
+            ServerSideEncryption: 'AES256',
           }),
           { abortSignal: signal },
         );
@@ -275,6 +280,10 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
             Key: options.destinationKey,
             ContentType: options.contentType,
             MetadataDirective: 'REPLACE',
+            // sec-U11: explicit SSE-S3 on the destination object so a copy
+            // does not bypass the encryption requirement if the bucket
+            // default is misconfigured.
+            ServerSideEncryption: 'AES256',
           }),
           { abortSignal: signal },
         );
