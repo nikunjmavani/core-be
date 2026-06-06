@@ -35,6 +35,7 @@ vi.mock('@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.j
   consumeMfaRecoveryCode: vi.fn().mockResolvedValue(false),
   hashMfaRecoveryCode: (plain: string) => `HASHED:${plain}`,
   insertMfaRecoveryCodes: vi.fn().mockResolvedValue(undefined),
+  invalidateAllUnusedRecoveryCodesForUser: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.util.js', () => ({
@@ -227,6 +228,82 @@ describe('MfaService', () => {
     );
     expect(authMethodService.createAuthMethodRecord).not.toHaveBeenCalled();
     expect(userService.updateMfaEnabled).not.toHaveBeenCalled();
+  });
+
+  it('sec-re-04: enrollConfirm revokes existing active TOTP methods and invalidates old recovery codes before inserting the new ones', async () => {
+    // Without dedup, re-enrolling left two active MFA_TOTP rows in
+    // auth_methods (the old one and the new one). findTotpByUserId had no
+    // ORDER BY so login picked an arbitrary row, often the stale one — the
+    // user's working authenticator codes were rejected, soft-locking the
+    // account. After this fix the existing methods are revoked and the
+    // user's prior recovery codes are invalidated inside the same
+    // transaction BEFORE the new credentials are persisted.
+    const { insertMfaRecoveryCodes, invalidateAllUnusedRecoveryCodesForUser } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
+    );
+    const callOrder: string[] = [];
+    vi.mocked(authMethodService.listMfaMethodsByUserId).mockImplementation(async () => {
+      callOrder.push('listMfaMethodsByUserId');
+      return [
+        { id: 11, method_type: 'MFA_TOTP', last_used_at: null, created_at: new Date() },
+        { id: 12, method_type: 'MFA_TOTP', last_used_at: null, created_at: new Date() },
+      ] as never;
+    });
+    vi.mocked(authMethodService.revokeAuthMethod).mockImplementation(async () => {
+      callOrder.push('revokeAuthMethod');
+    });
+    vi.mocked(invalidateAllUnusedRecoveryCodesForUser).mockImplementation(async () => {
+      callOrder.push('invalidateAllUnusedRecoveryCodesForUser');
+    });
+    vi.mocked(authMethodService.createAuthMethodRecord).mockImplementation(async () => {
+      callOrder.push('createAuthMethodRecord');
+      return { id: 99 } as never;
+    });
+    vi.mocked(insertMfaRecoveryCodes).mockImplementation(async () => {
+      callOrder.push('insertMfaRecoveryCodes');
+    });
+    redis.getdel.mockResolvedValueOnce('TESTSECRET');
+
+    await service.enrollConfirm('user_public', { code: '123456' });
+
+    // Both existing TOTP rows are revoked.
+    expect(authMethodService.revokeAuthMethod).toHaveBeenCalledWith(11, user.id);
+    expect(authMethodService.revokeAuthMethod).toHaveBeenCalledWith(12, user.id);
+    // Recovery codes for the old secret are invalidated.
+    expect(invalidateAllUnusedRecoveryCodesForUser).toHaveBeenCalledWith(user.id);
+    // The new credentials are persisted.
+    expect(authMethodService.createAuthMethodRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ method_type: 'MFA_TOTP' }),
+    );
+    expect(insertMfaRecoveryCodes).toHaveBeenCalledTimes(1);
+
+    // The cleanup steps MUST complete before the new credentials are written
+    // — otherwise a crash between insert and revoke leaves orphans.
+    const revokeIndex = callOrder.indexOf('revokeAuthMethod');
+    const invalidateIndex = callOrder.indexOf('invalidateAllUnusedRecoveryCodesForUser');
+    const createIndex = callOrder.indexOf('createAuthMethodRecord');
+    const insertCodesIndex = callOrder.indexOf('insertMfaRecoveryCodes');
+    expect(revokeIndex).toBeGreaterThanOrEqual(0);
+    expect(invalidateIndex).toBeGreaterThanOrEqual(0);
+    expect(revokeIndex).toBeLessThan(createIndex);
+    expect(invalidateIndex).toBeLessThan(insertCodesIndex);
+  });
+
+  it('sec-re-04: enrollConfirm proceeds normally when no existing TOTP methods are present (first-time enrollment)', async () => {
+    // First-time enrollment still works — no revokes happen because the
+    // user has no active methods, no recovery codes to invalidate.
+    const { insertMfaRecoveryCodes, invalidateAllUnusedRecoveryCodesForUser } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
+    );
+    vi.mocked(authMethodService.listMfaMethodsByUserId).mockResolvedValueOnce([] as never);
+    redis.getdel.mockResolvedValueOnce('TESTSECRET');
+
+    await service.enrollConfirm('user_public', { code: '123456' });
+
+    expect(authMethodService.revokeAuthMethod).not.toHaveBeenCalled();
+    expect(invalidateAllUnusedRecoveryCodesForUser).toHaveBeenCalledWith(user.id);
+    expect(authMethodService.createAuthMethodRecord).toHaveBeenCalledOnce();
+    expect(insertMfaRecoveryCodes).toHaveBeenCalledOnce();
   });
 
   it('verifyLoginMfa rejects a replayed TOTP code within its window', async () => {

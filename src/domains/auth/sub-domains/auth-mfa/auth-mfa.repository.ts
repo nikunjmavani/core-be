@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 
@@ -8,6 +8,10 @@ import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method
  */
 export class MfaRepository {
   async findTotpByUserId(userId: number) {
+    // sec-re-04: ORDER BY ensures `limit(1)` returns the most-recently created active
+    // TOTP row when historical duplicates exist (which the new partial UNIQUE index
+    // prevents going forward). Without an explicit order, Postgres returned an
+    // arbitrary row and login could land on a stale secret the user no longer holds.
     const rows = await getRequestDatabase()
       .select()
       .from(auth_methods)
@@ -18,6 +22,7 @@ export class MfaRepository {
           isNull(auth_methods.revoked_at),
         ),
       )
+      .orderBy(desc(auth_methods.created_at), desc(auth_methods.id))
       .limit(1);
     return rows[0] ?? null;
   }
