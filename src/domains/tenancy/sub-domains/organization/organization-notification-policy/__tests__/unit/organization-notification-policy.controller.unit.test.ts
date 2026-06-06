@@ -39,7 +39,7 @@ const policyRow = {
 describe('createOrganizationNotificationPolicyController', () => {
   const service = {
     list: vi.fn().mockResolvedValue([policyRow]),
-    getById: vi.fn().mockResolvedValue(policyRow),
+    getByPublicId: vi.fn().mockResolvedValue(policyRow),
     create: vi.fn().mockResolvedValue(policyRow),
     update: vi.fn().mockResolvedValue(policyRow),
     delete: vi.fn().mockResolvedValue(undefined),
@@ -65,20 +65,23 @@ describe('createOrganizationNotificationPolicyController', () => {
 
   it('getPolicy delegates to service with policy id', async () => {
     const response = await controller.getPolicy(
-      mockRequest({ params: { id: organizationPublicId, policyId: '1' } }),
+      mockRequest({ params: { id: organizationPublicId, policyId: 'pol_public_1234567890' } }),
       mockReply(),
     );
-    expect(service.getById).toHaveBeenCalledWith(organizationPublicId, 1);
+    expect(service.getByPublicId).toHaveBeenCalledWith(
+      organizationPublicId,
+      'pol_public_1234567890',
+    );
     expect(response).toMatchObject({ data: policyRow });
   });
 
   it('getPolicy propagates NotFoundError when policy is missing', async () => {
-    vi.mocked(service.getById).mockRejectedValueOnce(
+    vi.mocked(service.getByPublicId).mockRejectedValueOnce(
       new NotFoundError('Organization notification policy'),
     );
     await expect(
       controller.getPolicy(
-        mockRequest({ params: { id: organizationPublicId, policyId: '1' } }),
+        mockRequest({ params: { id: organizationPublicId, policyId: 'pol_public_1234567890' } }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -120,13 +123,18 @@ describe('createOrganizationNotificationPolicyController', () => {
     const userId = generatePublicId();
     const response = await controller.updatePolicy(
       mockRequest({
-        params: { id: organizationPublicId, policyId: '1' },
+        params: { id: organizationPublicId, policyId: 'pol_public_1234567890' },
         body,
         auth: { kind: 'user', userId, role: 'user' } as never,
       }),
       mockReply(),
     );
-    expect(service.update).toHaveBeenCalledWith(organizationPublicId, 1, body, userId);
+    expect(service.update).toHaveBeenCalledWith(
+      organizationPublicId,
+      'pol_public_1234567890',
+      body,
+      userId,
+    );
     expect(response).toMatchObject({ data: policyRow });
   });
 
@@ -134,7 +142,7 @@ describe('createOrganizationNotificationPolicyController', () => {
     await expect(
       controller.updatePolicy(
         mockRequest({
-          params: { id: organizationPublicId, policyId: '1' },
+          params: { id: organizationPublicId, policyId: 'pol_public_1234567890' },
           auth: undefined as never,
         }),
         mockReply(),
@@ -148,7 +156,10 @@ describe('createOrganizationNotificationPolicyController', () => {
     );
     await expect(
       controller.updatePolicy(
-        mockRequest({ params: { id: organizationPublicId, policyId: '1' }, body: {} }),
+        mockRequest({
+          params: { id: organizationPublicId, policyId: 'pol_public_1234567890' },
+          body: {},
+        }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -157,10 +168,10 @@ describe('createOrganizationNotificationPolicyController', () => {
   it('deletePolicy calls service delete and sends 204', async () => {
     const reply = mockReply();
     await controller.deletePolicy(
-      mockRequest({ params: { id: organizationPublicId, policyId: '1' } }),
+      mockRequest({ params: { id: organizationPublicId, policyId: 'pol_public_1234567890' } }),
       reply,
     );
-    expect(service.delete).toHaveBeenCalledWith(organizationPublicId, 1);
+    expect(service.delete).toHaveBeenCalledWith(organizationPublicId, 'pol_public_1234567890');
     expect(reply.code).toHaveBeenCalledWith(204);
     expect(reply.send).toHaveBeenCalled();
   });
@@ -169,7 +180,7 @@ describe('createOrganizationNotificationPolicyController', () => {
     await expect(
       controller.deletePolicy(
         mockRequest({
-          params: { id: organizationPublicId, policyId: '1' },
+          params: { id: organizationPublicId, policyId: 'pol_public_1234567890' },
           auth: undefined as never,
         }),
         mockReply(),
@@ -183,7 +194,7 @@ describe('createOrganizationNotificationPolicyController', () => {
     );
     await expect(
       controller.deletePolicy(
-        mockRequest({ params: { id: organizationPublicId, policyId: '1' } }),
+        mockRequest({ params: { id: organizationPublicId, policyId: 'pol_public_1234567890' } }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(NotFoundError);

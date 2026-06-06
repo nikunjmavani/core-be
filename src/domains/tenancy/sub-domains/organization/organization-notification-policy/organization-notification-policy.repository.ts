@@ -43,8 +43,8 @@ export class OrganizationNotificationPolicyRepository {
     return rows as OrganizationNotificationPolicyRow[];
   }
 
-  async findById(
-    id: number,
+  async findByPublicId(
+    public_id: string,
     organization_id: number,
   ): Promise<OrganizationNotificationPolicyRow | null> {
     const rows = await getRequestDatabase()
@@ -52,7 +52,7 @@ export class OrganizationNotificationPolicyRepository {
       .from(organization_notification_policies)
       .where(
         and(
-          eq(organization_notification_policies.id, id),
+          eq(organization_notification_policies.public_id, public_id),
           eq(organization_notification_policies.organization_id, organization_id),
           isNull(organization_notification_policies.deleted_at),
         ),
@@ -110,7 +110,7 @@ export class OrganizationNotificationPolicyRepository {
   }
 
   async update(
-    id: number,
+    public_id: string,
     organization_id: number,
     data: {
       default_enabled?: boolean;
@@ -133,7 +133,7 @@ export class OrganizationNotificationPolicyRepository {
       })
       .where(
         and(
-          eq(organization_notification_policies.id, id),
+          eq(organization_notification_policies.public_id, public_id),
           eq(organization_notification_policies.organization_id, organization_id),
           isNull(organization_notification_policies.deleted_at),
         ),
@@ -143,7 +143,7 @@ export class OrganizationNotificationPolicyRepository {
   }
 
   async softDelete(
-    id: number,
+    public_id: string,
     organization_id: number,
   ): Promise<OrganizationNotificationPolicyRow | null> {
     const rows = await getRequestDatabase()
@@ -151,7 +151,7 @@ export class OrganizationNotificationPolicyRepository {
       .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
       .where(
         and(
-          eq(organization_notification_policies.id, id),
+          eq(organization_notification_policies.public_id, public_id),
           eq(organization_notification_policies.organization_id, organization_id),
           isNull(organization_notification_policies.deleted_at),
         ),
