@@ -220,6 +220,20 @@ const envSchemaBase = z.object({
    * The PENDING sweeper reconciles eventually.
    */
   UPLOAD_MAX_PENDING_PER_ORGANIZATION: z.coerce.number().int().min(1).max(100_000).default(2_000),
+  /**
+   * Per-statement timeout (ms) for worker context wrappers (retention,
+   * GDPR export, DLQ scans, etc.) — separate from the HTTP timeout so
+   * background jobs scanning large tables are not killed at the 5 s cap
+   * the HTTP path uses (sec-D2). Default 5 minutes — large enough for
+   * cascading FK deletes / audit scans, small enough to prevent runaway
+   * queries holding pool checkouts indefinitely.
+   */
+  DATABASE_WORKER_STATEMENT_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(3_600_000)
+    .default(300_000),
   S3_BUCKET: z.string().min(1).optional(),
   S3_REGION: z.string().min(1).optional(),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),

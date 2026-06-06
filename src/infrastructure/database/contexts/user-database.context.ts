@@ -13,6 +13,7 @@ import {
   brandWorkerContextDatabaseHandle,
   type WorkerContextDatabaseHandle,
 } from '@/infrastructure/database/utils/database-handle.types.js';
+import { applyWorkerStatementTimeout } from '@/infrastructure/database/contexts/worker-statement-timeout.util.js';
 
 /**
  * Sets `app.current_user_id` (auth.users public_id) for user-scoped RLS policies.
@@ -90,6 +91,10 @@ export async function withSessionRetentionCleanupDatabaseContext<T>(
   return runWithWorkerDatabaseContext({ kind: 'session_retention_cleanup' }, () =>
     database.transaction(async (transaction) => {
       const databaseHandle = transaction as unknown as RequestScopedPostgresDatabase;
+      // sec-D2: this wrapper is worker-only (cross-user session retention
+      // deletes). Lift the HTTP 5 s statement_timeout so the cascade-delete
+      // does not abort on production-sized session tables.
+      await applyWorkerStatementTimeout(databaseHandle);
       await setLocalDatabaseConfig(databaseHandle, 'app.session_retention_cleanup', 'true');
       return runWithPinnedDatabaseHandle(databaseHandle, () =>
         callback(brandWorkerContextDatabaseHandle(databaseHandle)),

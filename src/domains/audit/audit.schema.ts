@@ -68,6 +68,11 @@ export const logs = auditSchema
       index('idx_audit_logs_created_at').on(table.created_at),
       index('idx_audit_logs_created_id').on(table.created_at, table.id),
       index('idx_audit_logs_severity_created').on(table.severity, table.created_at),
+      // sec-D3: partial index covers the FK from auth.users hard-delete; the
+      // null subset is the bulk of rows so the index stays small.
+      index('idx_audit_logs_target_user_id')
+        .on(table.target_user_id)
+        .where(sql`${table.target_user_id} IS NOT NULL`),
       index('idx_audit_logs_action_created').on(table.action, table.created_at),
       index('idx_audit_logs_action_created_id').on(table.action, table.created_at, table.id),
       check(
