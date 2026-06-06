@@ -5,6 +5,7 @@ import type { SubscriptionService } from '@/domains/billing/sub-domains/subscrip
 import { ConflictError } from '@/shared/errors/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import type { PlanRepository } from '@/domains/billing/sub-domains/plan/plan.repository.js';
 import type { StripeWebhookEventRepository } from './stripe-webhook-event.repository.js';
 import { runStripeWebhookHandlerWithOrganizationContext } from './stripe-webhook-organization.util.js';
 import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
@@ -40,6 +41,14 @@ export class StripeWebhookService {
   constructor(
     private readonly subscriptionService: SubscriptionService,
     private readonly stripeWebhookEventRepository: StripeWebhookEventRepository,
+    /**
+     * Used to resolve `items.data[0].price.id` from a `customer.subscription.updated`
+     * event back to the local `plans.id` so Dashboard-driven plan changes flow into
+     * `subscriptions.plan_id` (sec-B7). Drift between the Stripe-side plan and the
+     * local entitlement column otherwise serves the old `plan.features` set forever
+     * — most visible after a customer-service-initiated downgrade.
+     */
+    private readonly planRepository: PlanRepository,
   ) {}
 
   /**
@@ -145,6 +154,31 @@ export class StripeWebhookService {
     const periodStart = firstItem ? new Date(firstItem.current_period_start * 1000) : new Date();
     const periodEnd = firstItem ? new Date(firstItem.current_period_end * 1000) : new Date();
 
+    /**
+     * sec-B7: resolve the Stripe price id → local plan id. When Stripe is the
+     * source of truth (an admin used the Dashboard to swap the plan), the
+     * webhook is the only signal we receive — so the sync MUST include
+     * `plan_id`. Omit it (rather than setting it to `null`) when the lookup
+     * returns no match: a dropped row could mean an unsynced catalog entry,
+     * but silently nulling the column would null every cached entitlement and
+     * effectively downgrade the customer to "no plan". Better to leave the
+     * existing plan_id in place and log the drift — alert tooling already
+     * watches webhook-handler logs.
+     */
+    const stripePriceId = firstItem?.price?.id;
+    let resolvedPlanId: number | undefined;
+    if (stripePriceId) {
+      const matchedPlan = await this.planRepository.findByStripePriceId(stripePriceId);
+      if (matchedPlan) {
+        resolvedPlanId = matchedPlan.id;
+      } else {
+        logger.warn(
+          { providerSubscriptionId, stripePriceId },
+          'stripe.webhook.plan_id_resolution_miss',
+        );
+      }
+    }
+
     const row = await this.subscriptionService.syncFromStripeProviderSubscription(
       providerSubscriptionId,
       omitUndefined({
@@ -155,6 +189,7 @@ export class StripeWebhookService {
           : undefined,
         current_period_start: periodStart,
         current_period_end: periodEnd,
+        plan_id: resolvedPlanId,
       }),
       stripeEventCreatedAt,
       subscriptionRepository,

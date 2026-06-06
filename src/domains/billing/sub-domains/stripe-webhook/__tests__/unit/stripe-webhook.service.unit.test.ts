@@ -5,6 +5,7 @@ import { ConflictError } from '@/shared/errors/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import type { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
 import type { StripeWebhookEventRepository } from '@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-event.repository.js';
+import type { PlanRepository } from '@/domains/billing/sub-domains/plan/plan.repository.js';
 
 vi.mock('@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-organization.util.js', () => ({
   runStripeWebhookHandlerWithOrganizationContext: vi.fn(
@@ -33,7 +34,15 @@ describe('StripeWebhookService', () => {
     markFailed: vi.fn(),
   } as unknown as StripeWebhookEventRepository;
 
-  const service = new StripeWebhookService(subscriptionService, stripeWebhookEventRepository);
+  const planRepository = {
+    findByStripePriceId: vi.fn(),
+  } as unknown as PlanRepository;
+
+  const service = new StripeWebhookService(
+    subscriptionService,
+    stripeWebhookEventRepository,
+    planRepository,
+  );
 
   const stripeEventCreatedAtSeconds = 1_700_000_000;
   const periodStartSeconds = 1_700_000_500;
@@ -49,7 +58,13 @@ describe('StripeWebhookService', () => {
       cancel_at_period_end: false,
       canceled_at: null,
       items: {
-        data: [{ current_period_start: periodStartSeconds, current_period_end: periodEndSeconds }],
+        data: [
+          {
+            current_period_start: periodStartSeconds,
+            current_period_end: periodEndSeconds,
+            price: { id: 'price_default_test' },
+          },
+        ],
       },
       ...overrides,
     } as unknown as Stripe.Subscription;
@@ -260,6 +275,82 @@ describe('StripeWebhookService', () => {
       );
       // The ledger is still marked processed — a missing row is not a processing failure.
       expect(stripeWebhookEventRepository.markProcessed).toHaveBeenCalledWith('evt_1');
+    });
+
+    // sec-B7: handler used to map status / cancel_at_period_end / period
+    // boundaries but never the price → plan id. A plan change made directly
+    // in Stripe Dashboard would leave local `subscriptions.plan_id` pinned
+    // to the old plan; entitlement checks against `plan.features` would
+    // therefore continue serving the OLD feature set forever (or until a
+    // checkout flow rebuilt the row). Resolve the new price id to a local
+    // plan id and include it in the sync payload.
+    it('resolves the local plan id from items.data[0].price.id and includes it in the sync payload (sec-B7)', async () => {
+      vi.mocked(planRepository.findByStripePriceId).mockResolvedValueOnce({ id: 42 } as never);
+
+      await service.handleEvent(
+        buildEvent({
+          data: {
+            object: buildSubscription({
+              items: {
+                data: [
+                  {
+                    current_period_start: periodStartSeconds,
+                    current_period_end: periodEndSeconds,
+                    price: { id: 'price_pro_monthly' },
+                  },
+                ],
+              },
+            }),
+          },
+        }),
+      );
+
+      expect(planRepository.findByStripePriceId).toHaveBeenCalledWith('price_pro_monthly');
+      const [, payload] = vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mock
+        .calls[0]!;
+      expect((payload as { plan_id?: number }).plan_id).toBe(42);
+    });
+
+    it('omits plan_id from the sync payload when the price id does not match any catalog row', async () => {
+      vi.mocked(planRepository.findByStripePriceId).mockResolvedValueOnce(null as never);
+
+      await service.handleEvent(
+        buildEvent({
+          data: {
+            object: buildSubscription({
+              items: {
+                data: [
+                  {
+                    current_period_start: periodStartSeconds,
+                    current_period_end: periodEndSeconds,
+                    price: { id: 'price_unknown' },
+                  },
+                ],
+              },
+            }),
+          },
+        }),
+      );
+
+      const [, payload] = vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mock
+        .calls[0]!;
+      // No match → keep the existing plan_id untouched (omit from UPDATE SET).
+      // A drift-tracking metric is fine here; silently clobbering plan_id
+      // to NULL would corrupt every cached entitlement.
+      expect((payload as Record<string, unknown>).plan_id).toBeUndefined();
+    });
+
+    it('omits plan_id when items.data is empty (no price to resolve)', async () => {
+      await service.handleEvent(
+        buildEvent({
+          data: { object: buildSubscription({ items: { data: [] } }) },
+        }),
+      );
+
+      expect(planRepository.findByStripePriceId).not.toHaveBeenCalled();
+      const [, payload] = vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mock
+        .calls[0]!;
+      expect((payload as Record<string, unknown>).plan_id).toBeUndefined();
     });
   });
 

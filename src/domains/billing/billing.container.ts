@@ -39,6 +39,7 @@ export function createBillingContainer(organizationService: OrganizationService)
   const stripeWebhookService = new StripeWebhookService(
     subscriptionService,
     stripeWebhookEventRepository,
+    planRepository,
   );
 
   return {

@@ -30,5 +30,9 @@ export function createStripeWebhookServiceForWorker(): StripeWebhookService {
   );
   const stripeWebhookEventRepository = new StripeWebhookEventRepository();
 
-  return new StripeWebhookService(subscriptionService, stripeWebhookEventRepository);
+  return new StripeWebhookService(
+    subscriptionService,
+    stripeWebhookEventRepository,
+    planRepository,
+  );
 }
