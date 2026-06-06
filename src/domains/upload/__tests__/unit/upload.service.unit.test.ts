@@ -63,6 +63,7 @@ describe('UploadService', () => {
     findByPublicIdForUser: vi.fn().mockResolvedValue(uploadRow),
     findActiveByUserId: vi.fn().mockResolvedValue([uploadRow]),
     findActiveByUserIdAfter: vi.fn().mockResolvedValue([uploadRow]),
+    findActiveByOrganizationIdAfter: vi.fn().mockResolvedValue([]),
     markStatus: vi.fn().mockResolvedValue(uploadRow),
     markStatusByPublicId: vi.fn().mockResolvedValue(uploadRow),
     markConfirmedByPublicId: vi.fn().mockResolvedValue(uploadRow),
@@ -255,9 +256,28 @@ describe('UploadService', () => {
   });
 
   it('tombstoneAllByOrganizationId soft-deletes organization uploads', async () => {
+    vi.mocked(repository.findActiveByOrganizationIdAfter).mockResolvedValueOnce([] as never);
     vi.mocked(repository.softDeleteAllByOrganizationId).mockResolvedValue(2);
     const count = await service.tombstoneAllByOrganizationId(10);
     expect(count).toBe(2);
+  });
+
+  it('tombstoneAllByOrganizationId removes S3 objects in bounded batches before the DB tombstone (sec-UP8)', async () => {
+    vi.mocked(repository.findActiveByOrganizationIdAfter)
+      .mockResolvedValueOnce([
+        { id: 1, file_key: 'organization-files/org/aaa.pdf' },
+        { id: 2, file_key: 'organization-files/org/bbb.pdf' },
+      ] as never)
+      .mockResolvedValueOnce([] as never);
+    vi.mocked(objectStorage.deleteObject).mockResolvedValue(true);
+    vi.mocked(repository.softDeleteAllByOrganizationId).mockResolvedValue(2);
+
+    const count = await service.tombstoneAllByOrganizationId(10);
+
+    expect(count).toBe(2);
+    expect(objectStorage.deleteObject).toHaveBeenCalledTimes(2);
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith('organization-files/org/aaa.pdf');
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith('organization-files/org/bbb.pdf');
   });
 
   const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);

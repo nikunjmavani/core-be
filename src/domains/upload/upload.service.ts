@@ -648,24 +648,63 @@ export class UploadService {
   /** Deletes S3 objects in fixed-size concurrent chunks; failures are logged, never thrown. */
   private async deleteObjectsWithBoundedConcurrency(options: {
     fileKeys: readonly string[];
-    userId: number;
+    userId?: number;
+    organizationId?: number;
   }): Promise<void> {
-    const { fileKeys, userId } = options;
+    const { fileKeys, userId, organizationId } = options;
     for (let index = 0; index < fileKeys.length; index += UPLOAD_OFFBOARDING_DELETE_CONCURRENCY) {
       const chunk = fileKeys.slice(index, index + UPLOAD_OFFBOARDING_DELETE_CONCURRENCY);
       await Promise.all(
         chunk.map(async (fileKey) => {
           const objectDeleted = await this.objectStorage.deleteObject(fileKey);
           if (!objectDeleted) {
-            logger.warn({ userId, fileKey }, 'upload.offboarding.s3ObjectDeleteFailed');
+            logger.warn(
+              { userId, organizationId, fileKey },
+              'upload.offboarding.s3ObjectDeleteFailed',
+            );
           }
         }),
       );
     }
   }
 
-  /** Tombstones org-scoped uploads (DB only; S3 removed on retention purge or per-upload DELETE). */
+  /**
+   * Tombstones all active uploads for an organization (offboarding) and removes
+   * S3 objects in the same bounded-concurrency pattern as
+   * {@link UploadService.tombstoneAllByUserId}.
+   *
+   * @remarks
+   * sec-UP8: the previous implementation only soft-deleted DB rows and relied
+   * on `UPLOAD_TOMBSTONE_RETENTION_CRON` to eventually clean S3. The cron is
+   * optional, so an operator who forgot to set it left org-deletion S3 objects
+   * around indefinitely — a GDPR Article 17 violation and an unbounded
+   * storage cost. Object removal now happens synchronously in the same
+   * offboarding pass, matching the user-tombstone contract.
+   *
+   * Streams in bounded keyset batches so a tenant with a large upload
+   * footprint does not load an unbounded result set into memory or
+   * serialise thousands of S3 round-trips inline.
+   */
   async tombstoneAllByOrganizationId(organization_id: number): Promise<number> {
+    let afterId = 0;
+    for (;;) {
+      const rows = await this.repository.findActiveByOrganizationIdAfter(
+        organization_id,
+        afterId,
+        UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE,
+      );
+      if (rows.length === 0) {
+        break;
+      }
+      await this.deleteObjectsWithBoundedConcurrency({
+        fileKeys: rows.map((row) => row.file_key),
+        organizationId: organization_id,
+      });
+      afterId = rows[rows.length - 1]!.id;
+      if (rows.length < UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE) {
+        break;
+      }
+    }
     return this.repository.softDeleteAllByOrganizationId(organization_id);
   }
 }
