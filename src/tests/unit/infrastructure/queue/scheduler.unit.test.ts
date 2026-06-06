@@ -1,14 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { upsertJobSchedulerMock, queueCloseMock } = vi.hoisted(() => ({
-  upsertJobSchedulerMock: vi.fn().mockResolvedValue(undefined),
-  queueCloseMock: vi.fn().mockResolvedValue(undefined),
-}));
+const { upsertJobSchedulerMock, queueCloseMock, getJobSchedulersMock, removeJobSchedulerMock } =
+  vi.hoisted(() => ({
+    upsertJobSchedulerMock: vi.fn().mockResolvedValue(undefined),
+    queueCloseMock: vi.fn().mockResolvedValue(undefined),
+    // sec-Q: scheduler reconciliation reads existing schedulers from Redis and drops any
+    // whose id is no longer in the canonical set (orphan rename/removal residue).
+    getJobSchedulersMock: vi.fn().mockResolvedValue([]),
+    removeJobSchedulerMock: vi.fn().mockResolvedValue(true),
+  }));
 
 vi.mock('bullmq', () => ({
   Queue: class MockQueue {
     upsertJobScheduler = upsertJobSchedulerMock;
     close = queueCloseMock;
+    getJobSchedulers = getJobSchedulersMock;
+    removeJobScheduler = removeJobSchedulerMock;
   },
 }));
 
@@ -27,6 +34,8 @@ describe('infrastructure queue scheduler', () => {
   beforeEach(() => {
     upsertJobSchedulerMock.mockClear();
     queueCloseMock.mockClear();
+    getJobSchedulersMock.mockClear().mockResolvedValue([]);
+    removeJobSchedulerMock.mockClear().mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -106,7 +115,10 @@ describe('infrastructure queue scheduler', () => {
     const schedulerHandle = await registerScheduledJobs();
     expect(upsertJobSchedulerMock).toHaveBeenCalledTimes(21);
     await schedulerHandle.close();
-    expect(queueCloseMock).toHaveBeenCalledTimes(21);
+    // Each scheduled job opens one Queue for upsert (21) + the reconcile pass opens one
+    // Queue per unique queue name (21) which is closed inside its own loop iteration.
+    // handle.close() then closes the 21 upsert queues, so the mock observes 42 close calls.
+    expect(queueCloseMock).toHaveBeenCalledTimes(42);
   });
 
   it('registerScheduledJobs does not instantiate queues when SCHEDULER_ENABLED is false', async () => {
@@ -116,5 +128,26 @@ describe('infrastructure queue scheduler', () => {
     expect(upsertJobSchedulerMock).not.toHaveBeenCalled();
     expect(queueCloseMock).not.toHaveBeenCalled();
     await schedulerHandle.close();
+  });
+
+  it('registerScheduledJobs removes orphan schedulers whose id is not in the canonical set (sec-Q)', async () => {
+    // A `schedulerId` rename or queue removal leaves the stale scheduler in Redis. Without
+    // reconciliation, BullMQ keeps firing it forever — doubling cron rate after rename, or
+    // firing into a worker-less queue after removal. The audit at boot only diffs in-code
+    // state and would not detect this; the registry MUST read Redis state and drop orphans.
+    getJobSchedulersMock.mockResolvedValue([
+      { key: 'orphan-scheduler-id', name: 'orphan-job' },
+      // A canonical id mixed in to verify it is NOT removed.
+      { key: 'daily-audit-cleanup', name: 'audit-cleanup' },
+    ]);
+
+    const { registerScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
+    await registerScheduledJobs({
+      activeQueueNames: new Set(['audit-retention']),
+    });
+
+    // Only the orphan is dropped, never a canonical scheduler.
+    expect(removeJobSchedulerMock).toHaveBeenCalledWith('orphan-scheduler-id');
+    expect(removeJobSchedulerMock).not.toHaveBeenCalledWith('daily-audit-cleanup');
   });
 });

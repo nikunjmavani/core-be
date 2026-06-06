@@ -59,6 +59,7 @@ export type DeadLetterJobLedgerRow = {
   job_id: string | null;
   job_name: string;
   payload_summary: Record<string, unknown>;
+  attempts_made: number;
   failed_at: Date;
 };
 
@@ -88,6 +89,7 @@ export async function findDeadLetterJobsForAutoRetry(input: {
       job_id: dead_letter_jobs.job_id,
       job_name: dead_letter_jobs.job_name,
       payload_summary: dead_letter_jobs.payload_summary,
+      attempts_made: dead_letter_jobs.attempts_made,
       failed_at: dead_letter_jobs.failed_at,
     })
     .from(dead_letter_jobs)
