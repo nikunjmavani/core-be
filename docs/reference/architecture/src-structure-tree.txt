@@ -92,6 +92,10 @@ src/
     │   ├── seed/
     │   │   └── index.ts
     │   ├── shared/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── audit-login.util.unit.test.ts
+    │   │   ├── audit-login.util.ts
     │   │   └── complete-first-factor-auth.ts
     │   ├── sub-domains/
     │   │   ├── auth-method/

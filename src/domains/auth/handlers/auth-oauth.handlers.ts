@@ -14,6 +14,7 @@ import {
 } from '@/domains/auth/auth.http.util.js';
 import type { OauthCallbackQueryInput } from '@/domains/auth/auth.dto.js';
 import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import { recordLoginAuditEvent } from '@/domains/auth/shared/audit-login.util.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthOauthHandlersDependencies = Pick<AuthContainer, 'oauthService'>;
@@ -82,6 +83,16 @@ export function createAuthOauthHandlers({ oauthService }: AuthOauthHandlersDepen
         typeof data.session_refresh_secret === 'string'
       ) {
         setSessionCookie(reply, data.session_public_id, data.session_refresh_secret);
+        // sec-A8: audit OAuth success; provider is embedded in the source so an
+        // incident-response query can correlate "every super_admin issued via
+        // OAuth Google in the last 24h" without a separate metadata column.
+        if ('access_token' in data && typeof data.access_token === 'string') {
+          await recordLoginAuditEvent(
+            request,
+            { access_token: data.access_token, session_public_id: data.session_public_id },
+            `oauth_${request.params.provider}`,
+          );
+        }
       }
 
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
