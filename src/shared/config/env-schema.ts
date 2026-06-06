@@ -809,6 +809,84 @@ export const envSchema = envSchemaBase
       message: `DATABASE_HTTP_STATEMENT_TIMEOUT_MS must be < ${PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS * 1_000} (PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS × 1000) or 0 (disabled). A longer timeout allows the recompute lock to expire mid-query, defeating the cache stampede guard.`,
       path: ['DATABASE_HTTP_STATEMENT_TIMEOUT_MS'],
     },
+  )
+  // sec-B6: Stripe secret key, when set, must carry a valid mode prefix
+  // (`sk_test_` or `sk_live_`). A garbled value defeats every Stripe API
+  // call and pushes the system into "fictional mode" (subs persist locally
+  // but never charge); fail closed at boot instead of silently at runtime.
+  .refine(
+    (data) =>
+      data.STRIPE_SECRET_KEY === undefined ||
+      data.STRIPE_SECRET_KEY.startsWith('sk_test_') ||
+      data.STRIPE_SECRET_KEY.startsWith('sk_live_'),
+    {
+      message:
+        'STRIPE_SECRET_KEY must begin with `sk_test_` or `sk_live_` (Stripe API key format).',
+      path: ['STRIPE_SECRET_KEY'],
+    },
+  )
+  // sec-B6: Stripe webhook secret, when set, must carry the `whsec_` prefix.
+  // A wrong value fails every HMAC and silently freezes subscription state
+  // (no past-due / cancellation events reach the DB) until Stripe disables
+  // the endpoint after ~3 days.
+  .refine(
+    (data) =>
+      data.STRIPE_WEBHOOK_SECRET === undefined || data.STRIPE_WEBHOOK_SECRET.startsWith('whsec_'),
+    {
+      message: 'STRIPE_WEBHOOK_SECRET must begin with `whsec_` (Stripe webhook secret format).',
+      path: ['STRIPE_WEBHOOK_SECRET'],
+    },
+  )
+  // sec-B6: In production, the Stripe secret key must be a live key
+  // (`sk_live_*`). A test key in production silently fails every webhook
+  // signature check and accepts no real payments.
+  .refine(
+    (data) => {
+      if (data.NODE_ENV !== 'production') return true;
+      if (data.STRIPE_SECRET_KEY === undefined) return true;
+      return data.STRIPE_SECRET_KEY.startsWith('sk_live_');
+    },
+    {
+      message:
+        'In production, STRIPE_SECRET_KEY must be a live-mode key (`sk_live_*`). Test-mode keys silently fail every webhook HMAC and accept no real payments.',
+      path: ['STRIPE_SECRET_KEY'],
+    },
+  )
+  // sec-B5: In production, half-configured Stripe (one of the two keys set,
+  // the other missing — typically a typo or missing GitHub Actions secret)
+  // would otherwise leave `isStripeConfigured()` returning false and the
+  // subscription service silently issuing local-only trials without ever
+  // charging. Reject the half-configured state loudly at boot.
+  .refine(
+    (data) => {
+      if (data.NODE_ENV !== 'production') return true;
+      const hasSecretKey = Boolean(data.STRIPE_SECRET_KEY);
+      const hasWebhookSecret = Boolean(data.STRIPE_WEBHOOK_SECRET);
+      // Both unset = billing disabled (allowed). Both set = handled by the
+      // format / live-mode refines above. Only one set = error.
+      return hasSecretKey === hasWebhookSecret;
+    },
+    {
+      message:
+        'In production, STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must both be set or both unset; a half-configured Stripe environment silently runs in fictional mode (subscriptions persist locally without charging).',
+      path: ['STRIPE_WEBHOOK_SECRET'],
+    },
+  )
+  // Mirror of the half-config refine — Zod path is informational, so we emit
+  // a second clause targeting `STRIPE_SECRET_KEY` so either-missing-side error
+  // surfaces on the offending key in deploy validators.
+  .refine(
+    (data) => {
+      if (data.NODE_ENV !== 'production') return true;
+      const hasSecretKey = Boolean(data.STRIPE_SECRET_KEY);
+      const hasWebhookSecret = Boolean(data.STRIPE_WEBHOOK_SECRET);
+      return hasSecretKey === hasWebhookSecret;
+    },
+    {
+      message:
+        'In production, STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must both be set or both unset (see sec-B5).',
+      path: ['STRIPE_SECRET_KEY'],
+    },
   );
 
 /** Ordered list of env var names from the schema (for .env.example sync and scripts). */
