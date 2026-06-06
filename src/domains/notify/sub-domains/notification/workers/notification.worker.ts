@@ -28,6 +28,8 @@ import {
 } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
+import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { NotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 
 type NotificationDispatchData = {
@@ -144,10 +146,30 @@ export async function processNotificationDispatchJob(
     return repository.findByIdForDispatch(notificationId, organizationPublicId ?? null);
   };
 
-  const loadNotificationForScope = () =>
-    organizationPublicId === null || organizationPublicId === undefined
-      ? runGlobalRetentionWorkerJob(loadNotification)
-      : withOrganizationContext(organizationPublicId, loadNotification);
+  // sec-D #10: NULL-organization notifications are user-scoped, not retention work.
+  // The prior code wrapped them in `runGlobalRetentionWorkerJob`, which pins
+  // `app.global_retention_cleanup = 'true'` — a wide escape hatch that also unlocks
+  // DELETE on audit.logs and cross-tenant reads on every RLS-scoped table that has
+  // the retention branch. Even though today's dispatch only reads then exits, that
+  // GUC's blast radius is a future-regression risk: any patch that adds a write
+  // inside this scope (e.g. "stamp delivered_at") would silently inherit cross-tenant
+  // write privileges. Resolve the recipient's public id via the narrow SECURITY
+  // DEFINER function and pin `withUserDatabaseContext` so the
+  // `notifications_owner_access` policy authorises the read on its intended branch.
+  const loadNotificationForScope = async () => {
+    if (organizationPublicId === null || organizationPublicId === undefined) {
+      const userPublicId = await withGlobalAdminDatabaseContext(async (databaseHandle) => {
+        const repository =
+          notificationRepository ?? createWorkerNotificationRepository(databaseHandle);
+        return repository.findUserPublicIdForNotificationDispatch(notificationId);
+      });
+      if (!userPublicId) {
+        throw new Error(`notification.user_unknown:${String(notificationId)}`);
+      }
+      return withUserDatabaseContext(userPublicId, loadNotification);
+    }
+    return withOrganizationContext(organizationPublicId, loadNotification);
+  };
   const notificationRow =
     notificationRepository !== undefined
       ? await notificationRepository.findByIdForDispatch(

@@ -56,6 +56,14 @@ export const api_keys = tenancySchema
         .on(table.organization_id, table.created_at, table.id)
         .where(sql`${table.deleted_at} IS NULL`),
       index('idx_api_keys_key_prefix').on(table.key_prefix),
+      // sec-D #18: partial UNIQUE on `key_hash` for ACTIVE non-deleted rows so
+      // a duplicate hash cannot authenticate as a different organization than
+      // the one that issued the surviving key. Revoked keys are unaffected,
+      // which keeps the legitimate rotate-then-revoke flow valid. Added by
+      // migration 20260607020000.
+      uniqueIndex('idx_api_keys_key_hash_active_unique')
+        .on(table.key_hash)
+        .where(sql`${table.status} = 'ACTIVE' AND ${table.deleted_at} IS NULL`),
       index('idx_api_keys_deleted').on(table.deleted_at).where(sql`${table.deleted_at} IS NULL`),
       index('idx_api_keys_scopes_gin').using('gin', table.scopes),
       check('chk_api_keys_status', sql`${table.status} IN ('ACTIVE', 'REVOKED')`),
