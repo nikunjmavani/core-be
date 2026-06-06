@@ -21,13 +21,15 @@ describe('audit-retention.worker', () => {
     deleteInBatchesByConditionMock.mockReset();
     deleteInBatchesByConditionMock
       .mockResolvedValueOnce({ deletedCount: 4, blockedCount: 0 })
-      .mockResolvedValueOnce({ deletedCount: 2, blockedCount: 1 });
+      .mockResolvedValueOnce({ deletedCount: 2, blockedCount: 1 })
+      // sec-D5: third call is auth.verification_tokens cleanup.
+      .mockResolvedValueOnce({ deletedCount: 11, blockedCount: 0 });
   });
 
-  it('runAuditRetentionJob purges both audit logs and the dead-letter ledger past the window', async () => {
+  it('runAuditRetentionJob purges audit logs, dead-letter ledger, and expired verification tokens past the window', async () => {
     const result = await runAuditRetentionJob({} as never);
 
-    expect(deleteInBatchesByConditionMock).toHaveBeenCalledTimes(2);
+    expect(deleteInBatchesByConditionMock).toHaveBeenCalledTimes(3);
     expect(deleteInBatchesByConditionMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -42,11 +44,20 @@ describe('audit-retention.worker', () => {
         tableLabel: 'audit.dead_letter_jobs',
       }),
     );
+    expect(deleteInBatchesByConditionMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        logContext: 'audit-retention.verification-tokens',
+        tableLabel: 'auth.verification_tokens',
+      }),
+    );
     expect(result).toEqual({
       deletedCount: 4,
       blockedCount: 0,
       deadLetterDeletedCount: 2,
       deadLetterBlockedCount: 1,
+      verificationTokenDeletedCount: 11,
+      verificationTokenBlockedCount: 0,
     });
   });
 });

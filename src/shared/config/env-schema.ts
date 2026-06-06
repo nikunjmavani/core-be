@@ -330,7 +330,13 @@ const envSchemaBase = z.object({
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1).optional(),
 
   // Data retention (days to keep audit logs / revoked sessions before cleanup)
-  AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1),
+  /**
+   * sec-U10: cap retention at 2 years and default to 1 year. The previous
+   * `min(1)` with no max + no default meant a typo (365 → 36500) silently
+   * disabled retention; once audit.logs is unbounded the table becomes the
+   * largest in the DB and trips autovacuum / search-path bloat thresholds.
+   */
+  AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(365),
   NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
   AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1),
   /** Tombstoned-row TTL before purge workers hard-delete (default avoids mandatory deploy secret). */
