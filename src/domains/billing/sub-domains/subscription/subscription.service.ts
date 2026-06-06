@@ -81,6 +81,60 @@ export class SubscriptionService {
     );
   }
 
+  /**
+   * Fallback INSERT path for `customer.subscription.created` webhook events
+   * whose local row is still missing (sec-B9).
+   *
+   * @remarks
+   * When the Stripe webhook arrives before the HTTP create path has committed
+   * the local row (typical B2 race in busy production traffic), the regular
+   * sync UPDATE matches 0 rows and the event quietly advances to `processed` —
+   * the user's first billing cycle is then invisible to local entitlement.
+   * This method resolves the active organization context (`organizationPublicId`
+   * is set by the webhook tenancy resolver before the dispatch) and inserts
+   * the row with the worker-scoped repository. Returns `null` on a missing
+   * organization (catalog drift; should already be caught by the tenancy
+   * resolver but defensive here) so the caller can log + advance the ledger
+   * rather than throw a non-retryable error.
+   */
+  async createFromStripeWebhookEvent(input: {
+    providerSubscriptionId: string;
+    providerCustomerId: string | null;
+    planId: number;
+    status: string;
+    cancelAtPeriodEnd: boolean;
+    canceledAt: Date | null;
+    currentPeriodStart: Date;
+    currentPeriodEnd: Date;
+    billingCycle: string;
+    stripeEventCreatedAt: Date;
+    repositoryOverride: SubscriptionRepository;
+  }) {
+    const organizationId = await input.repositoryOverride.findOrganizationIdFromCurrentContext();
+    if (organizationId === null) {
+      return null;
+    }
+    // SubscriptionCreateData does not carry cancel_at_period_end / canceled_at
+    // — the subsequent customer.subscription.updated event (Stripe always
+    // emits one shortly after .created) will sync those columns through the
+    // regular UPDATE path. For a brand-new subscription they are essentially
+    // always (false, null) anyway.
+    return input.repositoryOverride.create({
+      organization_id: organizationId,
+      plan_id: input.planId,
+      billing_cycle: input.billingCycle,
+      status: input.status,
+      current_period_start: input.currentPeriodStart,
+      current_period_end: input.currentPeriodEnd,
+      provider: 'stripe',
+      provider_subscription_id: input.providerSubscriptionId,
+      ...(input.providerCustomerId !== null
+        ? { provider_customer_id: input.providerCustomerId }
+        : {}),
+      last_stripe_event_created_at: input.stripeEventCreatedAt,
+    });
+  }
+
   async list(organization_public_id: string) {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =

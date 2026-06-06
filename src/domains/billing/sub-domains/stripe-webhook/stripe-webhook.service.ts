@@ -10,6 +10,31 @@ import type { StripeWebhookEventRepository } from './stripe-webhook-event.reposi
 import { runStripeWebhookHandlerWithOrganizationContext } from './stripe-webhook-organization.util.js';
 import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 
+/** Result row type from PlanRepository.findByStripePriceId; threaded through the sec-B9 fallback. */
+type MatchedPlanForCreate = Awaited<ReturnType<PlanRepository['findByStripePriceId']>>;
+
+/**
+ * Resolves the local `billing_cycle` ('monthly' | 'yearly') for a Stripe price
+ * id by matching against the plan's `stripe_price_*_id` columns. Falls back to
+ * 'monthly' when neither column matches — a defensive default for a Stripe
+ * dashboard that has only one of the two price ids populated, so the sec-B9
+ * fallback INSERT path still creates a row instead of dropping the event. The
+ * upstream `customer.subscription.updated` handler will reconcile any actual
+ * billing-cycle drift on the next event.
+ */
+function resolveBillingCycleForStripePrice(
+  stripePriceId: string | undefined,
+  plan: {
+    stripe_price_monthly_id: string | null;
+    stripe_price_yearly_id: string | null;
+  },
+): 'monthly' | 'yearly' {
+  if (stripePriceId !== undefined && plan.stripe_price_yearly_id === stripePriceId) {
+    return 'yearly';
+  }
+  return 'monthly';
+}
+
 /**
  * Processes Stripe webhook events and syncs subscription state.
  * Plans are managed offline via admin panel — subscription lifecycle events only.
@@ -35,7 +60,10 @@ import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts
  *   stage; unhandled event types are logged and skipped.
  * - **Notes:** Runs inside {@link withSystemTableWorkerContext} so the ledger
  *   write happens without an organization GUC; the subscription write then
- *   switches into {@link withOrganizationContext} for RLS-safe mutation.
+ *   switches into {@link withOrganizationContext} for RLS-safe mutation. The
+ *   `customer.subscription.created` race that left a missing local row
+ *   silently advancing to `processed` is now recovered by the sec-B9 fallback
+ *   INSERT path; see `tryFallbackInsertForCreated`.
  */
 export class StripeWebhookService {
   constructor(
@@ -113,6 +141,7 @@ export class StripeWebhookService {
           event.data.object,
           stripeEventCreatedAt,
           subscriptionRepository,
+          event.type,
         );
         break;
 
@@ -133,6 +162,7 @@ export class StripeWebhookService {
     stripeSubscription: Stripe.Subscription,
     stripeEventCreatedAt: Date,
     subscriptionRepository: SubscriptionRepository,
+    eventType: 'customer.subscription.created' | 'customer.subscription.updated',
   ): Promise<void> {
     const providerSubscriptionId = stripeSubscription.id;
 
@@ -167,10 +197,15 @@ export class StripeWebhookService {
      */
     const stripePriceId = firstItem?.price?.id;
     let resolvedPlanId: number | undefined;
+    // Track the matched plan so the sec-B9 fallback INSERT path can derive
+    // `billing_cycle` from whether the Stripe price id is the monthly or
+    // yearly column on the plan row.
+    let matchedPlanForCreate: MatchedPlanForCreate = null;
     if (stripePriceId) {
       const matchedPlan = await this.planRepository.findByStripePriceId(stripePriceId);
       if (matchedPlan) {
         resolvedPlanId = matchedPlan.id;
+        matchedPlanForCreate = matchedPlan;
       } else {
         logger.warn(
           { providerSubscriptionId, stripePriceId },
@@ -196,16 +231,93 @@ export class StripeWebhookService {
     );
 
     if (!row) {
-      logger.warn(
-        { providerSubscriptionId, stripeEventCreatedAt },
-        'stripe.webhook.subscription_not_found_or_stale',
-      );
+      const recovered =
+        eventType === 'customer.subscription.created'
+          ? await this.tryFallbackInsertForCreated({
+              stripeSubscription,
+              stripeEventCreatedAt,
+              subscriptionRepository,
+              resolvedPlanId,
+              matchedPlanForCreate,
+              stripePriceId,
+              periodStart,
+              periodEnd,
+              mappedStatus,
+              providerSubscriptionId,
+            })
+          : false;
+      if (!recovered) {
+        logger.warn(
+          { providerSubscriptionId, stripeEventCreatedAt },
+          'stripe.webhook.subscription_not_found_or_stale',
+        );
+      }
     } else {
       logger.info(
         { providerSubscriptionId, status: mappedStatus },
         'stripe.webhook.subscription_synced',
       );
     }
+  }
+
+  /**
+   * sec-B9: when `customer.subscription.created` sync returns null (the row
+   * did not exist yet — Stripe outran our HTTP create), insert the row
+   * straight from the webhook payload. Returns `true` when the recovery
+   * insert succeeded (so the caller skips the "stale/not_found" warning),
+   * `false` otherwise.
+   *
+   * Extracted from `handleSubscriptionUpdated` to keep that method below the
+   * Biome cognitive-complexity threshold; the policy logic is unchanged. A
+   * missing plan id (`subscriptions.plan_id` is NOT NULL) refuses the insert
+   * with a structured warning rather than corrupting downstream entitlement
+   * reads with a half-broken row.
+   */
+  private async tryFallbackInsertForCreated(input: {
+    stripeSubscription: Stripe.Subscription;
+    stripeEventCreatedAt: Date;
+    subscriptionRepository: SubscriptionRepository;
+    resolvedPlanId: number | undefined;
+    matchedPlanForCreate: MatchedPlanForCreate;
+    stripePriceId: string | undefined;
+    periodStart: Date;
+    periodEnd: Date;
+    mappedStatus: string;
+    providerSubscriptionId: string;
+  }): Promise<boolean> {
+    const { resolvedPlanId, matchedPlanForCreate, stripePriceId, providerSubscriptionId } = input;
+    if (!(resolvedPlanId && matchedPlanForCreate)) {
+      logger.warn(
+        { providerSubscriptionId, stripePriceId },
+        'stripe.webhook.subscription_created_insert_skipped_no_plan',
+      );
+      return false;
+    }
+    const billingCycle = resolveBillingCycleForStripePrice(stripePriceId, matchedPlanForCreate);
+    const inserted = await this.subscriptionService.createFromStripeWebhookEvent({
+      providerSubscriptionId,
+      providerCustomerId:
+        typeof input.stripeSubscription.customer === 'string'
+          ? input.stripeSubscription.customer
+          : null,
+      planId: resolvedPlanId,
+      status: input.mappedStatus,
+      cancelAtPeriodEnd: input.stripeSubscription.cancel_at_period_end,
+      canceledAt: input.stripeSubscription.canceled_at
+        ? new Date(input.stripeSubscription.canceled_at * 1000)
+        : null,
+      currentPeriodStart: input.periodStart,
+      currentPeriodEnd: input.periodEnd,
+      billingCycle,
+      stripeEventCreatedAt: input.stripeEventCreatedAt,
+      repositoryOverride: input.subscriptionRepository,
+    });
+    if (!inserted) return false;
+    logger.info(
+      { providerSubscriptionId, planId: resolvedPlanId, billingCycle },
+      'stripe.webhook.subscription_inserted_on_created',
+    );
+    return true;
   }
 
   private async handleSubscriptionDeleted(
