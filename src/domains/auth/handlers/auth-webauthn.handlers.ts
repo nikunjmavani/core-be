@@ -8,7 +8,10 @@ import {
   setSessionCookie,
 } from '@/domains/auth/auth.http.util.js';
 import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
-import { recordLoginAuditEvent } from '@/domains/auth/shared/audit-login.util.js';
+import {
+  recordLoginAuditEvent,
+  recordLoginFailureAuditEvent,
+} from '@/domains/auth/shared/audit-login.util.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthWebauthnHandlersDependencies = Pick<AuthContainer, 'webauthnService'>;
@@ -41,12 +44,19 @@ export function createAuthWebauthnHandlers({ webauthnService }: AuthWebauthnHand
       return successResponse(data, getRequestIdentifier(request));
     },
     webauthnAuthenticateVerify: async (request: FastifyRequest, reply: FastifyReply) => {
-      const data = await webauthnService.verifyAuthentication(
-        request.body,
-        getIpAddress(request),
-        readRequestOrigin(request),
-        getUserAgent(request) ?? undefined,
-      );
+      let data: Awaited<ReturnType<typeof webauthnService.verifyAuthentication>>;
+      try {
+        data = await webauthnService.verifyAuthentication(
+          request.body,
+          getIpAddress(request),
+          readRequestOrigin(request),
+          getUserAgent(request) ?? undefined,
+        );
+      } catch (error) {
+        // sec-A8 follow-up: record the failure side of the OVERVIEW invariant.
+        await recordLoginFailureAuditEvent(request, 'webauthn', error);
+        throw error;
+      }
       if ('mfa_required' in data && data.mfa_required === true) {
         return successResponse(AuthSerializer.mfaRequired(data), getRequestIdentifier(request));
       }

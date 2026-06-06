@@ -3,7 +3,10 @@ import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier } from '@/shared/utils/http/request.util.js';
 import { getIpAddress, getUserAgent, setSessionCookie } from '@/domains/auth/auth.http.util.js';
 import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
-import { recordLoginAuditEvent } from '@/domains/auth/shared/audit-login.util.js';
+import {
+  recordLoginAuditEvent,
+  recordLoginFailureAuditEvent,
+} from '@/domains/auth/shared/audit-login.util.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthLoginHandlersDependencies = Pick<AuthContainer, 'authService'>;
@@ -14,7 +17,17 @@ export function createAuthLoginHandlers({ authService }: AuthLoginHandlersDepend
     login: async (request: FastifyRequest, reply: FastifyReply) => {
       const ipAddress = getIpAddress(request);
       const userAgent = getUserAgent(request);
-      const data = await authService.login(request.body, ipAddress, userAgent ?? undefined);
+      let data: Awaited<ReturnType<typeof authService.login>>;
+      try {
+        data = await authService.login(request.body, ipAddress, userAgent ?? undefined);
+      } catch (error) {
+        // sec-A8 follow-up: record the failure side of the OVERVIEW invariant
+        // ("every login (success or failure) records a row"). The helper is
+        // best-effort and never throws — we always re-raise the original error
+        // so the global error handler maps it to the right HTTP status.
+        await recordLoginFailureAuditEvent(request, 'password', error);
+        throw error;
+      }
 
       if ('mfa_required' in data) {
         return successResponse(AuthSerializer.mfaRequired(data), getRequestIdentifier(request));
