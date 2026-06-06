@@ -55,7 +55,11 @@ function isCaptchaFailOpen(): boolean {
 
 function isCaptchaBypassAllowed(request: FastifyRequest): boolean {
   const environment = getEnv();
-  if (environment.NODE_ENV === 'production') {
+  // sec-M3: previously only refused bypass in production; staging accepted it.
+  // If staging ever receives real traffic (DNS misconfig, blue/green slot
+  // mix-up) credential-stuffing protection collapses. Treat staging the same
+  // as production — bypass is a dev/test affordance only.
+  if (environment.NODE_ENV === 'production' || environment.NODE_ENV === 'staging') {
     return false;
   }
   const bypassHeaderName = environment.CAPTCHA_BYPASS_HEADER;

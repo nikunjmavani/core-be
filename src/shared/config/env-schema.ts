@@ -111,6 +111,19 @@ const envSchemaBase = z.object({
   AUTH_SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).default(7),
   /** Secure flag for session + CSRF cookies. Set false only for plaintext local loops. */
   COOKIE_SECURE: booleanString('true'),
+  /**
+   * sec-M5: HSTS `preload` is operationally irreversible (weeks to remove
+   * from the preload list). Default false so we never advertise preload
+   * without operator opt-in confirming registration at
+   * https://hstspreload.org has been completed.
+   */
+  HSTS_PRELOAD_REGISTERED: booleanString('false'),
+  /**
+   * sec-M5: HSTS `includeSubDomains` locks every subdomain to HTTPS for the
+   * full max-age — destructive if the apex hosts non-HTTPS subdomains.
+   * Default false; operator opts in once subdomain inventory is audited.
+   */
+  HSTS_INCLUDE_SUBDOMAINS: booleanString('false'),
 
   // CORS (comma-separated origins; required in every runtime)
   ALLOWED_ORIGINS: z.string().min(1),
@@ -642,9 +655,23 @@ export const envSchema = envSchemaBase
       // In production every origin must be an absolute https:// URL. Plaintext http
       // origins would let cross-site requests ride over an unencrypted channel and
       // weaken the cookie-origin defenses that compare against this allowlist.
+      // sec-M9: ALSO reject entries that don't round-trip — a config that includes
+      // userinfo (`https://attacker@allowed.com`), trailing slash, or any path is
+      // an operator footgun: the runtime compares against browser-supplied `Origin`
+      // (which strips all of these), so the entry silently never matches and the
+      // origin gate fails closed against all requests instead of permitting the
+      // intended host.
       return origins.every((origin) => {
         try {
-          return new URL(origin).protocol === 'https:';
+          const parsed = new URL(origin);
+          if (parsed.protocol !== 'https:') return false;
+          if (parsed.username !== '' || parsed.password !== '') return false;
+          if (parsed.pathname !== '' && parsed.pathname !== '/') return false;
+          if (parsed.search !== '' || parsed.hash !== '') return false;
+          // Round-trip check: parsed.origin canonicalises away trailing slashes;
+          // require the input already match the canonical form so config drift is
+          // surfaced loudly rather than silently broken.
+          return parsed.origin === origin;
         } catch {
           return false;
         }
@@ -652,7 +679,7 @@ export const envSchema = envSchemaBase
     },
     {
       message:
-        'ALLOWED_ORIGINS must not contain `*`; in production every entry must be an absolute https:// origin.',
+        'ALLOWED_ORIGINS must not contain `*`; in production every entry must be an absolute https:// origin without userinfo, path, query, fragment, or trailing slash.',
       path: ['ALLOWED_ORIGINS'],
     },
   )
