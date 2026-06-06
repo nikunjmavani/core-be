@@ -4,6 +4,7 @@
  */
 
 import { Queue } from 'bullmq';
+import { SEVEN_DAYS_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retention.constants.js';
 import { NOTIFICATION_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/workers/notification-retention.constants.js';
@@ -242,6 +243,18 @@ export function getScheduledJobs(): ScheduledJob[] {
 }
 
 /**
+ * sec-Q1: bounded retention for cron-driven queues. The event-driven queues
+ * already set similar `defaultJobOptions`; without this, minute-cadence
+ * crons grew Redis indefinitely. Numbers chosen to leave enough recent
+ * history for debugging while staying inside maxmemory on a small shared
+ * instance.
+ */
+const SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS = {
+  removeOnComplete: { count: 100, age: SEVEN_DAYS_SECONDS },
+  removeOnFail: { count: 200, age: SEVEN_DAYS_SECONDS },
+} as const;
+
+/**
  * Options for {@link registerScheduledJobs}. Used by split worker services to avoid
  * registering cron schedules for queues whose worker is not running in this process —
  * otherwise BullMQ would enqueue jobs nobody picks up.
@@ -277,7 +290,14 @@ export async function registerScheduledJobs(
 
   try {
     for (const job of jobs) {
-      const queue = new Queue(job.queueName, { connection });
+      // sec-Q1: bounded retention on cron-driven queues. Without this,
+      // 17 cron queues each piling completed/failed jobs forever grows
+      // Redis indefinitely and eventually exhausts maxmemory on a shared
+      // cache+BullMQ instance.
+      const queue = new Queue(job.queueName, {
+        connection,
+        defaultJobOptions: SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS,
+      });
       queues.push(queue);
       await queue.upsertJobScheduler(
         job.schedulerId,
@@ -285,7 +305,7 @@ export async function registerScheduledJobs(
           pattern: job.cronPattern,
           ...(job.timezone !== undefined ? { tz: job.timezone } : {}),
         },
-        { name: job.jobName },
+        { name: job.jobName, opts: SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS },
       );
       logger.info(
         {

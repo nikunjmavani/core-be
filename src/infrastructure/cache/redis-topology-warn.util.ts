@@ -20,23 +20,37 @@ function redactUrlPassword(url: string): string {
 }
 
 /**
- * Logs the resolved Redis topology at boot. When BullMQ runs on a dedicated endpoint
- * (separate host or logical database from the cache `REDIS_URL`), this records that
- * queue/cache isolation is active — the recommended production topology so a BullMQ
- * backlog cannot starve the write-critical cache / idempotency / rate-limit store.
- * No-op when BullMQ shares the cache endpoint (single-instance local development).
+ * Logs the resolved Redis topology at boot.
+ *
+ * @remarks
+ * sec-Q2: the previous function name implied "warn when sharing" but the
+ * conditional did the OPPOSITE — it short-circuited silently in the
+ * dangerous case (shared host) and only emitted a positive INFO when the
+ * isolation was already correct. Operators who accidentally pointed
+ * BullMQ at the cache Redis got no signal — risking a BullMQ-backlog
+ * driven OOM of the rate-limit / idempotency store.
+ *
+ * Renamed conceptually to `logRedisTopology`: WARN in the shared case
+ * (the only event worth flagging), INFO in the isolated case.
  */
 export function warnWhenBullMqSharesCacheRedisHost(): void {
   const bullMqRedisUrl = resolveBullMqRedisUrl();
-  if (!usesSeparateBullMqRedisEndpoint(env.REDIS_URL, bullMqRedisUrl)) {
+  const isolated = usesSeparateBullMqRedisEndpoint(env.REDIS_URL, bullMqRedisUrl);
+  const payload = {
+    cacheRedisUrl: redactUrlPassword(env.REDIS_URL),
+    bullMqRedisUrl: redactUrlPassword(bullMqRedisUrl),
+  };
+
+  if (isolated) {
+    logger.info(
+      payload,
+      'redis.topology.dedicated_bullmq_endpoint — BullMQ uses a dedicated Redis endpoint; queue/cache isolation is active (see docs/deployment/runbooks/redis-topology.md)',
+    );
     return;
   }
 
-  logger.info(
-    {
-      cacheRedisUrl: redactUrlPassword(env.REDIS_URL),
-      bullMqRedisUrl: redactUrlPassword(bullMqRedisUrl),
-    },
-    'redis.topology.dedicated_bullmq_endpoint — BullMQ uses a dedicated Redis endpoint; queue/cache isolation is active (see docs/deployment/runbooks/redis-topology.md)',
+  logger.warn(
+    payload,
+    'redis.topology.shared_bullmq_endpoint — BullMQ shares the cache Redis endpoint; a BullMQ backlog can starve rate-limit / idempotency / session-cache keys (set REDIS_BULLMQ_URL to a dedicated endpoint for production).',
   );
 }

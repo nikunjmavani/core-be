@@ -75,11 +75,26 @@ export function findMaintenanceWorkersWithoutSchedule(): string[] {
     .map((definition) => definition.queueName);
 }
 
-/** Logs a single warning per mismatch found; no-op when registry and scheduler agree. */
+/**
+ * Logs a single warning per mismatch found; no-op when registry and scheduler agree.
+ *
+ * @remarks
+ * sec-Q3: in production, a scheduler/registry mismatch silently grows the
+ * downstream table (cron enqueues jobs no worker is registered to consume,
+ * OR a worker runs without its cron and the table it maintains grows
+ * unbounded). Throw to fail boot fast in production; keep WARN in non-prod
+ * so tests/dev iteration are not blocked by deliberate split-worker
+ * registrations.
+ */
 export function auditSchedulerRegistryConsistency(): void {
   const mismatches = detectSchedulerRegistryMismatches();
   if (mismatches.length === 0) {
     return;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `worker.registry.scheduler_mismatch — refusing to boot in production with scheduler/worker registry drift: ${JSON.stringify(mismatches)}`,
+    );
   }
   logger.warn({ mismatches }, 'worker.registry.scheduler_mismatch');
 }
