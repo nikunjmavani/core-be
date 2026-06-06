@@ -8,6 +8,7 @@ import {
   setSessionCookie,
 } from '@/domains/auth/auth.http.util.js';
 import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import { recordLoginAuditEvent } from '@/domains/auth/shared/audit-login.util.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthWebauthnHandlersDependencies = Pick<AuthContainer, 'webauthnService'>;
@@ -56,6 +57,15 @@ export function createAuthWebauthnHandlers({ webauthnService }: AuthWebauthnHand
         typeof data.session_refresh_secret === 'string'
       ) {
         setSessionCookie(reply, data.session_public_id, data.session_refresh_secret);
+        // sec-A8: audit WebAuthn passkey login so the OVERVIEW.md "every login
+        // records a row" invariant holds across every entrypoint.
+        if ('access_token' in data && typeof data.access_token === 'string') {
+          await recordLoginAuditEvent(
+            request,
+            { access_token: data.access_token, session_public_id: data.session_public_id },
+            'webauthn',
+          );
+        }
       }
       return successResponse(
         AuthSerializer.accessToken(data as { access_token: string; session_public_id?: string }),
