@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { and, desc, eq, gte, lte, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, sql, type SQL } from 'drizzle-orm';
 import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { logs } from '@/domains/audit/audit.schema.js';
 import { api_keys } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.schema.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
   buildDescendingCreatedAtIdCursorCondition,
@@ -164,5 +165,45 @@ export class AuditRepository {
       .where(eq(logs.actor_user_id, actor_user_id))
       .orderBy(desc(logs.created_at))
       .limit(limit);
+  }
+
+  /**
+   * Batch-resolves the internal user ids carried on a page of audit rows to their public ids
+   * via the `auth.resolve_user_public_ids_by_ids` SECURITY DEFINER function. auth.users is
+   * FORCE RLS — a plain join from the audit query context returns zero rows even under
+   * `app.global_admin`, so we go through the same resolver `MembershipRepository` uses.
+   * Empty input returns an empty map without a round-trip.
+   */
+  async resolveUserPublicIdsByInternalIds(
+    userInternalIds: readonly number[],
+  ): Promise<Map<number, string>> {
+    if (userInternalIds.length === 0) return new Map();
+    const userIdValues = sql.join(
+      userInternalIds.map((userInternalId) => sql`${userInternalId}`),
+      sql`, `,
+    );
+    const result = await getRequestDatabase().execute(
+      sql`SELECT id, public_id FROM auth.resolve_user_public_ids_by_ids(ARRAY[${userIdValues}]::bigint[])`,
+    );
+    const rows = (
+      Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])
+    ) as { id: number | string; public_id: string }[];
+    return new Map(rows.map((row) => [Number(row.id), row.public_id]));
+  }
+
+  /**
+   * Batch-resolves the internal organization ids carried on a page of audit rows to their
+   * public ids. `tenancy.organizations` is not FORCE RLS for the admin / org-audit contexts
+   * the audit list runs under, so a plain SELECT works (no resolver needed).
+   */
+  async resolveOrganizationPublicIdsByInternalIds(
+    organizationInternalIds: readonly number[],
+  ): Promise<Map<number, string>> {
+    if (organizationInternalIds.length === 0) return new Map();
+    const rows = await getRequestDatabase()
+      .select({ id: organizations.id, public_id: organizations.public_id })
+      .from(organizations)
+      .where(inArray(organizations.id, [...organizationInternalIds]));
+    return new Map(rows.map((row) => [Number(row.id), row.public_id]));
   }
 }

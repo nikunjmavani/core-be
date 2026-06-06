@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { AuditSerializer } from '@/domains/audit/audit.serializer.js';
 
+function baseRow(overrides: Record<string, unknown> = {}) {
+  return {
+    action: 'role.changed',
+    resource_type: 'role',
+    severity: 'INFO',
+    created_at: '2026-06-07T00:00:00.000Z',
+    ...overrides,
+  } as never;
+}
+
 /**
  * Regression for sec-U2 (High, forensics blind): the old serializer stripped
  * every key ending in `_id` from `metadata` — including the public ids the
@@ -17,8 +27,7 @@ import { AuditSerializer } from '@/domains/audit/audit.serializer.js';
 describe('AuditSerializer — metadata identifier stripping (denylist)', () => {
   it('strips only known internal-id keys; public-id keys flow through', () => {
     const items = AuditSerializer.many([
-      {
-        public_id: 'log_public_abc',
+      baseRow({
         metadata: {
           // Internal numeric surrogates — must be stripped.
           auth_method_id: 99,
@@ -30,7 +39,7 @@ describe('AuditSerializer — metadata identifier stripping (denylist)', () => {
           // Free-form context — must survive.
           action_detail: 'role changed',
         },
-      },
+      }),
     ]);
 
     expect(items[0]?.metadata).toEqual({
@@ -43,23 +52,20 @@ describe('AuditSerializer — metadata identifier stripping (denylist)', () => {
 
   it('keeps non-identifier metadata fields untouched', () => {
     const items = AuditSerializer.many([
-      {
-        public_id: 'log_public_def',
-        metadata: { channel: 'email', severity: 'info' },
-      },
+      baseRow({ metadata: { channel: 'email', severity: 'info' } }),
     ]);
 
     expect(items[0]?.metadata).toEqual({ channel: 'email', severity: 'info' });
   });
 
   it('returns null metadata unchanged', () => {
-    const items = AuditSerializer.many([{ public_id: 'log_public_ghi', metadata: null }]);
+    const items = AuditSerializer.many([baseRow({ metadata: null })]);
     expect(items[0]?.metadata).toBeNull();
   });
 
   it('returns array metadata unchanged (not object-shaped)', () => {
     const metadata = [{ user_id: 1 }];
-    const items = AuditSerializer.many([{ public_id: 'log_public_jkl', metadata }]);
+    const items = AuditSerializer.many([baseRow({ metadata })]);
     expect(items[0]?.metadata).toEqual(metadata);
   });
 });
