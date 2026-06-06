@@ -3,8 +3,17 @@ import { deleteInBatchesByCondition } from '@/infrastructure/database/utils/batc
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { logs } from '@/domains/audit/audit.schema.js';
 import { dead_letter_jobs } from '@/infrastructure/queue/dlq/dead-letter.schema.js';
+import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.schema.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env } from '@/shared/config/env.config.js';
+
+/**
+ * sec-D5: verification tokens age out 7 days after they expire — used or
+ * unused. Magic-link, password-reset, and email-verify rows hold plaintext
+ * email + token-hash; once past expiry they have no auth value and only add
+ * GDPR / SOC2 retention exposure.
+ */
+const VERIFICATION_TOKEN_RETENTION_GRACE_DAYS = 7;
 
 /**
  * Deletes audit-schema operational records older than `AUDIT_RETENTION_DAYS` in
@@ -35,6 +44,8 @@ export async function runAuditRetentionJob(databaseHandle: WorkerDatabaseHandle)
   blockedCount: number;
   deadLetterDeletedCount: number;
   deadLetterBlockedCount: number;
+  verificationTokenDeletedCount: number;
+  verificationTokenBlockedCount: number;
 }> {
   const retentionDays = env.AUDIT_RETENTION_DAYS;
   const cutoffDate = new Date();
@@ -61,16 +72,45 @@ export async function runAuditRetentionJob(databaseHandle: WorkerDatabaseHandle)
       tableLabel: 'audit.dead_letter_jobs',
     });
 
+  // sec-D5: purge verification tokens 7 days past expiry. The auth flows
+  // already filter on `expires_at > now() AND used_at IS NULL`, so deleting
+  // past-expiry rows is byte-equivalent at the auth layer; the benefit is
+  // bounded growth, smaller indexes, and shorter plaintext-email retention.
+  const verificationTokenCutoffDate = new Date();
+  verificationTokenCutoffDate.setDate(
+    verificationTokenCutoffDate.getDate() - VERIFICATION_TOKEN_RETENTION_GRACE_DAYS,
+  );
+  const {
+    deletedCount: verificationTokenDeletedCount,
+    blockedCount: verificationTokenBlockedCount,
+  } = await deleteInBatchesByCondition({
+    databaseHandle,
+    table: verification_tokens,
+    idColumn: verification_tokens.id,
+    whereCondition: lt(verification_tokens.expires_at, verificationTokenCutoffDate),
+    logContext: 'audit-retention.verification-tokens',
+    tableLabel: 'auth.verification_tokens',
+  });
+
   logger.info(
     {
       deletedCount,
       blockedCount,
       deadLetterDeletedCount,
       deadLetterBlockedCount,
+      verificationTokenDeletedCount,
+      verificationTokenBlockedCount,
       retentionDays,
     },
     'audit-retention.completed',
   );
 
-  return { deletedCount, blockedCount, deadLetterDeletedCount, deadLetterBlockedCount };
+  return {
+    deletedCount,
+    blockedCount,
+    deadLetterDeletedCount,
+    deadLetterBlockedCount,
+    verificationTokenDeletedCount,
+    verificationTokenBlockedCount,
+  };
 }
