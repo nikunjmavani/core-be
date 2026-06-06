@@ -722,6 +722,7 @@ src/
     │   │   │   │   │   ├── index.ts
     │   │   │   │   │   ├── organization-settings.bulk.seed.ts
     │   │   │   │   │   └── organization-settings.faker.ts
+    │   │   │   │   ├── i18n-locale.cache.ts
     │   │   │   │   ├── organization-settings.controller.ts
     │   │   │   │   ├── organization-settings.dto.ts
     │   │   │   │   ├── organization-settings.repository.ts

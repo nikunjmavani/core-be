@@ -6,6 +6,23 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
+const { i18nLocaleCacheSpies } = vi.hoisted(() => ({
+  i18nLocaleCacheSpies: {
+    get: vi.fn(),
+    set: vi.fn(),
+    invalidate: vi.fn(),
+  },
+}));
+
+vi.mock(
+  '@/domains/tenancy/sub-domains/organization/organization-settings/i18n-locale.cache.js',
+  () => ({
+    getCachedOrganizationDefaultLocale: i18nLocaleCacheSpies.get,
+    setCachedOrganizationDefaultLocale: i18nLocaleCacheSpies.set,
+    invalidateCachedOrganizationDefaultLocale: i18nLocaleCacheSpies.invalidate,
+  }),
+);
+
 import { NotFoundError } from '@/shared/errors/index.js';
 import { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
@@ -104,6 +121,13 @@ describe('OrganizationSettingsService', () => {
   });
 
   describe('resolveDefaultLocaleForOrganization', () => {
+    beforeEach(() => {
+      // Default: cache miss, so the test exercises the DB resolve path.
+      i18nLocaleCacheSpies.get.mockResolvedValue(null);
+      i18nLocaleCacheSpies.set.mockResolvedValue(undefined);
+      i18nLocaleCacheSpies.invalidate.mockResolvedValue(undefined);
+    });
+
     it('returns configured locale when set', async () => {
       const locale = await service.resolveDefaultLocaleForOrganization('org_public_abc');
       expect(locale).toBe('en');
@@ -113,6 +137,58 @@ describe('OrganizationSettingsService', () => {
       vi.mocked(settingsRepository.findDefaultLocaleByOrganizationPublicId).mockResolvedValue(null);
       const locale = await service.resolveDefaultLocaleForOrganization('org_public_abc');
       expect(locale).toBe('en');
+    });
+
+    // sec-M1: cache hit must short-circuit the DB call entirely so an
+    // attacker spamming pre-auth requests with an `X-Organization-Id` header
+    // cannot drive thousands of Postgres lookups per second.
+    it('returns the cached locale and skips the DB when cache hits (sec-M1)', async () => {
+      i18nLocaleCacheSpies.get.mockResolvedValueOnce('es');
+
+      const locale = await service.resolveDefaultLocaleForOrganization('org_public_abc');
+
+      expect(locale).toBe('es');
+      expect(settingsRepository.findDefaultLocaleByOrganizationPublicId).not.toHaveBeenCalled();
+      // No need to re-cache a value we already read out of the cache.
+      expect(i18nLocaleCacheSpies.set).not.toHaveBeenCalled();
+    });
+
+    it('caches the freshly-resolved locale on a miss so subsequent calls do not hit the DB', async () => {
+      i18nLocaleCacheSpies.get.mockResolvedValueOnce(null);
+      vi.mocked(settingsRepository.findDefaultLocaleByOrganizationPublicId).mockResolvedValueOnce(
+        'es',
+      );
+
+      await service.resolveDefaultLocaleForOrganization('org_public_abc');
+
+      expect(i18nLocaleCacheSpies.set).toHaveBeenCalledWith('org_public_abc', 'es');
+    });
+
+    it('caches the "en" fallback so unknown org ids stop hitting the DB after the first lookup', async () => {
+      i18nLocaleCacheSpies.get.mockResolvedValueOnce(null);
+      vi.mocked(settingsRepository.findDefaultLocaleByOrganizationPublicId).mockResolvedValueOnce(
+        null,
+      );
+
+      await service.resolveDefaultLocaleForOrganization('org_unknown');
+
+      // The negative cache stops the existence-oracle path: every subsequent
+      // request for the same unknown org returns 'en' from Redis without
+      // ever touching the SECURITY DEFINER function.
+      expect(i18nLocaleCacheSpies.set).toHaveBeenCalledWith('org_unknown', 'en');
+    });
+  });
+
+  describe('update — sec-M1 cache invalidation', () => {
+    it('invalidates the i18n locale cache when default_locale is changed', async () => {
+      await service.update('org_public_abc', { default_locale: 'es' }, undefined);
+      expect(i18nLocaleCacheSpies.invalidate).toHaveBeenCalledWith('org_public_abc');
+    });
+
+    it('does NOT invalidate when default_locale is absent from the patch', async () => {
+      i18nLocaleCacheSpies.invalidate.mockClear();
+      await service.update('org_public_abc', { is_email_notifications_enabled: false }, undefined);
+      expect(i18nLocaleCacheSpies.invalidate).not.toHaveBeenCalled();
     });
   });
 
