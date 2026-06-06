@@ -248,10 +248,17 @@ export class NotificationRepository {
   }
 }
 
-/** Worker-only factory — requires an explicit handle from `withOrganizationContext`. */
+/**
+ * Worker-only factory — requires an explicit handle pinned by one of the supported
+ * worker database contexts: `organization` (tenant-scoped notifications),
+ * `global_admin` (sec-D #10 SECURITY DEFINER user-id lookup for tenant-less
+ * notifications), `user` (sec-D #10 narrow per-user load for tenant-less
+ * notifications), or `global_retention_cleanup` (retained for backward-compat with
+ * pre-sec-re-01 wiring; no longer produced by the dispatch worker).
+ */
 export function createWorkerNotificationRepository(
   databaseHandle: WorkerDatabaseHandle,
 ): NotificationRepository {
-  assertWorkerDatabaseContext(['organization', 'global_retention_cleanup']);
+  assertWorkerDatabaseContext(['organization', 'global_admin', 'user', 'global_retention_cleanup']);
   return new NotificationRepository(databaseHandle);
 }
