@@ -21,15 +21,24 @@ export const stripeWebhookIngressPlugin: FastifyPluginAsync = async (application
       throw new ValidationError('errors:missingStripeSignature');
     }
 
+    // sec-B finding #7: the prior `Buffer.from(JSON.stringify(request.body))` fallback
+    // was dead code at best (re-stringified JSON CANNOT produce a byte-identical body
+    // for HMAC verification — key order, whitespace, escape sequences all diverge),
+    // and at worst masked the real bug: the route's `bodyLimit` / content-type-parser
+    // wiring failed to populate `request.rawBody`. With the fallback removed, a wiring
+    // bug fails closed AT THE FIRST REQUEST instead of silently rejecting every
+    // production webhook for the 3-day Stripe retry window.
+    //
+    // The Buffer-typed body branch is retained because Fastify's
+    // `addContentTypeParser('application/json', { parseAs: 'buffer' }, ...)` populates
+    // `request.body` with the raw Buffer for routes flagged via `routeOptions.config`
+    // (see `stripe-webhook.routes.ts`). The string branch handles a downstream parser
+    // that decodes the buffer to a string before reaching the preHandler.
     let parsedBody: Buffer | undefined;
     if (Buffer.isBuffer(request.body)) {
       parsedBody = request.body;
     } else if (typeof request.body === 'string') {
       parsedBody = Buffer.from(request.body);
-    } else if (request.body === undefined) {
-      parsedBody = undefined;
-    } else {
-      parsedBody = Buffer.from(JSON.stringify(request.body));
     }
     const rawBody = request.rawBody ?? parsedBody;
     if (!rawBody) {

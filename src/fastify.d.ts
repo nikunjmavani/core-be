@@ -14,6 +14,14 @@ import type Stripe from 'stripe';
 declare module 'fastify' {
   interface FastifyContextConfig {
     idempotencyRequired?: boolean;
+    /**
+     * sec-B finding #7: routes set this flag to request that the global
+     * content-type parser capture the raw body buffer onto `request.rawBody`
+     * for HMAC signature verification. The Stripe webhook routes plugin reads
+     * this flag in its `onRoute` hook and populates the raw-body URL registry
+     * read by the parser at request time.
+     */
+    captureRawBody?: boolean;
   }
 
   interface FastifyRequest {

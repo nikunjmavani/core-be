@@ -103,6 +103,20 @@ export class StripeWebhookEventRepository {
 
   /**
    * Re-claim a failed or stuck-processing ledger row for retry.
+   *
+   * @remarks
+   * Three reclaim conditions are recognised:
+   *   1. status='failed' — a prior worker attempt threw; safe to retry.
+   *   2. status='processing' AND updated_at older than the stuck-lease window — a
+   *      worker that was processing this row has likely crashed or stalled; safe
+   *      to retry (the previous worker's writes will fail-on-RETURNING once it
+   *      revives).
+   *   3. status='processing' AND attempt_count=0 — sec-B finding #6: the HTTP
+   *      ingress committed the durability row but the worker is the first to
+   *      actually dispatch. Atomicity of the UPDATE (which bumps attempt_count
+   *      to 1) guarantees only one worker can win this transition; a concurrent
+   *      retry that arrived seconds later will see attempt_count=1 and
+   *      updated_at fresh, neither matches, and gets `still_processing_within_lease`.
    */
   async tryReclaimEvent(stripe_event_id: string): Promise<boolean> {
     const stuckProcessingBefore = new Date(
@@ -126,6 +140,10 @@ export class StripeWebhookEventRepository {
             and(
               eq(stripe_webhook_events.processing_status, 'processing'),
               lt(stripe_webhook_events.updated_at, stuckProcessingBefore),
+            ),
+            and(
+              eq(stripe_webhook_events.processing_status, 'processing'),
+              eq(stripe_webhook_events.attempt_count, 0),
             ),
           ),
         ),

@@ -12,7 +12,7 @@ import {
   updateStripeSubscription,
 } from '@/infrastructure/payment/stripe.client.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import { ServiceUnavailableError } from '@/shared/errors/index.js';
+import { ConfigurationError, ServiceUnavailableError } from '@/shared/errors/index.js';
 import { env } from '@/shared/config/env.config.js';
 
 /**
@@ -33,12 +33,30 @@ import { env } from '@/shared/config/env.config.js';
  * already have a verified outbound sender — no new env variable is required.
  * The org public id is embedded so admin tooling can map a stuck Stripe email
  * back to a local organization at a glance.
+ *
+ * sec-B finding #19: the prior fallback to a `*@invalid` literal silently
+ * accepted a misconfigured environment — Stripe receipts, dunning, and refund
+ * notifications would land on a reserved-TLD address (RFC 6761) and bounce
+ * permanently. The cross-field env-schema refine (Stripe ⇒ `EMAIL_FROM_ADDRESS`)
+ * is the canonical guard; this throw is the boot-time-late fallback so a future
+ * loosening of the refine still fails closed rather than silently fanning
+ * `@invalid` customers into Stripe.
  */
 function buildStripeCustomerEmail(organizationPublicId: string): string {
   const fromAddress = env.EMAIL_FROM_ADDRESS;
-  const atIndex = fromAddress?.lastIndexOf('@') ?? -1;
-  const domain = atIndex >= 0 ? fromAddress!.slice(atIndex + 1) : 'invalid';
-  return `billing+${organizationPublicId}@${domain}`;
+  if (!fromAddress) {
+    throw new ConfigurationError(
+      'EMAIL_FROM_ADDRESS must be configured before creating Stripe customers — otherwise ' +
+        'Stripe receipts/dunning land on an unowned domain.',
+    );
+  }
+  const atIndex = fromAddress.lastIndexOf('@');
+  if (atIndex < 0) {
+    throw new ConfigurationError(
+      `EMAIL_FROM_ADDRESS=${fromAddress} is not a valid email — cannot derive Stripe customer domain.`,
+    );
+  }
+  return `billing+${organizationPublicId}@${fromAddress.slice(atIndex + 1)}`;
 }
 
 /**
