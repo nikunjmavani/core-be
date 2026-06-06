@@ -49,4 +49,4 @@ api patch /api/v1/users/me/settings request property `preferred_locales` max ite
 #    structurally-identical decoy challenge for unknown emails. Making `email`
 #    required at the DTO matches the production behaviour (webauthn.validator.unit.test.ts
 #    + webauthn.service.authenticate-options.unit.test.ts pin this).
-api post /api/v1/auth/webauthn/authenticate/options request property `email` became required
+api post /api/v1/auth/webauthn/authenticate/options the request property `email` became required
