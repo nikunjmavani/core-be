@@ -190,5 +190,76 @@ describe('MemberRolePermissionService', () => {
         null,
       );
     });
+
+    // sec-T2 — held-permissions-on-remove. A `ROLE_MANAGE` holder must not be
+    // able to strip permissions from a role they themselves do not hold; that
+    // would let a delegated role-manager downgrade a higher-privileged role
+    // (e.g. wiping every Admin perm via empty-array PUT, or selectively pulling
+    // `subscription:manage` from a Finance role they don't sit on). Service
+    // passes the UNION of added + removed codes to the grant-guard so the
+    // caller must hold every code involved in either direction.
+    it('checks every code being removed (empty PUT against role with current perms)', async () => {
+      vi.mocked(memberRolePermissionRepository.findByRoleId).mockResolvedValueOnce([
+        { permission_code: 'subscription:manage' },
+        { permission_code: 'tenancy:write' },
+      ] as never);
+
+      await service.put('org_public_abc', 'role_public', { permission_codes: [] }, 'admin_public');
+
+      // Empty-PUT means the caller is removing both currently-held codes; the
+      // guard must therefore receive both — not the empty array — so caller
+      // entitlement is verified for the wipe.
+      expect(assertCallerCanGrantPermissionCodes).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callerUserPublicId: 'admin_public',
+          organizationPublicId: 'org_public_abc',
+          requestedPermissionCodes: expect.arrayContaining([
+            'subscription:manage',
+            'tenancy:write',
+          ]),
+        }),
+      );
+      const passedCodes = vi
+        .mocked(assertCallerCanGrantPermissionCodes)
+        .mock.calls.at(-1)?.[0].requestedPermissionCodes;
+      expect(passedCodes).toHaveLength(2);
+    });
+
+    it('passes the union of added-and-removed codes (partial replace)', async () => {
+      vi.mocked(memberRolePermissionRepository.findByRoleId).mockResolvedValueOnce([
+        { permission_code: 'tenancy:read' },
+        { permission_code: 'subscription:manage' },
+      ] as never);
+
+      await service.put(
+        'org_public_abc',
+        'role_public',
+        { permission_codes: ['tenancy:read', 'audit:write'] },
+        'admin_public',
+      );
+
+      const passedCodes = vi
+        .mocked(assertCallerCanGrantPermissionCodes)
+        .mock.calls.at(-1)?.[0].requestedPermissionCodes;
+      // tenancy:read kept (carried over via the new set), audit:write being
+      // added, subscription:manage being removed → all three must be in the
+      // union the caller is verified against.
+      expect(passedCodes).toEqual(
+        expect.arrayContaining(['tenancy:read', 'audit:write', 'subscription:manage']),
+      );
+      expect(passedCodes).toHaveLength(3);
+    });
+
+    it('passes an empty array to the guard when role has no perms AND PUT is empty (no-op)', async () => {
+      vi.mocked(memberRolePermissionRepository.findByRoleId).mockResolvedValueOnce([] as never);
+
+      await service.put('org_public_abc', 'role_public', { permission_codes: [] }, 'admin_public');
+
+      expect(assertCallerCanGrantPermissionCodes).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestedPermissionCodes: [],
+        }),
+      );
+    });
   });
 });
