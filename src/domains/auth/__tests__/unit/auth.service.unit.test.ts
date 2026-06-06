@@ -183,6 +183,41 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
+  it('login uses the SAME error message for unknown email, wrong password, and currently-locked-out wrong password (sec-A #23)', async () => {
+    // Prior code returned `errors:accountLocked` when (email is real) AND (password is
+    // wrong) AND (lockout is active) — a narrow enumeration oracle a credential-stuffing
+    // operator could use to confirm "this account has recently received >=
+    // MAX_FAILED_LOGIN_ATTEMPTS failed logins". The fix collapses the message to the
+    // generic invalidEmailOrPassword for all three branches.
+    const { verifyPassword } = await import('@/shared/utils/security/password.util.js');
+
+    // Unknown email → invalidEmailOrPassword
+    vi.mocked(userService.findByEmail).mockResolvedValueOnce(null as never);
+    await expect(
+      service.login({ email: 'unknown@example.com', password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toMatchObject({ messageKey: 'errors:invalidEmailOrPassword' });
+
+    // Real email, wrong password, NO lockout → invalidEmailOrPassword
+    vi.mocked(userService.findByEmail).mockResolvedValueOnce({
+      ...user,
+      account_locked_until: null,
+    } as never);
+    vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
+    await expect(
+      service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toMatchObject({ messageKey: 'errors:invalidEmailOrPassword' });
+
+    // Real email, wrong password, ACTIVE lockout → invalidEmailOrPassword (no oracle)
+    vi.mocked(userService.findByEmail).mockResolvedValueOnce({
+      ...user,
+      account_locked_until: new Date(Date.now() + 60_000),
+    } as never);
+    vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
+    await expect(
+      service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toMatchObject({ messageKey: 'errors:invalidEmailOrPassword' });
+  });
+
   it('login lets a correct password bypass an active lockout (no victim-account DoS)', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue({
       ...user,

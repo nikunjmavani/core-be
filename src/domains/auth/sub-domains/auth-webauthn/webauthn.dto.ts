@@ -1,10 +1,17 @@
 import { z } from 'zod';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
-/** Zod schema for the `POST /api/v1/auth/webauthn/authenticate/options` request body — optional `email` to scope the credential discovery. */
+/**
+ * Zod schema for the `POST /api/v1/auth/webauthn/authenticate/options` request body —
+ * requires an `email` to scope the credential discovery. The service equalises unknown
+ * accounts (and known accounts without credentials) via a deterministic decoy challenge so
+ * the response does not reveal whether the email maps to a real account; making `email`
+ * required at the DTO layer keeps the contract honest (the service throws an enumeration
+ * oracle when `email` is absent — a present-vs-absent oracle that bypasses the decoy path).
+ */
 export const webauthnAuthenticateOptionsDto = z
   .object({
-    email: trimmedStringMinMax(3, 320).pipe(z.email()).optional(),
+    email: trimmedStringMinMax(3, 320).pipe(z.email()),
   })
   .strict();
 

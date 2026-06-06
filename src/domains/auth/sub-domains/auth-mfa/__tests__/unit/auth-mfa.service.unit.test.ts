@@ -22,6 +22,7 @@ vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
 vi.mock('@/domains/auth/auth.validator.js', () => ({
   validateMfaVerify: (body: unknown) => body,
   validateMfaEnroll: (body: unknown) => body,
+  validateMfaEnrollConfirm: (body: unknown) => body,
   validateMfaLoginVerify: (body: unknown) => body,
 }));
 
@@ -32,6 +33,14 @@ vi.mock('@/domains/auth/sub-domains/auth-mfa-session/auth-mfa-session.js', () =>
 
 vi.mock('@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js', () => ({
   consumeMfaRecoveryCode: vi.fn().mockResolvedValue(false),
+  hashMfaRecoveryCode: (plain: string) => `HASHED:${plain}`,
+  insertMfaRecoveryCodes: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.util.js', () => ({
+  generateMfaRecoveryCodes: vi.fn((count: number) =>
+    Array.from({ length: count }, (_value, index) => `RECOVERY${index + 1}`),
+  ),
 }));
 
 vi.mock('@/shared/utils/security/field-secret-encryption.util.js', () => ({
@@ -75,6 +84,7 @@ describe('MfaService', () => {
   const redis = {
     set: vi.fn().mockResolvedValue('OK'),
     get: vi.fn(),
+    getdel: vi.fn().mockResolvedValue(null),
     del: vi.fn().mockResolvedValue(1),
   };
 
@@ -146,17 +156,77 @@ describe('MfaService', () => {
     );
   });
 
-  it('enroll creates TOTP method', async () => {
-    const result = await service.enroll('user_public', { method_type: 'MFA_TOTP' });
+  it('enrollInit stages the secret in Redis without persisting an auth_methods row or flipping is_mfa_enabled', async () => {
+    // sec-A finding #3: phase 1 of the two-phase ceremony. The secret/provisioning URI
+    // are returned to the caller but NOTHING is written to Postgres until phase 2
+    // confirms a fresh code. The prior single-step `enroll` flipped is_mfa_enabled
+    // immediately, locking users out when transcription failed.
+    const result = await service.enrollInit('user_public', { method_type: 'MFA_TOTP' });
     expect(result.secret).toBe('TESTSECRET');
-    expect(result.method_id).toBe(99);
-    expect(userService.updateMfaEnabled).toHaveBeenCalledWith('user_public', true);
+    expect(result.provisioning_uri).toContain('otpauth://');
+    expect(redis.set).toHaveBeenCalledWith(
+      expect.stringMatching(/^mfa:enroll:/),
+      expect.any(String),
+      'EX',
+      expect.any(Number),
+    );
+    expect(authMethodService.createAuthMethodRecord).not.toHaveBeenCalled();
+    expect(userService.updateMfaEnabled).not.toHaveBeenCalled();
   });
 
-  it('enroll rejects non-TOTP method types', async () => {
-    await expect(service.enroll('user_public', { method_type: 'MFA_SMS' })).rejects.toBeInstanceOf(
+  it('enrollInit rejects non-TOTP method types', async () => {
+    await expect(
+      service.enrollInit('user_public', { method_type: 'MFA_SMS' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(redis.set).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^mfa:enroll:/),
+      expect.anything(),
+      'EX',
+      expect.anything(),
+    );
+  });
+
+  it('enrollConfirm persists the auth_methods row, mints recovery codes, and flips is_mfa_enabled on a verified code', async () => {
+    const { insertMfaRecoveryCodes } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
+    );
+    const { generateMfaRecoveryCodes } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.util.js'
+    );
+    // GETDEL returns the staged (encrypted) secret atomically.
+    redis.getdel.mockResolvedValueOnce('TESTSECRET');
+
+    const result = await service.enrollConfirm('user_public', { code: '123456' });
+
+    expect(redis.getdel).toHaveBeenCalledWith(expect.stringMatching(/^mfa:enroll:/));
+    expect(authMethodService.createAuthMethodRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ method_type: 'MFA_TOTP' }),
+    );
+    expect(insertMfaRecoveryCodes).toHaveBeenCalledTimes(1);
+    expect(generateMfaRecoveryCodes).toHaveBeenCalledTimes(1);
+    expect(userService.updateMfaEnabled).toHaveBeenCalledWith('user_public', true);
+    expect(result.method_id).toBe(99);
+    expect(result.recovery_codes).toHaveLength(10);
+  });
+
+  it('enrollConfirm rejects when no staged secret is present (expired or never started)', async () => {
+    redis.getdel.mockResolvedValueOnce(null);
+    await expect(service.enrollConfirm('user_public', { code: '123456' })).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
+    expect(authMethodService.createAuthMethodRecord).not.toHaveBeenCalled();
+    expect(userService.updateMfaEnabled).not.toHaveBeenCalled();
+  });
+
+  it('enrollConfirm rejects when the submitted code does not verify against the staged secret', async () => {
+    const otp = await import('otplib');
+    vi.mocked(otp.verify).mockResolvedValueOnce({ valid: false });
+    redis.getdel.mockResolvedValueOnce('TESTSECRET');
+    await expect(service.enrollConfirm('user_public', { code: '000000' })).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
+    expect(authMethodService.createAuthMethodRecord).not.toHaveBeenCalled();
+    expect(userService.updateMfaEnabled).not.toHaveBeenCalled();
   });
 
   it('verifyLoginMfa rejects a replayed TOTP code within its window', async () => {
@@ -262,9 +332,9 @@ describe('MfaService', () => {
     await expect(service.listMfaMethods('missing')).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
-  it('enroll rejects when user record is missing', async () => {
+  it('enrollInit rejects when user record is missing', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
-    await expect(service.enroll('missing', { method_type: 'MFA_TOTP' })).rejects.toBeInstanceOf(
+    await expect(service.enrollInit('missing', { method_type: 'MFA_TOTP' })).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
   });

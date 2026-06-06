@@ -124,7 +124,11 @@ describe('createAuthController', () => {
 
   const mfaService = {
     verify: vi.fn().mockResolvedValue({ verified: true }),
-    enroll: vi.fn().mockResolvedValue({ secret: 'secret', provisioning_uri: 'uri', method_id: 1 }),
+    // sec-A finding #3: two-phase enrollment. `enrollInit` stages the secret in Redis and
+    // returns only `{ secret, provisioning_uri }`; `enrollConfirm` verifies a code and
+    // returns the freshly minted plaintext recovery codes plus the method_id.
+    enrollInit: vi.fn().mockResolvedValue({ secret: 'secret', provisioning_uri: 'uri' }),
+    enrollConfirm: vi.fn().mockResolvedValue({ recovery_codes: ['CODE1', 'CODE2'], method_id: 1 }),
     verifyLoginMfa: vi.fn().mockResolvedValue({
       access_token: 'token',
       session_public_id: 'session',
@@ -219,6 +223,8 @@ describe('createAuthController', () => {
   it('MFA handlers delegate to mfa service', async () => {
     const loginReply = mockReply();
     await controller.enrollMfa(mockRequest({ body: { method_type: 'MFA_TOTP' } }), mockReply());
+    // sec-A finding #3: confirm is a separate handler at POST /auth/mfa/enroll/confirm.
+    await controller.confirmEnrollMfa(mockRequest({ body: { code: '123456' } }), mockReply());
     await controller.verifyMfa(mockRequest({ body: { code: '123456' } }), mockReply());
     await controller.verifyMfaLogin(
       mockRequest({ body: { mfa_session_token: 'session-token', totp_code: '123456' } }),
@@ -227,7 +233,8 @@ describe('createAuthController', () => {
     await controller.listMfaMethods(mockRequest(), mockReply());
     const deleteReply = mockReply();
     await controller.deleteMfa(mockRequest({ params: { mfaMethodId: '5' } }), deleteReply);
-    expect(mfaService.enroll).toHaveBeenCalled();
+    expect(mfaService.enrollInit).toHaveBeenCalled();
+    expect(mfaService.enrollConfirm).toHaveBeenCalled();
     expect(mfaService.verifyLoginMfa).toHaveBeenCalled();
     expect(deleteReply.code).toHaveBeenCalledWith(204);
   });

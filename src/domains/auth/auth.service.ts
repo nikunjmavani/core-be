@@ -155,12 +155,18 @@ export class AuthService {
         lockoutMinutes: ACCOUNT_LOCKOUT_MINUTES,
       });
       await this.recordIpFailedLogin(ipAddress);
-      // Surface accountLocked only when the credential was ALSO wrong (a correct password
-      // would have bypassed the lock above), so the lock status is never an oracle for a
-      // valid email and the lockout cannot be weaponized against the legitimate user.
-      throw new UnauthorizedError(
-        isLockedOut ? 'errors:accountLocked' : 'errors:invalidEmailOrPassword',
-      );
+      // sec-A finding #23: surface a UNIFORM error message for unknown-email, wrong-
+      // password, and currently-locked-out wrong-password. The prior code returned
+      // `errors:accountLocked` only when the email was real AND inside the lockout
+      // window AND the password was wrong — a narrow enumeration oracle that a
+      // credential-stuffing operator could use to confirm "this account has recently
+      // received >= MAX_FAILED_LOGIN_ATTEMPTS failed logins". The lockout itself is
+      // still observable server-side via the structured log below for ops/security
+      // dashboards; the client sees the same response regardless of state.
+      if (isLockedOut) {
+        logger.info({ user_public_id: user.public_id }, 'auth.login.attempt_during_lockout');
+      }
+      throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
     // First factor verified — refuse to issue (or escalate to MFA for) a session

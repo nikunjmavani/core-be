@@ -79,14 +79,23 @@ describe('AuthSerializer', () => {
     expect(AuthSerializer.message(payload)).toBe(payload);
   });
 
-  it('mfaEnroll and oauthProviders return structured data', () => {
+  it('mfaEnroll, mfaEnrollConfirm, and oauthProviders return structured data', () => {
+    // sec-A finding #3: mfaEnroll is now phase 1 of a two-phase ceremony and no longer
+    // returns method_id (no DB row exists at this point); phase 2 (`mfaEnrollConfirm`)
+    // returns the freshly-minted recovery codes plus method_id.
     expect(
       AuthSerializer.mfaEnroll({
         secret: 'secret',
         provisioning_uri: 'otpauth://',
-        method_id: 1,
       }),
-    ).toMatchObject({ secret: 'secret', method_id: 1 });
+    ).toMatchObject({ secret: 'secret', provisioning_uri: 'otpauth://' });
+
+    expect(
+      AuthSerializer.mfaEnrollConfirm({
+        recovery_codes: ['CODE1', 'CODE2', 'CODE3'],
+        method_id: 99,
+      }),
+    ).toEqual({ recovery_codes: ['CODE1', 'CODE2', 'CODE3'], method_id: 99 });
 
     expect(AuthSerializer.oauthProviders({ providers: ['google'] })).toEqual({
       providers: ['google'],

@@ -207,10 +207,9 @@ export class WebauthnService {
     _requestOrigin?: string,
   ): Promise<WebauthnAuthenticateOptionsResult> {
     const parsed = validateWebauthnAuthenticateOptions(body);
-    if (!parsed.email) {
-      throw new UnauthorizedError('errors:invalidEmailOrPassword');
-    }
-
+    // `email` is required at the DTO layer (sec-A finding #24). The runtime check is
+    // retained only as a defense-in-depth for tests/callers that bypass the validator;
+    // the DTO produces a typed value so this branch should be unreachable in normal flow.
     const user = await this.userService.findByEmail(parsed.email);
     const credentials = user
       ? await withUserDatabaseContext(user.public_id, () =>

@@ -107,6 +107,7 @@
   "mfaNotTotpMethod": "Not an MFA method",
   "mfaRevokeFailed": "Failed to revoke MFA method",
   "mfaOnlyTotpSupported": "Only MFA_TOTP is supported",
+  "mfaEnrollExpired": "MFA enrollment has expired or was not started. Please restart the enrollment flow.",
   "insufficientRolePrivileges": "Insufficient role privileges",
   "organizationContextRequired": "Organization context required",
   "insufficientOrganizationPermissions": "Insufficient organization permissions",

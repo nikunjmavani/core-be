@@ -34,13 +34,24 @@ export function createAuthMfaHandlers({ mfaService }: AuthMfaHandlersDependencie
     },
     enrollMfa: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const data = await mfaService.enroll(auth.userId, request.body);
+      const data = await mfaService.enrollInit(auth.userId, request.body);
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,
-        action: 'auth.mfa.enroll',
+        action: 'auth.mfa.enroll_init',
         resource_type: 'mfa_method',
       });
       return successResponse(AuthSerializer.mfaEnroll(data), getRequestIdentifier(request));
+    },
+    confirmEnrollMfa: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      const data = await mfaService.enrollConfirm(auth.userId, request.body);
+      await recordScopedAuditEvent(request, {
+        actorUserPublicId: auth.userId,
+        action: 'auth.mfa.enroll_confirm',
+        resource_type: 'mfa_method',
+        metadata: { mfa_method_id: data.method_id },
+      });
+      return successResponse(AuthSerializer.mfaEnrollConfirm(data), getRequestIdentifier(request));
     },
     deleteMfa: async (
       request: FastifyRequest<{ Params: { mfaMethodId: string } }>,

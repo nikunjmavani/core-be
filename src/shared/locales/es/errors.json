@@ -105,6 +105,7 @@
   "mfaNotTotpMethod": "No es un método MFA",
   "mfaRevokeFailed": "Error al revocar el método MFA",
   "mfaOnlyTotpSupported": "Solo se admite MFA_TOTP",
+  "mfaEnrollExpired": "La inscripción en MFA ha caducado o no se inició. Reinicia el flujo de inscripción.",
   "insufficientRolePrivileges": "Privilegios de rol insuficientes",
   "organizationContextRequired": "Contexto de organización requerido",
   "insufficientOrganizationPermissions": "Permisos de organización insuficientes",
