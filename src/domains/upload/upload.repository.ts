@@ -244,6 +244,31 @@ export class UploadRepository {
       .where(and(eq(uploads.organization_id, organization_id), isNull(uploads.deleted_at)));
   }
 
+  /**
+   * sec-UP8: keyset-paginated variant of {@link findActiveByOrganizationId},
+   * mirroring {@link findActiveByUserIdAfter}. Lets the offboarding hook stream
+   * an org's uploads in bounded batches so a large-tenant tombstone never
+   * loads an unbounded set into memory or serialises a thousand S3 round-trips.
+   */
+  async findActiveByOrganizationIdAfter(
+    organization_id: number,
+    after_id: number,
+    limit: number,
+  ): Promise<Pick<UploadRow, 'id' | 'file_key'>[]> {
+    return getRequestDatabase()
+      .select({ id: uploads.id, file_key: uploads.file_key })
+      .from(uploads)
+      .where(
+        and(
+          eq(uploads.organization_id, organization_id),
+          gt(uploads.id, after_id),
+          isNull(uploads.deleted_at),
+        ),
+      )
+      .orderBy(asc(uploads.id))
+      .limit(limit);
+  }
+
   async softDeleteAllByUserId(user_id: number): Promise<number> {
     const rows = await getRequestDatabase()
       .update(uploads)
