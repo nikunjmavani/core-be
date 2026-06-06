@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
@@ -94,6 +94,24 @@ export class NotificationRepository {
       .where(eq(organizations.id, organization_id))
       .limit(1);
     return rows[0]?.organizationPublicId ?? null;
+  }
+
+  /**
+   * sec-D #10: resolve the recipient's user public id from a notification id via the
+   * `notify.resolve_user_public_id_for_notification` SECURITY DEFINER function. Used by
+   * the notification dispatch worker to pin `withUserDatabaseContext` for NULL-organization
+   * notifications instead of the wider `app.global_retention_cleanup` retention scope.
+   * Returns null when the notification or recipient cannot be resolved (worker treats this
+   * as a hard error and throws).
+   */
+  async findUserPublicIdForNotificationDispatch(notification_id: number): Promise<string | null> {
+    const result = await this.db().execute(
+      sql`SELECT notify.resolve_user_public_id_for_notification(${notification_id}) AS user_public_id`,
+    );
+    const rows = (
+      Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])
+    ) as { user_public_id: string | null }[];
+    return rows[0]?.user_public_id ?? null;
   }
 
   async findByIdForDispatch(notification_id: number, organization_public_id: string | null) {

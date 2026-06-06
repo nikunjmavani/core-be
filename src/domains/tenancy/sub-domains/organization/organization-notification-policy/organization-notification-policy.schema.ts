@@ -55,7 +55,10 @@ export const organization_notification_policies = tenancySchema
         table.channel,
       ),
       index('idx_org_notif_policy_mandatory').on(table.organization_id, table.is_mandatory),
-      index('idx_org_notif_policy_muted').on(table.muted_until),
+      // sec-D #34: `idx_org_notif_policy_muted` was dropped by migration
+      // 20260607060000. After sec-D1 (writers normalize stale mutes to NULL),
+      // the column is either NULL or a future timestamp and no read path
+      // filters by it; the btree was pure dead weight on every upsert.
       check('chk_org_notif_channel', sql`${table.channel} IN ('EMAIL', 'SMS', 'PUSH', 'IN_APP')`),
       // sec-D1: the previous `chk_org_notif_muted` (volatile `now()` in a
       // CHECK) made the row IMMUTABLE once `muted_until` slipped into the

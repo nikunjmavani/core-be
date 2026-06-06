@@ -50,8 +50,14 @@ export const verification_tokens = authSchema
       created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     },
     (table) => [
-      index('idx_verification_tokens_token_hash').on(table.token_hash),
+      // sec-D #32: `token_hash` is already UNIQUE on the column (`.unique()` above
+      // provisions a unique btree). The prior non-unique
+      // `idx_verification_tokens_token_hash` was a redundant duplicate index
+      // dropped by 20260607040000.
       index('idx_verification_tokens_user_type').on(table.user_id, table.token_type),
+      // sec-D #11: covers the sec-D5 retention sweep
+      // (`DELETE WHERE expires_at < cutoff`). Added by 20260607010000.
+      index('idx_verification_tokens_expires_at').on(table.expires_at),
       pgPolicy('verification_tokens_application_access', {
         as: 'permissive',
         for: 'all',
