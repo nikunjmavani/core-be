@@ -80,6 +80,18 @@ export const listCursorPayloadSchema = z
     sort_value: z.string().optional(),
     public_id: z.string().min(1).max(21).optional(),
     id: z.number().int().positive().optional(),
+    /**
+     * sec-U12: SHA-256 (hex) of the normalized filter set that minted this
+     * cursor. Repositories that bind their filters to the cursor recompute
+     * the fingerprint per request and reject mismatches, so an admin cannot
+     * replay a cursor minted under filter set A against filter set B.
+     * Optional because most legacy callers don't bind; the audit-list path is
+     * the first opt-in.
+     */
+    filter_fingerprint: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
   })
   .strict();
 
@@ -97,6 +109,8 @@ export type ParsedListCursor = {
   sort_value?: string;
   public_id?: string;
   id?: number;
+  /** Optional SHA-256 fingerprint of the minting filter set (sec-U12). */
+  filter_fingerprint?: string;
 };
 
 /** Encodes a cursor payload as a URL-safe base64 string. */
@@ -133,6 +147,7 @@ export function parseListCursor(after: string | undefined): ParsedListCursor | n
       sort_value: opaque.sort_value,
       public_id: opaque.public_id,
       id: opaque.id,
+      filter_fingerprint: opaque.filter_fingerprint,
     });
   }
   return null;
@@ -144,6 +159,7 @@ export function createOpaqueCursorFromRow(row: {
   sort_value?: string;
   public_id?: string;
   id: number;
+  filter_fingerprint?: string;
 }): string {
   return encodeListCursor(
     omitUndefined({
@@ -151,6 +167,7 @@ export function createOpaqueCursorFromRow(row: {
       sort_value: row.sort_value,
       public_id: row.public_id,
       id: row.id,
+      filter_fingerprint: row.filter_fingerprint,
     }),
   );
 }
