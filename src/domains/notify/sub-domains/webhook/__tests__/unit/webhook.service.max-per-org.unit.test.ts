@@ -85,7 +85,11 @@ describe('WebhookService.create — per-organization cap (sec-N4)', () => {
     vi.mocked(webhookRepository.countActiveByOrganization).mockResolvedValue(5);
     await service.create(
       'org_public',
-      { url: 'https://example.com/hook', events: ['subscription.updated'], secret: 's' },
+      {
+        url: 'https://example.com/hook',
+        events: ['subscription.updated'],
+        secret: 'sixteenCharSecret',
+      },
       'user_public',
     );
     expect(webhookRepository.create).toHaveBeenCalledTimes(1);
@@ -96,7 +100,11 @@ describe('WebhookService.create — per-organization cap (sec-N4)', () => {
     await expect(
       service.create(
         'org_public',
-        { url: 'https://example.com/hook', events: ['subscription.updated'], secret: 's' },
+        {
+          url: 'https://example.com/hook',
+          events: ['subscription.updated'],
+          secret: 'sixteenCharSecret',
+        },
         'user_public',
       ),
     ).rejects.toBeInstanceOf(ConflictError);
@@ -108,7 +116,11 @@ describe('WebhookService.create — per-organization cap (sec-N4)', () => {
     await expect(
       service.create(
         'org_public',
-        { url: 'https://example.com/hook', events: ['subscription.updated'], secret: 's' },
+        {
+          url: 'https://example.com/hook',
+          events: ['subscription.updated'],
+          secret: 'sixteenCharSecret',
+        },
         'user_public',
       ),
     ).rejects.toBeInstanceOf(ConflictError);

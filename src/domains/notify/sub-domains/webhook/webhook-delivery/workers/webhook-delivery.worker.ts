@@ -188,7 +188,22 @@ async function deliverClaimedWebhook(options: {
   const payloadString = JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000);
   const signingSecret = decryptFieldSecret(encryptedSecret);
-  const signature = signPayload(signingSecret, payloadString, timestamp);
+  // sec-UP finding #8 (defense in depth): when the resolved signing secret is empty
+  // (a regression of the DTO bound, or a legacy row that pre-dates the fix), do NOT
+  // emit a signature header at all. The prior code computed
+  // `createHmac('sha256', '').update(...).digest('hex')` — Node accepts an empty
+  // key and emits a deterministic, attacker-reproducible value, so customers
+  // verifying the signature would accept any forged request signed with the same
+  // empty key. Omitting the header makes the unsigned state explicit and
+  // observable instead of fake-authentic.
+  const signature =
+    signingSecret.length > 0 ? signPayload(signingSecret, payloadString, timestamp) : null;
+  if (signature === null) {
+    logger.warn(
+      { webhookId, deliveryAttemptId, eventType },
+      'webhook.delivery.empty_signing_secret_skipping_signature_header',
+    );
+  }
 
   // sec-N8: dual-sign while inside the rotation overlap window so a customer
   // who has not yet rolled their verifier still sees a matching signature.
@@ -252,7 +267,9 @@ async function deliverClaimedWebhook(options: {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'X-Webhook-Signature': `t=${timestamp},v1=${signature}`,
+                ...(signature !== null
+                  ? { 'X-Webhook-Signature': `t=${timestamp},v1=${signature}` }
+                  : {}),
                 'X-Webhook-Event': eventType,
                 'X-Webhook-Timestamp': String(timestamp),
                 // sec-N3: stable per-delivery id (same BullMQ job, same attempt-

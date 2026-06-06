@@ -334,6 +334,24 @@ export async function setUploadStatusByInternalId(
     .where(eq(uploads.id, id));
 }
 
+/**
+ * sec-UP finding #20: worker-side equivalent of the HTTP confirm path's
+ * `markConfirmedByPublicId` — flips status to UPLOADED AND repoints `file_key`
+ * to the final (non-pending) key in a single UPDATE so a servable row never
+ * references the overwritable `pending/` namespace. Used by the pending-sweep
+ * auto-confirm path; mirrors the HTTP confirm invariant established by sec-UP1.
+ */
+export async function markConfirmedByInternalId(
+  databaseHandle: WorkerDatabaseHandle,
+  id: number,
+  finalFileKey: string,
+): Promise<void> {
+  await databaseHandle
+    .update(uploads)
+    .set({ status: 'UPLOADED', file_key: finalFileKey, updated_at: databaseNowTimestamp })
+    .where(eq(uploads.id, id));
+}
+
 /** Hard-deletes upload rows by internal id (caller must remove S3 objects first when needed). */
 export async function hardDeleteUploadsByInternalIds(
   databaseHandle: WorkerDatabaseHandle,
