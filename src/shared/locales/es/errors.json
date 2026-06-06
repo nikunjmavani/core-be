@@ -67,6 +67,7 @@
   "invalidOrExpiredVerificationToken": "Token de verificación no válido o caducado",
   "invalidOrExpiredMagicLink": "Enlace mágico no válido o caducado",
   "declineOwnInvitationOnly": "Solo puedes rechazar invitaciones enviadas a tu correo",
+  "invitationEmailMismatch": "Solo puedes aceptar invitaciones enviadas a tu correo",
   "organizationSlugExists": "Ya existe una organización con el slug \"{{slug}}\"",
   "roleNameExists": "Ya existe un rol con el nombre \"{{name}}\" en esta organización",
   "apiKeyRotationConflict": "Esta clave de API ya fue rotada o revocada por una solicitud concurrente; recarga e inténtalo de nuevo",

@@ -195,8 +195,23 @@ export class MemberInvitationService {
     });
   }
 
-  async accept(invitation_public_id: string, body: unknown): Promise<MemberInvitationOutput> {
+  async accept(
+    invitation_public_id: string,
+    body: unknown,
+    actingUserPublicId: string,
+  ): Promise<MemberInvitationOutput> {
     const parsed = validateAcceptMemberInvitation(body);
+    // sec-T4: previously accept was unauthenticated, so anyone with the
+    // invitation URL could flip the victim's pending membership to ACTIVE.
+    // Bind the acting user's email to the invitee email — mirrors the
+    // decline path which has always had this check.
+    if (!this.userService) {
+      throw new Error(
+        'UserService is not configured on MemberInvitationService. Wire it via tenancy.container.',
+      );
+    }
+    const actingUser = await this.userService.requireUserRecordByPublicId(actingUserPublicId);
+    if (!actingUser) throw new NotFoundError('User');
     /**
      * Public route: no org context up front. Resolve the owning org via the
      * SECURITY DEFINER lookup, then wrap the read + UPDATE in
@@ -208,6 +223,9 @@ export class MemberInvitationService {
     return withOrganizationDatabaseContext(lookup.organization_public_id, async () => {
       const row = await this.invitationRepository.findByPublicId(invitation_public_id);
       if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      if (row.email.toLowerCase() !== actingUser.email.toLowerCase()) {
+        throw new ForbiddenError('errors:invitationEmailMismatch');
+      }
       const tokenHash = hashInvitationToken(parsed.token);
       const now = new Date();
       assertInvitationAcceptable(row, now);
