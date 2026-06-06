@@ -101,7 +101,8 @@ describe('organization serializers', () => {
         'org-public',
       ),
     ).toMatchObject({
-      id: 1,
+      // sec-T5: serializer now emits the 21-char public id, not the bigserial.
+      id: 'policy-public',
       organization_id: 'org-public',
       notification_type: 'billing',
       channel: 'email',
