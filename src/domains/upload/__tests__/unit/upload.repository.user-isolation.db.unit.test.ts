@@ -56,11 +56,12 @@ describe('UploadRepository user/organization isolation (database)', () => {
     const afterDelete = await repository.findByPublicIdForUser(created.public_id, ownerUser.id);
     expect(afterDelete).toBeNull();
 
-    const findActive = await repository.findActiveByUserId(ownerUser.id);
+    // sec-D12: keyset variant; production callers always paginate.
+    const findActive = await repository.findActiveByUserIdAfter(ownerUser.id, 0, 100);
     expect(findActive.some((row) => row.id === created.id)).toBe(false);
   });
 
-  it('findActiveByOrganizationId only returns uploads scoped to that organization', async () => {
+  it('findActiveByOrganizationIdAfter only returns uploads scoped to that organization (sec-D12)', async () => {
     const ownerUser = await createTestUser({ email: 'org-isolation@example.com' });
     const organizationA = await createTestOrganization({ ownerUserId: ownerUser.id });
     const organizationB = await createTestOrganization({ ownerUserId: ownerUser.id });
@@ -98,13 +99,13 @@ describe('UploadRepository user/organization isolation (database)', () => {
       bucket: 'test-bucket',
     });
 
-    const activeInOrgA = await repository.findActiveByOrganizationId(organizationA.id);
+    const activeInOrgA = await repository.findActiveByOrganizationIdAfter(organizationA.id, 0, 100);
     const idsInOrgA = activeInOrgA.map((row) => row.id);
     expect(idsInOrgA).toContain(inOrgA.id);
     expect(idsInOrgA).not.toContain(inOrgB.id);
     expect(idsInOrgA).not.toContain(userScopedUpload.id);
 
-    const activeInOrgB = await repository.findActiveByOrganizationId(organizationB.id);
+    const activeInOrgB = await repository.findActiveByOrganizationIdAfter(organizationB.id, 0, 100);
     const idsInOrgB = activeInOrgB.map((row) => row.id);
     expect(idsInOrgB).toContain(inOrgB.id);
     expect(idsInOrgB).not.toContain(inOrgA.id);
