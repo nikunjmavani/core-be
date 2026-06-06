@@ -42,6 +42,9 @@ describe('AuthSessionService', () => {
     findByPublicId: vi
       .fn()
       .mockResolvedValue({ public_id: 'session_public', token_hash: 'old-hash' }),
+    findByPublicIdIncludingRevoked: vi
+      .fn()
+      .mockResolvedValue({ public_id: 'session_public', token_hash: 'old-hash' }),
     findActiveByTokenHash: vi.fn().mockResolvedValue({
       public_id: 'session_public',
       expires_at: new Date('2026-12-31T00:00:00.000Z'),
@@ -227,11 +230,15 @@ describe('AuthSessionService', () => {
   });
 
   it('refreshSessionCredentials revokes the entire session family when an old refresh secret is replayed (reuse detection)', async () => {
-    vi.mocked(sessionRepository.findByPublicId).mockResolvedValue({
+    // sec-A finding #9: the reuse-detection lookup now uses
+    // `findByPublicIdIncludingRevoked` so a stolen refresh secret replayed against
+    // an already-revoked session still triggers the family-wide kill / audit signal.
+    vi.mocked(sessionRepository.findByPublicIdIncludingRevoked).mockResolvedValue({
       public_id: 'session_public',
       user_id: user.id,
       token_hash: 'old-token-hash',
       refresh_token_hash: 'already-rotated-hash',
+      is_revoked: false,
     } as never);
     vi.mocked(sessionRepository.rotateSessionCredentials).mockResolvedValue(null as never);
     vi.mocked(sessionRepository.revokeAllByUserId).mockResolvedValue([
@@ -255,5 +262,31 @@ describe('AuthSessionService', () => {
     expect(sessionRepository.revokeAllByUserId).toHaveBeenCalledWith(user.id);
     expect(invalidateCachedSessionToken).toHaveBeenCalledWith('family-hash-a');
     expect(invalidateCachedSessionToken).toHaveBeenCalledWith('family-hash-b');
+  });
+
+  it('refreshSessionCredentials still raises the reuse-detection signal when the session is ALREADY revoked (sec-A #9)', async () => {
+    // The prior code filtered `is_revoked = false` in the lookup, so once the user had
+    // logged out everywhere the reuse-detection path silently no-op'd. We now include
+    // revoked rows in the lookup, emit the Sentry signal for forensics, and skip the
+    // re-revoke (the session is already revoked — re-revoking would be a no-op).
+    vi.mocked(sessionRepository.findByPublicIdIncludingRevoked).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: user.id,
+      token_hash: 'old-token-hash',
+      refresh_token_hash: 'already-rotated-hash',
+      is_revoked: true,
+    } as never);
+    vi.mocked(sessionRepository.rotateSessionCredentials).mockResolvedValue(null as never);
+
+    await expect(
+      service.refreshSessionCredentials({
+        sessionPublicId: 'session_public',
+        refreshSecret: 'stolen-old-secret',
+        nextAccessToken: 'next-access-token',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+
+    // The session is already revoked — do NOT call revokeAllByUserId a second time.
+    expect(sessionRepository.revokeAllByUserId).not.toHaveBeenCalled();
   });
 });

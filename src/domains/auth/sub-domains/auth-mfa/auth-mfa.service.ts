@@ -17,7 +17,9 @@ import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/a
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import {
+  MFA_RECOVERY_CODE_COUNT,
   MFA_TOTP_CODE_REPLAY_TTL_SECONDS,
+  MFA_TOTP_ENROLLMENT_STAGE_TTL_SECONDS,
   MFA_TOTP_TOLERANCE_STEPS,
   TOTP_STEP_SECONDS,
 } from '@/shared/constants/index.js';
@@ -25,19 +27,32 @@ import { TOTP_ISSUER } from '@/shared/constants/project-identity.constants.js';
 import {
   validateMfaVerify,
   validateMfaEnroll,
+  validateMfaEnrollConfirm,
   validateMfaLoginVerify,
 } from '@/domains/auth/auth.validator.js';
 import {
   createMfaSession,
   verifyMfaSession,
 } from '@/domains/auth/sub-domains/auth-mfa-session/auth-mfa-session.js';
-import { consumeMfaRecoveryCode } from './auth-mfa-recovery-code.repository.js';
+import {
+  consumeMfaRecoveryCode,
+  hashMfaRecoveryCode,
+  insertMfaRecoveryCodes,
+} from './auth-mfa-recovery-code.repository.js';
+import { generateMfaRecoveryCodes } from './auth-mfa-recovery-code.util.js';
 
 const ERROR_KEY_MFA_USER_NOT_FOUND = 'errors:mfaUserNotFound';
 const ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE = 'errors:mfaInvalidOrExpiredCode';
 
 /** Redis key prefix marking a TOTP code consumed by a user, used to reject replay within its validity window. */
 const MFA_TOTP_CONSUMED_KEY_PREFIX = 'mfa:totp:consumed:';
+
+/**
+ * Redis key prefix for the staged TOTP enrollment secret keyed by user public id
+ * (sec-A finding #3 — two-phase enrollment). The encrypted secret lives here until
+ * `enrollConfirm` consumes it atomically via `GETDEL`.
+ */
+const MFA_TOTP_ENROLLMENT_STAGE_KEY_PREFIX = 'mfa:enroll:';
 
 /**
  * TOTP-based MFA and recovery-code orchestrator for the auth domain.
@@ -213,11 +228,29 @@ export class MfaService {
     return { verified: true };
   }
 
-  /** Enroll MFA (TOTP) for the current user. Returns secret and provisioning URI. */
-  async enroll(
+  /**
+   * Phase 1 of the two-phase MFA TOTP enrollment ceremony (sec-A finding #3).
+   *
+   * @remarks
+   * Generates a fresh otplib secret, stages it in Redis (encrypted at rest) under a
+   * per-user key with `MFA_TOTP_ENROLLMENT_STAGE_TTL_SECONDS`, and returns the
+   * plaintext secret + provisioning URI to the caller. **Nothing is written to
+   * Postgres** and `is_mfa_enabled` is **NOT** flipped — the user has not yet
+   * proved their authenticator can produce a valid code from this secret. The
+   * matching `POST /auth/mfa/enroll/confirm` request consumes the staged secret,
+   * verifies a fresh code, and only then atomically persists the auth_methods row,
+   * generates and hashes the recovery codes, and flips `is_mfa_enabled`. Without
+   * this proof-of-possession gate, a user who closes the dialog or mis-transcribes
+   * the secret can permanently lock themselves out of their account — in an MFA-
+   * required organization the lockout is absolute and requires admin SQL bypass.
+   *
+   * Re-running INIT before CONFIRM overwrites the staged secret (last-write wins),
+   * matching natural retry semantics.
+   */
+  async enrollInit(
     userPublicId: string,
     body: unknown,
-  ): Promise<{ secret: string; provisioning_uri: string; method_id: number }> {
+  ): Promise<{ secret: string; provisioning_uri: string }> {
     const parsed = validateMfaEnroll(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
@@ -230,19 +263,85 @@ export class MfaService {
       label: user.email,
       secret,
     });
-    const record = await withUserDatabaseContext(user.public_id, () =>
-      this.authMethodService.createAuthMethodRecord({
+    const stageKey = `${MFA_TOTP_ENROLLMENT_STAGE_KEY_PREFIX}${user.public_id}`;
+    await this.redis.set(
+      stageKey,
+      encryptFieldSecret(secret),
+      'EX',
+      MFA_TOTP_ENROLLMENT_STAGE_TTL_SECONDS,
+    );
+    return {
+      secret,
+      provisioning_uri: provisioningUri,
+    };
+  }
+
+  /**
+   * Phase 2 of the two-phase MFA TOTP enrollment ceremony (sec-A finding #3).
+   *
+   * @remarks
+   * Atomically pops the staged secret from Redis (`GETDEL`), verifies the submitted
+   * 6-digit code against it (with the same tolerance window as login-time verify),
+   * and on success persists the auth_methods row, generates {@link MFA_RECOVERY_CODE_COUNT}
+   * recovery codes, hashes them via SHA-256 and bulk-inserts the hashes, then flips
+   * `is_mfa_enabled`. Returns the plaintext recovery codes EXACTLY ONCE — the server
+   * never holds them again.
+   *
+   * Failure modes:
+   * - Stage key expired or missing → `errors:mfaEnrollExpired` (user must restart INIT)
+   * - Code does not verify → `errors:mfaInvalidOrExpiredCode` (stage was already
+   *   GETDEL'd; user must restart INIT, which is acceptable because the secret is
+   *   one-time-use and a wrong-code attempt is most often a fat-fingered transcription
+   *   that warrants regenerating to be safe)
+   */
+  async enrollConfirm(
+    userPublicId: string,
+    body: unknown,
+  ): Promise<{ recovery_codes: string[]; method_id: number }> {
+    const parsed = validateMfaEnrollConfirm(body);
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
+
+    const stageKey = `${MFA_TOTP_ENROLLMENT_STAGE_KEY_PREFIX}${user.public_id}`;
+    // GETDEL is atomic in Redis 6.2+; a single network round-trip prevents two
+    // concurrent confirm requests from both seeing the same staged secret.
+    const encryptedStagedSecret = await this.redis.getdel(stageKey);
+    if (!encryptedStagedSecret) {
+      throw new UnauthorizedError('errors:mfaEnrollExpired');
+    }
+
+    const secret = decryptFieldSecret(encryptedStagedSecret);
+    const result = await verify({
+      secret,
+      token: parsed.code,
+      epochTolerance: MFA_TOTP_TOLERANCE_STEPS * TOTP_STEP_SECONDS,
+    });
+    if (!result.valid) {
+      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
+    }
+
+    // Mark the code consumed so it can't double as both an enroll-verify and an
+    // immediate step-up verify within the replay window.
+    await this.rejectReplayedTotpCode(user.id, parsed.code);
+
+    const plaintextRecoveryCodes = generateMfaRecoveryCodes(MFA_RECOVERY_CODE_COUNT);
+    const recoveryCodeHashes = plaintextRecoveryCodes.map(hashMfaRecoveryCode);
+
+    const record = await withUserDatabaseContext(user.public_id, async () => {
+      const created = await this.authMethodService.createAuthMethodRecord({
         user_id: user.id,
         method_type: 'MFA_TOTP',
         encrypted_secret: encryptFieldSecret(secret),
         is_primary: false,
         created_by_user_id: user.id,
-      }),
-    );
+      });
+      await insertMfaRecoveryCodes(user.id, recoveryCodeHashes);
+      return created;
+    });
     await this.userService.updateMfaEnabled(user.public_id, true);
+
     return {
-      secret,
-      provisioning_uri: provisioningUri,
+      recovery_codes: plaintextRecoveryCodes,
       method_id: record.id,
     };
   }

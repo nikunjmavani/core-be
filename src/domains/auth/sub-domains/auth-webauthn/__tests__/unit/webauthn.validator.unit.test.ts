@@ -13,14 +13,17 @@ describe('webauthn.validator', () => {
       expect(result).toEqual({ email: 'user@example.com' });
     });
 
-    it('accepts an empty body (email is optional)', () => {
-      const result = validateWebauthnAuthenticateOptions({});
-      expect(result).toEqual({});
+    // sec-A finding #24: `email` is now required at the DTO layer. The prior "optional"
+    // contract was inconsistent with the service's enumeration-defense decoy path — the
+    // service threw a different error for missing-email than for unknown-email, leaking a
+    // present-vs-absent oracle that bypassed the decoy. Making `email` required at the
+    // schema layer keeps the contract honest.
+    it('throws ValidationError when email is omitted (required by DTO)', () => {
+      expect(() => validateWebauthnAuthenticateOptions({})).toThrow(ValidationError);
     });
 
-    it('accepts undefined body as empty object (email is optional)', () => {
-      const result = validateWebauthnAuthenticateOptions(undefined);
-      expect(result).toEqual({});
+    it('throws ValidationError when body is undefined', () => {
+      expect(() => validateWebauthnAuthenticateOptions(undefined)).toThrow(ValidationError);
     });
 
     it('throws ValidationError for empty string email', () => {

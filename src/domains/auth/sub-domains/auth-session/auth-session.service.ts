@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { NotFoundError, UnauthorizedError } from '@/shared/errors/index.js';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import { generateRefreshSecret } from '@/domains/auth/auth.http.util.js';
 import {
@@ -250,18 +251,36 @@ export class AuthSessionService {
       // secret is being replayed. Revoke the user's entire session family so a leaked refresh
       // token cannot be used to keep — or regain — access on any device (OAuth refresh-token
       // rotation reuse-detection per RFC 9700).
-      const reusedUserId = await withSessionPublicIdDatabaseContext(
+      //
+      // sec-A finding #9: include ALREADY-REVOKED rows in the lookup. A user who clicks
+      // "Log out everywhere" revokes the row but an attacker may still hold the stale
+      // refresh secret. Without including the revoked row in this lookup, the family-wide
+      // kill path silently no-ops and we lose the audit/Sentry signal exactly when it is
+      // most informative — "we already revoked this session and someone is still trying
+      // to use its refresh secret." We capture every refresh-secret mismatch to Sentry
+      // for breach detection, separate from whether we re-revoke.
+      const reuseDetection = await withSessionPublicIdDatabaseContext(
         sessionPublicId,
         async (_databaseHandle) => {
-          const existing = await this.sessionRepository.findByPublicId(sessionPublicId);
+          const existing =
+            await this.sessionRepository.findByPublicIdIncludingRevoked(sessionPublicId);
           if (existing?.refresh_token_hash && existing.refresh_token_hash !== currentRefreshHash) {
-            return existing.user_id;
+            return { userId: existing.user_id, wasAlreadyRevoked: existing.is_revoked };
           }
           return null;
         },
       );
-      if (reusedUserId !== null) {
-        await this.revokeAllSessionsForReusedRefreshSecret(reusedUserId);
+      if (reuseDetection !== null) {
+        captureMessage('auth.refresh_token.reuse_detected', {
+          level: 'warning',
+          extra: {
+            session_public_id: sessionPublicId,
+            was_already_revoked: reuseDetection.wasAlreadyRevoked,
+          },
+        });
+        if (!reuseDetection.wasAlreadyRevoked) {
+          await this.revokeAllSessionsForReusedRefreshSecret(reuseDetection.userId);
+        }
       }
       throw new UnauthorizedError('errors:invalidOrExpiredSession');
     }

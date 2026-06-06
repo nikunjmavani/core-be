@@ -58,8 +58,17 @@ export const AuthSerializer = {
   message(data: { message: string }) {
     return data;
   },
-  mfaEnroll(data: { secret: string; provisioning_uri: string; method_id: number }) {
-    return data;
+  mfaEnroll(data: { secret: string; provisioning_uri: string }) {
+    return {
+      secret: data.secret,
+      provisioning_uri: data.provisioning_uri,
+    };
+  },
+  mfaEnrollConfirm(data: { recovery_codes: string[]; method_id: number }) {
+    return {
+      recovery_codes: data.recovery_codes,
+      method_id: data.method_id,
+    };
   },
   oauthProviders(data: { providers: string[] }) {
     return data;

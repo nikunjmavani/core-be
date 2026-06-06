@@ -80,6 +80,25 @@ export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = (MFA_TOTP_TOLERANCE_STEPS + 2) *
 /** WebAuthn ceremony challenge lifetime in Redis (seconds). */
 export const WEBAUTHN_CHALLENGE_TTL_SECONDS = MFA_SESSION_TTL_SECONDS;
 
+/**
+ * Lifetime of a staged MFA TOTP enrollment secret in Redis (seconds).
+ *
+ * @remarks
+ * The two-phase enrollment ceremony (sec-A finding #3) stores the encrypted TOTP seed
+ * under a per-user Redis key after `POST /auth/mfa/enroll`. The user has this window to
+ * scan the QR, configure their authenticator, and POST a verified code at
+ * `/auth/mfa/enroll/confirm`. Long enough for a careful user; short enough that an
+ * abandoned enrollment evicts cheaply. 10 minutes mirrors the OAuth state window
+ * ({@link OAUTH_STATE_TTL_SECONDS}).
+ */
+export const MFA_TOTP_ENROLLMENT_STAGE_TTL_SECONDS = 600;
+
+/** Number of one-time recovery codes minted on a successful MFA TOTP enroll confirm. */
+export const MFA_RECOVERY_CODE_COUNT = 10;
+
+/** Character length of a generated MFA recovery code (base32 alphabet, no separators). */
+export const MFA_RECOVERY_CODE_LENGTH = 12;
+
 /** OAuth CSRF state parameter lifetime in Redis (seconds). */
 export const OAUTH_STATE_TTL_SECONDS = 600;
 

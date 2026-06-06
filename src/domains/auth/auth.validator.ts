@@ -12,6 +12,7 @@ import type {
   StepUpVerifyInput,
   VerifyEmailInput,
   MfaEnrollInput,
+  MfaEnrollConfirmInput,
   MfaLoginVerifyInput,
   OauthCallbackQueryInput,
 } from './auth.dto.js';
@@ -27,6 +28,7 @@ import {
   StepUpVerifyDto,
   VerifyEmailDto,
   MfaEnrollDto,
+  MfaEnrollConfirmDto,
   MfaLoginVerifyDto,
   OauthCallbackQueryDto,
 } from './auth.dto.js';
@@ -166,6 +168,19 @@ export function validateVerifyEmail(body: unknown): VerifyEmailInput {
 /** Validates the authenticated `POST /api/v1/auth/mfa/enroll` request body against {@link MfaEnrollDto}. */
 export function validateMfaEnroll(body: unknown): MfaEnrollInput {
   const result = MfaEnrollDto.safeParse(body);
+  if (!result.success) {
+    throw new ValidationError(
+      ERROR_KEY_INVALID_INPUT,
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
+  }
+  return result.data;
+}
+
+/** Validates the authenticated `POST /api/v1/auth/mfa/enroll/confirm` request body against {@link MfaEnrollConfirmDto}. */
+export function validateMfaEnrollConfirm(body: unknown): MfaEnrollConfirmInput {
+  const result = MfaEnrollConfirmDto.safeParse(body);
   if (!result.success) {
     throw new ValidationError(
       ERROR_KEY_INVALID_INPUT,
