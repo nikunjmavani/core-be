@@ -3,6 +3,39 @@
 -- constraint enforces the same limit at the database level.
 --
 -- migration-safety: allow alter_column_type reason="text → varchar(512) with USING left(..., 512); app-layer truncation already in place so no data loss; rewrite is safe on the auth.sessions table which has no long-running transactions"
+--
+-- sec-D6 — DO NOT COPY THIS PATTERN.
+-- ----------------------------------------------------------------------------
+-- This migration uses `ALTER COLUMN ... TYPE varchar(512) USING left(...)`, which
+-- forces a full-table rewrite under ACCESS EXCLUSIVE. On a multi-million-row
+-- `auth.sessions` table that lock window is long enough (~45 s in our profile)
+-- to time out every JWT-validating request — auth offline for the duration.
+-- The `migration-safety: allow alter_column_type` note above protects against
+-- being BLOCKED by existing long-running transactions; it does NOT shorten
+-- the rewrite duration itself.
+--
+-- The online-safe pattern for capping a text/varchar column going forward:
+--
+--   -- Step 1 (cheap, no rewrite — records the upper bound as NOT VALID).
+--   ALTER TABLE auth.sessions
+--     ADD CONSTRAINT chk_sessions_user_agent_len
+--     CHECK (length(user_agent) <= 512) NOT VALID;
+--
+--   -- Step 2 (online scan — reads each row without blocking writes).
+--   ALTER TABLE auth.sessions
+--     VALIDATE CONSTRAINT chk_sessions_user_agent_len;
+--
+--   -- Step 3 (metadata-only — the CHECK already guarantees the cap, so
+--   -- Postgres can shrink the column type without rewriting rows).
+--   ALTER TABLE auth.sessions
+--     ALTER COLUMN user_agent TYPE varchar(512);
+--
+-- This pattern keeps writes online throughout. Re-rolling THIS migration with
+-- the online pattern would just inflict the same ACCESS EXCLUSIVE in reverse
+-- (the type is already varchar(512)), so the lesson lives here as a
+-- copy-paste reference for the next length-cap migration; see
+-- `docs/reference/data/data-lifecycle-deletion.md` for the broader
+-- online-DDL playbook the team is building out.
 
 ALTER TABLE auth.sessions
   ALTER COLUMN user_agent TYPE varchar(512) USING left(user_agent, 512);
