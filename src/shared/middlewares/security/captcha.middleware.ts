@@ -1,22 +1,42 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
-import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
+import {
+  addSentryBreadcrumb,
+  captureMessage,
+} from '@/infrastructure/observability/sentry/sentry.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import { UnauthorizedError } from '@/shared/errors/index.js';
 import { verifyTurnstileToken } from '@/shared/utils/security/turnstile-verifier.util.js';
 
-/** Throttle window for the degraded-mode Sentry alert so a captcha-provider outage cannot flood Sentry. */
+/** Throttle window for outage-class Sentry alerts so a sustained Turnstile outage cannot flood Sentry. */
 const CAPTCHA_PROVIDER_UNAVAILABLE_ALERT_INTERVAL_MS = 30_000;
 let lastCaptchaProviderUnavailableAlertAtMs = 0;
 
+/** Reasons the captcha pre-handler may surface to Sentry. */
+type CaptchaUnavailableReason = 'not_configured' | 'breaker_open' | 'verify_error';
+
 /**
- * Surfaces the captcha provider (Cloudflare Turnstile) being unavailable as a throttled Sentry
- * event. In production the captcha pre-handler fails closed, so a Turnstile outage blocks every
- * captcha-gated auth route (login, signup, password reset); this makes that page operations rather
- * than only appearing as a spike of 401s. Throttled to one event per
- * {@link CAPTCHA_PROVIDER_UNAVAILABLE_ALERT_INTERVAL_MS} so a sustained outage does not flood Sentry.
+ * Surfaces the captcha provider (Cloudflare Turnstile) being unavailable as a Sentry event.
+ *
+ * @remarks
+ * sec-C/M finding #16: the throttle is now reason-specific. The 30-second window is intended
+ * for outage-class signals (`breaker_open`, `verify_error`) — a Turnstile outage that floods
+ * Sentry once per minute is preferable to one event per request. Misconfiguration
+ * (`not_configured`) is a different beast: there is no other observable signal beyond the
+ * 401 spike, and the env-schema refine is supposed to prevent it from ever reaching
+ * production. We still emit a throttled `captureMessage` for visibility, but ADDITIONALLY
+ * emit a per-request breadcrumb so every blocked login is correlatable in the trace timeline
+ * once an operator opens the case — without flooding `captureMessage` itself.
  */
-function alertCaptchaProviderUnavailable(reason: string): void {
+function alertCaptchaProviderUnavailable(reason: CaptchaUnavailableReason): void {
+  if (reason === 'not_configured') {
+    // Per-request breadcrumb (cheap, no rate limit) for forensic visibility.
+    addSentryBreadcrumb({
+      category: 'captcha',
+      message: 'captcha.provider_unavailable.not_configured',
+      level: 'error',
+    });
+  }
   const now = Date.now();
   if (
     now - lastCaptchaProviderUnavailableAlertAtMs <

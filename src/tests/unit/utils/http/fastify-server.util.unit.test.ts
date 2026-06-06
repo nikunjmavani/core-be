@@ -54,23 +54,32 @@ describe('fastify-server.util', () => {
 
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  it('genReqId prefers X-Request-Id header when present', () => {
+  it('genReqId ALWAYS mints a server-side UUID even when a well-formed inbound x-request-id is supplied (sec-C/M #27)', () => {
+    // The prior implementation promoted the inbound client value to the
+    // authoritative correlation id used by Sentry tags and Pino logs — an
+    // attacker could pollute incident triage by replaying a victim's id or
+    // planting a chosen id to bait on-call. The client value is now surfaced
+    // separately via `extractClientSuppliedRequestIdentifier` (and exposed as
+    // `x-client-request-id` in responses + a `clientRequestId` log field) but
+    // never becomes the primary id.
     const options = buildFastifyServerOptions();
     const incomingMessage = new IncomingMessage({} as never);
     incomingMessage.headers = { 'x-request-id': 'trace-abc' };
 
     const requestIdentifier = options.genReqId?.(incomingMessage as never);
-    expect(requestIdentifier).toBe('trace-abc');
+    expect(requestIdentifier).toMatch(UUID_PATTERN);
+    expect(requestIdentifier).not.toBe('trace-abc');
   });
 
-  it('genReqId accepts a well-formed inbound UUID unchanged', () => {
+  it('genReqId mints a server-side UUID even when a well-formed inbound UUID is supplied (sec-C/M #27)', () => {
     const options = buildFastifyServerOptions();
     const incomingMessage = new IncomingMessage({} as never);
     const inboundUuid = '550e8400-e29b-41d4-a716-446655440000';
     incomingMessage.headers = { 'x-request-id': inboundUuid };
 
     const requestIdentifier = options.genReqId?.(incomingMessage as never);
-    expect(requestIdentifier).toBe(inboundUuid);
+    expect(requestIdentifier).toMatch(UUID_PATTERN);
+    expect(requestIdentifier).not.toBe(inboundUuid);
   });
 
   it('genReqId rejects a malformed x-request-id and generates a server-side id', () => {
@@ -124,13 +133,14 @@ describe('fastify-server.util', () => {
     vi.resetModules();
   });
 
-  it('genReqId uses first array header value when x-request-id is an array', () => {
+  it('genReqId mints a server-side UUID even when x-request-id is an array (sec-C/M #27)', () => {
     const options = buildFastifyServerOptions();
     const incomingMessage = new IncomingMessage({} as never);
     incomingMessage.headers = { 'x-request-id': ['trace-array', 'ignored'] };
 
     const requestIdentifier = options.genReqId?.(incomingMessage as never);
-    expect(requestIdentifier).toBe('trace-array');
+    expect(requestIdentifier).toMatch(UUID_PATTERN);
+    expect(requestIdentifier).not.toBe('trace-array');
   });
 
   it('honors explicit TRUST_PROXY=false in production', async () => {
