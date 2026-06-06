@@ -73,6 +73,14 @@ export const logs = auditSchema
       index('idx_audit_logs_target_user_id')
         .on(table.target_user_id)
         .where(sql`${table.target_user_id} IS NOT NULL`),
+      // sec-D8: matching partial index for the api-key actor FK. API keys are
+      // soft-deleted today so the FK cascade-scan does not fire, but "audit
+      // by api-key" admin queries (and any future hard-delete path) need the
+      // index to avoid a seq scan over the partitioned table. Trailing
+      // `created_at` covers the "newest-first" pagination contract.
+      index('idx_audit_logs_actor_api_key_id_created')
+        .on(table.actor_api_key_id, table.created_at)
+        .where(sql`${table.actor_api_key_id} IS NOT NULL`),
       index('idx_audit_logs_action_created').on(table.action, table.created_at),
       index('idx_audit_logs_action_created_id').on(table.action, table.created_at, table.id),
       check(
