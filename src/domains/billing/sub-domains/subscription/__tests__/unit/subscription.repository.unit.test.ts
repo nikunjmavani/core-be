@@ -3,7 +3,8 @@ import { SubscriptionRepository } from '@/domains/billing/sub-domains/subscripti
 
 const mockLimit = vi.fn();
 const mockWhereList = vi.fn(() => ({ limit: mockLimit }));
-const mockFromList = vi.fn(() => ({ where: mockWhereList }));
+const mockLeftJoin = vi.fn(() => ({ where: mockWhereList }));
+const mockFromList = vi.fn(() => ({ where: mockWhereList, leftJoin: mockLeftJoin }));
 const mockSelect = vi.fn(() => ({ from: mockFromList }));
 
 const mockReturning = vi.fn();
@@ -58,9 +59,19 @@ describe('SubscriptionRepository', () => {
     expect(result).toBeNull();
   });
 
-  it('create inserts subscription with generated public id', async () => {
-    const created = { public_id: 'subscription_public', organization_id: 10 };
-    mockReturning.mockResolvedValue([created]);
+  it('create inserts subscription with generated public id and re-selects with plan join (sec-re-07)', async () => {
+    const inserted = { public_id: 'subscription_public', organization_id: 10 };
+    // sec-re-07: create now does INSERT then SELECT-with-plan-join. First
+    // `mockReturning` resolution feeds the INSERT; the SELECT goes through
+    // `.from().leftJoin().where().limit()` chain so we override the chain's
+    // limit to return the joined row.
+    const joined = {
+      public_id: 'subscription_public',
+      organization_id: 10,
+      plan_public_id: 'pln_pub',
+    };
+    mockReturning.mockResolvedValue([inserted]);
+    mockLimit.mockResolvedValue([joined]);
 
     const result = await repository.create({
       organization_id: 10,
@@ -73,7 +84,7 @@ describe('SubscriptionRepository', () => {
       provider_customer_id: 'cus_stripe',
     });
 
-    expect(result).toEqual(created);
+    expect(result).toEqual(joined);
   });
 
   it('update returns null when subscription is not found', async () => {
@@ -85,17 +96,22 @@ describe('SubscriptionRepository', () => {
   });
 
   it('findByPublicId returns subscription row when present', async () => {
-    const subscription = { public_id: 'sub_1', organization_id: 10 };
-    mockWhereList.mockReturnValueOnce({ limit: vi.fn().mockResolvedValue([subscription]) });
+    const subscription = { public_id: 'sub_1', organization_id: 10, plan_public_id: 'pln_pub' };
+    mockLimit.mockResolvedValueOnce([subscription]);
 
     const result = await repository.findByPublicId('sub_1', 10);
 
     expect(result).toEqual(subscription);
   });
 
-  it('update returns updated subscription row', async () => {
-    const updated = { public_id: 'sub_1', status: 'ACTIVE' };
-    mockReturning.mockResolvedValue([updated]);
+  it('update returns updated subscription row joined with plan public id (sec-re-07)', async () => {
+    // sec-re-07: update now performs UPDATE → SELECT-with-plan-join. The
+    // first `mockReturning` resolution drives the UPDATE's RETURNING (id only);
+    // the follow-up SELECT goes through the `.from().leftJoin().where().limit()`
+    // chain so the same `mockLimit` mocks both the SELECT result.
+    const updated = { public_id: 'sub_1', status: 'ACTIVE', plan_public_id: 'pln_pub' };
+    mockReturning.mockResolvedValue([{ id: 1 }]);
+    mockLimit.mockResolvedValue([updated]);
 
     const result = await repository.update('sub_1', 10, { status: 'ACTIVE' });
 

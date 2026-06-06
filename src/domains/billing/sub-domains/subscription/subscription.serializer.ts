@@ -1,6 +1,8 @@
 /**
  * Subscription row fields exposed to API consumers. Mirrors the live Drizzle row but with
- * the public-id rename baked in and every leak-class field excluded — see sec-T finding #17.
+ * the public-id rename baked in and every leak-class field excluded — see sec-T finding #17
+ * and sec-re-07 (plan public id surfaced after the prior strip-only fix dropped the bigserial
+ * plan reference with no substitute).
  */
 interface SubscriptionRow {
   public_id: string;
@@ -12,6 +14,8 @@ interface SubscriptionRow {
   cancel_at_period_end: boolean;
   canceled_at: Date | string | null;
   provider: string | null;
+  /** Joined `billing.plans.public_id` — surfaced as `plan_id` in the response (sec-re-07). */
+  plan_public_id: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -25,8 +29,8 @@ function toIsoString(value: Date | string | null | undefined): string | null {
 function serializeOne<T extends SubscriptionRow>(row: T) {
   return {
     // sec-T #17: emit the 21-char public_id, NOT the internal bigserial. The
-    // bigserial `id`, the bigserial `organization_id`, the bigserial `plan_id`,
-    // the bigserial `created_by_user_id` / `updated_by_user_id`, the Stripe-side
+    // bigserial `id`, the bigserial `organization_id`, the bigserial
+    // `created_by_user_id` / `updated_by_user_id`, the Stripe-side
     // `provider_subscription_id` / `provider_customer_id`, and the internal
     // `last_stripe_event_created_at` watermark are all DROPPED — they leak
     // platform growth (sequential ids), correlate to Stripe customer activity
@@ -43,6 +47,13 @@ function serializeOne<T extends SubscriptionRow>(row: T) {
     // Provider is kept as a string literal (e.g. `"stripe"`) so callers can
     // route conditional UI without ever seeing the Stripe object ids.
     provider: row.provider,
+    // sec-re-07: surface the joined `billing.plans.public_id` as the documented
+    // `plan_id` public field. sec-T #17 correctly stripped the bigserial
+    // plan_id, but left clients without ANY plan reference in the response —
+    // ChangePlanDto round-trips that they could no longer verify against.
+    // Defensive `?? null` keeps the contract stable when an unexpectedly
+    // joined row carries `undefined`.
+    plan_id: row.plan_public_id ?? null,
     created_at: toIsoString(row.created_at),
     updated_at: toIsoString(row.updated_at),
   };
