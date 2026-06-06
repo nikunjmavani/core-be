@@ -35,12 +35,24 @@ export async function settleAndAwaitOrganizationRlsTransaction(
 }
 
 /**
- * Placeholder plugin retained for middleware registration order. Org-scoped HTTP handlers
- * must wrap database work in `withOrganizationDatabaseContext`; this middleware no longer
- * pins a pooled checkout for the full request.
+ * No-op compatibility plugin retained for the request-lifecycle settlement
+ * contract.
+ *
+ * @remarks
+ * sec-M4: this plugin used to pin a pooled DB checkout for the duration of
+ * the request. Now `withOrganizationDatabaseContext` opens its own short-
+ * lived transaction at each call site, so there is nothing for this plugin
+ * to do — it registers, owns no hooks, and returns. It is NOT safe to delete
+ * yet because `request-lifecycle.middleware.ts` imports
+ * {@link OrganizationRlsTransactionSettlementOutcome} from this file and
+ * branches on it during `onResponse`. A future cleanup that drops this no-op
+ * must also fold the settlement outcome union into the lifecycle middleware,
+ * or inline `'no_transaction'` everywhere it currently flows through this
+ * function. Until then the no-op + the outcome union live together so the
+ * type and the implementation cannot drift.
  */
 const organizationRlsTransactionMiddlewarePlugin: FastifyPluginAsync = async () => {
-  /* no-op — scoped RLS contexts only */
+  /* no-op — scoped RLS contexts only (sec-M4) */
 };
 
 export default fp(organizationRlsTransactionMiddlewarePlugin, {
