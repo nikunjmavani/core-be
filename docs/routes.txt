@@ -105,7 +105,7 @@ Legend:
 ================================================================================
 
   — Sub Domains —
-  POST   /api/v1/tenancy/invitations/:invitationId/accept        PUBLIC
+  POST   /api/v1/tenancy/invitations/:invitationId/accept        AUTH
   POST   /api/v1/tenancy/invitations/:invitationId/decline       AUTH
   GET    /api/v1/tenancy/invitations/pending                     AUTH
   GET    /api/v1/tenancy/organizations                           AUTH
@@ -212,8 +212,8 @@ Legend:
 ================================================================================
 
   Total routes    : 128
-  Public          : 21
-  Authenticated   : 45
+  Public          : 20
+  Authenticated   : 46
   Role-guarded    : 9
   Perm-guarded    : 50
   Token-guarded   : 3
