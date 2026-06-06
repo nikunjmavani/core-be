@@ -31,10 +31,15 @@ export function createMembershipController(service: MembershipService) {
       });
     },
     getMembership: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const { id: organizationId, membershipId } = (request.params as {
-        id: string;
-        membershipId: string;
-      }) ?? { id: '', membershipId: '' };
+      const rawParams = (request.params as { id: string; membershipId: string }) ?? {
+        id: '',
+        membershipId: '',
+      };
+      // sec-re-18 (sec-B10 class): bind path params at the boundary so an
+      // attacker-supplied string never flows into Sentry breadcrumbs, log
+      // payloads, or metric labels with unbounded cardinality.
+      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
+      const membershipId = validatePublicIdParam(rawParams.membershipId ?? '', 'membershipId');
       const data = await service.getByPublicId(organizationId, membershipId);
       return successResponse(data, getRequestIdentifier(request));
     },
@@ -50,10 +55,15 @@ export function createMembershipController(service: MembershipService) {
     },
     updateMembership: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const { id: organizationId, membershipId } = (request.params as {
-        id: string;
-        membershipId: string;
-      }) ?? { id: '', membershipId: '' };
+      const rawParams = (request.params as { id: string; membershipId: string }) ?? {
+        id: '',
+        membershipId: '',
+      };
+      // sec-re-18 (sec-B10 class): bind path params at the boundary so an
+      // attacker-supplied string never flows into Sentry breadcrumbs, log
+      // payloads, or metric labels with unbounded cardinality.
+      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
+      const membershipId = validatePublicIdParam(rawParams.membershipId ?? '', 'membershipId');
       const data = await service.update(
         organizationId,
         membershipId,
@@ -64,18 +74,28 @@ export function createMembershipController(service: MembershipService) {
     },
     deleteMembership: async (request: FastifyRequest, reply: FastifyReply) => {
       requirePrincipal(request);
-      const { id: organizationId, membershipId } = (request.params as {
-        id: string;
-        membershipId: string;
-      }) ?? { id: '', membershipId: '' };
+      const rawParams = (request.params as { id: string; membershipId: string }) ?? {
+        id: '',
+        membershipId: '',
+      };
+      // sec-re-18 (sec-B10 class): bind path params at the boundary so an
+      // attacker-supplied string never flows into Sentry breadcrumbs, log
+      // payloads, or metric labels with unbounded cardinality.
+      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
+      const membershipId = validatePublicIdParam(rawParams.membershipId ?? '', 'membershipId');
       await service.delete(organizationId, membershipId);
       return reply.code(204).send();
     },
     getMembershipPermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const { id: organizationId, membershipId } = (request.params as {
-        id: string;
-        membershipId: string;
-      }) ?? { id: '', membershipId: '' };
+      const rawParams = (request.params as { id: string; membershipId: string }) ?? {
+        id: '',
+        membershipId: '',
+      };
+      // sec-re-18 (sec-B10 class): bind path params at the boundary so an
+      // attacker-supplied string never flows into Sentry breadcrumbs, log
+      // payloads, or metric labels with unbounded cardinality.
+      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
+      const membershipId = validatePublicIdParam(rawParams.membershipId ?? '', 'membershipId');
       const data = await service.getPermissions(organizationId, membershipId);
       return successResponse(data, getRequestIdentifier(request));
     },
