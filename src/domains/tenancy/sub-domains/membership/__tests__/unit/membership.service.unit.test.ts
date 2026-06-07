@@ -176,6 +176,40 @@ describe('MembershipService', () => {
     expect(membershipRepository.update).toHaveBeenCalled();
   });
 
+  // sec-new-T1: owner membership cannot be modified (would enable Admin lockout of owner)
+  it('update rejects any status change targeting the org owner membership (sec-new-T1)', async () => {
+    // membership.user_id matches organization.owner_user_id (99)
+    vi.mocked(membershipRepository.findByPublicId).mockResolvedValue({
+      ...membershipRow,
+      user_id: 99,
+    } as never);
+    await expect(
+      service.update('org_public', 'owner_mem', { status: 'SUSPENDED' }, 'admin_public'),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    // Guard fires before any write
+    expect(membershipRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('update rejects ACTIVE status targeting the org owner membership (sec-new-T1)', async () => {
+    // Even a benign reactivation attempt on the owner is blocked — use transferOwnership.
+    vi.mocked(membershipRepository.findByPublicId).mockResolvedValue({
+      ...membershipRow,
+      user_id: 99,
+      status: 'SUSPENDED',
+      joined_at: new Date(),
+    } as never);
+    await expect(
+      service.update('org_public', 'owner_mem', { status: 'ACTIVE' }, 'admin_public'),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(membershipRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('update allows modifying a non-owner membership with matching user_id below owner', async () => {
+    // Sanity: user_id:10 !== owner_user_id:99 — update proceeds normally
+    await service.update('org_public', 'mem_public', { status: 'SUSPENDED' }, 'admin_public');
+    expect(membershipRepository.update).toHaveBeenCalled();
+  });
+
   it('update rejects activating a never-joined (INVITED) membership via PATCH', async () => {
     vi.mocked(membershipRepository.findByPublicId).mockResolvedValue({
       ...membershipRow,

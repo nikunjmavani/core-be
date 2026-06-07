@@ -79,6 +79,7 @@
   "webauthnCredentialExists": "This passkey is already registered",
   "ownerCannotLeave": "Organization owner cannot leave; transfer ownership first",
   "ownerCannotBeRemoved": "The organization owner cannot be removed; transfer ownership first",
+  "ownerMembershipCannotBeModified": "The organization owner's membership cannot be modified; transfer ownership first",
   "onlyOwnerCanTransfer": "Only the organization owner can transfer ownership",
   "membershipActivationRequiresInvitationAccept": "Membership can only be activated by accepting the invitation",
   "oauthProviderNotConfigured": "OAuth provider \"{{provider}}\" is not configured.",
