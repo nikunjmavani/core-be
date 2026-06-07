@@ -389,7 +389,7 @@ export class MfaService {
   async deleteMfa(userPublicId: string, mfaMethodId: number): Promise<void> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
-    const remaining = await withUserDatabaseContext(user.public_id, async () => {
+    await withUserDatabaseContext(user.public_id, async () => {
       const found = await this.authMethodService.findAuthMethodByIdForUser(mfaMethodId, user.id);
       if (!found) throw new UnauthorizedError('errors:mfaMethodNotFound');
       if (found.method_type !== 'MFA_TOTP') {
@@ -408,11 +408,15 @@ export class MfaService {
         }
       }
       await this.authMethodService.revokeAuthMethod(mfaMethodId, user.id);
-      return this.authMethodService.listMfaMethodsByUserId(user.id);
+      const remaining = await this.authMethodService.listMfaMethodsByUserId(user.id);
+      // sec-new-A4: flip is_mfa_enabled INSIDE the same withUserDatabaseContext
+      // transaction as the revoke so there is no TOCTOU window where a concurrent
+      // enroll could set is_mfa_enabled = true between the delete and the flag flip.
+      // The nested withUserDatabaseContext call reuses the already-pinned handle.
+      if (remaining.length === 0) {
+        await this.userService.updateMfaEnabled(user.public_id, false);
+      }
     });
-    if (remaining.length === 0) {
-      await this.userService.updateMfaEnabled(user.public_id, false);
-    }
   }
 
   /** List MFA methods for the current user. */
