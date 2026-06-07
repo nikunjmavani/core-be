@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { ValidationError } from '@/shared/errors/index.js';
 import { createWebhookController } from '@/domains/notify/sub-domains/webhook/webhook.controller.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { WebhookService } from '@/domains/notify/sub-domains/webhook/webhook.service.js';
@@ -226,6 +227,70 @@ describe('createWebhookController', () => {
           pagination: expect.objectContaining({ estimated_total: 1, has_more: false, next: null }),
         },
       });
+    });
+  });
+
+  describe('sec-new-N1 webhookId path-param validation', () => {
+    it('getWebhook rejects empty webhookId with ValidationError', async () => {
+      await expect(
+        controller.getWebhook(
+          mockRequest({ params: { id: organizationPublicId, webhookId: '' } }) as never,
+          mockReply(),
+        ),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('getWebhook rejects malformed webhookId with ValidationError', async () => {
+      await expect(
+        controller.getWebhook(
+          mockRequest({
+            params: { id: organizationPublicId, webhookId: 'not-a-valid-id' },
+          }) as never,
+          mockReply(),
+        ),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('updateWebhook rejects malformed webhookId with ValidationError', async () => {
+      await expect(
+        controller.updateWebhook(
+          mockRequest({
+            params: { id: organizationPublicId, webhookId: 'bad!!id' },
+            body: { enabled: false },
+          }) as never,
+          mockReply(),
+        ),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('deleteWebhook rejects malformed webhookId with ValidationError', async () => {
+      await expect(
+        controller.deleteWebhook(
+          mockRequest({ params: { id: organizationPublicId, webhookId: 'INVALID' } }) as never,
+          mockReply(),
+        ),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('listDeliveryAttempts rejects malformed webhookId with ValidationError', async () => {
+      await expect(
+        controller.listDeliveryAttempts(
+          mockRequest({
+            params: { id: organizationPublicId, webhookId: '../traversal' },
+            query: {},
+          }) as never,
+          mockReply(),
+        ),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('testWebhook rejects malformed webhookId with ValidationError', async () => {
+      await expect(
+        controller.testWebhook(
+          mockRequest({ params: { id: organizationPublicId, webhookId: 'not valid' } }) as never,
+          mockReply(),
+        ),
+      ).rejects.toBeInstanceOf(ValidationError);
     });
   });
 
