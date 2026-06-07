@@ -32,10 +32,15 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
       });
     },
     getApiKey: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const { id: organizationId, apiKeyId } = (request.params as {
-        id: string;
-        apiKeyId: string;
-      }) ?? { id: '', apiKeyId: '' };
+      const rawParams = (request.params as { id: string; apiKeyId: string }) ?? {
+        id: '',
+        apiKeyId: '',
+      };
+      // sec-re-18 (sec-B10 class): bind path params at the boundary so an
+      // attacker-supplied string never flows into Sentry breadcrumbs, log
+      // payloads, or metric labels with unbounded cardinality.
+      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
+      const apiKeyId = validatePublicIdParam(rawParams.apiKeyId ?? '', 'apiKeyId');
       const data = await service.getByPublicId(organizationId, apiKeyId);
       return successResponse(data, getRequestIdentifier(request));
     },
@@ -54,10 +59,15 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
     },
     updateApiKey: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const { id: organizationId, apiKeyId } = (request.params as {
-        id: string;
-        apiKeyId: string;
-      }) ?? { id: '', apiKeyId: '' };
+      const rawParams = (request.params as { id: string; apiKeyId: string }) ?? {
+        id: '',
+        apiKeyId: '',
+      };
+      // sec-re-18 (sec-B10 class): bind path params at the boundary so an
+      // attacker-supplied string never flows into Sentry breadcrumbs, log
+      // payloads, or metric labels with unbounded cardinality.
+      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
+      const apiKeyId = validatePublicIdParam(rawParams.apiKeyId ?? '', 'apiKeyId');
       const data = await service.update(
         organizationId,
         apiKeyId,
@@ -68,19 +78,29 @@ export function createOrganizationApiKeyController(service: OrganizationApiKeySe
     },
     deleteApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
       requirePrincipal(request);
-      const { id: organizationId, apiKeyId } = (request.params as {
-        id: string;
-        apiKeyId: string;
-      }) ?? { id: '', apiKeyId: '' };
+      const rawParams = (request.params as { id: string; apiKeyId: string }) ?? {
+        id: '',
+        apiKeyId: '',
+      };
+      // sec-re-18 (sec-B10 class): bind path params at the boundary so an
+      // attacker-supplied string never flows into Sentry breadcrumbs, log
+      // payloads, or metric labels with unbounded cardinality.
+      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
+      const apiKeyId = validatePublicIdParam(rawParams.apiKeyId ?? '', 'apiKeyId');
       await service.delete(organizationId, apiKeyId);
       return reply.code(204).send();
     },
     rotateApiKey: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const { id: organizationId, apiKeyId } = (request.params as {
-        id: string;
-        apiKeyId: string;
-      }) ?? { id: '', apiKeyId: '' };
+      const rawParams = (request.params as { id: string; apiKeyId: string }) ?? {
+        id: '',
+        apiKeyId: '',
+      };
+      // sec-re-18 (sec-B10 class): bind path params at the boundary so an
+      // attacker-supplied string never flows into Sentry breadcrumbs, log
+      // payloads, or metric labels with unbounded cardinality.
+      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
+      const apiKeyId = validatePublicIdParam(rawParams.apiKeyId ?? '', 'apiKeyId');
       const result = await service.rotate(organizationId, apiKeyId, auth.userId);
       reply.code(201);
       return successResponse(
