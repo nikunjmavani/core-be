@@ -331,7 +331,6 @@ describe('Tenancy Domain — Integration', () => {
         headers: { 'idempotency-key': `idem-${randomUUID()}` },
         payload: {
           membership_id: membershipId,
-          email: 'invite@yopmail.com',
           expires_in_days: 7,
         },
       });

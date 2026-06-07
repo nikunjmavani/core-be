@@ -61,7 +61,7 @@ function payloadForPermissionRoute(
     return { is_enabled: false };
   }
   if (route.path.endsWith('/invitations')) {
-    return { membership_id: PATH_PARAM_PLACEHOLDER, email: 'matrix@example.com' };
+    return { membership_id: PATH_PARAM_PLACEHOLDER };
   }
   if (route.path.includes('/invitations/:invitationId/resend')) {
     return { expires_in_days: 7 };

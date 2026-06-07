@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { organizationIdParamsDto } from '@/domains/tenancy/sub-domains/organization/organization.dto.js';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
-import { trimmedEmail, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
+import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /**
  * Zod schema for the `:id` path param on `GET /organizations/:id/invitations`;
@@ -40,13 +40,14 @@ export const organizationInvitationParamsDto = organizationIdParamsDto.extend({
 
 /**
  * Zod schema for the `POST /organizations/:id/invitations` request body.
- * Targets an existing membership by public id; `expires_in_days` clamps to
- * 1–365 with a 7-day default.
+ * Carries only `membership_id` and `expires_in_days`; the invitee email is
+ * derived server-side from the membership's actual user record and is never
+ * accepted from the client. `expires_in_days` clamps to 1–365 with a 7-day
+ * default.
  */
 export const createMemberInvitationDto = z
   .object({
     membership_id: trimmedStringMinMax(1, 21),
-    email: trimmedEmail(),
     expires_in_days: z.number().int().min(1).max(365).optional().default(7),
   })
   .strict();
