@@ -3,7 +3,8 @@ import { MfaRepository } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.repo
 
 const mockReturning = vi.fn().mockResolvedValue([]);
 const mockLimit = vi.fn().mockResolvedValue([]);
-const mockWhereForSelect = vi.fn(() => ({ limit: mockLimit }));
+const mockOrderBy = vi.fn(() => ({ limit: mockLimit }));
+const mockWhereForSelect = vi.fn(() => ({ limit: mockLimit, orderBy: mockOrderBy }));
 const mockWhereForUpdate = vi.fn(() => ({ returning: mockReturning }));
 const mockFrom = vi.fn(() => ({ where: mockWhereForSelect }));
 const mockSelect = vi.fn(() => ({ from: mockFrom }));

@@ -38,6 +38,7 @@ import {
   consumeMfaRecoveryCode,
   hashMfaRecoveryCode,
   insertMfaRecoveryCodes,
+  invalidateAllUnusedRecoveryCodesForUser,
 } from './auth-mfa-recovery-code.repository.js';
 import { generateMfaRecoveryCodes } from './auth-mfa-recovery-code.util.js';
 
@@ -328,6 +329,23 @@ export class MfaService {
     const recoveryCodeHashes = plaintextRecoveryCodes.map(hashMfaRecoveryCode);
 
     const record = await withUserDatabaseContext(user.public_id, async () => {
+      // sec-re-04: a re-enrollment (lost device, new phone) must replace the
+      // previous TOTP factor — not silently add a second active one. Without
+      // this dedup, two active MFA_TOTP rows existed and login picked an
+      // arbitrary one via `findTotpByUserId(.limit(1))`, frequently rejecting
+      // the user's codes against a stale secret. Revoking old factors AND
+      // invalidating unused recovery codes BEFORE inserting the new ones keeps
+      // the whole transition inside one `withUserDatabaseContext` transaction
+      // — a crash partway through rolls everything back and the user can
+      // simply restart the enroll-confirm flow.
+      const existingMfaMethods = await this.authMethodService.listMfaMethodsByUserId(user.id);
+      for (const existing of existingMfaMethods) {
+        if (existing.method_type === 'MFA_TOTP') {
+          await this.authMethodService.revokeAuthMethod(existing.id, user.id);
+        }
+      }
+      await invalidateAllUnusedRecoveryCodesForUser(user.id);
+
       const created = await this.authMethodService.createAuthMethodRecord({
         user_id: user.id,
         method_type: 'MFA_TOTP',

@@ -31,6 +31,20 @@ export function hashMfaRecoveryCode(plainCode: string): string {
 }
 
 /**
+ * Marks every unused recovery code for `userId` as consumed in a single UPDATE so a re-enrolled
+ * user can't authenticate against codes that belonged to a TOTP secret they no longer hold
+ * (sec-re-04). Idempotent — re-running the call does nothing because all rows are already
+ * marked used. RLS-gated by `app.current_user_id`, so callers must invoke this inside
+ * `withUserDatabaseContext`.
+ */
+export async function invalidateAllUnusedRecoveryCodesForUser(userId: number): Promise<void> {
+  await getRequestDatabase()
+    .update(mfa_recovery_codes)
+    .set({ used_at: databaseNowTimestamp })
+    .where(and(eq(mfa_recovery_codes.user_id, userId), isNull(mfa_recovery_codes.used_at)));
+}
+
+/**
  * Atomically consumes a recovery code for `userId`: sets `used_at` only when the row is still unused;
  * returns `true` on success and `false` on unknown / already-consumed codes. Enforces the single-use
  * invariant via the UPDATE filter. `auth.mfa_recovery_codes` is FORCE RLS keyed on
