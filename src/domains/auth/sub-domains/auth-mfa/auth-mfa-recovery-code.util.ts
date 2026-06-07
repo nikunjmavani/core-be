@@ -3,15 +3,20 @@ import { MFA_RECOVERY_CODE_LENGTH } from '@/shared/constants/ttl.constants.js';
 
 /**
  * Crockford-style base32 alphabet with the visually-ambiguous characters dropped
- * (no `I`, `L`, `O`, `0`, `1`). 32 symbols → exactly 5 bits per character, so a
- * {@link MFA_RECOVERY_CODE_LENGTH}-char code carries 60 bits of entropy.
+ * (no `I`, `L`, `O`, `0`, `1`). sec-re-14: **31 symbols** (23 letters + 8 digits)
+ * → log₂(31) ≈ 4.954 bits per character, so a {@link MFA_RECOVERY_CODE_LENGTH}-char
+ * code carries ~59.4 bits of entropy — not the 60 bits the earlier comment claimed.
+ * The shortfall is operationally negligible (well above the threshold at which
+ * the single-use `consumeMfaRecoveryCode` UPDATE filter + per-IP rate limit make
+ * online brute-force infeasible), but the docstring should match reality so future
+ * tuning has the right baseline.
  *
  * @remarks
  * Recovery codes are read off paper / a password manager; the dropped characters
- * eliminate the most common transcription mistakes. The deliberate uppercase
- * (no lowercase) keeps comparison case-insensitive in the user's head while the
- * server's SHA-256 hashing stays exact (callers should normalise to uppercase
- * before hashing — see {@link hashMfaRecoveryCode}).
+ * eliminate the most common transcription mistakes. The alphabet is intentionally
+ * uppercase-only; the matching `hashMfaRecoveryCode` uppercases the user-supplied
+ * code before SHA-256 (sec-re-14) so a user who types in lowercase or mixed case
+ * still authenticates against the stored hash.
  */
 const RECOVERY_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const ALPHABET_SIZE = RECOVERY_CODE_ALPHABET.length;
