@@ -233,6 +233,7 @@ export class AuditService {
       if (!organization) {
         return {
           items: [],
+          resolution: { userPublicIds: new Map(), organizationPublicIds: new Map() },
           total: parsed.include_total === 'true' ? 0 : null,
           limit: parsed.limit,
           has_more: false,
@@ -247,6 +248,7 @@ export class AuditService {
       if (!user) {
         return {
           items: [],
+          resolution: { userPublicIds: new Map(), organizationPublicIds: new Map() },
           total: parsed.include_total === 'true' ? 0 : null,
           limit: parsed.limit,
           has_more: false,
@@ -270,8 +272,25 @@ export class AuditService {
 
     const { items, total, hasMore, nextCursor } = await this.repository.findWithFilters(filters);
 
+    // sec-re-08: batch-resolve every actor + target user id and every organization id
+    // referenced on this page to its public id. The serializer surfaces those public
+    // ids in place of the bigserials (which sec-re-08 drops). One SECURITY DEFINER
+    // query + one in-context SELECT, no N+1 — and an empty page short-circuits both.
+    const userInternalIds = new Set<number>();
+    const organizationInternalIds = new Set<number>();
+    for (const row of items) {
+      if (row.actor_user_id != null) userInternalIds.add(row.actor_user_id);
+      if (row.target_user_id != null) userInternalIds.add(row.target_user_id);
+      if (row.organization_id != null) organizationInternalIds.add(row.organization_id);
+    }
+    const [userPublicIds, organizationPublicIds] = await Promise.all([
+      this.repository.resolveUserPublicIdsByInternalIds([...userInternalIds]),
+      this.repository.resolveOrganizationPublicIdsByInternalIds([...organizationInternalIds]),
+    ]);
+
     return {
       items,
+      resolution: { userPublicIds, organizationPublicIds },
       total,
       limit: parsed.limit,
       has_more: hasMore,

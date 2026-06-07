@@ -49,6 +49,9 @@ describe('AuditService', () => {
       hasMore: false,
       nextCursor: null,
     }),
+    // sec-re-08: service now batch-resolves user/org public ids for each page.
+    resolveUserPublicIdsByInternalIds: vi.fn().mockResolvedValue(new Map()),
+    resolveOrganizationPublicIdsByInternalIds: vi.fn().mockResolvedValue(new Map()),
   } as unknown as AuditRepository;
 
   const organizationService = {
@@ -159,7 +162,7 @@ describe('AuditService', () => {
     vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
     const result = await service.list({ limit: 20, organization_id: generatePublicId() });
     expect(repository.findWithFilters).not.toHaveBeenCalled();
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       items: [],
       total: null,
       limit: 20,
@@ -176,7 +179,7 @@ describe('AuditService', () => {
       include_total: 'true',
     });
     expect(repository.findWithFilters).not.toHaveBeenCalled();
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       items: [],
       total: 0,
       limit: 20,
@@ -189,7 +192,7 @@ describe('AuditService', () => {
     vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
     const result = await service.list({ limit: 20, actor_user_id: generatePublicId() });
     expect(repository.findWithFilters).not.toHaveBeenCalled();
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       items: [],
       total: null,
       limit: 20,
@@ -206,7 +209,7 @@ describe('AuditService', () => {
       include_total: 'true',
     });
     expect(repository.findWithFilters).not.toHaveBeenCalled();
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       items: [],
       total: 0,
       limit: 20,

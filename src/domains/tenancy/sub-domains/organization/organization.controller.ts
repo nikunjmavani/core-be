@@ -86,20 +86,21 @@ export function createOrganizationController(
         organization_id: organizationId,
       };
       const result = await auditService.listForOrganization(organizationId, query);
-      // sec-T finding #4: route org-scoped audit log rows through `AuditSerializer.many`
-      // so the sensitive-metadata denylist (sec-U2) — which strips internal
-      // `auth_method_id` / `mfa_method_id` keys from the JSON payload — runs on the
-      // tenant-facing endpoint too. The admin path (`audit.controller.ts:41`) already
-      // applied this; this controller previously passed raw rows to `paginatedResponse`,
-      // letting org admins with `AUDIT_LOG_READ` read internal MFA/auth method ids for
-      // other members. The serializer is a strip-only transform, so the public shape
-      // is unchanged.
-      return paginatedResponse(AuditSerializer.many(result.items), getRequestIdentifier(request), {
-        per_page: result.limit,
-        next: result.next_cursor,
-        has_more: result.has_more,
-        ...(result.total !== null ? { estimated_total: result.total } : {}),
-      });
+      // sec-T finding #4 + sec-re-08: route org-scoped audit log rows through
+      // `AuditSerializer.many` so (a) the sensitive-metadata denylist runs and
+      // (b) the strip-only allowlist drops every top-level bigint id, surfacing
+      // the resolved actor/target/organization public ids instead. The admin
+      // path (`audit.controller.ts`) does the same.
+      return paginatedResponse(
+        AuditSerializer.many(result.items, result.resolution),
+        getRequestIdentifier(request),
+        {
+          per_page: result.limit,
+          next: result.next_cursor,
+          has_more: result.has_more,
+          ...(result.total !== null ? { estimated_total: result.total } : {}),
+        },
+      );
     },
   };
 }

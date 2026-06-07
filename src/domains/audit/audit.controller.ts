@@ -38,12 +38,16 @@ export function createAuditController(service: AuditService) {
           },
         });
       }
-      return paginatedResponse(AuditSerializer.many(result.items), getRequestIdentifier(request), {
-        per_page: result.limit,
-        next: result.next_cursor,
-        has_more: result.has_more,
-        ...(result.total !== null ? { estimated_total: result.total } : {}),
-      });
+      return paginatedResponse(
+        AuditSerializer.many(result.items, result.resolution),
+        getRequestIdentifier(request),
+        {
+          per_page: result.limit,
+          next: result.next_cursor,
+          has_more: result.has_more,
+          ...(result.total !== null ? { estimated_total: result.total } : {}),
+        },
+      );
     },
   };
 }
