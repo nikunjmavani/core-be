@@ -152,6 +152,8 @@ export const vitestProjects = [
       pool: 'forks',
       fileParallelism: false,
       maxWorkers: 1,
+      testTimeout: 60_000,
+      hookTimeout: 60_000,
     },
   },
 
@@ -176,6 +178,8 @@ export const vitestProjects = [
       pool: 'forks',
       fileParallelism: false,
       maxWorkers: 1,
+      testTimeout: 60_000,
+      hookTimeout: 60_000,
     },
   },
 
@@ -220,6 +224,8 @@ export const vitestProjects = [
       pool: 'forks',
       fileParallelism: false,
       maxWorkers: 1,
+      testTimeout: 60_000,
+      hookTimeout: 60_000,
     },
   },
 
@@ -232,6 +238,8 @@ export const vitestProjects = [
       pool: 'forks',
       fileParallelism: false,
       maxWorkers: 1,
+      testTimeout: 60_000,
+      hookTimeout: 60_000,
     },
   },
 

@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import { cleanupDatabase, database } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateSuperAdminToken } from '@/tests/helpers/test-auth.js';
+import { resetEnvCacheForTests } from '@/shared/config/env.config.js';
 import {
   injectAuthenticated,
   injectUnauthenticated,
@@ -17,14 +18,30 @@ import type { FastifyInstance } from 'fastify';
  */
 describe('Security: Queue dashboard audit', () => {
   let app: FastifyInstance;
+  const previousEnableQueueDashboard = process.env.ENABLE_QUEUE_DASHBOARD;
+  const previousEnableQueueDashboardMutations = process.env.ENABLE_QUEUE_DASHBOARD_MUTATIONS;
 
   beforeAll(async () => {
+    process.env.ENABLE_QUEUE_DASHBOARD = 'true';
+    process.env.ENABLE_QUEUE_DASHBOARD_MUTATIONS = 'true';
+    resetEnvCacheForTests();
     const testApp = await createTestApp();
     app = testApp.app;
   });
 
   afterAll(async () => {
     await app.close();
+    if (previousEnableQueueDashboard === undefined) {
+      delete process.env.ENABLE_QUEUE_DASHBOARD;
+    } else {
+      process.env.ENABLE_QUEUE_DASHBOARD = previousEnableQueueDashboard;
+    }
+    if (previousEnableQueueDashboardMutations === undefined) {
+      delete process.env.ENABLE_QUEUE_DASHBOARD_MUTATIONS;
+    } else {
+      process.env.ENABLE_QUEUE_DASHBOARD_MUTATIONS = previousEnableQueueDashboardMutations;
+    }
+    resetEnvCacheForTests();
   });
 
   beforeEach(async () => {
@@ -54,14 +71,15 @@ describe('Security: Queue dashboard audit', () => {
 
     expect(response.statusCode).toBe(200);
 
-    const rows = await database.select().from(logs).where(eq(logs.action, 'queue.pause'));
-
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.actor_user_id).toBe(user.id);
-    expect(rows[0]!.resource_type).toBe('queue');
-    expect(rows[0]!.metadata).toMatchObject({
-      queue: 'mail',
-      method: 'PUT',
+    await vi.waitFor(async () => {
+      const rows = await database.select().from(logs).where(eq(logs.action, 'queue.pause'));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.actor_user_id).toBe(user.id);
+      expect(rows[0]!.resource_type).toBe('queue');
+      expect(rows[0]!.metadata).toMatchObject({
+        queue: 'mail',
+        method: 'PUT',
+      });
     });
   });
 });

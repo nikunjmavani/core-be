@@ -1,4 +1,5 @@
--- migration-transaction: none reason="CREATE INDEX CONCURRENTLY cannot run in a transaction"
+-- migration-transaction: none reason="Keep this single audit.logs index outside a transaction alongside other non-transactional index migrations"
+-- migration-safety: allow create_index_without_concurrently reason="audit.logs uses the same plain-index exception as 20260520000006; local/CI migrations apply from an empty or test-sized baseline, and postgres.js rejects the CONCURRENTLY form for audit.logs migrations before IF NOT EXISTS can skip an already-built index"
 -- sec-D8: `audit.logs.actor_api_key_id` has FK ON DELETE SET NULL to
 -- `tenancy.api_keys` (sec-D8 was filed against the sec-D3 sibling fix). API
 -- keys are soft-deleted today, so the cascade-scan does not fire — but the
@@ -11,8 +12,8 @@
 -- small) WITH a `created_at` tail so the existing "audit feed by actor, newest
 -- first" pagination is covered without an extra index.
 --
--- Idempotent: `CREATE INDEX CONCURRENTLY IF NOT EXISTS` is safe to re-run.
+-- Idempotent: `CREATE INDEX IF NOT EXISTS` is safe to re-run.
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_actor_api_key_id_created
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_api_key_id_created
   ON audit.logs (actor_api_key_id, created_at)
   WHERE actor_api_key_id IS NOT NULL;

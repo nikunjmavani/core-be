@@ -357,15 +357,24 @@ describe('Membership Sub-Domain — Integration', () => {
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1_000),
         created_by_user_id: admin.id,
       });
-      return { organization, token, invitation, inviteeMembership: inviteeMembership!, rawToken };
+      return {
+        organization,
+        token,
+        invitation,
+        invitee,
+        inviteeMembership: inviteeMembership!,
+        rawToken,
+      };
     }
 
     it('atomically activates the linked membership when the invitation is accepted', async () => {
-      const { invitation, inviteeMembership, rawToken } = await createPendingInvitation();
+      const { invitation, invitee, inviteeMembership, rawToken } = await createPendingInvitation();
+      const inviteeToken = await generateTestToken({ userId: invitee.public_id });
 
-      const acceptResponse = await injectUnauthenticated(app, {
+      const acceptResponse = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath(`/tenancy/invitations/${invitation.public_id}/accept`),
+        token: inviteeToken,
         payload: { token: rawToken },
       });
       expect(acceptResponse.statusCode).toBe(200);

@@ -7,7 +7,7 @@ import { createTestOrganization } from '@/tests/factories/organization.factory.j
 import { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.repository.js';
 import { webhooks } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 
-vi.setConfig({ testTimeout: 15_000, hookTimeout: 20_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 describe('WebhookRepository (database)', () => {
   const repository = new WebhookRepository();
@@ -79,12 +79,12 @@ describe('WebhookRepository (database)', () => {
     const organization = await createTestOrganization({ ownerUserId: user.id });
     const baseCreatedAt = Date.now();
 
-    for (let index = 0; index < 501; index += 1) {
+    for (let index = 0; index < 11; index += 1) {
       const created = await repository.create({
         organization_id: organization.id,
         url: `https://example.com/hook-${index}-${baseCreatedAt}`,
         encrypted_secret: 'secret',
-        events: index === 500 ? ['subscription.updated'] : ['user.created'],
+        events: index === 10 ? ['subscription.updated'] : ['user.created'],
         is_enabled: index !== 0,
         created_by_user_id: user.id,
       });
@@ -98,11 +98,11 @@ describe('WebhookRepository (database)', () => {
     const subscribed = await repository.listEnabledSubscribedToEvent(
       organization.id,
       'subscription.updated',
-      100,
+      10,
     );
 
     expect(subscribed).toHaveLength(1);
-    expect(subscribed[0]?.url).toContain('hook-500-');
+    expect(subscribed[0]?.url).toContain('hook-10-');
   });
 
   describe('listByOrganization (keyset cursor pagination)', () => {

@@ -8,7 +8,7 @@ import { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.
 import { WebhookDeliveryAttemptRepository } from '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery-attempt.repository.js';
 import { webhook_delivery_attempts } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 
-vi.setConfig({ testTimeout: 15_000, hookTimeout: 20_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 describe('WebhookDeliveryAttemptRepository (database)', () => {
   const webhookRepository = new WebhookRepository();

@@ -179,7 +179,7 @@ export class UploadService {
     return serializeUploadCreate({
       publicId: row.public_id,
       uploadUrl,
-      key: pendingKey,
+      key,
       expiresAt,
       uploadMethod,
       ...(fields !== undefined ? { fields } : {}),

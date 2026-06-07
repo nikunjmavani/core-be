@@ -1767,7 +1767,6 @@ src/
     │   ├── config/
     │   │   ├── env-schema-boolean-coerce.unit.test.ts
     │   │   ├── env-schema.unit.test.ts
-    │   │   ├── env-schema.unit.test.ts.bak
     │   │   └── env.config.unit.test.ts
     │   ├── database/
     │   │   └── role-least-privilege-migration.policy.unit.test.ts

@@ -6,6 +6,7 @@ import { dead_letter_jobs } from '@/infrastructure/queue/dlq/dead-letter.schema.
 import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.schema.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env } from '@/shared/config/env.config.js';
+import { SEVEN_DAYS } from '@/shared/constants/ttl.constants.js';
 
 /**
  * sec-D5: verification tokens age out 7 days after they expire — used or
@@ -13,7 +14,7 @@ import { env } from '@/shared/config/env.config.js';
  * email + token-hash; once past expiry they have no auth value and only add
  * GDPR / SOC2 retention exposure.
  */
-const VERIFICATION_TOKEN_RETENTION_GRACE_DAYS = 7;
+const VERIFICATION_TOKEN_RETENTION_GRACE_DAYS = SEVEN_DAYS;
 
 /**
  * Deletes audit-schema operational records older than `AUDIT_RETENTION_DAYS` in

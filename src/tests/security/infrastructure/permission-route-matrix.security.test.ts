@@ -35,7 +35,7 @@ function payloadForPermissionRoute(
     return { plan_id: planPublicId, billing_cycle: 'monthly' };
   }
   if (route.path.includes('/subscriptions/:subscriptionId')) {
-    return { cancel_at_period_end: true };
+    return {};
   }
   if (route.path.endsWith('/api-keys')) {
     return { name: 'Matrix API key', scopes: [route.permissionCode] };

@@ -417,6 +417,26 @@ describe('UploadService', () => {
     expect(createArgs?.file_key).toMatch(/^pending\/avatars\//);
   });
 
+  it('createUpload returns the final attach key while presigning the pending object', async () => {
+    const result = await service.createUpload(
+      {
+        purpose: 'avatar',
+        for: 'user',
+        contentType: 'image/png',
+        fileName: 'avatar.png',
+        fileSize: 1024,
+      },
+      userPublicId,
+    );
+
+    const presignArgs = vi.mocked(objectStorage.createPresignedUploadUrl).mock.calls[0]?.[0];
+    const createArgs = vi.mocked(repository.create).mock.calls[0]?.[0];
+    expect(result.key).toMatch(/^avatars\//);
+    expect(result.key).not.toMatch(/^pending\//);
+    expect(presignArgs?.key).toBe(`pending/${result.key}`);
+    expect(createArgs?.file_key).toBe(`pending/${result.key}`);
+  });
+
   it('confirmUpload allows org managers to confirm teammate-created organization uploads', async () => {
     // sec-UP1: must be pending-keyed.
     const finalKey = uploadRow.file_key;

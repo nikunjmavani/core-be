@@ -56,6 +56,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
       method: 'POST',
       url: testApiPath('/auth/webauthn/register/options'),
       token,
+      payload: {},
     });
     expect(registerOptionsResponse.statusCode).toBe(200);
     const registerOptionsBody = registerOptionsResponse.json() as {
@@ -170,6 +171,7 @@ describe('Auth e2e: WebAuthn passkey enrolment and sign-in', () => {
         method: 'POST',
         url: testApiPath('/auth/webauthn/register/options'),
         token,
+        payload: {},
       });
       expect(optionsResponse.statusCode).toBe(200);
       const challengeToken = (optionsResponse.json() as { data: { challenge_token: string } }).data

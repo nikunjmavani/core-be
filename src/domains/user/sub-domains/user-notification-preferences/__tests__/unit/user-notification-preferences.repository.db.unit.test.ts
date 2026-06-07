@@ -81,6 +81,8 @@ describe('UserNotificationPreferencesRepository (database)', () => {
         channel: 'EMAIL',
         is_enabled: true,
       }),
-    ).rejects.toThrow(/chk_user_notif_prefs_no_org/);
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({ constraint_name: 'chk_user_notif_prefs_no_org' }),
+    });
   });
 });
