@@ -22,7 +22,6 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { getWorkerConcurrencyNotify } from '@/shared/config/worker-concurrency.util.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 import {
-  runGlobalRetentionWorkerJob,
   runTenantScopedWorkerJob,
   type WorkerDatabaseHandle,
 } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
@@ -244,9 +243,15 @@ async function processTenantScopedNotificationJob(
  * @remarks
  * - **Algorithm:** for each job, branch on `organizationPublicId`: tenant-scoped jobs run inside
  *   `runTenantScopedWorkerJob` (`withOrganizationContext`) so RLS pins reads to the org;
- *   global / system notifications (no org id) run inside `runGlobalRetentionWorkerJob`. Both
- *   paths build a worker-scoped {@link NotificationRepository} from the database handle and
- *   delegate to {@link processNotificationDispatchJob} for per-channel fan-out.
+ *   tenant-less notifications delegate directly to {@link processNotificationDispatchJob}
+ *   which then enters its own `loadNotificationForScope` flow — resolving the recipient
+ *   public id under `withGlobalAdminDatabaseContext` and pinning `withUserDatabaseContext`
+ *   for the load (sec-re-01: the prior wiring wrapped this branch in
+ *   `runGlobalRetentionWorkerJob` and injected a repository, which short-circuited the new
+ *   `loadNotificationForScope` flow — making the sec-D #10 user-context fix dead code).
+ *   Both paths produce a worker-scoped {@link NotificationRepository} (via injection on the
+ *   tenant-scoped path, via the loadNotificationForScope helper on the tenant-less path)
+ *   and delegate to {@link processNotificationDispatchJob} for per-channel fan-out.
  * - **Failure modes:** BullMQ retries on thrown errors using the queue's exponential backoff
  *   (3 attempts); stalls and completions are logged via the worker listeners.
  * - **Side effects:** subscribes a `Worker` to {@link NOTIFICATION_QUEUE_NAME}; reads notification
@@ -266,14 +271,17 @@ export function createNotificationWorker(): WorkerHandle {
         });
 
       return runWithPropagatedTraceContext({ traceparent, tracestate }, job.name, () => {
+        // sec-re-01: tenant-less notifications delegate directly to
+        // processNotificationDispatchJob so it can enter its own loadNotificationForScope
+        // flow (withGlobalAdminDatabaseContext → withUserDatabaseContext). The prior
+        // wiring wrapped this branch in runGlobalRetentionWorkerJob AND injected a
+        // repository, which short-circuited the new flow and left the sec-D #10 fix
+        // dead code.
         if (organizationPublicId === null || organizationPublicId === undefined) {
-          return runGlobalRetentionWorkerJob((databaseHandle) =>
-            processNotificationDispatchJob(
-              notificationId,
-              organizationPublicId,
-              omitUndefined({ id: job.id, requestId }),
-              createWorkerNotificationRepository(databaseHandle),
-            ),
+          return processNotificationDispatchJob(
+            notificationId,
+            organizationPublicId,
+            omitUndefined({ id: job.id, requestId }),
           );
         }
 
