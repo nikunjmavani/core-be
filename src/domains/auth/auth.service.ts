@@ -214,7 +214,19 @@ export class AuthService {
     sessionPublicId: string;
     refreshSecret: string;
   }): Promise<{ access_token: string; refresh_secret: string }> {
-    const session = await this.authSessionService.findActiveSessionByPublicId(sessionPublicId);
+    // sec-re-05: look the session up via the INCLUDING-REVOKED path so a
+    // refresh-secret replay against an already-revoked session reaches
+    // `refreshSessionCredentials`'s reuse-detection block (the sec-A #9
+    // `findByPublicIdIncludingRevoked` lookup). The prior
+    // `findActiveSessionByPublicId` filtered `is_revoked = true` rows out
+    // here and threw `errors:invalidOrExpiredSession` before the rotation
+    // ran — silently disabling the Sentry `auth.refresh_token.reuse_detected`
+    // signal exactly when it is most informative. Revoked sessions still
+    // fail to refresh because `refreshSessionCredentials`'s rotation UPDATE
+    // filters `is_revoked = false` internally and throws after firing the
+    // reuse-detection block.
+    const session =
+      await this.authSessionService.findSessionByPublicIdIncludingRevoked(sessionPublicId);
     if (!session) {
       throw new UnauthorizedError('errors:invalidOrExpiredSession');
     }

@@ -202,6 +202,20 @@ export class AuthSessionService {
     );
   }
 
+  /**
+   * Lookup wrapper that returns the session row even when `is_revoked = true`.
+   * Used by `auth.service.refreshToken` so a refresh-secret replay against an
+   * already-revoked session reaches `refreshSessionCredentials`'
+   * reuse-detection block (sec-re-05). The narrow active-only
+   * `findActiveSessionByPublicId` is retained for callers that genuinely need
+   * to filter revoked rows.
+   */
+  async findSessionByPublicIdIncludingRevoked(sessionPublicId: string) {
+    return withSessionPublicIdDatabaseContext(sessionPublicId, (_databaseHandle) =>
+      this.sessionRepository.findByPublicIdIncludingRevoked(sessionPublicId),
+    );
+  }
+
   async rotateSessionTokenHash(sessionPublicId: string, tokenHash: string): Promise<void> {
     await withSessionPublicIdDatabaseContext(sessionPublicId, async (_databaseHandle) => {
       const existing = await this.sessionRepository.findByPublicId(sessionPublicId);

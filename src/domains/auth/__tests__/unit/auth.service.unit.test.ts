@@ -79,6 +79,12 @@ describe('AuthService', () => {
       expires_at: new Date(Date.now() + 86_400_000),
       revoked_at: null,
     }),
+    findSessionByPublicIdIncludingRevoked: vi.fn().mockResolvedValue({
+      public_id: 'session_public',
+      user_id: 1,
+      expires_at: new Date(Date.now() + 86_400_000),
+      is_revoked: false,
+    }),
     rotateSessionTokenHash: vi.fn().mockResolvedValue(undefined),
     refreshSessionCredentials: vi.fn().mockResolvedValue({ refresh_secret: 'new-refresh-secret' }),
   } as unknown as AuthSessionService;
@@ -290,33 +296,71 @@ describe('AuthService', () => {
   });
 
   it('refreshToken rejects missing session', async () => {
-    vi.mocked(authSessionService.findActiveSessionByPublicId).mockResolvedValue(null);
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue(null);
     await expect(
       service.refreshToken({ sessionPublicId: 'missing', refreshSecret: 'refresh-secret' }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('refreshToken rejects expired sessions and inactive users', async () => {
-    vi.mocked(authSessionService.findActiveSessionByPublicId).mockResolvedValue({
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue({
       public_id: 'session_public',
       user_id: 1,
       expires_at: new Date(Date.now() - 1000),
-      revoked_at: null,
+      is_revoked: false,
     } as never);
     await expect(
       service.refreshToken({ sessionPublicId: 'session_public', refreshSecret: 'refresh-secret' }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
 
-    vi.mocked(authSessionService.findActiveSessionByPublicId).mockResolvedValue({
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue({
       public_id: 'session_public',
       user_id: 1,
       expires_at: new Date(Date.now() + 86_400_000),
-      revoked_at: null,
+      is_revoked: false,
     } as never);
     vi.mocked(userService.findById).mockResolvedValue({ ...user, status: 'SUSPENDED' } as never);
     await expect(
       service.refreshToken({ sessionPublicId: 'session_public', refreshSecret: 'refresh-secret' }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('sec-re-05: refreshToken reaches refreshSessionCredentials even when the session row is revoked, so the reuse-detection block can fire', async () => {
+    // Without this fix, `refreshToken` looked the session up via
+    // `findActiveSessionByPublicId` (which filters `is_revoked = false`) and
+    // threw `errors:invalidOrExpiredSession` for revoked rows BEFORE
+    // `refreshSessionCredentials` could run the
+    // `findByPublicIdIncludingRevoked` reuse-detection block — the exact
+    // "user clicked Log out everywhere, attacker holds stale refresh secret"
+    // scenario sec-A #9 was meant to catch silently no-op'd. The Sentry
+    // signal (`auth.refresh_token.reuse_detected`) never fired.
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: 1,
+      expires_at: new Date(Date.now() + 86_400_000),
+      is_revoked: true,
+    } as never);
+    vi.mocked(userService.findById).mockResolvedValue({ ...user, status: 'ACTIVE' } as never);
+    vi.mocked(authSessionService.refreshSessionCredentials).mockRejectedValueOnce(
+      new UnauthorizedError('errors:invalidOrExpiredSession'),
+    );
+
+    await expect(
+      service.refreshToken({
+        sessionPublicId: 'session_public',
+        refreshSecret: 'replayed-stale-secret',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+
+    // The critical assertion — refreshSessionCredentials WAS reached, even for
+    // a revoked session. On dev this call never happens because the service
+    // throws on the earlier findActiveSessionByPublicId null-return.
+    expect(authSessionService.refreshSessionCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionPublicId: 'session_public',
+        refreshSecret: 'replayed-stale-secret',
+      }),
+    );
   });
 
   it('login rehashes password when verifyPassword reports needsRehash', async () => {
