@@ -146,6 +146,40 @@ describe('mail.processor', () => {
     expect(markMailOutboxFailedMock).not.toHaveBeenCalled();
   });
 
+  it('sec-new-Q3: processMailOutboxJob throws ZodError when to_addresses is not an array', async () => {
+    tryClaimPendingMailOutboxMock.mockResolvedValue('claimed');
+    findMailOutboxByIdMock.mockResolvedValue({
+      id: 50,
+      status: 'sending',
+      to_addresses: 'not-an-array@example.com',
+      subject: 'Hello',
+      html: '<p>Hi</p>',
+      text_body: null,
+      reply_to: null,
+      tags: null,
+    });
+
+    await expect(processMailOutboxJob({ mailOutboxId: 50 })).rejects.toThrow();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('sec-new-Q3: processMailOutboxJob throws ZodError when to_addresses contains non-email strings', async () => {
+    tryClaimPendingMailOutboxMock.mockResolvedValue('claimed');
+    findMailOutboxByIdMock.mockResolvedValue({
+      id: 51,
+      status: 'sending',
+      to_addresses: ['not-a-valid-email'],
+      subject: 'Hello',
+      html: '<p>Hi</p>',
+      text_body: null,
+      reply_to: null,
+      tags: null,
+    });
+
+    await expect(processMailOutboxJob({ mailOutboxId: 51 })).rejects.toThrow();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
   it('processMailOutboxJob marks failed on final send failure', async () => {
     tryClaimPendingMailOutboxMock.mockResolvedValue('claimed');
     findMailOutboxByIdMock.mockResolvedValue({

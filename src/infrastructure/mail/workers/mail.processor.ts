@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 import { CircuitBreakerOpenError } from '@/infrastructure/resilience/circuit-breaker.js';
 import { sendEmail } from '@/infrastructure/mail/mail.service.js';
@@ -142,7 +143,10 @@ async function processMailOutboxJobInner(
     throw new Error(`mail.outbox.not_claimable:${String(mailOutboxId)}:${claimResult}`);
   }
 
-  const toAddresses = outboxRow.to_addresses as string[];
+  // sec-new-Q3: parse the JSONB column instead of blindly casting so a
+  // corrupt or mis-shaped row throws early (and retries) rather than
+  // reaching sendEmail() with a non-array / non-string value.
+  const toAddresses = z.array(z.string().email()).parse(outboxRow.to_addresses);
   logger.info(
     {
       jobId: options.jobId,
