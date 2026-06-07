@@ -425,6 +425,51 @@ describe('MfaService', () => {
     await expect(service.deleteMfa('user_public', 5)).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
+  it('sec-new-A4: updateMfaEnabled is called inside the withUserDatabaseContext transaction (no TOCTOU window)', async () => {
+    // Regression: the previous code called updateMfaEnabled AFTER withUserDatabaseContext
+    // returned, leaving a TOCTOU gap where a concurrent enroll could flip is_mfa_enabled
+    // back to true between the revoke commit and the flag update.
+    const { withUserDatabaseContext } = await import(
+      '@/infrastructure/database/contexts/user-database.context.js'
+    );
+
+    const callOrder: string[] = [];
+    vi.mocked(withUserDatabaseContext).mockImplementationOnce(
+      async (_userPublicId: string, callback: Parameters<typeof withUserDatabaseContext>[1]) => {
+        callOrder.push('txn_start');
+        await callback(null as never);
+        callOrder.push('txn_end');
+      },
+    );
+
+    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValueOnce({
+      id: 5,
+      method_type: 'MFA_TOTP',
+    } as never);
+    vi.mocked(authMethodService.revokeAuthMethod).mockImplementationOnce(async () => {
+      callOrder.push('revokeAuthMethod');
+      return { id: 5 } as never;
+    });
+    // Both listMfaMethodsByUserId calls return [] — the pre-check count is 0 (
+    // wouldBeLastRemoval = true) and the post-revoke remaining count is 0.
+    vi.mocked(authMethodService.listMfaMethodsByUserId).mockResolvedValue([] as never);
+    vi.mocked(userService.updateMfaEnabled).mockImplementationOnce(async () => {
+      callOrder.push('updateMfaEnabled');
+      return null as never;
+    });
+
+    await service.deleteMfa('user_public', 5);
+
+    // updateMfaEnabled must happen INSIDE the transaction (between txn_start and txn_end)
+    expect(callOrder).toContain('updateMfaEnabled');
+    expect(callOrder.indexOf('updateMfaEnabled')).toBeGreaterThan(callOrder.indexOf('txn_start'));
+    expect(callOrder.indexOf('updateMfaEnabled')).toBeLessThan(callOrder.indexOf('txn_end'));
+    // The revoke must precede the flag flip.
+    expect(callOrder.indexOf('revokeAuthMethod')).toBeLessThan(
+      callOrder.indexOf('updateMfaEnabled'),
+    );
+  });
+
   it('verify and listMfaMethods reject when user record is missing', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
     await expect(service.verify('missing', { code: '123456' })).rejects.toBeInstanceOf(
