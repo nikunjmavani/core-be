@@ -847,15 +847,25 @@ export const envSchema = envSchemaBase
       path: ['STRIPE_SECRET_KEY'],
     },
   )
-  // sec-B6: Stripe webhook secret, when set, must carry the `whsec_` prefix.
+  // sec-B6 + sec-new-B3: Stripe webhook secret, when set, must carry the `whsec_` prefix.
   // A wrong value fails every HMAC and silently freezes subscription state
   // (no past-due / cancellation events reach the DB) until Stripe disables
   // the endpoint after ~3 days.
+  // sec-new-B3: accepts a comma-separated list for zero-downtime key rotation
+  // (e.g. `whsec_old,whsec_new`); every segment must start with `whsec_`.
+  // Trailing commas and whitespace around segments are ignored so copy-paste
+  // errors from the Stripe Dashboard do not brick the webhook at boot.
   .refine(
-    (data) =>
-      data.STRIPE_WEBHOOK_SECRET === undefined || data.STRIPE_WEBHOOK_SECRET.startsWith('whsec_'),
+    (data) => {
+      if (data.STRIPE_WEBHOOK_SECRET === undefined) return true;
+      const segments = data.STRIPE_WEBHOOK_SECRET.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return segments.length > 0 && segments.every((s) => s.startsWith('whsec_'));
+    },
     {
-      message: 'STRIPE_WEBHOOK_SECRET must begin with `whsec_` (Stripe webhook secret format).',
+      message:
+        'STRIPE_WEBHOOK_SECRET must be a `whsec_`-prefixed value or a comma-separated list of `whsec_`-prefixed values (Stripe webhook secret format).',
       path: ['STRIPE_WEBHOOK_SECRET'],
     },
   )

@@ -624,6 +624,41 @@ describe('env-schema', () => {
       expect(issue).toBeDefined();
     });
 
+    // sec-new-B3: comma-separated secret list validation
+    it('sec-new-B3: accepts comma-separated list of valid whsec_ secrets', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_old,whsec_new',
+        EMAIL_FROM_ADDRESS: 'billing@example.com',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('sec-new-B3: accepts comma-separated list with surrounding whitespace (copy-paste tolerance)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: '  whsec_first  ,  whsec_second  ,  ',
+        EMAIL_FROM_ADDRESS: 'billing@example.com',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('sec-new-B3: rejects comma-separated list where one segment lacks the whsec_ prefix', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_valid,garbage',
+        EMAIL_FROM_ADDRESS: 'billing@example.com',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_WEBHOOK_SECRET'));
+      expect(issue).toBeDefined();
+    });
+
     it('accepts production env with both Stripe keys set in live mode', () => {
       // sec-B #19: configuring Stripe also requires EMAIL_FROM_ADDRESS so the
       // Stripe customer email is built off a real owned domain (not @invalid).

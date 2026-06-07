@@ -321,13 +321,20 @@ export async function updateStripeSubscription(
 // ── Webhook verification ──────────────────────────────────────
 
 /**
- * Verifies the `Stripe-Signature` header against the raw body using `STRIPE_WEBHOOK_SECRET`
- * and returns the parsed `Stripe.Event`. Throws when the secret is missing or the
- * signature does not match — callers must use the raw (un-parsed) request body.
+ * Verifies the `Stripe-Signature` header against the raw body and returns the parsed
+ * `Stripe.Event`. Throws when the secret is missing or no configured secret matches.
  *
  * @remarks
- * The tolerance is set to 150 seconds (half of Stripe's 300 s default) to halve the
- * replay window; legitimate deliveries from Stripe arrive within seconds of signing.
+ * **Tolerance:** 150 seconds (half of Stripe's 300 s default) to halve the replay window;
+ * legitimate deliveries from Stripe arrive within seconds of signing.
+ *
+ * **Key rotation (sec-new-B3):** `STRIPE_WEBHOOK_SECRET` may be a comma-separated list of
+ * `whsec_`-prefixed secrets (e.g. `whsec_old,whsec_new`). Each segment is trimmed; empty
+ * segments from trailing commas are ignored. Secrets are tried in order and the first that
+ * verifies is returned. This enables zero-downtime key rotation: add the new secret to the
+ * list in the Stripe Dashboard, then remove the old one once it is no longer in use. If no
+ * secret matches, the last `StripeSignatureVerificationError` is re-thrown so callers can
+ * distinguish "bad signature" from "missing config".
  */
 export function constructStripeWebhookEvent(
   body: string | Buffer,
@@ -338,7 +345,21 @@ export function constructStripeWebhookEvent(
   if (!webhookSecret) {
     throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
   }
-  return stripe.webhooks.constructEvent(body, signature, webhookSecret, 150);
+  // sec-new-B3: split on comma so operators can list old + new secret during a
+  // rolling key rotation without dropping in-flight deliveries.
+  const secrets = webhookSecret
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  let lastError: unknown;
+  for (const secret of secrets) {
+    try {
+      return stripe.webhooks.constructEvent(body, signature, secret, 150);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 logger.info('Stripe client module loaded');
