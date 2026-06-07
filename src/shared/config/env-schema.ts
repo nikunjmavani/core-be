@@ -417,6 +417,8 @@ const envSchemaBase = z.object({
   MEMBER_ROLE_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   UPLOAD_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
+  /** sec-new-Q1: cron override for GDPR export artifact purge. */
+  USER_DATA_EXPORT_RETENTION_CRON: z.string().min(1).optional(),
   /** Cron for the PENDING upload sweeper (auto-confirm matches, hard-delete orphans). */
   UPLOAD_PENDING_SWEEP_CRON: z.string().min(1).optional(),
   /**
@@ -453,6 +455,8 @@ const envSchemaBase = z.object({
   /** Maximum ledger rows inspected per sweeper tick. */
   DLQ_AUTO_RETRY_BATCH_SIZE: z.coerce.number().int().min(1).default(20),
   DLQ_AUTO_RETRY_CRON: z.string().min(1).optional(),
+  /** sec-new-Q1: cron override for the commit-dispatch recovery sweep. */
+  COMMIT_DISPATCH_RECOVERY_CRON: z.string().min(1).optional(),
 
   /**
    * Alert when a single BullMQ source queue's waiting + delayed backlog reaches this many

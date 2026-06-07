@@ -88,6 +88,24 @@ describe('infrastructure queue scheduler', () => {
     );
   });
 
+  it('sec-new-Q1: getScheduledJobs honors USER_DATA_EXPORT_RETENTION_CRON from the environment', async () => {
+    vi.stubEnv('USER_DATA_EXPORT_RETENTION_CRON', '*/9 * * * *');
+    const { getScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
+    const scheduledJobs = getScheduledJobs();
+    expect(
+      scheduledJobs.find((job) => job.queueName === 'user-data-export-retention')?.cronPattern,
+    ).toBe('*/9 * * * *');
+  });
+
+  it('sec-new-Q1: getScheduledJobs honors COMMIT_DISPATCH_RECOVERY_CRON from the environment', async () => {
+    vi.stubEnv('COMMIT_DISPATCH_RECOVERY_CRON', '*/11 * * * *');
+    const { getScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
+    const scheduledJobs = getScheduledJobs();
+    expect(
+      scheduledJobs.find((job) => job.queueName === 'commit-dispatch-recovery')?.cronPattern,
+    ).toBe('*/11 * * * *');
+  });
+
   it('registerScheduledJobs registers only active queue names when filtered', async () => {
     vi.stubEnv('SCHEDULER_ENABLED', 'true');
     const { registerScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
