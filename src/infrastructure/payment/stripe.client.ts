@@ -145,17 +145,25 @@ export async function retrieveStripeEvent(
     buildOutboundCallOptions({
       name: 'stripe',
       requestId,
-      // sec-Q5: the BullMQ webhook worker calls this per attempt. Under
-      // Stripe latency or a regional outage, every retry of every queued
-      // event piled a new outbound call onto an already-stressed Stripe
-      // API. Honouring the abort timeout caps each retry's bad-day
-      // contribution to the queue at the configured outbound-call window
-      // instead of letting it hang for the network's full TCP timeout.
+      // sec-Q5 + sec-re-15: the BullMQ webhook worker calls this per attempt.
+      // Under Stripe latency or a regional outage, every retry of every queued
+      // event piled a new outbound call onto an already-stressed Stripe API.
+      // Stripe's RequestOptions are the only place we can actually bind the
+      // retrieve to a single attempt and a per-request timeout — the SDK does
+      // not thread our AbortSignal into the underlying HTTP call, so the prior
+      // `enforceAbortTimeout: true` combined with the client-level
+      // `maxNetworkRetries: 2` meant ONE worker attempt could still take up to
+      // 3 × STRIPE_HTTP_TIMEOUT_MS, in direct contradiction of the comment.
+      // Overriding both at the call site caps the bad-day contribution at the
+      // configured outbound-call window for real.
       enforceAbortTimeout: true,
       rethrowIf: (error) => error instanceof Stripe.errors.StripeError,
       operation: async () => {
         const stripe = getStripeClient();
-        return stripe.events.retrieve(stripeEventId);
+        return stripe.events.retrieve(stripeEventId, undefined, {
+          timeout: env.STRIPE_HTTP_TIMEOUT_MS,
+          maxNetworkRetries: 0,
+        });
       },
     }),
   );
