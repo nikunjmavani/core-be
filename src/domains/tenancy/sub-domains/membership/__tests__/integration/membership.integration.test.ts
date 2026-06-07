@@ -310,7 +310,6 @@ describe('Membership Sub-Domain — Integration', () => {
         headers: { 'idempotency-key': `idem-${randomUUID()}` },
         payload: {
           membership_id: membership.public_id,
-          email: `route-invite-${Date.now()}@test.com`,
           expires_in_days: 7,
         },
       });
