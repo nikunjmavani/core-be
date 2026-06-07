@@ -6,6 +6,7 @@ import {
 import { DEFAULT_COMMIT_DISPATCH_RECOVERY_BATCH_SIZE } from '@/shared/constants/limits.constants.js';
 import { executeCommitDispatchTask } from '@/infrastructure/queue/commit-dispatch/commit-dispatch.executor.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { isSentryInitialized, Sentry } from '@/infrastructure/observability/sentry/sentry.js';
 
 /**
  * Outcome counters for one commit-dispatch recovery sweeper pass.
@@ -45,6 +46,12 @@ export async function runCommitDispatchRecoveryJob(): Promise<CommitDispatchReco
         executedCount += 1;
       } catch (error) {
         logger.warn({ error, requestId, task }, 'commit-dispatch-recovery.task.failed');
+        // sec-new-Q2: surface per-task failures in Sentry so they are not
+        // silently swallowed — the logger.warn above is too easy to miss in
+        // production dashboards.
+        if (isSentryInitialized()) {
+          Sentry.captureException(error);
+        }
       }
     }
   }
