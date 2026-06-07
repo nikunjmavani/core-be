@@ -95,7 +95,8 @@ function getTombstoneRetentionScheduledJobs(timezone: string | undefined): Sched
       queueName: USER_DATA_EXPORT_RETENTION_QUEUE_NAME,
       schedulerId: 'daily-user-data-export-retention',
       jobName: 'purge-expired-user-data-exports',
-      cronPattern: DEFAULT_USER_DATA_EXPORT_RETENTION_CRON,
+      // sec-new-Q1: allow operators to override the default schedule via env.
+      cronPattern: env.USER_DATA_EXPORT_RETENTION_CRON ?? DEFAULT_USER_DATA_EXPORT_RETENTION_CRON,
     }),
     withSchedulerTimezone(timezone, {
       queueName: UPLOAD_TOMBSTONE_RETENTION_QUEUE_NAME,
@@ -218,7 +219,8 @@ export function getScheduledJobs(): ScheduledJob[] {
       queueName: COMMIT_DISPATCH_RECOVERY_QUEUE_NAME,
       schedulerId: 'commit-dispatch-recovery',
       jobName: 'replay-stale-commit-dispatch',
-      cronPattern: DEFAULT_COMMIT_DISPATCH_RECOVERY_CRON,
+      // sec-new-Q1: allow operators to override the default schedule via env.
+      cronPattern: env.COMMIT_DISPATCH_RECOVERY_CRON ?? DEFAULT_COMMIT_DISPATCH_RECOVERY_CRON,
     }),
     withSchedulerTimezone(timezone, {
       queueName: MAIL_OUTBOX_SWEEPER_QUEUE_NAME,
