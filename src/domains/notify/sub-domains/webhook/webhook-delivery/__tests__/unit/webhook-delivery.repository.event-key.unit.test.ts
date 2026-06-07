@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { insertMock, valuesMock, onConflictDoNothingMock, returningMock } = vi.hoisted(() => {
+const {
+  insertMock,
+  valuesMock,
+  onConflictDoNothingMock,
+  returningMock,
+  limitMock,
+  whereMock,
+  fromMock,
+  selectMock,
+} = vi.hoisted(() => {
   const returningMock = vi.fn().mockResolvedValue([{ id: 7 }]);
   const onConflictDoNothingMock = vi.fn().mockReturnValue({ returning: returningMock });
   const valuesMock = vi.fn().mockReturnValue({
@@ -8,11 +17,26 @@ const { insertMock, valuesMock, onConflictDoNothingMock, returningMock } = vi.ho
     returning: returningMock,
   });
   const insertMock = vi.fn().mockReturnValue({ values: valuesMock });
-  return { insertMock, valuesMock, onConflictDoNothingMock, returningMock };
+
+  const limitMock = vi.fn().mockResolvedValue([{ id: 99 }]);
+  const whereMock = vi.fn().mockReturnValue({ limit: limitMock });
+  const fromMock = vi.fn().mockReturnValue({ where: whereMock });
+  const selectMock = vi.fn().mockReturnValue({ from: fromMock });
+
+  return {
+    insertMock,
+    valuesMock,
+    onConflictDoNothingMock,
+    returningMock,
+    limitMock,
+    whereMock,
+    fromMock,
+    selectMock,
+  };
 });
 
 vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => ({
-  getRequestDatabase: vi.fn(() => ({ insert: insertMock })),
+  getRequestDatabase: vi.fn(() => ({ insert: insertMock, select: selectMock })),
   setLocalDatabaseConfig: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -48,6 +72,11 @@ describe('createPendingWebhookDeliveryAttempt — event_key dedupe (sec-N2)', ()
     onConflictDoNothingMock.mockClear();
     returningMock.mockClear();
     returningMock.mockResolvedValue([{ id: 7 }]);
+    selectMock.mockClear();
+    fromMock.mockClear();
+    whereMock.mockClear();
+    limitMock.mockClear();
+    limitMock.mockResolvedValue([{ id: 99 }]);
   });
 
   it('persists event_key when provided and applies onConflictDoNothing(webhook_id, event_key)', async () => {
@@ -78,5 +107,34 @@ describe('createPendingWebhookDeliveryAttempt — event_key dedupe (sec-N2)', ()
     const inserted = valuesMock.mock.calls[0]?.[0];
     expect(inserted).not.toHaveProperty('event_key');
     expect(onConflictDoNothingMock).not.toHaveBeenCalled();
+  });
+
+  it('sec-new-D4: fallback SELECT on conflict path issues a SELECT with .where().limit(1)', async () => {
+    // Simulate conflict: insert returns [] (onConflictDoNothing suppressed the insert)
+    returningMock.mockResolvedValue([]);
+    await createPendingWebhookDeliveryAttempt({
+      webhookId: 5,
+      eventType: 'customer.updated',
+      payload: { ok: true },
+      eventKey: 'evt_conflict_key',
+    });
+    // The fallback SELECT path must be exercised — sec-new-D4 ensures status='PENDING'
+    // is included in the WHERE clause alongside webhook_id and event_key so a
+    // completed/failed row with the same (webhook_id, event_key) is not returned.
+    expect(selectMock).toHaveBeenCalledOnce();
+    expect(whereMock).toHaveBeenCalledOnce();
+    expect(limitMock).toHaveBeenCalledWith(1);
+  });
+
+  it('sec-new-D4: fallback SELECT returns the found pending row id', async () => {
+    returningMock.mockResolvedValue([]);
+    limitMock.mockResolvedValue([{ id: 42 }]);
+    const result = await createPendingWebhookDeliveryAttempt({
+      webhookId: 5,
+      eventType: 'customer.updated',
+      payload: { ok: true },
+      eventKey: 'evt_for_existing',
+    });
+    expect(result).toBe(42);
   });
 });
