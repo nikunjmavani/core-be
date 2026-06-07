@@ -187,7 +187,7 @@ describe('MfaService', () => {
     );
   });
 
-  it('enrollConfirm persists the auth_methods row, mints recovery codes, and flips is_mfa_enabled on a verified code', async () => {
+  it('enrollConfirm persists the auth_methods row, mints recovery codes, and flips is_mfa_enabled on a verified code (sec-re-06: flip happens INSIDE the transaction)', async () => {
     const { insertMfaRecoveryCodes } = await import(
       '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
     );
@@ -196,6 +196,24 @@ describe('MfaService', () => {
     );
     // GETDEL returns the staged (encrypted) secret atomically.
     redis.getdel.mockResolvedValueOnce('TESTSECRET');
+
+    // Track call order: createAuthMethodRecord → insertMfaRecoveryCodes → updateMfaEnabled
+    // must all happen inside the withUserDatabaseContext callback (same transaction).
+    // sec-re-06: the prior code called updateMfaEnabled AFTER withUserDatabaseContext
+    // returned, on a separate connection; a crash between commit and the flip left the
+    // user with valid TOTP + codes but is_mfa_enabled=false, bypassing MFA at login.
+    const callOrder: string[] = [];
+    vi.mocked(authMethodService.createAuthMethodRecord).mockImplementationOnce(async () => {
+      callOrder.push('createAuthMethodRecord');
+      return { id: 99 } as never;
+    });
+    vi.mocked(insertMfaRecoveryCodes).mockImplementationOnce(async () => {
+      callOrder.push('insertMfaRecoveryCodes');
+    });
+    vi.mocked(userService.updateMfaEnabled).mockImplementationOnce(async () => {
+      callOrder.push('updateMfaEnabled');
+      return null as never;
+    });
 
     const result = await service.enrollConfirm('user_public', { code: '123456' });
 
@@ -208,6 +226,12 @@ describe('MfaService', () => {
     expect(userService.updateMfaEnabled).toHaveBeenCalledWith('user_public', true);
     expect(result.method_id).toBe(99);
     expect(result.recovery_codes).toHaveLength(10);
+
+    // The is_mfa_enabled flip must happen AFTER the TOTP row and recovery codes
+    // are written — but BEFORE the transaction commits (so they're atomic).
+    expect(callOrder.indexOf('updateMfaEnabled')).toBeGreaterThan(
+      callOrder.indexOf('insertMfaRecoveryCodes'),
+    );
   });
 
   it('enrollConfirm rejects when no staged secret is present (expired or never started)', async () => {
