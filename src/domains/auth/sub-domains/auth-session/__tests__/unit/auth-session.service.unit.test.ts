@@ -24,12 +24,19 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
-const user = { id: 1, public_id: 'user_public', email: 'user@example.com' };
+const user = {
+  id: 1,
+  public_id: 'user_public',
+  email: 'user@example.com',
+  status: 'ACTIVE',
+  deleted_at: null,
+};
 
 describe('AuthSessionService', () => {
   const userService = {
     requireUserRecordByPublicId: vi.fn().mockResolvedValue(user),
     findById: vi.fn().mockResolvedValue(user),
+    findUserRecordByPublicId: vi.fn().mockResolvedValue(user),
   } as unknown as UserService;
 
   const sessionRepository = {
@@ -59,6 +66,7 @@ describe('AuthSessionService', () => {
     vi.clearAllMocks();
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
     vi.mocked(userService.findById).mockResolvedValue(user as never);
+    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(user as never);
   });
 
   it('list returns sessions for user', async () => {
@@ -178,7 +186,7 @@ describe('AuthSessionService', () => {
       '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
     );
     vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce('sess_cached');
-    const result = await service.verifyActiveAccessToken('cached-token');
+    const result = await service.verifyActiveAccessToken('cached-token', 'user_public');
     expect(sessionRepository.findActiveByTokenHash).not.toHaveBeenCalled();
     expect(result).toEqual({ sessionPublicId: 'sess_cached' });
   });
@@ -193,7 +201,9 @@ describe('AuthSessionService', () => {
       public_id: 'session_public',
       expires_at: sessionExpiresAt,
     } as never);
-    const result = await service.verifyActiveAccessToken('fresh-token');
+    // sec-new-A2: active user is returned on cache miss so the user status check passes
+    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValueOnce(user as never);
+    const result = await service.verifyActiveAccessToken('fresh-token', 'user_public');
     expect(sessionRepository.findActiveByTokenHash).toHaveBeenCalled();
     expect(setCachedSessionTokenValid).toHaveBeenCalledWith(
       expect.objectContaining({ sessionExpiresAt, sessionPublicId: 'session_public' }),
@@ -203,9 +213,46 @@ describe('AuthSessionService', () => {
 
   it('verifyActiveAccessToken throws when session is missing', async () => {
     vi.mocked(sessionRepository.findActiveByTokenHash).mockResolvedValueOnce(null);
-    await expect(service.verifyActiveAccessToken('unknown-token')).rejects.toBeInstanceOf(
-      UnauthorizedError,
+    await expect(
+      service.verifyActiveAccessToken('unknown-token', 'user_public'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('verifyActiveAccessToken throws accountNotActive when user is suspended (sec-new-A2)', async () => {
+    const { getCachedSessionTokenValid } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
     );
+    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(null);
+    vi.mocked(sessionRepository.findActiveByTokenHash).mockResolvedValueOnce({
+      public_id: 'session_public',
+      expires_at: new Date('2026-12-31T00:00:00.000Z'),
+    } as never);
+    // sec-new-A2: suspended user must be rejected even when the session row is still active
+    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValueOnce({
+      ...user,
+      status: 'SUSPENDED',
+    } as never);
+    await expect(
+      service.verifyActiveAccessToken('active-session-token', 'suspended_user'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('verifyActiveAccessToken throws accountNotActive when user is soft-deleted (sec-new-A2)', async () => {
+    const { getCachedSessionTokenValid } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
+    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(null);
+    vi.mocked(sessionRepository.findActiveByTokenHash).mockResolvedValueOnce({
+      public_id: 'session_public',
+      expires_at: new Date('2026-12-31T00:00:00.000Z'),
+    } as never);
+    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValueOnce({
+      ...user,
+      deleted_at: new Date('2026-01-01T00:00:00.000Z'),
+    } as never);
+    await expect(
+      service.verifyActiveAccessToken('active-session-token', 'deleted_user'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('refreshSessionCredentials rotates the secret and does not revoke the family on the happy path', async () => {
