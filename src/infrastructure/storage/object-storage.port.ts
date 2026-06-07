@@ -62,11 +62,15 @@ export interface ObjectStoragePort {
    * upload confirm step to publish a verified pending object to its immutable final key so the
    * served object can never be overwritten via the client's still-valid presigned upload URL. The
    * destination `contentType` is set on the copy so the served object carries the verified type.
+   * `sourceETag` (sec-re-10) is the S3 ETag captured at the verify step; when supplied the
+   * adapter passes it as `CopySourceIfMatch` so the COPY fails with `PreconditionFailed` if the
+   * source bytes changed between verify and copy (closes the pending-PUT replay TOCTOU window).
    */
   copyObject(options: {
     sourceKey: string;
     destinationKey: string;
     contentType: string;
+    sourceETag?: string;
   }): Promise<void>;
 
   getObject(key: string): Promise<{ body: Buffer; contentType: string | undefined }>;
@@ -74,12 +78,14 @@ export interface ObjectStoragePort {
   /**
    * Fetches the first `byteCount` bytes of an S3 object via a ranged GET. Used for magic-byte
    * verification so large uploads are not fully buffered in the process. Returns `null` on
-   * S3 errors (logged internally); throws when `S3_BUCKET` is unset.
+   * S3 errors (logged internally); throws when `S3_BUCKET` is unset. `eTag` (sec-re-10) is the
+   * S3 ETag of the object at the time of read; callers thread it into `copyObject` to close
+   * the verify→copy TOCTOU window.
    */
   getObjectFirstBytes(
     key: string,
     byteCount: number,
-  ): Promise<{ body: Buffer; contentType: string | undefined } | null>;
+  ): Promise<{ body: Buffer; contentType: string | undefined; eTag?: string } | null>;
 
   getObjectUrl(key: string): string;
 

@@ -543,7 +543,19 @@ export class UploadService {
         return false;
       }
       if (finalKey !== sourceKey) {
-        await this.objectStorage.copyObject({ sourceKey, destinationKey: finalKey, contentType });
+        // sec-re-10: pin the COPY to the exact object bytes we just verified.
+        // The presigned PUT/POST that minted `pending/<key>` remains replayable
+        // for the lifetime of the upload URL (~15 min), so an authenticated
+        // client could race a second PUT between this HEAD and the copy and
+        // have the COPY pick up hostile bytes. `CopySourceIfMatch` makes S3
+        // reject that race with `PreconditionFailed` so the publish fails
+        // fast and we never serve unverified bytes from `finalKey`.
+        await this.objectStorage.copyObject({
+          sourceKey,
+          destinationKey: finalKey,
+          contentType,
+          ...(header.eTag ? { sourceETag: header.eTag } : {}),
+        });
       }
       return true;
     }
