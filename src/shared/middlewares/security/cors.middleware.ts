@@ -23,7 +23,12 @@ const corsMiddleware: FastifyPluginAsync = async (app) => {
       'Idempotency-Key',
       'X-Request-Id',
     ],
-    exposedHeaders: ['X-Request-Id', 'X-Idempotency-Replay'],
+    // sec-re-17: sec-CM #27 added the server-minted `X-Client-Request-Id`
+    // response header but did not list it on `exposedHeaders`. Cross-origin
+    // browsers honour `Access-Control-Expose-Headers` strictly, so without
+    // this entry the new header was invisible to fetch / XHR callers and
+    // the tracing pivot it was meant to enable did not work from web apps.
+    exposedHeaders: ['X-Request-Id', 'X-Client-Request-Id', 'X-Idempotency-Replay'],
     maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
   });
 };
