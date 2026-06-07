@@ -195,6 +195,10 @@ export async function createPendingWebhookDeliveryAttempt(input: {
     // Conflict path: another inserter already wrote the PENDING row for this
     // (webhook_id, event_key). Look up its id so the caller can enqueue against
     // the existing row instead of dropping the delivery.
+    // sec-new-D4: filter on status='PENDING' — the partial unique index only
+    // covers PENDING rows, so the conflict guarantee ends once the row
+    // transitions to SENDING/SENT/FAILED. Matching only PENDING here avoids
+    // handing a completed-row id back to the caller.
     const existing = await getRequestDatabase()
       .select({ id: webhook_delivery_attempts.id })
       .from(webhook_delivery_attempts)
@@ -202,6 +206,7 @@ export async function createPendingWebhookDeliveryAttempt(input: {
         and(
           eq(webhook_delivery_attempts.webhook_id, input.webhookId),
           eq(webhook_delivery_attempts.event_key, input.eventKey),
+          eq(webhook_delivery_attempts.status, 'PENDING'),
         ),
       )
       .limit(1);
