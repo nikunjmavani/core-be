@@ -72,6 +72,7 @@ src/
     │   │   ├── unit/
     │   │   │   ├── auth-mfa.validator.unit.test.ts
     │   │   │   ├── auth.controller.unit.test.ts
+    │   │   │   ├── auth.routes.mfa-login-captcha.unit.test.ts
     │   │   │   ├── auth.routes.session-revoke-stepup.unit.test.ts
     │   │   │   ├── auth.serializer.unit.test.ts
     │   │   │   ├── auth.service.unit.test.ts

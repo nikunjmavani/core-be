@@ -171,6 +171,11 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/mfa/login',
     {
       ...STRICT_PUBLIC_RATE_LIMIT,
+      // sec-new-A1: add bot-protection at the MFA step. The mfa_session_token is
+      // single-use (GETDEL), so per-email rate-limiting is already enforced at
+      // POST /auth/login (which mints the token). Captcha here adds a second
+      // friction layer against automated TOTP guessing from accumulated tokens.
+      preHandler: [captchaPreHandler],
       schema: {
         summary: 'Complete MFA during login',
         description:
