@@ -265,13 +265,16 @@ export class OrganizationRepository extends BaseRepository {
     organization_id: number,
     stripe_customer_id: string,
   ): Promise<Organization | null> {
+    // sec-new-D1: include isNull(deleted_at) so a soft-deleted organization's
+    // stripe_customer_id cannot be clobbered by a Stripe webhook that still
+    // references the old customer id (returns null → caller treats it as a no-op).
     const rows = await getRequestDatabase()
       .update(organizations)
       .set({
         stripe_customer_id,
         updated_at: databaseNowTimestamp,
       })
-      .where(eq(organizations.id, organization_id))
+      .where(and(eq(organizations.id, organization_id), isNull(organizations.deleted_at)))
       .returning();
     return (rows[0] ?? null) as Organization | null;
   }

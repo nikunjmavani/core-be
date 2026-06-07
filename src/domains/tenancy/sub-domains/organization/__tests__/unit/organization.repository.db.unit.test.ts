@@ -92,6 +92,28 @@ describe('OrganizationRepository (database)', () => {
     expect(await repository.updateOwner('missing_org', owner.id)).toBeNull();
   });
 
+  // sec-new-D1: updateStripeCustomerId must include isNull(deleted_at) in its WHERE clause
+  // so that a soft-deleted organization cannot have its Stripe customer id silently
+  // (re-)assigned. Without the guard, a ghost row could resurface in Stripe lookup
+  // and attach a new subscription to a deleted tenant.
+  it('updateStripeCustomerId returns null for a soft-deleted organization (sec-new-D1)', async () => {
+    const owner = await createTestUser({ email: 'stripe-cid-deleted@example.com' });
+    const organization = await repository.create({
+      name: 'Deleted Stripe Org',
+      slug: 'deleted-stripe-org',
+      owner_user_id: owner.id,
+      created_by_user_id: owner.id,
+    });
+
+    // Soft-delete requires marking deletion as started first.
+    await repository.markDeletionStarted(organization.public_id);
+    await repository.softDelete(organization.public_id);
+
+    // Must return null — soft-deleted org must not be assigned a Stripe customer id.
+    const result = await repository.updateStripeCustomerId(organization.id, 'cus_ghost_123');
+    expect(result).toBeNull();
+  });
+
   it('updateOwner transfers only to a member who is still active (atomic TOCTOU guard)', async () => {
     const owner = await createTestUser({ email: 'transfer-owner@example.com' });
     const organization = await repository.create({
