@@ -1,6 +1,7 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { WEBHOOK_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
+import { applyDeprecatedEndpointHeaders } from '@/shared/utils/http/api-versioning.util.js';
 import { createStripeWebhookController } from './stripe-webhook.controller.js';
 import { stripeWebhookIngressPlugin } from './stripe-webhook-ingress.plugin.js';
 import { registerStripeWebhookRawBodyRoute } from './stripe-webhook-raw-body.registry.js';
@@ -72,16 +73,31 @@ export function stripeWebhookRoutes(): FastifyPluginAsync {
       controller.handleWebhook,
     );
 
+    // sec-new-M2: emit RFC 8594 Sunset + RFC 9745 Deprecation response headers on
+    // EVERY response from the deprecated alias, including pre-handler error paths.
+    // `onSend` is used (instead of a wrapper handler) because `stripeWebhookIngressPlugin`
+    // registers a `preHandler` that throws before the route handler runs on invalid
+    // signatures — if headers were set in the handler they would be silently dropped.
+    // The `onSend` lifecycle hook fires on both success and error paths.
     zodApplication.post(
       '/stripe/webhook',
       {
         ...WEBHOOK_RATE_LIMIT,
         config: { captureRawBody: true },
         bodyLimit: STRIPE_WEBHOOK_BODY_LIMIT_BYTES,
+        onSend: [
+          async (_request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
+            applyDeprecatedEndpointHeaders(reply, {
+              sunset: STRIPE_WEBHOOK_ALIAS_SUNSET,
+              deprecation: true,
+            });
+            return payload;
+          },
+        ],
         schema: {
-          summary: 'Stripe webhook receiver',
+          summary: 'Stripe webhook receiver (DEPRECATED alias)',
           description:
-            'Public endpoint for Stripe billing events. Verifies the `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET` and enqueues durable processing. Raw JSON body is required for signature verification.',
+            'DEPRECATED. Use POST /api/v1/billing/webhook instead. This backwards-compatibility alias will be removed once all Stripe Dashboard and CLI forwarder endpoints have been migrated to the canonical path.',
           tags: ['Billing', 'Stripe Webhook'],
         },
       },
@@ -92,3 +108,10 @@ export function stripeWebhookRoutes(): FastifyPluginAsync {
 
 /** sec-C/M #29: per-route body limit for Stripe webhook receivers (5 MB). */
 const STRIPE_WEBHOOK_BODY_LIMIT_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Placeholder Sunset date for the deprecated `/api/v1/billing/stripe/webhook` alias
+ * (sec-new-M2). No firm removal date is set yet. Update this constant — and notify
+ * all Stripe Dashboard / CLI forwarder operators — once a real sunset is agreed.
+ */
+const STRIPE_WEBHOOK_ALIAS_SUNSET = new Date('2030-01-01T00:00:00Z');
