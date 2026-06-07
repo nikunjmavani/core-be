@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { generate as generateTotp } from 'otplib';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
   injectAuthenticated,
@@ -103,8 +104,16 @@ describe('User Domain — Integration', () => {
         payload: { method_type: 'MFA_TOTP' },
       });
       expect(enrollResponse.statusCode).toBe(200);
-      const enrollBody = enrollResponse.json() as { data: { method_id: number } };
-      const methodId = enrollBody.data.method_id;
+      const enrollBody = enrollResponse.json() as { data: { secret: string } };
+      const confirmResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/enroll/confirm'),
+        token,
+        payload: { code: await generateTotp({ secret: enrollBody.data.secret }) },
+      });
+      expect(confirmResponse.statusCode).toBe(200);
+      const confirmBody = confirmResponse.json() as { data: { method_id: number } };
+      const methodId = confirmBody.data.method_id;
       expect(typeof methodId).toBe('number');
 
       const meAfterEnroll = await getMeWithRetry(app, token);

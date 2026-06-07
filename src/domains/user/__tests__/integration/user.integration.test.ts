@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { generate as generateTotp } from 'otplib';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
@@ -106,7 +107,15 @@ describe('User Domain — Integration', () => {
         payload: { method_type: 'MFA_TOTP' },
       });
       expect(enrollResponse.statusCode).toBe(200);
-      const methodId = (enrollResponse.json() as { data: Record<string, unknown> }).data
+      const enrollSecret = (enrollResponse.json() as { data: { secret: string } }).data.secret;
+      const confirmResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/enroll/confirm'),
+        token: token,
+        payload: { code: await generateTotp({ secret: enrollSecret }) },
+      });
+      expect(confirmResponse.statusCode).toBe(200);
+      const methodId = (confirmResponse.json() as { data: Record<string, unknown> }).data
         .method_id as number;
       expect(typeof methodId).toBe('number');
 

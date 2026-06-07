@@ -423,11 +423,15 @@ describe('Tenancy Domain — Integration', () => {
 
   describe('PUT /api/v1/tenancy/organizations/:id/roles/:roleId/permissions', () => {
     it('should replace role permissions', async () => {
-      const { organization, role, token } = await createAuthorizedUserAndOrganization();
+      const { organization, token } = await createAuthorizedUserAndOrganization();
+      const targetRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.ROLE_READ],
+      });
       const response = await injectAuthenticated(app, {
         method: 'PUT',
         url: testApiPath(
-          `/tenancy/organizations/${organization.public_id}/roles/${role.public_id}/permissions`,
+          `/tenancy/organizations/${organization.public_id}/roles/${targetRole.public_id}/permissions`,
         ),
         token,
         payload: { permission_codes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] },

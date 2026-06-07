@@ -14,7 +14,7 @@ describe('StripeWebhookEventRepository', () => {
       .where(eq(stripe_webhook_events.stripe_event_id, stripeEventId));
   });
 
-  it('claims a new event once and treats a concurrent second claim as in-flight', async () => {
+  it('claims a new event, reclaims the durable ingress row, then treats fresh processing as in-flight', async () => {
     const stripeCreatedAt = new Date('2026-01-15T12:00:00.000Z');
 
     const firstClaim = await repository.tryClaimEvent({
@@ -31,8 +31,16 @@ describe('StripeWebhookEventRepository', () => {
       request_id: 'req-2',
     });
 
+    const thirdClaim = await repository.tryClaimEvent({
+      stripe_event_id: stripeEventId,
+      event_type: 'customer.subscription.updated',
+      stripe_created_at: stripeCreatedAt,
+      request_id: 'req-3',
+    });
+
     expect(firstClaim).toBe('claimed');
-    expect(secondClaim).toBe('still_processing_within_lease');
+    expect(secondClaim).toBe('reclaimed');
+    expect(thirdClaim).toBe('still_processing_within_lease');
   });
 
   it('returns processed_duplicate after the event is marked processed', async () => {

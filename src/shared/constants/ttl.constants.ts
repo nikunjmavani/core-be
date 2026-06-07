@@ -12,8 +12,23 @@ export const MILLISECONDS_PER_HOUR = 60 * MILLISECONDS_PER_MINUTE;
 /** Seconds in one calendar day. */
 export const SECONDS_PER_DAY = 86_400;
 
+/**
+ * Seven calendar days expressed as a day count for retention and artifact-expiry windows.
+ *
+ * @remarks
+ * Rationale: one week is the standard short-lived retention grace for expired auth artifacts
+ * and user-generated export artifacts.
+ *
+ * Consequences of change:
+ * - Decreasing tightens cleanup windows and may remove expired artifacts sooner than operators expect.
+ * - Increasing extends storage and personal-data retention for short-lived artifacts.
+ *
+ * Last reviewed: 2026-06-07.
+ */
+export const SEVEN_DAYS = 7;
+
 /** Seconds in seven days (BullMQ job history eviction window). */
-export const SEVEN_DAYS_SECONDS = 7 * SECONDS_PER_DAY;
+export const SEVEN_DAYS_SECONDS = SEVEN_DAYS * SECONDS_PER_DAY;
 
 /** Seconds in thirty days (default long-lived Redis retention window). */
 export const THIRTY_DAYS_SECONDS = 30 * SECONDS_PER_DAY;

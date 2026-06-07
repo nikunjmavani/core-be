@@ -36,6 +36,27 @@ async function persistActiveSessionForToken(
   return session.public_id;
 }
 
+function getConfiguredSuperAdminEmail(): string | undefined {
+  return env.GLOBAL_ADMIN_EMAILS?.split(',')
+    .map((email) => email.trim().toLowerCase())
+    .find((email) => email.length > 0);
+}
+
+async function alignUserWithSuperAdminAllowlist(userPublicId: string): Promise<void> {
+  const superAdminEmail = getConfiguredSuperAdminEmail();
+  if (!superAdminEmail) return;
+
+  await database
+    .update(users)
+    .set({
+      email: superAdminEmail,
+      email_hash: createHash('sha256').update(superAdminEmail).digest('hex'),
+      is_email_verified: true,
+      status: 'ACTIVE',
+    })
+    .where(eq(users.public_id, userPublicId));
+}
+
 /**
  * Generate a test JWT access token backed by an active auth session row (required by auth middleware).
  */
@@ -79,6 +100,7 @@ export async function generateTestTokenAndSession(options: {
  * Generate a test token for a super admin user.
  */
 export async function generateSuperAdminToken(userId = 'test-super-admin'): Promise<string> {
+  await alignUserWithSuperAdminAllowlist(userId);
   return generateTestToken({ userId, role: 'super_admin' });
 }
 

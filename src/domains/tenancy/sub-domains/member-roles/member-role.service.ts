@@ -189,6 +189,10 @@ export class MemberRoleService {
         );
       const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
       if (!role) throw new NotFoundError('Role');
+      // sec-T3: system roles (Admin/Member) are immutable from the API — same guard as delete.
+      if (role.is_system) {
+        throw new ForbiddenError('errors:cannotModifySystemRole');
+      }
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
       let updated: MemberRoleRow | null;

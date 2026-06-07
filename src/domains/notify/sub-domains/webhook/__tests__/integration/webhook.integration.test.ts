@@ -128,7 +128,7 @@ describe('Webhook Sub-Domain — Integration', () => {
       });
       expect(page1Response.statusCode).toBe(200);
       const page1Body = page1Response.json() as {
-        data: Array<{ public_id: string }>;
+        data: Array<{ id: string }>;
         meta?: {
           pagination?: {
             has_more?: boolean;
@@ -155,12 +155,12 @@ describe('Webhook Sub-Domain — Integration', () => {
       });
       expect(page2Response.statusCode).toBe(200);
       const page2Body = page2Response.json() as {
-        data: Array<{ public_id: string }>;
+        data: Array<{ id: string }>;
         meta?: { pagination?: { has_more?: boolean; next?: string | null } };
       };
-      const page1Ids = new Set(page1Body.data.map((row) => row.public_id));
+      const page1Ids = new Set(page1Body.data.map((row) => row.id));
       for (const row of page2Body.data) {
-        expect(page1Ids.has(row.public_id)).toBe(false);
+        expect(page1Ids.has(row.id)).toBe(false);
       }
       expect(page1Body.data.length + page2Body.data.length).toBe(3);
       expect(page2Body.meta?.pagination).toMatchObject({ has_more: false, next: null });

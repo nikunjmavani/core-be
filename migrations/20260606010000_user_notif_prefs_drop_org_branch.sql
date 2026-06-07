@@ -76,8 +76,7 @@ ALTER TABLE auth.user_notification_preferences
   CHECK (organization_id IS NULL) NOT VALID;
 --> statement-breakpoint
 
--- Validate the constraint. Production data is known-NULL via the service guard,
--- so validation is a fast metadata change rather than a heavy scan; keeping
--- VALIDATE explicit so the catalog records the constraint as fully enforced.
-ALTER TABLE auth.user_notification_preferences
-  VALIDATE CONSTRAINT chk_user_notif_prefs_no_org;
+-- Leave the constraint NOT VALID for existing rows. PostgreSQL still enforces
+-- NOT VALID CHECK constraints for new/updated rows, which is the invariant
+-- this migration needs; validating can be performed later as a separate
+-- operational migration if desired.

@@ -86,6 +86,26 @@ describe('WebhookDeliveryAttemptRepository.tryMarkSending (database)', () => {
     expect(result).toBe('claimed');
   });
 
+  it('tryMarkSending reclaims failed attempt for the next BullMQ retry only once', async () => {
+    const { webhook } = await createWebhookFixture('failed-retry');
+    const attempt = await attemptRepository.create({
+      webhook_id: webhook.id,
+      event_type: 'subscription.updated',
+      payload: { id: 'sub_failed_retry' },
+      status: 'FAILED',
+      http_status_code: 500,
+      response_body: 'server error',
+      sent_at: new Date(),
+      attempt_count: 1,
+    });
+
+    const retryResult = await attemptRepository.tryMarkSending(attempt.id, 2);
+    expect(retryResult).toBe('claimed');
+
+    const duplicateRetryResult = await attemptRepository.tryMarkSending(attempt.id, 2);
+    expect(duplicateRetryResult).toBe('in_flight');
+  });
+
   it('tryMarkSending returns already_sent for completed (SENT) attempt', async () => {
     const { webhook } = await createWebhookFixture('sent');
     const attempt = await attemptRepository.create({

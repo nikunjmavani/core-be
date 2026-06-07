@@ -102,8 +102,9 @@ export class WebhookDeliveryAttemptRepository {
   }
 
   /**
-   * Atomically claims a delivery attempt for outbound HTTP (`PENDING` → `SENDING`, or
-   * reclaims a stale `SENDING` row after the lease expires).
+   * Atomically claims a delivery attempt for outbound HTTP (`PENDING` → `SENDING`,
+   * `FAILED` → `SENDING` when BullMQ advances to the next retry, or reclaims a
+   * stale `SENDING` row after the lease expires).
    */
   async tryMarkSending(
     deliveryAttemptId: number,
@@ -130,6 +131,29 @@ export class WebhookDeliveryAttemptRepository {
       .returning({ id: webhook_delivery_attempts.id });
 
     if (claimedFromPending.length > 0) {
+      return 'claimed';
+    }
+
+    const reclaimedFailedRetry = await requestDatabase
+      .update(webhook_delivery_attempts)
+      .set({
+        status: 'SENDING',
+        attempt_count: attemptCount,
+        sent_at: new Date(),
+        http_status_code: null,
+        response_body: null,
+        next_retry_at: null,
+      })
+      .where(
+        and(
+          eq(webhook_delivery_attempts.id, deliveryAttemptId),
+          eq(webhook_delivery_attempts.status, 'FAILED'),
+          lt(webhook_delivery_attempts.attempt_count, attemptCount),
+        ),
+      )
+      .returning({ id: webhook_delivery_attempts.id });
+
+    if (reclaimedFailedRetry.length > 0) {
       return 'claimed';
     }
 
