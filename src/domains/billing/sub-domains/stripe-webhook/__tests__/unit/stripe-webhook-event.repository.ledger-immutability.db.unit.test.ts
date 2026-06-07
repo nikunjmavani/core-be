@@ -122,7 +122,7 @@ describe('StripeWebhookEventRepository ledger immutability (database)', () => {
     expect(reclaimed).toBe(false);
 
     const sweepResult = await repository.sweepReclaimableEvents(50);
-    expect(sweepResult.reclaimedStripeEventIds).not.toContain(processedEventId);
+    expect(sweepResult.candidateStripeEventIds).not.toContain(processedEventId);
 
     const rows = await database
       .select()
@@ -131,7 +131,15 @@ describe('StripeWebhookEventRepository ledger immutability (database)', () => {
     expect(rows[0]?.processing_status).toBe('processed');
   });
 
-  it('reclaim picks up rows stuck in processing past lease timeout', async () => {
+  it('sweep surfaces stuck-processing rows as candidates without mutating them (sec-re-02)', {
+    timeout: 30_000,
+  }, async () => {
+    // sec-re-02: the cron sweep returns the candidate ids only; the
+    // failed → processing (or stale-processing → processing) transition is
+    // performed by the worker's `tryClaimEvent` → `tryReclaimEvent` when it
+    // dequeues the re-enqueued job. The prior code bumped the row inside the
+    // sweep, which left the worker unable to claim because none of
+    // tryReclaimEvent's three branches matched the freshly-bumped state.
     const stuckEventId = 'evt_ledger_reclaim_stuck_processing';
     const stripeCreatedAt = new Date('2026-04-01T00:00:00.000Z');
 
@@ -140,6 +148,12 @@ describe('StripeWebhookEventRepository ledger immutability (database)', () => {
       event_type: 'customer.subscription.updated',
       stripe_created_at: stripeCreatedAt,
     });
+
+    const beforeSweep = await database
+      .select()
+      .from(stripe_webhook_events)
+      .where(eq(stripe_webhook_events.stripe_event_id, stuckEventId));
+    const initialAttemptCount = beforeSweep[0]?.attempt_count ?? 0;
 
     const pastLease = new Date(
       Date.now() - (STRIPE_WEBHOOK_STUCK_PROCESSING_LEASE_MINUTES + 5) * MILLISECONDS_PER_MINUTE,
@@ -153,14 +167,28 @@ describe('StripeWebhookEventRepository ledger immutability (database)', () => {
     expect(reclaimableIds).toContain(stuckEventId);
 
     const sweepResult = await repository.sweepReclaimableEvents(50);
-    expect(sweepResult.reclaimedStripeEventIds).toContain(stuckEventId);
+    expect(sweepResult.candidateStripeEventIds).toContain(stuckEventId);
 
-    const rows = await database
+    // The row is unchanged after the sweep — the cron does not pre-bump.
+    const afterSweep = await database
       .select()
       .from(stripe_webhook_events)
       .where(eq(stripe_webhook_events.stripe_event_id, stuckEventId));
-    expect(rows[0]?.processing_status).toBe('processing');
-    expect(rows[0]?.attempt_count).toBe(1);
-    expect(rows[0]?.failure_reason).toBeNull();
+    expect(afterSweep[0]?.processing_status).toBe('processing');
+    expect(afterSweep[0]?.attempt_count).toBe(initialAttemptCount);
+
+    // The worker's downstream `tryClaimEvent` is what performs the transition.
+    // We simulate that here by calling `tryReclaimEvent` directly — it must
+    // still match the stuck-processing branch and bump the row.
+    const reclaimed = await repository.tryReclaimEvent(stuckEventId);
+    expect(reclaimed).toBe(true);
+
+    const afterReclaim = await database
+      .select()
+      .from(stripe_webhook_events)
+      .where(eq(stripe_webhook_events.stripe_event_id, stuckEventId));
+    expect(afterReclaim[0]?.processing_status).toBe('processing');
+    expect(afterReclaim[0]?.attempt_count).toBe(initialAttemptCount + 1);
+    expect(afterReclaim[0]?.failure_reason).toBeNull();
   });
 });

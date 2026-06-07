@@ -195,24 +195,40 @@ export class StripeWebhookEventRepository {
     return rows.map((row) => row.stripe_event_id);
   }
 
+  /**
+   * Scans the ledger for reclaimable rows (failed, or processing past the
+   * stuck-lease window) and returns their stripe_event_ids without mutating
+   * the rows.
+   *
+   * @remarks
+   * - **sec-re-02:** Prior to this fix, the sweep called
+   *   {@link tryReclaimEvent} inline, which bumped `processing_status` to
+   *   `processing`, incremented `attempt_count` and refreshed `updated_at`.
+   *   The worker's subsequent `tryClaimEvent` → `tryReclaimEvent` then found
+   *   all three reclaim branches false (not failed, not stale, not
+   *   attempt_count = 0), returned `still_processing_within_lease`, BullMQ
+   *   retried 5× and DLQ'd, and — combined with sec-Q #1's seven-day
+   *   failed-job retention — the next sweep's re-enqueue became a silent
+   *   duplicate-jobId no-op. The row was stuck in `processing` permanently.
+   *   Returning just the candidate ids and letting the worker call
+   *   `tryClaimEvent` → `tryReclaimEvent` itself preserves the atomic
+   *   transition semantics in one place (the worker) and re-arms the
+   *   failed → processing branch.
+   * - **Failure modes:** none beyond a transient SELECT error, which the
+   *   caller logs and retries on the next sweep.
+   * - **Side effects:** none — pure read.
+   * - **Notes:** the cron processor pairs this with
+   *   `enqueueStripeWebhookByEventIdForReclaim` (fresh jobId per attempt) so
+   *   the BullMQ dedup does not block the re-enqueue.
+   */
   async sweepReclaimableEvents(batchSize: number): Promise<{
     scannedCount: number;
-    reclaimedCount: number;
-    reclaimedStripeEventIds: string[];
+    candidateStripeEventIds: string[];
   }> {
     const candidateStripeEventIds = await this.findReclaimableStripeEventIds(batchSize);
-    const reclaimedStripeEventIds: string[] = [];
-
-    for (const stripeEventId of candidateStripeEventIds) {
-      if (await this.tryReclaimEvent(stripeEventId)) {
-        reclaimedStripeEventIds.push(stripeEventId);
-      }
-    }
-
     return {
       scannedCount: candidateStripeEventIds.length,
-      reclaimedCount: reclaimedStripeEventIds.length,
-      reclaimedStripeEventIds,
+      candidateStripeEventIds,
     };
   }
 
