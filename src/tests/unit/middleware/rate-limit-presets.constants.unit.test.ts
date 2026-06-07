@@ -57,7 +57,14 @@ describe('rate-limit-presets', () => {
     expect(STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.max).toBe(5000);
   });
 
-  it('per-email key generator normalizes the body email (trim + lowercase) and ignores IP', async () => {
+  it('sec-re-11: per-email key generator hashes the normalized body email and never embeds the raw address', async () => {
+    // Prior to this fix the key was `email:user@example.com` verbatim — the
+    // literal value Redis stored, the value the structured log carried, and
+    // the value the Sentry breadcrumb message embedded. Hashing makes the
+    // bucket stable (deterministic per address) while keeping the
+    // log/breadcrumb value opaque so a credential-stuffing run no longer
+    // ships the targeted addresses to observability.
+    const crypto = await import('node:crypto');
     mockEnv.NODE_ENV = 'production';
     const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
       '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
@@ -68,7 +75,40 @@ describe('rate-limit-presets', () => {
       ip: '203.0.113.7',
       body: { email: '  USER@Example.COM ' },
     } as never);
-    expect(key).toBe('email:user@example.com');
+    // Normalization (trim + lowercase) THEN hash, then take the first 16 hex chars.
+    const expectedHashPrefix = crypto
+      .createHash('sha256')
+      .update('user@example.com')
+      .digest('hex')
+      .slice(0, 16);
+    expect(key).toBe(`email:${expectedHashPrefix}`);
+    // Belt-and-braces: the raw address must not appear anywhere.
+    expect(key).not.toContain('user@example.com');
+    expect(key).not.toContain('@');
+  });
+
+  it('sec-re-11: per-email key generator yields stable buckets per address (same email → same key)', async () => {
+    mockEnv.NODE_ENV = 'production';
+    const { STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS } = await import(
+      '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js'
+    );
+    const keyGenerator = STRICT_PUBLIC_PER_EMAIL_RATE_LIMIT_OPTIONS.keyGenerator;
+    const keyFromAttempt1 = await keyGenerator?.({
+      ip: '203.0.113.7',
+      body: { email: 'victim@example.com' },
+    } as never);
+    const keyFromAttempt2 = await keyGenerator?.({
+      ip: '198.51.100.4', // Different IP — bucket must still collapse on the same email.
+      body: { email: 'victim@example.com' },
+    } as never);
+    expect(keyFromAttempt1).toBe(keyFromAttempt2);
+
+    // And different emails yield different buckets.
+    const otherKey = await keyGenerator?.({
+      ip: '203.0.113.7',
+      body: { email: 'someone-else@example.com' },
+    } as never);
+    expect(otherKey).not.toBe(keyFromAttempt1);
   });
 
   it('per-email key generator falls back to IP when the body has no usable email', async () => {

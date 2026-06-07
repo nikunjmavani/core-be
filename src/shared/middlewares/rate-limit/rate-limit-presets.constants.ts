@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { RateLimitOptions } from '@fastify/rate-limit';
 import { env } from '@/shared/config/env.config.js';
@@ -42,9 +43,27 @@ function recordRouteRateLimitExceeded(request: FastifyRequest, key: string): voi
 }
 
 /**
+ * Length of the SHA-256 hex prefix used as the per-email rate-limit bucket id (sec-re-11).
+ * 16 hex chars (64 bits) is well clear of birthday collisions for the per-IP user-base
+ * we'd realistically throttle in a 15-minute window, while keeping bucket keys short for
+ * Redis. The full 64-char hash would also work; the trim is just hygiene.
+ */
+const RATE_LIMIT_EMAIL_HASH_PREFIX_LENGTH = 16;
+
+/**
  * Derives a stable per-identity rate-limit key from the normalized email in the request body.
  * Falls back to the caller IP when no email is present (e.g. malformed body that still reaches
  * the limiter), so the bucket is never globally shared.
+ *
+ * sec-re-11: hash the email portion before embedding it in the key. The prior raw-email key
+ * (`email:user@host.com`) was the literal value Redis stored, the value `recordRouteRateLimitExceeded`
+ * logged via Pino, and the value the Sentry breadcrumb message interpolated. Pino's `redact.paths`
+ * are exact-path so `key` was never matched; `redactSensitive` only catches URL/query-shaped
+ * strings; the breadcrumb message isn't run through any redaction. Every credential-stuffing
+ * campaign hitting the per-email cap therefore shipped its targeted addresses to BOTH Pino logs
+ * AND Sentry breadcrumbs — a direct breach of the codebase's email redaction policy and the
+ * `sendDefaultPii: false` Sentry posture. Hashing the email keeps the bucket stable (deterministic
+ * per address) while making the log/breadcrumb value an opaque identifier.
  */
 function buildRateLimitKeyFromRequestBodyEmail(request: FastifyRequest): string {
   const body = request.body as { email?: unknown } | undefined;
@@ -52,7 +71,11 @@ function buildRateLimitKeyFromRequestBodyEmail(request: FastifyRequest): string 
   if (typeof rawEmail === 'string') {
     const normalizedEmail = rawEmail.trim().toLowerCase();
     if (normalizedEmail.length > 0) {
-      return `email:${normalizedEmail}`;
+      const emailHashPrefix = createHash('sha256')
+        .update(normalizedEmail)
+        .digest('hex')
+        .slice(0, RATE_LIMIT_EMAIL_HASH_PREFIX_LENGTH);
+      return `email:${emailHashPrefix}`;
     }
   }
   return `ip:${request.ip}`;
