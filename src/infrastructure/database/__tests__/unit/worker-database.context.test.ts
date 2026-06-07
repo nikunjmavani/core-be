@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
-import { withGlobalRetentionCleanupDatabaseContext } from '@/infrastructure/database/contexts/retention-database.context.js';
+import {
+  withGlobalRetentionCleanupDatabaseContext,
+  withSystemTableRetentionContext,
+} from '@/infrastructure/database/contexts/retention-database.context.js';
 import { WorkerDatabaseContextError } from '@/infrastructure/database/contexts/worker-database.context.error.js';
 import {
   assertWorkerDatabaseContext,
@@ -89,5 +92,26 @@ describe('worker database context', () => {
         assertWorkerForceRlsTableAccess({ schemaName: 'billing', tableName: 'subscriptions' }),
       ).not.toThrow();
     });
+  });
+
+  it('sec-new-Q4: withSystemTableRetentionContext sets system_table kind in worker runtime', async () => {
+    process.env.CORE_BE_RUNTIME = 'worker';
+    await withSystemTableRetentionContext(async () => {
+      expect(getWorkerDatabaseContext()?.kind).toBe('system_table');
+      expect(() => getRequestDatabase()).not.toThrow();
+    });
+  });
+
+  it('sec-new-Q4: withSystemTableRetentionContext opens a transaction and applies statement timeout', async () => {
+    process.env.CORE_BE_RUNTIME = 'worker';
+    const { database: mockedDatabase } = await import('@/infrastructure/database/connection.js');
+    mockExecute.mockClear();
+    await withSystemTableRetentionContext(async () => {
+      /* pure-DB callback */
+    });
+    // A transaction must be opened (so SET LOCAL statement_timeout takes effect)
+    expect(mockedDatabase.transaction).toHaveBeenCalled();
+    // applyWorkerStatementTimeout calls databaseHandle.execute() with the SET LOCAL statement
+    expect(mockExecute).toHaveBeenCalled();
   });
 });

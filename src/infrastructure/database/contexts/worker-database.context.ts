@@ -96,7 +96,7 @@ export function assertWorkerDatabaseContext(
   const context = getWorkerDatabaseContext();
   if (context === undefined) {
     throw new WorkerDatabaseContextError(
-      'Worker process must not use unpinned database access. Wrap the job in a context helper (withOrganizationContext, runTenantScopedWorkerJob, withGlobalRetentionCleanupDatabaseContext, withUserDatabaseContext, withSessionRetentionCleanupDatabaseContext, or withSystemTableWorkerContext) and pass databaseHandle into createWorker*Repository() factories.',
+      'Worker process must not use unpinned database access. Wrap the job in a context helper (withOrganizationContext, runTenantScopedWorkerJob, withGlobalRetentionCleanupDatabaseContext, withUserDatabaseContext, withSessionRetentionCleanupDatabaseContext, withSystemTableWorkerContext, or withSystemTableRetentionContext) and pass databaseHandle into createWorker*Repository() factories.',
     );
   }
 
@@ -137,6 +137,16 @@ export function assertWorkerForceRlsTableAccess(tableRef: ForceRlsTableRef): voi
 /**
  * Explicit bypass for tables without tenant RLS (mail outbox, Stripe webhook ledger).
  * Pins ALS so getRequestDatabase() resolves in worker runtime without opening a transaction.
+ *
+ * @remarks
+ * - **Notes:** Does NOT open a Postgres transaction, so `SET LOCAL statement_timeout`
+ *   is not applied. This is intentional — callers like the mail processor and
+ *   BullMQ re-enqueue workers perform external I/O (Resend, Redis) inside the
+ *   context and must not hold a connection across network calls.
+ *   For pure-DB retention workers (no external I/O) use
+ *   `withSystemTableRetentionContext` from
+ *   `@/infrastructure/database/contexts/retention-database.context.js`
+ *   instead so the worker statement-timeout is applied (sec-new-Q4).
  */
 export async function withSystemTableWorkerContext<T>(
   callback: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
