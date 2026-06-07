@@ -111,7 +111,12 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.post(
       '/organizations',
       {
-        config: { idempotencyRequired: true },
+        // sec-new-M1: add STRICT_AUTHED_RATE_LIMIT (10 req/60s per user) — org creation is a
+        // high-value mutation (provisions DB rows, mints memberships, charges billing);
+        // without a cap an authenticated user could flood the endpoint. Merge rateLimit
+        // into the existing config object rather than spreading STRICT_AUTHED_RATE_LIMIT at
+        // the top level to preserve idempotencyRequired alongside the rate-limit config.
+        config: { idempotencyRequired: true, ...STRICT_AUTHED_RATE_LIMIT.config },
         schema: {
           summary: 'Create organization',
           description:
