@@ -340,6 +340,15 @@ export async function setUploadStatusByInternalId(
  * to the final (non-pending) key in a single UPDATE so a servable row never
  * references the overwritable `pending/` namespace. Used by the pending-sweep
  * auto-confirm path; mirrors the HTTP confirm invariant established by sec-UP1.
+ *
+ * sec-re-13: tighten the WHERE to also filter `deleted_at IS NULL` (for
+ * sibling-consistency with `markConfirmedByPublicId`) and `status = 'PENDING'`.
+ * The prior unfiltered `eq(uploads.id, id)` would silently UPDATE a row the
+ * user had soft-deleted between the sweep's HEAD and this write, leaving an
+ * `UPLOADED` row with `deleted_at IS NOT NULL`. Cross-domain attach checks
+ * already filter on `isNull(deleted_at)` so this is not currently exploitable,
+ * but the invariant ("only confirm rows that are PENDING and undeleted") is
+ * worth making a WHERE-level guarantee instead of a downstream assumption.
  */
 export async function markConfirmedByInternalId(
   databaseHandle: WorkerDatabaseHandle,
@@ -349,7 +358,7 @@ export async function markConfirmedByInternalId(
   await databaseHandle
     .update(uploads)
     .set({ status: 'UPLOADED', file_key: finalFileKey, updated_at: databaseNowTimestamp })
-    .where(eq(uploads.id, id));
+    .where(and(eq(uploads.id, id), isNull(uploads.deleted_at), eq(uploads.status, 'PENDING')));
 }
 
 /** Hard-deletes upload rows by internal id (caller must remove S3 objects first when needed). */
