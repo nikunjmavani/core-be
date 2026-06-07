@@ -1721,6 +1721,7 @@ src/
     │   │   ├── organization-rls-session.security.test.ts
     │   │   ├── organization-settings-resolvers.security.test.ts
     │   │   ├── organization-user-discovery.security.test.ts
+    │   │   ├── organizations-rls-deleted.security.test.ts
     │   │   ├── retention-cleanup-rls.security.test.ts
     │   │   ├── rls-matrix.security.test.ts
     │   │   ├── system-tables-rls.security.test.ts
