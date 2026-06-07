@@ -140,3 +140,86 @@ describe('MemberRoleService.delete — sec-T3 guards', () => {
     expect(memberRoleRepository.softDelete).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Regression for sec-T3 (High): update must refuse to mutate system roles.
+ *
+ * The delete-guard was added first; this extends the same invariant to PATCH so
+ * that tenants cannot rename Admin/Member to mask or shadow the seed identity,
+ * which would defeat the is_system check used by the delete guard itself.
+ */
+describe('MemberRoleService.update — sec-T3 is_system guard', () => {
+  const organization = { id: 1, public_id: 'org_public', owner_user_id: 99 };
+
+  const systemRole = {
+    id: 7,
+    public_id: 'role_system',
+    name: 'Admin',
+    organization_id: organization.id,
+    is_system: true,
+    deleted_at: null,
+  };
+
+  const now = new Date('2026-01-01T00:00:00.000Z');
+
+  const customRole = {
+    id: 10,
+    public_id: 'role_custom',
+    name: 'People-Ops',
+    description: null,
+    organization_id: organization.id,
+    is_system: false,
+    deleted_at: null,
+    created_at: now,
+    updated_at: now,
+  };
+
+  const orgServiceForUpdate = {
+    requireOrganizationMembershipByPublicId: vi.fn().mockResolvedValue(organization),
+    resolveUserInternalIdByPublicId: vi.fn().mockResolvedValue(null),
+  } as unknown as OrganizationService;
+
+  const roleRepoForUpdate = {
+    findByPublicId: vi.fn(),
+    update: vi.fn(),
+  } as unknown as MemberRoleRepository;
+
+  const membershipRepoForUpdate = {
+    countActiveByRoleId: vi.fn(),
+  } as unknown as MembershipRepository;
+
+  const updateService = new MemberRoleService(
+    orgServiceForUpdate,
+    roleRepoForUpdate,
+    membershipRepoForUpdate,
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(orgServiceForUpdate.requireOrganizationMembershipByPublicId).mockResolvedValue(
+      organization as never,
+    );
+  });
+
+  it('refuses to update a system role with ForbiddenError', async () => {
+    vi.mocked(roleRepoForUpdate.findByPublicId).mockResolvedValue(systemRole as never);
+
+    await expect(
+      updateService.update('org_public', systemRole.public_id, { name: 'Hacked' }, undefined),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+
+    expect(roleRepoForUpdate.update).not.toHaveBeenCalled();
+  });
+
+  it('allows updating a non-system role (happy path)', async () => {
+    const updatedRole = { ...customRole, name: 'Renamed', updated_at: now };
+    vi.mocked(roleRepoForUpdate.findByPublicId).mockResolvedValue(customRole as never);
+    vi.mocked(roleRepoForUpdate.update).mockResolvedValue(updatedRole as never);
+
+    await expect(
+      updateService.update('org_public', customRole.public_id, { name: 'Renamed' }, undefined),
+    ).resolves.toBeDefined();
+
+    expect(roleRepoForUpdate.update).toHaveBeenCalled();
+  });
+});
