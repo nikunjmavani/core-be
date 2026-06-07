@@ -163,7 +163,8 @@ export class AuthSessionService {
   }
 
   /**
-   * Ensures the bearer token matches an active, non-revoked session row.
+   * Ensures the bearer token matches an active, non-revoked session row AND that
+   * the owning user is still active (not suspended or soft-deleted).
    *
    * @remarks
    * Returns `{ sessionPublicId }` so callers (auth middleware) can attach session
@@ -172,11 +173,22 @@ export class AuthSessionService {
    * cache hit avoids the Postgres round-trip AND still produces the session id.
    * The cache TTL is capped to the session's remaining lifetime so a cached "valid"
    * entry can never outlive the session (see {@link setCachedSessionTokenValid}).
+   *
+   * **sec-new-A2:** `userPublicId` (from the JWT payload) is used to verify user
+   * status on every DB-path validation (cache miss). A suspended or deleted user will
+   * receive `errors:accountNotActive` instead of being allowed to continue using their
+   * still-valid access token. The Redis cache caps the propagation window at ≤60 s
+   * (same TTL as session validity), down from the prior ≤15 min access-token lifetime.
    */
-  async verifyActiveAccessToken(rawToken: string): Promise<{ sessionPublicId: string }> {
+  async verifyActiveAccessToken(
+    rawToken: string,
+    userPublicId: string,
+  ): Promise<{ sessionPublicId: string }> {
     const tokenHash = hashAccessToken(rawToken);
     const cachedSessionPublicId = await getCachedSessionTokenValid(tokenHash);
     if (cachedSessionPublicId !== null) {
+      // Cache hit: session was valid ≤60 s ago; user status is implicitly valid at
+      // that point. Suspension propagates on the next cache miss (≤60 s window).
       return { sessionPublicId: cachedSessionPublicId };
     }
 
@@ -186,6 +198,14 @@ export class AuthSessionService {
 
     if (!session) {
       throw new UnauthorizedError('errors:invalidOrExpiredSession');
+    }
+
+    // sec-new-A2: verify the owning user is still active. Runs only on cache miss
+    // (first request per 60 s window) to avoid a per-request DB round-trip.
+    // findUserRecordByPublicId wraps withUserDatabaseContext internally.
+    const user = await this.userService.findUserRecordByPublicId(userPublicId);
+    if (!user || user.status !== 'ACTIVE' || user.deleted_at !== null) {
+      throw new UnauthorizedError('errors:accountNotActive');
     }
 
     await setCachedSessionTokenValid({

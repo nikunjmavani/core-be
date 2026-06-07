@@ -161,7 +161,11 @@ describe('auth.middleware', () => {
     });
 
     expect(response.statusCode).toBe(401);
-    expect(authSessionService!.verifyActiveAccessToken).toHaveBeenCalledWith(accessToken);
+    // sec-new-A2: verifyActiveAccessToken now takes (token, userPublicId) — assert both args
+    expect(authSessionService!.verifyActiveAccessToken).toHaveBeenCalledWith(
+      accessToken,
+      userPublicId,
+    );
     // The original UnauthorizedError must propagate unchanged — the catch block re-throws
     // `instanceof UnauthorizedError` as-is rather than re-wrapping it as the generic
     // invalid-token error. Asserting the specific session message pins that passthrough; a

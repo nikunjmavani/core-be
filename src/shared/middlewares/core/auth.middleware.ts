@@ -71,7 +71,12 @@ async function authenticate(request: FastifyRequest, _reply: FastifyReply): Prom
       throw new UnauthorizedError('errors:validation.invalidToken');
     }
 
-    const { sessionPublicId } = await authSessionService.verifyActiveAccessToken(token);
+    // sec-new-A2: pass userPublicId so verifyActiveAccessToken can check user.status
+    // on every DB-path validation (cache miss), reducing suspension propagation to ≤60 s.
+    const { sessionPublicId } = await authSessionService.verifyActiveAccessToken(
+      token,
+      payload.userId,
+    );
 
     // sec-A6: re-derive SUPER_ADMIN per request so removal from GLOBAL_ADMIN_EMAILS
     // takes effect immediately, not at next token refresh (default 5-minute window).
