@@ -1321,6 +1321,9 @@ src/
     │   │   └── success.json
     ├── middlewares/
     │   ├── core/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── compress.middleware.unit.test.ts
     │   │   ├── api-versioning.middleware.ts
     │   │   ├── auth.middleware.ts
     │   │   ├── compress.middleware.ts
