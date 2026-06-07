@@ -354,9 +354,18 @@ export class MfaService {
         created_by_user_id: user.id,
       });
       await insertMfaRecoveryCodes(user.id, recoveryCodeHashes);
+      // sec-re-06: flip is_mfa_enabled INSIDE the same withUserDatabaseContext
+      // callback so it is part of the same transaction as the auth_methods insert
+      // and recovery-codes insert. Previously it ran AFTER commit on a separate
+      // connection; a crash / pool timeout between commit and the flip left the
+      // user with valid TOTP + recovery codes but is_mfa_enabled = false, so the
+      // next login skipped the MFA challenge entirely.
+      // The nested withUserDatabaseContext call reuses the already-pinned handle
+      // (the outer callback is still inside the same transaction), so no separate
+      // transaction is opened — all three writes still commit atomically.
+      await this.userService.updateMfaEnabled(user.public_id, true);
       return created;
     });
-    await this.userService.updateMfaEnabled(user.public_id, true);
 
     return {
       recovery_codes: plaintextRecoveryCodes,
