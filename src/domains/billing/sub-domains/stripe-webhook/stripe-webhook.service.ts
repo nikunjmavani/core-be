@@ -120,10 +120,24 @@ export class StripeWebhookService {
           const workerSubscriptionRepository = createWorkerSubscriptionRepository(databaseHandle);
           await this.dispatchEvent(event, stripeEventCreatedAt, workerSubscriptionRepository);
         });
-        await this.stripeWebhookEventRepository.markProcessed(event.id);
+        // sec-new-D2: detect no-op writes (ledger row unexpectedly absent)
+        const marked = await this.stripeWebhookEventRepository.markProcessed(event.id);
+        if (!marked) {
+          logger.warn(
+            { eventId: event.id, eventType: event.type },
+            'stripe.webhook.mark_processed.no_row',
+          );
+        }
       } catch (error) {
         const failureReason = error instanceof Error ? error.message : String(error);
-        await this.stripeWebhookEventRepository.markFailed(event.id, failureReason);
+        // sec-new-D2: detect no-op writes (ledger row unexpectedly absent)
+        const marked = await this.stripeWebhookEventRepository.markFailed(event.id, failureReason);
+        if (!marked) {
+          logger.warn(
+            { eventId: event.id, eventType: event.type, failureReason },
+            'stripe.webhook.mark_failed.no_row',
+          );
+        }
         throw error;
       }
     });

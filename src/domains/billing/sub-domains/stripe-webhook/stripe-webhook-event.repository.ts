@@ -153,15 +153,19 @@ export class StripeWebhookEventRepository {
     return rows.length > 0;
   }
 
-  async markProcessed(stripe_event_id: string): Promise<void> {
-    await stripeWebhookLedgerDatabase()
+  async markProcessed(stripe_event_id: string): Promise<boolean> {
+    // sec-new-D2: return whether a row was actually updated so the caller can
+    // detect and log a no-op (e.g. the ledger row was unexpectedly absent).
+    const rows = await stripeWebhookLedgerDatabase()
       .update(stripe_webhook_events)
       .set({
         processing_status: 'processed' satisfies StripeWebhookProcessingStatus,
         processed_at: new Date(),
         updated_at: sql`NOW()`,
       })
-      .where(eq(stripe_webhook_events.stripe_event_id, stripe_event_id));
+      .where(eq(stripe_webhook_events.stripe_event_id, stripe_event_id))
+      .returning({ stripe_event_id: stripe_webhook_events.stripe_event_id });
+    return rows.length > 0;
   }
 
   async countFailedEvents(): Promise<number> {
@@ -232,10 +236,12 @@ export class StripeWebhookEventRepository {
     };
   }
 
-  async markFailed(stripe_event_id: string, failure_reason: string): Promise<void> {
+  async markFailed(stripe_event_id: string, failure_reason: string): Promise<boolean> {
+    // sec-new-D2: return whether a row was actually updated so the caller can
+    // detect and log a no-op (e.g. the ledger row was unexpectedly absent).
     const truncatedReason =
       failure_reason.length > 2000 ? failure_reason.slice(0, 2000) : failure_reason;
-    await stripeWebhookLedgerDatabase()
+    const rows = await stripeWebhookLedgerDatabase()
       .update(stripe_webhook_events)
       .set({
         processing_status: 'failed' satisfies StripeWebhookProcessingStatus,
@@ -243,6 +249,8 @@ export class StripeWebhookEventRepository {
         failure_reason: truncatedReason,
         updated_at: sql`NOW()`,
       })
-      .where(eq(stripe_webhook_events.stripe_event_id, stripe_event_id));
+      .where(eq(stripe_webhook_events.stripe_event_id, stripe_event_id))
+      .returning({ stripe_event_id: stripe_webhook_events.stripe_event_id });
+    return rows.length > 0;
   }
 }

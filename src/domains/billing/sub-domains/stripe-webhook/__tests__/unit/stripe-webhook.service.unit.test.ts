@@ -89,8 +89,9 @@ describe('StripeWebhookService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(stripeWebhookEventRepository.tryClaimEvent).mockResolvedValue('claimed');
-    vi.mocked(stripeWebhookEventRepository.markProcessed).mockResolvedValue(undefined);
-    vi.mocked(stripeWebhookEventRepository.markFailed).mockResolvedValue(undefined);
+    // sec-new-D2: markProcessed/markFailed now return boolean (true = row found and updated)
+    vi.mocked(stripeWebhookEventRepository.markProcessed).mockResolvedValue(true as never);
+    vi.mocked(stripeWebhookEventRepository.markFailed).mockResolvedValue(true as never);
     vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockResolvedValue({
       id: 1,
     } as never);
@@ -561,6 +562,35 @@ describe('StripeWebhookService', () => {
       expect(stripeWebhookEventRepository.markFailed).toHaveBeenCalledWith(
         'evt_fail_str',
         'plain string failure',
+      );
+    });
+
+    // sec-new-D2: markProcessed/markFailed return a boolean so the caller can
+    // detect and warn when the ledger row was unexpectedly absent (no row updated).
+    it('emits mark_processed.no_row warning when markProcessed returns false (sec-new-D2)', async () => {
+      vi.mocked(stripeWebhookEventRepository.markProcessed).mockResolvedValueOnce(false as never);
+
+      await service.handleEvent(buildEvent({ id: 'evt_no_row' }));
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ eventId: 'evt_no_row' }),
+        'stripe.webhook.mark_processed.no_row',
+      );
+    });
+
+    it('emits mark_failed.no_row warning when markFailed returns false (sec-new-D2)', async () => {
+      vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockRejectedValue(
+        new Error('transient error'),
+      );
+      vi.mocked(stripeWebhookEventRepository.markFailed).mockResolvedValueOnce(false as never);
+
+      await expect(service.handleEvent(buildEvent({ id: 'evt_fail_no_row' }))).rejects.toThrow(
+        'transient error',
+      );
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ eventId: 'evt_fail_no_row' }),
+        'stripe.webhook.mark_failed.no_row',
       );
     });
   });

@@ -71,7 +71,8 @@ describe('stripe-webhook.processor duplicate job delivery', () => {
     vi.mocked(stripeWebhookEventRepository.markProcessed).mockReset();
     vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockReset();
 
-    vi.mocked(stripeWebhookEventRepository.markProcessed).mockResolvedValue(undefined);
+    // sec-new-D2: markProcessed now returns boolean; true = row found and updated.
+    vi.mocked(stripeWebhookEventRepository.markProcessed).mockResolvedValue(true as never);
     vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockResolvedValue({
       id: 1,
     } as never);
