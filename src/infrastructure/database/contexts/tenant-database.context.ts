@@ -18,6 +18,7 @@ import {
   brandWorkerContextDatabaseHandle,
   type WorkerContextDatabaseHandle,
 } from '@/infrastructure/database/utils/database-handle.types.js';
+import { applyWorkerStatementTimeout } from '@/infrastructure/database/contexts/worker-statement-timeout.util.js';
 
 /**
  * Runs a callback inside a transaction with RLS organization context set via SET LOCAL.
@@ -58,6 +59,14 @@ export async function withOrganizationContext<T>(
           await databaseHandle.execute(
             drizzleSql`SELECT set_config('app.current_organization_id', ${organizationPublicId}, true)`,
           );
+          // sec-re-16: lift the HTTP 5s `statement_timeout` to the worker budget
+          // so tenant-scoped worker jobs match the policy applied by sibling
+          // context wrappers (`withGlobalRetentionCleanupDatabaseContext`,
+          // `withUserDatabaseContext`). Today's tenant-scoped jobs run single-
+          // row CRUD where the HTTP timeout is fine; the omission would surface
+          // as silently-canceled work the moment a future job (e.g. a bulk
+          // backfill inside an org scope) crossed the HTTP budget.
+          await applyWorkerStatementTimeout(databaseHandle);
           return runWithPinnedOrganizationDatabaseSession(
             organizationPublicId,
             databaseHandle,
