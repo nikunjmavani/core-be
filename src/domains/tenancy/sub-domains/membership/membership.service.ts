@@ -281,6 +281,15 @@ export class MembershipService {
       );
       if (!membership) throw new NotFoundError('Membership');
       /**
+       * sec-new-T1: The org owner's membership must not be modified by other members.
+       * An Admin holding MEMBERSHIP_MANAGE could otherwise SUSPEND the owner, locking
+       * them out of all RBAC-gated routes with no self-recovery path. The ownership
+       * transfer endpoint is the correct mechanism for any ownership-adjacent change.
+       */
+      if (organization.owner_user_id === membership.user_id) {
+        throw new ForbiddenError('errors:ownerMembershipCannotBeModified');
+      }
+      /**
        * Initial activation must be driven by invitation acceptance, not a
        * manager PATCH. A membership that has never joined (`joined_at IS NULL`,
        * i.e. still `INVITED`) cannot be flipped to `ACTIVE` here. Reactivating a
