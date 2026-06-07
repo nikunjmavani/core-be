@@ -6,7 +6,7 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
-import { NotFoundError } from '@/shared/errors/index.js';
+import { NotFoundError, UnprocessableEntityError } from '@/shared/errors/index.js';
 import { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
@@ -147,5 +147,57 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
 
     expect(paymentProvider.updateSubscriptionPrice).not.toHaveBeenCalled();
     expect(repository.update).toHaveBeenCalled();
+  });
+
+  // sec-new-B1: terminal-status guard prevents Stripe calls on CANCELED / INCOMPLETE_EXPIRED
+  it.each([
+    ['CANCELED'],
+    ['INCOMPLETE_EXPIRED'],
+  ] as const)('cancel throws UnprocessableEntityError for terminal status %s (sec-new-B1)', async (terminalStatus) => {
+    const { service, repository, paymentProvider } = context;
+    vi.mocked(repository.findByPublicId).mockResolvedValueOnce({
+      ...baseSubscriptionRow,
+      status: terminalStatus,
+    } as never);
+
+    await expect(service.cancel('org_public', 'sub_public')).rejects.toBeInstanceOf(
+      UnprocessableEntityError,
+    );
+    expect(paymentProvider.cancelSubscriptionAtPeriodEnd).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['CANCELED'],
+    ['INCOMPLETE_EXPIRED'],
+  ] as const)('resume throws UnprocessableEntityError for terminal status %s (sec-new-B1)', async (terminalStatus) => {
+    const { service, repository, paymentProvider } = context;
+    vi.mocked(repository.findByPublicId).mockResolvedValueOnce({
+      ...baseSubscriptionRow,
+      status: terminalStatus,
+    } as never);
+
+    await expect(service.resume('org_public', 'sub_public')).rejects.toBeInstanceOf(
+      UnprocessableEntityError,
+    );
+    expect(paymentProvider.resumeSubscription).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['CANCELED'],
+    ['INCOMPLETE_EXPIRED'],
+  ] as const)('changePlan throws UnprocessableEntityError for terminal status %s (sec-new-B1)', async (terminalStatus) => {
+    const { service, repository, paymentProvider } = context;
+    vi.mocked(repository.findByPublicId).mockResolvedValueOnce({
+      ...baseSubscriptionRow,
+      status: terminalStatus,
+    } as never);
+
+    await expect(
+      service.changePlan('org_public', 'sub_public', { plan_id: 'plan_public' }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+    expect(paymentProvider.updateSubscriptionPrice).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
   });
 });

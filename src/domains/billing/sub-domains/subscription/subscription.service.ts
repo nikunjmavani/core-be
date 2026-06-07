@@ -1,4 +1,17 @@
-import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, NotFoundError, UnprocessableEntityError } from '@/shared/errors/index.js';
+
+/**
+ * Subscription statuses that are considered terminal (non-mutable).
+ *
+ * @remarks
+ * `CANCELED` and `INCOMPLETE_EXPIRED` rows can no longer be modified via the
+ * cancel / resume / changePlan operations. Attempting to do so would make a
+ * spurious Stripe API call against an already-inactive subscription, which
+ * produces a Stripe error, surfaces as 503 to the caller, and may confuse
+ * downstream event reconciliation. Guard every mutating method with this set
+ * before reaching the payment provider (sec-new-B1).
+ */
+const TERMINAL_STATUSES = new Set(['CANCELED', 'INCOMPLETE_EXPIRED']);
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
@@ -280,6 +293,10 @@ export class SubscriptionService {
           organization.id,
         );
         if (!subscription) throw new NotFoundError('Subscription');
+        // sec-new-B1: terminal subscriptions cannot have their plan changed
+        if (TERMINAL_STATUSES.has(subscription.status)) {
+          throw new UnprocessableEntityError('errors:subscriptionNotMutable');
+        }
         const previousPlan = await this.planService.requirePlanRecordByInternalId(
           subscription.plan_id,
         );
@@ -353,6 +370,10 @@ export class SubscriptionService {
           organization.id,
         );
         if (!subscription) throw new NotFoundError('Subscription');
+        // sec-new-B1: terminal subscriptions cannot be canceled (they are already non-billable)
+        if (TERMINAL_STATUSES.has(subscription.status)) {
+          throw new UnprocessableEntityError('errors:subscriptionNotMutable');
+        }
         return { organization, subscription };
       },
     );
@@ -392,6 +413,10 @@ export class SubscriptionService {
           organization.id,
         );
         if (!subscription) throw new NotFoundError('Subscription');
+        // sec-new-B1: terminal subscriptions cannot be resumed (already non-billable)
+        if (TERMINAL_STATUSES.has(subscription.status)) {
+          throw new UnprocessableEntityError('errors:subscriptionNotMutable');
+        }
         return { organization, subscription };
       },
     );

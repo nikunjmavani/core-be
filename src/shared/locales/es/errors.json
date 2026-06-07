@@ -138,6 +138,7 @@
   "stripeWebhookVerificationFailed": "Error al verificar la firma del webhook",
   "stripeWebhookEventInFlight": "El evento de webhook de Stripe {{eventId}} aún se está procesando; reintente en breve.",
   "subscriptionAlreadyExists": "Ya existe una suscripción activa para esta organización",
+  "subscriptionNotMutable": "Esta suscripción está en estado terminal y ya no puede modificarse; crea una nueva suscripción en su lugar",
   "paymentProviderUnavailable": "El proveedor de pagos no está disponible temporalmente. Vuelve a intentarlo.",
   "mailNotConfigured": "El envío de correo no está disponible temporalmente. Vuelve a intentarlo más tarde.",
   "captchaRequired": "Se requiere verificación CAPTCHA",
