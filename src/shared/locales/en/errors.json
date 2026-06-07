@@ -138,6 +138,7 @@
   "stripeWebhookVerificationFailed": "Webhook signature verification failed",
   "stripeWebhookEventInFlight": "Stripe webhook event {{eventId}} is still being processed; retry shortly.",
   "subscriptionAlreadyExists": "An active subscription already exists for this organization",
+  "subscriptionNotMutable": "This subscription is in a terminal state and can no longer be modified; create a new subscription instead",
   "paymentProviderUnavailable": "The payment provider is temporarily unavailable. Please try again.",
   "mailNotConfigured": "Email delivery is temporarily unavailable. Please try again later.",
   "captchaRequired": "CAPTCHA verification is required",
