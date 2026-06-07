@@ -378,16 +378,41 @@ export class WebhookService {
     };
     const payloadString = JSON.stringify(testPayload);
     const signatureTimestamp = Math.floor(Date.now() / 1000);
-    const signatureHeader = buildWebhookSignatureHeader(
-      decryptFieldSecret(webhook.encrypted_secret),
-      payloadString,
-      signatureTimestamp,
-    );
+    // sec-re-09: mirror the worker's sec-UP #8 guard. When the resolved signing
+    // secret round-trips to '' (a legacy row that pre-dates the DTO .min(16)
+    // bound, or a corrupt envelope), buildWebhookSignatureHeader would compute
+    // `createHmac('sha256', '').update(...).digest('hex')` — Node accepts an
+    // empty key and emits a deterministic, attacker-reproducible value. A
+    // customer verifier validating X-Webhook-Signature against that empty key
+    // would accept any forged request signed the same way, indistinguishable
+    // from a legitimate test delivery from us. Omitting the header makes the
+    // unsigned state explicit and observable instead of fake-authentic.
+    const signingSecret = decryptFieldSecret(webhook.encrypted_secret);
+    const signatureHeader =
+      signingSecret.length > 0
+        ? buildWebhookSignatureHeader(signingSecret, payloadString, signatureTimestamp)
+        : null;
+    if (signatureHeader === null) {
+      logger.warn(
+        { webhookPublicId: webhook.public_id, organizationPublicId: organization_public_id },
+        'webhook.test.empty_signing_secret_skipping_signature_header',
+      );
+    }
 
     const sentAt = new Date();
     let statusCode: number | null = null;
     let responseBody: string | null = null;
     let success = false;
+
+    const requestHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'core-be-webhook/1.0',
+      'X-Webhook-Event': 'webhook.test',
+      'X-Webhook-Timestamp': String(signatureTimestamp),
+    };
+    if (signatureHeader !== null) {
+      requestHeaders['X-Webhook-Signature'] = signatureHeader;
+    }
 
     try {
       const response = await outboundFetch(
@@ -398,13 +423,7 @@ export class WebhookService {
           fetchImplementation: pinnedFetch,
           init: {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': 'core-be-webhook/1.0',
-              'X-Webhook-Event': 'webhook.test',
-              'X-Webhook-Signature': signatureHeader,
-              'X-Webhook-Timestamp': String(signatureTimestamp),
-            },
+            headers: requestHeaders,
             body: payloadString,
           },
         }),
