@@ -142,6 +142,7 @@ describe('createAuthController', () => {
     list: vi.fn().mockResolvedValue([]),
     revoke: vi.fn().mockResolvedValue(undefined),
     revokeAllSessions: vi.fn().mockResolvedValue(undefined),
+    revokeAllSessionsExceptCurrent: vi.fn().mockResolvedValue(undefined),
   };
 
   const webauthnService = {
@@ -419,6 +420,34 @@ describe('createAuthController', () => {
       reply,
     );
     expect(reply.status).toHaveBeenCalledWith(501);
+  });
+
+  // sec-new-A3: DELETE /me/sessions must preserve the caller's current session.
+  it('revokeAllSessions calls revokeAllSessionsExceptCurrent with bearer token and skips revokeAllSessions (sec-new-A3)', async () => {
+    const reply = mockReply();
+    await controller.revokeAllSessions(
+      mockRequest({
+        headers: { authorization: 'Bearer current-session-token', 'user-agent': 'vitest' },
+      }),
+      reply,
+    );
+    expect(authSessionService.revokeAllSessionsExceptCurrent).toHaveBeenCalledWith({
+      userPublicId: expect.any(String),
+      currentAccessToken: 'current-session-token',
+    });
+    expect(authSessionService.revokeAllSessions).not.toHaveBeenCalled();
+    expect(reply.clearCookie).toHaveBeenCalled();
+  });
+
+  it('revokeAllSessions falls back to empty token when Authorization header is absent (sec-new-A3)', async () => {
+    vi.mocked(authSessionService.revokeAllSessionsExceptCurrent).mockClear();
+    const reply = mockReply();
+    await controller.revokeAllSessions(mockRequest(), reply);
+    expect(authSessionService.revokeAllSessionsExceptCurrent).toHaveBeenCalledWith({
+      userPublicId: expect.any(String),
+      currentAccessToken: '',
+    });
+    expect(reply.clearCookie).toHaveBeenCalled();
   });
 
   it('verifyEmail uses i18next fallback when request.t is absent', async () => {
