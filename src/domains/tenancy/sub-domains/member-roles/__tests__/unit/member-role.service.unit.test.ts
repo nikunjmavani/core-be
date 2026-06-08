@@ -41,6 +41,10 @@ describe('MemberRoleService', () => {
       .mockResolvedValue({ items: [roleRow], has_more: false, next_cursor: null }),
     findByPublicId: vi.fn().mockResolvedValue(roleRow),
     findByInternalId: vi.fn().mockResolvedValue(roleRow),
+    // sec-r5-followup-ratelimit-dos-2: create() now consults this guard
+    // before insert. Default to 0 so the lifecycle tests still reach create;
+    // the cap regression lives in `per-org-row-caps.unit.test.ts`.
+    countActiveByOrganization: vi.fn().mockResolvedValue(0),
     create: vi.fn().mockResolvedValue(roleRow),
     update: vi.fn().mockResolvedValue(roleRow),
     softDelete: vi.fn().mockResolvedValue(roleRow),

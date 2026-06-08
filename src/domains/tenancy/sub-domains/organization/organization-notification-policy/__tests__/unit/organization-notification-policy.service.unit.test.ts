@@ -35,6 +35,10 @@ describe('OrganizationNotificationPolicyService', () => {
   const policyRepository = {
     findByOrganizationId: vi.fn().mockResolvedValue([policyRow]),
     findByPublicId: vi.fn().mockResolvedValue(policyRow),
+    // sec-r5-followup-ratelimit-dos-3: create() now consults this guard
+    // before insert. Default to 0 so existing tests still reach create;
+    // the cap regression lives in `per-org-row-caps.unit.test.ts`.
+    countActiveByOrganization: vi.fn().mockResolvedValue(0),
     create: vi.fn().mockResolvedValue(policyRow),
     update: vi.fn().mockResolvedValue(policyRow),
     softDelete: vi.fn().mockResolvedValue(policyRow),
