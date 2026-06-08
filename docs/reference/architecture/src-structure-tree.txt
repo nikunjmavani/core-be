@@ -843,6 +843,7 @@ src/
     │   │   │   │   └── worker/
     │   │   │   │   │   └── user-tombstone-retention.worker.unit.test.ts
     │   │   │   ├── tombstone-repository-reads.unit.test.ts
+    │   │   │   ├── user-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── user.controller.admin-audit.unit.test.ts
     │   │   │   ├── user.controller.unit.test.ts
     │   │   │   ├── user.repository.db.unit.test.ts
