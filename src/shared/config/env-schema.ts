@@ -113,7 +113,14 @@ const envSchemaBase = z.object({
   GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
 
   // Session
-  AUTH_SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).default(7),
+  // sec-r4-C4: cap session lifetime at one year. Without an upper bound, an
+  // operator typo (`AUTH_SESSION_MAX_AGE_DAYS=3650`) or stale config could
+  // produce sessions that effectively never expire — extending the breach
+  // window after a credential compromise indefinitely. 365 is well clear of
+  // any realistic "stay signed in" UX (Slack / GitHub / GMail all rotate
+  // long-lived sessions inside this window) and bounds the worst-case impact
+  // of a stolen refresh token to a known interval.
+  AUTH_SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   /** Secure flag for session + CSRF cookies. Set false only for plaintext local loops. */
   COOKIE_SECURE: booleanString('true'),
   /**

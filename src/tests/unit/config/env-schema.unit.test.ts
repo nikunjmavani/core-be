@@ -82,6 +82,34 @@ describe('env-schema', () => {
     }
   });
 
+  // sec-r4-C4: AUTH_SESSION_MAX_AGE_DAYS must be bounded at 365 so a config
+  // typo cannot produce effectively-never-expiring sessions.
+  it('rejects AUTH_SESSION_MAX_AGE_DAYS above 365 (sec-r4-C4)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'test',
+      AUTH_SESSION_MAX_AGE_DAYS: '366',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(
+        parsed.error.issues.some((issue) => issue.path.includes('AUTH_SESSION_MAX_AGE_DAYS')),
+      ).toBe(true);
+    }
+  });
+
+  it('accepts AUTH_SESSION_MAX_AGE_DAYS at the 365 ceiling (sec-r4-C4)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'test',
+      AUTH_SESSION_MAX_AGE_DAYS: '365',
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.AUTH_SESSION_MAX_AGE_DAYS).toBe(365);
+    }
+  });
+
   it('requires EMAIL_FROM_ADDRESS when RESEND_API_KEY is set', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
