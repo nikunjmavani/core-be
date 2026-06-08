@@ -343,7 +343,6 @@ jobs:
             -e DATABASE_URL="$DATABASE_URL" \
             -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
             -e REDIS_URL="$REDIS_URL" \
-            -e JWT_SECRET="$JWT_SECRET" \
             -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
             -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
             -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
@@ -359,7 +358,6 @@ jobs:
             -e DATABASE_URL="$DATABASE_URL" \
             -e REDIS_URL="$REDIS_URL" \
             -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
-            -e JWT_SECRET="$JWT_SECRET" \
             -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
             -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
             -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
