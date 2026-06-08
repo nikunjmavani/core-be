@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.5.7-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.6-dev.0...v4.5.7-dev.0) (2026-06-08)
+
+
+### Documentation
+
+* **infra:** annotate Dockerfile build-stage ENV as test-only placeholders (sec-r4-C6) ([#519](https://github.com/nikunjmavani/core-be/issues/519)) ([cdf76ef](https://github.com/nikunjmavani/core-be/commit/cdf76ef7e6a85de7e638c161d1e7ad34dd12e38a))
+
 ## [4.5.6-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.5-dev.0...v4.5.6-dev.0) (2026-06-08)
 
 
