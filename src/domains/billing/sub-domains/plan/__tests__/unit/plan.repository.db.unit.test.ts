@@ -34,4 +34,16 @@ describe('PlanRepository (database)', () => {
     const missingId = await repository.findById(9_999_999);
     expect(missingId).toBeNull();
   });
+
+  // sec-r4-D3: findAllActive must apply a hard row cap so an unbounded plan
+  // catalog can never page the entire table into the API process.
+  it('findAllActive caps results at 100 rows even when more active plans exist (sec-r4-D3)', async () => {
+    // Seed 101 active plans — slug must be unique per row.
+    for (let index = 0; index < 101; index += 1) {
+      await createTestPlan({ name: `Bulk Plan ${String(index).padStart(3, '0')}` });
+    }
+
+    const activePlans = await repository.findAllActive();
+    expect(activePlans.length).toBe(100);
+  });
 });

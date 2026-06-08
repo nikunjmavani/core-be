@@ -3,12 +3,27 @@ import { getRequestDatabase } from '@/infrastructure/database/contexts/request-d
 import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 
 /**
+ * Hard cap on the number of active plan rows returned by `findAllActive`.
+ *
+ * sec-r4-D3: the catalog is intentionally small (a few tiers in production),
+ * but an operator with INSERT on `billing.plans` could otherwise grow it
+ * without bound and a single \\/api/v1/plans\\ request would page the entire
+ * table into the API process. 100 is well clear of any realistic plan catalog
+ * and bounds the memory cost of the public list endpoint.
+ */
+const PLAN_FIND_ALL_ACTIVE_LIMIT = 100;
+
+/**
  * Drizzle access to the `billing.plans` catalog table. Plans are a global system
  * table (no organization scope), so reads do not depend on RLS context.
  */
 export class PlanRepository {
   async findAllActive() {
-    return getRequestDatabase().select().from(plans).where(eq(plans.is_active, true));
+    return getRequestDatabase()
+      .select()
+      .from(plans)
+      .where(eq(plans.is_active, true))
+      .limit(PLAN_FIND_ALL_ACTIVE_LIMIT);
   }
 
   async findByPublicId(public_id: string) {
