@@ -11,6 +11,14 @@ FROM node:${NODE_VERSION}-alpine AS build
 ARG PNPM_VERSION
 WORKDIR /app
 
+# sec-r4-C6: WARNING — every value below is a TEST-ONLY COMPILE-TIME PLACEHOLDER
+# that exists solely so `pnpm build` / `pnpm build:check` pass the env-schema's
+# `min(1)` Zod check during the build stage. These values MUST NEVER be replaced
+# with real credentials at build time — they would persist in the intermediate
+# image layer metadata (`docker history` / `docker inspect` / pulled
+# `--target build` images). The runtime stage explicitly resets NODE_ENV=production
+# and reads real credentials from the runtime environment. See the matching warning
+# in `Dockerfile`.
 ENV NODE_ENV=test \
   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/core \
   REDIS_URL=redis://localhost:6379 \
