@@ -178,28 +178,65 @@ describe('Security: Session invalidation', () => {
     expect(stillActiveResponseA.statusCode).toBe(200);
   });
 
-  // NEGATIVE — revokeAllSessions then use old token
-  it('should return 401 after DELETE /auth/me/sessions revokes all sessions', async () => {
-    const { token, sessionPublicId, user } = await createActiveUserWithToken();
-    await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
+  // sec-new-A3 + sec-r4-A1: DELETE /auth/me/sessions intentionally PRESERVES
+  // the caller's own session so the client is not silently logged out — only
+  // OTHER sessions are revoked. The caller's token must therefore still work
+  // after the bulk revoke; a second device's token must be rejected.
+  it(
+    'after DELETE /auth/me/sessions: caller session preserved (sec-new-A3 / sec-r4-A1), ' +
+      'other sessions revoked',
+    async () => {
+      const {
+        token: tokenA,
+        sessionPublicId: sessionPublicIdA,
+        user,
+      } = await createActiveUserWithToken();
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicIdA);
 
-    // Revoke ALL sessions for this user
-    const revokeAll = await injectAuthenticated(app, {
-      method: 'DELETE',
-      url: testApiPath('/auth/me/sessions'),
-      token,
-    });
-    expect([200, 204]).toContain(revokeAll.statusCode);
+      // Second login on the same user → simulates a different device.
+      const tokenB = (await generateTestTokenAndSession({ userId: user.public_id })).token;
 
-    // The same token must be rejected now
-    const afterRevoke = await injectAuthenticated(app, {
-      method: 'GET',
-      url: testApiPath('/auth/me/sessions'),
-      token,
-    });
+      // Pre-condition: both tokens succeed against /auth/me/sessions.
+      const sanityA = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token: tokenA,
+      });
+      expect(sanityA.statusCode).toBe(200);
+      const sanityB = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token: tokenB,
+      });
+      expect(sanityB.statusCode).toBe(200);
 
-    expect(afterRevoke.statusCode).toBe(401);
-  });
+      // Device A revokes ALL sessions for this user via the bulk endpoint.
+      const revokeAll = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath('/auth/me/sessions'),
+        token: tokenA,
+      });
+      expect([200, 204]).toContain(revokeAll.statusCode);
+
+      // Caller (device A) MUST still work — sec-new-A3 preserves the caller's
+      // own session; sec-r4-A1 leaves the session cookie intact too.
+      const callerAfter = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token: tokenA,
+      });
+      expect(callerAfter.statusCode).toBe(200);
+
+      // Device B's token must now be rejected — every session OTHER THAN the
+      // caller's was revoked.
+      const otherDeviceAfter = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/me/sessions'),
+        token: tokenB,
+      });
+      expect(otherDeviceAfter.statusCode).toBe(401);
+    },
+  );
 
   // NEGATIVE — token signed with a different (wrong) algorithm / tampered signature
   it('should return 401 for a token with a tampered payload', async () => {

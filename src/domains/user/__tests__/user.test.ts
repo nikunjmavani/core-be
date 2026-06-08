@@ -7,6 +7,9 @@ import {
   type InjectHttpResult,
 } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { eq } from 'drizzle-orm';
+import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import {
   generateTestToken,
@@ -112,9 +115,22 @@ describe('User Domain — Integration', () => {
         payload: { code: await generateTotp({ secret: enrollBody.data.secret }) },
       });
       expect(confirmResponse.statusCode).toBe(200);
-      const confirmBody = confirmResponse.json() as { data: { method_id: number } };
-      const methodId = confirmBody.data.method_id;
-      expect(typeof methodId).toBe('number');
+      // sec-new-B4: serializer was renamed to return `method_public_id: string`
+      // (the bigserial id is no longer exposed). The DELETE /auth/mfa/:mfaMethodId
+      // route still validates numeric ids though, so we look up the row id from
+      // the returned public id to drive the DELETE below. When/if the DELETE
+      // route migrates to accept public ids, the lookup goes away.
+      const confirmBody = confirmResponse.json() as { data: { method_public_id: string } };
+      const methodPublicId = confirmBody.data.method_public_id;
+      expect(typeof methodPublicId).toBe('string');
+      expect(methodPublicId).toMatch(/^[a-z0-9]{21}$/);
+      const [methodRow] = await database
+        .select({ id: auth_methods.id })
+        .from(auth_methods)
+        .where(eq(auth_methods.public_id, methodPublicId))
+        .limit(1);
+      expect(methodRow).toBeDefined();
+      const methodId = methodRow!.id;
 
       const meAfterEnroll = await getMeWithRetry(app, token);
       expect(meAfterEnroll.statusCode).toBe(200);

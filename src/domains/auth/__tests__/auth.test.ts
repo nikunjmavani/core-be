@@ -11,7 +11,9 @@ import { createTestUser, createTestUserWithPassword } from '@/tests/factories/us
 import { generateTestToken, generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
 import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import { database } from '@/infrastructure/database/connection.js';
+import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
 import { verification_tokens } from '@/domains/auth/sub-domains/auth-method/verification-token/verification-token.schema.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 
@@ -912,6 +914,18 @@ describe('Auth Domain — Integration', () => {
 
     it('sec-new-B4: response items expose public_id, not bigserial id', async () => {
       const user = await createTestUser();
+      // `cleanupDatabase` runs in beforeEach, so the user starts with zero auth
+      // methods. Seed one verified primary auth method directly so the list
+      // response has an item to inspect for the B4 (public_id, no bigserial)
+      // shape contract.
+      await database.insert(auth_methods).values({
+        public_id: generatePublicId(),
+        user_id: user.id,
+        method_type: 'MAGIC_LINK',
+        is_primary: true,
+        verified_at: new Date(),
+        created_by_user_id: user.id,
+      });
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
         url: testApiPath('/auth/me/auth-methods'),
