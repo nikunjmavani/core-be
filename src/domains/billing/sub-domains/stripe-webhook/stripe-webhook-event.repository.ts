@@ -253,4 +253,31 @@ export class StripeWebhookEventRepository {
       .returning({ stripe_event_id: stripe_webhook_events.stripe_event_id });
     return rows.length > 0;
   }
+
+  /**
+   * Resolves the owning organization's public id for a Stripe subscription via
+   * the `billing.resolve_organization_public_id_for_stripe_subscription`
+   * SECURITY DEFINER resolver. Used by the Stripe webhook handler to pin
+   * `app.current_organization_id` before mutating tenant-scoped billing rows.
+   *
+   * @remarks
+   * Architecturally this belongs on the repository rather than as ad-hoc
+   * `sql\`\`` in a util because (a) it accesses Postgres directly, and (b) the
+   * util layer is forbidden from importing the raw `sql` template by
+   * architecture rule (services and utils call repositories; repositories own
+   * the DB connection). Returns `undefined` when the resolver finds no row,
+   * letting the caller decide whether to throw or skip based on the event type.
+   */
+  async resolveOrganizationPublicIdByProviderSubscriptionId(
+    provider_subscription_id: string,
+  ): Promise<string | undefined> {
+    const rows = await stripeWebhookLedgerDatabase().execute(
+      sql`SELECT billing.resolve_organization_public_id_for_stripe_subscription(${provider_subscription_id}) AS public_id`,
+    );
+    const resultRows = ((rows as { rows?: unknown[] }).rows ?? rows) as Array<{
+      public_id: string | null;
+    }>;
+    const organizationPublicId = resultRows[0]?.public_id;
+    return organizationPublicId ?? undefined;
+  }
 }

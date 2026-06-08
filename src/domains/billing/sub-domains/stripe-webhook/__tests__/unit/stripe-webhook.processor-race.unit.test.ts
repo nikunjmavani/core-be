@@ -14,8 +14,11 @@ vi.mock('@/infrastructure/payment/stripe.client.js', () => ({
 
 vi.mock('@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-organization.util.js', () => ({
   runStripeWebhookHandlerWithOrganizationContext: vi.fn(
-    async (_event: Stripe.Event, handler: (databaseHandle: unknown) => Promise<void>) =>
-      handler({} as never),
+    async (
+      _event: Stripe.Event,
+      _repository: unknown,
+      handler: (databaseHandle: unknown) => Promise<void>,
+    ) => handler({} as never),
   ),
 }));
 

@@ -116,10 +116,14 @@ export class StripeWebhookService {
       }
 
       try {
-        await runStripeWebhookHandlerWithOrganizationContext(event, async (databaseHandle) => {
-          const workerSubscriptionRepository = createWorkerSubscriptionRepository(databaseHandle);
-          await this.dispatchEvent(event, stripeEventCreatedAt, workerSubscriptionRepository);
-        });
+        await runStripeWebhookHandlerWithOrganizationContext(
+          event,
+          this.stripeWebhookEventRepository,
+          async (databaseHandle) => {
+            const workerSubscriptionRepository = createWorkerSubscriptionRepository(databaseHandle);
+            await this.dispatchEvent(event, stripeEventCreatedAt, workerSubscriptionRepository);
+          },
+        );
         // sec-new-D2: detect no-op writes (ledger row unexpectedly absent)
         const marked = await this.stripeWebhookEventRepository.markProcessed(event.id);
         if (!marked) {
