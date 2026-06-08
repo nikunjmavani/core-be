@@ -409,6 +409,106 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
+  describe('POST /api/v1/tenancy/invitations/:invitationId/decline (route-coverage gap-fill)', () => {
+    async function createPendingInvitationForDecline() {
+      const { organization, user: admin } = await createAuthorizedContext();
+      const invitee = await createTestUser({ email: `decliner-${randomUUID()}@test.com` });
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+      const [inviteeMembership] = await database
+        .insert(memberships)
+        .values({
+          public_id: generatePublicId(),
+          user_id: invitee.id,
+          organization_id: organization.id,
+          role_id: memberRole.id,
+          status: 'INVITED',
+        })
+        .returning();
+      const rawToken = `decline-token-${randomUUID()}`;
+      const invitationRepository = new MemberInvitationRepository();
+      const invitation = await invitationRepository.create({
+        membership_id: inviteeMembership!.id,
+        email: invitee.email,
+        token_hash: hashInvitationToken(rawToken),
+        invited_by_user_id: admin.id,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1_000),
+        created_by_user_id: admin.id,
+      });
+      return { invitation, invitee, inviteeMembership: inviteeMembership! };
+    }
+
+    it('revokes the invitation and leaves the membership in INVITED status', async () => {
+      const { invitation, invitee, inviteeMembership } = await createPendingInvitationForDecline();
+      const inviteeToken = await generateTestToken({ userId: invitee.public_id });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/invitations/${invitation.public_id}/decline`),
+        token: inviteeToken,
+      });
+      expect(response.statusCode).toBe(204);
+
+      const [postDeclineInvitation] = await database
+        .select()
+        .from(member_invitations)
+        .where(eq(member_invitations.id, invitation.id));
+      expect(postDeclineInvitation!.revoked_at).not.toBeNull();
+      expect(postDeclineInvitation!.accepted_at).toBeNull();
+
+      const [postDeclineMembership] = await database
+        .select()
+        .from(memberships)
+        .where(eq(memberships.id, inviteeMembership.id));
+      expect(postDeclineMembership!.status).toBe('INVITED');
+      expect(postDeclineMembership!.joined_at).toBeNull();
+    });
+
+    it("rejects declining someone else's invitation (403)", async () => {
+      const { invitation } = await createPendingInvitationForDecline();
+      const otherUser = await createTestUser({ email: `intruder-${randomUUID()}@test.com` });
+      const intruderToken = await generateTestToken({ userId: otherUser.public_id });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/invitations/${invitation.public_id}/decline`),
+        token: intruderToken,
+      });
+      expect(response.statusCode).toBe(403);
+
+      const [stillPending] = await database
+        .select()
+        .from(member_invitations)
+        .where(eq(member_invitations.id, invitation.id));
+      expect(stillPending!.revoked_at).toBeNull();
+    });
+
+    it('rejects a second decline on the same invitation', async () => {
+      const { invitation, invitee } = await createPendingInvitationForDecline();
+      const inviteeToken = await generateTestToken({ userId: invitee.public_id });
+
+      const first = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/invitations/${invitation.public_id}/decline`),
+        token: inviteeToken,
+      });
+      expect(first.statusCode).toBe(204);
+
+      const second = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/invitations/${invitation.public_id}/decline`),
+        token: inviteeToken,
+      });
+      // 404, not 400: the `tenancy.resolve_member_invitation_lookup_by_public_id`
+      // SECURITY DEFINER function excludes revoked rows, so a second decline
+      // can't find the invitation at all. This is intentional — once revoked,
+      // an invitation should look like it never existed to the invitee.
+      expect(second.statusCode).toBe(404);
+    });
+  });
+
   describe('DELETE /api/v1/tenancy/organizations/:id/memberships/:membershipId', () => {
     it('refuses to remove the organization owner (403, no orphaned org)', async () => {
       const owner = await createTestUser();
