@@ -25,6 +25,7 @@ import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { MemberInvitationRepository } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.repository.js';
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { hashInvitationToken } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.token.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { FastifyInstance } from 'fastify';
@@ -406,6 +407,94 @@ describe('Membership Sub-Domain — Integration', () => {
         .where(eq(memberships.id, inviteeMembership.id));
       expect(stillInvited!.status).toBe('INVITED');
       expect(stillInvited!.joined_at).toBeNull();
+    });
+  });
+
+  describe('POST /api/v1/tenancy/organizations/:id/transfer-ownership (route-coverage gap-fill)', () => {
+    it('transfers ownership: organizations.owner_user_id updated (200)', async () => {
+      const { organization, token: ownerToken, user: owner } = await createAuthorizedContext();
+      // Build an ACTIVE second member who will become the new owner.
+      const newOwner = await createTestUser({ email: `new-owner-${randomUUID()}@test.com` });
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: MEMBERSHIP_PERMISSIONS,
+      });
+      await createMembership({
+        userId: newOwner.id,
+        organizationId: organization.id,
+        roleId: memberRole.id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/transfer-ownership`),
+        token: ownerToken,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: { new_owner_user_id: newOwner.public_id },
+      });
+      expect(response.statusCode).toBe(200);
+
+      const [updatedOrg] = await database
+        .select()
+        .from(organizations)
+        .where(eq(organizations.id, organization.id));
+      expect(updatedOrg!.owner_user_id).toBe(newOwner.id);
+      expect(updatedOrg!.owner_user_id).not.toBe(owner.id);
+    });
+
+    it('rejects non-owner callers with 403 (errors:onlyOwnerCanTransfer)', async () => {
+      const { organization } = await createAuthorizedContext();
+      // Build a non-owner ACTIVE member of the same org with the manage perms.
+      const nonOwner = await createTestUser({ email: `non-owner-${randomUUID()}@test.com` });
+      const role = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: MEMBERSHIP_PERMISSIONS,
+      });
+      await createMembership({
+        userId: nonOwner.id,
+        organizationId: organization.id,
+        roleId: role.id,
+      });
+      const nonOwnerToken = await generateTestToken({ userId: nonOwner.public_id });
+      const target = await createTestUser({ email: `target-${randomUUID()}@test.com` });
+      await createMembership({
+        userId: target.id,
+        organizationId: organization.id,
+        roleId: role.id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/transfer-ownership`),
+        token: nonOwnerToken,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: { new_owner_user_id: target.public_id },
+      });
+      expect(response.statusCode).toBe(403);
+
+      const [orgUnchanged] = await database
+        .select()
+        .from(organizations)
+        .where(eq(organizations.id, organization.id));
+      expect(orgUnchanged!.owner_user_id).not.toBe(target.id);
+    });
+
+    it('rejects transfer to a user who is not an active member (404)', async () => {
+      const { organization, token: ownerToken } = await createAuthorizedContext();
+      // The would-be new owner exists as a user but has NO membership in this org.
+      const outsider = await createTestUser({ email: `outsider-${randomUUID()}@test.com` });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/transfer-ownership`),
+        token: ownerToken,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: { new_owner_user_id: outsider.public_id },
+      });
+      expect(response.statusCode).toBe(404);
     });
   });
 
