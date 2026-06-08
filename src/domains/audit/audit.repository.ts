@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, desc, eq, gte, inArray, lte, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lte, sql, type SQL } from 'drizzle-orm';
 import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { logs } from '@/domains/audit/audit.schema.js';
@@ -195,6 +195,13 @@ export class AuditRepository {
    * Batch-resolves the internal organization ids carried on a page of audit rows to their
    * public ids. `tenancy.organizations` is not FORCE RLS for the admin / org-audit contexts
    * the audit list runs under, so a plain SELECT works (no resolver needed).
+   *
+   * sec-r4-D2: filter on `deleted_at IS NULL` so soft-deleted organization public ids do
+   * not leak into the serialized audit-log response. Audit rows themselves are retained
+   * (regulatory retention) but the audit list surface should still respect the org's
+   * soft-deleted tombstone — a deleted org's public id should not be discoverable via the
+   * audit-list response. Rows whose organization is soft-deleted simply omit the public id
+   * (the serializer treats a missing map entry as "no public id available").
    */
   async resolveOrganizationPublicIdsByInternalIds(
     organizationInternalIds: readonly number[],
@@ -203,7 +210,12 @@ export class AuditRepository {
     const rows = await getRequestDatabase()
       .select({ id: organizations.id, public_id: organizations.public_id })
       .from(organizations)
-      .where(inArray(organizations.id, [...organizationInternalIds]));
+      .where(
+        and(
+          inArray(organizations.id, [...organizationInternalIds]),
+          isNull(organizations.deleted_at),
+        ),
+      );
     return new Map(rows.map((row) => [Number(row.id), row.public_id]));
   }
 }
