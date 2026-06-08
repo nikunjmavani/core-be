@@ -409,6 +409,67 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
+  describe('POST /api/v1/tenancy/organizations/:id/leave (route-coverage gap-fill)', () => {
+    it('soft-deletes the membership when a non-owner leaves (204)', async () => {
+      const owner = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: owner.id });
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+      const member = await createTestUser({ email: `leaver-${randomUUID()}@test.com` });
+      const memberMembership = await createMembership({
+        userId: member.id,
+        organizationId: organization.id,
+        roleId: memberRole.id,
+      });
+      const memberToken = await generateTestToken({ userId: member.public_id });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/leave`),
+        token: memberToken,
+        organizationPublicId: organization.public_id,
+      });
+      expect(response.statusCode).toBe(204);
+
+      const [softDeleted] = await database
+        .select()
+        .from(memberships)
+        .where(eq(memberships.id, memberMembership.id));
+      expect(softDeleted!.deleted_at).not.toBeNull();
+    });
+
+    it('refuses to let the organization owner leave (403)', async () => {
+      const owner = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: owner.id });
+      const ownerRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: MEMBERSHIP_PERMISSIONS,
+      });
+      const ownerMembership = await createMembership({
+        userId: owner.id,
+        organizationId: organization.id,
+        roleId: ownerRole.id,
+      });
+      const ownerToken = await generateTestToken({ userId: owner.public_id });
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/tenancy/organizations/${organization.public_id}/leave`),
+        token: ownerToken,
+        organizationPublicId: organization.public_id,
+      });
+      expect(response.statusCode).toBe(403);
+
+      const [stillActive] = await database
+        .select()
+        .from(memberships)
+        .where(eq(memberships.id, ownerMembership.id));
+      expect(stillActive!.deleted_at).toBeNull();
+    });
+  });
+
   describe('DELETE /api/v1/tenancy/organizations/:id/memberships/:membershipId', () => {
     it('refuses to remove the organization owner (403, no orphaned org)', async () => {
       const owner = await createTestUser();
