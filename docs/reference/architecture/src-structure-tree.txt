@@ -1717,6 +1717,7 @@ src/
     │   │   └── rate-limiting.security.test.ts
     │   ├── rls/
     │   │   ├── audit-append-only.security.test.ts
+    │   │   ├── audit-insert-rls-privilege-bypass.security.test.ts
     │   │   ├── bola-cross-tenant.security.test.ts
     │   │   ├── core-be-app-role-privileges.security.test.ts
     │   │   ├── organization-rls-session.security.test.ts

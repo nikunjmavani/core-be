@@ -17,10 +17,14 @@ import { api_keys } from '@/domains/tenancy/sub-domains/organization/organizatio
 
 /**
  * Drizzle definition for `audit.logs` — the append-only ledger of actor/resource
- * actions. RLS tenant-isolation policy scopes rows to the current organization
- * (or to retention-cleanup workers that set `app.global_retention_cleanup`, or
- * the cross-tenant admin escape hatch `app.global_admin` used by the admin
- * audit-log listing via `withGlobalAdminDatabaseContext`).
+ * actions. RLS tenant-isolation policies scope access by operation type:
+ * - **INSERT** (WITH CHECK): only normal tenant context (`app.current_organization_id`)
+ *   may write rows. Neither `app.global_admin` nor `app.global_retention_cleanup`
+ *   is permitted on INSERT — they are read/delete contexts only (sec-r4-D1).
+ * - **SELECT** (USING): tenant context, `app.global_retention_cleanup`, and the
+ *   cross-tenant admin escape hatch `app.global_admin` (used by admin audit-log
+ *   listing via `withGlobalAdminDatabaseContext`) are all permitted for reads.
+ * - **DELETE** (USING): `app.global_retention_cleanup` only; admin is not on DELETE.
  *
  * Storage: the migrations create this as a plain table (`id bigserial PRIMARY KEY`). High-volume
  * hosted environments may RANGE-partition it by `created_at` out-of-band — that partitioning is
@@ -114,12 +118,15 @@ export const logs = auditSchema
         as: 'permissive',
         for: 'insert',
         to: 'public',
+        // sec-r4-D1: only normal tenant context may INSERT audit rows.
+        // global_admin is a read escape hatch; global_retention_cleanup is for
+        // DELETE only. Neither has a legitimate reason to write audit rows for
+        // an arbitrary organization. The SELECT policy retains both escape
+        // hatches for reads; the INSERT policy is tightened to tenant-only.
         withCheck: sql`${table.organization_id} = (
             SELECT id FROM tenancy.organizations
             WHERE public_id = current_setting('app.current_organization_id', true)
-          )
-          OR current_setting('app.global_retention_cleanup', true) = 'true'
-          OR current_setting('app.global_admin', true) = 'true'`,
+          )`,
       }),
       pgPolicy('audit_logs_tenant_isolation_delete', {
         as: 'permissive',
