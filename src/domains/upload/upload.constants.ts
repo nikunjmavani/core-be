@@ -97,6 +97,20 @@ export const UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE = 500;
  */
 export const UPLOAD_OFFBOARDING_DELETE_CONCURRENCY = 10;
 
+/**
+ * Hard DTO-level ceiling on the declared `fileSize` claim — set to the highest
+ * per-purpose cap currently configured in {@link UPLOAD_PURPOSE_CONFIG}.
+ *
+ * sec-r4-I4: the validator already rejects oversized declarations per purpose,
+ * but the DTO accepted any positive int. A defense-in-depth max at the schema
+ * layer (a) makes the OpenAPI contract reflect the true ceiling for clients
+ * generating SDKs from the spec, and (b) catches absurd values (e.g. integer
+ * overflow attempts) before the per-purpose policy check has even chosen a
+ * config row. Must be kept in sync with the largest \`UPLOAD_PURPOSE_CONFIG\`
+ * entry.
+ */
+export const UPLOAD_DTO_FILE_SIZE_MAX_BYTES = 10 * 1024 * 1024;
+
 export { PRESIGNED_URL_EXPIRY_SECONDS } from '@/shared/constants/ttl.constants.js';
 
 /**
