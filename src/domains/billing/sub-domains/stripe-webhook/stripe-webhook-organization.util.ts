@@ -1,8 +1,8 @@
 import type Stripe from 'stripe';
-import { sql } from '@/infrastructure/database/connection.js';
 import type { WorkerContextDatabaseHandle } from '@/infrastructure/database/utils/database-handle.types.js';
 import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import type { StripeWebhookEventRepository } from './stripe-webhook-event.repository.js';
 
 type StripeSubscriptionEvent =
   | Stripe.CustomerSubscriptionCreatedEvent
@@ -40,21 +40,18 @@ function readOrganizationPublicIdFromStripeMetadata(
     : undefined;
 }
 
-async function resolveOrganizationPublicIdByProviderSubscriptionId(
-  provider_subscription_id: string,
-): Promise<string | undefined> {
-  const rows = await sql<{ public_id: string | null }[]>`
-    SELECT billing.resolve_organization_public_id_for_stripe_subscription(${provider_subscription_id}) AS public_id
-  `;
-  const organizationPublicId = rows[0]?.public_id;
-  return organizationPublicId ?? undefined;
-}
-
 /**
  * Resolves tenancy scope for Stripe webhook side effects (RLS requires app.current_organization_id).
+ *
+ * @remarks
+ * Delegates the Postgres lookup to {@link StripeWebhookEventRepository.resolveOrganizationPublicIdByProviderSubscriptionId}
+ * so that direct DB access stays at the repository layer (architecture rule:
+ * services and utils call repositories; only repositories own the DB
+ * connection).
  */
 export async function resolveOrganizationPublicIdForStripeEvent(
   event: Stripe.Event,
+  repository: StripeWebhookEventRepository,
 ): Promise<string | undefined> {
   if (!isStripeSubscriptionEvent(event)) {
     return undefined;
@@ -63,7 +60,7 @@ export async function resolveOrganizationPublicIdForStripeEvent(
   const stripeSubscription = event.data.object;
 
   const fromMetadata = readOrganizationPublicIdFromStripeMetadata(stripeSubscription.metadata);
-  const fromSubscription = await resolveOrganizationPublicIdByProviderSubscriptionId(
+  const fromSubscription = await repository.resolveOrganizationPublicIdByProviderSubscriptionId(
     stripeSubscription.id,
   );
 
@@ -99,9 +96,10 @@ export async function runWithOrganizationPublicIdForStripeWebhook<T>(
  */
 export async function runStripeWebhookHandlerWithOrganizationContext<T>(
   event: Stripe.Event,
+  repository: StripeWebhookEventRepository,
   handler: (databaseHandle: WorkerContextDatabaseHandle) => Promise<T>,
 ): Promise<T | undefined> {
-  const organizationPublicId = await resolveOrganizationPublicIdForStripeEvent(event);
+  const organizationPublicId = await resolveOrganizationPublicIdForStripeEvent(event, repository);
   if (organizationPublicId === undefined) {
     logger.warn(
       { eventId: event.id, eventType: event.type },

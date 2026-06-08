@@ -13,8 +13,11 @@ vi.mock('@/infrastructure/database/connection.js', () => ({
 
 vi.mock('@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-organization.util.js', () => ({
   runStripeWebhookHandlerWithOrganizationContext: vi.fn(
-    async (_event: unknown, handler: (databaseHandle: unknown) => Promise<void>) =>
-      handler({ update: drizzleOutboundWebhookDatabaseUpdateSpy }),
+    async (
+      _event: unknown,
+      _repository: unknown,
+      handler: (databaseHandle: unknown) => Promise<void>,
+    ) => handler({ update: drizzleOutboundWebhookDatabaseUpdateSpy }),
   ),
 }));
 
