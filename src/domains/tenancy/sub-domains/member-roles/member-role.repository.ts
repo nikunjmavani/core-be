@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
@@ -24,6 +24,22 @@ interface MemberRoleListPagination {
  * retried on collision via {@link runInsertWithPublicIdentifierRetry}.
  */
 export class MemberRoleRepository extends BaseRepository {
+  /**
+   * Counts the active (not soft-deleted) custom roles for the given organization.
+   *
+   * @remarks
+   * sec-r5-followup-ratelimit-dos-2: used by `MemberRoleService.create` to
+   * enforce `MEMBER_ROLE_MAX_PER_ORG`. Same shape as
+   * `webhook.repository.countActiveByOrganization`.
+   */
+  async countActiveByOrganization(organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: sql<number>`count(*)::int` })
+      .from(roles)
+      .where(and(eq(roles.organization_id, organization_id), isNull(roles.deleted_at)));
+    return rows[0]?.value ?? 0;
+  }
+
   async findByOrganizationId(organization_id: number, pagination: MemberRoleListPagination) {
     const { after, limit } = pagination;
     const cursorCondition = buildAscendingTextIdCursorCondition(

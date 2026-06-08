@@ -171,6 +171,39 @@ const envSchemaBase = z.object({
    */
   WEBHOOK_MAX_PER_ORG: z.coerce.number().int().min(1).max(1000).default(25),
   /**
+   * Max number of active (not revoked) API keys allowed per organization
+   * (sec-r5-followup-ratelimit-dos-1). Parity with `WEBHOOK_MAX_PER_ORG`. The
+   * route already has `ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT` to bound the
+   * RATE at which mutations are accepted; this caps the COUNT so a long-running
+   * Admin role-holder cannot accumulate unbounded auth-amplifying credentials
+   * over time. Default 25 matches realistic CI / service-account needs; raise
+   * deliberately for tenants with many micro-service callers.
+   */
+  ORGANIZATION_API_KEY_MAX_PER_ORG: z.coerce.number().int().min(1).max(1000).default(25),
+  /**
+   * Max number of active (not deleted) custom roles allowed per organization
+   * (sec-r5-followup-ratelimit-dos-2). Parity with `WEBHOOK_MAX_PER_ORG`. The
+   * sec-r4-D4 `.limit(256)` on `findByRoleId` already caps the per-role
+   * permission read; this caps the per-org role count so a churning Admin
+   * cannot unbound the role table itself. Default 50 fits realistic RBAC
+   * granularity (admin/editor/viewer + a few custom flavours).
+   */
+  MEMBER_ROLE_MAX_PER_ORG: z.coerce.number().int().min(1).max(500).default(50),
+  /**
+   * Max number of active notification policies allowed per organization
+   * (sec-r5-followup-ratelimit-dos-3). Parity with `WEBHOOK_MAX_PER_ORG`. The
+   * `notification_type` column is free-form varchar(50) with no enum, so
+   * without a cap an Admin could churn policies and flap downstream routing.
+   * Default 100 — enough for a fine-grained notification matrix (≈ 25 event
+   * types × 4 channels) but bounded.
+   */
+  ORGANIZATION_NOTIFICATION_POLICY_MAX_PER_ORG: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1000)
+    .default(100),
+  /**
    * Window (hours) during which outbound webhook deliveries dual-sign with
    * the previous secret too (sec-N8). After this window the worker stops
    * sending `X-Webhook-Signature-Previous`. Default 24h covers a one-day

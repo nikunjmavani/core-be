@@ -1,3 +1,4 @@
+import { env } from '@/shared/config/env.config.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
@@ -154,6 +155,18 @@ export class MemberRoleService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
+      // sec-r5-followup-ratelimit-dos-2: enforce the per-org custom-role cap
+      // before insert. Mirrors `WEBHOOK_MAX_PER_ORG` in webhook.service.ts —
+      // a stability cap, not a security boundary; the per-route rate limit
+      // bounds concurrency so the inherent race ("one extra row") is acceptable.
+      const activeCount = await this.memberRoleRepository.countActiveByOrganization(
+        organization.id,
+      );
+      if (activeCount >= env.MEMBER_ROLE_MAX_PER_ORG) {
+        throw new ConflictError('errors:memberRoleMaxReached', {
+          max: env.MEMBER_ROLE_MAX_PER_ORG,
+        });
+      }
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
       try {

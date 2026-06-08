@@ -43,6 +43,25 @@ function parseScopesColumn(value: unknown): string[] {
  * authentication, and `last_used_at` touches.
  */
 export class OrganizationApiKeyRepository extends BaseRepository {
+  /**
+   * Counts the active (not soft-deleted) API keys for the given organization.
+   *
+   * @remarks
+   * sec-r5-followup-ratelimit-dos-1: used by `OrganizationApiKeyService.create`
+   * to enforce `ORGANIZATION_API_KEY_MAX_PER_ORG` before insert. Race-safe
+   * enough for a stability cap (the per-route rate limit bounds concurrency);
+   * the failure mode of two parallel inserts at N-1 is "one extra row," not
+   * security-critical. Mirrors the `webhook.repository.countActiveByOrganization`
+   * pattern.
+   */
+  async countActiveByOrganization(organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: sql<number>`count(*)::int` })
+      .from(api_keys)
+      .where(and(eq(api_keys.organization_id, organization_id), isNull(api_keys.deleted_at)));
+    return rows[0]?.value ?? 0;
+  }
+
   async findByOrganizationId(
     organization_id: number,
     pagination: OrganizationApiKeyListPagination,
