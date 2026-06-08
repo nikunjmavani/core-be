@@ -122,6 +122,11 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me',
     {
       onRequest: [app.authenticate],
+      // sec-r4-I1: bound profile-update writes per authenticated user — the field
+      // touches PII columns and downstream notification preferences, so cap at
+      // the moderate-authed tier (30 req / 60s) consistent with other authed
+      // mutation paths. Unauthenticated traffic is already rejected upstream.
+      ...MODERATE_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Update current user profile',
         description:
@@ -136,6 +141,11 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me',
     {
       onRequest: [app.authenticate],
+      // sec-r4-I1: account self-deletion is irreversible (cascades sessions,
+      // memberships, schedules retention sweep). Cap at the expensive-authed
+      // tier (5 req / 5 min) so a hijacked session cannot rip through victim
+      // accounts in bulk.
+      ...EXPENSIVE_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Delete my account',
         description:
@@ -162,6 +172,9 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/settings',
     {
       onRequest: [app.authenticate],
+      // sec-r4-I1: moderate-authed tier for self-service settings mutations so a
+      // session-token holder cannot churn settings rows unbounded.
+      ...MODERATE_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Update my settings',
         description: "Updates the authenticated user's personal settings.",
@@ -188,6 +201,10 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/notification-preferences',
     {
       onRequest: [app.authenticate],
+      // sec-r4-I1: cap notification-preference replacement at the moderate-authed
+      // tier — a PUT replaces the full set per call and could otherwise be looped
+      // to churn rows or trigger downstream cache invalidation storms.
+      ...MODERATE_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Replace notification preferences',
         description:
@@ -202,6 +219,10 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/avatar',
     {
       onRequest: [app.authenticate],
+      // sec-r4-I1: each avatar upload writes to S3 and rewrites the user row;
+      // cap at moderate-authed (30 req / 60s) so a hijacked session cannot
+      // mint unbounded S3 objects.
+      ...MODERATE_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Upload avatar',
         description: "Uploads or replaces the authenticated user's avatar image.",
@@ -215,6 +236,9 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/avatar',
     {
       onRequest: [app.authenticate],
+      // sec-r4-I1: avatar deletion calls S3 and rewrites the user row; same
+      // moderate-authed bound as the upload counterpart.
+      ...MODERATE_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Remove avatar',
         description: "Removes the authenticated user's avatar image.",
