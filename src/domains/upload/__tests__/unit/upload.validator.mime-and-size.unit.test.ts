@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
 import { validateCreateUpload } from '@/domains/upload/upload.validator.js';
-import { UPLOAD_PURPOSE_CONFIG } from '@/domains/upload/upload.constants.js';
+import {
+  UPLOAD_DTO_FILE_SIZE_MAX_BYTES,
+  UPLOAD_PURPOSE_CONFIG,
+} from '@/domains/upload/upload.constants.js';
 
 describe('validateCreateUpload — MIME, size, and ownership', () => {
   const baseUserUpload = {
@@ -23,6 +26,21 @@ describe('validateCreateUpload — MIME, size, and ownership', () => {
     expect(() => validateCreateUpload({ ...baseUserUpload, fileSize: maxSize + 1 })).toThrow(
       ValidationError,
     );
+  });
+
+  // sec-r4-I4: DTO-level cap rejects absurd values before the per-purpose
+  // policy check runs. UPLOAD_DTO_FILE_SIZE_MAX_BYTES is the highest realistic
+  // upload size (10 MB today, matching user_file / organization_file).
+  it('rejects fileSize above the DTO-level ceiling (sec-r4-I4)', () => {
+    expect(() =>
+      validateCreateUpload({ ...baseUserUpload, fileSize: UPLOAD_DTO_FILE_SIZE_MAX_BYTES + 1 }),
+    ).toThrow(ValidationError);
+  });
+
+  it('rejects integer-overflow scale fileSize at the DTO layer (sec-r4-I4)', () => {
+    expect(() =>
+      validateCreateUpload({ ...baseUserUpload, fileSize: Number.MAX_SAFE_INTEGER }),
+    ).toThrow(ValidationError);
   });
 
   it('requires organizationId for organization-target uploads', () => {

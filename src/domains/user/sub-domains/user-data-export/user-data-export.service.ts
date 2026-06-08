@@ -12,6 +12,8 @@ import type { UserDataExportRepository } from '@/domains/user/sub-domains/user-d
 import { serializeUserDataExport } from '@/domains/user/sub-domains/user-data-export/user-data-export.serializer.js';
 import {
   USER_DATA_EXPORT_ARTIFACT_TTL_DAYS,
+  USER_DATA_EXPORT_OFFBOARDING_DELETE_BATCH_SIZE,
+  USER_DATA_EXPORT_OFFBOARDING_DELETE_CONCURRENCY,
   USER_DATA_EXPORT_S3_PREFIX,
 } from '@/domains/user/sub-domains/user-data-export/user-data-export.constants.js';
 import {
@@ -412,27 +414,67 @@ export class UserDataExportService {
     // auth.user_data_exports is FORCE RLS keyed on app.current_user_id. Offboarding can be initiated
     // by an admin, so pin the context to the TARGET user (not the caller) so the owner-access policy
     // matches and the rows are actually removed in default scoped-RLS mode.
-    const rows = await withUserDatabaseContext(userPublicId, () =>
-      this.exportRepository.listByUserId(userInternalId),
-    );
-    await Promise.all(
-      rows
-        .filter((row): row is typeof row & { s3_key: string } => row.s3_key !== null)
-        .map(async (row) => {
-          const objectDeleted = await this.objectStorage.deleteObject(row.s3_key);
-          if (!objectDeleted) {
-            logger.warn(
-              { userInternalId, exportPublicId: row.public_id, s3Key: row.s3_key },
-              'user-data-export.offboarding.s3DeleteFailed',
-            );
-          }
-        }),
-    );
+    //
+    // sec-r4-R2: stream the user's export S3 keys in bounded keyset batches and
+    // delete the objects with bounded concurrency. The previous version loaded
+    // every export row into memory and fanned out one in-flight S3 request per
+    // row via `Promise.all`, which is unbounded in both heap and outbound
+    // throughput for a user with a large export history. Mirrors the upload
+    // domain's `tombstoneAllByUserId` offboarding pattern.
+    let afterId = 0;
+    for (;;) {
+      const rows = await withUserDatabaseContext(userPublicId, () =>
+        this.exportRepository.findS3KeysByUserIdAfter(
+          userInternalId,
+          afterId,
+          USER_DATA_EXPORT_OFFBOARDING_DELETE_BATCH_SIZE,
+        ),
+      );
+      if (rows.length === 0) {
+        break;
+      }
+      await this.deleteS3ObjectsWithBoundedConcurrency({
+        s3Keys: rows.map((row) => row.s3_key).filter((s3Key): s3Key is string => s3Key !== null),
+        userInternalId,
+      });
+      afterId = rows[rows.length - 1]!.id;
+      if (rows.length < USER_DATA_EXPORT_OFFBOARDING_DELETE_BATCH_SIZE) {
+        break;
+      }
+    }
     const deletedCount = await withUserDatabaseContext(userPublicId, () =>
       this.exportRepository.deleteAllByUserId(userInternalId),
     );
     if (deletedCount > 0) {
       logger.info({ userInternalId, deletedCount }, 'user-data-export.offboarding.deleted');
+    }
+  }
+
+  /**
+   * Deletes S3 objects in fixed-size concurrent chunks (sec-r4-R2). Failures
+   * are logged but never rethrown — offboarding must continue to the database
+   * delete regardless of upstream S3 hiccups, mirroring the upload domain's
+   * tombstoneAllByUserId behaviour.
+   */
+  private async deleteS3ObjectsWithBoundedConcurrency(options: {
+    s3Keys: readonly string[];
+    userInternalId: number;
+  }): Promise<void> {
+    const { s3Keys, userInternalId } = options;
+    for (
+      let index = 0;
+      index < s3Keys.length;
+      index += USER_DATA_EXPORT_OFFBOARDING_DELETE_CONCURRENCY
+    ) {
+      const chunk = s3Keys.slice(index, index + USER_DATA_EXPORT_OFFBOARDING_DELETE_CONCURRENCY);
+      await Promise.all(
+        chunk.map(async (s3Key) => {
+          const objectDeleted = await this.objectStorage.deleteObject(s3Key);
+          if (!objectDeleted) {
+            logger.warn({ userInternalId, s3Key }, 'user-data-export.offboarding.s3DeleteFailed');
+          }
+        }),
+      );
     }
   }
 

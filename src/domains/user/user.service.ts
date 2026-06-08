@@ -228,6 +228,19 @@ export class UserService {
     );
   }
 
+  /**
+   * Clears `users.password_hash = NULL` for the given user (sec-r5-auth-session-info-1).
+   *
+   * @remarks
+   * Called by {@link AuthMethodService.delete} when the user revokes their
+   * PASSWORD auth_method row so the credential is no longer accepted by
+   * `POST /auth/login`. Without this, the auth-method list reports "no
+   * password" but the stale hash on `auth.users` continues to authenticate.
+   */
+  async clearPasswordHash(public_id: string): Promise<UserAuthRecord | null> {
+    return withUserDatabaseContext(public_id, () => this.repository.clearPasswordHash(public_id));
+  }
+
   async updateLoginAttempt(
     public_id: string,
     failed_login_count: number,

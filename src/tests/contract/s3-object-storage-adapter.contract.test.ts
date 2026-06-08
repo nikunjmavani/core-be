@@ -49,6 +49,19 @@ describe('Amazon S3 contract (`S3ObjectStorageAdapter`)', () => {
     expect(postResponse.fields).toHaveProperty('key', objectKeyOutbound);
     // S3 SDK emits an x-amz-meta-* form field for every metadata entry the policy expects.
     expect(postResponse.fields).toHaveProperty('x-amz-meta-purpose', 'avatar');
+    // sec-r4-E1: presigned POST must require AES256 server-side encryption.
+    // The field is pre-populated so a vanilla form upload satisfies the policy.
+    expect(postResponse.fields).toHaveProperty('x-amz-server-side-encryption', 'AES256');
+    // The base64 policy must declare the SSE condition so S3 rejects any form
+    // submission that strips or rewrites the header.
+    const decodedPolicy = JSON.parse(
+      Buffer.from(postResponse.fields.Policy ?? '', 'base64').toString('utf8'),
+    ) as { conditions: unknown[] };
+    expect(decodedPolicy.conditions).toContainEqual([
+      'eq',
+      '$x-amz-server-side-encryption',
+      'AES256',
+    ]);
   });
 
   test('createPresignedUploadUrl returns SigV4 PUT URL with deterministic bucket hostname', async () => {
@@ -77,6 +90,16 @@ describe('Amazon S3 contract (`S3ObjectStorageAdapter`)', () => {
     );
     expect(algorithmKey).toBeDefined();
     expect(queryParameters.get(algorithmKey!)).toBe('AWS4-HMAC-SHA256');
+
+    // sec-r4-E1: the SSE header is in the signed-headers set, so SigV4 lists
+    // it among the headers that must be present and unchanged at upload time.
+    const signedHeadersKey = [...queryParameters.keys()].find((key) =>
+      key.toLowerCase().endsWith('amz-signedheaders'),
+    );
+    expect(signedHeadersKey).toBeDefined();
+    expect(queryParameters.get(signedHeadersKey!)?.toLowerCase()).toContain(
+      'x-amz-server-side-encryption',
+    );
   });
 
   test('verifyUploadedObject returns HEAD-reported contentType + contentLength', async () => {

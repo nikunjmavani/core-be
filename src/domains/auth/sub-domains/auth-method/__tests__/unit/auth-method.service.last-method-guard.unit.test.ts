@@ -29,6 +29,11 @@ const METHOD_PUB_MFA = 'testmethodpubm12345'; // MFA_TOTP method
 describe('AuthMethodService.delete — last-method guard (sec-A5)', () => {
   const userService = {
     requireUserRecordByPublicId: vi.fn(),
+    // sec-r5-auth-session-info-1: PASSWORD revocation now atomically clears
+    // users.password_hash so the user-facing "I removed my password" view
+    // matches the auth view. The service path calls this when the revoked
+    // method's type is PASSWORD.
+    clearPasswordHash: vi.fn().mockResolvedValue(null),
   } as unknown as UserService;
 
   const authMethodRepository = {

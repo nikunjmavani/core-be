@@ -59,11 +59,17 @@ export const apiKeySchema = {
   },
 };
 
+// API key example for the OpenAPI response-map. These values surface in
+// generated docs (Swagger / Redoc / Postman). Do NOT use Stripe-shaped
+// prefixes (`sk_live_`, `sk_test_`, `whsec_`) here — GitHub Secret Scanning
+// matches those patterns by raw regex against committed source and cannot
+// distinguish a documentation placeholder from a leaked production secret.
+// Use a clearly-fake redacted shape so future regenerations stay scanner-safe.
 export const apiKeyExample = {
   id: 'key_x9k3m7n2p5q8w1r4',
   organization_id: 'org_k7x9m2pqr4w8n1v3',
   name: 'Production API Key',
-  key_prefix: 'sk_live_abc1',
+  key_prefix: 'ak_redacted',
   last_used_at: '2026-02-14T07:45:00.000Z',
   expires_at: '2027-02-14T00:00:00.000Z',
   status: 'ACTIVE',
@@ -73,7 +79,7 @@ export const apiKeyExample = {
 
 export const apiKeyCreatedExample = {
   ...apiKeyExample,
-  key: 'sk_live_abc1...',
+  key: '<api-key-shown-once>',
 };
 
 // ── Organization Notification Policy ──

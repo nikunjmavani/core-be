@@ -41,6 +41,10 @@ function buildService() {
   const apiKeyRepository = {
     findByOrganizationId: vi.fn().mockResolvedValue({ items: [KEY_ROW], next_cursor: null }),
     findByPublicId: vi.fn().mockResolvedValue(KEY_ROW),
+    // sec-r5-followup-ratelimit-dos-1: create() now consults this guard
+    // before insert. Default to 0 so existing tests still reach the create
+    // path; the cap regression lives in `per-org-row-caps.unit.test.ts`.
+    countActiveByOrganization: vi.fn().mockResolvedValue(0),
     create: vi.fn().mockResolvedValue(KEY_ROW),
     update: vi.fn().mockResolvedValue({ ...KEY_ROW, name: 'Renamed' }),
     softDelete: vi.fn().mockResolvedValue(KEY_ROW),

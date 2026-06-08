@@ -22,11 +22,22 @@ vi.mock('bullmq', () => ({
   },
 }));
 
-vi.mock('@/infrastructure/database/connection.js', () => ({
-  database: {
+vi.mock('@/infrastructure/database/connection.js', () => {
+  const handle = {
     insert: () => ({ values: vi.fn().mockResolvedValue(undefined) }),
-  },
-}));
+    execute: vi.fn().mockResolvedValue(undefined),
+  };
+  return {
+    database: {
+      insert: () => ({ values: vi.fn().mockResolvedValue(undefined) }),
+      // sec-r5-async-queue-1: the audit-write paths now wrap in
+      // `withSystemAuditInsertContext` → `database.transaction(...)`. Stub the
+      // transaction call to execute its callback against a handle that exposes
+      // the same `insert(...).values(...)` shape.
+      transaction: (callback: (h: typeof handle) => Promise<unknown>) => callback(handle),
+    },
+  };
+});
 
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },

@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNotNull } from 'drizzle-orm';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
@@ -79,6 +79,29 @@ export class UserDataExportRepository {
 
   async listByUserId(user_id: number) {
     return this.db().select().from(user_data_exports).where(eq(user_data_exports.user_id, user_id));
+  }
+
+  /**
+   * Keyset page over rows with a non-null `s3_key`, ordered by `id` ascending.
+   *
+   * sec-r4-R2: offboarding deletion fan-out reads only the S3 keys it needs to
+   * remove, in bounded batches, so a user with a long export history doesn't
+   * load every column of every row into memory at once. Pairs with
+   * {@link USER_DATA_EXPORT_OFFBOARDING_DELETE_BATCH_SIZE} on the caller side.
+   */
+  async findS3KeysByUserIdAfter(user_id: number, after_id: number, limit: number) {
+    return this.db()
+      .select({ id: user_data_exports.id, s3_key: user_data_exports.s3_key })
+      .from(user_data_exports)
+      .where(
+        and(
+          eq(user_data_exports.user_id, user_id),
+          isNotNull(user_data_exports.s3_key),
+          gt(user_data_exports.id, after_id),
+        ),
+      )
+      .orderBy(asc(user_data_exports.id))
+      .limit(limit);
   }
 
   async updateStatus(

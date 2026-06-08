@@ -151,6 +151,16 @@ export class AuthMethodService {
       }
       const revoked = await this.authMethodRepository.revoke(existing.id, user.id);
       if (!revoked) throw new NotFoundError('Auth method');
+
+      // sec-r5-auth-session-info-1: revoking the PASSWORD auth_method row only
+      // flipped `auth_methods.revoked_at` but left the stale `users.password_hash`
+      // intact, so `POST /auth/login` continued to accept the old credential
+      // — the user-facing "I removed my password" view did not match the
+      // auth-layer view. Clear the hash atomically in the same
+      // withUserDatabaseContext transaction so the invariant is real.
+      if (existing.method_type === 'PASSWORD') {
+        await this.userService.clearPasswordHash(userPublicId);
+      }
     });
   }
 

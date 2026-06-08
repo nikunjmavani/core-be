@@ -113,7 +113,14 @@ const envSchemaBase = z.object({
   GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
 
   // Session
-  AUTH_SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).default(7),
+  // sec-r4-C4: cap session lifetime at one year. Without an upper bound, an
+  // operator typo (`AUTH_SESSION_MAX_AGE_DAYS=3650`) or stale config could
+  // produce sessions that effectively never expire — extending the breach
+  // window after a credential compromise indefinitely. 365 is well clear of
+  // any realistic "stay signed in" UX (Slack / GitHub / GMail all rotate
+  // long-lived sessions inside this window) and bounds the worst-case impact
+  // of a stolen refresh token to a known interval.
+  AUTH_SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   /** Secure flag for session + CSRF cookies. Set false only for plaintext local loops. */
   COOKIE_SECURE: booleanString('true'),
   /**
@@ -163,6 +170,39 @@ const envSchemaBase = z.object({
    * signed-POST amplifier.
    */
   WEBHOOK_MAX_PER_ORG: z.coerce.number().int().min(1).max(1000).default(25),
+  /**
+   * Max number of active (not revoked) API keys allowed per organization
+   * (sec-r5-followup-ratelimit-dos-1). Parity with `WEBHOOK_MAX_PER_ORG`. The
+   * route already has `ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT` to bound the
+   * RATE at which mutations are accepted; this caps the COUNT so a long-running
+   * Admin role-holder cannot accumulate unbounded auth-amplifying credentials
+   * over time. Default 25 matches realistic CI / service-account needs; raise
+   * deliberately for tenants with many micro-service callers.
+   */
+  ORGANIZATION_API_KEY_MAX_PER_ORG: z.coerce.number().int().min(1).max(1000).default(25),
+  /**
+   * Max number of active (not deleted) custom roles allowed per organization
+   * (sec-r5-followup-ratelimit-dos-2). Parity with `WEBHOOK_MAX_PER_ORG`. The
+   * sec-r4-D4 `.limit(256)` on `findByRoleId` already caps the per-role
+   * permission read; this caps the per-org role count so a churning Admin
+   * cannot unbound the role table itself. Default 50 fits realistic RBAC
+   * granularity (admin/editor/viewer + a few custom flavours).
+   */
+  MEMBER_ROLE_MAX_PER_ORG: z.coerce.number().int().min(1).max(500).default(50),
+  /**
+   * Max number of active notification policies allowed per organization
+   * (sec-r5-followup-ratelimit-dos-3). Parity with `WEBHOOK_MAX_PER_ORG`. The
+   * `notification_type` column is free-form varchar(50) with no enum, so
+   * without a cap an Admin could churn policies and flap downstream routing.
+   * Default 100 — enough for a fine-grained notification matrix (≈ 25 event
+   * types × 4 channels) but bounded.
+   */
+  ORGANIZATION_NOTIFICATION_POLICY_MAX_PER_ORG: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1000)
+    .default(100),
   /**
    * Window (hours) during which outbound webhook deliveries dual-sign with
    * the previous secret too (sec-N8). After this window the worker stops
@@ -613,7 +653,11 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      if (data.NODE_ENV !== 'production') {
+      // sec-r4-C3: staging shares production's encryption-at-rest requirement.
+      // A low-entropy key (e.g. the all-zero .env.example template) in staging
+      // would silently defeat encryption of MFA TOTP seeds and webhook signing
+      // secrets for a deployed environment.
+      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
         return true;
       }
       // Reject placeholder / low-entropy keys (e.g. the all-zero .env.example template) that
@@ -624,7 +668,7 @@ export const envSchema = envSchemaBase
     },
     {
       message:
-        'In production, SECRETS_ENCRYPTION_KEY must be a high-entropy 32-byte key (generate with `openssl rand -hex 32`); placeholder/low-entropy values are rejected',
+        'In production and staging, SECRETS_ENCRYPTION_KEY must be a high-entropy 32-byte key (generate with `openssl rand -hex 32`); placeholder/low-entropy values are rejected',
       path: ['SECRETS_ENCRYPTION_KEY'],
     },
   )
@@ -672,12 +716,16 @@ export const envSchema = envSchemaBase
       if (origins.includes('*')) {
         return false;
       }
-      if (data.NODE_ENV !== 'production') {
+      // sec-r4-C1: staging is a deployed environment and shares the same https
+      // requirement as production — plaintext http origins would weaken the
+      // session-cookie Origin defense in staging just as they would in production.
+      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
         return true;
       }
-      // In production every origin must be an absolute https:// URL. Plaintext http
-      // origins would let cross-site requests ride over an unencrypted channel and
-      // weaken the cookie-origin defenses that compare against this allowlist.
+      // In production and staging every origin must be an absolute https:// URL.
+      // Plaintext http origins would let cross-site requests ride over an
+      // unencrypted channel and weaken the cookie-origin defenses that compare
+      // against this allowlist.
       // sec-M9: ALSO reject entries that don't round-trip — a config that includes
       // userinfo (`https://attacker@allowed.com`), trailing slash, or any path is
       // an operator footgun: the runtime compares against browser-supplied `Origin`
@@ -741,17 +789,18 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      // In production, session + CSRF cookies must carry the Secure attribute so they are
-      // never transmitted over plaintext HTTP. COOKIE_SECURE=false is only valid for local
-      // plaintext loops (non-production); allowing it in production would expose the session
-      // cookie to network interception.
-      if (data.NODE_ENV !== 'production') {
+      // sec-r4-C2: staging is a deployed environment; session + CSRF cookies
+      // must carry the Secure attribute in both production and staging so they
+      // are never transmitted over plaintext HTTP. COOKIE_SECURE=false is only
+      // valid for local plaintext loops (development/test/local).
+      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
         return true;
       }
       return data.COOKIE_SECURE === true;
     },
     {
-      message: 'COOKIE_SECURE must be true in production (cookies sent over HTTPS only).',
+      message:
+        'COOKIE_SECURE must be true in production and staging (cookies sent over HTTPS only).',
       path: ['COOKIE_SECURE'],
     },
   )

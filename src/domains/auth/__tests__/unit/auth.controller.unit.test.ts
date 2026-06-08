@@ -293,7 +293,9 @@ describe('createAuthController', () => {
     expect(resetReply.code).toHaveBeenCalledWith(204);
   });
 
-  it('refreshToken and revokeAllSessions use session cookie', async () => {
+  it('refreshToken uses session cookie and revokeAllSessions does NOT clear the cookie', async () => {
+    // sec-r4-A1: revokeAllSessions must NOT call clearSessionCookie — the caller's
+    // own session is preserved (sec-new-A3) so the browser cookie must remain intact.
     const refreshReply = mockReply();
     await controller.refreshToken(
       mockRequest({ cookies: { session_id: 'session.refresh-secret' } }),
@@ -310,7 +312,8 @@ describe('createAuthController', () => {
       'session.new-refresh-secret',
       expect.objectContaining({ httpOnly: true }),
     );
-    expect(revokeAllReply.clearCookie).toHaveBeenCalled();
+    // The cookie must NOT be cleared — the caller's preserved session still needs it.
+    expect(revokeAllReply.clearCookie).not.toHaveBeenCalled();
   });
 
   it('refreshToken rejects missing session cookie', async () => {
@@ -429,7 +432,9 @@ describe('createAuthController', () => {
   });
 
   // sec-new-A3: DELETE /me/sessions must preserve the caller's current session.
-  it('revokeAllSessions calls revokeAllSessionsExceptCurrent with bearer token and skips revokeAllSessions (sec-new-A3)', async () => {
+  // sec-r4-A1: the session cookie must NOT be cleared — clearing it would invalidate
+  // the preserved session's browser-side refresh token even though the DB row survives.
+  it('revokeAllSessions calls revokeAllSessionsExceptCurrent with bearer token, skips revokeAllSessions, and does NOT clear the cookie (sec-new-A3 + sec-r4-A1)', async () => {
     const reply = mockReply();
     await controller.revokeAllSessions(
       mockRequest({
@@ -442,10 +447,11 @@ describe('createAuthController', () => {
       currentAccessToken: 'current-session-token',
     });
     expect(authSessionService.revokeAllSessions).not.toHaveBeenCalled();
-    expect(reply.clearCookie).toHaveBeenCalled();
+    // Cookie must NOT be cleared — the preserved session still needs it.
+    expect(reply.clearCookie).not.toHaveBeenCalled();
   });
 
-  it('revokeAllSessions falls back to empty token when Authorization header is absent (sec-new-A3)', async () => {
+  it('revokeAllSessions falls back to empty token when Authorization header is absent, does not clear cookie (sec-new-A3 + sec-r4-A1)', async () => {
     vi.mocked(authSessionService.revokeAllSessionsExceptCurrent).mockClear();
     const reply = mockReply();
     await controller.revokeAllSessions(mockRequest(), reply);
@@ -453,7 +459,8 @@ describe('createAuthController', () => {
       userPublicId: expect.any(String),
       currentAccessToken: '',
     });
-    expect(reply.clearCookie).toHaveBeenCalled();
+    // Cookie must NOT be cleared — the caller's preserved session still needs it.
+    expect(reply.clearCookie).not.toHaveBeenCalled();
   });
 
   it('verifyEmail uses i18next fallback when request.t is absent', async () => {

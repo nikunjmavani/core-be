@@ -31,6 +31,16 @@ const productionRequiredBase = {
   ...productionRedisTopology,
 };
 
+// sec-r4-C1/C2/C3: staging is a deployed environment and shares the same
+// https-origins, secure-cookies, and high-entropy-key requirements as production.
+const stagingRequiredBase = {
+  ...commonRequiredBase,
+  NODE_ENV: 'staging',
+  ALLOWED_ORIGINS: 'https://staging.example.com',
+  CAPTCHA_PROVIDER: 'turnstile',
+  CAPTCHA_SECRET: 'turnstile-secret',
+};
+
 describe('env-schema', () => {
   it('exports schema keys for tooling sync', () => {
     expect(envSchemaKeys.length).toBeGreaterThan(0);
@@ -69,6 +79,34 @@ describe('env-schema', () => {
     if (parsed.success) {
       expect(parsed.data.PORT).toBe(4000);
       expect(parsed.data.AUTH_SESSION_MAX_AGE_DAYS).toBe(7);
+    }
+  });
+
+  // sec-r4-C4: AUTH_SESSION_MAX_AGE_DAYS must be bounded at 365 so a config
+  // typo cannot produce effectively-never-expiring sessions.
+  it('rejects AUTH_SESSION_MAX_AGE_DAYS above 365 (sec-r4-C4)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'test',
+      AUTH_SESSION_MAX_AGE_DAYS: '366',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(
+        parsed.error.issues.some((issue) => issue.path.includes('AUTH_SESSION_MAX_AGE_DAYS')),
+      ).toBe(true);
+    }
+  });
+
+  it('accepts AUTH_SESSION_MAX_AGE_DAYS at the 365 ceiling (sec-r4-C4)', () => {
+    const parsed = envSchema.safeParse({
+      ...commonRequiredBase,
+      NODE_ENV: 'test',
+      AUTH_SESSION_MAX_AGE_DAYS: '365',
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.AUTH_SESSION_MAX_AGE_DAYS).toBe(365);
     }
   });
 
@@ -121,6 +159,19 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(false);
   });
 
+  // sec-r4-C1: staging is a deployed environment and must enforce the same
+  // https-origins requirement as production.
+  it('rejects plaintext http ALLOWED_ORIGINS in staging (sec-r4-C1)', () => {
+    const parsed = envSchema.safeParse({
+      ...stagingRequiredBase,
+      ALLOWED_ORIGINS: 'http://staging.example.com',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path[0] === 'ALLOWED_ORIGINS')).toBe(true);
+    }
+  });
+
   it('accepts https ALLOWED_ORIGINS in production', () => {
     const parsed = envSchema.safeParse({
       ...productionRequiredBase,
@@ -129,7 +180,12 @@ describe('env-schema', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('allows http localhost ALLOWED_ORIGINS outside production', () => {
+  it('accepts https ALLOWED_ORIGINS in staging (sec-r4-C1 no regression)', () => {
+    const parsed = envSchema.safeParse(stagingRequiredBase);
+    expect(parsed.success).toBe(true);
+  });
+
+  it('allows http localhost ALLOWED_ORIGINS outside production/staging', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
       NODE_ENV: 'development',
@@ -376,7 +432,22 @@ describe('env-schema', () => {
     expect(singleChar.success).toBe(false);
   });
 
-  it('allows a low-entropy SECRETS_ENCRYPTION_KEY outside production (ephemeral test/CI keys)', () => {
+  // sec-r4-C3: staging is a deployed environment and must enforce the same
+  // high-entropy key requirement as production.
+  it('rejects a low-entropy / placeholder SECRETS_ENCRYPTION_KEY in staging (sec-r4-C3)', () => {
+    const allZeros = envSchema.safeParse({
+      ...stagingRequiredBase,
+      SECRETS_ENCRYPTION_KEY: '0'.repeat(64),
+    });
+    expect(allZeros.success).toBe(false);
+    if (!allZeros.success) {
+      expect(
+        allZeros.error.issues.some((issue) => issue.path[0] === 'SECRETS_ENCRYPTION_KEY'),
+      ).toBe(true);
+    }
+  });
+
+  it('allows a low-entropy SECRETS_ENCRYPTION_KEY outside production/staging (ephemeral test/CI keys)', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
       NODE_ENV: 'test',
@@ -408,13 +479,9 @@ describe('env-schema', () => {
   });
 
   it('accepts NODE_ENV staging for secure cookies and staging deploys', () => {
-    const parsed = envSchema.safeParse({
-      ...commonRequiredBase,
-      NODE_ENV: 'staging',
-      // Staging now requires CAPTCHA (same as production) to prevent auth-endpoint bot abuse.
-      CAPTCHA_PROVIDER: 'turnstile',
-      CAPTCHA_SECRET: 'turnstile-secret',
-    });
+    // sec-r4-C1: staging now also requires https ALLOWED_ORIGINS (not just CAPTCHA).
+    // Use stagingRequiredBase which supplies https origins, CAPTCHA, and high-entropy key.
+    const parsed = envSchema.safeParse(stagingRequiredBase);
 
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -494,7 +561,20 @@ describe('env-schema', () => {
     }
   });
 
-  it('allows COOKIE_SECURE=false outside production (local plaintext loops)', () => {
+  // sec-r4-C2: staging is a deployed environment; COOKIE_SECURE=false must be
+  // rejected in staging just as it is in production.
+  it('rejects staging boot when COOKIE_SECURE is disabled (sec-r4-C2)', () => {
+    const parsed = envSchema.safeParse({
+      ...stagingRequiredBase,
+      COOKIE_SECURE: 'false',
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path[0] === 'COOKIE_SECURE')).toBe(true);
+    }
+  });
+
+  it('allows COOKIE_SECURE=false outside production/staging (local plaintext loops)', () => {
     const parsed = envSchema.safeParse({
       ...commonRequiredBase,
       NODE_ENV: 'development',

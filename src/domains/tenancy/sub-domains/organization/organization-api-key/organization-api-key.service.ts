@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { env } from '@/shared/config/env.config.js';
 import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
@@ -113,6 +114,17 @@ export class OrganizationApiKeyService {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
+      // sec-r5-followup-ratelimit-dos-1: enforce the per-org count cap before
+      // insert. Race-safe enough for a stability cap (the per-route rate limit
+      // bounds concurrency); the failure mode of two parallel inserts at N-1
+      // is "one extra row," not security-critical. Mirrors the
+      // `WEBHOOK_MAX_PER_ORG` check in webhook.service.ts.
+      const activeCount = await this.apiKeyRepository.countActiveByOrganization(organization.id);
+      if (activeCount >= env.ORGANIZATION_API_KEY_MAX_PER_ORG) {
+        throw new ConflictError('errors:organizationApiKeyMaxReached', {
+          max: env.ORGANIZATION_API_KEY_MAX_PER_ORG,
+        });
+      }
       const userId =
         await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id);
       const rawKey = generateApiKey();

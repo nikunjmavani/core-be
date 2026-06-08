@@ -47,6 +47,10 @@ describe('WebhookDeliveryAttemptRepository (database)', () => {
     expect(listed.items).toHaveLength(1);
     expect(listed.items[0]!.status).toBe('SENT');
     expect(listed.total).toBeNull();
+    // sec-r4-D6: list projection MUST NOT include payload / response_body.
+    // A future single-attempt detail endpoint can expose them on request.
+    expect(listed.items[0]).not.toHaveProperty('payload');
+    expect(listed.items[0]).not.toHaveProperty('response_body');
   });
 
   it('getWebhookId returns null for unknown webhook', async () => {

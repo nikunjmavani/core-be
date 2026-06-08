@@ -71,6 +71,7 @@ src/
     │   │   │   └── refresh-rotates-token-hash.integration.test.ts
     │   │   ├── unit/
     │   │   │   ├── auth-mfa.validator.unit.test.ts
+    │   │   │   ├── auth-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── auth.controller.unit.test.ts
     │   │   │   ├── auth.routes.mfa-login-captcha.unit.test.ts
     │   │   │   ├── auth.routes.session-revoke-stepup.unit.test.ts
@@ -223,6 +224,7 @@ src/
     │   │   │       │   ├── webauthn-challenge.unit.test.ts
     │   │   │       │   ├── webauthn-config.expected-origin.unit.test.ts
     │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
+    │   │   │       │   ├── webauthn-user-verification.policy.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
     │   │   │       │   └── webauthn.validator.unit.test.ts
     │   │   │   ├── seed/
@@ -561,6 +563,7 @@ src/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   └── unit/
     │   │   │   │   │   │   ├── member-role-permission.controller.unit.test.ts
+    │   │   │   │   │   │   ├── member-role-permission.repository.bound.policy.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.serializer.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.service.owner-role-guard.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.service.unit.test.ts
@@ -600,6 +603,7 @@ src/
     │   │   │   │   │   ├── events/
     │   │   │   │   │       └── worker/
     │   │   │   │   │       │   └── membership-tombstone-retention.worker.unit.test.ts
+    │   │   │   │   │   ├── membership-routes-rate-limit.policy.unit.test.ts
     │   │   │   │   │   ├── membership-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   ├── membership.controller.unit.test.ts
     │   │   │   │   │   ├── membership.repository.db.unit.test.ts
@@ -654,6 +658,7 @@ src/
     │   │   │   │   ├── integration/
     │   │   │   │   │   └── organization.integration.test.ts
     │   │   │   │   └── unit/
+    │   │   │   │   │   ├── organization-routes-rate-limit.policy.unit.test.ts
     │   │   │   │   │   ├── organization-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   ├── organization-tombstone-retention.worker.unit.test.ts
     │   │   │   │   │   ├── organization.controller.unit.test.ts
@@ -843,6 +848,7 @@ src/
     │   │   │   │   └── worker/
     │   │   │   │   │   └── user-tombstone-retention.worker.unit.test.ts
     │   │   │   ├── tombstone-repository-reads.unit.test.ts
+    │   │   │   ├── user-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── user.controller.admin-audit.unit.test.ts
     │   │   │   ├── user.controller.unit.test.ts
     │   │   │   ├── user.repository.db.unit.test.ts
@@ -988,6 +994,7 @@ src/
     │   │   ├── organization-database.context.ts
     │   │   ├── request-database.context.ts
     │   │   ├── retention-database.context.ts
+    │   │   ├── system-audit-insert-database.context.ts
     │   │   ├── tenant-database.context.ts
     │   │   ├── user-database.context.ts
     │   │   ├── worker-database-guard.util.ts
@@ -1222,6 +1229,7 @@ src/
     │   ├── memory-soak.ts
     │   ├── next-migration-prefix.ts
     │   ├── record-contract-fixtures.ts
+    │   ├── route-coverage-audit.ts
     │   ├── secrets-key-rotate.ts
     │   ├── send-load-test-results-email.ts
     │   ├── send-test-report-email.ts
@@ -1510,6 +1518,7 @@ src/
     │   ├── s3.contract.test.ts
     │   ├── stripe-webhook.contract.test.ts
     │   ├── stripe.contract.test.ts
+    │   ├── turnstile.contract.test.ts
     │   └── webhook-request-id-forward.contract.test.ts
     ├── e2e/
     │   ├── billing-onboarding.e2e.test.ts
@@ -1544,6 +1553,8 @@ src/
     │   ├── domain-consistency.global.test.ts
     │   ├── external-sdk-coverage.global.test.ts
     │   ├── import-paths.global.test.ts
+    │   ├── no-direct-db-in-services.global.test.ts
+    │   ├── no-stripe-shaped-literals.global.test.ts
     │   ├── openapi-completeness.global.test.ts
     │   ├── openapi-cursor-pagination.global.test.ts
     │   ├── openapi-mcp.global.test.ts
@@ -1619,6 +1630,7 @@ src/
     │   │   ├── webhook-claim-race.integration.test.ts
     │   │   ├── webhook-delivery-race.integration.test.ts
     │   │   └── webhook-reclaim.integration.test.ts
+    │   ├── empty-body-json-parser.integration.test.ts
     │   ├── ops-route-smoke.integration.test.ts
     │   └── OVERVIEW.md
     ├── load/
@@ -1668,6 +1680,8 @@ src/
     │   ├── OVERVIEW.md
     │   └── worker-bulkheads.performance.test.ts
     ├── security/
+    │   ├── api-versioning/
+    │   │   └── deprecated-route-headers.security.test.ts
     │   ├── auth/
     │   │   ├── api-key-auth.security.test.ts
     │   │   ├── auth-enforcement.security.test.ts
@@ -1713,10 +1727,13 @@ src/
     │   │   └── upload-svg.security.test.ts
     │   ├── rate-limit/
     │   │   ├── cross-tenant-rate-limit.security.test.ts
+    │   │   ├── preset-authed-burst.security.test.ts
     │   │   ├── rate-limit-burst.security.test.ts
     │   │   └── rate-limiting.security.test.ts
     │   ├── rls/
     │   │   ├── audit-append-only.security.test.ts
+    │   │   ├── audit-insert-rls-privilege-bypass.security.test.ts
+    │   │   ├── audit-system-audit-insert-arm.security.test.ts
     │   │   ├── bola-cross-tenant.security.test.ts
     │   │   ├── core-be-app-role-privileges.security.test.ts
     │   │   ├── organization-rls-session.security.test.ts
@@ -1869,6 +1886,7 @@ src/
     │   │   ├── generate-project-structure-tree.unit.test.ts
     │   │   ├── generate-route-catalog.unit.test.ts
     │   │   ├── lint-migrations-concurrent-index.unit.test.ts
+    │   │   ├── lint-migrations-drop-index.unit.test.ts
     │   │   ├── lint-migrations-rollback.unit.test.ts
     │   │   ├── lint-migrations-row-security-guc.unit.test.ts
     │   │   ├── lint-migrations-timestamp.unit.test.ts
@@ -1958,7 +1976,8 @@ src/
     │   │   ├── tenant-scoped-job-data.policy.test.ts
     │   │   ├── tenant-scoped-job-data.policy.unit.test.ts
     │   │   └── webhook-worker-no-schema-import.policy.unit.test.ts
-    │   └── OVERVIEW.md
+    │   ├── OVERVIEW.md
+    │   └── per-org-row-caps.unit.test.ts
     ├── global-setup.ts
     └── setup.ts
 ├── app.ts

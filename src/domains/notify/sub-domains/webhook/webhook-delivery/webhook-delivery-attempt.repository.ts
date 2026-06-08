@@ -58,8 +58,25 @@ export class WebhookDeliveryAttemptRepository {
     const where =
       cursorCondition !== undefined ? and(...filterConditions, cursorCondition) : countWhere;
 
+    // sec-r4-D6: project only the columns the delivery-history UI needs.
+    // `payload` (jsonb full event body) and `response_body` (text response from
+    // the customer's webhook endpoint) can carry PII or sensitive business data
+    // and should not surface in every list-row response. A dedicated single-
+    // attempt detail endpoint can expose them when actually requested.
     const rowsPromise = this.db()
-      .select()
+      .select({
+        public_id: webhook_delivery_attempts.public_id,
+        event_type: webhook_delivery_attempts.event_type,
+        event_key: webhook_delivery_attempts.event_key,
+        status: webhook_delivery_attempts.status,
+        http_status_code: webhook_delivery_attempts.http_status_code,
+        sent_at: webhook_delivery_attempts.sent_at,
+        attempt_count: webhook_delivery_attempts.attempt_count,
+        next_retry_at: webhook_delivery_attempts.next_retry_at,
+        created_at: webhook_delivery_attempts.created_at,
+        // Keep the keyset cursor columns available to the serializer.
+        id: webhook_delivery_attempts.id,
+      })
       .from(webhook_delivery_attempts)
       .where(where)
       .orderBy(desc(webhook_delivery_attempts.created_at), desc(webhook_delivery_attempts.id))

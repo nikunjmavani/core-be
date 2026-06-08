@@ -1,8 +1,11 @@
+import { eq } from 'drizzle-orm';
 import { describe, it, expect, beforeEach } from 'vitest';
+import { database } from '@/infrastructure/database/connection.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { AuditRepository } from '@/domains/audit/audit.repository.js';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { ValidationError } from '@/shared/errors/index.js';
 
 describe('AuditRepository (database)', () => {
@@ -98,6 +101,29 @@ describe('AuditRepository (database)', () => {
     } as never);
 
     expect(listed.items.some((row) => row.action === 'user.viewed')).toBe(true);
+  });
+
+  // sec-r4-D2: resolveOrganizationPublicIdsByInternalIds must filter out
+  // soft-deleted organizations so a deleted org's public id does not leak into
+  // serialized audit-log responses.
+  it('resolveOrganizationPublicIdsByInternalIds omits soft-deleted organizations (sec-r4-D2)', async () => {
+    const owner = await createTestUser({ email: 'audit-d2-owner@example.com' });
+    const liveOrganization = await createTestOrganization({ ownerUserId: owner.id });
+    const deletedOrganization = await createTestOrganization({ ownerUserId: owner.id });
+
+    // Soft-delete one organization after creation.
+    await database
+      .update(organizations)
+      .set({ deleted_at: new Date() })
+      .where(eq(organizations.id, deletedOrganization.id));
+
+    const resolved = await repository.resolveOrganizationPublicIdsByInternalIds([
+      liveOrganization.id,
+      deletedOrganization.id,
+    ]);
+
+    expect(resolved.get(liveOrganization.id)).toBe(liveOrganization.public_id);
+    expect(resolved.has(deletedOrganization.id)).toBe(false);
   });
 
   // sec-U12: an opaque cursor minted under one filter set used to apply to ANY

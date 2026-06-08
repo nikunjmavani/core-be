@@ -1,4 +1,5 @@
-import { NotFoundError } from '@/shared/errors/index.js';
+import { env } from '@/shared/config/env.config.js';
+import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import type { OrganizationNotificationPolicyRepository } from './organization-notification-policy.repository.js';
@@ -69,6 +70,16 @@ export class OrganizationNotificationPolicyService {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
+      // sec-r5-followup-ratelimit-dos-3: enforce the per-org notification-policy
+      // cap before insert. notification_type is free-form varchar(50) — without
+      // a count cap an Admin could churn policies and flap downstream routing.
+      // Mirrors `WEBHOOK_MAX_PER_ORG` in webhook.service.ts.
+      const activeCount = await this.policyRepository.countActiveByOrganization(organization.id);
+      if (activeCount >= env.ORGANIZATION_NOTIFICATION_POLICY_MAX_PER_ORG) {
+        throw new ConflictError('errors:organizationNotificationPolicyMaxReached', {
+          max: env.ORGANIZATION_NOTIFICATION_POLICY_MAX_PER_ORG,
+        });
+      }
       const userId =
         await this.organizationRepository.resolveUserIdByPublicId(created_by_user_public_id);
       const mutedUntil = parsed.muted_until ? new Date(parsed.muted_until) : null;

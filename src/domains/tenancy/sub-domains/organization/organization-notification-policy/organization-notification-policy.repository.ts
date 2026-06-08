@@ -1,4 +1,5 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { env } from '@/shared/config/env.config.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
@@ -26,6 +27,28 @@ function normalizeMuteForPersistence(mutedUntil: Date | null | undefined): Date 
  * and soft-delete.
  */
 export class OrganizationNotificationPolicyRepository {
+  /**
+   * Counts the active (not soft-deleted) notification policies for the given
+   * organization.
+   *
+   * @remarks
+   * sec-r5-followup-ratelimit-dos-3: used by `OrganizationNotificationPolicyService.create`
+   * to enforce `ORGANIZATION_NOTIFICATION_POLICY_MAX_PER_ORG`. Same shape as
+   * `webhook.repository.countActiveByOrganization`.
+   */
+  async countActiveByOrganization(organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: sql<number>`count(*)::int` })
+      .from(organization_notification_policies)
+      .where(
+        and(
+          eq(organization_notification_policies.organization_id, organization_id),
+          isNull(organization_notification_policies.deleted_at),
+        ),
+      );
+    return rows[0]?.value ?? 0;
+  }
+
   async findByOrganizationId(organization_id: number) {
     const rows = await getRequestDatabase()
       .select()
@@ -39,7 +62,11 @@ export class OrganizationNotificationPolicyRepository {
       .orderBy(
         asc(organization_notification_policies.notification_type),
         asc(organization_notification_policies.channel),
-      );
+      )
+      // sec-r5-followup-ratelimit-dos-3: defense-in-depth cap matching the
+      // create-time MAX_PER_ORG constant so a corrupted table cannot page
+      // unbounded rows into the API process on the per-org list endpoint.
+      .limit(env.ORGANIZATION_NOTIFICATION_POLICY_MAX_PER_ORG);
     return rows as OrganizationNotificationPolicyRow[];
   }
 

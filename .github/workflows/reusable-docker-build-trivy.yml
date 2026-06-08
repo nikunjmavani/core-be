@@ -99,7 +99,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ env.MERGE_COMMIT_SHA }}
           fetch-depth: 1
@@ -239,7 +239,7 @@ jobs:
 
       - name: Install Cosign
         if: contains(fromJSON(env.PROTECTED_BRANCHES_JSON), env.TARGET_BRANCH)
-        uses: sigstore/cosign-installer@2e2f661cd4be3a4b891a882064e49d0fed4b7b88 # v3.9.0
+        uses: sigstore/cosign-installer@fb28c2b6339dcd94da6e4cbcbc5e888961f6f8c3 # v3.9.0
 
       - name: Push images to GHCR (main + dev)
         id: push
@@ -299,7 +299,7 @@ jobs:
 
       - name: Attest API build provenance
         if: contains(fromJSON(env.PROTECTED_BRANCHES_JSON), env.TARGET_BRANCH)
-        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-name: ${{ steps.push.outputs.api_image_base }}
           subject-digest: ${{ steps.push.outputs.api_digest }}
@@ -307,7 +307,7 @@ jobs:
 
       - name: Attest worker build provenance
         if: contains(fromJSON(env.PROTECTED_BRANCHES_JSON), env.TARGET_BRANCH)
-        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-name: ${{ steps.push.outputs.worker_image_base }}
           subject-digest: ${{ steps.push.outputs.worker_digest }}
@@ -315,7 +315,7 @@ jobs:
 
       - name: Attest API SBOM
         if: contains(fromJSON(env.PROTECTED_BRANCHES_JSON), env.TARGET_BRANCH)
-        uses: actions/attest-sbom@51e74621a501c89df81fc1391c5a8f4cfc9fab2f # v3
+        uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
         with:
           subject-name: ${{ steps.push.outputs.api_image_base }}
           subject-digest: ${{ steps.push.outputs.api_digest }}
@@ -324,7 +324,7 @@ jobs:
 
       - name: Attest worker SBOM
         if: contains(fromJSON(env.PROTECTED_BRANCHES_JSON), env.TARGET_BRANCH)
-        uses: actions/attest-sbom@51e74621a501c89df81fc1391c5a8f4cfc9fab2f # v3
+        uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
         with:
           subject-name: ${{ steps.push.outputs.worker_image_base }}
           subject-digest: ${{ steps.push.outputs.worker_digest }}
@@ -343,7 +343,6 @@ jobs:
             -e DATABASE_URL="$DATABASE_URL" \
             -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
             -e REDIS_URL="$REDIS_URL" \
-            -e JWT_SECRET="$JWT_SECRET" \
             -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
             -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
             -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
@@ -359,7 +358,6 @@ jobs:
             -e DATABASE_URL="$DATABASE_URL" \
             -e REDIS_URL="$REDIS_URL" \
             -e DATABASE_SSL_ENABLED="$DATABASE_SSL_ENABLED" \
-            -e JWT_SECRET="$JWT_SECRET" \
             -e JWT_PRIVATE_KEY="$JWT_PRIVATE_KEY" \
             -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY" \
             -e ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
