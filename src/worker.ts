@@ -37,6 +37,7 @@ import { closeStripeWebhookQueue } from '@/domains/billing/sub-domains/stripe-we
 import { closeMailQueue } from '@/infrastructure/mail/queues/mail.queue.js';
 import { closeNotificationQueue } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { closeWebhookDeliveryQueue } from '@/domains/notify/sub-domains/webhook/webhook-delivery/queues/webhook-delivery.queue.js';
+import { closeUserDataExportQueue } from '@/domains/user/sub-domains/user-data-export/queues/user-data-export.queue.js';
 
 // Initialize Sentry before anything else
 initSentry();
@@ -110,6 +111,7 @@ async function main() {
         closeMailQueue(),
         closeNotificationQueue(),
         closeWebhookDeliveryQueue(),
+        closeUserDataExportQueue(), // sec-r4-R1: was missing from shutdown sequence
       ]);
       await Promise.allSettled([closeRedis(), closeBullMqRedis(), closeDatabase()]);
       await flushSentry();
