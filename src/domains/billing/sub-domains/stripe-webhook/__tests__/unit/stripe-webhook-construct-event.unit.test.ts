@@ -19,12 +19,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Env + Stripe client mocking ─────────────────────────────────────────────
 
-const SK_TEST = 'sk_test_00000000000000000000000000000000000000000000000000';
+// Opaque test placeholders — DO NOT use Stripe-shaped prefixes (`sk_test_`,
+// `sk_live_`, `whsec_`) here. GitHub Secret Scanning matches by raw regex
+// against the source text and cannot distinguish unit-test fixtures from a
+// leaked production secret. The Stripe SDK's HMAC routine treats the secret
+// as an opaque byte string, so the actual value is irrelevant to what these
+// tests verify (the runtime application of `Stripe.webhooks.constructEvent`).
+const SK_TEST = 'STRIPE_TEST_SECRET_KEY_PLACEHOLDER_DO_NOT_USE';
 
-// Two independent Stripe `whsec_*` shaped secrets used throughout.
-const SECRET_A = 'whsec_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-const SECRET_B = 'whsec_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-const SECRET_C = 'whsec_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
+// Two independent test webhook signing keys used throughout (rotation
+// scenario: env supports comma-separated list of "old, new").
+const SECRET_A = 'TEST_WEBHOOK_SIGNING_KEY_A_DO_NOT_USE';
+const SECRET_B = 'TEST_WEBHOOK_SIGNING_KEY_B_DO_NOT_USE';
+const SECRET_C = 'TEST_WEBHOOK_SIGNING_KEY_C_DO_NOT_USE';
 
 let mockWebhookSecret: string | undefined = SECRET_A;
 
