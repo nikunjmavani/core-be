@@ -12,8 +12,23 @@ export const MILLISECONDS_PER_HOUR = 60 * MILLISECONDS_PER_MINUTE;
 /** Seconds in one calendar day. */
 export const SECONDS_PER_DAY = 86_400;
 
+/**
+ * Seven calendar days expressed as a day count for retention and artifact-expiry windows.
+ *
+ * @remarks
+ * Rationale: one week is the standard short-lived retention grace for expired auth artifacts
+ * and user-generated export artifacts.
+ *
+ * Consequences of change:
+ * - Decreasing tightens cleanup windows and may remove expired artifacts sooner than operators expect.
+ * - Increasing extends storage and personal-data retention for short-lived artifacts.
+ *
+ * Last reviewed: 2026-06-07.
+ */
+export const SEVEN_DAYS = 7;
+
 /** Seconds in seven days (BullMQ job history eviction window). */
-export const SEVEN_DAYS_SECONDS = 7 * SECONDS_PER_DAY;
+export const SEVEN_DAYS_SECONDS = SEVEN_DAYS * SECONDS_PER_DAY;
 
 /** Seconds in thirty days (default long-lived Redis retention window). */
 export const THIRTY_DAYS_SECONDS = 30 * SECONDS_PER_DAY;
@@ -80,6 +95,25 @@ export const MFA_TOTP_CODE_REPLAY_TTL_SECONDS = (MFA_TOTP_TOLERANCE_STEPS + 2) *
 /** WebAuthn ceremony challenge lifetime in Redis (seconds). */
 export const WEBAUTHN_CHALLENGE_TTL_SECONDS = MFA_SESSION_TTL_SECONDS;
 
+/**
+ * Lifetime of a staged MFA TOTP enrollment secret in Redis (seconds).
+ *
+ * @remarks
+ * The two-phase enrollment ceremony (sec-A finding #3) stores the encrypted TOTP seed
+ * under a per-user Redis key after `POST /auth/mfa/enroll`. The user has this window to
+ * scan the QR, configure their authenticator, and POST a verified code at
+ * `/auth/mfa/enroll/confirm`. Long enough for a careful user; short enough that an
+ * abandoned enrollment evicts cheaply. 10 minutes mirrors the OAuth state window
+ * ({@link OAUTH_STATE_TTL_SECONDS}).
+ */
+export const MFA_TOTP_ENROLLMENT_STAGE_TTL_SECONDS = 600;
+
+/** Number of one-time recovery codes minted on a successful MFA TOTP enroll confirm. */
+export const MFA_RECOVERY_CODE_COUNT = 10;
+
+/** Character length of a generated MFA recovery code (base32 alphabet, no separators). */
+export const MFA_RECOVERY_CODE_LENGTH = 12;
+
 /** OAuth CSRF state parameter lifetime in Redis (seconds). */
 export const OAUTH_STATE_TTL_SECONDS = 600;
 
@@ -130,8 +164,20 @@ export const HEALTH_READINESS_PROBE_CACHE_TTL_MS = 2_000;
 /** S3 presigned URL lifetime (seconds); aligns with access token TTL. */
 export const PRESIGNED_URL_EXPIRY_SECONDS = ACCESS_TOKEN_EXPIRY_SECONDS;
 
-/** GDPR user data export download URL lifetime (seconds); max 24 hours. */
-export const USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS = SECONDS_PER_DAY;
+/**
+ * GDPR user data export download URL lifetime (seconds).
+ *
+ * @remarks
+ * sec-U6: shortened from 24h to 15 min. The previous TTL was the S3-presigned
+ * max, set defensively before sec-U6 was filed; in practice an exfiltrated
+ * session token used to be able to mint a URL with that lifetime and replay it
+ * for a full day. 15 min still gives the legitimate browser-pull plenty of
+ * headroom (the bundle is a single gzip download) while collapsing the stolen-
+ * token replay window. Adjusted in lockstep with `audit.events` recording on
+ * every mint so post-hoc forensics retain the trail even when the URL has
+ * expired.
+ */
+export const USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS = 15 * 60;
 
 /** BullMQ default worker lock duration (milliseconds). */
 export const BULLMQ_DEFAULT_LOCK_DURATION_MS = THIRTY_SECONDS_MS;

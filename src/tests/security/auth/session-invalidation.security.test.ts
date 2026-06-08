@@ -3,7 +3,8 @@ import { createTestApp } from '@/tests/helpers/test-app.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
-import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { generateTestToken, generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
+import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import {
   injectAuthenticated,
   injectUnauthenticated,
@@ -51,8 +52,10 @@ describe('Security: Session invalidation', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
-    return { user, organization, token };
+    const { token, sessionPublicId } = await generateTestTokenAndSession({
+      userId: user.public_id,
+    });
+    return { user, organization, token, sessionPublicId };
   }
 
   // POSITIVE — baseline: valid token returns 200
@@ -129,7 +132,11 @@ describe('Security: Session invalidation', () => {
   // assert device B's token is then rejected while device A's still works. This
   // proves the auth middleware enforces per-session revocation (verifyActiveAccessToken).
   it('should return 401 when a revoked (other-device) session token is reused', async () => {
-    const { token: tokenA, user } = await createActiveUserWithToken();
+    const {
+      token: tokenA,
+      sessionPublicId: sessionPublicIdA,
+      user,
+    } = await createActiveUserWithToken();
 
     // Snapshot device A's session public id.
     const idsBeforeB = await listSessionPublicIds(tokenA);
@@ -138,6 +145,7 @@ describe('Security: Session invalidation', () => {
 
     // Create a second session (device B) for the same user.
     const tokenB = await generateTestToken({ userId: user.public_id });
+    await seedRecentStepUpForTestUser(user.public_id, sessionPublicIdA);
 
     // Device A now sees two sessions; identify device B as the new one.
     const idsAfterB = await listSessionPublicIds(tokenA);
@@ -172,7 +180,8 @@ describe('Security: Session invalidation', () => {
 
   // NEGATIVE — revokeAllSessions then use old token
   it('should return 401 after DELETE /auth/me/sessions revokes all sessions', async () => {
-    const { token } = await createActiveUserWithToken();
+    const { token, sessionPublicId, user } = await createActiveUserWithToken();
+    await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
 
     // Revoke ALL sessions for this user
     const revokeAll = await injectAuthenticated(app, {

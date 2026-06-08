@@ -22,6 +22,7 @@ vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
 vi.mock('@/domains/auth/auth.validator.js', () => ({
   validateMfaVerify: (body: unknown) => body,
   validateMfaEnroll: (body: unknown) => body,
+  validateMfaEnrollConfirm: (body: unknown) => body,
   validateMfaLoginVerify: (body: unknown) => body,
 }));
 
@@ -32,6 +33,15 @@ vi.mock('@/domains/auth/sub-domains/auth-mfa-session/auth-mfa-session.js', () =>
 
 vi.mock('@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js', () => ({
   consumeMfaRecoveryCode: vi.fn().mockResolvedValue(false),
+  hashMfaRecoveryCode: (plain: string) => `HASHED:${plain}`,
+  insertMfaRecoveryCodes: vi.fn().mockResolvedValue(undefined),
+  invalidateAllUnusedRecoveryCodesForUser: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.util.js', () => ({
+  generateMfaRecoveryCodes: vi.fn((count: number) =>
+    Array.from({ length: count }, (_value, index) => `RECOVERY${index + 1}`),
+  ),
 }));
 
 vi.mock('@/shared/utils/security/field-secret-encryption.util.js', () => ({
@@ -62,7 +72,9 @@ describe('MfaService', () => {
   const authMethodService = {
     findTotpByUserId: vi.fn(),
     updateAuthMethodLastUsedAt: vi.fn().mockResolvedValue({}),
-    createAuthMethodRecord: vi.fn().mockResolvedValue({ id: 99 }),
+    createAuthMethodRecord: vi
+      .fn()
+      .mockResolvedValue({ id: 99, public_id: 'testpublicmid0000000' }),
     listMfaMethodsByUserId: vi.fn().mockResolvedValue([]),
     revokeAuthMethod: vi.fn(),
     findAuthMethodByIdForUser: vi.fn(),
@@ -75,6 +87,7 @@ describe('MfaService', () => {
   const redis = {
     set: vi.fn().mockResolvedValue('OK'),
     get: vi.fn(),
+    getdel: vi.fn().mockResolvedValue(null),
     del: vi.fn().mockResolvedValue(1),
   };
 
@@ -146,17 +159,179 @@ describe('MfaService', () => {
     );
   });
 
-  it('enroll creates TOTP method', async () => {
-    const result = await service.enroll('user_public', { method_type: 'MFA_TOTP' });
+  it('enrollInit stages the secret in Redis without persisting an auth_methods row or flipping is_mfa_enabled', async () => {
+    // sec-A finding #3: phase 1 of the two-phase ceremony. The secret/provisioning URI
+    // are returned to the caller but NOTHING is written to Postgres until phase 2
+    // confirms a fresh code. The prior single-step `enroll` flipped is_mfa_enabled
+    // immediately, locking users out when transcription failed.
+    const result = await service.enrollInit('user_public', { method_type: 'MFA_TOTP' });
     expect(result.secret).toBe('TESTSECRET');
-    expect(result.method_id).toBe(99);
-    expect(userService.updateMfaEnabled).toHaveBeenCalledWith('user_public', true);
+    expect(result.provisioning_uri).toContain('otpauth://');
+    expect(redis.set).toHaveBeenCalledWith(
+      expect.stringMatching(/^mfa:enroll:/),
+      expect.any(String),
+      'EX',
+      expect.any(Number),
+    );
+    expect(authMethodService.createAuthMethodRecord).not.toHaveBeenCalled();
+    expect(userService.updateMfaEnabled).not.toHaveBeenCalled();
   });
 
-  it('enroll rejects non-TOTP method types', async () => {
-    await expect(service.enroll('user_public', { method_type: 'MFA_SMS' })).rejects.toBeInstanceOf(
+  it('enrollInit rejects non-TOTP method types', async () => {
+    await expect(
+      service.enrollInit('user_public', { method_type: 'MFA_SMS' }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(redis.set).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^mfa:enroll:/),
+      expect.anything(),
+      'EX',
+      expect.anything(),
+    );
+  });
+
+  it('enrollConfirm persists the auth_methods row, mints recovery codes, and flips is_mfa_enabled on a verified code (sec-re-06: flip happens INSIDE the transaction)', async () => {
+    const { insertMfaRecoveryCodes } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
+    );
+    const { generateMfaRecoveryCodes } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.util.js'
+    );
+    // GETDEL returns the staged (encrypted) secret atomically.
+    redis.getdel.mockResolvedValueOnce('TESTSECRET');
+
+    // Track call order: createAuthMethodRecord → insertMfaRecoveryCodes → updateMfaEnabled
+    // must all happen inside the withUserDatabaseContext callback (same transaction).
+    // sec-re-06: the prior code called updateMfaEnabled AFTER withUserDatabaseContext
+    // returned, on a separate connection; a crash between commit and the flip left the
+    // user with valid TOTP + codes but is_mfa_enabled=false, bypassing MFA at login.
+    const callOrder: string[] = [];
+    vi.mocked(authMethodService.createAuthMethodRecord).mockImplementationOnce(async () => {
+      callOrder.push('createAuthMethodRecord');
+      return { id: 99, public_id: 'testpublicmid0000000' } as never;
+    });
+    vi.mocked(insertMfaRecoveryCodes).mockImplementationOnce(async () => {
+      callOrder.push('insertMfaRecoveryCodes');
+    });
+    vi.mocked(userService.updateMfaEnabled).mockImplementationOnce(async () => {
+      callOrder.push('updateMfaEnabled');
+      return null as never;
+    });
+
+    const result = await service.enrollConfirm('user_public', { code: '123456' });
+
+    expect(redis.getdel).toHaveBeenCalledWith(expect.stringMatching(/^mfa:enroll:/));
+    expect(authMethodService.createAuthMethodRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ method_type: 'MFA_TOTP' }),
+    );
+    expect(insertMfaRecoveryCodes).toHaveBeenCalledTimes(1);
+    expect(generateMfaRecoveryCodes).toHaveBeenCalledTimes(1);
+    expect(userService.updateMfaEnabled).toHaveBeenCalledWith('user_public', true);
+    // sec-new-B4: enrollConfirm now returns method_public_id (opaque id) instead of bigserial method_id.
+    expect(result.method_public_id).toBeDefined();
+    expect(typeof result.method_public_id).toBe('string');
+    expect(result.recovery_codes).toHaveLength(10);
+
+    // The is_mfa_enabled flip must happen AFTER the TOTP row and recovery codes
+    // are written — but BEFORE the transaction commits (so they're atomic).
+    expect(callOrder.indexOf('updateMfaEnabled')).toBeGreaterThan(
+      callOrder.indexOf('insertMfaRecoveryCodes'),
+    );
+  });
+
+  it('enrollConfirm rejects when no staged secret is present (expired or never started)', async () => {
+    redis.getdel.mockResolvedValueOnce(null);
+    await expect(service.enrollConfirm('user_public', { code: '123456' })).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
+    expect(authMethodService.createAuthMethodRecord).not.toHaveBeenCalled();
+    expect(userService.updateMfaEnabled).not.toHaveBeenCalled();
+  });
+
+  it('enrollConfirm rejects when the submitted code does not verify against the staged secret', async () => {
+    const otp = await import('otplib');
+    vi.mocked(otp.verify).mockResolvedValueOnce({ valid: false });
+    redis.getdel.mockResolvedValueOnce('TESTSECRET');
+    await expect(service.enrollConfirm('user_public', { code: '000000' })).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
+    expect(authMethodService.createAuthMethodRecord).not.toHaveBeenCalled();
+    expect(userService.updateMfaEnabled).not.toHaveBeenCalled();
+  });
+
+  it('sec-re-04: enrollConfirm revokes existing active TOTP methods and invalidates old recovery codes before inserting the new ones', async () => {
+    // Without dedup, re-enrolling left two active MFA_TOTP rows in
+    // auth_methods (the old one and the new one). findTotpByUserId had no
+    // ORDER BY so login picked an arbitrary row, often the stale one — the
+    // user's working authenticator codes were rejected, soft-locking the
+    // account. After this fix the existing methods are revoked and the
+    // user's prior recovery codes are invalidated inside the same
+    // transaction BEFORE the new credentials are persisted.
+    const { insertMfaRecoveryCodes, invalidateAllUnusedRecoveryCodesForUser } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
+    );
+    const callOrder: string[] = [];
+    vi.mocked(authMethodService.listMfaMethodsByUserId).mockImplementation(async () => {
+      callOrder.push('listMfaMethodsByUserId');
+      return [
+        { id: 11, method_type: 'MFA_TOTP', last_used_at: null, created_at: new Date() },
+        { id: 12, method_type: 'MFA_TOTP', last_used_at: null, created_at: new Date() },
+      ] as never;
+    });
+    vi.mocked(authMethodService.revokeAuthMethod).mockImplementation(async () => {
+      callOrder.push('revokeAuthMethod');
+    });
+    vi.mocked(invalidateAllUnusedRecoveryCodesForUser).mockImplementation(async () => {
+      callOrder.push('invalidateAllUnusedRecoveryCodesForUser');
+    });
+    vi.mocked(authMethodService.createAuthMethodRecord).mockImplementation(async () => {
+      callOrder.push('createAuthMethodRecord');
+      return { id: 99, public_id: 'testpublicmid0000000' } as never;
+    });
+    vi.mocked(insertMfaRecoveryCodes).mockImplementation(async () => {
+      callOrder.push('insertMfaRecoveryCodes');
+    });
+    redis.getdel.mockResolvedValueOnce('TESTSECRET');
+
+    await service.enrollConfirm('user_public', { code: '123456' });
+
+    // Both existing TOTP rows are revoked.
+    expect(authMethodService.revokeAuthMethod).toHaveBeenCalledWith(11, user.id);
+    expect(authMethodService.revokeAuthMethod).toHaveBeenCalledWith(12, user.id);
+    // Recovery codes for the old secret are invalidated.
+    expect(invalidateAllUnusedRecoveryCodesForUser).toHaveBeenCalledWith(user.id);
+    // The new credentials are persisted.
+    expect(authMethodService.createAuthMethodRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ method_type: 'MFA_TOTP' }),
+    );
+    expect(insertMfaRecoveryCodes).toHaveBeenCalledTimes(1);
+
+    // The cleanup steps MUST complete before the new credentials are written
+    // — otherwise a crash between insert and revoke leaves orphans.
+    const revokeIndex = callOrder.indexOf('revokeAuthMethod');
+    const invalidateIndex = callOrder.indexOf('invalidateAllUnusedRecoveryCodesForUser');
+    const createIndex = callOrder.indexOf('createAuthMethodRecord');
+    const insertCodesIndex = callOrder.indexOf('insertMfaRecoveryCodes');
+    expect(revokeIndex).toBeGreaterThanOrEqual(0);
+    expect(invalidateIndex).toBeGreaterThanOrEqual(0);
+    expect(revokeIndex).toBeLessThan(createIndex);
+    expect(invalidateIndex).toBeLessThan(insertCodesIndex);
+  });
+
+  it('sec-re-04: enrollConfirm proceeds normally when no existing TOTP methods are present (first-time enrollment)', async () => {
+    // First-time enrollment still works — no revokes happen because the
+    // user has no active methods, no recovery codes to invalidate.
+    const { insertMfaRecoveryCodes, invalidateAllUnusedRecoveryCodesForUser } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
+    );
+    vi.mocked(authMethodService.listMfaMethodsByUserId).mockResolvedValueOnce([] as never);
+    redis.getdel.mockResolvedValueOnce('TESTSECRET');
+
+    await service.enrollConfirm('user_public', { code: '123456' });
+
+    expect(authMethodService.revokeAuthMethod).not.toHaveBeenCalled();
+    expect(invalidateAllUnusedRecoveryCodesForUser).toHaveBeenCalledWith(user.id);
+    expect(authMethodService.createAuthMethodRecord).toHaveBeenCalledOnce();
+    expect(insertMfaRecoveryCodes).toHaveBeenCalledOnce();
   });
 
   it('verifyLoginMfa rejects a replayed TOTP code within its window', async () => {
@@ -254,6 +429,51 @@ describe('MfaService', () => {
     await expect(service.deleteMfa('user_public', 5)).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
+  it('sec-new-A4: updateMfaEnabled is called inside the withUserDatabaseContext transaction (no TOCTOU window)', async () => {
+    // Regression: the previous code called updateMfaEnabled AFTER withUserDatabaseContext
+    // returned, leaving a TOCTOU gap where a concurrent enroll could flip is_mfa_enabled
+    // back to true between the revoke commit and the flag update.
+    const { withUserDatabaseContext } = await import(
+      '@/infrastructure/database/contexts/user-database.context.js'
+    );
+
+    const callOrder: string[] = [];
+    vi.mocked(withUserDatabaseContext).mockImplementationOnce(
+      async (_userPublicId: string, callback: Parameters<typeof withUserDatabaseContext>[1]) => {
+        callOrder.push('txn_start');
+        await callback(null as never);
+        callOrder.push('txn_end');
+      },
+    );
+
+    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValueOnce({
+      id: 5,
+      method_type: 'MFA_TOTP',
+    } as never);
+    vi.mocked(authMethodService.revokeAuthMethod).mockImplementationOnce(async () => {
+      callOrder.push('revokeAuthMethod');
+      return { id: 5 } as never;
+    });
+    // Both listMfaMethodsByUserId calls return [] — the pre-check count is 0 (
+    // wouldBeLastRemoval = true) and the post-revoke remaining count is 0.
+    vi.mocked(authMethodService.listMfaMethodsByUserId).mockResolvedValue([] as never);
+    vi.mocked(userService.updateMfaEnabled).mockImplementationOnce(async () => {
+      callOrder.push('updateMfaEnabled');
+      return null as never;
+    });
+
+    await service.deleteMfa('user_public', 5);
+
+    // updateMfaEnabled must happen INSIDE the transaction (between txn_start and txn_end)
+    expect(callOrder).toContain('updateMfaEnabled');
+    expect(callOrder.indexOf('updateMfaEnabled')).toBeGreaterThan(callOrder.indexOf('txn_start'));
+    expect(callOrder.indexOf('updateMfaEnabled')).toBeLessThan(callOrder.indexOf('txn_end'));
+    // The revoke must precede the flag flip.
+    expect(callOrder.indexOf('revokeAuthMethod')).toBeLessThan(
+      callOrder.indexOf('updateMfaEnabled'),
+    );
+  });
+
   it('verify and listMfaMethods reject when user record is missing', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
     await expect(service.verify('missing', { code: '123456' })).rejects.toBeInstanceOf(
@@ -262,9 +482,9 @@ describe('MfaService', () => {
     await expect(service.listMfaMethods('missing')).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
-  it('enroll rejects when user record is missing', async () => {
+  it('enrollInit rejects when user record is missing', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
-    await expect(service.enroll('missing', { method_type: 'MFA_TOTP' })).rejects.toBeInstanceOf(
+    await expect(service.enrollInit('missing', { method_type: 'MFA_TOTP' })).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
   });

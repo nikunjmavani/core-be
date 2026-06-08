@@ -62,7 +62,17 @@ const encryptionMiddleware: FastifyPluginAsync = async (application) => {
       });
     } catch (error) {
       logger.error({ error, url: request.url }, 'Response encryption failed');
-      throw new AppError('INTERNAL_ERROR', 500, 'errors:internal');
+      // sec-M8: surface as 503 (transient) instead of 500 (uncategorised
+      // server error). The encryption layer's stated purpose is DevTools
+      // readability, not anti-attacker hardening — failure should signal the
+      // client to retry rather than appear as a permanent server fault. The
+      // handler side effects have already committed; an idempotent retry will
+      // re-fetch and re-encrypt successfully once whatever transient cause
+      // clears (KMS hiccup, key rotation race, etc.).
+      if (typeof reply.header === 'function') {
+        reply.header('Retry-After', '1');
+      }
+      throw new AppError('SERVICE_UNAVAILABLE', 503, 'errors:serviceUnavailable');
     }
   });
 };

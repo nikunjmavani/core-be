@@ -71,6 +71,9 @@ describe('WebhookService', () => {
     update: vi.fn().mockResolvedValue(webhook),
     softDelete: vi.fn().mockResolvedValue(webhook),
     listEnabledSubscribedToEvent: vi.fn().mockResolvedValue([]),
+    // sec-N4: service consults this before insert; default to 0 so existing
+    // happy-path tests stay below the cap.
+    countActiveByOrganization: vi.fn().mockResolvedValue(0),
   } as unknown as WebhookRepository;
 
   const deliveryAttemptRepository = {
@@ -107,7 +110,11 @@ describe('WebhookService', () => {
     await service.get('org_public', 'webhook_public');
     await service.create(
       'org_public',
-      { url: 'https://example.com/hook', events: ['subscription.updated'], secret: 's' },
+      {
+        url: 'https://example.com/hook',
+        events: ['subscription.updated'],
+        secret: 'sixteenCharSecret',
+      },
       'user_public',
     );
     await service.update('org_public', 'webhook_public', { is_enabled: false }, 'user_public');
@@ -165,6 +172,31 @@ describe('WebhookService', () => {
     const headers = new Headers(requestInit.headers);
     expect(headers.get('X-Webhook-Signature')).toMatch(/^t=\d+,v1=[a-f0-9]{64}$/);
     expect(headers.get('X-Webhook-Timestamp')).toMatch(/^\d+$/);
+  });
+
+  it('sec-re-09: testWebhook OMITS X-Webhook-Signature when the resolved signing secret is empty', async () => {
+    // The worker fix (sec-UP #8) added a `signingSecret.length > 0` guard so a
+    // legacy row whose encrypted_secret round-trips to '' wouldn't emit an
+    // attacker-reproducible empty-key HMAC. testWebhook never got the same
+    // treatment — it built the header unconditionally, so a customer verifier
+    // validating X-Webhook-Signature against an empty key would accept any
+    // forged "test delivery" indistinguishable from the platform's.
+    const fieldSecretEncryption = await import(
+      '@/shared/utils/security/field-secret-encryption.util.js'
+    );
+    vi.mocked(fieldSecretEncryption.decryptFieldSecret).mockReturnValueOnce('');
+    mockPinnedFetch.mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
+
+    await service.testWebhook({
+      organization_public_id: 'org_public',
+      webhook_public_id: 'webhook_public',
+    });
+
+    expect(mockPinnedFetch).toHaveBeenCalledTimes(1);
+    const [, requestInit] = mockPinnedFetch.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(requestInit.headers);
+    // No signature → no header. X-Webhook-Timestamp may still be present.
+    expect(headers.get('X-Webhook-Signature')).toBeNull();
   });
 
   it('testWebhook rejects (and records nothing) when the URL is no longer SSRF-safe', async () => {

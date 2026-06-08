@@ -15,6 +15,7 @@ const now = new Date('2026-01-01T00:00:00.000Z');
 const organization = { id: 1, public_id: 'org_public_abc', name: 'Test Org' };
 const policyRow = {
   id: 1,
+  public_id: 'pol_public_1',
   organization_id: 1,
   notification_type: 'invite',
   channel: 'EMAIL',
@@ -33,7 +34,7 @@ describe('OrganizationNotificationPolicyService', () => {
 
   const policyRepository = {
     findByOrganizationId: vi.fn().mockResolvedValue([policyRow]),
-    findById: vi.fn().mockResolvedValue(policyRow),
+    findByPublicId: vi.fn().mockResolvedValue(policyRow),
     create: vi.fn().mockResolvedValue(policyRow),
     update: vi.fn().mockResolvedValue(policyRow),
     softDelete: vi.fn().mockResolvedValue(policyRow),
@@ -48,7 +49,7 @@ describe('OrganizationNotificationPolicyService', () => {
     vi.clearAllMocks();
     vi.mocked(organizationRepository.findByPublicId).mockResolvedValue(organization as never);
     vi.mocked(policyRepository.findByOrganizationId).mockResolvedValue([policyRow] as never);
-    vi.mocked(policyRepository.findById).mockResolvedValue(policyRow as never);
+    vi.mocked(policyRepository.findByPublicId).mockResolvedValue(policyRow as never);
     vi.mocked(policyRepository.create).mockResolvedValue(policyRow as never);
     vi.mocked(policyRepository.update).mockResolvedValue(policyRow as never);
     vi.mocked(policyRepository.softDelete).mockResolvedValue(policyRow as never);
@@ -80,18 +81,22 @@ describe('OrganizationNotificationPolicyService', () => {
 
   describe('getById', () => {
     it('returns serialized policy when found', async () => {
-      const result = await service.getById('org_public_abc', 1);
-      expect(result).toMatchObject({ id: 1, organization_id: 'org_public_abc' });
+      const result = await service.getByPublicId('org_public_abc', 'pol_public_1');
+      expect(result).toMatchObject({ id: policyRow.public_id, organization_id: 'org_public_abc' });
     });
 
     it('throws NotFoundError when organization is missing', async () => {
       vi.mocked(organizationRepository.findByPublicId).mockResolvedValue(null);
-      await expect(service.getById('org_public_abc', 1)).rejects.toBeInstanceOf(NotFoundError);
+      await expect(service.getByPublicId('org_public_abc', 'pol_public_1')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
     });
 
     it('throws NotFoundError when policy is missing', async () => {
-      vi.mocked(policyRepository.findById).mockResolvedValue(null);
-      await expect(service.getById('org_public_abc', 1)).rejects.toBeInstanceOf(NotFoundError);
+      vi.mocked(policyRepository.findByPublicId).mockResolvedValue(null);
+      await expect(service.getByPublicId('org_public_abc', 'pol_public_1')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
     });
   });
 
@@ -134,7 +139,7 @@ describe('OrganizationNotificationPolicyService', () => {
     it('updates and returns serialized policy', async () => {
       const result = await service.update(
         'org_public_abc',
-        1,
+        'pol_public_1',
         { default_enabled: false },
         'user_public',
       );
@@ -145,32 +150,36 @@ describe('OrganizationNotificationPolicyService', () => {
     it('throws NotFoundError when organization is missing', async () => {
       vi.mocked(organizationRepository.findByPublicId).mockResolvedValue(null);
       await expect(
-        service.update('org_public_abc', 1, { default_enabled: false }, 'user_public'),
+        service.update('org_public_abc', 'pol_public_1', { default_enabled: false }, 'user_public'),
       ).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('throws NotFoundError when policy update returns null', async () => {
       vi.mocked(policyRepository.update).mockResolvedValue(null);
       await expect(
-        service.update('org_public_abc', 1, { default_enabled: false }, 'user_public'),
+        service.update('org_public_abc', 'pol_public_1', { default_enabled: false }, 'user_public'),
       ).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
   describe('delete', () => {
     it('soft-deletes the policy when found', async () => {
-      await service.delete('org_public_abc', 1);
-      expect(policyRepository.softDelete).toHaveBeenCalledWith(1, organization.id);
+      await service.delete('org_public_abc', 'pol_public_1');
+      expect(policyRepository.softDelete).toHaveBeenCalledWith('pol_public_1', organization.id);
     });
 
     it('throws NotFoundError when organization is missing', async () => {
       vi.mocked(organizationRepository.findByPublicId).mockResolvedValue(null);
-      await expect(service.delete('org_public_abc', 1)).rejects.toBeInstanceOf(NotFoundError);
+      await expect(service.delete('org_public_abc', 'pol_public_1')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
     });
 
     it('throws NotFoundError when policy is not found for deletion', async () => {
       vi.mocked(policyRepository.softDelete).mockResolvedValue(null);
-      await expect(service.delete('org_public_abc', 1)).rejects.toBeInstanceOf(NotFoundError);
+      await expect(service.delete('org_public_abc', 'pol_public_1')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
     });
   });
 });

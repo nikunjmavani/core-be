@@ -1,6 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { EXPENSIVE_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
+import {
+  EXPENSIVE_AUTHED_RATE_LIMIT,
+  MODERATE_AUTHED_RATE_LIMIT,
+} from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { GLOBAL_ROLES } from '@/shared/constants/index.js';
 import { requireRole } from '@/shared/utils/auth/authorization.util.js';
 import { createUserController } from './user.controller.js';
@@ -230,7 +233,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Request GDPR data export',
         description:
-          'Enqueues an async export of all personal data. Poll GET /users/me/data-export/{exportId} for status and a time-limited download URL (≤24h).',
+          'Enqueues an async export of all personal data. Poll GET /users/me/data-export/{exportId} for status and a time-limited download URL (15-minute lifetime).',
         tags: ['User', 'Privacy'],
       },
     },
@@ -240,10 +243,17 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/data-export/:exportId',
     {
       onRequest: [app.authenticate],
+      // sec-U6: every successful poll while status === COMPLETED mints a fresh
+      // presigned download URL. Without a rate limit, a session-token holder
+      // could spin the poll loop to mint URLs indefinitely; cap at the
+      // moderate-authed tier (30 req / 60s) so the typical UI poll cadence
+      // (a few seconds while the user waits) is unaffected but bulk-replay
+      // mints are bounded.
+      ...MODERATE_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Get GDPR data export status',
         description:
-          'Returns export job status. When completed, includes a presigned download URL for the gzip JSON artifact.',
+          'Returns export job status. When completed, includes a presigned download URL for the gzip JSON artifact (15-minute lifetime; every mint is audited as `user.data_export.url_minted`).',
         tags: ['User', 'Privacy'],
       },
     },

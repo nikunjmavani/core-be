@@ -4,38 +4,53 @@ import {
   serializeUserNotificationPreferenceList,
 } from '@/domains/user/sub-domains/user-notification-preferences/user-notification-preferences.serializer.js';
 
+// sec-T finding #17: the serializer is now a strip-only allowlist that emits
+// `(notification_type, channel, is_enabled)`. The bigserial `id` and bigint
+// `organization_id` were dropped — preferences are addressed by
+// `(notification_type, channel)`, the PUT endpoint replaces the full set, and
+// no client needs a stable row id. The fixtures retain the wider input shape
+// to exercise the regression: extra row fields must NOT leak through.
+function makeRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 17,
+    notification_type: 'security.alert',
+    channel: 'email',
+    organization_id: null,
+    is_enabled: true,
+    ...overrides,
+  } as never;
+}
+
 describe('user-notification-preferences.serializer edge cases', () => {
-  it('preserves null organization_id separately from row id', () => {
-    const result = serializeUserNotificationPreference({
-      id: 17,
+  it('drops internal `id` and `organization_id` from the public response (sec-T #17)', () => {
+    const result = serializeUserNotificationPreference(makeRow({ id: 17, organization_id: null }));
+
+    expect(result).toEqual({
       notification_type: 'security.alert',
       channel: 'email',
-      organization_id: null,
       is_enabled: true,
     });
-
-    expect(result.id).toBe(17);
-    expect(result.organization_id).toBeNull();
+    // Belt-and-braces: even when the input row carries a value, neither key
+    // appears on the output.
+    expect(result).not.toHaveProperty('id');
+    expect(result).not.toHaveProperty('organization_id');
   });
 
-  it('preserves scoped organization_id distinct from row id', () => {
-    const result = serializeUserNotificationPreference({
-      id: 5,
-      notification_type: 'billing.invoice',
-      channel: 'email',
-      organization_id: 99,
-      is_enabled: true,
-    });
+  it('drops `organization_id` even when populated (no organization-id echo)', () => {
+    const result = serializeUserNotificationPreference(
+      makeRow({ id: 5, organization_id: 99, notification_type: 'billing.invoice' }),
+    );
 
-    expect(result.id).toBe(5);
-    expect(result.organization_id).toBe(99);
+    expect(result).not.toHaveProperty('id');
+    expect(result).not.toHaveProperty('organization_id');
+    expect(result.notification_type).toBe('billing.invoice');
   });
 
-  it('preserves enabled=false rows (does not drop them)', () => {
+  it('preserves is_enabled=false rows (does not drop them)', () => {
     const rows = [
-      { id: 1, notification_type: 'a', channel: 'email', organization_id: null, is_enabled: false },
-      { id: 2, notification_type: 'b', channel: 'email', organization_id: null, is_enabled: true },
-      { id: 3, notification_type: 'c', channel: 'email', organization_id: 7, is_enabled: false },
+      makeRow({ id: 1, notification_type: 'a', is_enabled: false }),
+      makeRow({ id: 2, notification_type: 'b', is_enabled: true }),
+      makeRow({ id: 3, notification_type: 'c', organization_id: 7, is_enabled: false }),
     ];
 
     const result = serializeUserNotificationPreferenceList(rows);
@@ -45,13 +60,9 @@ describe('user-notification-preferences.serializer edge cases', () => {
   });
 
   it('single row serializer keeps is_enabled=false untouched', () => {
-    const result = serializeUserNotificationPreference({
-      id: 8,
-      notification_type: 'security.alert',
-      channel: 'in_app',
-      organization_id: null,
-      is_enabled: false,
-    });
+    const result = serializeUserNotificationPreference(
+      makeRow({ id: 8, channel: 'in_app', is_enabled: false }),
+    );
 
     expect(result.is_enabled).toBe(false);
   });

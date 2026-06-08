@@ -12,12 +12,11 @@ import {
 } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.validator.js';
 
 describe('member-invitation validators', () => {
-  it('validateCreateMemberInvitation accepts membership and email', () => {
+  it('validateCreateMemberInvitation accepts membership_id and defaults expires_in_days', () => {
     const result = validateCreateMemberInvitation({
       membership_id: 'membershippublicid1',
-      email: 'invite@example.com',
     });
-    expect(result.email).toBe('invite@example.com');
+    expect(result.membership_id).toBe('membershippublicid1');
     expect(result.expires_in_days).toBe(7);
   });
 
@@ -31,7 +30,7 @@ describe('member-invitation validators', () => {
     expect(validateResendMemberInvitation({})).toEqual({ expires_in_days: 7 });
   });
 
-  it('validateCreateMemberInvitation rejects invalid email', () => {
+  it('validateCreateMemberInvitation rejects extra fields (strict schema)', () => {
     expect(() =>
       validateCreateMemberInvitation({
         membership_id: 'membershippublicid1',

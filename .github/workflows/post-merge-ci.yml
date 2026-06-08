@@ -363,7 +363,14 @@ jobs:
           GH_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag_name="$(gh release list --repo "${GH_REPOSITORY}" --limit 1 --json tagName --jq '.[0].tagName')"
+          expected_prerelease="${{ github.ref_name == 'dev' && 'true' || 'false' }}"
+          tag_name="$(
+            gh release list \
+              --repo "${GH_REPOSITORY}" \
+              --limit 20 \
+              --json tagName,isPrerelease \
+              --jq "[.[] | select((.isPrerelease | tostring) == \"${expected_prerelease}\")][0].tagName // \"\""
+          )"
           if [ -z "${tag_name}" ] || [ "${tag_name}" = "null" ]; then
             echo "::error::No GitHub Release found after release-please."
             exit 1
@@ -385,6 +392,54 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+  dispatch-post-release-backmerge:
+    name: Dispatch post-release back-merge
+    needs: [release-please, release-sbom]
+    if: |
+      always() &&
+      github.ref_name == 'main' &&
+      needs.release-please.outputs.releases_created == 'true' &&
+      needs.release-sbom.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Resolve stable release version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag_name="$(
+            gh release list \
+              --repo "${GH_REPOSITORY}" \
+              --limit 20 \
+              --json tagName,isPrerelease \
+              --jq '[.[] | select(.isPrerelease == false)][0].tagName // ""'
+          )"
+          if [ -z "${tag_name}" ] || [ "${tag_name}" = "null" ]; then
+            echo "::error::No stable GitHub Release found after release-please."
+            exit 1
+          fi
+          version="${tag_name#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Dispatching post-release back-merge for ${tag_name}"
+
+      - name: Dispatch back-merge workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh workflow run post-release-backmerge.yml \
+            --repo "${GH_REPOSITORY}" \
+            --ref main \
+            --field "version=${VERSION}"
 
   deploy:
     name: Deploy
@@ -414,6 +469,7 @@ jobs:
       - docker-build-push
       - matrix-tests
       - deploy
+      - dispatch-post-release-backmerge
       - release-please
     if: |
       always() &&
@@ -421,6 +477,7 @@ jobs:
         needs.docker-build-push.result == 'failure' ||
         needs.matrix-tests.result == 'failure' ||
         needs.deploy.result == 'failure' ||
+        needs.dispatch-post-release-backmerge.result == 'failure' ||
         needs.release-please.result == 'failure'
       )
     runs-on: ubuntu-latest
@@ -431,8 +488,9 @@ jobs:
           DOCKER_RESULT: ${{ needs.docker-build-push.result }}
           TESTS_RESULT: ${{ needs.matrix-tests.result }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
+          BACKMERGE_RESULT: ${{ needs.dispatch-post-release-backmerge.result }}
           RELEASE_RESULT: ${{ needs.release-please.result }}
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          echo "::error title=Post-merge CI failed::docker=${DOCKER_RESULT} tests=${TESTS_RESULT} deploy=${DEPLOY_RESULT} release=${RELEASE_RESULT} — ${WORKFLOW_URL}"
+          echo "::error title=Post-merge CI failed::docker=${DOCKER_RESULT} tests=${TESTS_RESULT} deploy=${DEPLOY_RESULT} backmerge=${BACKMERGE_RESULT} release=${RELEASE_RESULT} — ${WORKFLOW_URL}"

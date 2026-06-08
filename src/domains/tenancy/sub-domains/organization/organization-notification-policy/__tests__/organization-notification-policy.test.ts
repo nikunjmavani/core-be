@@ -57,7 +57,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     return `/api/v1/tenancy/organizations/${organizationPublicId}/notification-policies`;
   }
 
-  function notificationPolicyResourcePath(organizationPublicId: string, policyId: number | string) {
+  function notificationPolicyResourcePath(organizationPublicId: string, policyId: string) {
     return `/api/v1/tenancy/organizations/${organizationPublicId}/notification-policies/${policyId}`;
   }
 
@@ -100,7 +100,10 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
   describe('GET /api/v1/tenancy/organizations/:id/notification-policies/:policyId', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: notificationPolicyResourcePath('unauthenticated-organization-route', 1),
+        url: notificationPolicyResourcePath(
+          'unauthenticated-organization-route',
+          'pol_unauth0000000000_',
+        ),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -111,20 +114,21 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: notificationPolicyResourcePath(organization.public_id, 1),
+        url: notificationPolicyResourcePath(organization.public_id, 'pol_arbitrary00000000'),
         token,
       });
       expect(response.statusCode).toBe(403);
     });
 
-    it('should return 400 when policy id is not a positive integer', async () => {
+    // sec-T5: route validates the policyId as a 21-char public id now.
+    it('should return 400 when policy id is not a valid public id', async () => {
       const { organization, token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ,
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: notificationPolicyResourcePath(organization.public_id, 'not-an-integer'),
+        url: notificationPolicyResourcePath(organization.public_id, 'not-a-public-id'),
         token,
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -137,13 +141,14 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: notificationPolicyResourcePath(organization.public_id, 999_999),
+        // sec-T5: 21-char-ish well-formed public id that no row carries.
+        url: notificationPolicyResourcePath(organization.public_id, 'pol_doesnotexist00000'),
         token,
       });
       expect(response.statusCode).toBe(404);
     });
 
-    it('should return notification policy by numeric id', async () => {
+    it('should return notification policy by public id (sec-T5)', async () => {
       const { organization, token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ,
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
@@ -156,7 +161,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         payload: { notification_type: 'IN_APP', channel: 'EMAIL', default_enabled: true },
       });
       expect(created.statusCode).toBe(201);
-      const createdBody = created.json() as { data: { id: number } };
+      const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
       const response = await injectAuthenticated(app, {
@@ -164,8 +169,9 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         token,
       });
       expect(response.statusCode).toBe(200);
-      const body = response.json() as { data: { id: number; notification_type: string } };
+      const body = response.json() as { data: { id: string; notification_type: string } };
       expect(body.data).toHaveProperty('id', policyId);
+      expect(typeof body.data.id).toBe('string'); // sec-T5: public id (not bigserial)
       expect(body.data).toHaveProperty('notification_type', 'IN_APP');
     });
   });
@@ -303,7 +309,10 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'PATCH',
-        url: notificationPolicyResourcePath('unauthenticated-organization-route', 1),
+        url: notificationPolicyResourcePath(
+          'unauthenticated-organization-route',
+          'pol_unauth0000000000_',
+        ),
         payload: { default_enabled: false },
       });
       expect(response.statusCode).toBe(401);
@@ -320,7 +329,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         payload: { notification_type: 'SECURITY', channel: 'EMAIL' },
       });
       expect(created.statusCode).toBe(201);
-      const createdBody = created.json() as { data: { id: number } };
+      const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
       const readOnlyUser = await createTestUser({
@@ -358,7 +367,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         payload: { notification_type: 'UPDATE_TEST', channel: 'EMAIL' },
       });
       expect(created.statusCode).toBe(201);
-      const createdBody = created.json() as { data: { id: number } };
+      const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
@@ -382,7 +391,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         payload: { notification_type: 'MUTED_TEST', channel: 'SMS' },
       });
       expect(created.statusCode).toBe(201);
-      const createdBody = created.json() as { data: { id: number } };
+      const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
@@ -411,7 +420,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         },
       });
       expect(created.statusCode).toBe(201);
-      const createdBody = created.json() as { data: { id: number } };
+      const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
       const patched = await injectAuthenticatedOrganizationMutation(app, {
@@ -436,7 +445,10 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: notificationPolicyResourcePath('unauthenticated-organization-route', 1),
+        url: notificationPolicyResourcePath(
+          'unauthenticated-organization-route',
+          'pol_unauth0000000000_',
+        ),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -452,7 +464,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         payload: { notification_type: 'DELETE_GUARD', channel: 'EMAIL' },
       });
       expect(created.statusCode).toBe(201);
-      const createdBody = created.json() as { data: { id: number } };
+      const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
 
       const readOnlyUser = await createTestUser({
@@ -484,7 +496,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',
-        url: notificationPolicyResourcePath(organization.public_id, 888_888),
+        url: notificationPolicyResourcePath(organization.public_id, 'pol_doesnotexist00000'),
         token,
       });
       expect(response.statusCode).toBe(404);
@@ -506,9 +518,12 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         },
       });
       expect(created.statusCode).toBe(201);
-      const createdBody = created.json() as { data: { id: number } };
+      const createdBody = created.json() as { data: { id: string } };
       const policyId = createdBody.data.id;
-      expect(policyId).toBeGreaterThan(0);
+      // sec-T5: policy id is now a 21-char public id (string), not the
+      // bigserial row id.
+      expect(typeof policyId).toBe('string');
+      expect(policyId.length).toBeGreaterThan(0);
 
       const deleted = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',

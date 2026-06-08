@@ -55,6 +55,7 @@ export type DeadLetterLedgerReplayInput = {
   job_id: string | null;
   job_name: string;
   payload_summary: Record<string, unknown>;
+  attempts_made: number;
   auto_retry_count?: number;
 };
 
@@ -233,12 +234,19 @@ export async function recordDlqAutoRetryAuditEntry(input: {
  * Re-enqueues one dead-letter ledger row onto its source queue and removes the Redis DLQ mirror.
  *
  * @remarks
- * - **Algorithm:** builds payload from Postgres summary, adds to source queue (re-using
- *   `job_id` when present), best-effort removes the `-dlq` mirror job, writes audit row.
+ * - **Algorithm:** builds payload from Postgres summary, adds to source queue **without**
+ *   re-using the original `jobId` (BullMQ treats a re-`add` with the same id as a `duplicated`
+ *   event when the original failed job is still in Redis under `removeOnFail`, returning the
+ *   existing id without enqueueing — silently turning replay into a no-op). The source-queue
+ *   worker re-runs the job under app-layer idempotency (Stripe `tryClaimEvent` ledger,
+ *   mail outbox `tryClaimPendingMailOutbox`, webhook delivery `tryMarkSending`, notification
+ *   Redis `SET NX` dispatch marker), so a fresh BullMQ id cannot produce duplicate work.
+ *   The Redis DLQ mirror is best-effort removed and an audit row is appended.
  * - **Failure modes:** `payload_not_reconstructable` when summary keys are missing; Redis/Postgres
  *   errors propagate after a successful source enqueue.
  * - **Side effects:** BullMQ add + optional DLQ remove + audit insert.
- * - **Notes:** idempotent with downstream worker idempotency keys; does not mutate ledger rows.
+ * - **Notes:** does not mutate ledger rows. App-layer idempotency keys are the canonical
+ *   dedup boundary — never the BullMQ `jobId`.
  */
 export async function autoReplayDeadLetterFromLedger(input: {
   ledgerRow: DeadLetterLedgerReplayInput & { id: number; dead_letter_queue: string };
@@ -256,20 +264,17 @@ export async function autoReplayDeadLetterFromLedger(input: {
     connection: getBullMQConnectionOptions(),
   });
   try {
-    await sourceQueue.add(
-      input.ledgerRow.job_name,
-      payload,
-      omitUndefined({
-        jobId: input.ledgerRow.job_id ? String(input.ledgerRow.job_id) : undefined,
-      }),
-    );
+    // Intentionally omit `jobId` — see TSDoc. App-layer idempotency dedups execution.
+    await sourceQueue.add(input.ledgerRow.job_name, payload);
 
     const deadLetterQueue = new Queue(input.ledgerRow.dead_letter_queue, {
       connection: getBullMQConnectionOptions(),
     });
     try {
       const safeOriginalJobIdentifier = input.ledgerRow.job_id ?? 'unknown';
-      const deadLetterJobIdentifier = `dlq-${input.ledgerRow.source_queue}-${String(safeOriginalJobIdentifier)}`;
+      // Identifier format mirrors `enqueueDeadLetter` (`dlq-<source>-<originalId>-attempt-<n>`)
+      // so we look up the snapshot for the specific terminal failure recorded in the ledger.
+      const deadLetterJobIdentifier = `dlq-${input.ledgerRow.source_queue}-${String(safeOriginalJobIdentifier)}-attempt-${String(input.ledgerRow.attempts_made)}`;
       const deadLetterJob = await deadLetterQueue.getJob(deadLetterJobIdentifier);
       if (deadLetterJob) {
         await deadLetterJob.remove();
@@ -293,9 +298,17 @@ export async function autoReplayDeadLetterFromLedger(input: {
 
 /**
  * Replays a single dead-lettered job: looks it up, reconstructs its payload, adds it back
- * to the source queue (re-using the original `jobId` so downstream idempotency keys hit),
- * removes the DLQ entry, and writes an audit row. In `dryRun` mode no Redis or Postgres
- * writes happen and `actorUserPublicId` is not required.
+ * to the source queue with a fresh BullMQ id, removes the DLQ entry, and writes an audit row.
+ * In `dryRun` mode no Redis or Postgres writes happen and `actorUserPublicId` is not required.
+ *
+ * @remarks
+ * `jobId` is intentionally NOT re-used from `data.original_job_id`. BullMQ's `addStandardJob`
+ * Lua treats a re-`add` against an existing `jobIdKey` as a `duplicated` event and returns the
+ * existing id without enqueueing a new job; because source queues retain failed jobs for 7 days
+ * under `removeOnFail`, the original key is essentially always present, so re-using it turns
+ * replay into a silent no-op. App-layer idempotency (Stripe ledger, mail outbox, webhook
+ * delivery attempts, notification dispatch markers) is the canonical dedup boundary and is
+ * unaffected by a fresh BullMQ id.
  */
 export async function replayDeadLetterJob(input: {
   deadLetterQueueName: string;
@@ -329,13 +342,8 @@ export async function replayDeadLetterJob(input: {
       connection: getBullMQConnectionOptions(),
     });
     try {
-      await sourceQueue.add(
-        data.original_job_name,
-        payload,
-        omitUndefined({
-          jobId: data.original_job_id ? String(data.original_job_id) : undefined,
-        }),
-      );
+      // Intentionally omit `jobId` — see TSDoc. App-layer idempotency dedups execution.
+      await sourceQueue.add(data.original_job_name, payload);
       await job.remove();
       await recordDlqReplayAuditEntry({
         actorUserPublicId: input.actorUserPublicId,

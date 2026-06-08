@@ -8,12 +8,22 @@ import { resetWebhookOutboundCircuitsForTesting } from '@/domains/notify/sub-dom
 const { deliveryContextFixture } = vi.hoisted(() => ({
   deliveryContextFixture: {
     deliveryAttemptId: 42,
+    // sec-new-B2: opaque public id used as the X-Webhook-Delivery-Id header value.
+    deliveryAttemptPublicId: 'wa0y8vf3ktxqnhcm1ze21',
     webhookId: 1,
     webhookUrl: 'https://example.com/hook',
     encryptedSecret: 'v1:secret',
     eventType: 'webhook.test',
     payload: { ok: true },
     attemptCount: 0,
+    // sec-N1: worker re-checks the parent webhook's live state at claim time.
+    // Mark the fixture explicitly enabled / non-deleted so the happy-path
+    // tests below proceed through the claim → deliver → record sequence.
+    webhookIsEnabled: true,
+    webhookDeletedAt: null as Date | null,
+    // sec-N8: dual-sign fields; null means no rotation overlap → single signature only.
+    encryptedSecretPrevious: null as string | null,
+    secretRotatedAt: null as Date | null,
   },
 }));
 

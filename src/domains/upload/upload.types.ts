@@ -10,10 +10,14 @@ export interface CreateUploadInput {
   fileSize: number;
 }
 
-/** Response body returned by `POST /api/v1/uploads` — presigned URL plus key/expiry metadata. */
+/**
+ * Response body returned by `POST /api/v1/uploads` — presigned URL plus final attach key and
+ * expiry metadata.
+ */
 export interface UploadCreateOutput {
   publicId: string;
   uploadUrl: string;
+  /** Final storage key to pass to attach endpoints after `POST /confirm` succeeds. */
   key: string;
   expiresAt: string;
   /**

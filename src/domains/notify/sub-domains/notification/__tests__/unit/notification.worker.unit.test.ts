@@ -8,6 +8,11 @@ const isMailConfiguredMock = vi.fn();
 const claimNotificationEmailDispatchMock = vi.fn();
 const releaseNotificationEmailDispatchMock = vi.fn();
 
+const withGlobalAdminDatabaseContextMock = vi.fn();
+const withUserDatabaseContextMock = vi.fn();
+const withOrganizationContextMock = vi.fn();
+const createWorkerNotificationRepositoryMock = vi.fn();
+
 vi.mock('@/infrastructure/mail/queues/mail.queue.js', () => ({
   recordOutboxEmail: (...parameters: unknown[]) => recordOutboxEmailMock(...parameters),
   dispatchOutboxEmail: (...parameters: unknown[]) => dispatchOutboxEmailMock(...parameters),
@@ -25,6 +30,24 @@ vi.mock(
 
 vi.mock('@/infrastructure/database/contexts/worker-database.context.js', () => ({
   withSystemTableWorkerContext: (callback: () => Promise<unknown>) => callback(),
+}));
+
+vi.mock('@/infrastructure/database/contexts/global-admin-database.context.js', () => ({
+  withGlobalAdminDatabaseContext: (...parameters: unknown[]) =>
+    withGlobalAdminDatabaseContextMock(...parameters),
+}));
+
+vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
+  withUserDatabaseContext: (...parameters: unknown[]) => withUserDatabaseContextMock(...parameters),
+}));
+
+vi.mock('@/infrastructure/database/contexts/tenant-database.context.js', () => ({
+  withOrganizationContext: (...parameters: unknown[]) => withOrganizationContextMock(...parameters),
+}));
+
+vi.mock('@/domains/notify/sub-domains/notification/notification.repository.js', () => ({
+  createWorkerNotificationRepository: (...parameters: unknown[]) =>
+    createWorkerNotificationRepositoryMock(...parameters),
 }));
 
 vi.mock('@/infrastructure/mail/mail.service.js', () => ({
@@ -109,18 +132,48 @@ describe('notification.worker', () => {
     expect(result).toEqual({ channels: ['email:deduplicated', 'in_app:persisted'] });
   });
 
-  it('releases the dispatch claim and rethrows when enqueue fails so a retry can re-send', async () => {
+  it('keeps the dispatch claim and DOES NOT throw when the BullMQ enqueue fails after the outbox row is persisted', async () => {
+    // sec-Q regression: the outbox row IS the durability commit. Releasing the claim
+    // after a dispatch failure would let a BullMQ retry of THIS notification job INSERT
+    // a SECOND outbox row whose Idempotency-Key=mail-outbox-<newId> differs from row #1's
+    // key, and Resend would accept both — duplicate email at the recipient. The mail-
+    // outbox sweeper re-enqueues stale pending rows, so the notification worker's
+    // responsibility is fulfilled the moment the Postgres row lands.
     dispatchOutboxEmailMock.mockRejectedValueOnce(new Error('redis down'));
+    const repository = createNotificationRepository(buildNotificationRow());
+
+    const result = await processNotificationDispatchJob(
+      10,
+      'organization_public_id',
+      { id: 'job-1' },
+      repository,
+    );
+
+    expect(recordOutboxEmailMock).toHaveBeenCalledTimes(1);
+    expect(dispatchOutboxEmailMock).toHaveBeenCalledTimes(1);
+    expect(releaseNotificationEmailDispatchMock).not.toHaveBeenCalled();
+    // The notification job still reports email:queued because the durability commit
+    // (outbox row) succeeded — only the BullMQ enqueue failed.
+    expect(result.channels).toContain('email:queued');
+  });
+
+  it('releases the dispatch claim and rethrows when the outbox INSERT itself fails so BullMQ can retry', async () => {
+    // The recordOutboxEmail path is the durability commit; if it fails, NO outbox row
+    // exists and the claim must be released so a BullMQ retry can try again. This is the
+    // ONLY failure regime where releasing the claim is safe.
+    recordOutboxEmailMock.mockRejectedValueOnce(new Error('postgres down'));
     const repository = createNotificationRepository(buildNotificationRow());
 
     await expect(
       processNotificationDispatchJob(10, 'organization_public_id', { id: 'job-1' }, repository),
-    ).rejects.toThrow('redis down');
+    ).rejects.toThrow('postgres down');
 
     expect(releaseNotificationEmailDispatchMock).toHaveBeenCalledWith({
       notificationId: 10,
       recipient: 'user@example.com',
     });
+    // Dispatch was never reached because the INSERT failed first.
+    expect(dispatchOutboxEmailMock).not.toHaveBeenCalled();
   });
 
   it('escapes untrusted notification fields and drops unsafe action URLs in the email HTML', async () => {
@@ -178,5 +231,96 @@ describe('notification.worker', () => {
     await expect(
       processNotificationDispatchJob(999, null, { id: 'job-1' }, repository),
     ).rejects.toThrow('notification.not_found:999');
+  });
+
+  describe('sec-re-01: tenant-less notifications enter loadNotificationForScope', () => {
+    // The sec-D #10 fix added a `loadNotificationForScope` flow that pins
+    // `withUserDatabaseContext` for tenant-less notifications (instead of the prior
+    // `runGlobalRetentionWorkerJob` retention GUC). The sec-re-01 regression caught
+    // that the worker wiring still injected a repository, which short-circuited the
+    // new flow at `notificationRepository !== undefined` so production behavior was
+    // unchanged from before PR #450. These tests pin the recipient-resolution and
+    // narrow-context behavior so future wiring changes can't silently re-introduce
+    // the dead-code path.
+    beforeEach(() => {
+      withGlobalAdminDatabaseContextMock.mockReset();
+      withUserDatabaseContextMock.mockReset();
+      withOrganizationContextMock.mockReset();
+      createWorkerNotificationRepositoryMock.mockReset();
+
+      withGlobalAdminDatabaseContextMock.mockImplementation(
+        async (callback: (handle: unknown) => Promise<unknown>) => callback({}),
+      );
+      withUserDatabaseContextMock.mockImplementation(
+        async (_userPublicId: string, callback: (handle: unknown) => Promise<unknown>) =>
+          callback({}),
+      );
+      withOrganizationContextMock.mockImplementation(
+        async (_organizationPublicId: string, callback: (handle: unknown) => Promise<unknown>) =>
+          callback({}),
+      );
+    });
+
+    it('resolves the recipient user public id under global_admin scope and pins withUserDatabaseContext', async () => {
+      const findUserPublicIdMock = vi.fn().mockResolvedValue('usr_public_id_42');
+      const findByIdMock = vi.fn().mockResolvedValue(buildNotificationRow({ data: {} }));
+      createWorkerNotificationRepositoryMock.mockReturnValue({
+        findUserPublicIdForNotificationDispatch: findUserPublicIdMock,
+        findByIdForDispatch: findByIdMock,
+      });
+
+      const result = await processNotificationDispatchJob(
+        42,
+        null,
+        { id: 'job-1', requestId: 'req-1' },
+        // NB: no 4th argument — this is the wiring shape after sec-re-01.
+      );
+
+      expect(withGlobalAdminDatabaseContextMock).toHaveBeenCalledTimes(1);
+      expect(findUserPublicIdMock).toHaveBeenCalledWith(42);
+      expect(withUserDatabaseContextMock).toHaveBeenCalledWith(
+        'usr_public_id_42',
+        expect.any(Function),
+      );
+      expect(findByIdMock).toHaveBeenCalledWith(42, null);
+      // No tenant scope means withOrganizationContext is never touched.
+      expect(withOrganizationContextMock).not.toHaveBeenCalled();
+      expect(result).toEqual({ channels: ['in_app:persisted'] });
+    });
+
+    it('throws notification.user_unknown when the SECURITY DEFINER lookup returns null', async () => {
+      createWorkerNotificationRepositoryMock.mockReturnValue({
+        findUserPublicIdForNotificationDispatch: vi.fn().mockResolvedValue(null),
+        findByIdForDispatch: vi.fn(),
+      });
+
+      await expect(processNotificationDispatchJob(999, null, { id: 'job-1' })).rejects.toThrow(
+        'notification.user_unknown:999',
+      );
+    });
+
+    it('uses withOrganizationContext (not the user-scope path) when organizationPublicId is set and no repo is injected', async () => {
+      const findByIdMock = vi.fn().mockResolvedValue(buildNotificationRow({ data: {} }));
+      createWorkerNotificationRepositoryMock.mockReturnValue({
+        findUserPublicIdForNotificationDispatch: vi.fn(),
+        findByIdForDispatch: findByIdMock,
+      });
+
+      await processNotificationDispatchJob(
+        7,
+        'organization_public_id',
+        { id: 'job-1' },
+        // No injected repo — exercises loadNotificationForScope's tenant branch.
+      );
+
+      expect(withOrganizationContextMock).toHaveBeenCalledWith(
+        'organization_public_id',
+        expect.any(Function),
+      );
+      // The global-admin / user pair are exclusive to the tenant-less branch.
+      expect(withGlobalAdminDatabaseContextMock).not.toHaveBeenCalled();
+      expect(withUserDatabaseContextMock).not.toHaveBeenCalled();
+      expect(findByIdMock).toHaveBeenCalledWith(7, 'organization_public_id');
+    });
   });
 });

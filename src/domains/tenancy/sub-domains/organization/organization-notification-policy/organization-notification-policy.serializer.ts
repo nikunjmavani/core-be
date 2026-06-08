@@ -14,7 +14,10 @@ export function serializeOrganizationNotificationPolicy(
   organization_public_id: string,
 ): OrganizationNotificationPolicyOutput {
   return {
-    id: row.id,
+    // sec-T5: emit the 21-char public_id, NOT the internal bigserial. The
+    // schema already provisions public_id and the unique index keeps the
+    // lookup O(1).
+    id: row.public_id,
     organization_id: organization_public_id,
     notification_type: row.notification_type,
     channel: row.channel,

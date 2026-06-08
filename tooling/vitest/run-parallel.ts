@@ -31,6 +31,7 @@ type Lane = {
   /** Lanes that run sequentially together — useful when DB cleanup races would happen across forks. */
   serial?: boolean;
 };
+type LaneResult = { name: string; code: number; ms: number };
 
 const COVERAGE_FLAG = '--coverage';
 const COVERAGE_DISABLE_THRESHOLD_FLAGS = [
@@ -86,6 +87,31 @@ function buildLaneArgs(lane: Lane): string[] {
   ];
 }
 
+function splitSerialProjectArgs(lane: Lane): string[][] {
+  if (!lane.serial) return [buildLaneArgs(lane)];
+
+  const command = lane.args[0] ?? 'run';
+  const projects: string[] = [];
+  for (let index = 0; index < lane.args.length; index += 1) {
+    const project = lane.args[index + 1];
+    if (lane.args[index] === '--project' && project) {
+      projects.push(project);
+    }
+  }
+  if (projects.length === 0) return [buildLaneArgs(lane)];
+
+  return projects.map((project) => {
+    const args = [command, '--project', project];
+    if (!coverageEnabled) return args;
+    return [
+      ...args,
+      COVERAGE_FLAG,
+      `--coverage.reportsDirectory=coverage-${lane.name}-${project}`,
+      ...COVERAGE_DISABLE_THRESHOLD_FLAGS,
+    ];
+  });
+}
+
 function runChild(
   prefix: string,
   command: string,
@@ -119,17 +145,31 @@ function runChild(
   });
 }
 
-async function runLane(lane: Lane): Promise<{ name: string; code: number; ms: number }> {
-  const result = await runChild(`[${lane.name}]`, 'pnpm', [
-    'exec',
-    'vitest',
-    ...buildLaneArgs(lane),
-  ]);
-  return { name: lane.name, ...result };
+async function runLane(lane: Lane): Promise<LaneResult[]> {
+  const results: LaneResult[] = [];
+  const serialArgs = splitSerialProjectArgs(lane);
+
+  for (const args of serialArgs) {
+    const projectName = lane.serial
+      ? (args[args.indexOf('--project') + 1] ?? lane.name)
+      : lane.name;
+    const result = await runChild(`[${lane.name}]`, 'pnpm', ['exec', 'vitest', ...args]);
+    results.push({ name: lane.serial ? `${lane.name}:${projectName}` : lane.name, ...result });
+    if (result.code !== 0) break;
+  }
+
+  return results;
 }
 
 async function runMergedCoverageGate(): Promise<number> {
-  const shardInputs = LANES.map((lane) => `coverage-${lane.name}/coverage-final.json`);
+  const shardInputs = LANES.flatMap((lane) => {
+    if (!lane.serial) return [`coverage-${lane.name}/coverage-final.json`];
+    const projectArgs = splitSerialProjectArgs(lane);
+    return projectArgs.map((args) => {
+      const projectName = args[args.indexOf('--project') + 1] ?? lane.name;
+      return `coverage-${lane.name}-${projectName}/coverage-final.json`;
+    });
+  });
   const mergeScript = resolve(process.cwd(), 'tooling/ci/merge-coverage-and-check-thresholds.mjs');
   const args = [mergeScript, ...shardInputs, '--output', 'coverage/coverage-final.json'];
   const result = await runChild('[coverage-gate]', process.execPath, args);
@@ -138,12 +178,12 @@ async function runMergedCoverageGate(): Promise<number> {
 
 async function main(): Promise<void> {
   const overallStart = performance.now();
-  const results: Array<{ name: string; code: number; ms: number }> = [];
+  const results: LaneResult[] = [];
 
   for (const lane of LANES) {
-    const result = await runLane(lane);
-    results.push(result);
-    if (result.code !== 0) {
+    const laneResults = await runLane(lane);
+    results.push(...laneResults);
+    if (laneResults.some((result) => result.code !== 0)) {
       break;
     }
   }

@@ -38,7 +38,12 @@ vi.mock('@/shared/config/env.config.js', () => {
 
 function mockRequest(overrides: Record<string, unknown> = {}): never {
   return {
-    auth: { kind: 'user' as const, userId: generatePublicId(), role: 'user' },
+    auth: {
+      kind: 'user' as const,
+      userId: generatePublicId(),
+      role: 'user',
+      sessionPublicId: generatePublicId(),
+    },
     params: {},
     body: {},
     query: {},
@@ -119,7 +124,14 @@ describe('createAuthController', () => {
 
   const mfaService = {
     verify: vi.fn().mockResolvedValue({ verified: true }),
-    enroll: vi.fn().mockResolvedValue({ secret: 'secret', provisioning_uri: 'uri', method_id: 1 }),
+    // sec-A finding #3: two-phase enrollment. `enrollInit` stages the secret in Redis and
+    // returns only `{ secret, provisioning_uri }`; `enrollConfirm` verifies a code and
+    // returns the freshly minted plaintext recovery codes plus the method_id.
+    enrollInit: vi.fn().mockResolvedValue({ secret: 'secret', provisioning_uri: 'uri' }),
+    enrollConfirm: vi.fn().mockResolvedValue({
+      recovery_codes: ['CODE1', 'CODE2'],
+      method_public_id: 'testmethodpub000000a',
+    }),
     verifyLoginMfa: vi.fn().mockResolvedValue({
       access_token: 'token',
       session_public_id: 'session',
@@ -133,6 +145,7 @@ describe('createAuthController', () => {
     list: vi.fn().mockResolvedValue([]),
     revoke: vi.fn().mockResolvedValue(undefined),
     revokeAllSessions: vi.fn().mockResolvedValue(undefined),
+    revokeAllSessionsExceptCurrent: vi.fn().mockResolvedValue(undefined),
   };
 
   const webauthnService = {
@@ -214,6 +227,8 @@ describe('createAuthController', () => {
   it('MFA handlers delegate to mfa service', async () => {
     const loginReply = mockReply();
     await controller.enrollMfa(mockRequest({ body: { method_type: 'MFA_TOTP' } }), mockReply());
+    // sec-A finding #3: confirm is a separate handler at POST /auth/mfa/enroll/confirm.
+    await controller.confirmEnrollMfa(mockRequest({ body: { code: '123456' } }), mockReply());
     await controller.verifyMfa(mockRequest({ body: { code: '123456' } }), mockReply());
     await controller.verifyMfaLogin(
       mockRequest({ body: { mfa_session_token: 'session-token', totp_code: '123456' } }),
@@ -222,7 +237,8 @@ describe('createAuthController', () => {
     await controller.listMfaMethods(mockRequest(), mockReply());
     const deleteReply = mockReply();
     await controller.deleteMfa(mockRequest({ params: { mfaMethodId: '5' } }), deleteReply);
-    expect(mfaService.enroll).toHaveBeenCalled();
+    expect(mfaService.enrollInit).toHaveBeenCalled();
+    expect(mfaService.enrollConfirm).toHaveBeenCalled();
     expect(mfaService.verifyLoginMfa).toHaveBeenCalled();
     expect(deleteReply.code).toHaveBeenCalledWith(204);
   });
@@ -248,7 +264,10 @@ describe('createAuthController', () => {
     await controller.listAuthMethods(mockRequest(), mockReply());
     await controller.createAuthMethod(mockRequest({ body: { type: 'password' } }), mockReply());
     const deleteMethodReply = mockReply();
-    await controller.deleteAuthMethod(mockRequest({ params: { id: '1' } }), deleteMethodReply);
+    await controller.deleteAuthMethod(
+      mockRequest({ params: { publicId: 'testpublicid12345678a' } }),
+      deleteMethodReply,
+    );
     await controller.listSessions(mockRequest(), mockReply());
     const revokeReply = mockReply();
     await controller.revokeSession(
@@ -300,9 +319,9 @@ describe('createAuthController', () => {
     );
   });
 
-  it('deleteAuthMethod rejects invalid id param', async () => {
+  it('deleteAuthMethod rejects invalid publicId param (too short)', async () => {
     await expect(
-      controller.deleteAuthMethod(mockRequest({ params: { id: '0' } }), mockReply()),
+      controller.deleteAuthMethod(mockRequest({ params: { publicId: '0' } }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -409,6 +428,34 @@ describe('createAuthController', () => {
     expect(reply.status).toHaveBeenCalledWith(501);
   });
 
+  // sec-new-A3: DELETE /me/sessions must preserve the caller's current session.
+  it('revokeAllSessions calls revokeAllSessionsExceptCurrent with bearer token and skips revokeAllSessions (sec-new-A3)', async () => {
+    const reply = mockReply();
+    await controller.revokeAllSessions(
+      mockRequest({
+        headers: { authorization: 'Bearer current-session-token', 'user-agent': 'vitest' },
+      }),
+      reply,
+    );
+    expect(authSessionService.revokeAllSessionsExceptCurrent).toHaveBeenCalledWith({
+      userPublicId: expect.any(String),
+      currentAccessToken: 'current-session-token',
+    });
+    expect(authSessionService.revokeAllSessions).not.toHaveBeenCalled();
+    expect(reply.clearCookie).toHaveBeenCalled();
+  });
+
+  it('revokeAllSessions falls back to empty token when Authorization header is absent (sec-new-A3)', async () => {
+    vi.mocked(authSessionService.revokeAllSessionsExceptCurrent).mockClear();
+    const reply = mockReply();
+    await controller.revokeAllSessions(mockRequest(), reply);
+    expect(authSessionService.revokeAllSessionsExceptCurrent).toHaveBeenCalledWith({
+      userPublicId: expect.any(String),
+      currentAccessToken: '',
+    });
+    expect(reply.clearCookie).toHaveBeenCalled();
+  });
+
   it('verifyEmail uses i18next fallback when request.t is absent', async () => {
     const responsePayload = await controller.verifyEmail(
       mockRequest({ body: { token: 'verify' }, t: undefined }),
@@ -470,9 +517,12 @@ describe('createAuthController', () => {
     expect(reply.setCookie).not.toHaveBeenCalled();
   });
 
-  it('deleteAuthMethod rejects non-integer id param', async () => {
+  it('deleteAuthMethod rejects publicId with wrong format (uppercase)', async () => {
     await expect(
-      controller.deleteAuthMethod(mockRequest({ params: { id: 'abc' } }), mockReply()),
+      controller.deleteAuthMethod(
+        mockRequest({ params: { publicId: 'INVALIDFORMAT123456789' } }),
+        mockReply(),
+      ),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 

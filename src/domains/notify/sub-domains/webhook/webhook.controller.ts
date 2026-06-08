@@ -8,7 +8,7 @@ import {
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { WebhookService } from './webhook.service.js';
-import { WebhookSerializer } from './webhook.serializer.js';
+import { WebhookDeliveryAttemptSerializer } from './webhook.serializer.js';
 import {
   validateListWebhookDeliveryAttemptsQuery,
   validateListWebhooksQuery,
@@ -60,14 +60,15 @@ function createListDeliveryAttemptsHandler(service: WebhookService) {
     const result = await service.listDeliveryAttempts(
       omitUndefined({
         organization_public_id: validatePublicIdParam(request.params.id, 'id'),
-        webhook_public_id: request.params.webhookId,
+        // sec-new-N1: reject malformed webhookId before reaching the service layer.
+        webhook_public_id: validatePublicIdParam(request.params.webhookId, 'webhookId'),
         after: parsed.after,
         limit: parsed.limit,
         include_total: parsed.include_total === 'true',
       }),
     );
     return paginatedResponse(
-      WebhookSerializer.many(result.items),
+      WebhookDeliveryAttemptSerializer.many(result.items),
       getRequestIdentifier(request),
       buildCursorPaginationMetadata(result),
     );
@@ -87,11 +88,15 @@ export function createWebhookController(service: WebhookService) {
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
+      // sec-new-N1: reject malformed webhookId before reaching the service layer.
       const data = await service.get(
         validatePublicIdParam(request.params.id, 'id'),
-        request.params.webhookId,
+        validatePublicIdParam(request.params.webhookId, 'webhookId'),
       );
-      return successResponse(WebhookSerializer.one(data), getRequestIdentifier(request));
+      // sec-T #17: service already returns the serialized public shape (id, url,
+      // events, is_enabled, ...). Re-running WebhookSerializer.one over it would
+      // double-serialize and (with the typed projection) reject the input shape.
+      return successResponse(data, getRequestIdentifier(request));
     },
     createWebhook: async (
       request: FastifyRequest<{ Params: { id: string } }>,
@@ -103,29 +108,31 @@ export function createWebhookController(service: WebhookService) {
         request.body,
         getActingUserPublicId(auth),
       );
-      return successResponse(WebhookSerializer.one(data), getRequestIdentifier(request));
+      return successResponse(data, getRequestIdentifier(request));
     },
     updateWebhook: async (
       request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
       _reply: FastifyReply,
     ) => {
       const auth = requirePrincipal(request);
+      // sec-new-N1: reject malformed webhookId before reaching the service layer.
       const data = await service.update(
         validatePublicIdParam(request.params.id, 'id'),
-        request.params.webhookId,
+        validatePublicIdParam(request.params.webhookId, 'webhookId'),
         request.body,
         getActingUserPublicId(auth),
       );
-      return successResponse(WebhookSerializer.one(data), getRequestIdentifier(request));
+      return successResponse(data, getRequestIdentifier(request));
     },
     deleteWebhook: async (
       request: FastifyRequest<{ Params: { id: string; webhookId: string } }>,
       reply: FastifyReply,
     ) => {
       requirePrincipal(request);
+      // sec-new-N1: reject malformed webhookId before reaching the service layer.
       await service.delete(
         validatePublicIdParam(request.params.id, 'id'),
-        request.params.webhookId,
+        validatePublicIdParam(request.params.webhookId, 'webhookId'),
       );
       return reply.code(204).send();
     },
@@ -135,12 +142,16 @@ export function createWebhookController(service: WebhookService) {
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
+      // sec-new-N1: reject malformed webhookId before reaching the service layer.
       const data = await service.testWebhook({
         organization_public_id: validatePublicIdParam(request.params.id, 'id'),
-        webhook_public_id: request.params.webhookId,
+        webhook_public_id: validatePublicIdParam(request.params.webhookId, 'webhookId'),
         requestId: getRequestIdentifier(request),
       });
-      return successResponse(WebhookSerializer.one(data), getRequestIdentifier(request));
+      // sec-T #17: testWebhook returns its own shape (success/status_code/delivered_at/
+      // response_body), NOT a webhook row — return it directly without re-running
+      // WebhookSerializer.one over it.
+      return successResponse(data, getRequestIdentifier(request));
     },
   };
 }

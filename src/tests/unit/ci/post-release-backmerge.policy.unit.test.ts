@@ -32,17 +32,17 @@ describe('post-release back-merge workflow policy', () => {
     expect(workflow).not.toMatch(/secrets\.GITHUB_PAT|secrets\.PERSONAL_ACCESS_TOKEN/i);
   });
 
-  it('only edits manifest.dev.json (no other release files or sources touched)', () => {
+  it('only edits the dev release seed files (no stable release files or sources touched)', () => {
     const workflow = readFileSync(BACKMERGE_WORKFLOW, 'utf8');
     const gitAddMatches = workflow.match(/git add (?:--[A-Za-z-]+ )*(\S+)/g) ?? [];
     expect(gitAddMatches.length).toBeGreaterThan(0);
+    expect(workflow).toMatch(/git add .*manifest\.dev\.json.*package\.json/);
     for (const match of gitAddMatches) {
       expect(match, `unexpected file added by back-merge workflow: ${match}`).toMatch(
-        /manifest\.dev\.json$/,
+        /(?:manifest\.dev\.json|package\.json)$/,
       );
     }
     expect(workflow).not.toMatch(/git add\s+.*manifest\.json[^.]/);
-    expect(workflow).not.toMatch(/git add\s+.*package\.json/);
     expect(workflow).not.toMatch(/git add\s+.*CHANGELOG/);
   });
 
@@ -52,7 +52,7 @@ describe('post-release back-merge workflow policy', () => {
     expect(workflow).toContain('git fetch origin main');
     expect(workflow).toMatch(/git merge[^\n]*origin\/main/);
     expect(workflow).toMatch(/branch="release\/backmerge-v\$\{VERSION\}"/);
-    expect(workflow).toMatch(/git push origin "\$\{branch\}"/);
+    expect(workflow).toMatch(/git push --force-with-lease origin "\$\{branch\}"/);
   });
 
   it('opens a PR to dev and enables auto-merge (idempotent)', () => {

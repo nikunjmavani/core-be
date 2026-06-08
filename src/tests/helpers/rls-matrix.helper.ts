@@ -74,6 +74,13 @@ export const RLS_MATRIX_SKIP_CRUD_TABLES = new Set([
   tableKey('tenancy', 'organization_settings'),
   tableKey('notify', 'webhook_delivery_attempts'),
   tableKey('auth', 'verification_tokens'),
+  // sec-U3: audit.logs is append-only — REVOKE UPDATE causes UPDATE to throw
+  // `permission denied` (instead of silently affecting 0 rows), and DELETE
+  // outside the retention context silently affects 0 rows but the matrix's
+  // SELECT-then-UPDATE-then-DELETE shape doesn't fit. The audit-append-only
+  // dedicated test file (audit-append-only.security.test.ts) covers both
+  // semantics precisely.
+  tableKey('audit', 'logs'),
 ]);
 
 export async function grantCoreBeAppRoleForTests(): Promise<void> {
@@ -490,6 +497,7 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
   const [authMethodA] = await database
     .insert(auth_methods)
     .values({
+      public_id: generatePublicId(),
       user_id: userA.id,
       method_type: 'OAUTH',
       provider: oauthProvider,
@@ -499,7 +507,12 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
     .returning();
   const [authMethodB] = await database
     .insert(auth_methods)
-    .values({ user_id: userB.id, method_type: 'PASSWORD', is_primary: true })
+    .values({
+      public_id: generatePublicId(),
+      user_id: userB.id,
+      method_type: 'PASSWORD',
+      is_primary: true,
+    })
     .returning();
   rowIdsByTable.set(tableKey('auth', 'auth_methods'), {
     userA: authMethodA!.id,

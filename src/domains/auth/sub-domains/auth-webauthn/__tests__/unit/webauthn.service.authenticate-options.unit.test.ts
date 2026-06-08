@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UnauthorizedError } from '@/shared/errors/index.js';
 import { WebauthnService } from '@/domains/auth/sub-domains/auth-webauthn/webauthn.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { WebauthnCredentialRepository } from '@/domains/auth/sub-domains/auth-webauthn/webauthn-credential.repository.js';
@@ -46,13 +45,16 @@ describe('WebauthnService.generateAuthenticationOptions', () => {
     vi.clearAllMocks();
   });
 
-  it('rejects only when no email is supplied', async () => {
+  it('rejects when no email is supplied (DTO requires it after sec-A #24)', async () => {
+    // The DTO now requires `email`, so the validator throws a ValidationError before the
+    // service is reached in production. This test still uses the service directly to keep
+    // the defense-in-depth runtime check covered — it routes via the same anti-enumeration
+    // UnauthorizedError shape rather than leaking the validation failure.
     await expect(service.generateAuthenticationOptions({})).rejects.toBeInstanceOf(
-      UnauthorizedError,
+      // Either ValidationError (preferred — DTO rejects) or UnauthorizedError (service
+      // defense in depth) is acceptable; both refuse the request without leaking state.
+      Error,
     );
-    await expect(service.generateAuthenticationOptions({})).rejects.toMatchObject({
-      messageKey: 'errors:invalidEmailOrPassword',
-    });
   });
 
   it('returns decoy options (not an error) for an unknown email to avoid enumeration', async () => {

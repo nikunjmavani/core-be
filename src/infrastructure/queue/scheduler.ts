@@ -4,6 +4,7 @@
  */
 
 import { Queue } from 'bullmq';
+import { SEVEN_DAYS_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retention.constants.js';
 import { NOTIFICATION_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/workers/notification-retention.constants.js';
@@ -94,7 +95,8 @@ function getTombstoneRetentionScheduledJobs(timezone: string | undefined): Sched
       queueName: USER_DATA_EXPORT_RETENTION_QUEUE_NAME,
       schedulerId: 'daily-user-data-export-retention',
       jobName: 'purge-expired-user-data-exports',
-      cronPattern: DEFAULT_USER_DATA_EXPORT_RETENTION_CRON,
+      // sec-new-Q1: allow operators to override the default schedule via env.
+      cronPattern: env.USER_DATA_EXPORT_RETENTION_CRON ?? DEFAULT_USER_DATA_EXPORT_RETENTION_CRON,
     }),
     withSchedulerTimezone(timezone, {
       queueName: UPLOAD_TOMBSTONE_RETENTION_QUEUE_NAME,
@@ -217,7 +219,8 @@ export function getScheduledJobs(): ScheduledJob[] {
       queueName: COMMIT_DISPATCH_RECOVERY_QUEUE_NAME,
       schedulerId: 'commit-dispatch-recovery',
       jobName: 'replay-stale-commit-dispatch',
-      cronPattern: DEFAULT_COMMIT_DISPATCH_RECOVERY_CRON,
+      // sec-new-Q1: allow operators to override the default schedule via env.
+      cronPattern: env.COMMIT_DISPATCH_RECOVERY_CRON ?? DEFAULT_COMMIT_DISPATCH_RECOVERY_CRON,
     }),
     withSchedulerTimezone(timezone, {
       queueName: MAIL_OUTBOX_SWEEPER_QUEUE_NAME,
@@ -240,6 +243,18 @@ export function getScheduledJobs(): ScheduledJob[] {
     }),
   ];
 }
+
+/**
+ * sec-Q1: bounded retention for cron-driven queues. The event-driven queues
+ * already set similar `defaultJobOptions`; without this, minute-cadence
+ * crons grew Redis indefinitely. Numbers chosen to leave enough recent
+ * history for debugging while staying inside maxmemory on a small shared
+ * instance.
+ */
+const SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS = {
+  removeOnComplete: { count: 100, age: SEVEN_DAYS_SECONDS },
+  removeOnFail: { count: 200, age: SEVEN_DAYS_SECONDS },
+} as const;
 
 /**
  * Options for {@link registerScheduledJobs}. Used by split worker services to avoid
@@ -275,9 +290,31 @@ export async function registerScheduledJobs(
       : allJobs.filter((job) => options.activeQueueNames?.has(job.queueName));
   const queues: Queue[] = [];
 
+  // Group canonical scheduler ids by queue name so the reconciliation step can drop any
+  // schedulers in Redis whose id is no longer in the canonical set. Without this, a rename
+  // (or removal) of a `schedulerId` leaves the OLD scheduler firing in Redis forever
+  // alongside the new one — the in-code registry audit never reads Redis state and would
+  // not detect it.
+  const canonicalSchedulerIdsByQueueName = new Map<string, Set<string>>();
+  for (const job of jobs) {
+    const existing = canonicalSchedulerIdsByQueueName.get(job.queueName);
+    if (existing) {
+      existing.add(job.schedulerId);
+    } else {
+      canonicalSchedulerIdsByQueueName.set(job.queueName, new Set([job.schedulerId]));
+    }
+  }
+
   try {
     for (const job of jobs) {
-      const queue = new Queue(job.queueName, { connection });
+      // sec-Q1: bounded retention on cron-driven queues. Without this,
+      // 17 cron queues each piling completed/failed jobs forever grows
+      // Redis indefinitely and eventually exhausts maxmemory on a shared
+      // cache+BullMQ instance.
+      const queue = new Queue(job.queueName, {
+        connection,
+        defaultJobOptions: SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS,
+      });
       queues.push(queue);
       await queue.upsertJobScheduler(
         job.schedulerId,
@@ -285,7 +322,7 @@ export async function registerScheduledJobs(
           pattern: job.cronPattern,
           ...(job.timezone !== undefined ? { tz: job.timezone } : {}),
         },
-        { name: job.jobName },
+        { name: job.jobName, opts: SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS },
       );
       logger.info(
         {
@@ -295,6 +332,30 @@ export async function registerScheduledJobs(
         },
         'scheduler.job.registered',
       );
+    }
+
+    // Drop orphan schedulers — any Redis scheduler whose id is not in the canonical set
+    // for its queue is a rename or removal residue, and BullMQ will otherwise keep firing
+    // it forever (doubling cron rate after rename, firing into a worker-less queue after
+    // removal). We close+reopen per queue rather than holding all queues open at once.
+    for (const [queueName, canonicalIds] of canonicalSchedulerIdsByQueueName) {
+      const queueForReconcile = new Queue(queueName, {
+        connection,
+        defaultJobOptions: SCHEDULED_QUEUE_DEFAULT_JOB_OPTIONS,
+      });
+      try {
+        // getJobSchedulers takes pagination args; first 1000 schedulers per queue is
+        // far above any realistic count for this app.
+        const existingSchedulers = await queueForReconcile.getJobSchedulers(0, 1000);
+        for (const existing of existingSchedulers) {
+          if (!canonicalIds.has(existing.key)) {
+            await queueForReconcile.removeJobScheduler(existing.key);
+            logger.warn({ queueName, schedulerId: existing.key }, 'scheduler.orphan.removed');
+          }
+        }
+      } finally {
+        await queueForReconcile.close();
+      }
     }
   } catch (error) {
     await Promise.allSettled(queues.map((queue) => queue.close()));

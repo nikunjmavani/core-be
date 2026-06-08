@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { createSubscriptionController } from '@/domains/billing/sub-domains/subscription/subscription.controller.js';
+import { ValidationError } from '@/shared/errors/index.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
 
@@ -119,5 +120,78 @@ describe('createSubscriptionController', () => {
       subscriptionPublicId,
       'idem-key-123456789012',
     );
+  });
+
+  // sec-B10: every handler validated `id` but threaded `subscriptionId` raw.
+  // Not an IDOR (the service uses exact-match WHERE), but attacker-controlled
+  // free-form input would otherwise flow into Sentry breadcrumbs / log payloads
+  // / metric labels — a small cardinality + content-exfiltration foot-gun that
+  // accumulates over time. Each mutating handler must refuse a malformed
+  // `subscriptionId` at the boundary, well before it can reach observability.
+  describe('subscriptionId path-param validation (sec-B10)', () => {
+    const malformedSubscriptionId = '‮"><script>alert(1)</script>';
+
+    it.each([
+      [
+        'getSubscription',
+        async () => {
+          await controller.getSubscription(
+            mockRequest({
+              params: { id: organizationPublicId, subscriptionId: malformedSubscriptionId },
+            }),
+            mockReply(),
+          );
+        },
+      ],
+      [
+        'updateSubscription',
+        async () => {
+          await controller.updateSubscription(
+            mockRequest({
+              params: { id: organizationPublicId, subscriptionId: malformedSubscriptionId },
+            }),
+            mockReply(),
+          );
+        },
+      ],
+      [
+        'changePlan',
+        async () => {
+          await controller.changePlan(
+            mockRequest({
+              params: { id: organizationPublicId, subscriptionId: malformedSubscriptionId },
+              headers: { 'idempotency-key': 'idem-key-123456789012' },
+            }),
+            mockReply(),
+          );
+        },
+      ],
+      [
+        'cancelSubscription',
+        async () => {
+          await controller.cancelSubscription(
+            mockRequest({
+              params: { id: organizationPublicId, subscriptionId: malformedSubscriptionId },
+              headers: { 'idempotency-key': 'idem-key-123456789012' },
+            }),
+            mockReply(),
+          );
+        },
+      ],
+      [
+        'resumeSubscription',
+        async () => {
+          await controller.resumeSubscription(
+            mockRequest({
+              params: { id: organizationPublicId, subscriptionId: malformedSubscriptionId },
+              headers: { 'idempotency-key': 'idem-key-123456789012' },
+            }),
+            mockReply(),
+          );
+        },
+      ],
+    ])('refuses a malformed subscriptionId in %s', async (_name, invoke) => {
+      await expect(invoke()).rejects.toBeInstanceOf(ValidationError);
+    });
   });
 });

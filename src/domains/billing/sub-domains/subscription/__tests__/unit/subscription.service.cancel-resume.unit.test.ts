@@ -6,7 +6,7 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
-import { NotFoundError } from '@/shared/errors/index.js';
+import { NotFoundError, UnprocessableEntityError } from '@/shared/errors/index.js';
 import { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
@@ -118,7 +118,7 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
     expect(repository.update).not.toHaveBeenCalled();
   });
 
-  it('resume calls Stripe and clears cancel_at_period_end / sets status ACTIVE', async () => {
+  it('resume calls Stripe and clears cancel_at_period_end without force-writing status (sec-B4)', async () => {
     const { service, repository, paymentProvider } = context;
 
     await service.resume('org_public', 'sub_public');
@@ -127,8 +127,13 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
     expect(repository.update).toHaveBeenCalledWith(
       'sub_public',
       organization.id,
-      expect.objectContaining({ cancel_at_period_end: false, status: 'ACTIVE' }),
+      expect.objectContaining({ cancel_at_period_end: false }),
     );
+    // sec-B4: status is no longer force-written; the Stripe webhook reconciles it.
+    // sec-B3: HTTP mutations stamp the watermark so a stale Stripe event cannot regress.
+    const updatePayload = vi.mocked(repository.update).mock.calls[0]![2];
+    expect(updatePayload.status).toBeUndefined();
+    expect(updatePayload.last_stripe_event_created_at).toBeInstanceOf(Date);
   });
 
   it('changePlan does not call paymentProvider when subscription has no provider id', async () => {
@@ -142,5 +147,57 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
 
     expect(paymentProvider.updateSubscriptionPrice).not.toHaveBeenCalled();
     expect(repository.update).toHaveBeenCalled();
+  });
+
+  // sec-new-B1: terminal-status guard prevents Stripe calls on CANCELED / INCOMPLETE_EXPIRED
+  it.each([
+    ['CANCELED'],
+    ['INCOMPLETE_EXPIRED'],
+  ] as const)('cancel throws UnprocessableEntityError for terminal status %s (sec-new-B1)', async (terminalStatus) => {
+    const { service, repository, paymentProvider } = context;
+    vi.mocked(repository.findByPublicId).mockResolvedValueOnce({
+      ...baseSubscriptionRow,
+      status: terminalStatus,
+    } as never);
+
+    await expect(service.cancel('org_public', 'sub_public')).rejects.toBeInstanceOf(
+      UnprocessableEntityError,
+    );
+    expect(paymentProvider.cancelSubscriptionAtPeriodEnd).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['CANCELED'],
+    ['INCOMPLETE_EXPIRED'],
+  ] as const)('resume throws UnprocessableEntityError for terminal status %s (sec-new-B1)', async (terminalStatus) => {
+    const { service, repository, paymentProvider } = context;
+    vi.mocked(repository.findByPublicId).mockResolvedValueOnce({
+      ...baseSubscriptionRow,
+      status: terminalStatus,
+    } as never);
+
+    await expect(service.resume('org_public', 'sub_public')).rejects.toBeInstanceOf(
+      UnprocessableEntityError,
+    );
+    expect(paymentProvider.resumeSubscription).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['CANCELED'],
+    ['INCOMPLETE_EXPIRED'],
+  ] as const)('changePlan throws UnprocessableEntityError for terminal status %s (sec-new-B1)', async (terminalStatus) => {
+    const { service, repository, paymentProvider } = context;
+    vi.mocked(repository.findByPublicId).mockResolvedValueOnce({
+      ...baseSubscriptionRow,
+      status: terminalStatus,
+    } as never);
+
+    await expect(
+      service.changePlan('org_public', 'sub_public', { plan_id: 'plan_public' }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
+    expect(paymentProvider.updateSubscriptionPrice).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
   });
 });

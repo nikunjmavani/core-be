@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 import { captchaPreHandler } from '@/shared/middlewares/security/captcha.middleware.js';
 import { requireRecentStepUpPreHandler } from '@/shared/middlewares/core/recent-step-up.middleware.js';
 import {
@@ -10,13 +11,14 @@ import {
 } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { createAuthController } from './auth.controller.js';
 import {
-  authMethodIdParamsDto,
+  authMethodPublicIdParamsDto,
   ChangePasswordDto,
   CreateAuthMethodDto,
   ForgotPasswordDto,
   LoginDto,
   MagicLinkSendDto,
   MagicLinkVerifyDto,
+  MfaEnrollConfirmDto,
   MfaEnrollDto,
   MfaLoginVerifyDto,
   MfaVerifyDto,
@@ -169,6 +171,11 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/mfa/login',
     {
       ...STRICT_PUBLIC_RATE_LIMIT,
+      // sec-new-A1: add bot-protection at the MFA step. The mfa_session_token is
+      // single-use (GETDEL), so per-email rate-limiting is already enforced at
+      // POST /auth/login (which mints the token). Captcha here adds a second
+      // friction layer against automated TOTP guessing from accumulated tokens.
+      preHandler: [captchaPreHandler],
       schema: {
         summary: 'Complete MFA during login',
         description:
@@ -256,9 +263,9 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
-        summary: 'Enroll in MFA',
+        summary: 'Begin MFA enrollment (phase 1 of 2)',
         description:
-          'Begins multi-factor authentication enrollment. Returns a TOTP secret and QR code URI for authenticator app setup.',
+          'Stages a TOTP secret in Redis and returns it with a provisioning URI for authenticator app setup. Phase 2 (`POST /auth/mfa/enroll/confirm`) verifies a fresh code and atomically persists the auth method, generates recovery codes, and flips is_mfa_enabled. Nothing is written to Postgres at this step.',
         tags: ['Auth', 'MFA'],
         body: MfaEnrollDto,
       },
@@ -266,12 +273,34 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.enrollMfa,
   );
   zodApplication.post(
+    '/mfa/enroll/confirm',
+    {
+      onRequest: [app.authenticate],
+      preHandler: [requireRecentStepUpPreHandler],
+      ...STRICT_AUTHED_RATE_LIMIT,
+      schema: {
+        summary: 'Confirm MFA enrollment (phase 2 of 2)',
+        description:
+          'Verifies a 6-digit TOTP code against the secret staged by `POST /auth/mfa/enroll`. On success the auth method is persisted, recovery codes are generated and hashed, and is_mfa_enabled is flipped. The plaintext recovery codes are returned EXACTLY ONCE in this response.',
+        tags: ['Auth', 'MFA'],
+        body: MfaEnrollConfirmDto,
+      },
+    },
+    controller.confirmEnrollMfa,
+  );
+  zodApplication.post(
     '/webauthn/register/options',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
-      schema: {},
+      schema: {
+        summary: 'Begin passkey registration',
+        description:
+          'Returns WebAuthn registration options and an opaque challenge token the client echoes back at /webauthn/register/verify. Requires recent step-up authentication.',
+        tags: ['Auth', 'WebAuthn'],
+        body: z.object({}).strict(),
+      },
     },
     controller.webauthnRegisterOptions,
   );
@@ -281,7 +310,13 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
-      schema: { body: webauthnRegisterVerifyDto },
+      schema: {
+        summary: 'Complete passkey registration',
+        description:
+          'Verifies the attestation response from a WebAuthn registration ceremony and persists the credential. Requires recent step-up authentication.',
+        tags: ['Auth', 'WebAuthn'],
+        body: webauthnRegisterVerifyDto,
+      },
     },
     controller.webauthnRegisterVerify,
   );
@@ -318,11 +353,16 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/sessions',
     {
       onRequest: [app.authenticate],
+      // sec-A7: a stolen bearer must not be able to kick the legitimate user out of their
+      // own browser. Requiring recent step-up forces the attacker to also possess the
+      // second factor (or password for non-MFA users — sec-A1 blocks the password-only
+      // step-up path for MFA-enabled accounts).
+      preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Revoke all sessions',
         description:
-          'Revokes all active sessions for the authenticated user except the current one.',
+          'Revokes all active sessions for the authenticated user except the current one. Requires recent step-up authentication.',
         tags: ['Auth', 'Session'],
       },
     },
@@ -373,8 +413,8 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     },
     controller.createAuthMethod,
   );
-  zodApplication.delete<{ Params: { id: string } }>(
-    '/me/auth-methods/:id',
+  zodApplication.delete<{ Params: { publicId: string } }>(
+    '/me/auth-methods/:publicId',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
@@ -384,7 +424,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         description:
           "Removes an authentication method from the user's account. Cannot remove the last auth method.",
         tags: ['Auth', 'Auth Method'],
-        params: authMethodIdParamsDto,
+        params: authMethodPublicIdParamsDto,
       },
     },
     controller.deleteAuthMethod,
@@ -407,11 +447,13 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     '/me/sessions/:id',
     {
       onRequest: [app.authenticate],
+      // sec-A7: see the comment on DELETE /me/sessions above — same threat model.
+      preHandler: [requireRecentStepUpPreHandler],
       ...STRICT_AUTHED_RATE_LIMIT,
       schema: {
         summary: 'Revoke a specific session',
         description:
-          'Revokes a specific session by its ID. Cannot revoke the current session (use logout instead).',
+          'Revokes a specific session by its ID. Cannot revoke the current session (use logout instead). Requires recent step-up authentication.',
         tags: ['Auth', 'Session'],
         params: sessionIdParamsDto,
       },

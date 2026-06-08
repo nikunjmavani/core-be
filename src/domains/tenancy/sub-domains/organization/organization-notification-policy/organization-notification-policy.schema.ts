@@ -55,12 +55,17 @@ export const organization_notification_policies = tenancySchema
         table.channel,
       ),
       index('idx_org_notif_policy_mandatory').on(table.organization_id, table.is_mandatory),
-      index('idx_org_notif_policy_muted').on(table.muted_until),
+      // sec-D #34: `idx_org_notif_policy_muted` was dropped by migration
+      // 20260607060000. After sec-D1 (writers normalize stale mutes to NULL),
+      // the column is either NULL or a future timestamp and no read path
+      // filters by it; the btree was pure dead weight on every upsert.
       check('chk_org_notif_channel', sql`${table.channel} IN ('EMAIL', 'SMS', 'PUSH', 'IN_APP')`),
-      check(
-        'chk_org_notif_muted',
-        sql`${table.muted_until} IS NULL OR ${table.muted_until} > now()`,
-      ),
+      // sec-D1: the previous `chk_org_notif_muted` (volatile `now()` in a
+      // CHECK) made the row IMMUTABLE once `muted_until` slipped into the
+      // past — even soft-delete failed. Mute expiry is enforced at the
+      // read layer (`muted_until > now()` in selects) and writers
+      // normalize stale mutes to NULL before persisting. The constraint
+      // is dropped by migration `20260605240100_drop_volatile_chk_org_notif_muted.sql`.
       check('chk_org_notif_updated', sql`${table.updated_at} >= ${table.created_at}`),
       pgPolicy('organization_notification_policies_tenant_isolation', {
         as: 'permissive',

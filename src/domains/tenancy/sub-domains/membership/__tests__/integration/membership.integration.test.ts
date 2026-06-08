@@ -116,7 +116,7 @@ describe('Membership Sub-Domain — Integration', () => {
         organizationId: organization.id,
         roleId: adminRole.id,
       });
-      const adminToken = await generateTestTokenWithActiveSession(app, admin.public_id);
+      const { token: adminToken } = await generateTestTokenWithActiveSession(app, admin.public_id);
 
       const settingsPatch = await injectAuthenticated(app, {
         method: 'PATCH',
@@ -146,7 +146,10 @@ describe('Membership Sub-Domain — Integration', () => {
       });
       expect(createMembershipResponse.statusCode).toBe(201);
 
-      const memberToken = await generateTestTokenWithActiveSession(app, newMember.public_id);
+      const { token: memberToken } = await generateTestTokenWithActiveSession(
+        app,
+        newMember.public_id,
+      );
       const settingsResponse = await injectAuthenticated(app, {
         method: 'GET',
         url: testApiPath('/users/me/settings'),
@@ -170,7 +173,7 @@ describe('Membership Sub-Domain — Integration', () => {
         organizationId: organization.id,
         roleId: adminRole.id,
       });
-      const adminToken = await generateTestTokenWithActiveSession(app, admin.public_id);
+      const { token: adminToken } = await generateTestTokenWithActiveSession(app, admin.public_id);
       const newMember = await createTestUser({ email: 'direct-active-member@test.com' });
       const memberRole = await createRoleWithPermissions({
         organizationId: organization.id,
@@ -307,7 +310,6 @@ describe('Membership Sub-Domain — Integration', () => {
         headers: { 'idempotency-key': `idem-${randomUUID()}` },
         payload: {
           membership_id: membership.public_id,
-          email: `route-invite-${Date.now()}@test.com`,
           expires_in_days: 7,
         },
       });
@@ -354,15 +356,24 @@ describe('Membership Sub-Domain — Integration', () => {
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1_000),
         created_by_user_id: admin.id,
       });
-      return { organization, token, invitation, inviteeMembership: inviteeMembership!, rawToken };
+      return {
+        organization,
+        token,
+        invitation,
+        invitee,
+        inviteeMembership: inviteeMembership!,
+        rawToken,
+      };
     }
 
     it('atomically activates the linked membership when the invitation is accepted', async () => {
-      const { invitation, inviteeMembership, rawToken } = await createPendingInvitation();
+      const { invitation, invitee, inviteeMembership, rawToken } = await createPendingInvitation();
+      const inviteeToken = await generateTestToken({ userId: invitee.public_id });
 
-      const acceptResponse = await injectUnauthenticated(app, {
+      const acceptResponse = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath(`/tenancy/invitations/${invitation.public_id}/accept`),
+        token: inviteeToken,
         payload: { token: rawToken },
       });
       expect(acceptResponse.statusCode).toBe(200);
@@ -411,7 +422,7 @@ describe('Membership Sub-Domain — Integration', () => {
         organizationId: organization.id,
         roleId: adminRole.id,
       });
-      const token = await generateTestTokenWithActiveSession(app, owner.public_id);
+      const { token } = await generateTestTokenWithActiveSession(app, owner.public_id);
 
       // Even an admin (here, the owner) cannot remove the owner's membership — ownership must be
       // transferred first, or the organization would be left without an owner.

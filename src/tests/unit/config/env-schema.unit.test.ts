@@ -11,7 +11,6 @@ const productionRedisTopology = {
 const commonRequiredBase = {
   DATABASE_URL: DATABASE_URL_FIXTURE,
   REDIS_URL: REDIS_URL_FIXTURE,
-  JWT_SECRET: 'a'.repeat(32),
   JWT_PRIVATE_KEY: 'private',
   JWT_PUBLIC_KEY: 'public',
   ALLOWED_ORIGINS: 'http://localhost:3000',
@@ -36,7 +35,7 @@ describe('env-schema', () => {
   it('exports schema keys for tooling sync', () => {
     expect(envSchemaKeys.length).toBeGreaterThan(0);
     expect(envSchemaKeys).toContain('DATABASE_URL');
-    expect(envSchemaKeys).toContain('JWT_SECRET');
+    expect(envSchemaKeys).toContain('JWT_PRIVATE_KEY');
   });
 
   it('applies DATABASE_HTTP_STATEMENT_TIMEOUT_MS and pool alert defaults', () => {
@@ -44,7 +43,6 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       AUDIT_RETENTION_DAYS: '30',
       AUTH_SESSION_RETENTION_DAYS: '30',
@@ -63,7 +61,6 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       PORT: '4000',
       NODE_ENV: 'test',
     });
@@ -146,7 +143,6 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       AUDIT_RETENTION_DAYS: '30',
       AUTH_SESSION_RETENTION_DAYS: '30',
@@ -164,7 +160,6 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       TRUST_PROXY: 'true',
     });
@@ -180,7 +175,6 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       TRUST_PROXY: '0',
     });
@@ -203,30 +197,15 @@ describe('env-schema', () => {
     }
   });
 
-  it('parses without JWT_SECRET when RS256 keys are set', () => {
-    const environmentInput = { ...process.env };
-    delete environmentInput.JWT_SECRET;
-    const parsed = envSchema.safeParse({
-      ...environmentInput,
-      DATABASE_URL: DATABASE_URL_FIXTURE,
-      REDIS_URL: REDIS_URL_FIXTURE,
-      NODE_ENV: 'test',
-      JWT_PRIVATE_KEY: 'test-private-key',
-      JWT_PUBLIC_KEY: 'test-public-key',
-      AUDIT_RETENTION_DAYS: '30',
-      AUTH_SESSION_RETENTION_DAYS: '30',
-    });
-
-    expect(parsed.success).toBe(true);
-    expect(parsed.data?.JWT_SECRET).toBeUndefined();
-  });
-
-  it('accepts optional RS256 JWT key pair alongside JWT_SECRET', () => {
+  // sec-C5: JWT_SECRET removed from the schema (RS256 only). The
+  // "parses without JWT_SECRET" + "accepts optional pair alongside
+  // JWT_SECRET" tests are no longer applicable; the RS256-key acceptance
+  // test below covers the surviving path.
+  it('parses with the RS256 key pair set', () => {
     const parsed = envSchema.safeParse({
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       JWT_PRIVATE_KEY: 'test-private-key',
       JWT_PUBLIC_KEY: 'test-public-key',
@@ -240,7 +219,6 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       ENABLE_RESPONSE_ENCRYPTION: 'true',
       RESPONSE_ENCRYPTION_KEY: 'a'.repeat(64),
@@ -249,7 +227,6 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       ENABLE_RESPONSE_ENCRYPTION: '0',
     });
@@ -263,7 +240,6 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       IDEMPOTENCY_CARDINALITY_WARN_THRESHOLD: '100',
       IDEMPOTENCY_CARDINALITY_CRITICAL_THRESHOLD: '10',
@@ -276,18 +252,20 @@ describe('env-schema', () => {
     const parsed = envSchema.safeParse({
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'production',
     });
 
     expect(parsed.success).toBe(false);
   });
 
-  it('rejects JWT_SECRET shorter than minimum length', () => {
+  it('rejects an env missing both RS256 key parts', () => {
+    // sec-C5: the original "rejects JWT_SECRET shorter than minimum length"
+    // assertion was actually pinning the "missing RS256 keys" rejection path
+    // (the env block omitted them too); rename to match what is actually
+    // being verified.
     const parsed = envSchema.safeParse({
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'too-short',
       NODE_ENV: 'test',
     });
 
@@ -299,7 +277,6 @@ describe('env-schema', () => {
       ...process.env,
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'test',
       AUDIT_RETENTION_DAYS: '30',
       AUTH_SESSION_RETENTION_DAYS: '30',
@@ -538,7 +515,6 @@ describe('env-schema', () => {
     const parsed = envSchema.safeParse({
       DATABASE_URL: DATABASE_URL_FIXTURE,
       REDIS_URL: REDIS_URL_FIXTURE,
-      JWT_SECRET: 'a'.repeat(32),
       NODE_ENV: 'development',
       FRONTEND_URL: 'not-a-url',
       AUDIT_RETENTION_DAYS: '30',
@@ -577,5 +553,153 @@ describe('env-schema', () => {
       DATABASE_HTTP_STATEMENT_TIMEOUT_MS: '5000',
     });
     expect(parsed.success).toBe(true);
+  });
+
+  // sec-B5 / sec-B6 — Stripe production guards. Without these, a typo or
+  // missing GitHub secret silently puts the system into "fictional mode"
+  // (subscriptions persist locally but never charge), and a wrong-mode key
+  // (sk_test_ in prod) silently freezes subscription state because every
+  // webhook HMAC fails.
+  describe('Stripe production guards (sec-B5 / sec-B6)', () => {
+    it('rejects production env with only STRIPE_SECRET_KEY set (half-configured)', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_live_X',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_WEBHOOK_SECRET'));
+      expect(issue).toBeDefined();
+    });
+
+    it('rejects production env with only STRIPE_WEBHOOK_SECRET set (half-configured)', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_SECRET_KEY'));
+      expect(issue).toBeDefined();
+    });
+
+    it('rejects production env with a test-mode STRIPE_SECRET_KEY (sk_test_*)', () => {
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_SECRET_KEY'));
+      expect(issue).toBeDefined();
+    });
+
+    it('rejects malformed STRIPE_SECRET_KEY everywhere (no sk_test_/sk_live_ prefix)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'not-a-stripe-key',
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_SECRET_KEY'));
+      expect(issue).toBeDefined();
+    });
+
+    it('rejects malformed STRIPE_WEBHOOK_SECRET everywhere (no whsec_ prefix)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'not-a-stripe-webhook',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_WEBHOOK_SECRET'));
+      expect(issue).toBeDefined();
+    });
+
+    // sec-new-B3: comma-separated secret list validation
+    it('sec-new-B3: accepts comma-separated list of valid whsec_ secrets', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_old,whsec_new',
+        EMAIL_FROM_ADDRESS: 'billing@example.com',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('sec-new-B3: accepts comma-separated list with surrounding whitespace (copy-paste tolerance)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: '  whsec_first  ,  whsec_second  ,  ',
+        EMAIL_FROM_ADDRESS: 'billing@example.com',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('sec-new-B3: rejects comma-separated list where one segment lacks the whsec_ prefix', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_valid,garbage',
+        EMAIL_FROM_ADDRESS: 'billing@example.com',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('STRIPE_WEBHOOK_SECRET'));
+      expect(issue).toBeDefined();
+    });
+
+    it('accepts production env with both Stripe keys set in live mode', () => {
+      // sec-B #19: configuring Stripe also requires EMAIL_FROM_ADDRESS so the
+      // Stripe customer email is built off a real owned domain (not @invalid).
+      const parsed = envSchema.safeParse({
+        ...productionRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_live_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+        EMAIL_FROM_ADDRESS: 'billing@example.com',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('accepts production env with no Stripe keys at all (billing disabled)', () => {
+      const parsed = envSchema.safeParse(productionRequiredBase);
+      expect(parsed.success).toBe(true);
+    });
+
+    it('accepts non-production with sk_test_ + whsec_ (typical dev configuration)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+        EMAIL_FROM_ADDRESS: 'billing@example.com',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('rejects Stripe configuration without EMAIL_FROM_ADDRESS (sec-B #19)', () => {
+      // The prior fallback to `billing+<id>@invalid` silently routed Stripe
+      // receipts/dunning/refund notifications to an RFC 6761 reserved TLD that
+      // bounces permanently. Cross-field refine: Stripe ⇒ EMAIL_FROM_ADDRESS.
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_SECRET_KEY: 'sk_test_X',
+        STRIPE_WEBHOOK_SECRET: 'whsec_X',
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes('EMAIL_FROM_ADDRESS'));
+      expect(issue).toBeDefined();
+    });
   });
 });

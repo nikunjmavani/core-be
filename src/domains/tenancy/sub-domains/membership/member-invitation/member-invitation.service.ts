@@ -87,8 +87,9 @@ export interface MemberInvitationListOptions {
  *   `invitationRevoked`, `invitationAlreadyAccepted`, `invitationExpired`,
  *   `errors:disposableEmail`) for state and input violations;
  *   `ForbiddenError('errors:declineOwnInvitationOnly')` when a user tries to
- *   decline somebody else's invitation; `ConfigurationError` if the optional
- *   `UserService` is required but not wired by the container.
+ *   decline somebody else's invitation; `ConfigurationError` if `UserService`
+ *   is not wired by the container (required for `create`, `listPendingInvitations`,
+ *   `decline`, and `accept`).
  * - **Side effects:** writes to `tenancy.member_invitations`; `accept`
  *   additionally activates the linked `tenancy.memberships` row
  *   (`status = 'ACTIVE'`, `joined_at = now()`) in the same transaction and
@@ -149,11 +150,6 @@ export class MemberInvitationService {
     invited_by_user_public_id: string,
   ): Promise<{ invitation: MemberInvitationOutput; token: string }> {
     const parsed = validateCreateMemberInvitation(body);
-    if (isDisposableEmailBlocked(parsed.email)) {
-      throw new ValidationError('errors:disposableEmail', undefined, undefined, [
-        { field: 'email', messageKey: 'errors:disposableEmail' },
-      ]);
-    }
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
@@ -165,12 +161,31 @@ export class MemberInvitationService {
       const inviterId =
         await this.organizationRepository.resolveUserIdByPublicId(invited_by_user_public_id);
       if (inviterId === null) throw new NotFoundError('User');
+      // sec-T1: derive email from the membership's user — the client no longer
+      // supplies it, so the stored invitation email always matches the actual
+      // membership user (defense-in-depth alongside the accept-side email check).
+      if (!this.userService) {
+        throw new ConfigurationError(
+          'UserService is not configured on MemberInvitationService. Wire it via tenancy.container.',
+        );
+      }
+      const memberUserPublicId = await this.organizationRepository.resolveUserPublicIdByInternalId(
+        membership.user_id,
+      );
+      if (!memberUserPublicId) throw new NotFoundError('User');
+      const memberUser = await this.userService.requireUserRecordByPublicId(memberUserPublicId);
+      const memberEmail = memberUser.email;
+      if (isDisposableEmailBlocked(memberEmail)) {
+        throw new ValidationError('errors:disposableEmail', undefined, undefined, [
+          { field: 'email', messageKey: 'errors:disposableEmail' },
+        ]);
+      }
       const token = generateInvitationToken();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + parsed.expires_in_days);
       const row = await this.invitationRepository.create({
         membership_id: membership.id,
-        email: parsed.email,
+        email: memberEmail,
         token_hash: hashInvitationToken(token),
         invited_by_user_id: inviterId,
         expires_at: expiresAt,
@@ -181,7 +196,7 @@ export class MemberInvitationService {
       await eventBus.emit({
         type: MEMBER_INVITATION_EVENT.CREATED,
         payload: {
-          email: parsed.email,
+          email: memberEmail,
           organization_name: organization.name ?? organization.public_id,
           inviter_name: invited_by_user_public_id,
           token,
@@ -195,8 +210,23 @@ export class MemberInvitationService {
     });
   }
 
-  async accept(invitation_public_id: string, body: unknown): Promise<MemberInvitationOutput> {
+  async accept(
+    invitation_public_id: string,
+    body: unknown,
+    actingUserPublicId: string,
+  ): Promise<MemberInvitationOutput> {
     const parsed = validateAcceptMemberInvitation(body);
+    // sec-T4: previously accept was unauthenticated, so anyone with the
+    // invitation URL could flip the victim's pending membership to ACTIVE.
+    // Bind the acting user's email to the invitee email — mirrors the
+    // decline path which has always had this check.
+    if (!this.userService) {
+      throw new Error(
+        'UserService is not configured on MemberInvitationService. Wire it via tenancy.container.',
+      );
+    }
+    const actingUser = await this.userService.requireUserRecordByPublicId(actingUserPublicId);
+    if (!actingUser) throw new NotFoundError('User');
     /**
      * Public route: no org context up front. Resolve the owning org via the
      * SECURITY DEFINER lookup, then wrap the read + UPDATE in
@@ -208,6 +238,9 @@ export class MemberInvitationService {
     return withOrganizationDatabaseContext(lookup.organization_public_id, async () => {
       const row = await this.invitationRepository.findByPublicId(invitation_public_id);
       if (!row) throw new NotFoundError(MEMBER_INVITATION_RESOURCE);
+      if (row.email.toLowerCase() !== actingUser.email.toLowerCase()) {
+        throw new ForbiddenError('errors:invitationEmailMismatch');
+      }
       const tokenHash = hashInvitationToken(parsed.token);
       const now = new Date();
       assertInvitationAcceptable(row, now);

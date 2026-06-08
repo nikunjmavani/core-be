@@ -17,6 +17,7 @@ import {
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestWebhook } from '@/tests/factories/webhook.factory.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 describe('Chaos resilience: BullMQ webhook delivery survives transient Postgres outages', () => {
   const chaosWebhookDeliveryProbeUrlAwaitingIsolation =
@@ -54,6 +55,7 @@ describe('Chaos resilience: BullMQ webhook delivery survives transient Postgres 
     const [pendingWebhookDeliveryAttemptAwaitingIsolation] = await database
       .insert(webhook_delivery_attempts)
       .values({
+        public_id: generatePublicId(),
         webhook_id: webhookAwaitingDeliveryJobIsolation.id,
         event_type: 'chaos.webhooks.delivery.probe',
         payload: { simulatedEvent: true },

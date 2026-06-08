@@ -76,6 +76,7 @@ describe('AuthMethodService', () => {
     findTotpByUserId: vi.fn().mockResolvedValue(null),
     updateLastUsedAt: vi.fn().mockResolvedValue(undefined),
     findByIdForUser: vi.fn().mockResolvedValue(null),
+    findByPublicIdForUser: vi.fn().mockResolvedValue(null),
     listMfaByUserId: vi.fn().mockResolvedValue([]),
   } as unknown as AuthMethodRepository;
 
@@ -121,12 +122,26 @@ describe('AuthMethodService', () => {
   });
 
   it('lists and mutates auth methods for user', async () => {
+    // sec-A5 guard: `delete()` reads the target method then verifies that another
+    // login-capable method survives. Provide both so the happy-path mutation
+    // continues to exercise the create/delete/revokeAllForUser fan-out.
+    // sec-new-B4: delete() now accepts a publicId string and uses findByPublicIdForUser.
+    vi.mocked(authMethodRepository.findByPublicIdForUser).mockResolvedValue({
+      id: 2,
+      public_id: 'testpublicmid000000a',
+      user_id: 1,
+      method_type: 'OAUTH',
+    } as never);
+    vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([
+      { id: 2, public_id: 'testpublicmid000000a', user_id: 1, method_type: 'OAUTH' },
+      { id: 3, public_id: 'testpublicmid000000b', user_id: 1, method_type: 'PASSWORD' },
+    ] as never);
     await service.list('user_public');
     await service.create('user_public', {
       method_type: 'MAGIC_LINK',
       is_primary: true,
     });
-    await service.delete('user_public', 2);
+    await service.delete('user_public', 'testpublicmid000000a');
     await service.revokeAllForUser('user_public');
     expect(authMethodRepository.create).toHaveBeenCalled();
   });
@@ -265,8 +280,11 @@ describe('AuthMethodService', () => {
   });
 
   it('delete throws when auth method is not found', async () => {
-    vi.mocked(authMethodRepository.revoke).mockResolvedValue(null);
-    await expect(service.delete('user_public', 99)).rejects.toBeInstanceOf(NotFoundError);
+    // sec-new-B4: delete() accepts a publicId string; findByPublicIdForUser returning null triggers NotFoundError.
+    vi.mocked(authMethodRepository.findByPublicIdForUser).mockResolvedValue(null);
+    await expect(service.delete('user_public', 'testpublicmid000000x')).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 
   it('resetPassword rejects wrong token type and missing user', async () => {
@@ -325,7 +343,9 @@ describe('AuthMethodService', () => {
 
   it('delete throws NotFoundError when user record is missing', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
-    await expect(service.delete('missing', 1)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.delete('missing', 'testpublicmid000000y')).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 
   it('changePassword throws NotFoundError when user record is missing', async () => {

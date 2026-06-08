@@ -47,14 +47,14 @@ export class OrganizationNotificationPolicyService {
     });
   }
 
-  async getById(
+  async getByPublicId(
     organization_public_id: string,
-    policy_id: number,
+    policy_public_id: string,
   ): Promise<OrganizationNotificationPolicyOutput> {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
-      const row = await this.policyRepository.findById(policy_id, organization.id);
+      const row = await this.policyRepository.findByPublicId(policy_public_id, organization.id);
       if (!row) throw new NotFoundError('Organization notification policy');
       return serializeOrganizationNotificationPolicy(row, organization_public_id);
     });
@@ -87,7 +87,7 @@ export class OrganizationNotificationPolicyService {
 
   async update(
     organization_public_id: string,
-    policy_id: number,
+    policy_public_id: string,
     body: unknown,
     updated_by_user_public_id: string | undefined,
   ): Promise<OrganizationNotificationPolicyOutput> {
@@ -108,7 +108,7 @@ export class OrganizationNotificationPolicyService {
         data.muted_until = parsed.muted_until ? new Date(parsed.muted_until) : null;
       }
       const row = await this.policyRepository.update(
-        policy_id,
+        policy_public_id,
         organization.id,
         data,
         userId ?? null,
@@ -118,11 +118,11 @@ export class OrganizationNotificationPolicyService {
     });
   }
 
-  async delete(organization_public_id: string, policy_id: number): Promise<void> {
+  async delete(organization_public_id: string, policy_public_id: string): Promise<void> {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
-      const deleted = await this.policyRepository.softDelete(policy_id, organization.id);
+      const deleted = await this.policyRepository.softDelete(policy_public_id, organization.id);
       if (!deleted) throw new NotFoundError('Organization notification policy');
     });
   }

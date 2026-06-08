@@ -2,10 +2,12 @@ import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime
 import {
   findPendingUploadsOlderThan,
   hardDeleteUploadsByInternalIds,
+  markConfirmedByInternalId,
   setUploadStatusByInternalId,
   type PendingUploadSweepRow,
 } from '@/domains/upload/upload.repository.js';
 import {
+  copyObject,
   deleteObject,
   getObjectLeadingBytes,
   headObject,
@@ -18,6 +20,11 @@ import {
   verifyFileMagicBytes,
 } from '@/shared/utils/validation/file-magic.util.js';
 import { UPLOAD_PENDING_SWEEP_BATCH_SIZE } from './upload-pending-sweep.constants.js';
+import { isSvgContentType } from '@/domains/upload/utils/upload-svg.util.js';
+import {
+  UPLOAD_PENDING_KEY_PREFIX,
+  stripPendingObjectKeyPrefix,
+} from '@/domains/upload/upload.constants.js';
 
 /**
  * Outcome counters for one {@link runUploadPendingSweepJob} run.
@@ -94,10 +101,40 @@ export async function runUploadPendingSweepJob(
   for (const row of rows) {
     const verdict = await resolvePendingUploadVerdict(row);
     if (verdict === 'auto_confirm') {
-      await setUploadStatusByInternalId(databaseHandle, row.id, 'UPLOADED');
+      // sec-UP finding #20: the HTTP confirm path enforces "a servable row never
+      // references the overwritable `pending/` key once it is servable" (sec-UP1).
+      // The sweep previously skipped this invariant — flipping status to UPLOADED
+      // while leaving `file_key` pointing at the still-overwritable pending object,
+      // which an S3 lifecycle policy on `pending/*` (a textbook cost-reclaim
+      // practice operators routinely add) would expire out from under the row.
+      // Copy bytes to the final key and rewrite `file_key` in the same UPDATE.
+      const finalKey = stripPendingObjectKeyPrefix(row.file_key);
+      try {
+        await copyObject({
+          sourceKey: row.file_key,
+          destinationKey: finalKey,
+          contentType: row.mime_type,
+        });
+      } catch (copyError) {
+        logger.warn(
+          { uploadId: row.id, fileKey: row.file_key, error: copyError },
+          'upload-pending-sweep.copyToFinalKeyFailed',
+        );
+        continue;
+      }
+      await markConfirmedByInternalId(databaseHandle, row.id, finalKey);
+      // Best-effort cleanup of the pending bytes; the row is already servable
+      // off the final key so a transient delete failure is logged-only.
+      const pendingDeleted = await deleteObject(row.file_key);
+      if (!pendingDeleted) {
+        logger.warn(
+          { uploadId: row.id, pendingKey: row.file_key },
+          'upload-pending-sweep.pendingDeleteFailedAfterPublish',
+        );
+      }
       autoConfirmedCount += 1;
       logger.info(
-        { uploadId: row.id, fileKey: row.file_key },
+        { uploadId: row.id, pendingKey: row.file_key, finalKey },
         'upload-pending-sweep.autoConfirmed',
       );
     } else if (verdict === 'fail') {
@@ -140,6 +177,26 @@ type PendingUploadVerdict = 'auto_confirm' | 'fail' | 'orphan';
 async function resolvePendingUploadVerdict(
   row: PendingUploadSweepRow,
 ): Promise<PendingUploadVerdict> {
+  // sec-UP finding #20: refuse rows whose `file_key` is not prefixed with the
+  // pending namespace. The HTTP confirm path makes the same assertion (sec-UP1)
+  // because a row that never went through the pending-key indirection has
+  // bypassed the entire publish ceremony. Auto-confirming such a row in the
+  // sweep would silently launder it into the UPLOADED state.
+  if (!row.file_key.startsWith(UPLOAD_PENDING_KEY_PREFIX)) {
+    logger.warn(
+      { uploadId: row.id, fileKey: row.file_key },
+      'upload-pending-sweep.non_pending_key_refused',
+    );
+    return 'fail';
+  }
+  // sec-UP2: the sweep would auto-confirm SVG by setting status=UPLOADED
+  // WITHOUT running the publish path that DOMPurifies SVG bytes and copies
+  // them off the pending (still client-writable) key. Refuse to auto-
+  // confirm SVG; the user must explicitly call confirm (which DOES go
+  // through publishConfirmedObject + sanitizer + pending→final copy).
+  if (isSvgContentType(row.mime_type)) {
+    return 'fail';
+  }
   const metadata = await headObject(row.file_key);
   if (metadata?.contentLength === undefined) {
     return 'orphan';

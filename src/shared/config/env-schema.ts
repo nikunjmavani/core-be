@@ -47,7 +47,14 @@ const envSchemaBase = z.object({
   /** Fastify HTTP bind address (worker health server also binds here). */
   HTTP_BIND_HOST: z.string().min(1).default('0.0.0.0'),
   NODE_ENV: nodeEnvSchema,
-  LOG_LEVEL: z.string().min(1).default('info'),
+  /**
+   * sec-C9: enum-constrained so a typo (`info ` with trailing whitespace,
+   * `dbug`) is caught at boot instead of silently degrading to whatever
+   * pino reads. Default `info` matches what the runtime expects; previously
+   * `.env.example` shipped `LOG_LEVEL=debug` which would 10-100x log volume
+   * in any environment scaffolded from the template — including production.
+   */
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   /** Number of reverse-proxy hops Fastify may trust for X-Forwarded-* headers. */
   TRUST_PROXY: trustProxyHopCountSchema,
   FASTIFY_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).optional(),
@@ -87,8 +94,6 @@ const envSchemaBase = z.object({
     .optional(),
 
   // Auth
-  /** Deprecated: unused at runtime (RS256 only). Retained for backward-compatible deploy templates. */
-  JWT_SECRET: z.string().min(32).optional(),
   /** RS256 PEM private key. Required in every runtime; NODE_ENV is metadata only. */
   JWT_PRIVATE_KEY: z.string().min(1),
   /** RS256 PEM public key. Required in every runtime; NODE_ENV is metadata only. */
@@ -111,6 +116,27 @@ const envSchemaBase = z.object({
   AUTH_SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).default(7),
   /** Secure flag for session + CSRF cookies. Set false only for plaintext local loops. */
   COOKIE_SECURE: booleanString('true'),
+  /**
+   * sec-M5: HSTS `preload` is operationally irreversible (weeks to remove
+   * from the preload list). Default false so we never advertise preload
+   * without operator opt-in confirming registration at
+   * https://hstspreload.org has been completed.
+   */
+  HSTS_PRELOAD_REGISTERED: booleanString('false'),
+  /**
+   * sec-M5: HSTS `includeSubDomains` locks every subdomain to HTTPS for the
+   * full max-age — destructive if the apex hosts non-HTTPS subdomains.
+   * Default false; operator opts in once subdomain inventory is audited.
+   */
+  HSTS_INCLUDE_SUBDOMAINS: booleanString('false'),
+  /**
+   * sec-C4: when true, `/readyz` returns the verbose operational body
+   * (`migration_version`, `mail_outbox_pending`, `dlq_depth`,
+   * `worker_queue_manifest`). Default false — unauthenticated callers see
+   * only dependency status, not topology / patch level / queue depth.
+   * Enable only for trusted internal ingress (LB-internal probes behind ACLs).
+   */
+  HEALTH_VERBOSE_BODY_ENABLED: booleanString('false'),
 
   // CORS (comma-separated origins; required in every runtime)
   ALLOWED_ORIGINS: z.string().min(1),
@@ -129,6 +155,21 @@ const envSchemaBase = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(60_000),
   /** Comma-separated hostnames allowed for outbound webhooks (optional; empty = no extra restriction). */
   WEBHOOK_URL_ALLOWLIST: z.string().optional(),
+  /**
+   * Per-organization cap on active webhook subscribers (sec-N4). The service
+   * rejects further creates beyond this number with a 409. The fan-out loop
+   * uses the same value as a defense-in-depth backstop so a drift between
+   * create-cap and runtime list cannot turn one event into an unbounded
+   * signed-POST amplifier.
+   */
+  WEBHOOK_MAX_PER_ORG: z.coerce.number().int().min(1).max(1000).default(25),
+  /**
+   * Window (hours) during which outbound webhook deliveries dual-sign with
+   * the previous secret too (sec-N8). After this window the worker stops
+   * sending `X-Webhook-Signature-Previous`. Default 24h covers a one-day
+   * verifier rollout for most customers.
+   */
+  WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS: z.coerce.number().int().min(1).max(720).default(24),
 
   // Email (Resend)
   RESEND_API_KEY: z.string().min(1).optional(),
@@ -174,6 +215,12 @@ const envSchemaBase = z.object({
   /** Bearer token a Prometheus scraper sends when scraping /metrics. Required when METRICS_ENABLED=true (min 32 chars). */
   METRICS_SCRAPE_TOKEN: z.string().min(32).optional(),
   /** OTLP HTTP traces endpoint base URL (e.g. https://otel.example.com). Appends /v1/traces when omitted. */
+  /**
+   * sec-C3: in production/staging the OTLP exporter MUST use https://. The
+   * runtime accepts both http:// and https://; spans carry SQL fragments,
+   * request paths, and request ids that should not traverse the network in
+   * plaintext. Refine enforced below.
+   */
   OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
   /** OpenTelemetry service.name override (defaults: core-be-api / core-be-worker). */
   OTEL_SERVICE_NAME: z.string().min(1).optional(),
@@ -197,6 +244,28 @@ const envSchemaBase = z.object({
    * and never calling confirm. Reconciled lazily by the PENDING sweeper worker. Default 100.
    */
   UPLOAD_MAX_PENDING_PER_USER: z.coerce.number().int().min(1).default(100),
+  /**
+   * Per-organization cap on concurrent PENDING uploads across ALL members
+   * (sec-UP4). Without this, a 200-member org sitting at the per-user cap
+   * could mint 20,000 in-flight uploads — ~200 GB per org at the 10 MB
+   * default limit. Default 2000 (4× expected 500-member org × 4 in-flight).
+   * The PENDING sweeper reconciles eventually.
+   */
+  UPLOAD_MAX_PENDING_PER_ORGANIZATION: z.coerce.number().int().min(1).max(100_000).default(2_000),
+  /**
+   * Per-statement timeout (ms) for worker context wrappers (retention,
+   * GDPR export, DLQ scans, etc.) — separate from the HTTP timeout so
+   * background jobs scanning large tables are not killed at the 5 s cap
+   * the HTTP path uses (sec-D2). Default 5 minutes — large enough for
+   * cascading FK deletes / audit scans, small enough to prevent runaway
+   * queries holding pool checkouts indefinitely.
+   */
+  DATABASE_WORKER_STATEMENT_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(3_600_000)
+    .default(300_000),
   S3_BUCKET: z.string().min(1).optional(),
   S3_REGION: z.string().min(1).optional(),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
@@ -278,12 +347,28 @@ const envSchemaBase = z.object({
   DATABASE_POOL_ALERT_CONSECUTIVE_POLLS: z.coerce.number().int().min(1).max(10).default(2),
   /** Enable Postgres TLS by default. Set false only for plaintext local Docker/test databases. */
   DATABASE_SSL_ENABLED: booleanString('true'),
-  /** When true, Postgres client verifies server TLS certificate (strict). Ignored when DATABASE_URL uses sslmode=verify-ca|verify-full (always strict). */
-  DATABASE_SSL_REJECT_UNAUTHORIZED: z.coerce.boolean().optional(),
+  /**
+   * When true, Postgres client verifies server TLS certificate (strict). Ignored when
+   * `DATABASE_URL` uses `sslmode=verify-ca|verify-full` (always strict).
+   *
+   * @remarks Parses `"true"`/`"1"` as `true` and everything else as `false`. Uses an explicit
+   * transform — NOT `z.coerce.boolean()`, which is `Boolean(String)` and silently treats
+   * `"false"`/`"0"` as `true` (the same foot-gun as DLQ_AUTO_RETRY_ENABLED — sec-C1).
+   */
+  DATABASE_SSL_REJECT_UNAUTHORIZED: z
+    .string()
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === 'true' || value === '1')),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1).optional(),
 
   // Data retention (days to keep audit logs / revoked sessions before cleanup)
-  AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1),
+  /**
+   * sec-U10: cap retention at 2 years and default to 1 year. The previous
+   * `min(1)` with no max + no default meant a typo (365 → 36500) silently
+   * disabled retention; once audit.logs is unbounded the table becomes the
+   * largest in the DB and trips autovacuum / search-path bloat thresholds.
+   */
+  AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(365),
   NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
   AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1),
   /** Tombstoned-row TTL before purge workers hard-delete (default avoids mandatory deploy secret). */
@@ -332,6 +417,8 @@ const envSchemaBase = z.object({
   MEMBER_ROLE_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   UPLOAD_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
+  /** sec-new-Q1: cron override for GDPR export artifact purge. */
+  USER_DATA_EXPORT_RETENTION_CRON: z.string().min(1).optional(),
   /** Cron for the PENDING upload sweeper (auto-confirm matches, hard-delete orphans). */
   UPLOAD_PENDING_SWEEP_CRON: z.string().min(1).optional(),
   /**
@@ -351,8 +438,16 @@ const envSchemaBase = z.object({
   DLQ_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(10),
   DLQ_DEPTH_CRON: z.string().min(1).optional(),
 
-  /** When true, the `dlq-auto-retry` sweeper re-enqueues replayable ledger rows after cooldown. */
-  DLQ_AUTO_RETRY_ENABLED: z.coerce.boolean().default(true),
+  /**
+   * When true, the `dlq-auto-retry` sweeper re-enqueues replayable ledger rows after cooldown.
+   *
+   * @remarks Uses the shared `booleanString('true')` helper so operator-facing kill-switches
+   * actually work: `"false"`/`"0"` parses to `false`. Previously used `z.coerce.boolean()`
+   * which is `Boolean(String)` and turns every non-empty string (including `"false"`) into
+   * `true` — operators trying to disable the sweeper during an incident found it kept firing
+   * (sec-C1).
+   */
+  DLQ_AUTO_RETRY_ENABLED: booleanString('true'),
   /** Maximum automated replays per `audit.dead_letter_jobs` row (Redis counter). */
   DLQ_AUTO_RETRY_MAX_COUNT: z.coerce.number().int().min(0).default(3),
   /** Minimum minutes between failure (or last auto-retry) and the next automated replay. */
@@ -360,6 +455,8 @@ const envSchemaBase = z.object({
   /** Maximum ledger rows inspected per sweeper tick. */
   DLQ_AUTO_RETRY_BATCH_SIZE: z.coerce.number().int().min(1).default(20),
   DLQ_AUTO_RETRY_CRON: z.string().min(1).optional(),
+  /** sec-new-Q1: cron override for the commit-dispatch recovery sweep. */
+  COMMIT_DISPATCH_RECOVERY_CRON: z.string().min(1).optional(),
 
   /**
    * Alert when a single BullMQ source queue's waiting + delayed backlog reaches this many
@@ -581,9 +678,23 @@ export const envSchema = envSchemaBase
       // In production every origin must be an absolute https:// URL. Plaintext http
       // origins would let cross-site requests ride over an unencrypted channel and
       // weaken the cookie-origin defenses that compare against this allowlist.
+      // sec-M9: ALSO reject entries that don't round-trip — a config that includes
+      // userinfo (`https://attacker@allowed.com`), trailing slash, or any path is
+      // an operator footgun: the runtime compares against browser-supplied `Origin`
+      // (which strips all of these), so the entry silently never matches and the
+      // origin gate fails closed against all requests instead of permitting the
+      // intended host.
       return origins.every((origin) => {
         try {
-          return new URL(origin).protocol === 'https:';
+          const parsed = new URL(origin);
+          if (parsed.protocol !== 'https:') return false;
+          if (parsed.username !== '' || parsed.password !== '') return false;
+          if (parsed.pathname !== '' && parsed.pathname !== '/') return false;
+          if (parsed.search !== '' || parsed.hash !== '') return false;
+          // Round-trip check: parsed.origin canonicalises away trailing slashes;
+          // require the input already match the canonical form so config drift is
+          // surfaced loudly rather than silently broken.
+          return parsed.origin === origin;
         } catch {
           return false;
         }
@@ -591,7 +702,7 @@ export const envSchema = envSchemaBase
     },
     {
       message:
-        'ALLOWED_ORIGINS must not contain `*`; in production every entry must be an absolute https:// origin.',
+        'ALLOWED_ORIGINS must not contain `*`; in production every entry must be an absolute https:// origin without userinfo, path, query, fragment, or trailing slash.',
       path: ['ALLOWED_ORIGINS'],
     },
   )
@@ -607,6 +718,24 @@ export const envSchema = envSchemaBase
     },
     {
       message: 'EMAIL_FROM_ADDRESS is required when RESEND_API_KEY is set.',
+      path: ['EMAIL_FROM_ADDRESS'],
+    },
+  )
+  .refine(
+    (data) => {
+      // sec-B finding #19: when Stripe is configured, EMAIL_FROM_ADDRESS must be set.
+      // `buildStripeCustomerEmail` derives the customer-email domain from this value;
+      // a missing setting previously fell back to `billing+<id>@invalid`, sending
+      // Stripe receipts/dunning/refund notifications to a reserved-TLD address that
+      // bounces permanently. Mirrors the Resend pairing above.
+      if (!data.STRIPE_SECRET_KEY) {
+        return true;
+      }
+      return Boolean(data.EMAIL_FROM_ADDRESS);
+    },
+    {
+      message:
+        'EMAIL_FROM_ADDRESS is required when STRIPE_SECRET_KEY is set — Stripe customer emails are derived from this address.',
       path: ['EMAIL_FROM_ADDRESS'],
     },
   )
@@ -628,6 +757,63 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
+      // sec-UP10: presigned PUT has no client-side min-size enforcement, so a
+      // zero-byte upload can occupy a row + presigned slot until the sweeper
+      // reclaims it. Presigned POST policy carries `content-length-range` that
+      // S3 evaluates at upload time, rejecting empty/oversized bodies before
+      // they cost anything. Force POST in production; PUT remains available
+      // for non-prod testing.
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      return data.UPLOAD_USE_PRESIGNED_POST === true;
+    },
+    {
+      message:
+        'UPLOAD_USE_PRESIGNED_POST must be true in production (PUT fallback has no min-size enforcement).',
+      path: ['UPLOAD_USE_PRESIGNED_POST'],
+    },
+  )
+  .refine(
+    (data) => {
+      // sec-C11: ENABLE_RESPONSE_ENCRYPTION must be paired with
+      // RESPONSE_ENCRYPTION_KEY. Other pairings (METRICS_ENABLED, CAPTCHA_*)
+      // enforce this at the schema; this one was previously enforced at
+      // `buildApp()` runtime, so a deploy without the key would crash on
+      // first request instead of failing config validation at boot.
+      if (!data.ENABLE_RESPONSE_ENCRYPTION) return true;
+      return (
+        typeof data.RESPONSE_ENCRYPTION_KEY === 'string' && data.RESPONSE_ENCRYPTION_KEY.length > 0
+      );
+    },
+    {
+      message:
+        'RESPONSE_ENCRYPTION_KEY (64 hex chars / 32 bytes for AES-256) is required when ENABLE_RESPONSE_ENCRYPTION=true.',
+      path: ['RESPONSE_ENCRYPTION_KEY'],
+    },
+  )
+  .refine(
+    (data) => {
+      // sec-C3: OTLP traffic carries SQL fragments, request paths, request ids.
+      // Allow plaintext http:// in dev/test (typical local collector), require
+      // https:// in production / staging — those environments must export over
+      // an encrypted channel.
+      if (data.OTEL_EXPORTER_OTLP_ENDPOINT === undefined) return true;
+      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') return true;
+      try {
+        return new URL(data.OTEL_EXPORTER_OTLP_ENDPOINT).protocol === 'https:';
+      } catch {
+        return false;
+      }
+    },
+    {
+      message:
+        'OTEL_EXPORTER_OTLP_ENDPOINT must be an https:// URL in production / staging (telemetry exporters cannot transmit SQL fragments / request paths in plaintext).',
+      path: ['OTEL_EXPORTER_OTLP_ENDPOINT'],
+    },
+  )
+  .refine(
+    (data) => {
       // PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS is the Redis lock held while a permission
       // cache miss triggers a DB recompute. If the HTTP statement timeout exceeds the lock TTL,
       // the lock can expire before the DB query finishes, causing concurrent waiters to bypass
@@ -644,6 +830,94 @@ export const envSchema = envSchemaBase
     {
       message: `DATABASE_HTTP_STATEMENT_TIMEOUT_MS must be < ${PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS * 1_000} (PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS × 1000) or 0 (disabled). A longer timeout allows the recompute lock to expire mid-query, defeating the cache stampede guard.`,
       path: ['DATABASE_HTTP_STATEMENT_TIMEOUT_MS'],
+    },
+  )
+  // sec-B6: Stripe secret key, when set, must carry a valid mode prefix
+  // (`sk_test_` or `sk_live_`). A garbled value defeats every Stripe API
+  // call and pushes the system into "fictional mode" (subs persist locally
+  // but never charge); fail closed at boot instead of silently at runtime.
+  .refine(
+    (data) =>
+      data.STRIPE_SECRET_KEY === undefined ||
+      data.STRIPE_SECRET_KEY.startsWith('sk_test_') ||
+      data.STRIPE_SECRET_KEY.startsWith('sk_live_'),
+    {
+      message:
+        'STRIPE_SECRET_KEY must begin with `sk_test_` or `sk_live_` (Stripe API key format).',
+      path: ['STRIPE_SECRET_KEY'],
+    },
+  )
+  // sec-B6 + sec-new-B3: Stripe webhook secret, when set, must carry the `whsec_` prefix.
+  // A wrong value fails every HMAC and silently freezes subscription state
+  // (no past-due / cancellation events reach the DB) until Stripe disables
+  // the endpoint after ~3 days.
+  // sec-new-B3: accepts a comma-separated list for zero-downtime key rotation
+  // (e.g. `whsec_old,whsec_new`); every segment must start with `whsec_`.
+  // Trailing commas and whitespace around segments are ignored so copy-paste
+  // errors from the Stripe Dashboard do not brick the webhook at boot.
+  .refine(
+    (data) => {
+      if (data.STRIPE_WEBHOOK_SECRET === undefined) return true;
+      const segments = data.STRIPE_WEBHOOK_SECRET.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return segments.length > 0 && segments.every((s) => s.startsWith('whsec_'));
+    },
+    {
+      message:
+        'STRIPE_WEBHOOK_SECRET must be a `whsec_`-prefixed value or a comma-separated list of `whsec_`-prefixed values (Stripe webhook secret format).',
+      path: ['STRIPE_WEBHOOK_SECRET'],
+    },
+  )
+  // sec-B6: In production, the Stripe secret key must be a live key
+  // (`sk_live_*`). A test key in production silently fails every webhook
+  // signature check and accepts no real payments.
+  .refine(
+    (data) => {
+      if (data.NODE_ENV !== 'production') return true;
+      if (data.STRIPE_SECRET_KEY === undefined) return true;
+      return data.STRIPE_SECRET_KEY.startsWith('sk_live_');
+    },
+    {
+      message:
+        'In production, STRIPE_SECRET_KEY must be a live-mode key (`sk_live_*`). Test-mode keys silently fail every webhook HMAC and accept no real payments.',
+      path: ['STRIPE_SECRET_KEY'],
+    },
+  )
+  // sec-B5: In production, half-configured Stripe (one of the two keys set,
+  // the other missing — typically a typo or missing GitHub Actions secret)
+  // would otherwise leave `isStripeConfigured()` returning false and the
+  // subscription service silently issuing local-only trials without ever
+  // charging. Reject the half-configured state loudly at boot.
+  .refine(
+    (data) => {
+      if (data.NODE_ENV !== 'production') return true;
+      const hasSecretKey = Boolean(data.STRIPE_SECRET_KEY);
+      const hasWebhookSecret = Boolean(data.STRIPE_WEBHOOK_SECRET);
+      // Both unset = billing disabled (allowed). Both set = handled by the
+      // format / live-mode refines above. Only one set = error.
+      return hasSecretKey === hasWebhookSecret;
+    },
+    {
+      message:
+        'In production, STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must both be set or both unset; a half-configured Stripe environment silently runs in fictional mode (subscriptions persist locally without charging).',
+      path: ['STRIPE_WEBHOOK_SECRET'],
+    },
+  )
+  // Mirror of the half-config refine — Zod path is informational, so we emit
+  // a second clause targeting `STRIPE_SECRET_KEY` so either-missing-side error
+  // surfaces on the offending key in deploy validators.
+  .refine(
+    (data) => {
+      if (data.NODE_ENV !== 'production') return true;
+      const hasSecretKey = Boolean(data.STRIPE_SECRET_KEY);
+      const hasWebhookSecret = Boolean(data.STRIPE_WEBHOOK_SECRET);
+      return hasSecretKey === hasWebhookSecret;
+    },
+    {
+      message:
+        'In production, STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must both be set or both unset (see sec-B5).',
+      path: ['STRIPE_SECRET_KEY'],
     },
   );
 

@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { paginatedResponse, successResponse } from '@/shared/utils/http/response.util.js';
+import { ForbiddenError } from '@/shared/errors/index.js';
 import {
   getRequestIdentifier,
   requireAuth,
@@ -46,10 +47,20 @@ export function createMemberInvitationController(service: MemberInvitationServic
       );
     },
     acceptMemberInvitation: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const { invitationId } = (request.params as { invitationId: string }) ?? {
+      // sec-T4: route now `app.authenticate`-gated; service binds the
+      // invitee email to the acting user's email. API-key principals
+      // cannot accept invitations (no user identity to bind to) — gate
+      // explicitly with a 403.
+      const auth = requirePrincipal(request);
+      if (auth.kind !== 'user') {
+        throw new ForbiddenError('errors:invitationEmailMismatch');
+      }
+      const { invitationId: rawAcceptId } = (request.params as { invitationId: string }) ?? {
         invitationId: '',
       };
-      const data = await service.accept(invitationId, request.body);
+      // sec-new-T2: reject malformed path params before reaching the service layer.
+      const invitationId = validatePublicIdParam(rawAcceptId ?? '', 'invitationId');
+      const data = await service.accept(invitationId, request.body, auth.userId);
       return successResponse(data, getRequestIdentifier(request));
     },
     revokeMemberInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
@@ -58,7 +69,9 @@ export function createMemberInvitationController(service: MemberInvitationServic
         (request.params as { id: string }).id ?? '',
         'id',
       );
-      const { invitationId } = request.params as { invitationId: string };
+      // sec-new-T2: reject malformed path params before reaching the service layer.
+      const { invitationId: rawRevokeId } = request.params as { invitationId: string };
+      const invitationId = validatePublicIdParam(rawRevokeId ?? '', 'invitationId');
       await service.revoke(organizationId, invitationId);
       return reply.code(204).send();
     },
@@ -67,7 +80,9 @@ export function createMemberInvitationController(service: MemberInvitationServic
         (request.params as { id: string }).id ?? '',
         'id',
       );
-      const { invitationId } = request.params as { invitationId: string };
+      // sec-new-T2: reject malformed path params before reaching the service layer.
+      const { invitationId: rawResendId } = request.params as { invitationId: string };
+      const invitationId = validatePublicIdParam(rawResendId ?? '', 'invitationId');
       const result = await service.resend(organizationId, invitationId, request.body);
       return successResponse(
         { invitation: result.invitation, token: result.token },
@@ -81,9 +96,11 @@ export function createMemberInvitationController(service: MemberInvitationServic
     },
     declineInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const { invitationId } = (request.params as { invitationId: string }) ?? {
+      const { invitationId: rawDeclineId } = (request.params as { invitationId: string }) ?? {
         invitationId: '',
       };
+      // sec-new-T2: reject malformed path params before reaching the service layer.
+      const invitationId = validatePublicIdParam(rawDeclineId ?? '', 'invitationId');
       await service.decline(invitationId, auth.userId);
       return reply.code(204).send();
     },

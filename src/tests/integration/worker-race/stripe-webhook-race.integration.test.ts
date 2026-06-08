@@ -45,6 +45,9 @@ describe('Integration: stripe-webhook worker concurrency race', () => {
         markCanceledByStripeProviderSubscriptionId: vi.fn(),
       } as unknown as SubscriptionService,
       new StripeWebhookEventRepository(),
+      // sec-B7: race test fires `account.updated` (not subscription.updated)
+      // so the plan-id resolver is never reached. Stub for type safety only.
+      { findByStripePriceId: vi.fn() } as never,
     );
 
     await Promise.allSettled(

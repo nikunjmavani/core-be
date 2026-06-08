@@ -104,4 +104,16 @@ export class VerificationTokenRepository {
         ),
       );
   }
+
+  /**
+   * Invalidate ALL outstanding tokens for a user across every token type. Used by the
+   * offboarding sequence (sec-U1) so a magic-link / password-reset / email-verify token
+   * issued seconds before soft-delete cannot mint a session for the deleted user.
+   */
+  async invalidateAllByUser(userId: number) {
+    await getRequestDatabase()
+      .update(verification_tokens)
+      .set({ used_at: new Date() })
+      .where(and(eq(verification_tokens.user_id, userId), isNull(verification_tokens.used_at)));
+  }
 }

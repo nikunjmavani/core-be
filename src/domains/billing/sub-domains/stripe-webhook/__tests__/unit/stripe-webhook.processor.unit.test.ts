@@ -58,6 +58,9 @@ describe('stripe-webhook.processor duplicate job delivery', () => {
   const stripeWebhookService = new StripeWebhookService(
     subscriptionService,
     stripeWebhookEventRepository,
+    // sec-B7: processor test exercises retry / DLQ paths, never reaches
+    // plan-id resolution. Stub for type safety only.
+    { findByStripePriceId: vi.fn() } as never,
   );
 
   beforeEach(() => {
@@ -68,7 +71,8 @@ describe('stripe-webhook.processor duplicate job delivery', () => {
     vi.mocked(stripeWebhookEventRepository.markProcessed).mockReset();
     vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockReset();
 
-    vi.mocked(stripeWebhookEventRepository.markProcessed).mockResolvedValue(undefined);
+    // sec-new-D2: markProcessed now returns boolean; true = row found and updated.
+    vi.mocked(stripeWebhookEventRepository.markProcessed).mockResolvedValue(true as never);
     vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockResolvedValue({
       id: 1,
     } as never);

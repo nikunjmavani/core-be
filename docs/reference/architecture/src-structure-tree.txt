@@ -22,6 +22,7 @@ src/
     │   │   │   │   └── worker/
     │   │   │   │   │   └── audit-retention.worker.unit.test.ts
     │   │   │   ├── audit-export.processor.unit.test.ts
+    │   │   │   ├── audit.controller.admin-read-audit.unit.test.ts
     │   │   │   ├── audit.controller.unit.test.ts
     │   │   │   ├── audit.repository.boundary.db.unit.test.ts
     │   │   │   ├── audit.repository.db.unit.test.ts
@@ -71,6 +72,8 @@ src/
     │   │   ├── unit/
     │   │   │   ├── auth-mfa.validator.unit.test.ts
     │   │   │   ├── auth.controller.unit.test.ts
+    │   │   │   ├── auth.routes.mfa-login-captcha.unit.test.ts
+    │   │   │   ├── auth.routes.session-revoke-stepup.unit.test.ts
     │   │   │   ├── auth.serializer.unit.test.ts
     │   │   │   ├── auth.service.unit.test.ts
     │   │   │   ├── auth.validator.oauth-callback.unit.test.ts
@@ -90,6 +93,10 @@ src/
     │   ├── seed/
     │   │   └── index.ts
     │   ├── shared/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── audit-login.util.unit.test.ts
+    │   │   ├── audit-login.util.ts
     │   │   └── complete-first-factor-auth.ts
     │   ├── sub-domains/
     │   │   ├── auth-method/
@@ -101,6 +108,8 @@ src/
     │   │   │   │   │       └── auth-method.event-handlers.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.unit.test.ts
+    │   │   │   │   │   ├── auth-method.service.last-method-guard.unit.test.ts
+    │   │   │   │   │   ├── auth-method.service.step-up-mfa.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.unit.test.ts
     │   │   │   │   │   ├── auth-method.validator.unit.test.ts
     │   │   │   │   │   └── magic-link.service.unit.test.ts
@@ -156,6 +165,7 @@ src/
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── auth-mfa-recovery-code.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.repository.unit.test.ts
+    │   │   │   │   │   ├── auth-mfa.service.org-policy-on-delete.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.service.unit.test.ts
     │   │   │   │   │   └── auth-mfa.validator.unit.test.ts
     │   │   │   ├── seed/
@@ -165,6 +175,7 @@ src/
     │   │   │   ├── auth-mfa-method.schema.ts
     │   │   │   ├── auth-mfa-recovery-code.repository.ts
     │   │   │   ├── auth-mfa-recovery-code.schema.ts
+    │   │   │   ├── auth-mfa-recovery-code.util.ts
     │   │   │   ├── auth-mfa.repository.ts
     │   │   │   ├── auth-mfa.service.ts
     │   │   │   ├── auth-mfa.types.ts
@@ -211,6 +222,7 @@ src/
     │   │   │       └── unit/
     │   │   │       │   ├── webauthn-challenge.unit.test.ts
     │   │   │       │   ├── webauthn-config.expected-origin.unit.test.ts
+    │   │   │       │   ├── webauthn-credential.repository.counter-monotonicity.unit.test.ts
     │   │   │       │   ├── webauthn.service.authenticate-options.unit.test.ts
     │   │   │       │   └── webauthn.validator.unit.test.ts
     │   │   │   ├── seed/
@@ -289,6 +301,7 @@ src/
     │   │   │   │   │       │   ├── stripe-webhook-event-reclaim.worker.unit.test.ts
     │   │   │   │   │       │   ├── stripe-webhook-event-retention.worker.unit.test.ts
     │   │   │   │   │       │   └── stripe-webhook.worker.unit.test.ts
+    │   │   │   │   │   ├── stripe-webhook-construct-event.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event.repository.db.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-event.repository.ledger-immutability.db.unit.test.ts
     │   │   │   │   │   ├── stripe-webhook-ingress.plugin.unit.test.ts
@@ -316,6 +329,7 @@ src/
     │   │   │   ├── stripe-webhook-event.repository.ts
     │   │   │   ├── stripe-webhook-ingress.plugin.ts
     │   │   │   ├── stripe-webhook-organization.util.ts
+    │   │   │   ├── stripe-webhook-raw-body.registry.ts
     │   │   │   ├── stripe-webhook.container.ts
     │   │   │   ├── stripe-webhook.controller.ts
     │   │   │   ├── stripe-webhook.routes.ts
@@ -329,6 +343,7 @@ src/
     │   │   │       │   └── subscription.integration.test.ts
     │   │   │       └── unit/
     │   │   │       │   ├── payment-provider.port.unit.test.ts
+    │   │   │       │   ├── stripe-payment-provider.email.unit.test.ts
     │   │   │       │   ├── subscription.controller.auth-matrix.unit.test.ts
     │   │   │       │   ├── subscription.controller.unit.test.ts
     │   │   │       │   ├── subscription.repository.db.unit.test.ts
@@ -337,6 +352,7 @@ src/
     │   │   │       │   ├── subscription.serializer.shape.unit.test.ts
     │   │   │       │   ├── subscription.serializer.unit.test.ts
     │   │   │       │   ├── subscription.service.cancel-resume.unit.test.ts
+    │   │   │       │   ├── subscription.service.stripe-reconciliation.unit.test.ts
     │   │   │       │   ├── subscription.service.unit.test.ts
     │   │   │       │   └── subscription.validator.unit.test.ts
     │   │   │   ├── seed/
@@ -428,6 +444,7 @@ src/
     │   │   │       │   ├── webhook.repository.unit.test.ts
     │   │   │       │   ├── webhook.serializer.no-secret.unit.test.ts
     │   │   │       │   ├── webhook.serializer.unit.test.ts
+    │   │   │       │   ├── webhook.service.max-per-org.unit.test.ts
     │   │   │       │   ├── webhook.service.ssrf-guard.unit.test.ts
     │   │   │       │   ├── webhook.service.unit.test.ts
     │   │   │       │   └── webhook.validator.unit.test.ts
@@ -445,12 +462,15 @@ src/
     │   │   │       │   ├── unit/
     │   │   │       │   │   ├── events/
     │   │   │       │   │   │   ├── worker/
+    │   │   │       │   │   │   │   ├── webhook-delivery.worker.dual-sign.unit.test.ts
+    │   │   │       │   │   │   │   ├── webhook-delivery.worker.durability.unit.test.ts
     │   │   │       │   │   │   │   └── webhook-delivery.worker.unit.test.ts
     │   │   │       │   │   │   ├── webhook-delivery-emit.unit.test.ts
     │   │   │       │   │   │   └── webhook-delivery.event-handlers.unit.test.ts
     │   │   │       │   │   ├── webhook-delivery-attempt.repository.db.unit.test.ts
     │   │   │       │   │   ├── webhook-delivery-attempt.repository.try-mark-sending.db.unit.test.ts
     │   │   │       │   │   ├── webhook-delivery.repository.db.unit.test.ts
+    │   │   │       │   │   ├── webhook-delivery.repository.event-key.unit.test.ts
     │   │   │       │   │   └── webhook-outbound-circuit.unit.test.ts
     │   │   │       │   └── webhook-delivery.worker.test.ts
     │   │   │       ├── events/
@@ -530,9 +550,11 @@ src/
     │   │   │   │   │   ├── member-role-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   ├── member-role-tombstone-retention.worker.unit.test.ts
     │   │   │   │   │   ├── member-role.controller.unit.test.ts
+    │   │   │   │   │   ├── member-role.dto.is-system-strip.unit.test.ts
     │   │   │   │   │   ├── member-role.repository.db.unit.test.ts
     │   │   │   │   │   ├── member-role.repository.unit.test.ts
     │   │   │   │   │   ├── member-role.serializer.unit.test.ts
+    │   │   │   │   │   ├── member-role.service.delete-guards.unit.test.ts
     │   │   │   │   │   ├── member-role.service.unit.test.ts
     │   │   │   │   │   └── member-role.validator.unit.test.ts
     │   │   │   ├── member-role-permission/
@@ -540,6 +562,7 @@ src/
     │   │   │   │   │   └── unit/
     │   │   │   │   │   │   ├── member-role-permission.controller.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.serializer.unit.test.ts
+    │   │   │   │   │   │   ├── member-role-permission.service.owner-role-guard.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.service.unit.test.ts
     │   │   │   │   │   │   ├── member-role-permission.validator.edge.unit.test.ts
     │   │   │   │   │   │   └── member-role-permission.validator.unit.test.ts
@@ -582,6 +605,7 @@ src/
     │   │   │   │   │   ├── membership.repository.db.unit.test.ts
     │   │   │   │   │   ├── membership.serializer.unit.test.ts
     │   │   │   │   │   ├── membership.service.cache-invalidation.unit.test.ts
+    │   │   │   │   │   ├── membership.service.grantable-permissions.unit.test.ts
     │   │   │   │   │   ├── membership.service.unit.test.ts
     │   │   │   │   │   └── membership.validator.unit.test.ts
     │   │   │   ├── member-invitation/
@@ -634,6 +658,7 @@ src/
     │   │   │   │   │   ├── organization-tombstone-retention.worker.unit.test.ts
     │   │   │   │   │   ├── organization.controller.unit.test.ts
     │   │   │   │   │   ├── organization.repository.db.unit.test.ts
+    │   │   │   │   │   ├── organization.routes.unit.test.ts
     │   │   │   │   │   ├── organization.serializer.unit.test.ts
     │   │   │   │   │   ├── organization.service.unit.test.ts
     │   │   │   │   │   └── organization.validator.unit.test.ts
@@ -702,6 +727,7 @@ src/
     │   │   │   │   │   ├── index.ts
     │   │   │   │   │   ├── organization-settings.bulk.seed.ts
     │   │   │   │   │   └── organization-settings.faker.ts
+    │   │   │   │   ├── i18n-locale.cache.ts
     │   │   │   │   ├── organization-settings.controller.ts
     │   │   │   │   ├── organization-settings.dto.ts
     │   │   │   │   ├── organization-settings.repository.ts
@@ -817,10 +843,12 @@ src/
     │   │   │   │   └── worker/
     │   │   │   │   │   └── user-tombstone-retention.worker.unit.test.ts
     │   │   │   ├── tombstone-repository-reads.unit.test.ts
+    │   │   │   ├── user.controller.admin-audit.unit.test.ts
     │   │   │   ├── user.controller.unit.test.ts
     │   │   │   ├── user.repository.db.unit.test.ts
     │   │   │   ├── user.repository.unit.test.ts
     │   │   │   ├── user.serializer.unit.test.ts
+    │   │   │   ├── user.service.account-deletion-safety.unit.test.ts
     │   │   │   ├── user.service.unit.test.ts
     │   │   │   ├── user.validator.unit.test.ts
     │   │   │   └── users-email-trgm-migration.policy.unit.test.ts
@@ -964,7 +992,8 @@ src/
     │   │   ├── user-database.context.ts
     │   │   ├── worker-database-guard.util.ts
     │   │   ├── worker-database.context.error.ts
-    │   │   └── worker-database.context.ts
+    │   │   ├── worker-database.context.ts
+    │   │   └── worker-statement-timeout.util.ts
     │   ├── migration/
     │   │   ├── migrate.ts
     │   │   ├── migration-execution-mode.ts
@@ -1084,6 +1113,7 @@ src/
     ├── queue/
     │   ├── __tests__/
     │   │   └── unit/
+    │   │   │   ├── commit-dispatch-recovery.processor.unit.test.ts
     │   │   │   ├── commit-dispatch.executor.unit.test.ts
     │   │   │   ├── commit-dispatch.store.unit.test.ts
     │   │   │   ├── dlq-auto-retry-circuit.util.unit.test.ts
@@ -1153,7 +1183,8 @@ src/
     │   ├── __tests__/
     │       └── unit/
     │       │   ├── s3-adapter.unit.test.ts
-    │       │   └── storage.service.presigned-put.unit.test.ts
+    │       │   ├── storage.service.presigned-put.unit.test.ts
+    │       │   └── storage.service.put-object-buffer.unit.test.ts
     │   ├── object-storage.port.ts
     │   ├── OVERVIEW.md
     │   ├── s3-adapter.ts
@@ -1294,6 +1325,9 @@ src/
     │   │   └── success.json
     ├── middlewares/
     │   ├── core/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── compress.middleware.unit.test.ts
     │   │   ├── api-versioning.middleware.ts
     │   │   ├── auth.middleware.ts
     │   │   ├── compress.middleware.ts
@@ -1325,6 +1359,9 @@ src/
     │   │   ├── cookie-session-origin.pre-handler.ts
     │   │   └── cookie.middleware.ts
     │   ├── tenant/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── tenant-authorized-organization-id.unit.test.ts
     │   │   ├── organization-rls-transaction.middleware.ts
     │   │   └── tenant.middleware.ts
     │   └── index.ts
@@ -1332,6 +1369,9 @@ src/
     │   └── index.ts
     ├── utils/
     │   ├── auth/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── recent-step-up.session-binding.unit.test.ts
     │   │   ├── account-status.util.ts
     │   │   ├── authorization.util.ts
     │   │   ├── global-admin-role.util.ts
@@ -1351,6 +1391,9 @@ src/
     │   │   ├── i18n-response.util.ts
     │   │   └── translate-request.util.ts
     │   ├── idempotency/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── idempotency-fingerprint.canonical.unit.test.ts
     │   │   ├── idempotency-fingerprint.util.ts
     │   │   ├── idempotency-key.util.ts
     │   │   └── idempotency-required.util.ts
@@ -1673,11 +1716,13 @@ src/
     │   │   ├── rate-limit-burst.security.test.ts
     │   │   └── rate-limiting.security.test.ts
     │   ├── rls/
+    │   │   ├── audit-append-only.security.test.ts
     │   │   ├── bola-cross-tenant.security.test.ts
     │   │   ├── core-be-app-role-privileges.security.test.ts
     │   │   ├── organization-rls-session.security.test.ts
     │   │   ├── organization-settings-resolvers.security.test.ts
     │   │   ├── organization-user-discovery.security.test.ts
+    │   │   ├── organizations-rls-deleted.security.test.ts
     │   │   ├── retention-cleanup-rls.security.test.ts
     │   │   ├── rls-matrix.security.test.ts
     │   │   ├── system-tables-rls.security.test.ts
@@ -1725,7 +1770,9 @@ src/
     │   │   ├── user-container-trim.policy.unit.test.ts
     │   │   └── worker-containers.unit.test.ts
     │   ├── config/
+    │   │   ├── env-schema-boolean-coerce.unit.test.ts
     │   │   ├── env-schema.unit.test.ts
+    │   │   ├── env-schema.unit.test.ts.bak
     │   │   └── env.config.unit.test.ts
     │   ├── database/
     │   │   └── role-least-privilege-migration.policy.unit.test.ts
@@ -1762,6 +1809,7 @@ src/
     │   ├── middleware/
     │   │   ├── api-key-auth.middleware.unit.test.ts
     │   │   ├── api-versioning.middleware.unit.test.ts
+    │   │   ├── auth.middleware.super-admin-rederive.unit.test.ts
     │   │   ├── auth.middleware.unit.test.ts
     │   │   ├── captcha.middleware.unit.test.ts
     │   │   ├── cookie-session-origin.pre-handler.unit.test.ts
@@ -1810,7 +1858,8 @@ src/
     │   ├── queue/
     │   │   ├── dead-letter.metadata.unit.test.ts
     │   │   ├── dead-letter.repository.unit.test.ts
-    │   │   └── dead-letter.unit.test.ts
+    │   │   ├── dead-letter.unit.test.ts
+    │   │   └── dlq-replay.unit.test.ts
     │   ├── scripts/
     │   │   ├── seed/
     │   │   │   ├── bulk-config.unit.test.ts
@@ -1852,6 +1901,7 @@ src/
     │   │   ├── auth/
     │   │   │   ├── account-status.util.unit.test.ts
     │   │   │   ├── authorization-request-memo.policy.unit.test.ts
+    │   │   │   ├── authorization.util.permission-deny-audit.unit.test.ts
     │   │   │   ├── authorization.util.unit.test.ts
     │   │   │   └── global-admin-role.util.unit.test.ts
     │   │   ├── http/

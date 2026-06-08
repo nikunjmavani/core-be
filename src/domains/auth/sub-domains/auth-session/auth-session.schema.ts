@@ -40,6 +40,13 @@ export const sessions = authSchema
     (table) => [
       index('idx_sessions_user_status').on(table.user_id, table.is_revoked, table.expires_at),
       index('idx_sessions_expires').on(table.expires_at),
+      // sec-D #33: covers the session-cleanup worker's revoked-branch
+      // (`AND(is_revoked, created_at < cutoff)`). Partial — scoped to the
+      // revoked subset only, the live population is unaffected. Added by
+      // migration 20260607050000.
+      index('idx_sessions_revoked_created_at')
+        .on(table.created_at)
+        .where(sql`${table.is_revoked} = true`),
       // Rotating refresh credential: indexed so refresh rotation and the refresh-token
       // RLS predicate resolve by index instead of scanning the table. Partial — sessions
       // that never refreshed (NULL) are excluded to keep the index small.

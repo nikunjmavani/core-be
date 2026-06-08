@@ -62,6 +62,9 @@ describe('stripe-webhook.processor race', () => {
     stripeWebhookService = new StripeWebhookService(
       subscriptionService,
       stripeWebhookEventRepository,
+      // sec-B7: race test asserts only the at-least-once idempotency contract;
+      // plan-id resolution is irrelevant. Stub for type safety only.
+      { findByStripePriceId: vi.fn() } as never,
     );
   });
 

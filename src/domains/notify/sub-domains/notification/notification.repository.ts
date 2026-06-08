@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { countWithCap } from '@/infrastructure/database/utils/capped-count.util.js';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
@@ -94,6 +94,24 @@ export class NotificationRepository {
       .where(eq(organizations.id, organization_id))
       .limit(1);
     return rows[0]?.organizationPublicId ?? null;
+  }
+
+  /**
+   * sec-D #10: resolve the recipient's user public id from a notification id via the
+   * `notify.resolve_user_public_id_for_notification` SECURITY DEFINER function. Used by
+   * the notification dispatch worker to pin `withUserDatabaseContext` for NULL-organization
+   * notifications instead of the wider `app.global_retention_cleanup` retention scope.
+   * Returns null when the notification or recipient cannot be resolved (worker treats this
+   * as a hard error and throws).
+   */
+  async findUserPublicIdForNotificationDispatch(notification_id: number): Promise<string | null> {
+    const result = await this.db().execute(
+      sql`SELECT notify.resolve_user_public_id_for_notification(${notification_id}) AS user_public_id`,
+    );
+    const rows = (
+      Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? [])
+    ) as { user_public_id: string | null }[];
+    return rows[0]?.user_public_id ?? null;
   }
 
   async findByIdForDispatch(notification_id: number, organization_public_id: string | null) {
@@ -196,15 +214,21 @@ export class NotificationRepository {
   }
 
   async markAllReadForUser(user_id: number): Promise<number> {
-    const unreadCount = await this.countUnreadForUser(user_id);
-    if (unreadCount === 0) return 0;
-
-    await this.db()
+    /**
+     * sec-D10: previously a SELECT-then-UPDATE — the count was sourced from a
+     * separate `countUnreadForUser` call ahead of the atomic UPDATE, so any
+     * concurrent notification arriving between the two would leave the API
+     * reporting a different number than the row count the DB actually marked.
+     * Using `UPDATE ... RETURNING { id }` returns the count atomically from the
+     * same statement, so the caller-visible value can never drift from the DB
+     * effect.
+     */
+    const rows = await this.db()
       .update(notifications)
       .set({ is_read: true, read_at: new Date() })
-      .where(and(eq(notifications.user_id, user_id), eq(notifications.is_read, false)));
-
-    return unreadCount;
+      .where(and(eq(notifications.user_id, user_id), eq(notifications.is_read, false)))
+      .returning({ id: notifications.id });
+    return rows.length;
   }
 
   async countUnreadForUser(user_id: number): Promise<number> {
@@ -224,10 +248,17 @@ export class NotificationRepository {
   }
 }
 
-/** Worker-only factory — requires an explicit handle from `withOrganizationContext`. */
+/**
+ * Worker-only factory — requires an explicit handle pinned by one of the supported
+ * worker database contexts: `organization` (tenant-scoped notifications),
+ * `global_admin` (sec-D #10 SECURITY DEFINER user-id lookup for tenant-less
+ * notifications), `user` (sec-D #10 narrow per-user load for tenant-less
+ * notifications), or `global_retention_cleanup` (retained for backward-compat with
+ * pre-sec-re-01 wiring; no longer produced by the dispatch worker).
+ */
 export function createWorkerNotificationRepository(
   databaseHandle: WorkerDatabaseHandle,
 ): NotificationRepository {
-  assertWorkerDatabaseContext(['organization', 'global_retention_cleanup']);
+  assertWorkerDatabaseContext(['organization', 'global_admin', 'user', 'global_retention_cleanup']);
   return new NotificationRepository(databaseHandle);
 }

@@ -53,6 +53,23 @@ export class AuthSessionRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Same as {@link findByPublicId} but DOES NOT filter `is_revoked = false`. Used by the
+   * refresh-token reuse-detection path so a replayed refresh secret against an already-
+   * revoked session still triggers the family-wide kill / audit signal (sec-A finding #9).
+   * Without this variant, the reuse detection silently no-ops once a user has logged out
+   * everywhere — losing forensic visibility into stolen refresh secrets exactly when it
+   * matters most.
+   */
+  async findByPublicIdIncludingRevoked(publicId: string) {
+    const rows = await getRequestDatabase()
+      .select()
+      .from(sessions)
+      .where(eq(sessions.public_id, publicId))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
   async findByPublicIdForUser(publicId: string, userId: number) {
     const rows = await getRequestDatabase()
       .select()

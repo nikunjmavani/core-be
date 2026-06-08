@@ -2,12 +2,20 @@ import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
-/** Zod schema for the `POST /organizations/:id/roles` request body. */
+/**
+ * Zod schema for the `POST /organizations/:id/roles` request body.
+ *
+ * @remarks
+ * sec-T3: `is_system` is a server-only flag set by the seeds (`tenancy.bulk.seed.ts`)
+ * to mark Admin/Member as immutable. Clients have no legitimate path to set it; the
+ * previous schema accepted it from the body so a tenant could mint roles
+ * indistinguishable from seeds and bypass the delete-guard. The `.strict()` shape
+ * rejects any body that includes the key.
+ */
 export const createMemberRoleDto = z
   .object({
     name: trimmedStringMinMax(1, 100),
     description: trimmedString().max(500).nullable().optional(),
-    is_system: z.boolean().optional(),
   })
   .strict();
 

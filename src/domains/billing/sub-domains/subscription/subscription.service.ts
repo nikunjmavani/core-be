@@ -1,4 +1,17 @@
-import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, NotFoundError, UnprocessableEntityError } from '@/shared/errors/index.js';
+
+/**
+ * Subscription statuses that are considered terminal (non-mutable).
+ *
+ * @remarks
+ * `CANCELED` and `INCOMPLETE_EXPIRED` rows can no longer be modified via the
+ * cancel / resume / changePlan operations. Attempting to do so would make a
+ * spurious Stripe API call against an already-inactive subscription, which
+ * produces a Stripe error, surfaces as 503 to the caller, and may confuse
+ * downstream event reconciliation. Guard every mutating method with this set
+ * before reaching the payment provider (sec-new-B1).
+ */
+const TERMINAL_STATUSES = new Set(['CANCELED', 'INCOMPLETE_EXPIRED']);
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
@@ -81,6 +94,74 @@ export class SubscriptionService {
     );
   }
 
+  /**
+   * sec-B finding #5: existence check on a Stripe-side subscription id, used by the
+   * webhook service to distinguish stale-event (no-op) from race-condition (retry)
+   * when the sync UPDATE returns null. Routed through the service so tests inject
+   * the worker-scoped repository the same way they do for sync/cancel.
+   */
+  async existsByStripeProviderSubscriptionId(
+    provider_subscription_id: string,
+    repositoryOverride?: SubscriptionRepository,
+  ): Promise<boolean> {
+    const repository = repositoryOverride ?? this.repository;
+    return repository.existsByProviderSubscriptionId(provider_subscription_id);
+  }
+
+  /**
+   * Fallback INSERT path for `customer.subscription.created` webhook events
+   * whose local row is still missing (sec-B9).
+   *
+   * @remarks
+   * When the Stripe webhook arrives before the HTTP create path has committed
+   * the local row (typical B2 race in busy production traffic), the regular
+   * sync UPDATE matches 0 rows and the event quietly advances to `processed` —
+   * the user's first billing cycle is then invisible to local entitlement.
+   * This method resolves the active organization context (`organizationPublicId`
+   * is set by the webhook tenancy resolver before the dispatch) and inserts
+   * the row with the worker-scoped repository. Returns `null` on a missing
+   * organization (catalog drift; should already be caught by the tenancy
+   * resolver but defensive here) so the caller can log + advance the ledger
+   * rather than throw a non-retryable error.
+   */
+  async createFromStripeWebhookEvent(input: {
+    providerSubscriptionId: string;
+    providerCustomerId: string | null;
+    planId: number;
+    status: string;
+    cancelAtPeriodEnd: boolean;
+    canceledAt: Date | null;
+    currentPeriodStart: Date;
+    currentPeriodEnd: Date;
+    billingCycle: string;
+    stripeEventCreatedAt: Date;
+    repositoryOverride: SubscriptionRepository;
+  }) {
+    const organizationId = await input.repositoryOverride.findOrganizationIdFromCurrentContext();
+    if (organizationId === null) {
+      return null;
+    }
+    // SubscriptionCreateData does not carry cancel_at_period_end / canceled_at
+    // — the subsequent customer.subscription.updated event (Stripe always
+    // emits one shortly after .created) will sync those columns through the
+    // regular UPDATE path. For a brand-new subscription they are essentially
+    // always (false, null) anyway.
+    return input.repositoryOverride.create({
+      organization_id: organizationId,
+      plan_id: input.planId,
+      billing_cycle: input.billingCycle,
+      status: input.status,
+      current_period_start: input.currentPeriodStart,
+      current_period_end: input.currentPeriodEnd,
+      provider: 'stripe',
+      provider_subscription_id: input.providerSubscriptionId,
+      ...(input.providerCustomerId !== null
+        ? { provider_customer_id: input.providerCustomerId }
+        : {}),
+      last_stripe_event_created_at: input.stripeEventCreatedAt,
+    });
+  }
+
   async list(organization_public_id: string) {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
@@ -154,6 +235,14 @@ export class SubscriptionService {
             provider: paymentResult.providerSubscriptionId ? 'stripe' : undefined,
             provider_subscription_id: paymentResult.providerSubscriptionId,
             provider_customer_id: paymentResult.providerCustomerId,
+            // sec-B2: stamp the watermark when Stripe accepted the subscription so a
+            // late-arriving `customer.subscription.created` event (whose `created`
+            // timestamp predates this moment) is filtered by the monotonic guard and
+            // cannot regress the row to a stale earlier state. Unset when Stripe is
+            // not configured (no webhook to reconcile, no watermark needed).
+            last_stripe_event_created_at: paymentResult.providerSubscriptionId
+              ? new Date()
+              : undefined,
           }),
         ),
       );
@@ -171,17 +260,19 @@ export class SubscriptionService {
   }
 
   async update(organization_public_id: string, subscription_public_id: string, body: unknown) {
-    const parsed = validateUpdateSubscription(body);
+    // sec-B1: validateUpdateSubscription enforces an empty-body DTO. Any client trying to
+    // PATCH `cancel_at_period_end` (or other billing-state fields) is rejected with 422
+    // and must use the dedicated /cancel and /resume routes (which DO call Stripe).
+    validateUpdateSubscription(body);
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
-      const updated = await this.repository.update(
+      const existing = await this.repository.findByPublicId(
         subscription_public_id,
         organization.id,
-        omitUndefined({ cancel_at_period_end: parsed.cancel_at_period_end }),
       );
-      if (!updated) throw new NotFoundError('Subscription');
-      return updated;
+      if (!existing) throw new NotFoundError('Subscription');
+      return existing;
     });
   }
 
@@ -202,6 +293,10 @@ export class SubscriptionService {
           organization.id,
         );
         if (!subscription) throw new NotFoundError('Subscription');
+        // sec-new-B1: terminal subscriptions cannot have their plan changed
+        if (TERMINAL_STATUSES.has(subscription.status)) {
+          throw new UnprocessableEntityError('errors:subscriptionNotMutable');
+        }
         const previousPlan = await this.planService.requirePlanRecordByInternalId(
           subscription.plan_id,
         );
@@ -235,6 +330,10 @@ export class SubscriptionService {
           plan_id: plan.id,
           current_period_start: periodStart,
           current_period_end: periodEnd,
+          // sec-B3: stamp the watermark so a stale `customer.subscription.updated` event
+          // delivered after this HTTP mutation cannot regress the plan back to its prior
+          // price (the webhook guard accepts an event only when its `created` > watermark).
+          last_stripe_event_created_at: new Date(),
         }),
       );
       if (!updated) throw new NotFoundError('Subscription');
@@ -271,6 +370,10 @@ export class SubscriptionService {
           organization.id,
         );
         if (!subscription) throw new NotFoundError('Subscription');
+        // sec-new-B1: terminal subscriptions cannot be canceled (they are already non-billable)
+        if (TERMINAL_STATUSES.has(subscription.status)) {
+          throw new UnprocessableEntityError('errors:subscriptionNotMutable');
+        }
         return { organization, subscription };
       },
     );
@@ -286,6 +389,9 @@ export class SubscriptionService {
     const updated = await withOrganizationDatabaseContext(organization_public_id, async () =>
       this.repository.update(subscription_public_id, organization.id, {
         cancel_at_period_end: true,
+        // sec-B3: stamp the watermark so a stale Stripe `updated` event arriving later
+        // cannot regress `cancel_at_period_end` back to false and silently resume billing.
+        last_stripe_event_created_at: new Date(),
       }),
     );
     if (!updated) throw new NotFoundError('Subscription');
@@ -307,6 +413,10 @@ export class SubscriptionService {
           organization.id,
         );
         if (!subscription) throw new NotFoundError('Subscription');
+        // sec-new-B1: terminal subscriptions cannot be resumed (already non-billable)
+        if (TERMINAL_STATUSES.has(subscription.status)) {
+          throw new UnprocessableEntityError('errors:subscriptionNotMutable');
+        }
         return { organization, subscription };
       },
     );
@@ -322,7 +432,16 @@ export class SubscriptionService {
     const updated = await withOrganizationDatabaseContext(organization_public_id, async () =>
       this.repository.update(subscription_public_id, organization.id, {
         cancel_at_period_end: false,
-        status: 'ACTIVE',
+        // sec-B4: do NOT force-write `status: 'ACTIVE'`. The Stripe webhook is the source
+        // of truth for status — the real value may be PAST_DUE (failed payment) or
+        // INCOMPLETE (3DS pending), and forcing ACTIVE here grants a transient
+        // entitlement window before the follow-up `customer.subscription.updated` event
+        // reconciles. The local row now only flips the cancel toggle.
+        //
+        // sec-B3: stamp the watermark so a stale Stripe `updated` event arriving later
+        // (e.g. delayed from the cancel that we are reversing) cannot re-set
+        // `cancel_at_period_end` back to true.
+        last_stripe_event_created_at: new Date(),
       }),
     );
     if (!updated) throw new NotFoundError('Subscription');

@@ -12,6 +12,7 @@ import type {
   StepUpVerifyInput,
   VerifyEmailInput,
   MfaEnrollInput,
+  MfaEnrollConfirmInput,
   MfaLoginVerifyInput,
   OauthCallbackQueryInput,
 } from './auth.dto.js';
@@ -27,6 +28,7 @@ import {
   StepUpVerifyDto,
   VerifyEmailDto,
   MfaEnrollDto,
+  MfaEnrollConfirmDto,
   MfaLoginVerifyDto,
   OauthCallbackQueryDto,
 } from './auth.dto.js';
@@ -176,6 +178,19 @@ export function validateMfaEnroll(body: unknown): MfaEnrollInput {
   return result.data;
 }
 
+/** Validates the authenticated `POST /api/v1/auth/mfa/enroll/confirm` request body against {@link MfaEnrollConfirmDto}. */
+export function validateMfaEnrollConfirm(body: unknown): MfaEnrollConfirmInput {
+  const result = MfaEnrollConfirmDto.safeParse(body);
+  if (!result.success) {
+    throw new ValidationError(
+      ERROR_KEY_INVALID_INPUT,
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
+  }
+  return result.data;
+}
+
 /** Validates the public login-flow MFA step body against {@link MfaLoginVerifyDto} (one of `totp_code` / `recovery_code` required). */
 export function validateMfaLoginVerify(body: unknown): MfaLoginVerifyInput {
   const result = MfaLoginVerifyDto.safeParse(body);
@@ -202,15 +217,18 @@ export function validateOauthCallbackQuery(query: unknown): OauthCallbackQueryIn
   return result.data;
 }
 
-/** Parses the `:id` path param on auth-method routes into a positive integer; throws {@link ValidationError} otherwise. */
-export function validateAuthMethodIdParam(authMethodId: string): number {
-  const authMethodIdNumber = Number(authMethodId);
-  if (!Number.isInteger(authMethodIdNumber) || authMethodIdNumber < 1) {
+/**
+ * Validates the `:publicId` path param on auth-method routes (sec-new-B4). Returns the
+ * 21-character alphanumeric public id; throws {@link ValidationError} when the value is not
+ * exactly 21 lowercase alphanumeric characters (the shape produced by {@link generatePublicId}).
+ */
+export function validateAuthMethodPublicIdParam(authMethodPublicId: string): string {
+  if (!/^[a-z0-9]{21}$/.test(authMethodPublicId)) {
     throw new ValidationError('errors:validation.invalidAuthMethodId', undefined, {
-      authMethodId: ['Must be a positive integer'],
+      authMethodPublicId: ['Must be a 21-character lowercase alphanumeric public id'],
     });
   }
-  return authMethodIdNumber;
+  return authMethodPublicId;
 }
 
 /** Parses the `:mfaMethodId` path param on MFA routes into a positive integer; throws {@link ValidationError} otherwise. */

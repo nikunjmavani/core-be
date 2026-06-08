@@ -12,7 +12,52 @@ import {
   updateStripeSubscription,
 } from '@/infrastructure/payment/stripe.client.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import { ServiceUnavailableError } from '@/shared/errors/index.js';
+import { ConfigurationError, ServiceUnavailableError } from '@/shared/errors/index.js';
+import { env } from '@/shared/config/env.config.js';
+
+/**
+ * Builds the Stripe customer email address from the platform's outbound
+ * transactional mail domain.
+ *
+ * @remarks
+ * sec-B11: the previous implementation interpolated the tenant-controlled
+ * `organization.slug` directly: `billing@${slug}.com`. An organization with
+ * slug `google` would be registered with Stripe as `billing@google.com`, and
+ * every Stripe-originated email (receipts, dunning, dispute notifications)
+ * would land at that external domain. The result is bounced mail, deliverability
+ * damage on the legitimate domain, and third-party complaints to AWS / Stripe.
+ *
+ * Switch to a per-organization plus-addressed mailbox on a domain we own.
+ * The domain is derived from `EMAIL_FROM_ADDRESS` (the same address auth /
+ * notification mail comes from), so an operator that sets up Stripe MUST
+ * already have a verified outbound sender — no new env variable is required.
+ * The org public id is embedded so admin tooling can map a stuck Stripe email
+ * back to a local organization at a glance.
+ *
+ * sec-B finding #19: the prior fallback to a `*@invalid` literal silently
+ * accepted a misconfigured environment — Stripe receipts, dunning, and refund
+ * notifications would land on a reserved-TLD address (RFC 6761) and bounce
+ * permanently. The cross-field env-schema refine (Stripe ⇒ `EMAIL_FROM_ADDRESS`)
+ * is the canonical guard; this throw is the boot-time-late fallback so a future
+ * loosening of the refine still fails closed rather than silently fanning
+ * `@invalid` customers into Stripe.
+ */
+function buildStripeCustomerEmail(organizationPublicId: string): string {
+  const fromAddress = env.EMAIL_FROM_ADDRESS;
+  if (!fromAddress) {
+    throw new ConfigurationError(
+      'EMAIL_FROM_ADDRESS must be configured before creating Stripe customers — otherwise ' +
+        'Stripe receipts/dunning land on an unowned domain.',
+    );
+  }
+  const atIndex = fromAddress.lastIndexOf('@');
+  if (atIndex < 0) {
+    throw new ConfigurationError(
+      `EMAIL_FROM_ADDRESS=${fromAddress} is not a valid email — cannot derive Stripe customer domain.`,
+    );
+  }
+  return `billing+${organizationPublicId}@${fromAddress.slice(atIndex + 1)}`;
+}
 
 /**
  * Stripe implementation of {@link PaymentProvider}.
@@ -53,7 +98,7 @@ export class StripePaymentProvider implements PaymentProvider {
       let stripeCustomerId = input.organization.stripe_customer_id;
       if (!stripeCustomerId) {
         const customer = await createStripeCustomer({
-          email: `billing@${input.organization.slug}.com`,
+          email: buildStripeCustomerEmail(input.organization.public_id),
           name: input.organization.name,
           metadata: { organization_id: input.organization.public_id },
           // One customer per organization: keying on the org public id makes a retried create

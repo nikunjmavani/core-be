@@ -22,18 +22,96 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { getWorkerConcurrencyNotify } from '@/shared/config/worker-concurrency.util.js';
 import type { WorkerHandle } from '@/infrastructure/queue/bootstrap.js';
 import {
-  runGlobalRetentionWorkerJob,
   runTenantScopedWorkerJob,
   type WorkerDatabaseHandle,
 } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withOrganizationContext } from '@/infrastructure/database/contexts/tenant-database.context.js';
+import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
+import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { NotificationRepository } from '@/domains/notify/sub-domains/notification/notification.repository.js';
 
 type NotificationDispatchData = {
   channels?: ('email' | 'in_app')[];
   email?: string;
 };
+
+/**
+ * Dispatch the email channel for one notification. Handles the two-phase outbox (Postgres
+ * INSERT then BullMQ enqueue) under a per-notification claim so retries collapse without
+ * producing duplicate sends.
+ *
+ * @remarks
+ * - **Algorithm:** claim → record outbox row → dispatch outbox enqueue. The claim is keyed by
+ *   `(notificationId, recipient)` with a TTL. If the INSERT fails, the claim is released so
+ *   a BullMQ retry can try again. If the INSERT succeeds but the BullMQ enqueue fails, the
+ *   claim is KEPT and the failure is logged — the mail-outbox sweeper will re-enqueue the
+ *   pending row, and any concurrent BullMQ retry of THIS job must hit `claimed = false` and
+ *   skip, preventing a duplicate row + duplicate Resend send.
+ * - **Failure modes:** propagates `recordOutboxEmail` errors so BullMQ retries; swallows
+ *   `dispatchOutboxEmail` errors because the outbox row is the durability commit.
+ * - **Side effects:** Redis claim write/release, Postgres outbox insert, BullMQ enqueue.
+ */
+async function dispatchNotificationEmail(options: {
+  notificationId: number;
+  type: string;
+  email: string | undefined;
+  title: string;
+  message: string;
+  actionUrl: string | null | undefined;
+  requestId: string | undefined;
+}): Promise<string | null> {
+  const { notificationId, type, email, title, message, actionUrl, requestId } = options;
+  if (!(isMailConfigured() && email)) {
+    logger.warn({ channel: 'email', notificationId }, 'notification.worker.channel_skipped');
+    return null;
+  }
+
+  const claimed = await claimNotificationEmailDispatch({ notificationId, recipient: email });
+  if (!claimed) {
+    logger.info({ notificationId, type }, 'notification.worker.email_already_dispatched');
+    return 'email:deduplicated';
+  }
+
+  const { subject, html } = buildNotificationEmailHtml({
+    title,
+    message,
+    actionUrl: actionUrl ?? null,
+  });
+
+  let mailOutboxId: number | undefined;
+  try {
+    await withSystemTableWorkerContext(async () => {
+      mailOutboxId = await recordOutboxEmail({
+        to: email,
+        subject,
+        html,
+        tags: [{ name: 'category', value: `notification-${type}` }],
+      });
+    });
+  } catch (error) {
+    // No outbox row was persisted — releasing the claim lets a BullMQ retry try again.
+    await releaseNotificationEmailDispatch({ notificationId, recipient: email });
+    throw error;
+  }
+
+  // The row is the durability commit. Do NOT release the claim and do NOT throw on dispatch
+  // failure — the mail-outbox sweeper will eventually re-enqueue the row, and any in-flight
+  // BullMQ retry that re-runs this job must hit `claimed = false` and skip to prevent a
+  // duplicate INSERT (and therefore duplicate Resend send via differing Idempotency-Keys).
+  if (mailOutboxId !== undefined) {
+    try {
+      await dispatchOutboxEmail(mailOutboxId, requestId ? { requestId } : undefined);
+    } catch (dispatchError) {
+      logger.warn(
+        { error: dispatchError, mailOutboxId, notificationId },
+        'notification.worker.dispatch_failed_outbox_row_persisted',
+      );
+    }
+  }
+
+  return 'email:queued';
+}
 
 /**
  * Hydrate a persisted notification and fan it out across its configured delivery channels
@@ -67,10 +145,30 @@ export async function processNotificationDispatchJob(
     return repository.findByIdForDispatch(notificationId, organizationPublicId ?? null);
   };
 
-  const loadNotificationForScope = () =>
-    organizationPublicId === null || organizationPublicId === undefined
-      ? runGlobalRetentionWorkerJob(loadNotification)
-      : withOrganizationContext(organizationPublicId, loadNotification);
+  // sec-D #10: NULL-organization notifications are user-scoped, not retention work.
+  // The prior code wrapped them in `runGlobalRetentionWorkerJob`, which pins
+  // `app.global_retention_cleanup = 'true'` — a wide escape hatch that also unlocks
+  // DELETE on audit.logs and cross-tenant reads on every RLS-scoped table that has
+  // the retention branch. Even though today's dispatch only reads then exits, that
+  // GUC's blast radius is a future-regression risk: any patch that adds a write
+  // inside this scope (e.g. "stamp delivered_at") would silently inherit cross-tenant
+  // write privileges. Resolve the recipient's public id via the narrow SECURITY
+  // DEFINER function and pin `withUserDatabaseContext` so the
+  // `notifications_owner_access` policy authorises the read on its intended branch.
+  const loadNotificationForScope = async () => {
+    if (organizationPublicId === null || organizationPublicId === undefined) {
+      const userPublicId = await withGlobalAdminDatabaseContext(async (databaseHandle) => {
+        const repository =
+          notificationRepository ?? createWorkerNotificationRepository(databaseHandle);
+        return repository.findUserPublicIdForNotificationDispatch(notificationId);
+      });
+      if (!userPublicId) {
+        throw new Error(`notification.user_unknown:${String(notificationId)}`);
+      }
+      return withUserDatabaseContext(userPublicId, loadNotification);
+    }
+    return withOrganizationContext(organizationPublicId, loadNotification);
+  };
   const notificationRow =
     notificationRepository !== undefined
       ? await notificationRepository.findByIdForDispatch(
@@ -85,7 +183,12 @@ export async function processNotificationDispatchJob(
 
   const dispatchData = (notificationRow.data ?? {}) as NotificationDispatchData;
   const channels = dispatchData.channels ?? ['in_app'];
-  const email = dispatchData.email ?? notificationRow.userEmail;
+  // sec-N7: never let a producer-supplied `data.email` override the
+  // authoritative recipient. `data` is `Record<string, unknown>`; the
+  // moment any domain handler reflects request input into it, an attacker
+  // could redirect system emails to a controlled inbox. Always use the
+  // notification row's joined `auth.users.email`.
+  const email = notificationRow.userEmail;
   const { type, title, message, actionUrl } = notificationRow;
 
   logger.info(
@@ -98,44 +201,16 @@ export async function processNotificationDispatchJob(
   for (const channel of channels) {
     switch (channel) {
       case 'email': {
-        if (!(isMailConfigured() && email)) {
-          logger.warn({ channel, notificationId }, 'notification.worker.channel_skipped');
-          break;
-        }
-
-        // Idempotency across BullMQ retries: a job that re-runs (transient failure, stall, or
-        // crash after a prior attempt already enqueued the email) must not enqueue a second
-        // email. Claim a one-time per-notification+recipient marker; if a prior attempt already
-        // claimed it, skip. The marker is released on dispatch failure so a genuine retry can
-        // re-claim and actually send.
-        const claimed = await claimNotificationEmailDispatch({ notificationId, recipient: email });
-        if (!claimed) {
-          logger.info({ notificationId, type }, 'notification.worker.email_already_dispatched');
-          results.push('email:deduplicated');
-          break;
-        }
-
-        const { subject, html } = buildNotificationEmailHtml({ title, message, actionUrl });
-
-        try {
-          await withSystemTableWorkerContext(async () => {
-            const mailOutboxId = await recordOutboxEmail({
-              to: email,
-              subject,
-              html,
-              tags: [{ name: 'category', value: `notification-${type}` }],
-            });
-            await dispatchOutboxEmail(
-              mailOutboxId,
-              jobContext.requestId ? { requestId: jobContext.requestId } : undefined,
-            );
-          });
-        } catch (error) {
-          await releaseNotificationEmailDispatch({ notificationId, recipient: email });
-          throw error;
-        }
-
-        results.push('email:queued');
+        const emailResult = await dispatchNotificationEmail({
+          notificationId,
+          type,
+          email,
+          title,
+          message,
+          actionUrl,
+          requestId: jobContext.requestId,
+        });
+        if (emailResult !== null) results.push(emailResult);
         break;
       }
 
@@ -168,9 +243,15 @@ async function processTenantScopedNotificationJob(
  * @remarks
  * - **Algorithm:** for each job, branch on `organizationPublicId`: tenant-scoped jobs run inside
  *   `runTenantScopedWorkerJob` (`withOrganizationContext`) so RLS pins reads to the org;
- *   global / system notifications (no org id) run inside `runGlobalRetentionWorkerJob`. Both
- *   paths build a worker-scoped {@link NotificationRepository} from the database handle and
- *   delegate to {@link processNotificationDispatchJob} for per-channel fan-out.
+ *   tenant-less notifications delegate directly to {@link processNotificationDispatchJob}
+ *   which then enters its own `loadNotificationForScope` flow — resolving the recipient
+ *   public id under `withGlobalAdminDatabaseContext` and pinning `withUserDatabaseContext`
+ *   for the load (sec-re-01: the prior wiring wrapped this branch in
+ *   `runGlobalRetentionWorkerJob` and injected a repository, which short-circuited the new
+ *   `loadNotificationForScope` flow — making the sec-D #10 user-context fix dead code).
+ *   Both paths produce a worker-scoped {@link NotificationRepository} (via injection on the
+ *   tenant-scoped path, via the loadNotificationForScope helper on the tenant-less path)
+ *   and delegate to {@link processNotificationDispatchJob} for per-channel fan-out.
  * - **Failure modes:** BullMQ retries on thrown errors using the queue's exponential backoff
  *   (3 attempts); stalls and completions are logged via the worker listeners.
  * - **Side effects:** subscribes a `Worker` to {@link NOTIFICATION_QUEUE_NAME}; reads notification
@@ -190,14 +271,17 @@ export function createNotificationWorker(): WorkerHandle {
         });
 
       return runWithPropagatedTraceContext({ traceparent, tracestate }, job.name, () => {
+        // sec-re-01: tenant-less notifications delegate directly to
+        // processNotificationDispatchJob so it can enter its own loadNotificationForScope
+        // flow (withGlobalAdminDatabaseContext → withUserDatabaseContext). The prior
+        // wiring wrapped this branch in runGlobalRetentionWorkerJob AND injected a
+        // repository, which short-circuited the new flow and left the sec-D #10 fix
+        // dead code.
         if (organizationPublicId === null || organizationPublicId === undefined) {
-          return runGlobalRetentionWorkerJob((databaseHandle) =>
-            processNotificationDispatchJob(
-              notificationId,
-              organizationPublicId,
-              omitUndefined({ id: job.id, requestId }),
-              createWorkerNotificationRepository(databaseHandle),
-            ),
+          return processNotificationDispatchJob(
+            notificationId,
+            organizationPublicId,
+            omitUndefined({ id: job.id, requestId }),
           );
         }
 

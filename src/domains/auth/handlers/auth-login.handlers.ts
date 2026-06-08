@@ -1,12 +1,12 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier } from '@/shared/utils/http/request.util.js';
-import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
-import { logger } from '@/shared/utils/infrastructure/logger.util.js';
-import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
-import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { getIpAddress, getUserAgent, setSessionCookie } from '@/domains/auth/auth.http.util.js';
 import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import {
+  recordLoginAuditEvent,
+  recordLoginFailureAuditEvent,
+} from '@/domains/auth/shared/audit-login.util.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthLoginHandlersDependencies = Pick<AuthContainer, 'authService'>;
@@ -17,7 +17,17 @@ export function createAuthLoginHandlers({ authService }: AuthLoginHandlersDepend
     login: async (request: FastifyRequest, reply: FastifyReply) => {
       const ipAddress = getIpAddress(request);
       const userAgent = getUserAgent(request);
-      const data = await authService.login(request.body, ipAddress, userAgent ?? undefined);
+      let data: Awaited<ReturnType<typeof authService.login>>;
+      try {
+        data = await authService.login(request.body, ipAddress, userAgent ?? undefined);
+      } catch (error) {
+        // sec-A8 follow-up: record the failure side of the OVERVIEW invariant
+        // ("every login (success or failure) records a row"). The helper is
+        // best-effort and never throws — we always re-raise the original error
+        // so the global error handler maps it to the right HTTP status.
+        await recordLoginFailureAuditEvent(request, 'password', error);
+        throw error;
+      }
 
       if ('mfa_required' in data) {
         return successResponse(AuthSerializer.mfaRequired(data), getRequestIdentifier(request));
@@ -25,28 +35,7 @@ export function createAuthLoginHandlers({ authService }: AuthLoginHandlersDepend
 
       setSessionCookie(reply, data.session_public_id, data.session_refresh_secret);
 
-      try {
-        const payload = await verifyAccessToken(data.access_token);
-        await recordScopedAuditEvent(request, {
-          actorUserPublicId: payload.userId,
-          action: 'auth.login',
-          resource_type: 'session',
-          metadata: { session_public_id: data.session_public_id },
-        });
-        // Break-glass visibility: every platform super_admin token issued via the
-        // credential path is recorded as a high-severity audit event.
-        if (payload.role === GLOBAL_ROLES.SUPER_ADMIN) {
-          await recordScopedAuditEvent(request, {
-            actorUserPublicId: payload.userId,
-            action: 'auth.super_admin.token_issued',
-            resource_type: 'session',
-            severity: 'WARNING',
-            metadata: { session_public_id: data.session_public_id, source: 'password_login' },
-          });
-        }
-      } catch (error) {
-        logger.warn({ error }, 'audit.login.recording.failed');
-      }
+      await recordLoginAuditEvent(request, data, 'password');
 
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
     },

@@ -30,13 +30,17 @@ describe('Auth WebAuthn — Integration', () => {
   describe('POST /api/v1/auth/webauthn/register/options', () => {
     it('should return registration options for authenticated user', async () => {
       const user = await createTestUser();
-      await seedRecentStepUpForTestUser(user.public_id);
-      const token = await generateTestTokenWithActiveSession(app, user.public_id);
+      const { token, sessionPublicId } = await generateTestTokenWithActiveSession(
+        app,
+        user.public_id,
+      );
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/webauthn/register/options'),
         token,
+        payload: {},
       });
 
       expect(response.statusCode).toBe(200);
@@ -68,7 +72,7 @@ describe('Auth WebAuthn — Integration', () => {
 
     it('should return 400 for invalid body', async () => {
       const user = await createTestUser();
-      const token = await generateTestTokenWithActiveSession(app, user.public_id);
+      const { token } = await generateTestTokenWithActiveSession(app, user.public_id);
       const response = await injectAuthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/webauthn/register/verify'),
@@ -80,13 +84,13 @@ describe('Auth WebAuthn — Integration', () => {
   });
 
   describe('POST /api/v1/auth/webauthn/authenticate/options', () => {
-    it('should return 401 when email is omitted (anti-enumeration)', async () => {
+    it('should return 400 when email is omitted (anti-enumeration)', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
         url: testApiPath('/auth/webauthn/authenticate/options'),
         payload: {},
       });
-      expect(response.statusCode).toBe(401);
+      expect(response.statusCode).toBe(400);
     });
   });
 

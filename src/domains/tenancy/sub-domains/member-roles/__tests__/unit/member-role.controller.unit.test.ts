@@ -164,22 +164,61 @@ describe('createMemberRoleController', () => {
     expect(service.getByPublicId).toHaveBeenCalledWith(organizationPublicId, rolePublicId);
   });
 
-  it('uses empty defaults when params are undefined', async () => {
-    vi.mocked(service.getByPublicId).mockClear();
-    vi.mocked(service.update).mockClear();
-    vi.mocked(service.delete).mockClear();
+  // sec-new-T3: getRole, updateRole, deleteRole now validate both id and roleId.
+  it('getRole rejects malformed roleId (sec-new-T3)', async () => {
+    await expect(
+      controller.getRole(
+        mockRequest({ params: { id: organizationPublicId, roleId: 'not_a_valid_id!!' } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
 
-    await controller.getRole(mockRequest({ params: undefined }), mockReply());
-    expect(service.getByPublicId).toHaveBeenCalledWith('', '');
+  it('getRole rejects malformed organizationId (sec-new-T3)', async () => {
+    await expect(
+      controller.getRole(
+        mockRequest({ params: { id: '../../etc', roleId: rolePublicId } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
 
-    await controller.updateRole(
-      mockRequest({ params: undefined, body: { name: 'Updated' } }),
-      mockReply(),
-    );
-    expect(service.update).toHaveBeenCalledWith('', '', { name: 'Updated' }, expect.any(String));
+  it('getRole rejects empty params (sec-new-T3)', async () => {
+    await expect(
+      controller.getRole(mockRequest({ params: undefined }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
 
-    const reply = mockReply();
-    await controller.deleteRole(mockRequest({ params: undefined }), reply);
-    expect(service.delete).toHaveBeenCalledWith('', '');
+  it('updateRole rejects malformed roleId (sec-new-T3)', async () => {
+    await expect(
+      controller.updateRole(
+        mockRequest({ params: { id: organizationPublicId, roleId: '' }, body: { name: 'X' } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('updateRole rejects malformed organizationId (sec-new-T3)', async () => {
+    await expect(
+      controller.updateRole(
+        mockRequest({ params: { id: 'bad id', roleId: rolePublicId }, body: { name: 'X' } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('deleteRole rejects malformed roleId (sec-new-T3)', async () => {
+    await expect(
+      controller.deleteRole(
+        mockRequest({ params: { id: organizationPublicId, roleId: '' } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('deleteRole rejects empty params (sec-new-T3)', async () => {
+    await expect(
+      controller.deleteRole(mockRequest({ params: undefined }), mockReply()),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 });

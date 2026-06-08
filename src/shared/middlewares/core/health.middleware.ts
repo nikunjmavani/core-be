@@ -4,6 +4,7 @@ import { isApplicationDraining } from '@/shared/utils/infrastructure/application
 import { getCachedHealthOperationalMetrics } from '@/shared/utils/infrastructure/health-operational-metrics.util.js';
 import { getCachedDependencyReadinessProbes } from '@/shared/utils/infrastructure/readiness-probes.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { env } from '@/shared/config/env.config.js';
 
 async function getOperationalMetricsForReadiness() {
   try {
@@ -39,6 +40,20 @@ async function handleReadinessProbe(reply: FastifyReply) {
     };
   }
 
+  // sec-C4: the verbose operational body (`migration_version`,
+  // `mail_outbox_pending`, `dlq_depth`, `worker_queue_manifest`) is useful
+  // for internal probes but is reconnaissance for unauthenticated callers:
+  // migration version reveals patch level; DLQ depth signals "platform
+  // reeling"; the manifest reveals worker topology. Default OFF; operators
+  // explicitly opt in via `HEALTH_VERBOSE_BODY_ENABLED=true` for trusted
+  // ingress paths (LB-internal probes behind network ACLs).
+  if (!env.HEALTH_VERBOSE_BODY_ENABLED) {
+    const readiness = await getCachedDependencyReadinessProbes();
+    if (readiness.status !== 'ok') {
+      reply.status(503);
+    }
+    return readiness;
+  }
   const [readiness, operational] = await Promise.all([
     getCachedDependencyReadinessProbes(),
     getOperationalMetricsForReadiness(),

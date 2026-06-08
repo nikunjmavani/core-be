@@ -88,16 +88,29 @@ describe('UploadRepository', () => {
     expect(await repository.markStatusByPublicId('upload_public_test', 'UPLOADED')).toEqual(row);
   });
 
-  it('findActiveByUserId and findActiveByOrganizationId return active rows', async () => {
-    const activeRows = [{ id: 1, file_key: 'avatars/key.png' }];
-    mockWhere.mockReturnValueOnce({ limit: mockLimit, returning: mockReturning });
-    mockFrom.mockReturnValueOnce({ where: vi.fn().mockResolvedValue(activeRows) });
+  // sec-D12: the unbounded `findActiveByUserId` / `findActiveByOrganizationId`
+  // siblings were removed — production goes through the keyset variants below.
+  it('findActiveByUserIdAfter and findActiveByOrganizationIdAfter return keyset-paginated rows', async () => {
+    const activeRows = [{ id: 11, file_key: 'avatars/key.png' }];
 
-    const byUser = await repository.findActiveByUserId(1);
+    mockFrom.mockReturnValueOnce({
+      where: vi.fn().mockReturnValueOnce({
+        orderBy: vi.fn().mockReturnValueOnce({
+          limit: vi.fn().mockResolvedValue(activeRows),
+        }),
+      }),
+    });
+    const byUser = await repository.findActiveByUserIdAfter(1, 0, 100);
     expect(byUser).toEqual(activeRows);
 
-    mockFrom.mockReturnValueOnce({ where: vi.fn().mockResolvedValue(activeRows) });
-    const byOrganization = await repository.findActiveByOrganizationId(10);
+    mockFrom.mockReturnValueOnce({
+      where: vi.fn().mockReturnValueOnce({
+        orderBy: vi.fn().mockReturnValueOnce({
+          limit: vi.fn().mockResolvedValue(activeRows),
+        }),
+      }),
+    });
+    const byOrganization = await repository.findActiveByOrganizationIdAfter(10, 0, 100);
     expect(byOrganization).toEqual(activeRows);
   });
 

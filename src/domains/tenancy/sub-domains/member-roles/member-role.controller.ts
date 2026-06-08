@@ -40,10 +40,13 @@ export function createMemberRoleController(service: MemberRoleService) {
       });
     },
     getRole: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const { id: organizationId, roleId } = (request.params as {
+      const { id: rawOrgId, roleId: rawRoleId } = (request.params as {
         id: string;
         roleId: string;
       }) ?? { id: '', roleId: '' };
+      // sec-new-T3: reject malformed path params before reaching the service layer.
+      const organizationId = validatePublicIdParam(rawOrgId ?? '', 'id');
+      const roleId = validatePublicIdParam(rawRoleId ?? '', 'roleId');
       const data = await service.getByPublicId(organizationId, roleId);
       return successResponse(data, getRequestIdentifier(request));
     },
@@ -66,10 +69,13 @@ export function createMemberRoleController(service: MemberRoleService) {
     },
     updateRole: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const { id: organizationId, roleId } = (request.params as {
+      const { id: rawUpdateOrgId, roleId: rawUpdateRoleId } = (request.params as {
         id: string;
         roleId: string;
       }) ?? { id: '', roleId: '' };
+      // sec-new-T3: reject malformed path params before reaching the service layer.
+      const organizationId = validatePublicIdParam(rawUpdateOrgId ?? '', 'id');
+      const roleId = validatePublicIdParam(rawUpdateRoleId ?? '', 'roleId');
       const data = await service.update(
         organizationId,
         roleId,
@@ -87,10 +93,13 @@ export function createMemberRoleController(service: MemberRoleService) {
     },
     deleteRole: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const { id: organizationId, roleId } = (request.params as {
+      const { id: rawDeleteOrgId, roleId: rawDeleteRoleId } = (request.params as {
         id: string;
         roleId: string;
       }) ?? { id: '', roleId: '' };
+      // sec-new-T3: reject malformed path params before reaching the service layer.
+      const organizationId = validatePublicIdParam(rawDeleteOrgId ?? '', 'id');
+      const roleId = validatePublicIdParam(rawDeleteRoleId ?? '', 'roleId');
       await service.delete(organizationId, roleId);
       await recordScopedAuditEvent(request, {
         ...buildAuditActorFields(auth),

@@ -8,6 +8,12 @@ import type { PermissionRepository } from './permission.repository.js';
  * @remarks
  * Prevents privilege escalation where a user with `role:manage` or `api-key:manage` grants
  * permissions they do not themselves possess (e.g. `organization:delete`, `subscription:manage`).
+ *
+ * Callers MUST pass the FULL set of codes being added AND removed (the union with the role's
+ * existing permission set), not just the new request body. The PUT-role-permissions service
+ * does this composition (sec-T2): an empty-array PUT is a *removal* of every currently-held
+ * code, and the guard must verify the caller holds them all. Passing only the new set lets
+ * a `role:manage` holder downgrade roles they themselves could not have created.
  */
 export async function assertCallerCanGrantPermissionCodes(options: {
   authorizationService: AuthorizationService;
@@ -17,6 +23,10 @@ export async function assertCallerCanGrantPermissionCodes(options: {
   requestedPermissionCodes: string[];
 }): Promise<void> {
   if (options.requestedPermissionCodes.length === 0) {
+    // No codes being added or removed (caller-supplied empty body against an already-empty
+    // role, or every code in the new set already present). Nothing to authorize. Note: this
+    // is NOT the "wipe a populated role" case — callers in that path pass the role's current
+    // permission set in the union and never reach this branch. See sec-T2.
     return;
   }
 

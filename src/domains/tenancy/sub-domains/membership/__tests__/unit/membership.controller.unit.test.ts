@@ -191,53 +191,82 @@ describe('createMembershipController', () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
-  it('updateMembership and deleteMembership use param fallbacks when ids are missing', async () => {
+  it('sec-re-18: updateMembership and deleteMembership reject when the organization id is missing instead of passing a sentinel through', async () => {
+    // Prior behaviour: missing organization id collapsed to undefined / '' and was
+    // forwarded to the service (which would then fail elsewhere with unbounded
+    // cardinality on the observability path). sec-re-18 binds at the boundary
+    // with validatePublicIdParam so the request is rejected with ValidationError
+    // before the service is reached.
     vi.mocked(service.update).mockClear();
     vi.mocked(service.delete).mockClear();
-    await controller.updateMembership(
-      mockRequest({ params: { membershipId: membershipPublicId }, body: { status: 'ACTIVE' } }),
-      mockReply(),
-    );
-    expect(service.update).toHaveBeenCalledWith(
-      undefined,
-      membershipPublicId,
-      { status: 'ACTIVE' },
-      expect.any(String),
-    );
-    const deleteReply = mockReply();
-    await controller.deleteMembership(
-      mockRequest({ params: { membershipId: membershipPublicId } }),
-      deleteReply,
-    );
-    expect(service.delete).toHaveBeenCalledWith(undefined, membershipPublicId);
+    await expect(
+      controller.updateMembership(
+        mockRequest({ params: { membershipId: membershipPublicId }, body: { status: 'ACTIVE' } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(service.update).not.toHaveBeenCalled();
+    await expect(
+      controller.deleteMembership(
+        mockRequest({ params: { membershipId: membershipPublicId } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(service.delete).not.toHaveBeenCalled();
   });
 
-  it('uses empty defaults when params are undefined', async () => {
+  it('sec-re-18: every membership handler that takes path params rejects undefined / invalid ids with ValidationError', async () => {
     vi.mocked(service.getByPublicId).mockClear();
     vi.mocked(service.update).mockClear();
     vi.mocked(service.delete).mockClear();
     vi.mocked(service.getPermissions).mockClear();
 
-    await controller.getMembership(mockRequest({ params: undefined }), {} as FastifyReply);
-    expect(service.getByPublicId).toHaveBeenCalledWith('', '');
+    await expect(
+      controller.getMembership(mockRequest({ params: undefined }), {} as FastifyReply),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(service.getByPublicId).not.toHaveBeenCalled();
 
-    await controller.getMembershipPermissions(
-      mockRequest({ params: undefined }),
-      {} as FastifyReply,
-    );
-    expect(service.getPermissions).toHaveBeenCalledWith('', '');
+    await expect(
+      controller.getMembershipPermissions(mockRequest({ params: undefined }), {} as FastifyReply),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(service.getPermissions).not.toHaveBeenCalled();
 
-    await controller.updateMembership(
-      mockRequest({ params: undefined, body: { status: 'ACTIVE' } }),
-      {} as FastifyReply,
-    );
-    expect(service.update).toHaveBeenCalledWith('', '', { status: 'ACTIVE' }, expect.any(String));
+    await expect(
+      controller.updateMembership(
+        mockRequest({ params: undefined, body: { status: 'ACTIVE' } }),
+        {} as FastifyReply,
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(service.update).not.toHaveBeenCalled();
 
     const deleteReply = { code: vi.fn().mockReturnThis(), send: vi.fn() };
-    await controller.deleteMembership(
-      mockRequest({ params: undefined }),
-      deleteReply as unknown as FastifyReply,
-    );
-    expect(service.delete).toHaveBeenCalledWith('', '');
+    await expect(
+      controller.deleteMembership(
+        mockRequest({ params: undefined }),
+        deleteReply as unknown as FastifyReply,
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(service.delete).not.toHaveBeenCalled();
+  });
+
+  it('sec-re-18: handlers reject an invalid membershipId at the boundary', async () => {
+    // membershipId was previously a raw passthrough — an attacker-supplied
+    // string would flow into the service and downstream observability.
+    vi.mocked(service.getByPublicId).mockClear();
+    vi.mocked(service.getPermissions).mockClear();
+    await expect(
+      controller.getMembership(
+        mockRequest({ params: { id: organizationPublicId, membershipId: 'not-a-public-id' } }),
+        {} as FastifyReply,
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(service.getByPublicId).not.toHaveBeenCalled();
+    await expect(
+      controller.getMembershipPermissions(
+        mockRequest({ params: { id: organizationPublicId, membershipId: 'not-a-public-id' } }),
+        {} as FastifyReply,
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(service.getPermissions).not.toHaveBeenCalled();
   });
 });

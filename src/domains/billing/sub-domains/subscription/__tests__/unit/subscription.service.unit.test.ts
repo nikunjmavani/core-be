@@ -6,7 +6,12 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
-import { ConflictError, NotFoundError, ServiceUnavailableError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  NotFoundError,
+  ServiceUnavailableError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
@@ -163,11 +168,17 @@ describe('SubscriptionService', () => {
     expect(result).toEqual(subscriptionRow);
   });
 
-  it('update sets cancel_at_period_end', async () => {
-    await service.update('org_public', 'sub_public', { cancel_at_period_end: true });
-    expect(repository.update).toHaveBeenCalledWith('sub_public', 1, {
-      cancel_at_period_end: true,
-    });
+  it('update rejects cancel_at_period_end (sec-B1: use /cancel + /resume instead)', async () => {
+    await expect(
+      service.update('org_public', 'sub_public', { cancel_at_period_end: true }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('update with empty body returns the existing subscription (no-op)', async () => {
+    const result = await service.update('org_public', 'sub_public', {});
+    expect(result).toEqual(subscriptionRow);
+    expect(repository.update).not.toHaveBeenCalled();
   });
 
   it('changePlan updates plan on subscription', async () => {
@@ -184,13 +195,18 @@ describe('SubscriptionService', () => {
     );
   });
 
-  it('resume reactivates subscription', async () => {
+  it('resume clears cancel_at_period_end but does NOT force status=ACTIVE (sec-B4)', async () => {
     await service.resume('org_public', 'sub_public');
     expect(repository.update).toHaveBeenCalledWith(
       'sub_public',
       1,
-      expect.objectContaining({ cancel_at_period_end: false, status: 'ACTIVE' }),
+      expect.objectContaining({ cancel_at_period_end: false }),
     );
+    // sec-B4: status is no longer force-written; the upcoming Stripe webhook reconciles it.
+    const updatePayload = vi.mocked(repository.update).mock.calls[0]![2];
+    expect(updatePayload.status).toBeUndefined();
+    // sec-B3: HTTP mutations stamp the watermark so a stale Stripe event cannot regress.
+    expect(updatePayload.last_stripe_event_created_at).toBeInstanceOf(Date);
   });
 
   it('create uses Stripe when configured and plan has price id', async () => {
@@ -342,11 +358,11 @@ describe('SubscriptionService', () => {
     expect(repository.update).not.toHaveBeenCalled();
   });
 
-  it('update throws when repository returns no row', async () => {
-    vi.mocked(repository.update).mockResolvedValue(null);
-    await expect(
-      service.update('org_public', 'sub_public', { cancel_at_period_end: true }),
-    ).rejects.toBeInstanceOf(NotFoundError);
+  it('update with empty body throws NotFoundError when subscription is missing', async () => {
+    vi.mocked(repository.findByPublicId).mockResolvedValue(null);
+    await expect(service.update('org_public', 'sub_public', {})).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 
   it('changePlan throws when subscription is missing', async () => {

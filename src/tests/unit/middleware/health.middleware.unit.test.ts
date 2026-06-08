@@ -30,6 +30,18 @@ vi.mock('@/shared/utils/infrastructure/health-operational-metrics.util.js', () =
   }),
 }));
 
+// sec-C4: tests assert the verbose-body shape. Default for new env var is
+// false; enable it in this suite so the existing assertions continue to
+// exercise the operational-metrics surface (which is still the path that
+// runs on operator-opted internal probes).
+vi.mock('@/shared/config/env.config.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/shared/config/env.config.js')>();
+  return {
+    ...original,
+    env: { ...original.env, HEALTH_VERBOSE_BODY_ENABLED: true },
+  };
+});
+
 vi.mock('@/shared/utils/infrastructure/readiness-probes.util.js', () => ({
   getCachedDependencyReadinessProbes: vi.fn().mockResolvedValue({
     status: 'ok',

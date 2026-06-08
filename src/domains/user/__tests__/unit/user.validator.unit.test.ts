@@ -35,6 +35,15 @@ describe('user.validator', () => {
     expect(() => validateListUsers({ status: 'INVALID' })).toThrow(ValidationError);
   });
 
+  it('sec-new-U1: validateListUsers rejects after cursor longer than 512 characters', () => {
+    expect(() => validateListUsers({ after: 'a'.repeat(513) })).toThrow(ValidationError);
+  });
+
+  it('sec-new-U1: validateListUsers accepts after cursor of exactly 512 characters', () => {
+    const result = validateListUsers({ after: 'a'.repeat(512) });
+    expect(result.after).toHaveLength(512);
+  });
+
   it('validateListUsers rejects legacy page query parameter', () => {
     try {
       validateListUsers({ page: '1', limit: '10' });

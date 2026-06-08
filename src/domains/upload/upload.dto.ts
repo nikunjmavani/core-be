@@ -5,6 +5,13 @@ import { UPLOAD_PURPOSES, UPLOAD_TARGETS } from './upload.constants.js';
 /**
  * Zod schema for the `POST /api/v1/uploads` request body — the structural
  * gate before {@link validateCreateUpload} applies purpose/MIME/size policies.
+ *
+ * @remarks
+ * sec-UP3 is enforced at the validator layer (validateCreateUpload uses
+ * `validatePublicIdParam` on `organizationId`) rather than the DTO so the
+ * OpenAPI contract remains a generic string — clients still pass the
+ * canonical 21-char public id; the validator rejects anything else with a
+ * ValidationError before the value reaches S3 keys / Redis cache keys.
  */
 export const createUploadDto = z
   .object({

@@ -1,5 +1,25 @@
 import '@/shared/config/load-env-files.js';
 
+const LOCAL_TEST_DATABASE_URL = 'postgresql://core:core@localhost:5432/core';
+
+function isLocalDatabaseUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const { hostname } = new URL(value);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  } catch {
+    return false;
+  }
+}
+
+function forceLocalDatabaseForNonCiTestRun(): void {
+  if (process.env.CI === 'true' || process.env.ALLOW_HOSTED_TEST_DATABASE === 'true') return;
+  if (isLocalDatabaseUrl(process.env.DATABASE_URL)) return;
+
+  process.env.DATABASE_URL = LOCAL_TEST_DATABASE_URL;
+  process.env.DATABASE_MIGRATION_URL = LOCAL_TEST_DATABASE_URL;
+}
+
 /**
  * `.env.development` is loaded before this file (via `load-env-files`). Several values that
  * make sense for `pnpm dev` would break the test harness — they MUST mirror CI's
@@ -8,6 +28,7 @@ import '@/shared/config/load-env-files.js';
  * what each contributor has in their `.env.development`.
  */
 process.env.NODE_ENV = 'test';
+forceLocalDatabaseForNonCiTestRun();
 process.env.DATABASE_SSL_ENABLED = 'false';
 /**
  * Mirror CI (which leaves this unset → schema default `true`). `.env.development` pins it to
@@ -132,11 +153,10 @@ process.env.PORT ??= '3000';
 process.env.HTTP_BIND_HOST = '127.0.0.1';
 // Local fallback — tests run against the same Docker Postgres dev uses (see docker-compose.yml).
 // CI overrides DATABASE_URL to its ephemeral service-container Postgres.
-process.env.DATABASE_URL ??= 'postgresql://core:core@localhost:5432/core';
+process.env.DATABASE_URL ??= LOCAL_TEST_DATABASE_URL;
 process.env.REDIS_URL ??= 'redis://localhost:6379';
 process.env.RUN_REDIS_TESTS ??= '1';
 /** Deprecated optional no-op; RS256 keys below are authoritative for JWT. */
-process.env.JWT_SECRET ??= 'test-jwt-secret-min-32-chars-xxxxxxxx';
 process.env.SECRETS_ENCRYPTION_KEY ??= 'a'.repeat(64);
 process.env.METRICS_SCRAPE_TOKEN ??= 'test-metrics-bearer-token-min-32-chars';
 process.env.COOKIE_SECURE ??= 'false';

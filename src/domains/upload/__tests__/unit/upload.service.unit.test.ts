@@ -19,12 +19,14 @@ vi.mock('@/shared/config/env.config.js', () => ({
     LOG_LEVEL: 'silent',
     UPLOAD_ALLOW_SVG: false,
     UPLOAD_MAX_PENDING_PER_USER: 100,
+    UPLOAD_MAX_PENDING_PER_ORGANIZATION: 2_000,
   })),
   env: {
     S3_BUCKET: 'test-bucket',
     LOG_LEVEL: 'silent',
     UPLOAD_ALLOW_SVG: false,
     UPLOAD_MAX_PENDING_PER_USER: 100,
+    UPLOAD_MAX_PENDING_PER_ORGANIZATION: 2_000,
   },
 }));
 
@@ -59,8 +61,8 @@ describe('UploadService', () => {
     create: vi.fn().mockResolvedValue(uploadRow),
     findByPublicId: vi.fn().mockResolvedValue(uploadRow),
     findByPublicIdForUser: vi.fn().mockResolvedValue(uploadRow),
-    findActiveByUserId: vi.fn().mockResolvedValue([uploadRow]),
     findActiveByUserIdAfter: vi.fn().mockResolvedValue([uploadRow]),
+    findActiveByOrganizationIdAfter: vi.fn().mockResolvedValue([]),
     markStatus: vi.fn().mockResolvedValue(uploadRow),
     markStatusByPublicId: vi.fn().mockResolvedValue(uploadRow),
     markConfirmedByPublicId: vi.fn().mockResolvedValue(uploadRow),
@@ -69,6 +71,7 @@ describe('UploadService', () => {
     softDeleteAllByUserId: vi.fn().mockResolvedValue(1),
     softDeleteAllByOrganizationId: vi.fn().mockResolvedValue(2),
     countPendingByUserId: vi.fn().mockResolvedValue(0),
+    countPendingByOrganizationId: vi.fn().mockResolvedValue(0),
     acquirePendingUploadQuotaLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as UploadRepository;
 
@@ -92,6 +95,7 @@ describe('UploadService', () => {
       LOG_LEVEL: 'silent',
       UPLOAD_ALLOW_SVG: false,
       UPLOAD_MAX_PENDING_PER_USER: 100,
+      UPLOAD_MAX_PENDING_PER_ORGANIZATION: 2_000,
     } as ReturnType<typeof getEnv>);
     vi.mocked(repository.findByPublicId).mockResolvedValue(uploadRow as never);
     vi.mocked(repository.softDeleteByPublicId).mockResolvedValue(uploadRow as never);
@@ -123,6 +127,7 @@ describe('UploadService', () => {
       UPLOAD_ALLOW_SVG: false,
       UPLOAD_USE_PRESIGNED_POST: true,
       UPLOAD_MAX_PENDING_PER_USER: 100,
+      UPLOAD_MAX_PENDING_PER_ORGANIZATION: 2_000,
     } as ReturnType<typeof getEnv>);
     vi.mocked(objectStorage.createPresignedUploadPost).mockResolvedValueOnce({
       url: 'https://s3.example/post',
@@ -250,16 +255,40 @@ describe('UploadService', () => {
   });
 
   it('tombstoneAllByOrganizationId soft-deletes organization uploads', async () => {
+    vi.mocked(repository.findActiveByOrganizationIdAfter).mockResolvedValueOnce([] as never);
     vi.mocked(repository.softDeleteAllByOrganizationId).mockResolvedValue(2);
     const count = await service.tombstoneAllByOrganizationId(10);
     expect(count).toBe(2);
   });
 
+  it('tombstoneAllByOrganizationId removes S3 objects in bounded batches before the DB tombstone (sec-UP8)', async () => {
+    vi.mocked(repository.findActiveByOrganizationIdAfter)
+      .mockResolvedValueOnce([
+        { id: 1, file_key: 'organization-files/org/aaa.pdf' },
+        { id: 2, file_key: 'organization-files/org/bbb.pdf' },
+      ] as never)
+      .mockResolvedValueOnce([] as never);
+    vi.mocked(objectStorage.deleteObject).mockResolvedValue(true);
+    vi.mocked(repository.softDeleteAllByOrganizationId).mockResolvedValue(2);
+
+    const count = await service.tombstoneAllByOrganizationId(10);
+
+    expect(count).toBe(2);
+    expect(objectStorage.deleteObject).toHaveBeenCalledTimes(2);
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith('organization-files/org/aaa.pdf');
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith('organization-files/org/bbb.pdf');
+  });
+
   const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
 
   it('confirmUpload marks UPLOADED when the object matches declared type, size, and magic bytes', async () => {
+    // sec-UP1: confirm now requires pending-key indirection — legacy in-place
+    // rows are refused. Use a pending-prefixed key so the happy path runs.
+    const finalKey = uploadRow.file_key;
+    const pendingKey = `pending/${finalKey}`;
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...uploadRow,
+      file_key: pendingKey,
       status: 'PENDING',
     } as never);
     vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
@@ -270,6 +299,8 @@ describe('UploadService', () => {
       body: PNG_MAGIC,
       contentType: 'image/png',
     });
+    vi.mocked(objectStorage.copyObject).mockResolvedValueOnce(undefined);
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(true);
     vi.mocked(repository.markConfirmedByPublicId).mockResolvedValue({
       ...uploadRow,
       status: 'UPLOADED',
@@ -277,15 +308,12 @@ describe('UploadService', () => {
 
     const result = await service.confirmUpload(uploadPublicId, userPublicId);
 
-    expect(objectStorage.verifyUploadedObject).toHaveBeenCalledWith(uploadRow.file_key, {
+    expect(objectStorage.verifyUploadedObject).toHaveBeenCalledWith(pendingKey, {
       contentType: 'image/png',
       contentLength: 1024,
     });
-    // Legacy (non-pending-keyed) row: confirmed in place at its existing key.
-    expect(repository.markConfirmedByPublicId).toHaveBeenCalledWith(
-      uploadPublicId,
-      uploadRow.file_key,
-    );
+    // Row is repointed at the immutable final key (pending key is then deleted).
+    expect(repository.markConfirmedByPublicId).toHaveBeenCalledWith(uploadPublicId, finalKey);
     expect(result.status).toBe('UPLOADED');
   });
 
@@ -307,6 +335,7 @@ describe('UploadService', () => {
     vi.mocked(objectStorage.getObjectFirstBytes).mockResolvedValueOnce({
       body: PNG_MAGIC,
       contentType: 'image/png',
+      eTag: '"verified-etag"',
     });
     vi.mocked(repository.markConfirmedByPublicId).mockResolvedValue({
       ...uploadRow,
@@ -318,16 +347,56 @@ describe('UploadService', () => {
 
     // Verified against the pending object, then server-side copied to the final key (no re-upload).
     expect(objectStorage.verifyUploadedObject).toHaveBeenCalledWith(pendingKey, expect.anything());
+    // sec-re-10: COPY pins the source ETag captured at HEAD so a replayed
+    // PUT between verify and copy fails the COPY with PreconditionFailed.
     expect(objectStorage.copyObject).toHaveBeenCalledWith({
       sourceKey: pendingKey,
       destinationKey: finalKey,
       contentType: 'image/png',
+      sourceETag: '"verified-etag"',
     });
     // No transforming put for a non-SVG; the row is repointed to the final key and pending removed.
     expect(objectStorage.putObject).not.toHaveBeenCalled();
     expect(repository.markConfirmedByPublicId).toHaveBeenCalledWith(uploadPublicId, finalKey);
     expect(objectStorage.deleteObject).toHaveBeenCalledWith(pendingKey);
     expect(result.status).toBe('UPLOADED');
+  });
+
+  it('sec-re-10: confirmUpload omits sourceETag when the HEAD response carries no ETag (legacy / unversioned mocks)', async () => {
+    // Defensive: pre-fix call sites returned no ETag. The fix preserves the
+    // legacy unprotected COPY when the HEAD response has no ETag — the
+    // alternative (refusing to copy) would gate publishes on a header the
+    // platform may not always supply (e.g. some MinIO test setups).
+    const finalKey = 'avatars/user_public/key2.png';
+    const pendingKey = `pending/${finalKey}`;
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...uploadRow,
+      file_key: pendingKey,
+      status: 'PENDING',
+    } as never);
+    vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
+      contentType: 'image/png',
+      contentLength: 1024,
+    });
+    vi.mocked(objectStorage.getObjectFirstBytes).mockResolvedValueOnce({
+      body: PNG_MAGIC,
+      contentType: 'image/png',
+      // No eTag → legacy unprotected path.
+    });
+    vi.mocked(repository.markConfirmedByPublicId).mockResolvedValue({
+      ...uploadRow,
+      file_key: finalKey,
+      status: 'UPLOADED',
+    } as never);
+
+    await service.confirmUpload(uploadPublicId, userPublicId);
+
+    expect(objectStorage.copyObject).toHaveBeenCalledWith({
+      sourceKey: pendingKey,
+      destinationKey: finalKey,
+      contentType: 'image/png',
+      // Note: no `sourceETag` key in the payload.
+    });
   });
 
   it('createUpload presigns a pending-namespaced key, never the final servable key', async () => {
@@ -348,9 +417,33 @@ describe('UploadService', () => {
     expect(createArgs?.file_key).toMatch(/^pending\/avatars\//);
   });
 
+  it('createUpload returns the final attach key while presigning the pending object', async () => {
+    const result = await service.createUpload(
+      {
+        purpose: 'avatar',
+        for: 'user',
+        contentType: 'image/png',
+        fileName: 'avatar.png',
+        fileSize: 1024,
+      },
+      userPublicId,
+    );
+
+    const presignArgs = vi.mocked(objectStorage.createPresignedUploadUrl).mock.calls[0]?.[0];
+    const createArgs = vi.mocked(repository.create).mock.calls[0]?.[0];
+    expect(result.key).toMatch(/^avatars\//);
+    expect(result.key).not.toMatch(/^pending\//);
+    expect(presignArgs?.key).toBe(`pending/${result.key}`);
+    expect(createArgs?.file_key).toBe(`pending/${result.key}`);
+  });
+
   it('confirmUpload allows org managers to confirm teammate-created organization uploads', async () => {
+    // sec-UP1: must be pending-keyed.
+    const finalKey = uploadRow.file_key;
+    const pendingKey = `pending/${finalKey}`;
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...uploadRow,
+      file_key: pendingKey,
       user_id: 99,
       organization_id: 10,
       status: 'PENDING',
@@ -363,6 +456,8 @@ describe('UploadService', () => {
       body: PNG_MAGIC,
       contentType: 'image/png',
     });
+    vi.mocked(objectStorage.copyObject).mockResolvedValueOnce(undefined);
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(true);
     vi.mocked(repository.markConfirmedByPublicId).mockResolvedValue({
       ...uploadRow,
       user_id: 99,
@@ -373,15 +468,14 @@ describe('UploadService', () => {
     const result = await service.confirmUpload(uploadPublicId, userPublicId);
 
     expect(result.status).toBe('UPLOADED');
-    expect(repository.markConfirmedByPublicId).toHaveBeenCalledWith(
-      uploadPublicId,
-      uploadRow.file_key,
-    );
+    expect(repository.markConfirmedByPublicId).toHaveBeenCalledWith(uploadPublicId, finalKey);
   });
 
   it('confirmUpload marks FAILED when magic bytes do not match the declared type (spoofed content)', async () => {
+    // sec-UP1: pending-keyed so we reach the magic-byte check rather than the legacy refusal.
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...uploadRow,
+      file_key: `pending/${uploadRow.file_key}`,
       status: 'PENDING',
     } as never);
     vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
@@ -401,8 +495,10 @@ describe('UploadService', () => {
   });
 
   it('confirmUpload marks FAILED and throws when object size does not match', async () => {
+    // sec-UP1: pending-keyed so we exercise the size-mismatch path, not the legacy refusal.
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...uploadRow,
+      file_key: `pending/${uploadRow.file_key}`,
       status: 'PENDING',
     } as never);
     vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
@@ -416,11 +512,15 @@ describe('UploadService', () => {
     expect(repository.markStatusByPublicId).toHaveBeenCalledWith(uploadPublicId, 'FAILED');
   });
 
-  it('confirmUpload sanitizes a stored SVG in place before marking UPLOADED', async () => {
+  it('confirmUpload sanitizes a stored SVG before marking UPLOADED', async () => {
+    // sec-UP1: pending-keyed; the SVG is sanitized in transit from the pending
+    // key to the final key (no in-place mutation of the writable pending key).
+    const finalKey = 'avatars/user_public/key.svg';
+    const pendingKey = `pending/${finalKey}`;
     const svgRow = {
       ...uploadRow,
       file_name: 'logo.svg',
-      file_key: 'avatars/user_public/key.svg',
+      file_key: pendingKey,
       mime_type: 'image/svg+xml',
       file_size: 80,
       status: 'PENDING',
@@ -428,6 +528,7 @@ describe('UploadService', () => {
     vi.mocked(repository.findByPublicId).mockResolvedValue(svgRow as never);
     vi.mocked(repository.markConfirmedByPublicId).mockResolvedValue({
       ...svgRow,
+      file_key: finalKey,
       status: 'UPLOADED',
     } as never);
     vi.mocked(objectStorage.verifyUploadedObject).mockResolvedValueOnce({
@@ -442,13 +543,14 @@ describe('UploadService', () => {
       body: hostileSvg,
       contentType: 'image/svg+xml',
     });
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(true);
 
     const result = await service.confirmUpload(uploadPublicId, userPublicId);
 
-    expect(objectStorage.getObject).toHaveBeenCalledWith(svgRow.file_key);
+    expect(objectStorage.getObject).toHaveBeenCalledWith(pendingKey);
     expect(objectStorage.putObject).toHaveBeenCalledTimes(1);
     const putArgs = vi.mocked(objectStorage.putObject).mock.calls[0]?.[0];
-    expect(putArgs?.key).toBe(svgRow.file_key);
+    expect(putArgs?.key).toBe(finalKey);
     expect(putArgs?.contentType).toBe('image/svg+xml');
     const rewritten = (putArgs?.body as Buffer).toString('utf8');
     expect(rewritten).not.toMatch(/<script/i);
@@ -457,9 +559,10 @@ describe('UploadService', () => {
   });
 
   it('confirmUpload marks FAILED when an SVG sanitizes to empty content (hostile/zero-byte)', async () => {
+    // sec-UP1: pending-keyed so we exercise the sanitizer-empty path.
     const svgRow = {
       ...uploadRow,
-      file_key: 'avatars/user_public/empty.svg',
+      file_key: 'pending/avatars/user_public/empty.svg',
       mime_type: 'image/svg+xml',
       file_size: 12,
       status: 'PENDING',
@@ -589,6 +692,7 @@ describe('UploadService', () => {
       LOG_LEVEL: 'silent',
       UPLOAD_ALLOW_SVG: false,
       UPLOAD_MAX_PENDING_PER_USER: 100,
+      UPLOAD_MAX_PENDING_PER_ORGANIZATION: 2_000,
     } as ReturnType<typeof getEnv>);
     await expect(
       service.createUpload(

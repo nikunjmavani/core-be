@@ -65,6 +65,7 @@ describe('Security: Worker tenant isolation', () => {
     const [pendingAttempt] = await database
       .insert(webhook_delivery_attempts)
       .values({
+        public_id: generatePublicId(),
         webhook_id: webhook.id,
         event_type: 'security.test',
         payload: { probe: true },

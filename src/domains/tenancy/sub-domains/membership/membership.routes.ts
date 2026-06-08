@@ -184,11 +184,16 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     app.post<{ Params: { invitationId: string } }>(
       '/invitations/:invitationId/accept',
       {
+        // sec-T4: accept now requires authentication and (in the service)
+        // an invitee-email match. The previous unauthenticated route let
+        // anyone who got hold of the invitation URL flip the victim's
+        // pending membership to ACTIVE without the victim's interaction.
+        onRequest: [app.authenticate],
         ...STRICT_PUBLIC_RATE_LIMIT,
         schema: {
           summary: 'Accept invitation',
           description:
-            'Accepts a pending invitation using the invitation token. Creates a membership for the user.',
+            "Accepts a pending invitation using the invitation token. Requires authentication; the authenticated user's email must match the invitee email on the invitation. Creates a membership for the user.",
           tags: ['Membership', 'Invitation'],
         },
       },

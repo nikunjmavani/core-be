@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 
@@ -22,6 +22,38 @@ export class PlanRepository {
 
   async findById(id: number) {
     const rows = await getRequestDatabase().select().from(plans).where(eq(plans.id, id)).limit(1);
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Resolves a Stripe price id to the owning local plan (matches either the
+   * monthly or yearly column). Returns null when no catalog row references the
+   * given price id — used by the Stripe webhook handler to map an externally-
+   * mutated subscription back to the local plan id.
+   *
+   * @remarks
+   * sec-B7: `customer.subscription.updated` events used to skip the price → plan
+   * mapping, so a plan change initiated directly in the Stripe Dashboard left
+   * the local `subscriptions.plan_id` pinned to the previous plan. Every
+   * entitlement check against `plan.features` continued serving the OLD
+   * feature set until something other than a webhook (e.g. a fresh checkout)
+   * rebuilt the row. This finder is the lookup half of the fix; the webhook
+   * handler now passes the resolved id into `syncFromStripeProviderSubscription`.
+   */
+  async findByStripePriceId(stripe_price_id: string) {
+    const rows = await getRequestDatabase()
+      .select()
+      .from(plans)
+      .where(
+        and(
+          eq(plans.is_active, true),
+          or(
+            eq(plans.stripe_price_monthly_id, stripe_price_id),
+            eq(plans.stripe_price_yearly_id, stripe_price_id),
+          ),
+        ),
+      )
+      .limit(1);
     return rows[0] ?? null;
   }
 }

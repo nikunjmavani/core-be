@@ -5,7 +5,9 @@ import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthSessionRepository } from '@/domains/auth/sub-domains/auth-session/auth-session.repository.js';
 
 vi.mock('@/domains/auth/sub-domains/auth-session/session-token-cache.service.js', () => ({
-  getCachedSessionTokenValid: vi.fn().mockResolvedValue(false),
+  // Returns the session public id on cache hit, or `null` on miss (sec-A2 changed the
+  // sentinel from `'1'` to the session public id so callers can recover identity).
+  getCachedSessionTokenValid: vi.fn().mockResolvedValue(null),
   setCachedSessionTokenValid: vi.fn().mockResolvedValue(undefined),
   invalidateCachedSessionToken: vi.fn().mockResolvedValue(undefined),
 }));
@@ -22,12 +24,19 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
-const user = { id: 1, public_id: 'user_public', email: 'user@example.com' };
+const user = {
+  id: 1,
+  public_id: 'user_public',
+  email: 'user@example.com',
+  status: 'ACTIVE',
+  deleted_at: null,
+};
 
 describe('AuthSessionService', () => {
   const userService = {
     requireUserRecordByPublicId: vi.fn().mockResolvedValue(user),
     findById: vi.fn().mockResolvedValue(user),
+    findUserRecordByPublicId: vi.fn().mockResolvedValue(user),
   } as unknown as UserService;
 
   const sessionRepository = {
@@ -38,6 +47,9 @@ describe('AuthSessionService', () => {
     create: vi.fn().mockResolvedValue({ public_id: 'session_new' }),
     revokeByTokenHash: vi.fn().mockResolvedValue({ public_id: 'session_public' }),
     findByPublicId: vi
+      .fn()
+      .mockResolvedValue({ public_id: 'session_public', token_hash: 'old-hash' }),
+    findByPublicIdIncludingRevoked: vi
       .fn()
       .mockResolvedValue({ public_id: 'session_public', token_hash: 'old-hash' }),
     findActiveByTokenHash: vi.fn().mockResolvedValue({
@@ -54,6 +66,7 @@ describe('AuthSessionService', () => {
     vi.clearAllMocks();
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
     vi.mocked(userService.findById).mockResolvedValue(user as never);
+    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(user as never);
   });
 
   it('list returns sessions for user', async () => {
@@ -172,9 +185,10 @@ describe('AuthSessionService', () => {
     const { getCachedSessionTokenValid } = await import(
       '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
     );
-    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(true);
-    await service.verifyActiveAccessToken('cached-token');
+    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce('sess_cached');
+    const result = await service.verifyActiveAccessToken('cached-token', 'user_public');
     expect(sessionRepository.findActiveByTokenHash).not.toHaveBeenCalled();
+    expect(result).toEqual({ sessionPublicId: 'sess_cached' });
   });
 
   it('verifyActiveAccessToken loads session and caches with the session expiry on miss', async () => {
@@ -182,23 +196,63 @@ describe('AuthSessionService', () => {
     const { getCachedSessionTokenValid, setCachedSessionTokenValid } = await import(
       '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
     );
-    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(false);
+    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(null);
     vi.mocked(sessionRepository.findActiveByTokenHash).mockResolvedValueOnce({
       public_id: 'session_public',
       expires_at: sessionExpiresAt,
     } as never);
-    await service.verifyActiveAccessToken('fresh-token');
+    // sec-new-A2: active user is returned on cache miss so the user status check passes
+    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValueOnce(user as never);
+    const result = await service.verifyActiveAccessToken('fresh-token', 'user_public');
     expect(sessionRepository.findActiveByTokenHash).toHaveBeenCalled();
     expect(setCachedSessionTokenValid).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionExpiresAt }),
+      expect.objectContaining({ sessionExpiresAt, sessionPublicId: 'session_public' }),
     );
+    expect(result).toEqual({ sessionPublicId: 'session_public' });
   });
 
   it('verifyActiveAccessToken throws when session is missing', async () => {
     vi.mocked(sessionRepository.findActiveByTokenHash).mockResolvedValueOnce(null);
-    await expect(service.verifyActiveAccessToken('unknown-token')).rejects.toBeInstanceOf(
-      UnauthorizedError,
+    await expect(
+      service.verifyActiveAccessToken('unknown-token', 'user_public'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('verifyActiveAccessToken throws accountNotActive when user is suspended (sec-new-A2)', async () => {
+    const { getCachedSessionTokenValid } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
     );
+    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(null);
+    vi.mocked(sessionRepository.findActiveByTokenHash).mockResolvedValueOnce({
+      public_id: 'session_public',
+      expires_at: new Date('2026-12-31T00:00:00.000Z'),
+    } as never);
+    // sec-new-A2: suspended user must be rejected even when the session row is still active
+    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValueOnce({
+      ...user,
+      status: 'SUSPENDED',
+    } as never);
+    await expect(
+      service.verifyActiveAccessToken('active-session-token', 'suspended_user'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('verifyActiveAccessToken throws accountNotActive when user is soft-deleted (sec-new-A2)', async () => {
+    const { getCachedSessionTokenValid } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
+    vi.mocked(getCachedSessionTokenValid).mockResolvedValueOnce(null);
+    vi.mocked(sessionRepository.findActiveByTokenHash).mockResolvedValueOnce({
+      public_id: 'session_public',
+      expires_at: new Date('2026-12-31T00:00:00.000Z'),
+    } as never);
+    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValueOnce({
+      ...user,
+      deleted_at: new Date('2026-01-01T00:00:00.000Z'),
+    } as never);
+    await expect(
+      service.verifyActiveAccessToken('active-session-token', 'deleted_user'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('refreshSessionCredentials rotates the secret and does not revoke the family on the happy path', async () => {
@@ -223,11 +277,15 @@ describe('AuthSessionService', () => {
   });
 
   it('refreshSessionCredentials revokes the entire session family when an old refresh secret is replayed (reuse detection)', async () => {
-    vi.mocked(sessionRepository.findByPublicId).mockResolvedValue({
+    // sec-A finding #9: the reuse-detection lookup now uses
+    // `findByPublicIdIncludingRevoked` so a stolen refresh secret replayed against
+    // an already-revoked session still triggers the family-wide kill / audit signal.
+    vi.mocked(sessionRepository.findByPublicIdIncludingRevoked).mockResolvedValue({
       public_id: 'session_public',
       user_id: user.id,
       token_hash: 'old-token-hash',
       refresh_token_hash: 'already-rotated-hash',
+      is_revoked: false,
     } as never);
     vi.mocked(sessionRepository.rotateSessionCredentials).mockResolvedValue(null as never);
     vi.mocked(sessionRepository.revokeAllByUserId).mockResolvedValue([
@@ -251,5 +309,31 @@ describe('AuthSessionService', () => {
     expect(sessionRepository.revokeAllByUserId).toHaveBeenCalledWith(user.id);
     expect(invalidateCachedSessionToken).toHaveBeenCalledWith('family-hash-a');
     expect(invalidateCachedSessionToken).toHaveBeenCalledWith('family-hash-b');
+  });
+
+  it('refreshSessionCredentials still raises the reuse-detection signal when the session is ALREADY revoked (sec-A #9)', async () => {
+    // The prior code filtered `is_revoked = false` in the lookup, so once the user had
+    // logged out everywhere the reuse-detection path silently no-op'd. We now include
+    // revoked rows in the lookup, emit the Sentry signal for forensics, and skip the
+    // re-revoke (the session is already revoked — re-revoking would be a no-op).
+    vi.mocked(sessionRepository.findByPublicIdIncludingRevoked).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: user.id,
+      token_hash: 'old-token-hash',
+      refresh_token_hash: 'already-rotated-hash',
+      is_revoked: true,
+    } as never);
+    vi.mocked(sessionRepository.rotateSessionCredentials).mockResolvedValue(null as never);
+
+    await expect(
+      service.refreshSessionCredentials({
+        sessionPublicId: 'session_public',
+        refreshSecret: 'stolen-old-secret',
+        nextAccessToken: 'next-access-token',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+
+    // The session is already revoked — do NOT call revokeAllByUserId a second time.
+    expect(sessionRepository.revokeAllByUserId).not.toHaveBeenCalled();
   });
 });

@@ -60,6 +60,25 @@ export function redactSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
   if (event.contexts) {
     event.contexts = redactSensitive(event.contexts);
   }
+  // sec-C6: pino redacts by KEY, so secrets interpolated into Error
+  // messages or thrown values bypass the standard redaction pipeline and
+  // ship verbatim to Sentry. Walk every textual surface here.
+  if (typeof event.message === 'string') {
+    event.message = redactSensitive(event.message);
+  }
+  if (event.user) {
+    event.user = redactSensitive(event.user);
+  }
+  if (event.tags) {
+    event.tags = redactSensitive(event.tags);
+  }
+  if (event.exception?.values) {
+    for (const value of event.exception.values) {
+      if (typeof value.value === 'string') {
+        value.value = redactSensitive(value.value);
+      }
+    }
+  }
   return event;
 }
 
@@ -218,6 +237,30 @@ export function captureMessage(
     extra: options?.extra,
   });
   Sentry.captureMessage(message, captureContext);
+}
+
+/**
+ * Add a structured Sentry breadcrumb without sending a `captureMessage` event.
+ *
+ * @remarks
+ * Cheap (no rate limit, no quota consumption) and ideal for per-request signal trails
+ * (sec-C/M finding #16 — captcha misconfiguration). Breadcrumbs are attached to the next
+ * captured event automatically, so an operator opening a triggered alert sees the
+ * forensic trail without each call generating its own ingestion line.
+ */
+export function addSentryBreadcrumb(breadcrumb: {
+  category: string;
+  message: string;
+  level?: 'fatal' | 'error' | 'warning' | 'log' | 'info' | 'debug';
+  data?: Record<string, unknown>;
+}): void {
+  if (!initialized) return;
+  Sentry.addBreadcrumb({
+    category: breadcrumb.category,
+    message: breadcrumb.message,
+    level: breadcrumb.level ?? 'info',
+    ...(breadcrumb.data !== undefined ? { data: breadcrumb.data } : {}),
+  });
 }
 
 /**

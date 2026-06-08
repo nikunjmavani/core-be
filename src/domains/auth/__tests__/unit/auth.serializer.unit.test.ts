@@ -34,6 +34,7 @@ describe('AuthSerializer', () => {
   it('authMethodList and authMethod allowlist safe fields and strip secrets/PII/internal ids', () => {
     const row = {
       id: 7,
+      public_id: 'abcde12345678901234', // 21-char public id (sec-new-B4)
       user_id: 42,
       method_type: 'MFA_TOTP',
       provider: null,
@@ -49,7 +50,7 @@ describe('AuthSerializer', () => {
     };
 
     const expected = {
-      id: 7,
+      public_id: 'abcde12345678901234', // sec-new-B4: public_id replaces bigserial id
       method_type: 'MFA_TOTP',
       provider: null,
       is_primary: true,
@@ -69,6 +70,8 @@ describe('AuthSerializer', () => {
       expect(result).not.toHaveProperty('provider_user_id');
       expect(result).not.toHaveProperty('user_id');
       expect(result).not.toHaveProperty('created_by_user_id');
+      // sec-new-B4: bigserial id must not appear in the response
+      expect(result).not.toHaveProperty('id');
       expect(JSON.stringify(result)).not.toContain('aes-gcm-ciphertext-of-totp-seed');
       expect(JSON.stringify(result)).not.toContain('+15551234567');
     }
@@ -79,14 +82,27 @@ describe('AuthSerializer', () => {
     expect(AuthSerializer.message(payload)).toBe(payload);
   });
 
-  it('mfaEnroll and oauthProviders return structured data', () => {
+  it('mfaEnroll, mfaEnrollConfirm, and oauthProviders return structured data', () => {
+    // sec-A finding #3: mfaEnroll is now phase 1 of a two-phase ceremony and no longer
+    // returns method_id (no DB row exists at this point); phase 2 (`mfaEnrollConfirm`)
+    // returns the freshly-minted recovery codes plus method_id.
     expect(
       AuthSerializer.mfaEnroll({
         secret: 'secret',
         provisioning_uri: 'otpauth://',
-        method_id: 1,
       }),
-    ).toMatchObject({ secret: 'secret', method_id: 1 });
+    ).toMatchObject({ secret: 'secret', provisioning_uri: 'otpauth://' });
+
+    // sec-new-B4: mfaEnrollConfirm now returns method_public_id (opaque id) instead of bigserial method_id.
+    expect(
+      AuthSerializer.mfaEnrollConfirm({
+        recovery_codes: ['CODE1', 'CODE2', 'CODE3'],
+        method_public_id: 'abcde12345678901234',
+      }),
+    ).toEqual({
+      recovery_codes: ['CODE1', 'CODE2', 'CODE3'],
+      method_public_id: 'abcde12345678901234',
+    });
 
     expect(AuthSerializer.oauthProviders({ providers: ['google'] })).toEqual({
       providers: ['google'],

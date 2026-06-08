@@ -94,7 +94,7 @@ Table audit.logs {
 }
 
 Note audit.logs {
-  'RLS: enabled\nPolicies: audit_logs_tenant_isolation, audit_logs_user_export_select\nFORCE ROW LEVEL SECURITY'
+  'RLS: enabled\nPolicies: audit_logs_tenant_isolation, audit_logs_user_export_select, audit_logs_tenant_isolation_select, audit_logs_tenant_isolation_insert, audit_logs_tenant_isolation_delete\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.auth_methods {
@@ -108,6 +108,7 @@ Table auth.auth_methods {
   phone_number varchar(20)
   provider varchar(50)
   provider_user_id varchar(255)
+  public_id varchar(21)
   revoked_at timestamptz
   user_id bigint [not null]
   verified_at timestamptz
@@ -220,7 +221,7 @@ Table auth.user_notification_preferences {
 }
 
 Note auth.user_notification_preferences {
-  'RLS: enabled\nPolicies: user_notification_preferences_user_org_access\nFORCE ROW LEVEL SECURITY'
+  'RLS: enabled\nPolicies: user_notification_preferences_user_org_access, user_notification_preferences_user_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table auth.user_settings {
@@ -391,6 +392,7 @@ Table notify.webhook_delivery_attempts {
   id bigint [pk, increment, not null]
   next_retry_at timestamptz
   payload jsonb [not null]
+  public_id varchar(21)
   response_body text
   sent_at timestamptz
   status varchar(20) [not null]
@@ -406,11 +408,13 @@ Table notify.webhooks {
   created_by_user_id bigint
   deleted_at timestamptz
   encrypted_secret varchar(255) [not null]
+  encrypted_secret_previous varchar(255)
   events jsonb [not null]
   id bigint [pk, increment, not null]
   is_enabled boolean [not null]
   organization_id bigint [not null]
   public_id varchar(21) [not null]
+  secret_rotated_at timestamptz
   updated_at timestamptz [not null]
   updated_by_user_id bigint
   url text [not null]

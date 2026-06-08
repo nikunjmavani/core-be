@@ -18,8 +18,17 @@ function readIdempotencyKey(request: FastifyRequest): string | undefined {
 /**
  * Builds organization-scoped subscription handlers (list / get / create /
  * update / change-plan / cancel / resume). Each handler validates the
- * organization `id` path param; externally mutating routes also require the
- * `Idempotency-Key` header before delegating to {@link SubscriptionService}.
+ * organization `id` AND the `subscriptionId` path params (sec-B10); externally
+ * mutating routes also require the `Idempotency-Key` header before delegating
+ * to {@link SubscriptionService}.
+ *
+ * @remarks
+ * sec-B10: every handler used to validate the organization `id` but threaded
+ * `request.params.subscriptionId` to the service unchecked. Not an IDOR (the
+ * service uses an exact-match WHERE), but unbounded attacker-supplied input
+ * would otherwise flow into Sentry breadcrumbs, log payloads, and route-tagged
+ * metric labels — a small cardinality + content-exfiltration foot-gun.
+ * Validate both ids at the boundary so observability cannot be poisoned.
  */
 export function createSubscriptionController(service: SubscriptionService) {
   return {
@@ -38,7 +47,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.get(
         validatePublicIdParam(request.params.id, 'id'),
-        request.params.subscriptionId,
+        validatePublicIdParam(request.params.subscriptionId, 'subscriptionId'),
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
@@ -63,7 +72,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.update(
         validatePublicIdParam(request.params.id, 'id'),
-        request.params.subscriptionId,
+        validatePublicIdParam(request.params.subscriptionId, 'subscriptionId'),
         request.body,
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
@@ -75,7 +84,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.changePlan(
         validatePublicIdParam(request.params.id, 'id'),
-        request.params.subscriptionId,
+        validatePublicIdParam(request.params.subscriptionId, 'subscriptionId'),
         request.body,
         readIdempotencyKey(request),
       );
@@ -88,7 +97,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.cancel(
         validatePublicIdParam(request.params.id, 'id'),
-        request.params.subscriptionId,
+        validatePublicIdParam(request.params.subscriptionId, 'subscriptionId'),
         readIdempotencyKey(request),
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
@@ -100,7 +109,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       requirePrincipal(request);
       const data = await service.resume(
         validatePublicIdParam(request.params.id, 'id'),
-        request.params.subscriptionId,
+        validatePublicIdParam(request.params.subscriptionId, 'subscriptionId'),
         readIdempotencyKey(request),
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));

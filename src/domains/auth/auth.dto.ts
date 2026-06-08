@@ -111,7 +111,13 @@ export const VerifyEmailDto = z
 export type VerifyEmailInput = z.infer<typeof VerifyEmailDto>;
 
 // MFA
-/** Zod schema for the authenticated `POST /api/v1/auth/mfa/enroll` request body (TOTP enrollment). */
+/**
+ * Zod schema for the authenticated `POST /api/v1/auth/mfa/enroll` request body
+ * (TOTP enrollment INIT — phase 1 of the two-phase ceremony introduced in sec-A
+ * finding #3). The init step stages the encrypted TOTP secret in Redis and
+ * returns it to the caller; nothing is persisted to Postgres until the matching
+ * `POST /auth/mfa/enroll/confirm` request verifies a fresh code.
+ */
 export const MfaEnrollDto = z
   .object({
     method_type: z.enum(['MFA_TOTP']),
@@ -119,6 +125,21 @@ export const MfaEnrollDto = z
   .strict();
 /** Inferred input type of {@link MfaEnrollDto}. */
 export type MfaEnrollInput = z.infer<typeof MfaEnrollDto>;
+
+/**
+ * Zod schema for the authenticated `POST /api/v1/auth/mfa/enroll/confirm` request body
+ * (TOTP enrollment CONFIRM — phase 2 of the two-phase ceremony). The caller submits a
+ * 6-digit TOTP code generated from the secret returned by INIT; on success the server
+ * atomically persists the auth_methods row, generates and hashes the recovery codes, and
+ * flips `is_mfa_enabled`. On failure (invalid code, expired stage, etc.) nothing changes.
+ */
+export const MfaEnrollConfirmDto = z
+  .object({
+    code: z.string().trim().length(6).regex(/^\d+$/),
+  })
+  .strict();
+/** Inferred input type of {@link MfaEnrollConfirmDto}. */
+export type MfaEnrollConfirmInput = z.infer<typeof MfaEnrollConfirmDto>;
 
 /** Public login MFA step after password verification (no JWT yet). */
 export const MfaLoginVerifyDto = z
@@ -168,14 +189,17 @@ export const mfaMethodIdParamsDto = z
 /** Inferred input type of {@link mfaMethodIdParamsDto}. */
 export type MfaMethodIdParamsInput = z.infer<typeof mfaMethodIdParamsDto>;
 
-/** Zod schema for the `:id` path parameter on `/api/v1/auth/me/auth-methods/:id`. */
-export const authMethodIdParamsDto = z
+/** Zod schema for the `:publicId` path parameter on `DELETE /api/v1/auth/me/auth-methods/:publicId` (sec-new-B4). */
+export const authMethodPublicIdParamsDto = z
   .object({
-    id: z.string().trim().regex(/^\d+$/),
+    publicId: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9]{21}$/),
   })
   .strict();
-/** Inferred input type of {@link authMethodIdParamsDto}. */
-export type AuthMethodIdParamsInput = z.infer<typeof authMethodIdParamsDto>;
+/** Inferred input type of {@link authMethodPublicIdParamsDto}. */
+export type AuthMethodPublicIdParamsInput = z.infer<typeof authMethodPublicIdParamsDto>;
 
 /** Zod schema for the `:id` (session public id) path parameter on `/api/v1/auth/me/sessions/:id`. */
 export const sessionIdParamsDto = z

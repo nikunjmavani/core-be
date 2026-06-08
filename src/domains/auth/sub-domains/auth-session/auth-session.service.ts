@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { NotFoundError, UnauthorizedError } from '@/shared/errors/index.js';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import { generateRefreshSecret } from '@/domains/auth/auth.http.util.js';
 import {
@@ -162,17 +163,33 @@ export class AuthSessionService {
   }
 
   /**
-   * Ensures the bearer token matches an active, non-revoked session row.
+   * Ensures the bearer token matches an active, non-revoked session row AND that
+   * the owning user is still active (not suspended or soft-deleted).
    *
    * @remarks
-   * The positive result is cached in Redis for up to 60s, but the cache TTL is
-   * capped to the session's remaining lifetime so a cached "valid" entry can
-   * never outlive the session (see {@link setCachedSessionTokenValid}).
+   * Returns `{ sessionPublicId }` so callers (auth middleware) can attach session
+   * identity to `request.auth` for step-up binding (sec-A2). The positive result is
+   * cached in Redis for up to 60s — the cache value is the session's `public_id`, so a
+   * cache hit avoids the Postgres round-trip AND still produces the session id.
+   * The cache TTL is capped to the session's remaining lifetime so a cached "valid"
+   * entry can never outlive the session (see {@link setCachedSessionTokenValid}).
+   *
+   * **sec-new-A2:** `userPublicId` (from the JWT payload) is used to verify user
+   * status on every DB-path validation (cache miss). A suspended or deleted user will
+   * receive `errors:accountNotActive` instead of being allowed to continue using their
+   * still-valid access token. The Redis cache caps the propagation window at ≤60 s
+   * (same TTL as session validity), down from the prior ≤15 min access-token lifetime.
    */
-  async verifyActiveAccessToken(rawToken: string): Promise<void> {
+  async verifyActiveAccessToken(
+    rawToken: string,
+    userPublicId: string,
+  ): Promise<{ sessionPublicId: string }> {
     const tokenHash = hashAccessToken(rawToken);
-    if (await getCachedSessionTokenValid(tokenHash)) {
-      return;
+    const cachedSessionPublicId = await getCachedSessionTokenValid(tokenHash);
+    if (cachedSessionPublicId !== null) {
+      // Cache hit: session was valid ≤60 s ago; user status is implicitly valid at
+      // that point. Suspension propagates on the next cache miss (≤60 s window).
+      return { sessionPublicId: cachedSessionPublicId };
     }
 
     const session = await withSessionTokenHashDatabaseContext(tokenHash, (_databaseHandle) =>
@@ -183,12 +200,39 @@ export class AuthSessionService {
       throw new UnauthorizedError('errors:invalidOrExpiredSession');
     }
 
-    await setCachedSessionTokenValid({ tokenHash, sessionExpiresAt: session.expires_at });
+    // sec-new-A2: verify the owning user is still active. Runs only on cache miss
+    // (first request per 60 s window) to avoid a per-request DB round-trip.
+    // findUserRecordByPublicId wraps withUserDatabaseContext internally.
+    const user = await this.userService.findUserRecordByPublicId(userPublicId);
+    if (!user || user.status !== 'ACTIVE' || user.deleted_at !== null) {
+      throw new UnauthorizedError('errors:accountNotActive');
+    }
+
+    await setCachedSessionTokenValid({
+      tokenHash,
+      sessionPublicId: session.public_id,
+      sessionExpiresAt: session.expires_at,
+    });
+    return { sessionPublicId: session.public_id };
   }
 
   async findActiveSessionByPublicId(sessionPublicId: string) {
     return withSessionPublicIdDatabaseContext(sessionPublicId, (_databaseHandle) =>
       this.sessionRepository.findByPublicId(sessionPublicId),
+    );
+  }
+
+  /**
+   * Lookup wrapper that returns the session row even when `is_revoked = true`.
+   * Used by `auth.service.refreshToken` so a refresh-secret replay against an
+   * already-revoked session reaches `refreshSessionCredentials`'
+   * reuse-detection block (sec-re-05). The narrow active-only
+   * `findActiveSessionByPublicId` is retained for callers that genuinely need
+   * to filter revoked rows.
+   */
+  async findSessionByPublicIdIncludingRevoked(sessionPublicId: string) {
+    return withSessionPublicIdDatabaseContext(sessionPublicId, (_databaseHandle) =>
+      this.sessionRepository.findByPublicIdIncludingRevoked(sessionPublicId),
     );
   }
 
@@ -241,18 +285,36 @@ export class AuthSessionService {
       // secret is being replayed. Revoke the user's entire session family so a leaked refresh
       // token cannot be used to keep — or regain — access on any device (OAuth refresh-token
       // rotation reuse-detection per RFC 9700).
-      const reusedUserId = await withSessionPublicIdDatabaseContext(
+      //
+      // sec-A finding #9: include ALREADY-REVOKED rows in the lookup. A user who clicks
+      // "Log out everywhere" revokes the row but an attacker may still hold the stale
+      // refresh secret. Without including the revoked row in this lookup, the family-wide
+      // kill path silently no-ops and we lose the audit/Sentry signal exactly when it is
+      // most informative — "we already revoked this session and someone is still trying
+      // to use its refresh secret." We capture every refresh-secret mismatch to Sentry
+      // for breach detection, separate from whether we re-revoke.
+      const reuseDetection = await withSessionPublicIdDatabaseContext(
         sessionPublicId,
         async (_databaseHandle) => {
-          const existing = await this.sessionRepository.findByPublicId(sessionPublicId);
+          const existing =
+            await this.sessionRepository.findByPublicIdIncludingRevoked(sessionPublicId);
           if (existing?.refresh_token_hash && existing.refresh_token_hash !== currentRefreshHash) {
-            return existing.user_id;
+            return { userId: existing.user_id, wasAlreadyRevoked: existing.is_revoked };
           }
           return null;
         },
       );
-      if (reusedUserId !== null) {
-        await this.revokeAllSessionsForReusedRefreshSecret(reusedUserId);
+      if (reuseDetection !== null) {
+        captureMessage('auth.refresh_token.reuse_detected', {
+          level: 'warning',
+          extra: {
+            session_public_id: sessionPublicId,
+            was_already_revoked: reuseDetection.wasAlreadyRevoked,
+          },
+        });
+        if (!reuseDetection.wasAlreadyRevoked) {
+          await this.revokeAllSessionsForReusedRefreshSecret(reuseDetection.userId);
+        }
       }
       throw new UnauthorizedError('errors:invalidOrExpiredSession');
     }

@@ -7,6 +7,26 @@ import '@/shared/config/load-env-files.js';
 import { execSync } from 'node:child_process';
 import postgres from 'postgres';
 
+const LOCAL_TEST_DATABASE_URL = 'postgresql://core:core@localhost:5432/core';
+
+function isLocalDatabaseUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const { hostname } = new URL(value);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  } catch {
+    return false;
+  }
+}
+
+function forceLocalDatabaseForNonCiTestRun(): void {
+  if (process.env.CI === 'true' || process.env.ALLOW_HOSTED_TEST_DATABASE === 'true') return;
+  if (isLocalDatabaseUrl(process.env.DATABASE_URL)) return;
+
+  process.env.DATABASE_URL = LOCAL_TEST_DATABASE_URL;
+  process.env.DATABASE_MIGRATION_URL = LOCAL_TEST_DATABASE_URL;
+}
+
 /**
  * Vitest global setup: applies migrations against the test database and
  * ensures a small set of fallback tables exist for older fixtures. Skipped
@@ -15,6 +35,7 @@ import postgres from 'postgres';
  */
 export default async function globalSetup(): Promise<void> {
   process.env.NODE_ENV ??= 'test';
+  forceLocalDatabaseForNonCiTestRun();
 
   /** Contract tests mock outbound HTTP — skip Postgres churn (offline CI slice). See `pnpm test:contract`. */
   if (process.env.CONTRACT_TESTS_ONLY === 'true') {
@@ -31,7 +52,7 @@ export default async function globalSetup(): Promise<void> {
     return;
   }
 
-  process.env.DATABASE_URL ??= 'postgresql://core:core@localhost:5432/core';
+  process.env.DATABASE_URL ??= LOCAL_TEST_DATABASE_URL;
   const migrationUrl = process.env.DATABASE_URL;
   if (!migrationUrl) {
     throw new Error('DATABASE_URL must be set for test global setup');

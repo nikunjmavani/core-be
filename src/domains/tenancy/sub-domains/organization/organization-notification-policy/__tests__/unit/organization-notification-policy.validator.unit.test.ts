@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
   validateCreateOrganizationNotificationPolicy,
-  validatePolicyIdParam,
   validateUpdateOrganizationNotificationPolicy,
 } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/organization-notification-policy.validator.js';
 
@@ -43,15 +42,7 @@ describe('organization-notification-policy validators', () => {
     ).toThrow(ValidationError);
   });
 
-  it('validatePolicyIdParam accepts positive integer strings', () => {
-    expect(validatePolicyIdParam('42')).toBe(42);
-  });
-
-  it('validatePolicyIdParam rejects zero', () => {
-    expect(() => validatePolicyIdParam('0')).toThrow(ValidationError);
-  });
-
-  it('validatePolicyIdParam rejects non-numeric values', () => {
-    expect(() => validatePolicyIdParam('abc')).toThrow(ValidationError);
-  });
+  // sec-T5: `validatePolicyIdParam` was removed in PR-G40 — the policy id is
+  // now the 21-char `public_id` validated by the shared `validatePublicIdParam`
+  // helper. Tests for that helper live with the shared util.
 });

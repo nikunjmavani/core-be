@@ -187,17 +187,37 @@ export class UploadRepository {
     return rows[0]?.value ?? 0;
   }
 
-  async findActiveByUserId(user_id: number): Promise<Pick<UploadRow, 'id' | 'file_key'>[]> {
-    return getRequestDatabase()
-      .select({ id: uploads.id, file_key: uploads.file_key })
+  /**
+   * Number of in-flight PENDING uploads aggregated across all members of an
+   * organization (sec-UP4). Used by the service to enforce the
+   * `UPLOAD_MAX_PENDING_PER_ORGANIZATION` cap so a single org cannot
+   * exhaust storage by piling per-user-cap-compliant PENDING rows across
+   * many member accounts.
+   */
+  async countPendingByOrganizationId(organization_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: count() })
       .from(uploads)
-      .where(and(eq(uploads.user_id, user_id), isNull(uploads.deleted_at)));
+      .where(
+        and(
+          eq(uploads.organization_id, organization_id),
+          eq(uploads.status, 'PENDING'),
+          isNull(uploads.deleted_at),
+        ),
+      );
+    return rows[0]?.value ?? 0;
   }
 
   /**
    * Active uploads for a user with `id > after_id`, ascending by id, capped at
    * `limit`. Used to stream a user's uploads in bounded keyset batches during
    * offboarding so object deletion never loads an unbounded result set.
+   *
+   * @remarks
+   * sec-D12: the unbounded sibling (`findActiveByUserId` without a keyset
+   * cursor) was deleted in PR-G35. Every production caller goes through this
+   * paginated variant — re-adding the unbounded shape is a foot-gun for any
+   * caller that eventually runs on a user with thousands of uploads.
    */
   async findActiveByUserIdAfter(
     user_id: number,
@@ -214,13 +234,37 @@ export class UploadRepository {
       .limit(limit);
   }
 
-  async findActiveByOrganizationId(
+  /**
+   * Keyset-paginated stream of active uploads for an organization, mirroring
+   * {@link findActiveByUserIdAfter}. Used by the offboarding hook (sec-UP8)
+   * so a large-tenant tombstone streams in bounded batches instead of
+   * loading the entire set into memory and serialising thousands of S3
+   * round-trips.
+   *
+   * @remarks
+   * sec-D12: the unbounded sibling (`findActiveByOrganizationId` without a
+   * keyset cursor) was deleted in PR-G35. The audit flagged it as a
+   * future-trap — a caller that ran on a small org today would silently
+   * become an O(N) load once tenants grew. Re-adding the unbounded shape
+   * requires re-arguing the size bound.
+   */
+  async findActiveByOrganizationIdAfter(
     organization_id: number,
+    after_id: number,
+    limit: number,
   ): Promise<Pick<UploadRow, 'id' | 'file_key'>[]> {
     return getRequestDatabase()
       .select({ id: uploads.id, file_key: uploads.file_key })
       .from(uploads)
-      .where(and(eq(uploads.organization_id, organization_id), isNull(uploads.deleted_at)));
+      .where(
+        and(
+          eq(uploads.organization_id, organization_id),
+          gt(uploads.id, after_id),
+          isNull(uploads.deleted_at),
+        ),
+      )
+      .orderBy(asc(uploads.id))
+      .limit(limit);
   }
 
   async softDeleteAllByUserId(user_id: number): Promise<number> {
@@ -288,6 +332,33 @@ export async function setUploadStatusByInternalId(
     .update(uploads)
     .set({ status, updated_at: databaseNowTimestamp })
     .where(eq(uploads.id, id));
+}
+
+/**
+ * sec-UP finding #20: worker-side equivalent of the HTTP confirm path's
+ * `markConfirmedByPublicId` — flips status to UPLOADED AND repoints `file_key`
+ * to the final (non-pending) key in a single UPDATE so a servable row never
+ * references the overwritable `pending/` namespace. Used by the pending-sweep
+ * auto-confirm path; mirrors the HTTP confirm invariant established by sec-UP1.
+ *
+ * sec-re-13: tighten the WHERE to also filter `deleted_at IS NULL` (for
+ * sibling-consistency with `markConfirmedByPublicId`) and `status = 'PENDING'`.
+ * The prior unfiltered `eq(uploads.id, id)` would silently UPDATE a row the
+ * user had soft-deleted between the sweep's HEAD and this write, leaving an
+ * `UPLOADED` row with `deleted_at IS NOT NULL`. Cross-domain attach checks
+ * already filter on `isNull(deleted_at)` so this is not currently exploitable,
+ * but the invariant ("only confirm rows that are PENDING and undeleted") is
+ * worth making a WHERE-level guarantee instead of a downstream assumption.
+ */
+export async function markConfirmedByInternalId(
+  databaseHandle: WorkerDatabaseHandle,
+  id: number,
+  finalFileKey: string,
+): Promise<void> {
+  await databaseHandle
+    .update(uploads)
+    .set({ status: 'UPLOADED', file_key: finalFileKey, updated_at: databaseNowTimestamp })
+    .where(and(eq(uploads.id, id), isNull(uploads.deleted_at), eq(uploads.status, 'PENDING')));
 }
 
 /** Hard-deletes upload rows by internal id (caller must remove S3 objects first when needed). */

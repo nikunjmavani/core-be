@@ -14,6 +14,10 @@ import {
 } from '@/domains/auth/auth.http.util.js';
 import type { OauthCallbackQueryInput } from '@/domains/auth/auth.dto.js';
 import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
+import {
+  recordLoginAuditEvent,
+  recordLoginFailureAuditEvent,
+} from '@/domains/auth/shared/audit-login.util.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
 type AuthOauthHandlersDependencies = Pick<AuthContainer, 'oauthService'>;
@@ -59,17 +63,26 @@ export function createAuthOauthHandlers({ oauthService }: AuthOauthHandlersDepen
       // The nonce cookie is single-use: clear it regardless of outcome so a stale value
       // cannot be replayed against a future forged state.
       clearOauthNonceCookie(reply);
-      const data = await oauthService.handleCallback(
-        omitUndefined({
-          provider: request.params.provider,
-          code: query.code,
-          state: query.state,
-          nonce,
-          ipAddress,
-          userAgent,
-          requestId: getRequestIdentifier(request),
-        }),
-      );
+      let data: Awaited<ReturnType<typeof oauthService.handleCallback>>;
+      try {
+        data = await oauthService.handleCallback(
+          omitUndefined({
+            provider: request.params.provider,
+            code: query.code,
+            state: query.state,
+            nonce,
+            ipAddress,
+            userAgent,
+            requestId: getRequestIdentifier(request),
+          }),
+        );
+      } catch (error) {
+        // sec-A8 follow-up: record the failure side. Provider id is embedded
+        // in the source so incident-response can filter by the IdP that
+        // rejected (e.g. "every google-OAuth failure in the last hour").
+        await recordLoginFailureAuditEvent(request, `oauth_${request.params.provider}`, error);
+        throw error;
+      }
 
       if ('mfa_required' in data) {
         return successResponse(AuthSerializer.mfaRequired(data), getRequestIdentifier(request));
@@ -82,6 +95,16 @@ export function createAuthOauthHandlers({ oauthService }: AuthOauthHandlersDepen
         typeof data.session_refresh_secret === 'string'
       ) {
         setSessionCookie(reply, data.session_public_id, data.session_refresh_secret);
+        // sec-A8: audit OAuth success; provider is embedded in the source so an
+        // incident-response query can correlate "every super_admin issued via
+        // OAuth Google in the last 24h" without a separate metadata column.
+        if ('access_token' in data && typeof data.access_token === 'string') {
+          await recordLoginAuditEvent(
+            request,
+            { access_token: data.access_token, session_public_id: data.session_public_id },
+            `oauth_${request.params.provider}`,
+          );
+        }
       }
 
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));

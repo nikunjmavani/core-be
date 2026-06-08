@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { generate as generateTotp } from 'otplib';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
   injectAuthenticated,
@@ -7,7 +8,11 @@ import {
 } from '@/tests/helpers/test-http-inject.helper.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
-import { generateTestToken, generateSuperAdminToken } from '@/tests/helpers/test-auth.js';
+import {
+  generateTestToken,
+  generateTestTokenAndSession,
+  generateSuperAdminToken,
+} from '@/tests/helpers/test-auth.js';
 import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import type { FastifyInstance } from 'fastify';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
@@ -82,8 +87,10 @@ describe('User Domain — Integration', () => {
 
     it('should return is_mfa_enabled true after MFA enroll and false after revoke', async () => {
       const user = await createTestUser();
-      await seedRecentStepUpForTestUser(user.public_id);
-      const token = await generateTestToken({ userId: user.public_id });
+      const { token, sessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
 
       const meBefore = await getMeWithRetry(app, token);
       expect(meBefore.statusCode).toBe(200);
@@ -97,8 +104,16 @@ describe('User Domain — Integration', () => {
         payload: { method_type: 'MFA_TOTP' },
       });
       expect(enrollResponse.statusCode).toBe(200);
-      const enrollBody = enrollResponse.json() as { data: { method_id: number } };
-      const methodId = enrollBody.data.method_id;
+      const enrollBody = enrollResponse.json() as { data: { secret: string } };
+      const confirmResponse = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath('/auth/mfa/enroll/confirm'),
+        token,
+        payload: { code: await generateTotp({ secret: enrollBody.data.secret }) },
+      });
+      expect(confirmResponse.statusCode).toBe(200);
+      const confirmBody = confirmResponse.json() as { data: { method_id: number } };
+      const methodId = confirmBody.data.method_id;
       expect(typeof methodId).toBe('number');
 
       const meAfterEnroll = await getMeWithRetry(app, token);
@@ -106,7 +121,7 @@ describe('User Domain — Integration', () => {
       const meAfterEnrollBody = meAfterEnroll.json() as { data: { is_mfa_enabled: boolean } };
       expect(meAfterEnrollBody.data.is_mfa_enabled).toBe(true);
 
-      await seedRecentStepUpForTestUser(user.public_id);
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
 
       const deleteResponse = await injectAuthenticated(app, {
         method: 'DELETE',

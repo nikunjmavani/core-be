@@ -79,6 +79,12 @@ describe('AuthService', () => {
       expires_at: new Date(Date.now() + 86_400_000),
       revoked_at: null,
     }),
+    findSessionByPublicIdIncludingRevoked: vi.fn().mockResolvedValue({
+      public_id: 'session_public',
+      user_id: 1,
+      expires_at: new Date(Date.now() + 86_400_000),
+      is_revoked: false,
+    }),
     rotateSessionTokenHash: vi.fn().mockResolvedValue(undefined),
     refreshSessionCredentials: vi.fn().mockResolvedValue({ refresh_secret: 'new-refresh-secret' }),
   } as unknown as AuthSessionService;
@@ -183,6 +189,41 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
+  it('login uses the SAME error message for unknown email, wrong password, and currently-locked-out wrong password (sec-A #23)', async () => {
+    // Prior code returned `errors:accountLocked` when (email is real) AND (password is
+    // wrong) AND (lockout is active) — a narrow enumeration oracle a credential-stuffing
+    // operator could use to confirm "this account has recently received >=
+    // MAX_FAILED_LOGIN_ATTEMPTS failed logins". The fix collapses the message to the
+    // generic invalidEmailOrPassword for all three branches.
+    const { verifyPassword } = await import('@/shared/utils/security/password.util.js');
+
+    // Unknown email → invalidEmailOrPassword
+    vi.mocked(userService.findByEmail).mockResolvedValueOnce(null as never);
+    await expect(
+      service.login({ email: 'unknown@example.com', password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toMatchObject({ messageKey: 'errors:invalidEmailOrPassword' });
+
+    // Real email, wrong password, NO lockout → invalidEmailOrPassword
+    vi.mocked(userService.findByEmail).mockResolvedValueOnce({
+      ...user,
+      account_locked_until: null,
+    } as never);
+    vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
+    await expect(
+      service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toMatchObject({ messageKey: 'errors:invalidEmailOrPassword' });
+
+    // Real email, wrong password, ACTIVE lockout → invalidEmailOrPassword (no oracle)
+    vi.mocked(userService.findByEmail).mockResolvedValueOnce({
+      ...user,
+      account_locked_until: new Date(Date.now() + 60_000),
+    } as never);
+    vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
+    await expect(
+      service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toMatchObject({ messageKey: 'errors:invalidEmailOrPassword' });
+  });
+
   it('login lets a correct password bypass an active lockout (no victim-account DoS)', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue({
       ...user,
@@ -255,33 +296,71 @@ describe('AuthService', () => {
   });
 
   it('refreshToken rejects missing session', async () => {
-    vi.mocked(authSessionService.findActiveSessionByPublicId).mockResolvedValue(null);
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue(null);
     await expect(
       service.refreshToken({ sessionPublicId: 'missing', refreshSecret: 'refresh-secret' }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('refreshToken rejects expired sessions and inactive users', async () => {
-    vi.mocked(authSessionService.findActiveSessionByPublicId).mockResolvedValue({
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue({
       public_id: 'session_public',
       user_id: 1,
       expires_at: new Date(Date.now() - 1000),
-      revoked_at: null,
+      is_revoked: false,
     } as never);
     await expect(
       service.refreshToken({ sessionPublicId: 'session_public', refreshSecret: 'refresh-secret' }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
 
-    vi.mocked(authSessionService.findActiveSessionByPublicId).mockResolvedValue({
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue({
       public_id: 'session_public',
       user_id: 1,
       expires_at: new Date(Date.now() + 86_400_000),
-      revoked_at: null,
+      is_revoked: false,
     } as never);
     vi.mocked(userService.findById).mockResolvedValue({ ...user, status: 'SUSPENDED' } as never);
     await expect(
       service.refreshToken({ sessionPublicId: 'session_public', refreshSecret: 'refresh-secret' }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('sec-re-05: refreshToken reaches refreshSessionCredentials even when the session row is revoked, so the reuse-detection block can fire', async () => {
+    // Without this fix, `refreshToken` looked the session up via
+    // `findActiveSessionByPublicId` (which filters `is_revoked = false`) and
+    // threw `errors:invalidOrExpiredSession` for revoked rows BEFORE
+    // `refreshSessionCredentials` could run the
+    // `findByPublicIdIncludingRevoked` reuse-detection block — the exact
+    // "user clicked Log out everywhere, attacker holds stale refresh secret"
+    // scenario sec-A #9 was meant to catch silently no-op'd. The Sentry
+    // signal (`auth.refresh_token.reuse_detected`) never fired.
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: 1,
+      expires_at: new Date(Date.now() + 86_400_000),
+      is_revoked: true,
+    } as never);
+    vi.mocked(userService.findById).mockResolvedValue({ ...user, status: 'ACTIVE' } as never);
+    vi.mocked(authSessionService.refreshSessionCredentials).mockRejectedValueOnce(
+      new UnauthorizedError('errors:invalidOrExpiredSession'),
+    );
+
+    await expect(
+      service.refreshToken({
+        sessionPublicId: 'session_public',
+        refreshSecret: 'replayed-stale-secret',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+
+    // The critical assertion — refreshSessionCredentials WAS reached, even for
+    // a revoked session. On dev this call never happens because the service
+    // throws on the earlier findActiveSessionByPublicId null-return.
+    expect(authSessionService.refreshSessionCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionPublicId: 'session_public',
+        refreshSecret: 'replayed-stale-secret',
+      }),
+    );
   });
 
   it('login rehashes password when verifyPassword reports needsRehash', async () => {

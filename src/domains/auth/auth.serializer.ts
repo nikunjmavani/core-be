@@ -1,6 +1,6 @@
 /** Subset of an `auth_methods` row that is safe to return to the owning user. */
 interface AuthMethodResponseInput {
-  id: number;
+  public_id: string;
   method_type: string;
   provider: string | null;
   is_primary: boolean;
@@ -12,12 +12,12 @@ interface AuthMethodResponseInput {
 /**
  * Allowlist an auth-method row for the API response. NEVER emits credential material
  * (`encrypted_secret` — the AES-GCM TOTP seed), PII (`phone_number`, `provider_user_id`) or
- * internal sequential ids (`user_id`, `created_by_user_id`). `id` is retained because it is the
- * `DELETE /me/auth-methods/:id` path parameter (this table has no public id).
+ * internal sequential ids (`id`, `user_id`, `created_by_user_id`). `public_id` is the stable
+ * opaque identifier accepted by `DELETE /me/auth-methods/:publicId` (sec-new-B4).
  */
 function serializeAuthMethod(item: AuthMethodResponseInput) {
   return {
-    id: item.id,
+    public_id: item.public_id,
     method_type: item.method_type,
     provider: item.provider,
     is_primary: item.is_primary,
@@ -58,8 +58,17 @@ export const AuthSerializer = {
   message(data: { message: string }) {
     return data;
   },
-  mfaEnroll(data: { secret: string; provisioning_uri: string; method_id: number }) {
-    return data;
+  mfaEnroll(data: { secret: string; provisioning_uri: string }) {
+    return {
+      secret: data.secret,
+      provisioning_uri: data.provisioning_uri,
+    };
+  },
+  mfaEnrollConfirm(data: { recovery_codes: string[]; method_public_id: string }) {
+    return {
+      recovery_codes: data.recovery_codes,
+      method_public_id: data.method_public_id,
+    };
   },
   oauthProviders(data: { providers: string[] }) {
     return data;

@@ -19,6 +19,7 @@ import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
 import { createTestWebhook } from '@/tests/factories/webhook.factory.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 vi.mock('@/shared/utils/security/webhook-url.util.js', () => ({
   validateWebhookUrl: vi.fn().mockResolvedValue(undefined),
@@ -74,6 +75,7 @@ describe('webhook-delivery.worker — status transitions', () => {
     const [pendingAttempt] = await database
       .insert(webhook_delivery_attempts)
       .values({
+        public_id: generatePublicId(),
         webhook_id: webhook.id,
         event_type: 'webhook.test',
         payload: { hello: 'world' },
@@ -122,6 +124,7 @@ describe('webhook-delivery.worker — status transitions', () => {
     const [pendingAttempt] = await database
       .insert(webhook_delivery_attempts)
       .values({
+        public_id: generatePublicId(),
         webhook_id: webhook.id,
         event_type: 'webhook.test',
         payload: { hello: 'world' },
@@ -165,6 +168,7 @@ describe('webhook-delivery.worker — status transitions', () => {
     const [pendingAttempt] = await database
       .insert(webhook_delivery_attempts)
       .values({
+        public_id: generatePublicId(),
         webhook_id: webhook.id,
         event_type: 'webhook.test',
         payload: { hello: 'world' },
@@ -216,6 +220,7 @@ describe('webhook-delivery.worker — status transitions', () => {
     const [pendingAttempt] = await database
       .insert(webhook_delivery_attempts)
       .values({
+        public_id: generatePublicId(),
         webhook_id: webhook.id,
         event_type: 'webhook.test',
         payload: { tenant: 'isolation' },

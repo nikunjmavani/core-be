@@ -80,7 +80,10 @@ describe('UserService', () => {
     vi.mocked(repository.update).mockResolvedValue(userRow as never);
     service.wireOffboardingServices({
       authSessionService: { revokeAllSessions: vi.fn().mockResolvedValue(undefined) } as never,
-      authMethodService: { revokeAllForUser: vi.fn().mockResolvedValue(undefined) } as never,
+      authMethodService: {
+        revokeAllForUser: vi.fn().mockResolvedValue(undefined),
+        invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
       uploadService: {
         tombstoneAllByUserId: vi.fn().mockResolvedValue(0),
         assertKeyConfirmed: vi.fn().mockResolvedValue(undefined),
@@ -139,7 +142,10 @@ describe('UserService', () => {
   it('uploadAvatar rejects when the upload has not been confirmed', async () => {
     service.wireOffboardingServices({
       authSessionService: { revokeAllSessions: vi.fn() } as never,
-      authMethodService: { revokeAllForUser: vi.fn() } as never,
+      authMethodService: {
+        revokeAllForUser: vi.fn(),
+        invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
       uploadService: {
         tombstoneAllByUserId: vi.fn().mockResolvedValue(0),
         assertKeyConfirmed: vi
@@ -157,7 +163,10 @@ describe('UserService', () => {
 
   it('deleteMe runs offboarding when dependencies attached', async () => {
     const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
-    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = {
+      revokeAllForUser: vi.fn().mockResolvedValue(undefined),
+      invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+    };
     const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
     service.wireOffboardingServices({
       authSessionService: authSessionService as never,
@@ -188,7 +197,10 @@ describe('UserService', () => {
     });
     service.wireOffboardingServices({
       authSessionService: { revokeAllSessions: vi.fn().mockResolvedValue(undefined) } as never,
-      authMethodService: { revokeAllForUser: vi.fn().mockResolvedValue(undefined) } as never,
+      authMethodService: {
+        revokeAllForUser: vi.fn().mockResolvedValue(undefined),
+        invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
       uploadService: { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) } as never,
       userDataExportService: {
         deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
@@ -216,7 +228,10 @@ describe('UserService', () => {
     const revokeAllSessions = vi.fn().mockResolvedValue(undefined);
     service.wireOffboardingServices({
       authSessionService: { revokeAllSessions } as never,
-      authMethodService: { revokeAllForUser: vi.fn() } as never,
+      authMethodService: {
+        revokeAllForUser: vi.fn(),
+        invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
       uploadService: {} as never,
       userDataExportService: {} as never,
     });
@@ -228,7 +243,10 @@ describe('UserService', () => {
     const revokeAllSessions = vi.fn().mockResolvedValue(undefined);
     service.wireOffboardingServices({
       authSessionService: { revokeAllSessions } as never,
-      authMethodService: { revokeAllForUser: vi.fn() } as never,
+      authMethodService: {
+        revokeAllForUser: vi.fn(),
+        invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+      } as never,
       uploadService: {} as never,
       userDataExportService: {} as never,
     });
@@ -340,7 +358,10 @@ describe('UserService', () => {
       avatar_url: null,
     } as never);
     const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
-    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = {
+      revokeAllForUser: vi.fn().mockResolvedValue(undefined),
+      invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+    };
     const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
     service.wireOffboardingServices({
       authSessionService: authSessionService as never,
@@ -369,7 +390,10 @@ describe('UserService', () => {
       avatar_url: avatarKey,
     } as never);
     const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
-    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = {
+      revokeAllForUser: vi.fn().mockResolvedValue(undefined),
+      invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+    };
     const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
     service.wireOffboardingServices({
       authSessionService: authSessionService as never,
@@ -390,7 +414,10 @@ describe('UserService', () => {
 
   it('deleteUser runs offboarding path', async () => {
     const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
-    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = {
+      revokeAllForUser: vi.fn().mockResolvedValue(undefined),
+      invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+    };
     const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
     service.wireOffboardingServices({
       authSessionService: authSessionService as never,
@@ -430,7 +457,10 @@ describe('UserService', () => {
       avatar_url: 'other-prefix/avatar.png',
     } as never);
     const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
-    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = {
+      revokeAllForUser: vi.fn().mockResolvedValue(undefined),
+      invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+    };
     const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
     service.wireOffboardingServices({
       authSessionService: authSessionService as never,
@@ -453,7 +483,10 @@ describe('UserService', () => {
     } as never);
     vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(false);
     const authSessionService = { revokeAllSessions: vi.fn().mockResolvedValue(undefined) };
-    const authMethodService = { revokeAllForUser: vi.fn().mockResolvedValue(undefined) };
+    const authMethodService = {
+      revokeAllForUser: vi.fn().mockResolvedValue(undefined),
+      invalidateAllVerificationTokensForUser: vi.fn().mockResolvedValue(undefined),
+    };
     const uploadService = { tombstoneAllByUserId: vi.fn().mockResolvedValue(0) };
     service.wireOffboardingServices({
       authSessionService: authSessionService as never,

@@ -103,6 +103,20 @@ export class StripeWebhookEventRepository {
 
   /**
    * Re-claim a failed or stuck-processing ledger row for retry.
+   *
+   * @remarks
+   * Three reclaim conditions are recognised:
+   *   1. status='failed' — a prior worker attempt threw; safe to retry.
+   *   2. status='processing' AND updated_at older than the stuck-lease window — a
+   *      worker that was processing this row has likely crashed or stalled; safe
+   *      to retry (the previous worker's writes will fail-on-RETURNING once it
+   *      revives).
+   *   3. status='processing' AND attempt_count=0 — sec-B finding #6: the HTTP
+   *      ingress committed the durability row but the worker is the first to
+   *      actually dispatch. Atomicity of the UPDATE (which bumps attempt_count
+   *      to 1) guarantees only one worker can win this transition; a concurrent
+   *      retry that arrived seconds later will see attempt_count=1 and
+   *      updated_at fresh, neither matches, and gets `still_processing_within_lease`.
    */
   async tryReclaimEvent(stripe_event_id: string): Promise<boolean> {
     const stuckProcessingBefore = new Date(
@@ -127,6 +141,10 @@ export class StripeWebhookEventRepository {
               eq(stripe_webhook_events.processing_status, 'processing'),
               lt(stripe_webhook_events.updated_at, stuckProcessingBefore),
             ),
+            and(
+              eq(stripe_webhook_events.processing_status, 'processing'),
+              eq(stripe_webhook_events.attempt_count, 0),
+            ),
           ),
         ),
       )
@@ -135,15 +153,19 @@ export class StripeWebhookEventRepository {
     return rows.length > 0;
   }
 
-  async markProcessed(stripe_event_id: string): Promise<void> {
-    await stripeWebhookLedgerDatabase()
+  async markProcessed(stripe_event_id: string): Promise<boolean> {
+    // sec-new-D2: return whether a row was actually updated so the caller can
+    // detect and log a no-op (e.g. the ledger row was unexpectedly absent).
+    const rows = await stripeWebhookLedgerDatabase()
       .update(stripe_webhook_events)
       .set({
         processing_status: 'processed' satisfies StripeWebhookProcessingStatus,
         processed_at: new Date(),
         updated_at: sql`NOW()`,
       })
-      .where(eq(stripe_webhook_events.stripe_event_id, stripe_event_id));
+      .where(eq(stripe_webhook_events.stripe_event_id, stripe_event_id))
+      .returning({ stripe_event_id: stripe_webhook_events.stripe_event_id });
+    return rows.length > 0;
   }
 
   async countFailedEvents(): Promise<number> {
@@ -177,31 +199,49 @@ export class StripeWebhookEventRepository {
     return rows.map((row) => row.stripe_event_id);
   }
 
+  /**
+   * Scans the ledger for reclaimable rows (failed, or processing past the
+   * stuck-lease window) and returns their stripe_event_ids without mutating
+   * the rows.
+   *
+   * @remarks
+   * - **sec-re-02:** Prior to this fix, the sweep called
+   *   {@link tryReclaimEvent} inline, which bumped `processing_status` to
+   *   `processing`, incremented `attempt_count` and refreshed `updated_at`.
+   *   The worker's subsequent `tryClaimEvent` → `tryReclaimEvent` then found
+   *   all three reclaim branches false (not failed, not stale, not
+   *   attempt_count = 0), returned `still_processing_within_lease`, BullMQ
+   *   retried 5× and DLQ'd, and — combined with sec-Q #1's seven-day
+   *   failed-job retention — the next sweep's re-enqueue became a silent
+   *   duplicate-jobId no-op. The row was stuck in `processing` permanently.
+   *   Returning just the candidate ids and letting the worker call
+   *   `tryClaimEvent` → `tryReclaimEvent` itself preserves the atomic
+   *   transition semantics in one place (the worker) and re-arms the
+   *   failed → processing branch.
+   * - **Failure modes:** none beyond a transient SELECT error, which the
+   *   caller logs and retries on the next sweep.
+   * - **Side effects:** none — pure read.
+   * - **Notes:** the cron processor pairs this with
+   *   `enqueueStripeWebhookByEventIdForReclaim` (fresh jobId per attempt) so
+   *   the BullMQ dedup does not block the re-enqueue.
+   */
   async sweepReclaimableEvents(batchSize: number): Promise<{
     scannedCount: number;
-    reclaimedCount: number;
-    reclaimedStripeEventIds: string[];
+    candidateStripeEventIds: string[];
   }> {
     const candidateStripeEventIds = await this.findReclaimableStripeEventIds(batchSize);
-    const reclaimedStripeEventIds: string[] = [];
-
-    for (const stripeEventId of candidateStripeEventIds) {
-      if (await this.tryReclaimEvent(stripeEventId)) {
-        reclaimedStripeEventIds.push(stripeEventId);
-      }
-    }
-
     return {
       scannedCount: candidateStripeEventIds.length,
-      reclaimedCount: reclaimedStripeEventIds.length,
-      reclaimedStripeEventIds,
+      candidateStripeEventIds,
     };
   }
 
-  async markFailed(stripe_event_id: string, failure_reason: string): Promise<void> {
+  async markFailed(stripe_event_id: string, failure_reason: string): Promise<boolean> {
+    // sec-new-D2: return whether a row was actually updated so the caller can
+    // detect and log a no-op (e.g. the ledger row was unexpectedly absent).
     const truncatedReason =
       failure_reason.length > 2000 ? failure_reason.slice(0, 2000) : failure_reason;
-    await stripeWebhookLedgerDatabase()
+    const rows = await stripeWebhookLedgerDatabase()
       .update(stripe_webhook_events)
       .set({
         processing_status: 'failed' satisfies StripeWebhookProcessingStatus,
@@ -209,6 +249,8 @@ export class StripeWebhookEventRepository {
         failure_reason: truncatedReason,
         updated_at: sql`NOW()`,
       })
-      .where(eq(stripe_webhook_events.stripe_event_id, stripe_event_id));
+      .where(eq(stripe_webhook_events.stripe_event_id, stripe_event_id))
+      .returning({ stripe_event_id: stripe_webhook_events.stripe_event_id });
+    return rows.length > 0;
   }
 }

@@ -29,7 +29,7 @@ What it does not own: credentials (lives in [auth](src/domains/auth/)), organiza
 | --- | --- |
 | [user-settings](src/domains/user/sub-domains/user-settings/) | Per-user feature toggles and presentation preferences. |
 | [user-notification-preferences](src/domains/user/sub-domains/user-notification-preferences/) | Per-user opt-in/opt-out for the notification + email channels. |
-| [user-data-export](src/domains/user/sub-domains/user-data-export/) | GDPR export: bundle every row this user owns into an S3 object, presign a 24 h download URL, deliver via email. |
+| [user-data-export](src/domains/user/sub-domains/user-data-export/) | GDPR export: bundle every row this user owns into an S3 object, presign a 15-minute download URL (sec-U6), deliver via email. |
 
 The root `user.service.ts` is also a public service (`UserService`) consumed by other domains for canonical user lookups (`findByEmail`, `findByPublicId`, `requireUserRecordByPublicId`).
 
@@ -57,7 +57,7 @@ stateDiagram-v2
   active --> active: profile / settings / preference updates
   active --> export_requested: POST /users/me/data-exports
   export_requested --> export_ready: worker bundle complete
-  export_ready --> active: client downloads (24h URL)
+  export_ready --> active: client downloads (15-min URL, sec-U6)
   active --> tombstoned: soft delete
   tombstoned --> [*]: retention worker purges after window
 ```
@@ -69,7 +69,7 @@ stateDiagram-v2
 
 ## External integrations
 
-- **S3** — GDPR export bundles are written to S3; presigned download URL TTL = `USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS = 86 400` (24 h, the legal cap).
+- **S3** — GDPR export bundles are written to S3; presigned download URL TTL = `USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS = 900` (15 minutes — sec-U6 collapsed the stolen-token replay window from the prior 24 h ceiling).
 - **Resend** (via mail outbox) — export-ready email.
 
 ## Failure modes
@@ -84,4 +84,4 @@ stateDiagram-v2
 See [src/POLICIES.md](src/POLICIES.md):
 
 - `GDPR_EXPORT_MAX_ROWS_PER_TABLE = 1 000`
-- `USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS = 86 400`
+- `USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS = 900` (15 minutes — sec-U6)

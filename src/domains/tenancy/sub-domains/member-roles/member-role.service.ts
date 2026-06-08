@@ -1,7 +1,8 @@
-import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/index.js';
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
+import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import type { MemberRoleRepository } from './member-role.repository.js';
 import type { MemberRoleOutput, MemberRoleRow } from './member-role.types.js';
 import {
@@ -42,6 +43,7 @@ export class MemberRoleService {
   constructor(
     private readonly organizationService: OrganizationService,
     private readonly memberRoleRepository: MemberRoleRepository,
+    private readonly membershipRepository: MembershipRepository,
   ) {}
 
   async list(organization_public_id: string, pagination: CursorPaginationInput) {
@@ -155,12 +157,14 @@ export class MemberRoleService {
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
       try {
+        // sec-T3: `is_system` is intentionally omitted — the DTO no longer accepts it
+        // from clients and the repository default is false. Only seeds set it (via a
+        // server-side path that does not go through this service).
         const created = await this.memberRoleRepository.create(
           omitUndefined({
             organization_id: organization.id,
             name: parsed.name,
             description: parsed.description,
-            is_system: parsed.is_system,
             created_by_user_id: userId ?? null,
           }),
         );
@@ -185,6 +189,10 @@ export class MemberRoleService {
         );
       const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
       if (!role) throw new NotFoundError('Role');
+      // sec-T3: system roles (Admin/Member) are immutable from the API — same guard as delete.
+      if (role.is_system) {
+        throw new ForbiddenError('errors:cannotModifySystemRole');
+      }
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
       let updated: MemberRoleRow | null;
@@ -203,12 +211,41 @@ export class MemberRoleService {
     });
   }
 
+  /**
+   * Soft-deletes a custom role.
+   *
+   * @remarks
+   * sec-T3 guards:
+   *   1. **`is_system` guard** — Admin/Member seed roles cannot be deleted from the API.
+   *      Surfaces as `ForbiddenError('errors:cannotDeleteSystemRole')`.
+   *   2. **Active-membership guard** — refuses to delete a role currently assigned to one
+   *      or more active memberships, because the permission-resolution join filters
+   *      `isNull(roles.deleted_at)` and would silently strip every member's permission
+   *      set. Surfaces as `ConflictError('errors:roleHasActiveMembers')` — clients
+   *      must reassign members before deleting.
+   *
+   * Both checks fire BEFORE the repository `softDelete` so a refused attempt leaves no
+   * partial state. The is_system guard runs first so operators get the more actionable
+   * "system role" message in the seeded-Admin case (which is the most common attempt).
+   */
   async delete(organization_public_id: string, role_public_id: string): Promise<void> {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
+      const role = await this.memberRoleRepository.findByPublicId(role_public_id, organization.id);
+      if (!role) throw new NotFoundError('Role');
+      if (role.is_system) {
+        throw new ForbiddenError('errors:cannotDeleteSystemRole');
+      }
+      const activeMembershipCount = await this.membershipRepository.countActiveByRoleId(
+        role.id,
+        organization.id,
+      );
+      if (activeMembershipCount > 0) {
+        throw new ConflictError('errors:roleHasActiveMembers');
+      }
       const deleted = await this.memberRoleRepository.softDelete(role_public_id, organization.id);
       if (!deleted) throw new NotFoundError('Role');
       await invalidateOrganizationPermissions(organization_public_id);

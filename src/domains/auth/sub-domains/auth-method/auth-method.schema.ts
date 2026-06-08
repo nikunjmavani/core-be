@@ -7,6 +7,7 @@ import {
   boolean,
   timestamp,
   index,
+  uniqueIndex,
   check,
   pgPolicy,
 } from 'drizzle-orm/pg-core';
@@ -26,6 +27,10 @@ export const auth_methods = authSchema
     'auth_methods',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
+      // sec-new-B4: opaque public identifier returned by the auth-method management API
+      // (GET /me/auth-methods, POST /me/auth-methods) and accepted as the path parameter
+      // on DELETE /me/auth-methods/:publicId so the bigserial is never exposed to callers.
+      public_id: varchar('public_id', { length: 21 }).notNull(),
       user_id: bigint('user_id', { mode: 'number' })
         .notNull()
         .references(() => users.id, { onDelete: 'cascade' }),
@@ -44,6 +49,7 @@ export const auth_methods = authSchema
       ),
     },
     (table) => [
+      uniqueIndex('idx_auth_methods_public_id').on(table.public_id),
       index('idx_auth_methods_user_type').on(table.user_id, table.method_type),
       index('idx_auth_methods_provider').on(table.provider, table.provider_user_id),
       index('idx_auth_methods_user_revoked').on(table.user_id, table.revoked_at),

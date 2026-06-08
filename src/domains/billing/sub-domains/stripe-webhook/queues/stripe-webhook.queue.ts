@@ -63,6 +63,45 @@ export async function enqueueStripeWebhookByEventId(
   });
 }
 
+/**
+ * Enqueues a `stripe-webhook` job for the cron-driven reclaim sweep with a
+ * fresh, attempt-unique jobId so BullMQ's seven-day failed-job retention
+ * (sec-Q #1) does not silently no-op the re-enqueue via the Lua duplicate-jobId
+ * path.
+ *
+ * @remarks
+ * - **sec-re-02:** The HTTP ingress path keeps using
+ *   {@link enqueueStripeWebhookByEventId} (jobId `stripe-event-${id}`) so
+ *   concurrent webhook deliveries deduplicate. The reclaim path needs the
+ *   opposite — every sweep must produce a job BullMQ has not seen before so
+ *   the worker actually receives it. We append the current epoch milliseconds
+ *   to the jobId; two sweeps in the same millisecond for the same event id
+ *   would still dedup, but downstream `tryClaimEvent` is atomic on the ledger
+ *   row so duplicate dispatches are safe (the second hits
+ *   `still_processing_within_lease` and exits).
+ * - **Failure modes:** propagates BullMQ enqueue errors so the caller can log
+ *   and skip.
+ * - **Side effects:** writes a new job to the `stripe-webhook` queue.
+ */
+export async function enqueueStripeWebhookByEventIdForReclaim(
+  stripeEventId: string,
+  requestId?: string,
+): Promise<void> {
+  const queue = getStripeWebhookQueue();
+  const jobData = parseBullMQJobData(
+    stripeWebhookJobDataSchema,
+    omitUndefined({
+      stripeEventId,
+      requestId,
+      ...captureTraceContextForPropagation(),
+    }),
+    STRIPE_WEBHOOK_QUEUE_NAME,
+  );
+  await queue.add('process-stripe-webhook', jobData, {
+    jobId: `stripe-event-${stripeEventId}-reclaim-${Date.now()}`,
+  });
+}
+
 /** Closes and disposes the singleton queue connection during graceful shutdown. */
 export async function closeStripeWebhookQueue(): Promise<void> {
   if (stripeWebhookQueue) {

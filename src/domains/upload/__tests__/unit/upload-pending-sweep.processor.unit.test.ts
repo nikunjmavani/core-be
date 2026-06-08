@@ -3,15 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const headObjectMock = vi.fn();
 const getObjectMock = vi.fn();
 const deleteObjectMock = vi.fn();
+const copyObjectMock = vi.fn();
 
 vi.mock('@/infrastructure/storage/storage.service.js', () => ({
   headObject: (...arguments_: unknown[]) => headObjectMock(...arguments_),
   getObjectLeadingBytes: (...arguments_: unknown[]) => getObjectMock(...arguments_),
   deleteObject: (...arguments_: unknown[]) => deleteObjectMock(...arguments_),
+  copyObject: (...arguments_: unknown[]) => copyObjectMock(...arguments_),
 }));
 
 const findPendingUploadsOlderThanMock = vi.fn();
 const setUploadStatusByInternalIdMock = vi.fn();
+const markConfirmedByInternalIdMock = vi.fn();
 const hardDeleteUploadsByInternalIdsMock = vi.fn();
 
 vi.mock('@/domains/upload/upload.repository.js', () => ({
@@ -19,6 +22,8 @@ vi.mock('@/domains/upload/upload.repository.js', () => ({
     findPendingUploadsOlderThanMock(...arguments_),
   setUploadStatusByInternalId: (...arguments_: unknown[]) =>
     setUploadStatusByInternalIdMock(...arguments_),
+  markConfirmedByInternalId: (...arguments_: unknown[]) =>
+    markConfirmedByInternalIdMock(...arguments_),
   hardDeleteUploadsByInternalIds: (...arguments_: unknown[]) =>
     hardDeleteUploadsByInternalIdsMock(...arguments_),
 }));
@@ -51,7 +56,10 @@ function makeRow(overrides: Partial<PendingUploadSweepRow>): PendingUploadSweepR
     id: 1,
     public_id: 'upl_public_1',
     user_id: 10,
-    file_key: 'avatars/owner/1.png',
+    // sec-UP #20: the sweep refuses rows whose file_key does not start with the
+    // `pending/` prefix (matching the HTTP confirm-path invariant from sec-UP1).
+    // Every fixture row therefore carries the prefix.
+    file_key: 'pending/avatars/owner/1.png',
     mime_type: 'image/png',
     file_size: 1024,
     created_at: new Date('2026-05-01T00:00:00Z'),
@@ -66,8 +74,10 @@ describe('upload-pending-sweep.processor', () => {
     headObjectMock.mockReset();
     getObjectMock.mockReset();
     deleteObjectMock.mockReset();
+    copyObjectMock.mockReset().mockResolvedValue(undefined);
     findPendingUploadsOlderThanMock.mockReset();
     setUploadStatusByInternalIdMock.mockReset();
+    markConfirmedByInternalIdMock.mockReset();
     hardDeleteUploadsByInternalIdsMock.mockResolvedValue(0);
     loggerMocks.info.mockReset();
     loggerMocks.warn.mockReset();
@@ -90,17 +100,39 @@ describe('upload-pending-sweep.processor', () => {
     expect(setUploadStatusByInternalIdMock).not.toHaveBeenCalled();
   });
 
-  it('auto-confirms rows whose S3 object matches declared content length', async () => {
-    const row = makeRow({ id: 1, file_key: 'avatars/owner/match.png', file_size: 2048 });
+  it('auto-confirms rows whose S3 object matches declared content length — copies bytes to final key and rewrites file_key (sec-UP #20)', async () => {
+    const row = makeRow({
+      id: 1,
+      file_key: 'pending/avatars/owner/match.png',
+      file_size: 2048,
+    });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
     headObjectMock.mockResolvedValueOnce({ contentType: 'image/png', contentLength: 2048 });
     getObjectMock.mockResolvedValueOnce({ body: validPngBody });
+    deleteObjectMock.mockResolvedValueOnce(true);
     const databaseHandle = {} as never;
 
     const result = await runUploadPendingSweepJob(databaseHandle);
 
-    expect(setUploadStatusByInternalIdMock).toHaveBeenCalledWith(databaseHandle, 1, 'UPLOADED');
-    expect(deleteObjectMock).not.toHaveBeenCalled();
+    // The sweep now mirrors the HTTP confirm path: copy pending → final, then
+    // atomically UPDATE status=UPLOADED + file_key=finalKey, then best-effort
+    // delete the pending bytes.
+    expect(copyObjectMock).toHaveBeenCalledWith({
+      sourceKey: 'pending/avatars/owner/match.png',
+      destinationKey: 'avatars/owner/match.png',
+      contentType: 'image/png',
+    });
+    expect(markConfirmedByInternalIdMock).toHaveBeenCalledWith(
+      databaseHandle,
+      1,
+      'avatars/owner/match.png',
+    );
+    expect(deleteObjectMock).toHaveBeenCalledWith('pending/avatars/owner/match.png');
+    expect(setUploadStatusByInternalIdMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      1,
+      'UPLOADED',
+    );
     expect(result.autoConfirmedCount).toBe(1);
     expect(result.failedCount).toBe(0);
     expect(result.deletedCount).toBe(0);
@@ -111,10 +143,33 @@ describe('upload-pending-sweep.processor', () => {
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
     headObjectMock.mockResolvedValueOnce({ contentType: undefined, contentLength: 999 });
     getObjectMock.mockResolvedValueOnce({ body: validPngBody });
+    deleteObjectMock.mockResolvedValueOnce(true);
 
     const result = await runUploadPendingSweepJob({} as never);
 
     expect(result.autoConfirmedCount).toBe(1);
+    expect(markConfirmedByInternalIdMock).toHaveBeenCalled();
+  });
+
+  it('refuses to auto-confirm rows whose file_key lacks the pending prefix (sec-UP #20)', async () => {
+    // Per sec-UP1 (HTTP confirm path) and sec-UP #20 (sweep parity), a row that
+    // never went through the pending-key indirection is a legacy/imported
+    // anomaly and must NOT be laundered into UPLOADED state.
+    const row = makeRow({
+      id: 99,
+      file_key: 'legacy/imports/no-prefix.png',
+      file_size: 1024,
+    });
+    findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
+
+    const result = await runUploadPendingSweepJob({} as never);
+
+    expect(headObjectMock).not.toHaveBeenCalled();
+    expect(copyObjectMock).not.toHaveBeenCalled();
+    expect(markConfirmedByInternalIdMock).not.toHaveBeenCalled();
+    expect(setUploadStatusByInternalIdMock).toHaveBeenCalledWith(expect.anything(), 99, 'FAILED');
+    expect(result.failedCount).toBe(1);
+    expect(result.autoConfirmedCount).toBe(0);
   });
 
   it('marks rows FAILED when magic bytes do not match declared content type', async () => {
@@ -145,7 +200,7 @@ describe('upload-pending-sweep.processor', () => {
   });
 
   it('hard-deletes rows whose S3 object is missing', async () => {
-    const row = makeRow({ id: 3, file_key: 'avatars/owner/orphan.png' });
+    const row = makeRow({ id: 3, file_key: 'pending/avatars/owner/orphan.png' });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
     headObjectMock.mockResolvedValueOnce(null);
     deleteObjectMock.mockResolvedValueOnce(true);
@@ -154,7 +209,7 @@ describe('upload-pending-sweep.processor', () => {
 
     const result = await runUploadPendingSweepJob(databaseHandle);
 
-    expect(deleteObjectMock).toHaveBeenCalledWith('avatars/owner/orphan.png');
+    expect(deleteObjectMock).toHaveBeenCalledWith('pending/avatars/owner/orphan.png');
     expect(hardDeleteUploadsByInternalIdsMock).toHaveBeenCalledWith(databaseHandle, [3]);
     expect(result.deletedCount).toBe(1);
     expect(result.autoConfirmedCount).toBe(0);
@@ -189,7 +244,9 @@ describe('upload-pending-sweep.processor', () => {
       .mockResolvedValueOnce({ contentType: undefined, contentLength: 999 })
       .mockResolvedValueOnce(null);
     getObjectMock.mockResolvedValueOnce({ body: validPngBody });
-    deleteObjectMock.mockResolvedValueOnce(true);
+    // First delete: post-publish pending cleanup for the auto-confirmed row.
+    // Second delete: orphan removal for the missing-object row.
+    deleteObjectMock.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     hardDeleteUploadsByInternalIdsMock.mockResolvedValueOnce(1);
 
     const result = await runUploadPendingSweepJob({} as never);

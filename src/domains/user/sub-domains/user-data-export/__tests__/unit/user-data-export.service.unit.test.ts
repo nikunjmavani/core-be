@@ -139,7 +139,11 @@ describe('UserDataExportService', () => {
     expect(result.status).toBe(USER_DATA_EXPORT_STATUSES.PENDING);
   });
 
-  it('getExportStatus uses 24h presigned download expiry for completed exports', async () => {
+  // sec-U6: 24h was too generous — an exfiltrated session token can mint
+  // the URL once, then walk away and use it within a full day. Drop to 15 min
+  // so a stolen token has a narrow exploit window between mint and use.
+  it('getExportStatus uses 15min presigned download expiry for completed exports (sec-U6)', async () => {
+    expect(USER_DATA_EXPORT_PRESIGNED_DOWNLOAD_EXPIRY_SECONDS).toBe(900);
     const expiresAt = new Date(Date.now() + 60_000);
     exportRepository.findByPublicIdAndUserId.mockResolvedValue({
       public_id: 'exp_dl',

@@ -84,7 +84,7 @@ describe('Security: Content-Security-Policy (Helmet)', () => {
       resetEnvCacheForTests();
     });
 
-    it('loads HTML at GET /reference/ with a strict CSP (no unsafe-inline)', async () => {
+    it('loads HTML at GET /reference/ with the documented scoped CSP relaxation', async () => {
       const response = await injectUnauthenticated(referenceApp, {
         method: 'GET',
         url: '/reference/',
@@ -95,7 +95,11 @@ describe('Security: Content-Security-Policy (Helmet)', () => {
       expect(response.body).toContain('scalar');
 
       const contentSecurityPolicy = getContentSecurityPolicyHeader(response.headers);
-      assertCspHasNoUnsafeInline(contentSecurityPolicy);
+      const normalized = contentSecurityPolicy.toLowerCase();
+      expect(normalized).toContain("default-src 'self'");
+      expect(normalized).toContain("script-src 'self' 'unsafe-inline'");
+      expect(normalized).toContain("style-src 'self' 'unsafe-inline'");
+      expect(normalized).not.toContain('unsafe-eval');
     });
   });
 });

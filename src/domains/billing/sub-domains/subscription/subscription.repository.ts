@@ -1,4 +1,6 @@
-import { and, eq, isNull, lt, lte, ne, or } from 'drizzle-orm';
+import { and, eq, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
+import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
@@ -10,6 +12,35 @@ import { subscriptions } from '@/domains/billing/sub-domains/subscription/subscr
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { SubscriptionCreateData, SubscriptionUpdateData } from './subscription.types.js';
+
+/**
+ * Drizzle `select` projection that mirrors every {@link subscriptions} column and adds
+ * the joined `billing.plans.public_id` as `plan_public_id` so the response serializer
+ * (sec-re-07) can surface a stable public plan reference without leaking the bigserial
+ * `plan_id` (which sec-T #17 correctly strips).
+ */
+const subscriptionRowWithPlanPublicId = {
+  id: subscriptions.id,
+  public_id: subscriptions.public_id,
+  organization_id: subscriptions.organization_id,
+  plan_id: subscriptions.plan_id,
+  status: subscriptions.status,
+  billing_cycle: subscriptions.billing_cycle,
+  current_period_start: subscriptions.current_period_start,
+  current_period_end: subscriptions.current_period_end,
+  trial_end: subscriptions.trial_end,
+  cancel_at_period_end: subscriptions.cancel_at_period_end,
+  canceled_at: subscriptions.canceled_at,
+  provider: subscriptions.provider,
+  provider_subscription_id: subscriptions.provider_subscription_id,
+  provider_customer_id: subscriptions.provider_customer_id,
+  created_at: subscriptions.created_at,
+  updated_at: subscriptions.updated_at,
+  created_by_user_id: subscriptions.created_by_user_id,
+  updated_by_user_id: subscriptions.updated_by_user_id,
+  last_stripe_event_created_at: subscriptions.last_stripe_event_created_at,
+  plan_public_id: plans.public_id,
+} as const;
 
 /**
  * Drizzle access to the append-only `billing.subscriptions` ledger.
@@ -45,9 +76,12 @@ export class SubscriptionRepository {
 
   async listByOrganization(organization_id: number, limit = DEFAULT_REPOSITORY_LIST_LIMIT) {
     // Fetch one extra row so a hit on the cap is observable instead of a silent truncation.
+    // sec-re-07: left-join plans so the serializer can surface plan_public_id as the
+    // documented public `plan_id` field without leaking the bigserial.
     const rows = await this.db()
-      .select()
+      .select(subscriptionRowWithPlanPublicId)
       .from(subscriptions)
+      .leftJoin(plans, eq(subscriptions.plan_id, plans.id))
       .where(eq(subscriptions.organization_id, organization_id))
       .limit(limit + 1);
     return capListWithWarning({
@@ -59,9 +93,11 @@ export class SubscriptionRepository {
   }
 
   async findActiveByOrganization(organization_id: number) {
+    // sec-re-07: join plans for `plan_public_id` (see listByOrganization).
     const rows = await this.db()
-      .select()
+      .select(subscriptionRowWithPlanPublicId)
       .from(subscriptions)
+      .leftJoin(plans, eq(subscriptions.plan_id, plans.id))
       .where(
         and(
           eq(subscriptions.organization_id, organization_id),
@@ -73,9 +109,11 @@ export class SubscriptionRepository {
   }
 
   async findByPublicId(public_id: string, organization_id: number) {
+    // sec-re-07: join plans for `plan_public_id` (see listByOrganization).
     const rows = await this.db()
-      .select()
+      .select(subscriptionRowWithPlanPublicId)
       .from(subscriptions)
+      .leftJoin(plans, eq(subscriptions.plan_id, plans.id))
       .where(
         and(
           eq(subscriptions.public_id, public_id),
@@ -86,8 +124,23 @@ export class SubscriptionRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Resolves the internal organization id from the active webhook RLS context.
+   * Used by the sec-B9 fallback INSERT path so it does not have to take an
+   * `OrganizationService` dependency just to map the public id baked into the
+   * GUC by `runStripeWebhookHandlerWithOrganizationContext`.
+   */
+  async findOrganizationIdFromCurrentContext(): Promise<number | null> {
+    const rows = await this.db()
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(sql`${organizations.public_id} = current_setting('app.current_organization_id', true)`)
+      .limit(1);
+    return rows[0]?.id ?? null;
+  }
+
   async create(data: SubscriptionCreateData) {
-    return runInsertWithPublicIdentifierRetry(async () => {
+    const inserted = await runInsertWithPublicIdentifierRetry(async () => {
       const public_id = generatePublicId();
       const rows = await this.db()
         .insert(subscriptions)
@@ -104,10 +157,26 @@ export class SubscriptionRepository {
           provider_subscription_id: data.provider_subscription_id,
           provider_customer_id: data.provider_customer_id,
           created_by_user_id: data.created_by_user_id,
+          last_stripe_event_created_at: data.last_stripe_event_created_at,
         })
         .returning();
       return rows[0]!;
     });
+    // sec-re-07: re-select with the plans join so the returned row carries
+    // plan_public_id for the HTTP serializer. The follow-up SELECT runs inside
+    // the same caller-supplied context (organization for HTTP, worker handle
+    // for the webhook fallback path) so RLS still applies — a successful
+    // INSERT in this context is guaranteed visible to the same context's
+    // SELECT, so a missing row would mean a bug elsewhere (and we'd rather
+    // surface that loudly than return a row that's silently missing
+    // plan_public_id).
+    const joined = await this.findByPublicId(inserted.public_id, data.organization_id);
+    if (!joined) {
+      throw new Error(
+        `subscription.create: row ${inserted.public_id} not visible after insert (context/RLS mismatch?)`,
+      );
+    }
+    return joined;
   }
 
   async update(public_id: string, organization_id: number, data: SubscriptionUpdateData) {
@@ -123,8 +192,34 @@ export class SubscriptionRepository {
           eq(subscriptions.organization_id, organization_id),
         ),
       )
-      .returning();
-    return rows[0] ?? null;
+      .returning({ id: subscriptions.id });
+    if (rows.length === 0) return null;
+    // sec-re-07: re-select with the plans join so the HTTP response carries
+    // plan_public_id. The two-step (UPDATE then SELECT) runs inside the
+    // caller's existing RLS context so the SELECT can never see a row
+    // outside the org.
+    return this.findByPublicId(public_id, organization_id);
+  }
+
+  /**
+   * Returns true when a local row already exists for `provider_subscription_id` (regardless
+   * of organization context — this is a system-level existence check). Used by the Stripe
+   * webhook service to distinguish two failure modes of {@link syncFromStripeProviderSubscription}
+   * returning null (sec-B finding #5):
+   *   1. The row does not exist yet (Stripe outran our HTTP create — retryable race).
+   *   2. The row exists but is at a newer watermark (stale event — no-op).
+   *
+   * Case 1 must throw so BullMQ retries until the race resolves; case 2 must silently skip.
+   * The earlier code conflated the two and silently dropped both, which let an `updated`-
+   * before-`created` reorder shadow newer state.
+   */
+  async existsByProviderSubscriptionId(provider_subscription_id: string): Promise<boolean> {
+    const rows = await this.db()
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(eq(subscriptions.provider_subscription_id, provider_subscription_id))
+      .limit(1);
+    return rows.length > 0;
   }
 
   async syncFromStripeProviderSubscription(

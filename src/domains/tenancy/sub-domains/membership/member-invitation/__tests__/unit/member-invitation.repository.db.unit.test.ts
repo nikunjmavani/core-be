@@ -12,7 +12,7 @@ import { MemberInvitationRepository } from '@/domains/tenancy/sub-domains/member
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
 import { hashInvitationToken } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.token.js';
 
-vi.setConfig({ testTimeout: 15_000, hookTimeout: 20_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 

@@ -179,7 +179,7 @@ export class UploadService {
     return serializeUploadCreate({
       publicId: row.public_id,
       uploadUrl,
-      key: pendingKey,
+      key,
       expiresAt,
       uploadMethod,
       ...(fields !== undefined ? { fields } : {}),
@@ -209,9 +209,35 @@ export class UploadService {
       fileSize,
       bucket,
     } = params;
-    const pendingCap = getEnv().UPLOAD_MAX_PENDING_PER_USER;
+    const environment = getEnv();
+    const pendingCap = environment.UPLOAD_MAX_PENDING_PER_USER;
+    const orgPendingCap = environment.UPLOAD_MAX_PENDING_PER_ORGANIZATION;
     return withUserDatabaseContext(userPublicId, async () => {
       await this.repository.acquirePendingUploadQuotaLock(userInternalId);
+      // sec-UP4: enforce the org-level cap BEFORE the per-user cap so a single
+      // org with many members cannot pile PENDING uploads across user accounts
+      // and exhaust storage. Race-safe enough for a stability cap (the per-
+      // user advisory lock above bounds per-user concurrency; cross-user
+      // org-level concurrency falls back to "sweeper reconciles" — same
+      // posture as the user cap).
+      if (organizationInternalId !== null) {
+        const orgPendingCount =
+          await this.repository.countPendingByOrganizationId(organizationInternalId);
+        if (orgPendingCount >= orgPendingCap) {
+          throw new ValidationError(
+            'errors:uploadPendingQuotaExceeded',
+            { limit: orgPendingCap, pending: orgPendingCount },
+            undefined,
+            [
+              {
+                field: 'fileSize',
+                messageKey: 'errors:uploadPendingQuotaExceeded',
+                messageParams: { limit: orgPendingCap, pending: orgPendingCount },
+              },
+            ],
+          );
+        }
+      }
       const pendingCount = await this.repository.countPendingByUserId(userInternalId);
       if (pendingCount >= pendingCap) {
         throw new ValidationError(
@@ -284,6 +310,44 @@ export class UploadService {
       throw new ValidationError('errors:validation.uploadNotConfirmed', undefined, {
         key: ['Upload has not been confirmed'],
       });
+    }
+  }
+
+  /**
+   * Stronger variant of {@link assertKeyConfirmed} that also binds the row to a
+   * specific owner (sec-UP5). Callers must supply either `userInternalId`
+   * (user-scoped uploads like avatars) or `organizationInternalId` (org-scoped
+   * uploads like logos / org files). Mismatch yields a ValidationError with the
+   * same key as a missing/un-confirmed row, so callers do not leak whether the
+   * row exists.
+   *
+   * Use this in any code path that doesn't enforce ownership via key-prefix
+   * derivation from auth — particularly admin or worker contexts where RLS is
+   * bypassed. The existing `assertKeyConfirmed` remains for the legacy
+   * prefix-derived call sites, but new callers should prefer this overload.
+   */
+  async assertKeyConfirmedForOwner(options: {
+    fileKey: string;
+    userInternalId?: number;
+    organizationInternalId?: number;
+  }): Promise<void> {
+    const { fileKey, userInternalId, organizationInternalId } = options;
+    if (userInternalId === undefined && organizationInternalId === undefined) {
+      throw new ValidationError('errors:validation.uploadNotConfirmed', undefined, {
+        key: ['assertKeyConfirmedForOwner requires user or organization owner'],
+      });
+    }
+    const row = await this.repository.findByFileKey(fileKey);
+    const notConfirmed = (): ValidationError =>
+      new ValidationError('errors:validation.uploadNotConfirmed', undefined, {
+        key: ['Upload has not been confirmed'],
+      });
+    if (!row || row.status !== UPLOAD_STATUS.UPLOADED) throw notConfirmed();
+    if (userInternalId !== undefined && row.user_id !== userInternalId) {
+      throw notConfirmed();
+    }
+    if (organizationInternalId !== undefined && row.organization_id !== organizationInternalId) {
+      throw notConfirmed();
     }
   }
 
@@ -377,6 +441,26 @@ export class UploadService {
     const sourceKey = row.file_key;
     const finalKey = stripPendingObjectKeyPrefix(sourceKey);
     const pendingKeyed = finalKey !== sourceKey;
+    // sec-UP1: refuse to confirm a row that never went through the
+    // pending-key indirection. Without it, finalKey === sourceKey and the
+    // presigned PUT URL the client used remains valid for the full TTL —
+    // an attacker can swap a same-length, same-magic-byte payload after
+    // confirm and the row stays UPLOADED with hostile content. Roll-out
+    // legacy rows are at end-of-life; refuse and require re-upload via
+    // a fresh pending key.
+    if (!pendingKeyed) {
+      const failedRow = await withUserDatabaseContext(userPublicId, () =>
+        this.repository.markStatusByPublicId(validatedPublicId, UPLOAD_STATUS.FAILED),
+      );
+      if (!failedRow) throw new NotFoundError('Upload');
+      logger.warn(
+        { publicId: validatedPublicId, fileKey: sourceKey },
+        'upload.confirm.legacyInPlaceRefused',
+      );
+      throw new ValidationError('errors:uploadVerificationFailed', undefined, {
+        file: ['Upload predates pending-key flow; re-upload to a fresh key'],
+      });
+    }
 
     let verified = false;
     try {
@@ -455,11 +539,23 @@ export class UploadService {
     // becomes servable. Ranged GET (first 32 bytes) avoids buffering the full upload.
     if (isMagicByteVerifiable(contentType)) {
       const header = await this.objectStorage.getObjectFirstBytes(sourceKey, 32);
-      if (!header || !verifyFileMagicBytes(header.body, contentType)) {
+      if (!(header && verifyFileMagicBytes(header.body, contentType))) {
         return false;
       }
       if (finalKey !== sourceKey) {
-        await this.objectStorage.copyObject({ sourceKey, destinationKey: finalKey, contentType });
+        // sec-re-10: pin the COPY to the exact object bytes we just verified.
+        // The presigned PUT/POST that minted `pending/<key>` remains replayable
+        // for the lifetime of the upload URL (~15 min), so an authenticated
+        // client could race a second PUT between this HEAD and the copy and
+        // have the COPY pick up hostile bytes. `CopySourceIfMatch` makes S3
+        // reject that race with `PreconditionFailed` so the publish fails
+        // fast and we never serve unverified bytes from `finalKey`.
+        await this.objectStorage.copyObject({
+          sourceKey,
+          destinationKey: finalKey,
+          contentType,
+          ...(header.eTag ? { sourceETag: header.eTag } : {}),
+        });
       }
       return true;
     }
@@ -564,24 +660,63 @@ export class UploadService {
   /** Deletes S3 objects in fixed-size concurrent chunks; failures are logged, never thrown. */
   private async deleteObjectsWithBoundedConcurrency(options: {
     fileKeys: readonly string[];
-    userId: number;
+    userId?: number;
+    organizationId?: number;
   }): Promise<void> {
-    const { fileKeys, userId } = options;
+    const { fileKeys, userId, organizationId } = options;
     for (let index = 0; index < fileKeys.length; index += UPLOAD_OFFBOARDING_DELETE_CONCURRENCY) {
       const chunk = fileKeys.slice(index, index + UPLOAD_OFFBOARDING_DELETE_CONCURRENCY);
       await Promise.all(
         chunk.map(async (fileKey) => {
           const objectDeleted = await this.objectStorage.deleteObject(fileKey);
           if (!objectDeleted) {
-            logger.warn({ userId, fileKey }, 'upload.offboarding.s3ObjectDeleteFailed');
+            logger.warn(
+              { userId, organizationId, fileKey },
+              'upload.offboarding.s3ObjectDeleteFailed',
+            );
           }
         }),
       );
     }
   }
 
-  /** Tombstones org-scoped uploads (DB only; S3 removed on retention purge or per-upload DELETE). */
+  /**
+   * Tombstones all active uploads for an organization (offboarding) and removes
+   * S3 objects in the same bounded-concurrency pattern as
+   * {@link UploadService.tombstoneAllByUserId}.
+   *
+   * @remarks
+   * sec-UP8: the previous implementation only soft-deleted DB rows and relied
+   * on `UPLOAD_TOMBSTONE_RETENTION_CRON` to eventually clean S3. The cron is
+   * optional, so an operator who forgot to set it left org-deletion S3 objects
+   * around indefinitely — a GDPR Article 17 violation and an unbounded
+   * storage cost. Object removal now happens synchronously in the same
+   * offboarding pass, matching the user-tombstone contract.
+   *
+   * Streams in bounded keyset batches so a tenant with a large upload
+   * footprint does not load an unbounded result set into memory or
+   * serialise thousands of S3 round-trips inline.
+   */
   async tombstoneAllByOrganizationId(organization_id: number): Promise<number> {
+    let afterId = 0;
+    for (;;) {
+      const rows = await this.repository.findActiveByOrganizationIdAfter(
+        organization_id,
+        afterId,
+        UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE,
+      );
+      if (rows.length === 0) {
+        break;
+      }
+      await this.deleteObjectsWithBoundedConcurrency({
+        fileKeys: rows.map((row) => row.file_key),
+        organizationId: organization_id,
+      });
+      afterId = rows[rows.length - 1]!.id;
+      if (rows.length < UPLOAD_OFFBOARDING_DELETE_BATCH_SIZE) {
+        break;
+      }
+    }
     return this.repository.softDeleteAllByOrganizationId(organization_id);
   }
 }

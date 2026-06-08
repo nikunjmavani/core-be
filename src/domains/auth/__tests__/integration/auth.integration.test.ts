@@ -10,7 +10,7 @@ import {
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { eq } from 'drizzle-orm';
 import { createTestUser, createTestUserWithPassword } from '@/tests/factories/user.factory.js';
-import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { generateTestToken, generateTestTokenAndSession } from '@/tests/helpers/test-auth.js';
 import { seedRecentStepUpForTestUser } from '@/tests/helpers/test-step-up.helper.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { users } from '@/domains/user/user.schema.js';
@@ -705,8 +705,10 @@ describe('Auth Domain — Integration', () => {
 
     it('should change password for authenticated user with valid current password', async () => {
       const { user, password } = await createTestUserWithPassword();
-      await seedRecentStepUpForTestUser(user.public_id);
-      const token = await generateTestToken({ userId: user.public_id });
+      const { token, sessionPublicId } = await generateTestTokenAndSession({
+        userId: user.public_id,
+      });
+      await seedRecentStepUpForTestUser(user.public_id, sessionPublicId);
       const newPassword = 'ChangedPassword789!';
       const response = await injectAuthenticated(app, {
         method: 'POST',

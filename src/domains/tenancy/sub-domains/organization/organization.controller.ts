@@ -9,6 +9,7 @@ import {
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationService } from './organization.service.js';
 import type { AuditService } from '@/domains/audit/audit.service.js';
+import { AuditSerializer } from '@/domains/audit/audit.serializer.js';
 
 /**
  * Builds the Fastify handler map for `/organizations` routes (CRUD, logo
@@ -85,12 +86,21 @@ export function createOrganizationController(
         organization_id: organizationId,
       };
       const result = await auditService.listForOrganization(organizationId, query);
-      return paginatedResponse(result.items, getRequestIdentifier(request), {
-        per_page: result.limit,
-        next: result.next_cursor,
-        has_more: result.has_more,
-        ...(result.total !== null ? { estimated_total: result.total } : {}),
-      });
+      // sec-T finding #4 + sec-re-08: route org-scoped audit log rows through
+      // `AuditSerializer.many` so (a) the sensitive-metadata denylist runs and
+      // (b) the strip-only allowlist drops every top-level bigint id, surfacing
+      // the resolved actor/target/organization public ids instead. The admin
+      // path (`audit.controller.ts`) does the same.
+      return paginatedResponse(
+        AuditSerializer.many(result.items, result.resolution),
+        getRequestIdentifier(request),
+        {
+          per_page: result.limit,
+          next: result.next_cursor,
+          has_more: result.has_more,
+          ...(result.total !== null ? { estimated_total: result.total } : {}),
+        },
+      );
     },
   };
 }

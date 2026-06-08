@@ -34,6 +34,14 @@ export const webhooks = notifySchema
         .references(() => organizations.id, { onDelete: 'cascade' }),
       url: text('url').notNull(),
       encrypted_secret: varchar('encrypted_secret', { length: 255 }).notNull(),
+      // sec-N8: rotation overlap window. The PRIOR encrypted_secret survives
+      // a rotation so the worker can dual-sign for an env-configurable
+      // window (WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS, default 24h) while
+      // the customer rolls their verifier. After the window the worker stops
+      // sending X-Webhook-Signature-Previous; the column itself is not
+      // cleared (re-rotation overwrites it; no separate sweeper).
+      encrypted_secret_previous: varchar('encrypted_secret_previous', { length: 255 }),
+      secret_rotated_at: timestamp('secret_rotated_at', { withTimezone: true }),
       events: jsonb('events').notNull(),
       is_enabled: boolean('is_enabled').notNull().default(true),
       deleted_at: timestamp('deleted_at', { withTimezone: true }),
@@ -80,6 +88,9 @@ export const webhook_delivery_attempts = notifySchema
     'webhook_delivery_attempts',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
+      // sec-new-B2: opaque public identifier used as the X-Webhook-Delivery-Id outbound
+      // header value so receivers get a stable dedupe key without exposing the bigserial.
+      public_id: varchar('public_id', { length: 21 }).notNull(),
       webhook_id: bigint('webhook_id', { mode: 'number' })
         .notNull()
         .references(() => webhooks.id, { onDelete: 'cascade' }),
@@ -106,6 +117,7 @@ export const webhook_delivery_attempts = notifySchema
         table.id,
       ),
       index('idx_webhook_attempts_retry').on(table.status, table.next_retry_at),
+      uniqueIndex('idx_webhook_delivery_attempts_public_id').on(table.public_id),
       uniqueIndex('idx_webhook_delivery_attempts_pending_event_key')
         .on(table.webhook_id, table.event_key)
         .where(sql`${table.status} = 'PENDING' AND ${table.event_key} IS NOT NULL`),

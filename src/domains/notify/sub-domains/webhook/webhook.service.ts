@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import i18next from 'i18next';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import { emitWebhookDeliveryRequested } from '@/domains/notify/sub-domains/webhook/webhook-delivery/events/webhook-delivery-emit.js';
@@ -24,11 +25,30 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { WEBHOOK_ORGANIZATION_FANOUT_CONCURRENCY } from '@/domains/notify/sub-domains/webhook/webhook-delivery/webhook-delivery.constants.js';
 import { PAGINATION } from '@/shared/constants/pagination.constants.js';
+import { env } from '@/shared/config/env.config.js';
 
 /** Maximum response body length returned to client (prevents leaking sensitive data from target) */
 const WEBHOOK_TEST_RESPONSE_BODY_MAX_LENGTH = 500;
 /** Maximum response body length persisted to the delivery-attempt record (bounds storage growth). */
 const WEBHOOK_TEST_RESPONSE_BODY_STORED_MAX_LENGTH = 2_000;
+
+/**
+ * Number of CSPRNG bytes used when auto-generating a webhook signing secret. 32 bytes →
+ * 64 hex chars (well clear of the DTO's 16-char minimum) → 256 bits of entropy. Far above
+ * any practical brute-force threat against the HMAC-SHA256 signature.
+ */
+const AUTO_GENERATED_WEBHOOK_SECRET_BYTES = 32;
+
+/**
+ * Generate a fresh webhook signing secret when the caller did not supply one. sec-UP
+ * finding #8: a missing/empty secret previously round-tripped through
+ * `decryptFieldSecret('')` and produced a deterministic, attacker-reproducible
+ * `X-Webhook-Signature`. Auto-generating closes the empty-key path while preserving the
+ * ergonomic "the platform manages the secret" UX.
+ */
+function generateWebhookSigningSecret(): string {
+  return randomBytes(AUTO_GENERATED_WEBHOOK_SECRET_BYTES).toString('hex');
+}
 
 /**
  * Options forwarded from controllers into {@link WebhookService.list}.
@@ -133,13 +153,30 @@ export class WebhookService {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+      // sec-N4: enforce the per-organization webhook cap before insert. Race-
+      // safe enough for a stability cap (the per-route rate limit bounds
+      // concurrency); intentionally not a DB constraint because the failure
+      // mode of two parallel inserts both passing at N-1 is "one extra row,"
+      // not security-critical. A future hardening could add a partial
+      // composite unique to make this transactional.
+      const activeCount = await this.webhookRepository.countActiveByOrganization(organization.id);
+      if (activeCount >= env.WEBHOOK_MAX_PER_ORG) {
+        throw new ConflictError('errors:webhookMaxReached', {
+          max: env.WEBHOOK_MAX_PER_ORG,
+        });
+      }
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(created_by_user_public_id);
+      // sec-UP #8: never persist an empty webhook secret. The DTO already refuses
+      // empty/short strings at the boundary; when the caller omits `secret`
+      // entirely (the "let the platform pick one" UX), generate a 256-bit CSPRNG
+      // value so the worker's HMAC always has a real key.
+      const effectiveSecret = parsed.secret ?? generateWebhookSigningSecret();
       const row = await this.webhookRepository.create(
         omitUndefined({
           organization_id: organization.id,
           url: parsed.url,
-          encrypted_secret: encryptFieldSecret(parsed.secret ?? ''),
+          encrypted_secret: encryptFieldSecret(effectiveSecret),
           events: parsed.events,
           is_enabled: parsed.is_enabled,
           created_by_user_id: userId ?? undefined,
@@ -239,10 +276,23 @@ export class WebhookService {
     payload: Record<string, unknown>,
     _requestId?: string,
   ): Promise<void> {
+    // sec-N4: defense-in-depth backstop — share the same per-org cap with create().
+    // If we ever load >= cap rows the create cap and runtime list have drifted
+    // OR an operator just lifted the cap; surface the truncation so an alert
+    // can fire (Sentry log warnings, ops dashboard).
+    const fanoutCap = env.WEBHOOK_MAX_PER_ORG;
     const webhooks = await this.webhookRepository.listEnabledSubscribedToEvent(
       organization_id,
       event_type,
+      undefined,
+      fanoutCap,
     );
+    if (webhooks.length >= fanoutCap) {
+      logger.warn(
+        { organizationId: organization_id, eventType: event_type, fanoutCap },
+        'notify.webhook.fanout.cap_reached',
+      );
+    }
     if (webhooks.length === 0) return;
 
     let firstError: unknown;
@@ -328,16 +378,41 @@ export class WebhookService {
     };
     const payloadString = JSON.stringify(testPayload);
     const signatureTimestamp = Math.floor(Date.now() / 1000);
-    const signatureHeader = buildWebhookSignatureHeader(
-      decryptFieldSecret(webhook.encrypted_secret),
-      payloadString,
-      signatureTimestamp,
-    );
+    // sec-re-09: mirror the worker's sec-UP #8 guard. When the resolved signing
+    // secret round-trips to '' (a legacy row that pre-dates the DTO .min(16)
+    // bound, or a corrupt envelope), buildWebhookSignatureHeader would compute
+    // `createHmac('sha256', '').update(...).digest('hex')` — Node accepts an
+    // empty key and emits a deterministic, attacker-reproducible value. A
+    // customer verifier validating X-Webhook-Signature against that empty key
+    // would accept any forged request signed the same way, indistinguishable
+    // from a legitimate test delivery from us. Omitting the header makes the
+    // unsigned state explicit and observable instead of fake-authentic.
+    const signingSecret = decryptFieldSecret(webhook.encrypted_secret);
+    const signatureHeader =
+      signingSecret.length > 0
+        ? buildWebhookSignatureHeader(signingSecret, payloadString, signatureTimestamp)
+        : null;
+    if (signatureHeader === null) {
+      logger.warn(
+        { webhookPublicId: webhook.public_id, organizationPublicId: organization_public_id },
+        'webhook.test.empty_signing_secret_skipping_signature_header',
+      );
+    }
 
     const sentAt = new Date();
     let statusCode: number | null = null;
     let responseBody: string | null = null;
     let success = false;
+
+    const requestHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'core-be-webhook/1.0',
+      'X-Webhook-Event': 'webhook.test',
+      'X-Webhook-Timestamp': String(signatureTimestamp),
+    };
+    if (signatureHeader !== null) {
+      requestHeaders['X-Webhook-Signature'] = signatureHeader;
+    }
 
     try {
       const response = await outboundFetch(
@@ -348,13 +423,7 @@ export class WebhookService {
           fetchImplementation: pinnedFetch,
           init: {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': 'core-be-webhook/1.0',
-              'X-Webhook-Event': 'webhook.test',
-              'X-Webhook-Signature': signatureHeader,
-              'X-Webhook-Timestamp': String(signatureTimestamp),
-            },
+            headers: requestHeaders,
             body: payloadString,
           },
         }),

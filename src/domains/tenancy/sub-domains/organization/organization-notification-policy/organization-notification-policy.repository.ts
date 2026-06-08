@@ -6,6 +6,19 @@ import { organization_notification_policies } from '@/domains/tenancy/sub-domain
 import type { OrganizationNotificationPolicyRow } from './organization-notification-policy.types.js';
 
 /**
+ * sec-D1: a `muted_until` slipped into the past must be persisted as NULL.
+ * Mute expiry is a read-side concern (selects filter `muted_until > now()`);
+ * persisting a stale value created a footgun where the old volatile CHECK
+ * would wedge the row on subsequent updates. Even with the CHECK dropped,
+ * keeping the column clean simplifies dashboards and reasoning.
+ */
+function normalizeMuteForPersistence(mutedUntil: Date | null | undefined): Date | null | undefined {
+  if (mutedUntil === undefined) return undefined;
+  if (mutedUntil === null) return null;
+  return mutedUntil.getTime() > Date.now() ? mutedUntil : null;
+}
+
+/**
  * Drizzle data-access for `tenancy.organization_notification_policies`.
  * Supports per-org list (ordered by `notification_type` then `channel`),
  * primary-key lookup scoped to the organization, soft-delete-aware upsert
@@ -30,8 +43,8 @@ export class OrganizationNotificationPolicyRepository {
     return rows as OrganizationNotificationPolicyRow[];
   }
 
-  async findById(
-    id: number,
+  async findByPublicId(
+    public_id: string,
     organization_id: number,
   ): Promise<OrganizationNotificationPolicyRow | null> {
     const rows = await getRequestDatabase()
@@ -39,7 +52,7 @@ export class OrganizationNotificationPolicyRepository {
       .from(organization_notification_policies)
       .where(
         and(
-          eq(organization_notification_policies.id, id),
+          eq(organization_notification_policies.public_id, public_id),
           eq(organization_notification_policies.organization_id, organization_id),
           isNull(organization_notification_policies.deleted_at),
         ),
@@ -58,6 +71,10 @@ export class OrganizationNotificationPolicyRepository {
     created_by_user_id?: number | null;
   }) {
     const mutableCreatedBy = data.created_by_user_id ?? undefined;
+    // sec-D1: stale mute (date in past) is read-side semantically equivalent
+    // to NULL. Normalize on write so a future-introduced CHECK / trigger
+    // never wedges the row on a subsequent UPDATE.
+    const normalizedMutedUntil = normalizeMuteForPersistence(data.muted_until);
     const rows = await getRequestDatabase()
       .insert(organization_notification_policies)
       .values({
@@ -67,7 +84,7 @@ export class OrganizationNotificationPolicyRepository {
         channel: data.channel,
         default_enabled: data.default_enabled ?? true,
         is_mandatory: data.is_mandatory ?? false,
-        muted_until: data.muted_until ?? undefined,
+        muted_until: normalizedMutedUntil ?? undefined,
         ...(mutableCreatedBy !== undefined && {
           created_by_user_id: mutableCreatedBy,
           updated_by_user_id: mutableCreatedBy,
@@ -83,7 +100,7 @@ export class OrganizationNotificationPolicyRepository {
           deleted_at: null,
           default_enabled: data.default_enabled ?? true,
           is_mandatory: data.is_mandatory ?? false,
-          muted_until: data.muted_until ?? undefined,
+          muted_until: normalizedMutedUntil ?? undefined,
           updated_at: databaseNowTimestamp,
           updated_by_user_id: mutableCreatedBy,
         },
@@ -93,7 +110,7 @@ export class OrganizationNotificationPolicyRepository {
   }
 
   async update(
-    id: number,
+    public_id: string,
     organization_id: number,
     data: {
       default_enabled?: boolean;
@@ -102,16 +119,21 @@ export class OrganizationNotificationPolicyRepository {
     },
     updated_by_user_id: number | null,
   ): Promise<OrganizationNotificationPolicyRow | null> {
+    // sec-D1: same normalization on update — never persist a stale mute.
+    const normalizedData =
+      data.muted_until === undefined
+        ? data
+        : { ...data, muted_until: normalizeMuteForPersistence(data.muted_until) };
     const rows = await getRequestDatabase()
       .update(organization_notification_policies)
       .set({
-        ...data,
+        ...normalizedData,
         updated_at: databaseNowTimestamp,
         updated_by_user_id: updated_by_user_id ?? undefined,
       })
       .where(
         and(
-          eq(organization_notification_policies.id, id),
+          eq(organization_notification_policies.public_id, public_id),
           eq(organization_notification_policies.organization_id, organization_id),
           isNull(organization_notification_policies.deleted_at),
         ),
@@ -121,7 +143,7 @@ export class OrganizationNotificationPolicyRepository {
   }
 
   async softDelete(
-    id: number,
+    public_id: string,
     organization_id: number,
   ): Promise<OrganizationNotificationPolicyRow | null> {
     const rows = await getRequestDatabase()
@@ -129,7 +151,7 @@ export class OrganizationNotificationPolicyRepository {
       .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
       .where(
         and(
-          eq(organization_notification_policies.id, id),
+          eq(organization_notification_policies.public_id, public_id),
           eq(organization_notification_policies.organization_id, organization_id),
           isNull(organization_notification_policies.deleted_at),
         ),
