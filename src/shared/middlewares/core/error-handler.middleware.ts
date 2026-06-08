@@ -219,7 +219,20 @@ function handleUnhandledErrorResponse(
       organizationId: request.organizationId ?? undefined,
     }),
   );
-  logger.error({ error, requestId }, 'Unhandled error');
+  logger.error(
+    {
+      error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+      errorName: error instanceof Error ? error.name : undefined,
+      errorCode:
+        error instanceof Error && 'code' in error
+          ? (error as Error & { code?: unknown }).code
+          : undefined,
+      requestId,
+    },
+    'Unhandled error',
+  );
   const internalDetail = translateDetail(request, 'errors:internal', {}, EXTERNAL_ERROR_MESSAGE);
   return {
     error: buildErrorPayload('request_error', 'internal_error', internalDetail),
