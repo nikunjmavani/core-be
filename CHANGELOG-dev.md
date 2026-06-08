@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.5.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.4-dev.0...v4.5.5-dev.0) (2026-06-08)
+
+
+### Fixed
+
+* **upload:** add DTO-level fileSize ceiling (sec-r4-I4) ([#515](https://github.com/nikunjmavani/core-be/issues/515)) ([049f917](https://github.com/nikunjmavani/core-be/commit/049f917c71b8c043e39bbbcd40f93eec534994fc))
+
 ## [4.5.4-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.3-dev.0...v4.5.4-dev.0) (2026-06-08)
 
 
