@@ -6,6 +6,14 @@ import type { SubscriptionService } from '@/domains/billing/sub-domains/subscrip
 import type { StripeWebhookEventRepository } from '@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-event.repository.js';
 import type { StripeWebhookJobData } from '@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js';
 
+// sec-r4-Q1 regression: parseBullMQJobData must NOT be called by the processor.
+// Validation belongs at the worker boundary (parseJobDataOrDeadLetter in
+// stripe-webhook.worker.ts); a second parse here would bypass DLQ routing.
+const parseBullMQJobDataSpy = vi.fn();
+vi.mock('@/shared/utils/validation/bullmq-job-validation.util.js', () => ({
+  parseBullMQJobData: parseBullMQJobDataSpy,
+}));
+
 const retrieveStripeEventMock = vi.fn();
 
 vi.mock('@/infrastructure/payment/stripe.client.js', () => ({
@@ -70,12 +78,23 @@ describe('stripe-webhook.processor duplicate job delivery', () => {
     vi.mocked(stripeWebhookEventRepository.tryClaimEvent).mockReset();
     vi.mocked(stripeWebhookEventRepository.markProcessed).mockReset();
     vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockReset();
+    parseBullMQJobDataSpy.mockReset();
 
     // sec-new-D2: markProcessed now returns boolean; true = row found and updated.
     vi.mocked(stripeWebhookEventRepository.markProcessed).mockResolvedValue(true as never);
     vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockResolvedValue({
       id: 1,
     } as never);
+  });
+
+  // sec-r4-Q1: processor must use jobData directly — no redundant re-parse.
+  it('does not re-invoke parseBullMQJobData (validation belongs at worker boundary)', async () => {
+    vi.mocked(stripeWebhookEventRepository.tryClaimEvent).mockResolvedValueOnce('claimed');
+
+    await processStripeWebhookJob(jobData, stripeWebhookService, 'job-noreparse');
+
+    expect(parseBullMQJobDataSpy).not.toHaveBeenCalled();
+    expect(retrieveStripeEventMock).toHaveBeenCalledWith(jobData.stripeEventId);
   });
 
   it('parallel duplicate BullMQ jobs apply subscription side effects only once', async () => {
