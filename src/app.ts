@@ -81,8 +81,20 @@ export async function buildApp(options?: BuildAppOptions) {
     if (shouldCaptureRawBody(request)) {
       (request as unknown as { rawBody: Buffer }).rawBody = buffer;
     }
+    // sec-r5-runtime: clients (curl, browsers, SDKs) commonly send POST/DELETE
+    // requests with `Content-Type: application/json` and no body — e.g.
+    // /auth/logout, /me/sessions DELETE, etc. JSON.parse('') throws
+    // `SyntaxError: Unexpected end of JSON input`, which Fastify surfaces as
+    // a 500 instead of routing the request to its handler. Treat an empty
+    // buffer as `undefined` so the route validator (Zod) sees no body and
+    // either accepts or rejects per its declared schema.
+    const text = buffer.toString();
+    if (text.length === 0) {
+      done(null, undefined);
+      return;
+    }
     try {
-      const json = JSON.parse(buffer.toString()) as unknown;
+      const json = JSON.parse(text) as unknown;
       done(null, json);
     } catch (error) {
       done(error as Error, undefined);

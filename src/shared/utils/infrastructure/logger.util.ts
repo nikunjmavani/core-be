@@ -14,6 +14,17 @@ export const logger = pino({
     paths: [...PINO_REDACT_PATHS],
     censor: '[REDACTED]',
   },
+  // sec-r5-observability: Pino's default behaviour serialises `Error` objects
+  // as `{}` because `name`/`message`/`stack` are non-enumerable. Every
+  // `logger.error({ error }, ...)` and `logger.fatal({ error }, ...)` call in
+  // the codebase therefore landed in production logs with the actual failure
+  // reason dropped. Apply `stdSerializers.err` to both `err` (the pino
+  // convention) and `error` (the convention this codebase uses) so every
+  // log site benefits without a per-call code change.
+  serializers: {
+    err: pino.stdSerializers.err,
+    error: pino.stdSerializers.err,
+  },
   formatters: {
     log: (object) => redactSensitive(object),
   },

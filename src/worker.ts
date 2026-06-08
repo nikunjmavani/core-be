@@ -132,6 +132,20 @@ async function main() {
 
 main().catch((error) => {
   captureException(error, { tags: { source: 'worker_startup' } });
-  logger.error({ error }, 'Worker failed to start');
+  // sec-r5-runtime: explicit message/stack/name fields are required because
+  // pino's default behaviour serialises `Error` objects as `{}` (non-enumerable
+  // properties). Without these, the worker startup error in production logs
+  // shows only "Worker failed to start" with no context — leaving an operator
+  // unable to diagnose why the worker process is restart-looping. The same
+  // pattern is applied in `error-handler.middleware.ts` for the HTTP path.
+  logger.error(
+    {
+      error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+      errorName: error instanceof Error ? error.name : undefined,
+    },
+    'Worker failed to start',
+  );
   void flushSentry().finally(() => process.exit(1));
 });
