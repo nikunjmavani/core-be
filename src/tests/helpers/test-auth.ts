@@ -44,7 +44,25 @@ function getConfiguredSuperAdminEmail(): string | undefined {
 
 async function alignUserWithSuperAdminAllowlist(userPublicId: string): Promise<void> {
   const superAdminEmail = getConfiguredSuperAdminEmail();
-  if (!superAdminEmail) return;
+  if (!superAdminEmail) {
+    // The auth middleware's `rederiveSuperAdminRole` consults the live
+    // `GLOBAL_ADMIN_EMAILS` allowlist on every request that carries a
+    // `super_admin` JWT. With no allowlist, the user is downgraded to USER
+    // and admin-gated routes return 403 — the test then fails with a
+    // confusing "expected 200 to be 403" message that doesn't point at the
+    // missing env config.
+    //
+    // Surface the misconfiguration here at test-setup time instead. Local dev
+    // ships `GLOBAL_ADMIN_EMAILS=ops@example.com` in `.env.development`; CI
+    // exports the same value via `.github/actions/test-env/action.yml`. If
+    // either is missing we want to fail loudly so the next maintainer
+    // doesn't repeat the 4-PR audit-test flake hunt that found this.
+    throw new Error(
+      'generateSuperAdminToken requires `GLOBAL_ADMIN_EMAILS` to be configured. ' +
+        'Set it in `.env.development` locally or in `.github/actions/test-env/action.yml` for CI. ' +
+        'Without it, the auth middleware downgrades super_admin JWTs to USER and admin routes 403.',
+    );
+  }
 
   await database
     .update(users)
