@@ -145,6 +145,18 @@ export async function markMailOutboxSent(
       resend_message_id: resendMessageId,
       sent_at: new Date(),
       updated_at: new Date(),
+      // sec-r5-crypto-1: scrub the rendered email body after a successful
+      // send. Magic-link / invitation / password-reset / email-verification
+      // templates embed the live single-use token directly in the HTML; if
+      // the row persists post-send (which it does — there is no retention
+      // sweep), a future PITR snapshot consumer, leaked operator console,
+      // SQLi, or compromised core_be_app credential could replay the token
+      // even though `auth.verification_tokens` itself stores only hashes.
+      // Resend returns a message id once we know delivery succeeded; we no
+      // longer need the body. The row is retained for the audit trail
+      // (recipient, subject, message id, sent_at).
+      html: '',
+      text_body: null,
     })
     .where(eq(mail_outbox.id, mailOutboxId));
 }

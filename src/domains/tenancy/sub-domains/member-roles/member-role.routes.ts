@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import type { MemberRoleService } from './member-role.service.js';
@@ -56,6 +57,12 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
     app.post<{ Params: { id: string } }>(
       '/organizations/:id/roles',
       {
+        // sec-r5-ratelimit-dos-2: per (org, actor) cap on custom-role creation
+        // so an Admin-role-holder cannot churn unbounded role rows. Parity with
+        // sec-r4-I2 / sec-r4-I3 on every other org-scoped mutation. The
+        // sec-r4-D4 .limit(256) on `findByRoleId` already caps per-role read
+        // memory; this caps the rate at which new rows can be created.
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE, 'id')],
         schema: {

@@ -298,6 +298,11 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.post<{ Params: { id: string } }>(
       '/organizations/:id/api-keys',
       {
+        // sec-r5-ratelimit-dos-1: per (org, actor) cap on API key creation so a
+        // single Admin role-holder (or a hijacked session for one) cannot churn
+        // unbounded API key rows. Parity with sec-r4-I2 / sec-r4-I3 on every
+        // other org-scoped mutation.
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Create API key',
           description:
@@ -389,6 +394,12 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.post<{ Params: { id: string } }>(
       '/organizations/:id/notification-policies',
       {
+        // sec-r5-ratelimit-dos-3: per (org, actor) cap on notification-policy
+        // creation. The `notification_type` field is free-form varchar(50)
+        // with no enum constraint and no per-org row cap, so without this
+        // limiter an Admin-role-holder could churn policies and flap
+        // downstream notification routing. Parity with sec-r4-I2.
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Create notification policy',
           description:
