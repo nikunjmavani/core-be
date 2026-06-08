@@ -85,7 +85,6 @@ const JUSTIFIED_GAPS = new Set<string>([
   'POST /api/v1/tenancy/organizations/:id/leave',
   'PUT /api/v1/tenancy/organizations/:id/logo',
   'DELETE /api/v1/tenancy/organizations/:id/logo',
-  'GET /api/v1/tenancy/organizations/:id/memberships/:membershipId/permissions',
   'POST /api/v1/tenancy/organizations/:id/transfer-ownership',
   'POST /api/v1/uploads/:publicId/confirm',
 ]);

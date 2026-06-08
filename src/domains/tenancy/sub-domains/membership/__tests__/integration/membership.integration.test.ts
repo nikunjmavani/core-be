@@ -409,6 +409,84 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
+  describe('GET /api/v1/tenancy/organizations/:id/memberships/:membershipId/permissions (route-coverage gap-fill)', () => {
+    it('returns the resolved permission codes for a membership (200)', async () => {
+      const { organization, token, membership } = await createAuthorizedContext();
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(
+          `/tenancy/organizations/${organization.public_id}/memberships/${membership.public_id}/permissions`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+      });
+      expect(response.statusCode).toBe(200);
+
+      const body = response.json() as { data?: { permissions?: string[] } };
+      const permissions = body.data?.permissions ?? [];
+      // The membership in createAuthorizedContext() has MEMBERSHIP_PERMISSIONS
+      // granted; the resolved set must include them.
+      expect(permissions).toEqual(expect.arrayContaining(MEMBERSHIP_PERMISSIONS));
+    });
+
+    it('refuses cross-organization lookups with 404 (tenant isolation)', async () => {
+      const { membership: orgAMembership } = await createAuthorizedContext();
+      // Build a SECOND independent org with its own admin trying to read
+      // the membership permissions from org A.
+      const { organization: orgB, token: orgBToken } = await createAuthorizedContext();
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(
+          `/tenancy/organizations/${orgB.public_id}/memberships/${orgAMembership.public_id}/permissions`,
+        ),
+        token: orgBToken,
+        organizationPublicId: orgB.public_id,
+      });
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('rejects callers without membership:read permission (403)', async () => {
+      const admin = await createTestUser();
+      const organization = await createTestOrganization({ ownerUserId: admin.id });
+      const adminRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: MEMBERSHIP_PERMISSIONS,
+      });
+      const adminMembership = await createMembership({
+        userId: admin.id,
+        organizationId: organization.id,
+        roleId: adminRole.id,
+      });
+      // Build a second user in the SAME org with ORGANIZATION_READ only
+      // (no MEMBERSHIP_READ) and use them to make the call.
+      const limitedUser = await createTestUser({
+        email: `mem-perm-limited-${randomUUID()}@test.com`,
+      });
+      const limitedRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.ORGANIZATION_READ],
+      });
+      await createMembership({
+        userId: limitedUser.id,
+        organizationId: organization.id,
+        roleId: limitedRole.id,
+      });
+      const limitedToken = await generateTestToken({ userId: limitedUser.public_id });
+
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(
+          `/tenancy/organizations/${organization.public_id}/memberships/${adminMembership.public_id}/permissions`,
+        ),
+        token: limitedToken,
+        organizationPublicId: organization.public_id,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
   describe('DELETE /api/v1/tenancy/organizations/:id/memberships/:membershipId', () => {
     it('refuses to remove the organization owner (403, no orphaned org)', async () => {
       const owner = await createTestUser();
