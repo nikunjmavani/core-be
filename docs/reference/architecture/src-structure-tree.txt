@@ -1875,6 +1875,7 @@ src/
     │   │   ├── generate-project-structure-tree.unit.test.ts
     │   │   ├── generate-route-catalog.unit.test.ts
     │   │   ├── lint-migrations-concurrent-index.unit.test.ts
+    │   │   ├── lint-migrations-drop-index.unit.test.ts
     │   │   ├── lint-migrations-rollback.unit.test.ts
     │   │   ├── lint-migrations-row-security-guc.unit.test.ts
     │   │   ├── lint-migrations-timestamp.unit.test.ts

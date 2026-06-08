@@ -26,6 +26,7 @@ export const migrationSafetyRuleIds = [
   'create_index_without_concurrently',
   'disable_row_security_guc',
   'drop_column',
+  'drop_index_without_concurrently',
   'drop_table',
   'missing_if_not_exists_on_create',
   'non_transactional_statements_need_breakpoints',
@@ -57,6 +58,8 @@ const ruleFixHints: Record<MigrationSafetyRuleId, string> = {
     'Migrations must not SET / RESET the `row_security` GUC. Postgres enforces RLS on FORCE ROW LEVEL SECURITY tables for any non-privileged session role; SECURITY DEFINER functions already run as their owner and bypass RLS through ownership, not by toggling row_security. Drop the SET row_security clause and rely on SECURITY DEFINER + GRANT EXECUTE.',
   drop_column:
     'Stop application writes, deploy, then drop the column in a later migration (contract phase).',
+  drop_index_without_concurrently:
+    'Prefer DROP INDEX CONCURRENTLY in a non-transactional migration. Plain DROP INDEX takes an ACCESS EXCLUSIVE lock on the parent table for the catalog update — short on a small index, but enough to stall a high-write table during the migration window. Move the DROP into a separate migration with `-- migration-transaction: none reason="DROP INDEX CONCURRENTLY cannot run inside a transaction"` and use `DROP INDEX CONCURRENTLY IF EXISTS <schema>.<name>;`.',
   drop_table:
     'DROP TABLE is destructive: use IF EXISTS for idempotency and add a migration-safety allow with a documented reason.',
   missing_if_not_exists_on_create:
@@ -420,6 +423,29 @@ function parseCreateIndexPrefix(normalizedStatement: string): {
   };
 }
 
+/**
+ * Recognises a `DROP INDEX ...` statement and reports whether it carries the
+ * CONCURRENTLY modifier.
+ *
+ * @remarks
+ * Mirrors {@link parseCreateIndexPrefix}: tolerates `DROP INDEX [CONCURRENTLY]
+ * [IF EXISTS] <name>`. Used by the {@link drop_index_without_concurrently}
+ * rule which flags plain `DROP INDEX` inside transactional migrations (those
+ * hold an `ACCESS EXCLUSIVE` lock for the duration of the file's transaction,
+ * blocking writers on the parent table).
+ */
+function parseDropIndexPrefix(normalizedStatement: string): {
+  isDropIndex: boolean;
+  hasConcurrently: boolean;
+} {
+  const words = splitNormalizedWords(normalizedStatement).map(upperKeyword);
+  if (words.length < 2 || words[0] !== 'DROP' || words[1] !== 'INDEX') {
+    return { isDropIndex: false, hasConcurrently: false };
+  }
+  const hasConcurrently = words[2] === 'CONCURRENTLY';
+  return { isDropIndex: true, hasConcurrently };
+}
+
 function parseMigrationHeader(rawFileContent: string): ParsedHeader {
   const allows = new Map<MigrationSafetyRuleId, string>();
   const headerErrors: string[] = [];
@@ -503,6 +529,31 @@ const rowSecurityGucPattern =
 
 /** Splitter used by the migration runner to send each segment independently. */
 const statementBreakpointPattern = /\n--> statement-breakpoint\s*\n?/g;
+
+/**
+ * Grandfathered filenames that pre-date the rule's introduction. Adding a file
+ * here is the equivalent of `-- migration-safety: allow <rule>` for migrations
+ * that were already applied to deployed environments before the rule existed
+ * (modifying an already-applied migration would lie about history).
+ *
+ * @remarks
+ * - **drop_index_without_concurrently:**
+ *   `20260606010000_user_notif_prefs_drop_org_branch.sql` uses
+ *   `DROP INDEX IF EXISTS auth.idx_user_notif_prefs_org` inside a transactional
+ *   migration. The lock window was small (single-column dead index) and the
+ *   correct-pattern follow-up `20260608060000_user_notif_prefs_drop_org_index_concurrently.sql`
+ *   exists; we grandfather this one file rather than retroactively editing
+ *   applied history.
+ */
+const ruleFilenameAllowlist: Partial<Record<MigrationSafetyRuleId, ReadonlySet<string>>> = {
+  drop_index_without_concurrently: new Set<string>([
+    '20260606010000_user_notif_prefs_drop_org_branch.sql',
+  ]),
+};
+
+function isFilenameAllowlistedForRule(filename: string, ruleId: MigrationSafetyRuleId): boolean {
+  return ruleFilenameAllowlist[ruleId]?.has(filename) ?? false;
+}
 
 /**
  * Flags non-transactional migrations whose `--> statement-breakpoint` segments
@@ -688,6 +739,26 @@ export function lintMigrationFileContent(
         );
         if (violation) violations.push(violation);
       }
+    }
+
+    // DROP INDEX must use CONCURRENTLY inside a transactional migration —
+    // sec-r4-D5 follow-up. Pre-existing transactional migrations are
+    // grandfathered via `ruleFilenameAllowlist`.
+    const dropIndexInfo = parseDropIndexPrefix(normalized);
+    if (
+      dropIndexInfo.isDropIndex &&
+      !dropIndexInfo.hasConcurrently &&
+      executionMode.transactional &&
+      !isFilenameAllowlistedForRule(filename, 'drop_index_without_concurrently')
+    ) {
+      const violation = emitViolationIfNotAllowed(
+        allows,
+        usedAllowRules,
+        'drop_index_without_concurrently',
+        filename,
+        lineNumber,
+      );
+      if (violation) violations.push(violation);
     }
 
     if (matchesCreateTableWithoutIfNotExists(normalized)) {

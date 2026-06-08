@@ -10,12 +10,36 @@ export interface CreateOrganizationOptions {
 }
 
 /**
+ * Maximum length of the database `slug` column (Drizzle schema:
+ * `varchar('slug', { length: 50 })`).
+ */
+const ORGANIZATION_SLUG_MAX_LENGTH = 50;
+
+/**
+ * Length of the public-id suffix appended to every test slug. The public id
+ * is a 21-char base32-style identifier; 10 chars is comfortably below birthday
+ * collisions for the worst-case test fan-out and leaves room for a hyphen + a
+ * meaningful slug prefix inside the 50-char column.
+ */
+const ORGANIZATION_SLUG_PUBLIC_ID_SUFFIX_LENGTH = 10;
+
+/**
  * Create a test organization in the database.
+ *
+ * @remarks
+ * Always suffixes the generated slug with the first 10 chars of the public id
+ * so parallel test files using faker-generated names cannot collide on
+ * `tenancy.idx_organizations_slug` (a unique index). faker's name pool is
+ * finite — without the suffix, `Math.random` repeats inside the same Vitest
+ * worker pool and inserts fail with 23505 (e.g. `mayert-llc` collided across
+ * `organization-settings-resolvers.security.test.ts` and others). Explicit
+ * `options.slug` is still accepted as-is so individual tests can pin a slug
+ * for assertion purposes.
  */
 export async function createTestOrganization(options: CreateOrganizationOptions) {
   const publicId = generatePublicId();
   const name = options.name ?? faker.company.name();
-  const slug = options.slug ?? faker.helpers.slugify(name).toLowerCase().slice(0, 50);
+  const slug = options.slug ?? buildCollisionResistantSlug(name, publicId);
 
   const [organization] = await database
     .insert(organizations)
@@ -29,4 +53,15 @@ export async function createTestOrganization(options: CreateOrganizationOptions)
     .returning();
 
   return organization!;
+}
+
+/**
+ * Builds a `<slug-prefix>-<publicIdSuffix>` slug that fits the 50-char column
+ * and is guaranteed unique per call (the public id supplies the entropy).
+ */
+function buildCollisionResistantSlug(name: string, publicId: string): string {
+  const suffix = `-${publicId.slice(0, ORGANIZATION_SLUG_PUBLIC_ID_SUFFIX_LENGTH)}`;
+  const prefixBudget = ORGANIZATION_SLUG_MAX_LENGTH - suffix.length;
+  const prefix = faker.helpers.slugify(name).toLowerCase().slice(0, prefixBudget);
+  return `${prefix}${suffix}`;
 }
