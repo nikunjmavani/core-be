@@ -42,6 +42,14 @@ runs:
           echo "ALLOWED_ORIGINS=${ALLOWED_ORIGINS_INPUT}"
           echo "AUDIT_RETENTION_DAYS=90"
           echo "AUTH_SESSION_RETENTION_DAYS=30"
+          # Matches the .env.development default so the super-admin allowlist
+          # path is exercised consistently in CI. Without this, tests that call
+          # `generateSuperAdminToken` would silently fall through the helper's
+          # early-return and the auth middleware's `rederiveSuperAdminRole`
+          # would downgrade the user to USER → unexpected 403 in audit / admin
+          # routes. Surfaced as the audit.test.ts Post-merge Matrix Tests flake
+          # (4+ consecutive failures on dev pre-2026-06-08).
+          echo "GLOBAL_ADMIN_EMAILS=ops@example.com"
           echo "METRICS_SCRAPE_TOKEN=test-metrics-token-min-32-characters"
           echo "SECRETS_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000"
         } >> "$GITHUB_ENV"
