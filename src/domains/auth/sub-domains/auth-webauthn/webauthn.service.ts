@@ -128,7 +128,13 @@ export class WebauthnService {
       })),
       authenticatorSelection: {
         residentKey: 'preferred',
-        userVerification: 'preferred',
+        // sec-r4-A2: align with the verify-time requirement (verifyRegistrationResponse
+        // calls with requireUserVerification: true). Setting 'preferred' here let a
+        // UV-incapable authenticator (no biometric / PIN) finish the registration
+        // round-trip and produce a credential that could NEVER authenticate — the
+        // verify step would always fail. 'required' surfaces UV capability as a hard
+        // requirement at enrollment time instead of after the credential is minted.
+        userVerification: 'required',
       },
     });
 
@@ -232,7 +238,10 @@ export class WebauthnService {
         id: credential.credential_id,
         transports: credential.transports as AuthenticatorTransportFuture[],
       })),
-      userVerification: 'preferred',
+      // sec-r4-A2: verifyAuthenticationResponse requires user verification, so the
+      // options round-trip must also require it. 'preferred' let UV-incapable
+      // authenticators round-trip successfully and then always fail verify.
+      userVerification: 'required',
     });
 
     const challengeToken = await createWebauthnChallenge(
@@ -272,7 +281,9 @@ export class WebauthnService {
     const options = await generateAuthenticationOptions({
       rpID: resolveWebauthnRelyingPartyId(),
       allowCredentials: [{ id: decoyCredentialId, transports: ['internal'] }],
-      userVerification: 'preferred',
+      // sec-r4-A2: keep the decoy structurally identical to a genuine challenge so
+      // the anti-enumeration guarantee holds.
+      userVerification: 'required',
     });
 
     const challengeToken = await createWebauthnChallenge(
