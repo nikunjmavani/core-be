@@ -1,0 +1,31 @@
+-- migration-transaction: none reason="DROP INDEX CONCURRENTLY cannot run inside a transaction"
+--
+-- sec-r4-D5: codify the correct DROP-INDEX-CONCURRENTLY pattern for the
+-- repository and add an idempotent safety net for `auth.idx_user_notif_prefs_org`.
+--
+-- The original drop in `20260606010000_user_notif_prefs_drop_org_branch.sql`
+-- ran inside a transaction with a plain `DROP INDEX IF EXISTS`, which takes
+-- an ACCESS EXCLUSIVE lock for the duration of the catalog update. The
+-- catalog mutation is fast on a small one-column index, so existing
+-- environments were not meaningfully impacted at apply time, but the
+-- pattern is the wrong one to copy forward.
+--
+-- This migration is intentionally a **no-op everywhere** today:
+-- - On already-migrated systems (production, dev, staging, CI image
+--   snapshots) the index was dropped by the prior migration and
+--   `IF EXISTS` skips silently.
+-- - On fresh installs the prior migration still drops the index
+--   non-concurrently first; this file then runs after it as a no-op.
+--
+-- The value of this file is forward-looking: it makes the
+-- `DROP INDEX CONCURRENTLY IF EXISTS` + `-- migration-transaction: none`
+-- pattern visible in the repository so future maintainers copy it instead
+-- of the prior transactional `DROP INDEX` shape. The historical migration
+-- is intentionally NOT modified — its transaction also drops a policy and
+-- adds a constraint; pulling those out of one transaction so the index drop
+-- could be concurrent would introduce a partial-apply hole on fresh installs
+-- (if `CREATE POLICY` failed after `DROP POLICY`, the table would land with
+-- RLS enabled and no policy at all). That trade-off is strictly worse than
+-- the brief catalog lock the historical apply already paid.
+
+DROP INDEX CONCURRENTLY IF EXISTS auth.idx_user_notif_prefs_org;
