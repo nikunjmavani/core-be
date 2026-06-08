@@ -1,6 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { STRICT_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
+import {
+  EXPENSIVE_AUTHED_RATE_LIMIT,
+  ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
+  STRICT_AUTHED_RATE_LIMIT,
+} from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import type { OrganizationService } from './organization.service.js';
 import type { OrganizationSettingsService } from './organization-settings/organization-settings.service.js';
 import type { OrganizationNotificationPolicyService } from './organization-notification-policy/organization-notification-policy.service.js';
@@ -131,6 +135,10 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.patch(
       '/organizations/:id',
       {
+        // sec-r4-I2: organization-scoped mutation — cap per (org, actor) so a
+        // single member cannot churn organization metadata in a loop or starve
+        // siblings, and a cross-tenant probe cannot exhaust the victim's bucket.
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Update organization',
           description:
@@ -147,6 +155,12 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.delete(
       '/organizations/:id',
       {
+        // sec-r4-I2: organization deletion is irreversible (cascades members,
+        // subscriptions, audit logs, storage objects). Cap at the expensive-authed
+        // tier (5 req / 5 min keyed by actor) so a hijacked session cannot bulk
+        // delete tenants. The keyGenerator is user-scoped (not org-scoped) since
+        // a delete burst targets multiple orgs by definition.
+        ...EXPENSIVE_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Delete organization',
           description:
@@ -164,6 +178,10 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.put(
       '/organizations/:id/logo',
       {
+        // sec-r4-I2: logo upload writes to S3 and rewrites the org row; cap at
+        // the org-scoped tier so a hijacked session cannot mint unbounded
+        // storage objects for one tenant.
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Upload organization logo',
           description:
@@ -180,6 +198,9 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.delete<{ Params: { id: string } }>(
       '/organizations/:id/logo',
       {
+        // sec-r4-I2: same org-scoped tier as upload — each call deletes an S3
+        // object and rewrites the org row.
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ORGANIZATION_UPDATE, 'id')],
         schema: {
@@ -228,6 +249,9 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.patch<{ Params: { id: string } }>(
       '/organizations/:id/settings',
       {
+        // sec-r4-I2: org-scoped settings mutation — bound per (org, actor) so
+        // policy churn or notification-config flapping cannot loop unbounded.
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Update organization settings',
           description: 'Updates organization settings. Requires ORGANIZATION_UPDATE permission.',
