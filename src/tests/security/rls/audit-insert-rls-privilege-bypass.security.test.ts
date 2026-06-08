@@ -17,20 +17,20 @@ import {
  * WITH CHECK expression.
  */
 async function isPrivilegeBypassMigrationApplied(): Promise<boolean> {
-  const rows = await sql<{ qual: string }[]>`
-    SELECT qual
+  // INSERT policies only carry a WITH CHECK predicate — `qual` (the USING
+  // predicate column) is NULL for INSERT-only policies. Query with_check.
+  const rows = await sql<{ with_check: string | null }[]>`
+    SELECT with_check
     FROM pg_policies
     WHERE schemaname = 'audit'
       AND tablename = 'logs'
       AND policyname = 'audit_logs_tenant_isolation_insert'
       AND cmd = 'INSERT'
   `;
-  const policy = rows[0];
-  if (!policy) return false;
+  const withCheck = rows[0]?.with_check;
+  if (!withCheck) return false;
   // After the fix the WITH CHECK must NOT mention global_admin or global_retention_cleanup.
-  return !(
-    policy.qual.includes('global_admin') || policy.qual.includes('global_retention_cleanup')
-  );
+  return !(withCheck.includes('global_admin') || withCheck.includes('global_retention_cleanup'));
 }
 
 /**
