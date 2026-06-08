@@ -60,3 +60,9 @@ api post /api/v1/auth/webauthn/authenticate/options the request property `email`
 #    Pinned by webhook.dto.unit.test.ts + webhook.service.unit.test.ts.
 api post /api/v1/notify/organizations/{id}/webhooks the `secret` request property's minlength was increased from `0` to `16`
 api patch /api/v1/notify/organizations/{id}/webhooks/{webhookid} the `secret` request property's minlength was increased from `0` to `16`
+
+# 9. DELETE /api/v1/auth/me/auth-methods/{id} renamed path param from bigserial `{id}` to
+#    `{publicId}` (21-char opaque identifier) as part of Round 3 security hardening sec-new-B4.
+#    Exposing the bigserial id allows row-count enumeration. Callers must use the public-id path.
+#    Pinned by auth.test.ts which asserts 400 for numeric (old) params.
+api delete /api/v1/auth/me/auth-methods/{id} removed the success response with the status `204`

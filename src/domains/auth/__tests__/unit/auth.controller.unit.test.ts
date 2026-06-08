@@ -128,7 +128,10 @@ describe('createAuthController', () => {
     // returns only `{ secret, provisioning_uri }`; `enrollConfirm` verifies a code and
     // returns the freshly minted plaintext recovery codes plus the method_id.
     enrollInit: vi.fn().mockResolvedValue({ secret: 'secret', provisioning_uri: 'uri' }),
-    enrollConfirm: vi.fn().mockResolvedValue({ recovery_codes: ['CODE1', 'CODE2'], method_id: 1 }),
+    enrollConfirm: vi.fn().mockResolvedValue({
+      recovery_codes: ['CODE1', 'CODE2'],
+      method_public_id: 'testmethodpub000000a',
+    }),
     verifyLoginMfa: vi.fn().mockResolvedValue({
       access_token: 'token',
       session_public_id: 'session',
@@ -261,7 +264,10 @@ describe('createAuthController', () => {
     await controller.listAuthMethods(mockRequest(), mockReply());
     await controller.createAuthMethod(mockRequest({ body: { type: 'password' } }), mockReply());
     const deleteMethodReply = mockReply();
-    await controller.deleteAuthMethod(mockRequest({ params: { id: '1' } }), deleteMethodReply);
+    await controller.deleteAuthMethod(
+      mockRequest({ params: { publicId: 'testpublicid12345678a' } }),
+      deleteMethodReply,
+    );
     await controller.listSessions(mockRequest(), mockReply());
     const revokeReply = mockReply();
     await controller.revokeSession(
@@ -313,9 +319,9 @@ describe('createAuthController', () => {
     );
   });
 
-  it('deleteAuthMethod rejects invalid id param', async () => {
+  it('deleteAuthMethod rejects invalid publicId param (too short)', async () => {
     await expect(
-      controller.deleteAuthMethod(mockRequest({ params: { id: '0' } }), mockReply()),
+      controller.deleteAuthMethod(mockRequest({ params: { publicId: '0' } }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -511,9 +517,12 @@ describe('createAuthController', () => {
     expect(reply.setCookie).not.toHaveBeenCalled();
   });
 
-  it('deleteAuthMethod rejects non-integer id param', async () => {
+  it('deleteAuthMethod rejects publicId with wrong format (uppercase)', async () => {
     await expect(
-      controller.deleteAuthMethod(mockRequest({ params: { id: 'abc' } }), mockReply()),
+      controller.deleteAuthMethod(
+        mockRequest({ params: { publicId: 'INVALIDFORMAT123456789' } }),
+        mockReply(),
+      ),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
