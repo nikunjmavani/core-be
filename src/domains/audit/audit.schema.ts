@@ -118,14 +118,23 @@ export const logs = auditSchema
         as: 'permissive',
         for: 'insert',
         to: 'public',
-        // sec-r4-D1: only normal tenant context may INSERT audit rows.
-        // global_admin is a read escape hatch; global_retention_cleanup is for
-        // DELETE only. Neither has a legitimate reason to write audit rows for
-        // an arbitrary organization. The SELECT policy retains both escape
-        // hatches for reads; the INSERT policy is tightened to tenant-only.
+        // sec-r4-D1: removed `global_admin` and `global_retention_cleanup` escape
+        // arms from the audit-INSERT WITH CHECK because neither has a
+        // legitimate reason to write audit rows for an arbitrary tenant.
+        //
+        // sec-r5-async-queue-1: re-opened a NARROW system-audit arm gated by
+        // `app.system_audit_insert='true'` AND `organization_id IS NULL`.
+        // Because the arm requires `organization_id IS NULL`, a process that
+        // flips this GUC cannot write to any tenant's audit log — only
+        // tenantless rows. Used by `withSystemAuditInsertContext` for DLQ
+        // replay and other system-level emitters that have no tenant.
         withCheck: sql`${table.organization_id} = (
             SELECT id FROM tenancy.organizations
             WHERE public_id = current_setting('app.current_organization_id', true)
+          )
+          OR (
+            ${table.organization_id} IS NULL
+            AND current_setting('app.system_audit_insert', true) = 'true'
           )`,
       }),
       pgPolicy('audit_logs_tenant_isolation_delete', {

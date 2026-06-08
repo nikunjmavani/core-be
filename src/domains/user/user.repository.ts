@@ -104,6 +104,31 @@ export class UserRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Sets `users.password_hash = NULL` for the given user (sec-r5-auth-session-info-1).
+   *
+   * @remarks
+   * Called by {@link AuthMethodService.delete} when revoking a PASSWORD auth_method
+   * row so the user-facing "I removed my password" view matches the auth view
+   * (`POST /auth/login` no longer authenticates with the previous credential).
+   * Pre-fix, removing the PASSWORD auth-method only flipped `auth_methods.revoked_at`
+   * but left the stale hash on `auth.users`, so the credential remained valid.
+   * Caller MUST be inside `withUserDatabaseContext` so the FORCE-RLS owner-access
+   * policy is satisfied.
+   */
+  async clearPasswordHash(publicId: string) {
+    const rows = await getRequestDatabase()
+      .update(users)
+      .set({
+        password_hash: null,
+        last_password_change_at: new Date(),
+        updated_at: databaseNowTimestamp,
+      })
+      .where(and(eq(users.public_id, publicId), isNull(users.deleted_at)))
+      .returning();
+    return rows[0] ?? null;
+  }
+
   async updateEmailVerified(publicId: string) {
     const rows = await getRequestDatabase()
       .update(users)
