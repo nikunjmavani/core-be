@@ -2,7 +2,7 @@
 
 Total routes: 129
 
-- ✅ Covered by explicit test: **118**
+- ✅ Covered by explicit test: **126**
 - 🟡 Smoke-only (probe but no assertion-rich test): **2**
 - ❌ Gap (no test reference found): **0**
 
@@ -45,17 +45,17 @@ Every route in `docs/routes.txt` is referenced by at least one explicit test fil
 | POST | `/api/v1/auth/mfa/login` | `src/tests/security/auth/mfa-security.security.test.ts:145` |
 | POST | `/api/v1/auth/mfa/verify` | `src/tests/security/auth/mfa-security.security.test.ts:61` |
 | GET | `/api/v1/auth/oauth/:provider` | `src/tests/security/infrastructure/api-versioning.security.test.ts:26` |
-| ... | ... | (98 more) |
+| ... | ... | (106 more) |
 
 ## Method overview
 
 | Method | Covered | Smoke-only | Gap |
 |---|---|---|---|
-| GET | 45 | 2 | 1 |
-| POST | 43 | 0 | 5 |
+| GET | 46 | 2 | 0 |
+| POST | 47 | 0 | 1 |
 | PATCH | 12 | 0 | 0 |
-| PUT | 3 | 0 | 1 |
-| DELETE | 15 | 0 | 2 |
+| PUT | 4 | 0 | 0 |
+| DELETE | 17 | 0 | 0 |
 
 ## Methodology
 

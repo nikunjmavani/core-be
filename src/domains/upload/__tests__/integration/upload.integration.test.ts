@@ -8,6 +8,10 @@ import {
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { uploads } from '@/domains/upload/upload.schema.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 
 describe('Upload Domain — Integration', () => {
@@ -110,6 +114,66 @@ describe('Upload Domain — Integration', () => {
         token: token,
       });
       expect(response.statusCode).toBe(404);
+    });
+  });
+
+  describe('POST /api/v1/uploads/:publicId/confirm (route-coverage gap-fill)', () => {
+    const unknownUploadPublicId = 'abcdefghijklmnopqrstu';
+
+    it('should return 401 without authentication', async () => {
+      const response = await injectUnauthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/uploads/${unknownUploadPublicId}/confirm`),
+        payload: {},
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('should return 404 for unknown upload public_id', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/uploads/${unknownUploadPublicId}/confirm`),
+        token,
+        payload: {},
+      });
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('is idempotent: re-confirming an already-UPLOADED row returns 200 without S3 calls', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const publicId = generatePublicId();
+      const [seeded] = await database
+        .insert(uploads)
+        .values({
+          public_id: publicId,
+          user_id: user.id,
+          organization_id: null,
+          file_name: 'verified.png',
+          file_key: 'uploads/already-verified/verified.png',
+          mime_type: 'image/png',
+          file_size: 1024,
+          storage_provider: 's3',
+          bucket: 'core-be-uploads',
+          status: 'UPLOADED',
+          metadata: { purpose: 'AVATAR', target: 'USER' },
+          uploaded_at: new Date(),
+        })
+        .returning();
+      expect(seeded!.status).toBe('UPLOADED');
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(`/uploads/${publicId}/confirm`),
+        token,
+        payload: {},
+      });
+      expect(response.statusCode).toBe(200);
+
+      const [postCall] = await database.select().from(uploads).where(eq(uploads.id, seeded!.id));
+      expect(postCall!.status).toBe('UPLOADED');
     });
   });
 });
