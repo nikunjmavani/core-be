@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.5.6-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.5-dev.0...v4.5.6-dev.0) (2026-06-08)
+
+
+### Fixed
+
+* **notify:** trim payload and response_body from webhook delivery list (sec-r4-D6) ([#518](https://github.com/nikunjmavani/core-be/issues/518)) ([89c24b7](https://github.com/nikunjmavani/core-be/commit/89c24b7f05dba72eba97447f746abb08130c61f6))
+
 ## [4.5.5-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.4-dev.0...v4.5.5-dev.0) (2026-06-08)
 
 
