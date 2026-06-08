@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
-import { UPLOAD_PURPOSES, UPLOAD_TARGETS } from './upload.constants.js';
+import {
+  UPLOAD_DTO_FILE_SIZE_MAX_BYTES,
+  UPLOAD_PURPOSES,
+  UPLOAD_TARGETS,
+} from './upload.constants.js';
 
 /**
  * Zod schema for the `POST /api/v1/uploads` request body — the structural
@@ -25,7 +29,12 @@ export const createUploadDto = z
     organizationId: trimmedStringMinMax(1, 255).optional(),
     contentType: trimmedStringMinMax(1, 100),
     fileName: trimmedStringMinMax(1, 255),
-    fileSize: z.number().int().positive(),
+    // sec-r4-I4: hard ceiling at the highest per-purpose cap. The validator
+    // still applies the per-purpose maxSize below this (avatars are smaller
+    // than user files, etc.); this `.max()` is a defense-in-depth gate so the
+    // OpenAPI contract reflects the real upper bound and absurd / overflowing
+    // claims are rejected before policy logic chooses a config row.
+    fileSize: z.number().int().positive().max(UPLOAD_DTO_FILE_SIZE_MAX_BYTES),
   })
   .strict();
 
