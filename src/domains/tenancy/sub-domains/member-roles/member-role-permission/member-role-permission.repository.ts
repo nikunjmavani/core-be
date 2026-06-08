@@ -3,6 +3,18 @@ import { getRequestDatabase } from '@/infrastructure/database/contexts/request-d
 import { role_permissions } from '@/domains/tenancy/sub-domains/member-roles/member-role-permission/member-role-permission.schema.js';
 
 /**
+ * Hard cap on the number of permission rows returned for a single role.
+ *
+ * sec-r4-D4: the in-app permission registries (tenancy / audit / notify /
+ * billing / upload) total well under 100 distinct codes; 256 is comfortably
+ * clear of any realistic future ceiling and prevents a corrupted
+ * `tenancy.role_permissions` table (e.g. a bug in a future migration, or a
+ * privileged-INSERT bypass) from paging unbounded rows into the API process
+ * on every per-role permission read.
+ */
+const MEMBER_ROLE_PERMISSION_MAX_ROWS_PER_ROLE = 256;
+
+/**
  * Drizzle data access for `tenancy.role_permissions`, the join table that
  * couples organization roles to permission codes. {@link replace} implements
  * set semantics: it deletes every existing row for the role before inserting
@@ -13,7 +25,8 @@ export class MemberRolePermissionRepository {
     return getRequestDatabase()
       .select()
       .from(role_permissions)
-      .where(eq(role_permissions.role_id, role_id));
+      .where(eq(role_permissions.role_id, role_id))
+      .limit(MEMBER_ROLE_PERMISSION_MAX_ROWS_PER_ROLE);
   }
 
   async replace(role_id: number, permission_codes: string[], created_by_user_id: number | null) {
