@@ -72,7 +72,9 @@ describe('MfaService', () => {
   const authMethodService = {
     findTotpByUserId: vi.fn(),
     updateAuthMethodLastUsedAt: vi.fn().mockResolvedValue({}),
-    createAuthMethodRecord: vi.fn().mockResolvedValue({ id: 99 }),
+    createAuthMethodRecord: vi
+      .fn()
+      .mockResolvedValue({ id: 99, public_id: 'testpublicmid0000000' }),
     listMfaMethodsByUserId: vi.fn().mockResolvedValue([]),
     revokeAuthMethod: vi.fn(),
     findAuthMethodByIdForUser: vi.fn(),
@@ -205,7 +207,7 @@ describe('MfaService', () => {
     const callOrder: string[] = [];
     vi.mocked(authMethodService.createAuthMethodRecord).mockImplementationOnce(async () => {
       callOrder.push('createAuthMethodRecord');
-      return { id: 99 } as never;
+      return { id: 99, public_id: 'testpublicmid0000000' } as never;
     });
     vi.mocked(insertMfaRecoveryCodes).mockImplementationOnce(async () => {
       callOrder.push('insertMfaRecoveryCodes');
@@ -224,7 +226,9 @@ describe('MfaService', () => {
     expect(insertMfaRecoveryCodes).toHaveBeenCalledTimes(1);
     expect(generateMfaRecoveryCodes).toHaveBeenCalledTimes(1);
     expect(userService.updateMfaEnabled).toHaveBeenCalledWith('user_public', true);
-    expect(result.method_id).toBe(99);
+    // sec-new-B4: enrollConfirm now returns method_public_id (opaque id) instead of bigserial method_id.
+    expect(result.method_public_id).toBeDefined();
+    expect(typeof result.method_public_id).toBe('string');
     expect(result.recovery_codes).toHaveLength(10);
 
     // The is_mfa_enabled flip must happen AFTER the TOTP row and recovery codes
@@ -281,7 +285,7 @@ describe('MfaService', () => {
     });
     vi.mocked(authMethodService.createAuthMethodRecord).mockImplementation(async () => {
       callOrder.push('createAuthMethodRecord');
-      return { id: 99 } as never;
+      return { id: 99, public_id: 'testpublicmid0000000' } as never;
     });
     vi.mocked(insertMfaRecoveryCodes).mockImplementation(async () => {
       callOrder.push('insertMfaRecoveryCodes');

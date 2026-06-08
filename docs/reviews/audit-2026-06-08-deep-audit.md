@@ -602,3 +602,17 @@ While working the Round 4 remediation campaign, this finding's premise turned ou
 **Why this is a BREAKING API change:** Any external client that already calls `DELETE /api/v1/auth/me/mfa/methods/:methodId` with the numeric id will break. Requires coordination with frontend / API consumers before merging.
 
 **Disposition (2026-06-08):** Deferred to a dedicated follow-up task rather than landing a high-risk breaking change at the tail of an Informational sweep. The audit explicitly notes the IDOR risk is negligible (RLS-scoped), leaving only the low-value platform-growth signal — which is consistent with this being Informational severity. The follow-up task carries the full corrected analysis and the scope summary above.
+
+---
+
+### ✅ sec-r4-A3 RESOLVED — 2026-06-08 (later same day): closed by Round 3 sec-new-B4 back-merge
+
+A subsequent back-merge of `main` into `dev` revealed that the entire scope above had already been implemented on `main` under finding **sec-new-B4** — and the only reason `dev` saw `auth.auth_methods` without `public_id` was that `main`'s PR #495 had not yet propagated back to `dev`. The B4 fix includes:
+
+- Migrations `20260608040000_auth_methods_add_public_id.sql` and `20260608050000_auth_methods_public_id_index.sql` adding `public_id varchar(21) UNIQUE NOT NULL` (the CONCURRENTLY-built unique index is in the second migration, isolated in its own `migration-transaction: none` file — same pattern sec-r4-D5 codified independently in `dev`).
+- Drizzle schema + repository + service updates so `record.public_id` flows through `enrollConfirm` (and every other auth-method path).
+- Serializer rename to `method_public_id`.
+- DELETE route `:methodId` → `:publicId` plus corresponding service lookup by public id (the breaking-changes ignore file `.github/oasdiff/breaking-changes-ignore.txt` entry #10 acknowledges the intentional API change).
+- Test updates across the MFA + auth-method suites.
+
+The corrected analysis above stands as a record of what was checked and why the audit's table mapping was confusing on the `dev` branch — but the follow-up task (`task_4e485aea`) is now obsolete and should be dismissed. **sec-r4-A3 is closed.**

@@ -8,6 +8,7 @@
 import { inArray } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { SeedContext } from '@/scripts/seed/seed-contract.js';
 import { generateBulkAuthMethod } from './auth-method.faker.js';
 
@@ -40,6 +41,7 @@ export async function seedAuthMethodsBulk(context: SeedContext): Promise<void> {
     if (seededUserIds.has(user.id)) continue;
     const profile = generateBulkAuthMethod(context.faker);
     await database.insert(auth_methods).values({
+      public_id: generatePublicId(),
       user_id: user.id,
       method_type: profile.method_type,
       provider: profile.provider,

@@ -909,6 +909,24 @@ describe('Auth Domain — Integration', () => {
       });
       expect(response.statusCode).toBe(200);
     });
+
+    it('sec-new-B4: response items expose public_id, not bigserial id', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        url: testApiPath('/auth/me/auth-methods'),
+        token,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { data: { public_id?: string; id?: unknown }[] };
+      expect(body.data.length).toBeGreaterThan(0);
+      for (const item of body.data) {
+        expect(typeof item.public_id).toBe('string');
+        expect(item.public_id).toMatch(/^[a-z0-9]{21}$/);
+        // sec-new-B4: bigserial id must not be returned
+        expect(item.id).toBeUndefined();
+      }
+    });
   });
 
   describe('POST /api/v1/auth/me/auth-methods', () => {
@@ -922,13 +940,25 @@ describe('Auth Domain — Integration', () => {
     });
   });
 
-  describe('DELETE /api/v1/auth/me/auth-methods/:id', () => {
+  describe('DELETE /api/v1/auth/me/auth-methods/:publicId', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: testApiPath('/auth/me/auth-methods/test-id'),
+        url: testApiPath('/auth/me/auth-methods/abc12345678901234567'),
       });
       expect(response.statusCode).toBe(401);
+    });
+
+    it('sec-new-B4: rejects a numeric (bigserial) id in the path param with 400', async () => {
+      const user = await createTestUser();
+      const token = await generateTestToken({ userId: user.public_id });
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath('/auth/me/auth-methods/123'),
+        token,
+      });
+      // Zod rejects the non-public-id value at the route level
+      expect(response.statusCode).toBe(400);
     });
   });
 });
