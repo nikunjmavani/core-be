@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
+  EXPENSIVE_AUTHED_RATE_LIMIT,
   MODERATE_AUTHED_RATE_LIMIT,
+  ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
   STRICT_AUTHED_RATE_LIMIT,
   STRICT_PUBLIC_RATE_LIMIT,
 } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
@@ -123,6 +125,11 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     app.post<{ Params: { id: string } }>(
       '/organizations/:id/leave',
       {
+        // sec-r4-I3: self-service exit revokes the caller's membership row.
+        // Without a cap, a session-token holder (or compromised script) could
+        // loop the endpoint against arbitrary org ids to probe membership
+        // existence by status code. Cap at the moderate-authed tier (30/60s).
+        ...MODERATE_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         schema: {
           summary: 'Leave organization',
@@ -136,7 +143,12 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     app.post<{ Params: { id: string } }>(
       '/organizations/:id/transfer-ownership',
       {
-        config: { idempotencyRequired: true },
+        // sec-r4-I3: ownership transfer is effectively irreversible (no
+        // automatic recovery if the new owner is malicious). Cap at the
+        // expensive-authed tier (5 req / 5 min) so a hijacked owner session
+        // cannot pivot multiple tenants in rapid succession. Preserve
+        // idempotencyRequired by merging into a single config object.
+        config: { idempotencyRequired: true, ...EXPENSIVE_AUTHED_RATE_LIMIT.config },
         onRequest: [app.authenticate],
         schema: {
           summary: 'Transfer organization ownership',
@@ -202,6 +214,10 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     app.delete<{ Params: { id: string; invitationId: string } }>(
       '/organizations/:id/invitations/:invitationId',
       {
+        // sec-r4-I3: invitation revocation is an org-scoped admin mutation.
+        // Cap per (org, actor) so a single admin cannot churn invitations and
+        // a cross-tenant probe cannot exhaust a victim org's bucket.
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE, 'id')],
         schema: {
@@ -243,6 +259,10 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     app.post<{ Params: { invitationId: string } }>(
       '/invitations/:invitationId/decline',
       {
+        // sec-r4-I3: decline targets a single invitation row by id; without a
+        // cap a hijacked session could probe invitation existence by 404
+        // vs 204 across enumerated ids. Cap at the moderate-authed tier.
+        ...MODERATE_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         schema: {
           summary: 'Decline invitation',

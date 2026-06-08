@@ -1,0 +1,57 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+/**
+ * sec-r4-I3 regression — membership lifecycle routes (leave, transfer-ownership,
+ * decline invitation, cancel invitation) must each carry a rate-limit preset.
+ * Without these caps a hijacked session could probe membership/invitation
+ * existence by status code, churn ownership transfers, or starve a victim
+ * org's bucket.
+ */
+describe('membership routes rate-limit policy (sec-r4-I3)', () => {
+  const membershipRoutesPath = join(
+    process.cwd(),
+    'src/domains/tenancy/sub-domains/membership/membership.routes.ts',
+  );
+  const source = readFileSync(membershipRoutesPath, 'utf8');
+
+  function findRouteBlock(httpMethod: string, urlLiteral: string): string {
+    const escapedUrl = urlLiteral.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Allow optional generic args (e.g. app.post<{ Params: ... }>(...))
+    const pattern = new RegExp(
+      `app\\.${httpMethod}(?:<[^>]*>)?\\(\\s*'${escapedUrl}',\\s*\\{([\\s\\S]*?)\\n\\s{4,6}\\},\\n\\s{4,6}\\w`,
+      'm',
+    );
+    const match = source.match(pattern);
+    if (!match) {
+      throw new Error(`route block not found: ${httpMethod.toUpperCase()} ${urlLiteral}`);
+    }
+    return match[1] ?? '';
+  }
+
+  it('POST /organizations/:id/leave has MODERATE_AUTHED_RATE_LIMIT applied', () => {
+    expect(findRouteBlock('post', '/organizations/:id/leave')).toContain(
+      '...MODERATE_AUTHED_RATE_LIMIT',
+    );
+  });
+
+  it('POST /organizations/:id/transfer-ownership has EXPENSIVE_AUTHED_RATE_LIMIT applied (irreversible)', () => {
+    // Merged into a single config object to preserve idempotencyRequired.
+    expect(findRouteBlock('post', '/organizations/:id/transfer-ownership')).toContain(
+      'EXPENSIVE_AUTHED_RATE_LIMIT.config',
+    );
+  });
+
+  it('DELETE /organizations/:id/invitations/:invitationId has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT', () => {
+    expect(findRouteBlock('delete', '/organizations/:id/invitations/:invitationId')).toContain(
+      '...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT',
+    );
+  });
+
+  it('POST /invitations/:invitationId/decline has MODERATE_AUTHED_RATE_LIMIT applied', () => {
+    expect(findRouteBlock('post', '/invitations/:invitationId/decline')).toContain(
+      '...MODERATE_AUTHED_RATE_LIMIT',
+    );
+  });
+});

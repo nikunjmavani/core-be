@@ -600,6 +600,7 @@ src/
     │   │   │   │   │   ├── events/
     │   │   │   │   │       └── worker/
     │   │   │   │   │       │   └── membership-tombstone-retention.worker.unit.test.ts
+    │   │   │   │   │   ├── membership-routes-rate-limit.policy.unit.test.ts
     │   │   │   │   │   ├── membership-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   ├── membership.controller.unit.test.ts
     │   │   │   │   │   ├── membership.repository.db.unit.test.ts
