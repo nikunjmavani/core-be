@@ -51,6 +51,8 @@ describe('UserDataExportService', () => {
     findPendingOrProcessingByUserId: vi.fn().mockResolvedValue(null),
     findByPublicIdAndUserId: vi.fn(),
     listByUserId: vi.fn(),
+    // sec-r4-R2: offboarding pages s3 keys with this method instead of listByUserId.
+    findS3KeysByUserIdAfter: vi.fn().mockResolvedValue([]),
     updateStatus: vi.fn(),
     deleteAllByUserId: vi.fn(),
   };
@@ -283,14 +285,49 @@ describe('UserDataExportService', () => {
   });
 
   it('deleteAllExportsForUser removes S3 objects and database rows', async () => {
-    exportRepository.listByUserId.mockResolvedValue([
-      { public_id: 'exp_1', s3_key: 'user-data-export/user/exp_1.json.gz' },
-    ]);
+    // sec-r4-R2: keyset-paginated; single batch returning fewer than the
+    // batch-size cap should end the loop after one pass.
+    exportRepository.findS3KeysByUserIdAfter
+      .mockResolvedValueOnce([{ id: 1, s3_key: 'user-data-export/user/exp_1.json.gz' }])
+      .mockResolvedValueOnce([]);
     exportRepository.deleteAllByUserId.mockResolvedValue(1);
 
     await service.deleteAllExportsForUser(1, 'user_public');
 
     expect(objectStorage.deleteObject).toHaveBeenCalledWith('user-data-export/user/exp_1.json.gz');
+    expect(exportRepository.deleteAllByUserId).toHaveBeenCalledWith(1);
+  });
+
+  // sec-r4-R2: with a long export history the loop must walk every page and
+  // never invoke S3 deletes for null s3_keys.
+  it('deleteAllExportsForUser pages through batches and skips rows with no s3_key', async () => {
+    // First batch returns exactly batch-size — but use a small fixture; we
+    // simulate the "more pages" path by returning a full chunk first.
+    const firstBatch = Array.from({ length: 500 }, (_, index) => ({
+      id: index + 1,
+      s3_key: `user-data-export/user/exp_${index + 1}.json.gz`,
+    }));
+    const secondBatch = [
+      { id: 501, s3_key: 'user-data-export/user/exp_501.json.gz' },
+      { id: 502, s3_key: null }, // rows with null s3_key must be skipped
+    ];
+    // vi.clearAllMocks() in beforeEach only clears call history — the
+    // mockResolvedValueOnce queue from the previous test (which left an unused
+    // `[]` because its single-batch run broke early) carries over. Reset the
+    // implementation queue on this mock specifically before queuing our own.
+    exportRepository.findS3KeysByUserIdAfter.mockReset();
+    exportRepository.findS3KeysByUserIdAfter
+      .mockResolvedValueOnce(firstBatch)
+      .mockResolvedValueOnce(secondBatch);
+    exportRepository.deleteAllByUserId.mockResolvedValue(501);
+
+    await service.deleteAllExportsForUser(1, 'user_public');
+
+    // 500 from the first batch + 1 from the second (null s3_key filtered out).
+    expect(objectStorage.deleteObject).toHaveBeenCalledTimes(501);
+    // First page asks from afterId=0; second page asks from afterId=500 (last id of first batch).
+    expect(exportRepository.findS3KeysByUserIdAfter).toHaveBeenNthCalledWith(1, 1, 0, 500);
+    expect(exportRepository.findS3KeysByUserIdAfter).toHaveBeenNthCalledWith(2, 1, 500, 500);
     expect(exportRepository.deleteAllByUserId).toHaveBeenCalledWith(1);
   });
 });
