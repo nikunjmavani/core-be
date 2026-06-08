@@ -137,6 +137,8 @@
     "docs:upload:hosted": "pnpm docs:upload && pnpm docs:upload:scalar",
     "routes:catalog": "tsx src/scripts/codegen/generate-route-catalog.ts",
     "routes:catalog:check": "tsx src/scripts/codegen/generate-route-catalog.ts --check",
+    "routes:coverage:audit": "tsx src/scripts/ops/route-coverage-audit.ts",
+    "routes:coverage:audit:check": "tsx src/scripts/ops/route-coverage-audit.ts --check",
     "tsdoc:check": "tsx tooling/tsdoc-coverage/check-coverage.ts",
     "tsdoc:check:report": "tsx tooling/tsdoc-coverage/check-coverage.ts --report",
     "tsdoc:check:refresh-budget": "tsx tooling/tsdoc-coverage/check-coverage.ts --refresh-budget",

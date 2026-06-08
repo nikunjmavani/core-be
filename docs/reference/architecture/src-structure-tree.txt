@@ -1229,6 +1229,7 @@ src/
     │   ├── memory-soak.ts
     │   ├── next-migration-prefix.ts
     │   ├── record-contract-fixtures.ts
+    │   ├── route-coverage-audit.ts
     │   ├── secrets-key-rotate.ts
     │   ├── send-load-test-results-email.ts
     │   ├── send-test-report-email.ts
