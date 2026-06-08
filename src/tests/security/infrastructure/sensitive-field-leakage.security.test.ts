@@ -15,6 +15,7 @@ import {
 import { createTestWebhook } from '@/tests/factories/webhook.factory.js';
 import { database } from '@/infrastructure/database/connection.js';
 import { auth_methods } from '@/domains/auth/sub-domains/auth-method/auth-method.schema.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 /**
  * Sensitive-field leakage sweep.
@@ -85,6 +86,7 @@ describe('Security: sensitive-field leakage sweep', () => {
     const { user, token } = await userWithToken();
     // Seed a TOTP method carrying credential material + PII that must never be serialized.
     await database.insert(auth_methods).values({
+      public_id: generatePublicId(),
       user_id: user.id,
       method_type: 'MFA_TOTP',
       encrypted_secret: 'leaked-totp-seed-ciphertext',

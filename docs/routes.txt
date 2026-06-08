@@ -30,7 +30,7 @@ Legend:
   POST   /api/v1/auth/magic-link/verify                          PUBLIC
   GET    /api/v1/auth/me/auth-methods                            AUTH
   POST   /api/v1/auth/me/auth-methods                            AUTH
-  DELETE /api/v1/auth/me/auth-methods/:id                        AUTH
+  DELETE /api/v1/auth/me/auth-methods/:publicId                  AUTH
   GET    /api/v1/auth/me/sessions                                AUTH
   DELETE /api/v1/auth/me/sessions                                AUTH
   DELETE /api/v1/auth/me/sessions/:id                            AUTH

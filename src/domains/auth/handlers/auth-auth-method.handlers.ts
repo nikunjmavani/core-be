@@ -6,7 +6,10 @@ import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-requ
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { recordRecentStepUp } from '@/shared/utils/auth/recent-step-up.util.js';
 import { resolveAuthMessageKeyResponse } from '@/domains/auth/auth.http.util.js';
-import { validateAuthMethodIdParam, validateStepUpVerify } from '@/domains/auth/auth.validator.js';
+import {
+  validateAuthMethodPublicIdParam,
+  validateStepUpVerify,
+} from '@/domains/auth/auth.validator.js';
 import { AuthSerializer } from '@/domains/auth/auth.serializer.js';
 import type { AuthContainer } from '@/domains/auth/auth.container.js';
 
@@ -29,22 +32,22 @@ export function createAuthAuthMethodHandlers({
         actorUserPublicId: auth.userId,
         action: 'auth.auth_method.create',
         resource_type: 'auth_method',
-        metadata: { auth_method_id: (data as { id?: number }).id },
+        metadata: { auth_method_id: (data as { public_id?: string }).public_id },
       });
       return successResponse(AuthSerializer.authMethod(data), getRequestIdentifier(request));
     },
     deleteAuthMethod: async (
-      request: FastifyRequest<{ Params: { id: string } }>,
+      request: FastifyRequest<{ Params: { publicId: string } }>,
       reply: FastifyReply,
     ) => {
       const auth = requireAuth(request);
-      const identifier = validateAuthMethodIdParam(request.params.id);
-      await authMethodService.delete(auth.userId, identifier);
+      const publicId = validateAuthMethodPublicIdParam(request.params.publicId);
+      await authMethodService.delete(auth.userId, publicId);
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,
         action: 'auth.auth_method.delete',
         resource_type: 'auth_method',
-        metadata: { auth_method_id: identifier },
+        metadata: { auth_method_id: publicId },
       });
       return reply.code(204).send();
     },
