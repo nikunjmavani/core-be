@@ -12,13 +12,24 @@ ARG PNPM_VERSION
 WORKDIR /app
 
 # sec-r4-C6: WARNING — every value below is a TEST-ONLY COMPILE-TIME PLACEHOLDER
-# that exists solely so `pnpm build` / `pnpm build:check` pass the env-schema's
-# `min(1)` Zod check during the build stage. These values MUST NEVER be replaced
-# with real credentials at build time — they would persist in the intermediate
-# image layer metadata (`docker history` / `docker inspect` / pulled
-# `--target build` images). The runtime stage explicitly resets NODE_ENV=production
-# and reads real credentials from the runtime environment. See the matching warning
-# in `Dockerfile`.
+# that exists solely so `pnpm build` / `pnpm build:check` / `pnpm routes:catalog`
+# pass the env-schema's `min(1)` Zod check during the build stage. These values
+# MUST NEVER be replaced with real credentials at build time:
+#
+#   - Build-stage ENV is baked into the intermediate image layer metadata and is
+#     visible via `docker history` / `docker inspect` / any pulled `--target build`
+#     image. The runtime stage (`AS api`) explicitly resets NODE_ENV=production
+#     and reads real credentials from the runtime environment — these placeholders
+#     are stripped from the final production image.
+#   - JWT_PRIVATE_KEY / JWT_PUBLIC_KEY are not PEMs; they would fail RS256
+#     signing at runtime if the runtime stage somehow inherited them.
+#   - SECRETS_ENCRYPTION_KEY is the all-zero key; the env schema rejects it under
+#     NODE_ENV=production / staging (sec-r4-C3), so a build-stage leak cannot
+#     accidentally become a real key.
+#
+# If you need to substitute real values at build time, pass them as `--build-arg`
+# instead so they appear only in build-time logs (not the persistent ENV metadata
+# of the final image), and confirm they never appear in the runtime stage.
 ENV NODE_ENV=test \
   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/core \
   REDIS_URL=redis://localhost:6379 \
