@@ -184,6 +184,10 @@ async function deliverClaimedWebhook(options: {
     payload,
     encryptedSecretPrevious,
     secretRotatedAt,
+    // sec-new-B2: opaque public identifier read from the DB row (generated once at
+    // insert) — stable across BullMQ retries so receivers can use it as a dedupe
+    // key without seeing the bigserial.
+    deliveryAttemptPublicId,
   } = deliveryContext;
   const payloadString = JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000);
@@ -272,10 +276,11 @@ async function deliverClaimedWebhook(options: {
                   : {}),
                 'X-Webhook-Event': eventType,
                 'X-Webhook-Timestamp': String(timestamp),
-                // sec-N3: stable per-delivery id (same BullMQ job, same attempt-
-                // row) so receivers can dedupe at-least-once redeliveries even
-                // though the timestamp + signature change per attempt.
-                'X-Webhook-Delivery-Id': String(deliveryAttemptId),
+                // sec-N3 + sec-new-B2: stable per-delivery public id (same BullMQ
+                // job reads the same row → same public_id) so receivers can dedupe
+                // at-least-once redeliveries without the bigserial leaking table
+                // cardinality or enabling enumeration.
+                'X-Webhook-Delivery-Id': deliveryAttemptPublicId,
                 ...(previousSignatureHeader
                   ? { 'X-Webhook-Signature-Previous': previousSignatureHeader }
                   : {}),

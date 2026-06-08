@@ -391,6 +391,7 @@ Table notify.webhook_delivery_attempts {
   id bigint [pk, increment, not null]
   next_retry_at timestamptz
   payload jsonb [not null]
+  public_id varchar(21)
   response_body text
   sent_at timestamptz
   status varchar(20) [not null]
