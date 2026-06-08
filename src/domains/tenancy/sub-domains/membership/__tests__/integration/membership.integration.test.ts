@@ -409,6 +409,121 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
+  describe('DELETE /api/v1/tenancy/organizations/:id/invitations/:invitationId (route-coverage gap-fill)', () => {
+    async function createPendingInvitationForAdminRevoke() {
+      const { organization, token: adminToken, user: admin } = await createAuthorizedContext();
+      const invitee = await createTestUser({ email: `admin-revoke-${randomUUID()}@test.com` });
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+      const [inviteeMembership] = await database
+        .insert(memberships)
+        .values({
+          public_id: generatePublicId(),
+          user_id: invitee.id,
+          organization_id: organization.id,
+          role_id: memberRole.id,
+          status: 'INVITED',
+        })
+        .returning();
+      const invitationRepository = new MemberInvitationRepository();
+      const invitation = await invitationRepository.create({
+        membership_id: inviteeMembership!.id,
+        email: invitee.email,
+        token_hash: hashInvitationToken(`admin-revoke-token-${randomUUID()}`),
+        invited_by_user_id: admin.id,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1_000),
+        created_by_user_id: admin.id,
+      });
+      return { organization, adminToken, invitation, inviteeMembership: inviteeMembership! };
+    }
+
+    it('admin revokes a pending invitation (204 + revoked_at set, membership unchanged)', async () => {
+      const { organization, adminToken, invitation, inviteeMembership } =
+        await createPendingInvitationForAdminRevoke();
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(
+          `/tenancy/organizations/${organization.public_id}/invitations/${invitation.public_id}`,
+        ),
+        token: adminToken,
+        organizationPublicId: organization.public_id,
+      });
+      expect(response.statusCode).toBe(204);
+
+      const [revoked] = await database
+        .select()
+        .from(member_invitations)
+        .where(eq(member_invitations.id, invitation.id));
+      expect(revoked!.revoked_at).not.toBeNull();
+      expect(revoked!.accepted_at).toBeNull();
+
+      const [stillInvited] = await database
+        .select()
+        .from(memberships)
+        .where(eq(memberships.id, inviteeMembership.id));
+      expect(stillInvited!.status).toBe('INVITED');
+      expect(stillInvited!.joined_at).toBeNull();
+    });
+
+    it('refuses cross-organization revoke attempts with 404 (tenant isolation)', async () => {
+      const { organization: orgA, invitation } = await createPendingInvitationForAdminRevoke();
+      // Build a SECOND independent org with its own admin trying to delete orgA's invitation.
+      const { organization: orgB, token: orgBAdminToken } = await createAuthorizedContext();
+      expect(orgA.id).not.toBe(orgB.id);
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(
+          `/tenancy/organizations/${orgB.public_id}/invitations/${invitation.public_id}`,
+        ),
+        token: orgBAdminToken,
+        organizationPublicId: orgB.public_id,
+      });
+      expect(response.statusCode).toBe(404);
+
+      const [untouched] = await database
+        .select()
+        .from(member_invitations)
+        .where(eq(member_invitations.id, invitation.id));
+      expect(untouched!.revoked_at).toBeNull();
+    });
+
+    it('rejects non-admin (no invitation:manage permission) with 403', async () => {
+      const { organization, invitation } = await createPendingInvitationForAdminRevoke();
+      // Build a member of the same org with READ-only permissions.
+      const readOnlyUser = await createTestUser({ email: `read-only-${randomUUID()}@test.com` });
+      const readOnlyRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+      await createMembership({
+        userId: readOnlyUser.id,
+        organizationId: organization.id,
+        roleId: readOnlyRole.id,
+      });
+      const readOnlyToken = await generateTestToken({ userId: readOnlyUser.public_id });
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(
+          `/tenancy/organizations/${organization.public_id}/invitations/${invitation.public_id}`,
+        ),
+        token: readOnlyToken,
+        organizationPublicId: organization.public_id,
+      });
+      expect(response.statusCode).toBe(403);
+
+      const [stillPending] = await database
+        .select()
+        .from(member_invitations)
+        .where(eq(member_invitations.id, invitation.id));
+      expect(stillPending!.revoked_at).toBeNull();
+    });
+  });
+
   describe('DELETE /api/v1/tenancy/organizations/:id/memberships/:membershipId', () => {
     it('refuses to remove the organization owner (403, no orphaned org)', async () => {
       const owner = await createTestUser();

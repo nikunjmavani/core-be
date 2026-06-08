@@ -2,7 +2,7 @@
 
 Total routes: 129
 
-- ✅ Covered by explicit test: **117**
+- ✅ Covered by explicit test: **118**
 - 🟡 Smoke-only (probe but no assertion-rich test): **2**
 - ❌ Gap (no test reference found): **0**
 
@@ -29,7 +29,7 @@ Every route in `docs/routes.txt` is referenced by at least one explicit test fil
 | POST | `/api/v1/auth/email/resend-verification` | `src/domains/auth/__tests__/auth.test.ts:705` |
 | POST | `/api/v1/auth/email/verify` | `src/domains/auth/__tests__/auth.test.ts:658` |
 | POST | `/api/v1/auth/login` | `src/tests/e2e/billing-onboarding.e2e.test.ts:42` |
-| POST | `/api/v1/auth/logout` | `src/tests/security/infrastructure/mutation-audit.security.test.ts:57` |
+| POST | `/api/v1/auth/logout` | `src/tests/integration/empty-body-json-parser.integration.test.ts:42` |
 | POST | `/api/v1/auth/magic-link/send` | `src/tests/chaos/redis-queue-enqueue.chaos.test.ts:63` |
 | POST | `/api/v1/auth/magic-link/verify` | `src/tests/integration/auth/magic-link.integration.test.ts:26` |
 | GET | `/api/v1/auth/me/auth-methods` | `src/tests/security/infrastructure/sensitive-field-leakage.security.test.ts:85` |
@@ -45,7 +45,7 @@ Every route in `docs/routes.txt` is referenced by at least one explicit test fil
 | POST | `/api/v1/auth/mfa/login` | `src/tests/security/auth/mfa-security.security.test.ts:145` |
 | POST | `/api/v1/auth/mfa/verify` | `src/tests/security/auth/mfa-security.security.test.ts:61` |
 | GET | `/api/v1/auth/oauth/:provider` | `src/tests/security/infrastructure/api-versioning.security.test.ts:26` |
-| ... | ... | (97 more) |
+| ... | ... | (98 more) |
 
 ## Method overview
 
@@ -55,7 +55,7 @@ Every route in `docs/routes.txt` is referenced by at least one explicit test fil
 | POST | 42 | 0 | 6 |
 | PATCH | 12 | 0 | 0 |
 | PUT | 3 | 0 | 1 |
-| DELETE | 15 | 0 | 2 |
+| DELETE | 16 | 0 | 1 |
 
 ## Methodology
 

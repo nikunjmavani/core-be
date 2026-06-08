@@ -80,7 +80,6 @@ const JUSTIFIED_GAPS = new Set<string>([
   // land; removing an entry MUST land with the matching integration
   // test in the same PR.
   'POST /api/v1/tenancy/invitations/:invitationId/decline',
-  'DELETE /api/v1/tenancy/organizations/:id/invitations/:invitationId',
   'POST /api/v1/tenancy/organizations/:id/invitations/:invitationId/resend',
   'POST /api/v1/tenancy/organizations/:id/leave',
   'PUT /api/v1/tenancy/organizations/:id/logo',
