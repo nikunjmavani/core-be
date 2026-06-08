@@ -613,7 +613,11 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      if (data.NODE_ENV !== 'production') {
+      // sec-r4-C3: staging shares production's encryption-at-rest requirement.
+      // A low-entropy key (e.g. the all-zero .env.example template) in staging
+      // would silently defeat encryption of MFA TOTP seeds and webhook signing
+      // secrets for a deployed environment.
+      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
         return true;
       }
       // Reject placeholder / low-entropy keys (e.g. the all-zero .env.example template) that
@@ -624,7 +628,7 @@ export const envSchema = envSchemaBase
     },
     {
       message:
-        'In production, SECRETS_ENCRYPTION_KEY must be a high-entropy 32-byte key (generate with `openssl rand -hex 32`); placeholder/low-entropy values are rejected',
+        'In production and staging, SECRETS_ENCRYPTION_KEY must be a high-entropy 32-byte key (generate with `openssl rand -hex 32`); placeholder/low-entropy values are rejected',
       path: ['SECRETS_ENCRYPTION_KEY'],
     },
   )
@@ -672,12 +676,16 @@ export const envSchema = envSchemaBase
       if (origins.includes('*')) {
         return false;
       }
-      if (data.NODE_ENV !== 'production') {
+      // sec-r4-C1: staging is a deployed environment and shares the same https
+      // requirement as production — plaintext http origins would weaken the
+      // session-cookie Origin defense in staging just as they would in production.
+      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
         return true;
       }
-      // In production every origin must be an absolute https:// URL. Plaintext http
-      // origins would let cross-site requests ride over an unencrypted channel and
-      // weaken the cookie-origin defenses that compare against this allowlist.
+      // In production and staging every origin must be an absolute https:// URL.
+      // Plaintext http origins would let cross-site requests ride over an
+      // unencrypted channel and weaken the cookie-origin defenses that compare
+      // against this allowlist.
       // sec-M9: ALSO reject entries that don't round-trip — a config that includes
       // userinfo (`https://attacker@allowed.com`), trailing slash, or any path is
       // an operator footgun: the runtime compares against browser-supplied `Origin`
@@ -741,17 +749,18 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
-      // In production, session + CSRF cookies must carry the Secure attribute so they are
-      // never transmitted over plaintext HTTP. COOKIE_SECURE=false is only valid for local
-      // plaintext loops (non-production); allowing it in production would expose the session
-      // cookie to network interception.
-      if (data.NODE_ENV !== 'production') {
+      // sec-r4-C2: staging is a deployed environment; session + CSRF cookies
+      // must carry the Secure attribute in both production and staging so they
+      // are never transmitted over plaintext HTTP. COOKIE_SECURE=false is only
+      // valid for local plaintext loops (development/test/local).
+      if (data.NODE_ENV !== 'production' && data.NODE_ENV !== 'staging') {
         return true;
       }
       return data.COOKIE_SECURE === true;
     },
     {
-      message: 'COOKIE_SECURE must be true in production (cookies sent over HTTPS only).',
+      message:
+        'COOKIE_SECURE must be true in production and staging (cookies sent over HTTPS only).',
       path: ['COOKIE_SECURE'],
     },
   )
