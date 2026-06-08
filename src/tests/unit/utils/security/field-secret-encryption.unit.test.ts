@@ -35,7 +35,10 @@ describe('field-secret-encryption.util', () => {
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
     resetEnvCacheForTests();
 
-    const plaintext = 'whsec_test_signing_key';
+    // sec-r5-secret-scanning: plaintext is opaque to the AEAD round-trip;
+    // avoid Stripe-shaped prefixes here so the static-source scanner does
+    // not flag this test fixture.
+    const plaintext = 'opaque-test-plaintext-for-aead-roundtrip';
     const encrypted = encryptFieldSecret(plaintext);
     expect(encrypted).toMatch(/^v1:/);
     expect(decryptFieldSecret(encrypted)).toBe(plaintext);

@@ -35,8 +35,15 @@ export function generateFieldExample(fieldName: string, schema: Record<string, u
   if (lowerField === 'token' || lowerField === 'refresh_token') {
     return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
   }
-  if (lowerField === 'secret') return 'whsec_...';
-  if (lowerField === 'raw_key') return 'sk_live_abc1...';
+  // OpenAPI examples are visible in published docs (Swagger / Redoc / Postman).
+  // Using real Stripe prefixes (`whsec_`, `sk_live_`) here would (a) ship a
+  // misleading example — these endpoints return our OWN webhook signing key
+  // and our OWN organization API key, NOT a Stripe value — and (b) trip
+  // GitHub Secret Scanning on push because the raw scanner matches the Stripe
+  // regex and cannot tell the difference between a leaked prod secret and a
+  // documentation placeholder. Use clearly-redacted opaque placeholders.
+  if (lowerField === 'secret') return '<webhook-signing-key-shown-once>';
+  if (lowerField === 'raw_key') return '<api-key-shown-once>';
 
   // ── URL fields ──
   if (lowerField === 'url') return 'https://api.example.com/webhooks/receive';

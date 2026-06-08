@@ -19,7 +19,12 @@ describe('field-examples', () => {
   });
 
   it('generateFieldExample uses redacted placeholders for secret-bearing fields', () => {
-    expect(generateFieldExample('secret', { type: 'string' })).toBe('whsec_...');
-    expect(generateFieldExample('raw_key', { type: 'string' })).toBe('sk_live_abc1...');
+    // The placeholders MUST NOT use real Stripe prefixes (`whsec_`, `sk_live_`)
+    // — see the comment in `enrichers/field-examples.ts` for the GitHub Secret
+    // Scanning rationale.
+    expect(generateFieldExample('secret', { type: 'string' })).toBe(
+      '<webhook-signing-key-shown-once>',
+    );
+    expect(generateFieldExample('raw_key', { type: 'string' })).toBe('<api-key-shown-once>');
   });
 });

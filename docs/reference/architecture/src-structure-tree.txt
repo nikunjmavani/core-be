@@ -1552,6 +1552,7 @@ src/
     │   ├── domain-consistency.global.test.ts
     │   ├── external-sdk-coverage.global.test.ts
     │   ├── import-paths.global.test.ts
+    │   ├── no-stripe-shaped-literals.global.test.ts
     │   ├── openapi-completeness.global.test.ts
     │   ├── openapi-cursor-pagination.global.test.ts
     │   ├── openapi-mcp.global.test.ts
