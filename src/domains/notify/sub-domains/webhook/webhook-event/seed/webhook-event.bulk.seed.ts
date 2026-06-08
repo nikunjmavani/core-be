@@ -16,6 +16,7 @@ import {
 } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import { BULK_WEBHOOK_URL_PATTERN } from '@/domains/notify/sub-domains/webhook/seed/webhook.bulk.seed.js';
 import type { SeedContext } from '@/scripts/seed/seed-contract.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { generateBulkWebhookEvent } from './webhook-event.faker.js';
 
 /** Delivery attempts seeded per webhook in the base profile (spread across SENT/FAILED/PENDING). */
@@ -30,6 +31,7 @@ type DeliveryStatus = 'PENDING' | 'SENDING' | 'SENT' | 'FAILED';
 
 /** A fully-resolved delivery-attempt row ready for insertion. */
 interface DeliveryAttemptInsert {
+  public_id: string;
   webhook_id: number;
   event_type: string;
   payload: Record<string, unknown>;
@@ -63,6 +65,8 @@ function buildDeliveryAttempt(
   const content = generateBulkWebhookEvent(context.faker);
   const status = statusForIndex(options.index, context.counts.edgeCases);
   const base: DeliveryAttemptInsert = {
+    // sec-new-B2: generate a unique public_id for each seeded attempt row.
+    public_id: generatePublicId(),
     webhook_id: options.webhookId,
     event_type: content.event_type,
     payload: content.payload,

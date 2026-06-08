@@ -8,6 +8,8 @@ import { resetWebhookOutboundCircuitsForTesting } from '@/domains/notify/sub-dom
 const { findWebhook, baseDeliveryContext } = vi.hoisted(() => {
   const baseDeliveryContext = {
     deliveryAttemptId: 42,
+    // sec-new-B2: opaque public id used as the X-Webhook-Delivery-Id header value.
+    deliveryAttemptPublicId: 'wa0y8vf3ktxqnhcm1ze21',
     webhookId: 1,
     webhookUrl: 'https://example.com/hook',
     encryptedSecret: 'enc:current',

@@ -88,6 +88,9 @@ export const webhook_delivery_attempts = notifySchema
     'webhook_delivery_attempts',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
+      // sec-new-B2: opaque public identifier used as the X-Webhook-Delivery-Id outbound
+      // header value so receivers get a stable dedupe key without exposing the bigserial.
+      public_id: varchar('public_id', { length: 21 }).notNull(),
       webhook_id: bigint('webhook_id', { mode: 'number' })
         .notNull()
         .references(() => webhooks.id, { onDelete: 'cascade' }),
@@ -114,6 +117,7 @@ export const webhook_delivery_attempts = notifySchema
         table.id,
       ),
       index('idx_webhook_attempts_retry').on(table.status, table.next_retry_at),
+      uniqueIndex('idx_webhook_delivery_attempts_public_id').on(table.public_id),
       uniqueIndex('idx_webhook_delivery_attempts_pending_event_key')
         .on(table.webhook_id, table.event_key)
         .where(sql`${table.status} = 'PENDING' AND ${table.event_key} IS NOT NULL`),

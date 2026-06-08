@@ -3,6 +3,7 @@ import {
   getRequestDatabase,
   type RequestScopedPostgresDatabase,
 } from '@/infrastructure/database/contexts/request-database.context.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { WorkerDatabaseHandle } from '@/infrastructure/queue/worker-runtime/worker-processor.util.js';
 import { resolveRepositoryDatabaseHandle } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
 import { assertWorkerDatabaseContext } from '@/infrastructure/database/contexts/worker-database.context.js';
@@ -26,6 +27,9 @@ import { organizations } from '@/domains/tenancy/sub-domains/organization/organi
  */
 export interface WebhookDeliveryAttemptWithWebhook {
   deliveryAttemptId: number;
+  // sec-new-B2: opaque public identifier projected from the row so workers can
+  // use it as the X-Webhook-Delivery-Id header value without exposing the bigserial.
+  deliveryAttemptPublicId: string;
   webhookId: number;
   webhookUrl: string;
   encryptedSecret: string;
@@ -116,6 +120,7 @@ export async function findWebhookDeliveryAttemptWithWebhook(
   const rows = await resolveDatabase(databaseHandle)
     .select({
       deliveryAttemptId: webhook_delivery_attempts.id,
+      deliveryAttemptPublicId: webhook_delivery_attempts.public_id,
       webhookId: webhooks.id,
       webhookUrl: webhooks.url,
       encryptedSecret: webhooks.encrypted_secret,
@@ -143,6 +148,7 @@ export async function findWebhookDeliveryAttemptWithWebhook(
 
   return {
     deliveryAttemptId: row.deliveryAttemptId,
+    deliveryAttemptPublicId: row.deliveryAttemptPublicId,
     webhookId: row.webhookId,
     webhookUrl: row.webhookUrl,
     encryptedSecret: row.encryptedSecret,
@@ -182,6 +188,9 @@ export async function createPendingWebhookDeliveryAttempt(input: {
     payload: input.payload,
     status: 'PENDING',
     attempt_count: 0,
+    // sec-new-B2: generate once at insert so every retry of the same job reads the
+    // same public_id from the DB and emits a stable X-Webhook-Delivery-Id header.
+    public_id: generatePublicId(),
   };
   const insertBuilder = getRequestDatabase().insert(webhook_delivery_attempts);
   if (input.eventKey !== undefined) {

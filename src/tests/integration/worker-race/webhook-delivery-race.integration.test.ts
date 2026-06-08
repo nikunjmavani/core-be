@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { database } from '@/infrastructure/database/connection.js';
 import { webhook_delivery_attempts } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import { processWebhookDeliveryAttempt } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-delivery.worker.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
@@ -33,6 +34,7 @@ describe('Integration: webhook-delivery worker concurrency race', () => {
     const [pendingAttempt] = await database
       .insert(webhook_delivery_attempts)
       .values({
+        public_id: generatePublicId(),
         webhook_id: webhook.id,
         event_type: 'webhook.test',
         payload: { race: true },

@@ -9,6 +9,8 @@ const { activeContextFixture, disabledContextFixture, deletedContextFixture, fin
   vi.hoisted(() => {
     const activeContextFixture = {
       deliveryAttemptId: 42,
+      // sec-new-B2: opaque public id used as the X-Webhook-Delivery-Id header value.
+      deliveryAttemptPublicId: 'wa0y8vf3ktxqnhcm1ze21',
       webhookId: 1,
       webhookUrl: 'https://example.com/hook',
       encryptedSecret: 'v1:secret',
@@ -80,9 +82,13 @@ function createDeliveryAttemptRepositoryMock() {
  * `X-Webhook-Event`, `X-Webhook-Timestamp` but no stable per-delivery id —
  * `timestamp` regenerates per attempt so the signature also changes, and
  * receivers cannot dedupe an at-least-once redelivery. The worker now sends
- * `X-Webhook-Delivery-Id: <deliveryAttemptId>` (stable across BullMQ retries
- * because the same job carries the same attempt-row id) so receivers have a
- * deterministic dedupe key.
+ * `X-Webhook-Delivery-Id: <deliveryAttemptPublicId>` (stable across BullMQ retries
+ * because the same DB row carries the same `public_id`) so receivers have a
+ * deterministic dedupe key without the bigserial leaking cardinality.
+ *
+ * sec-new-B2 (Low): the original implementation used `String(deliveryAttemptId)` —
+ * the bigserial PK — which lets a receiver infer table size or enumerate attempts.
+ * Replaced with the row's `public_id` (opaque, crypto-random 21-char string).
  */
 describe('processWebhookDeliveryAttempt — notify durability (sec-N1 + sec-N3)', () => {
   let fetchMock: Mock<WebhookDeliveryFetch>;
@@ -100,7 +106,7 @@ describe('processWebhookDeliveryAttempt — notify durability (sec-N1 + sec-N3)'
     resetWebhookOutboundCircuitsForTesting();
   });
 
-  it('sec-N3: outbound headers include X-Webhook-Delivery-Id matching the attempt id', async () => {
+  it('sec-N3 + sec-new-B2: outbound headers include X-Webhook-Delivery-Id matching the public_id (not the numeric id)', async () => {
     findWebhook.mockResolvedValue(activeContextFixture);
     const repository = createDeliveryAttemptRepositoryMock();
 
@@ -114,7 +120,12 @@ describe('processWebhookDeliveryAttempt — notify durability (sec-N1 + sec-N3)'
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(requestInit.headers).toMatchObject({ 'X-Webhook-Delivery-Id': '42' });
+    // sec-new-B2: must be the opaque public_id — not the numeric bigserial.
+    expect(requestInit.headers).toMatchObject({
+      'X-Webhook-Delivery-Id': 'wa0y8vf3ktxqnhcm1ze21',
+    });
+    const headers = requestInit.headers as Record<string, string>;
+    expect(headers['X-Webhook-Delivery-Id']).not.toBe('42');
   });
 
   it('sec-N1: marks FAILED with webhook_disabled + null retry when webhook.is_enabled is false', async () => {
