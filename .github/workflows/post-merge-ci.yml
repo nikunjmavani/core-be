@@ -223,6 +223,15 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      # Some recent release-please-action paths invoke endpoints that the
+      # default `GITHUB_TOKEN` cannot reach unless `id-token: write` is also
+      # granted (OIDC-scoped octokit calls inside the action). Adding it here
+      # is a no-op for the actual release create/update but unblocks the
+      # underlying API call when the action falls into that path. Pair with
+      # `actions: write` so the action can update the run's own status when
+      # a release PR-creation step runs after release creation.
+      id-token: write
+      actions: write
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created == 'true' && 'true' || 'false' }}
     env:
