@@ -70,7 +70,7 @@ jobs:
       docs-artifacts: ${{ steps.filter.outputs.docs-artifacts }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ github.sha }}
           # Full history avoids the dorny/paths-filter shallow-deepen race
@@ -166,7 +166,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -179,7 +179,7 @@ jobs:
           output-file: sbom.cyclonedx.json
 
       - name: Attest CycloneDX source SBOM
-        uses: actions/attest-sbom@51e74621a501c89df81fc1391c5a8f4cfc9fab2f # v3
+        uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
         with:
           subject-path: sbom.cyclonedx.json
           sbom-path: sbom.cyclonedx.json
@@ -229,14 +229,14 @@ jobs:
       CHANNEL_SUFFIX: ${{ github.ref_name == 'dev' && '.dev' || '' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Run release-please
         id: release
-        uses: googleapis/release-please-action@0dfd8538845b8e92600d271a895a5372865d4062 # v5
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
           token: ${{ github.token }}
           target-branch: ${{ github.ref_name }}
