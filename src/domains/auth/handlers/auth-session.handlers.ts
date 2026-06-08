@@ -105,7 +105,12 @@ export function createAuthSessionHandlers({
         resource_type: 'session',
       });
 
-      clearSessionCookie(reply);
+      // sec-r4-A1: do NOT clear the session cookie here. revokeAllSessionsExceptCurrent
+      // intentionally preserves the caller's own session (sec-new-A3) — clearing the cookie
+      // would destroy the browser-side refresh token for that preserved session, silently
+      // logging the caller out on their next token refresh despite the DB row being alive.
+      // clearSessionCookie() is only called in logout, which explicitly terminates the
+      // caller's own session.
 
       return reply.code(204).send();
     },
