@@ -409,6 +409,96 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
+  describe('Organization logo routes (route-coverage gap-fill)', () => {
+    describe('PUT /api/v1/tenancy/organizations/:id/logo', () => {
+      it('rejects callers without organization:update permission (403)', async () => {
+        const admin = await createTestUser();
+        const organization = await createTestOrganization({ ownerUserId: admin.id });
+        const readOnlyUser = await createTestUser({
+          email: `logo-read-only-${randomUUID()}@test.com`,
+        });
+        const readOnlyRole = await createRoleWithPermissions({
+          organizationId: organization.id,
+          permissionCodes: [TENANCY_PERMISSIONS.ORGANIZATION_READ],
+        });
+        await createMembership({
+          userId: readOnlyUser.id,
+          organizationId: organization.id,
+          roleId: readOnlyRole.id,
+        });
+        const token = await generateTestToken({ userId: readOnlyUser.public_id });
+
+        const response = await injectAuthenticated(app, {
+          method: 'PUT',
+          url: testApiPath(`/tenancy/organizations/${organization.public_id}/logo`),
+          token,
+          organizationPublicId: organization.public_id,
+          payload: { key: `organization-logos/${organization.public_id}/logo.png` },
+        });
+        expect(response.statusCode).toBe(403);
+      });
+
+      it('rejects a key that does not belong to this organization (400)', async () => {
+        const { organization, token } = await createAuthorizedContext();
+
+        const response = await injectAuthenticated(app, {
+          method: 'PUT',
+          url: testApiPath(`/tenancy/organizations/${organization.public_id}/logo`),
+          token,
+          organizationPublicId: organization.public_id,
+          // Key prefix targets a DIFFERENT org id — the service guards against
+          // cross-tenant attach attempts before any S3 call.
+          payload: { key: 'organization-logos/some-other-org/logo.png' },
+        });
+        expect(response.statusCode).toBe(400);
+      });
+    });
+
+    describe('DELETE /api/v1/tenancy/organizations/:id/logo', () => {
+      it('rejects callers without organization:update permission (403)', async () => {
+        const admin = await createTestUser();
+        const organization = await createTestOrganization({ ownerUserId: admin.id });
+        const readOnlyUser = await createTestUser({
+          email: `logo-del-read-only-${randomUUID()}@test.com`,
+        });
+        const readOnlyRole = await createRoleWithPermissions({
+          organizationId: organization.id,
+          permissionCodes: [TENANCY_PERMISSIONS.ORGANIZATION_READ],
+        });
+        await createMembership({
+          userId: readOnlyUser.id,
+          organizationId: organization.id,
+          roleId: readOnlyRole.id,
+        });
+        const token = await generateTestToken({ userId: readOnlyUser.public_id });
+
+        const response = await injectAuthenticated(app, {
+          method: 'DELETE',
+          url: testApiPath(`/tenancy/organizations/${organization.public_id}/logo`),
+          token,
+          organizationPublicId: organization.public_id,
+        });
+        expect(response.statusCode).toBe(403);
+      });
+
+      it('is a no-op (200) when no logo is set — does not touch S3', async () => {
+        // The service short-circuits S3 deletion when `organization.logo_url`
+        // is null, which is the default for a freshly created org. This proves
+        // the DB-side path through `withOrganizationDatabaseContext` →
+        // `repository.update({ logo_url: null })` without needing an S3 mock.
+        const { organization, token } = await createAuthorizedContext();
+
+        const response = await injectAuthenticated(app, {
+          method: 'DELETE',
+          url: testApiPath(`/tenancy/organizations/${organization.public_id}/logo`),
+          token,
+          organizationPublicId: organization.public_id,
+        });
+        expect(response.statusCode).toBe(200);
+      });
+    });
+  });
+
   describe('DELETE /api/v1/tenancy/organizations/:id/memberships/:membershipId', () => {
     it('refuses to remove the organization owner (403, no orphaned org)', async () => {
       const owner = await createTestUser();
