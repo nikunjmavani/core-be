@@ -189,14 +189,17 @@ export const mfaMethodIdParamsDto = z
 /** Inferred input type of {@link mfaMethodIdParamsDto}. */
 export type MfaMethodIdParamsInput = z.infer<typeof mfaMethodIdParamsDto>;
 
-/** Zod schema for the `:id` path parameter on `/api/v1/auth/me/auth-methods/:id`. */
-export const authMethodIdParamsDto = z
+/** Zod schema for the `:publicId` path parameter on `DELETE /api/v1/auth/me/auth-methods/:publicId` (sec-new-B4). */
+export const authMethodPublicIdParamsDto = z
   .object({
-    id: z.string().trim().regex(/^\d+$/),
+    publicId: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9]{21}$/),
   })
   .strict();
-/** Inferred input type of {@link authMethodIdParamsDto}. */
-export type AuthMethodIdParamsInput = z.infer<typeof authMethodIdParamsDto>;
+/** Inferred input type of {@link authMethodPublicIdParamsDto}. */
+export type AuthMethodPublicIdParamsInput = z.infer<typeof authMethodPublicIdParamsDto>;
 
 /** Zod schema for the `:id` (session public id) path parameter on `/api/v1/auth/me/sessions/:id`. */
 export const sessionIdParamsDto = z

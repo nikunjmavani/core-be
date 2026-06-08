@@ -298,7 +298,7 @@ export class MfaService {
   async enrollConfirm(
     userPublicId: string,
     body: unknown,
-  ): Promise<{ recovery_codes: string[]; method_id: number }> {
+  ): Promise<{ recovery_codes: string[]; method_public_id: string }> {
     const parsed = validateMfaEnrollConfirm(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
@@ -369,7 +369,7 @@ export class MfaService {
 
     return {
       recovery_codes: plaintextRecoveryCodes,
-      method_id: record.id,
+      method_public_id: record.public_id,
     };
   }
 

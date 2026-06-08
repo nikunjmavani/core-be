@@ -49,7 +49,7 @@ export function createAuthMfaHandlers({ mfaService }: AuthMfaHandlersDependencie
         actorUserPublicId: auth.userId,
         action: 'auth.mfa.enroll_confirm',
         resource_type: 'mfa_method',
-        metadata: { mfa_method_id: data.method_id },
+        metadata: { mfa_method_id: data.method_public_id },
       });
       return successResponse(AuthSerializer.mfaEnrollConfirm(data), getRequestIdentifier(request));
     },

@@ -217,15 +217,18 @@ export function validateOauthCallbackQuery(query: unknown): OauthCallbackQueryIn
   return result.data;
 }
 
-/** Parses the `:id` path param on auth-method routes into a positive integer; throws {@link ValidationError} otherwise. */
-export function validateAuthMethodIdParam(authMethodId: string): number {
-  const authMethodIdNumber = Number(authMethodId);
-  if (!Number.isInteger(authMethodIdNumber) || authMethodIdNumber < 1) {
+/**
+ * Validates the `:publicId` path param on auth-method routes (sec-new-B4). Returns the
+ * 21-character alphanumeric public id; throws {@link ValidationError} when the value is not
+ * exactly 21 lowercase alphanumeric characters (the shape produced by {@link generatePublicId}).
+ */
+export function validateAuthMethodPublicIdParam(authMethodPublicId: string): string {
+  if (!/^[a-z0-9]{21}$/.test(authMethodPublicId)) {
     throw new ValidationError('errors:validation.invalidAuthMethodId', undefined, {
-      authMethodId: ['Must be a positive integer'],
+      authMethodPublicId: ['Must be a 21-character lowercase alphanumeric public id'],
     });
   }
-  return authMethodIdNumber;
+  return authMethodPublicId;
 }
 
 /** Parses the `:mfaMethodId` path param on MFA routes into a positive integer; throws {@link ValidationError} otherwise. */

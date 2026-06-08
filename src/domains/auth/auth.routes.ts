@@ -11,7 +11,7 @@ import {
 } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { createAuthController } from './auth.controller.js';
 import {
-  authMethodIdParamsDto,
+  authMethodPublicIdParamsDto,
   ChangePasswordDto,
   CreateAuthMethodDto,
   ForgotPasswordDto,
@@ -413,8 +413,8 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
     },
     controller.createAuthMethod,
   );
-  zodApplication.delete<{ Params: { id: string } }>(
-    '/me/auth-methods/:id',
+  zodApplication.delete<{ Params: { publicId: string } }>(
+    '/me/auth-methods/:publicId',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRecentStepUpPreHandler],
@@ -424,7 +424,7 @@ export const authRoutesPlugin: FastifyPluginAsync = async (app) => {
         description:
           "Removes an authentication method from the user's account. Cannot remove the last auth method.",
         tags: ['Auth', 'Auth Method'],
-        params: authMethodIdParamsDto,
+        params: authMethodPublicIdParamsDto,
       },
     },
     controller.deleteAuthMethod,

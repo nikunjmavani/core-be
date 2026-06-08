@@ -497,6 +497,7 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
   const [authMethodA] = await database
     .insert(auth_methods)
     .values({
+      public_id: generatePublicId(),
       user_id: userA.id,
       method_type: 'OAUTH',
       provider: oauthProvider,
@@ -506,7 +507,12 @@ export async function seedUserScopedRlsFixtures(): Promise<RlsUserFixture> {
     .returning();
   const [authMethodB] = await database
     .insert(auth_methods)
-    .values({ user_id: userB.id, method_type: 'PASSWORD', is_primary: true })
+    .values({
+      public_id: generatePublicId(),
+      user_id: userB.id,
+      method_type: 'PASSWORD',
+      is_primary: true,
+    })
     .returning();
   rowIdsByTable.set(tableKey('auth', 'auth_methods'), {
     userA: authMethodA!.id,

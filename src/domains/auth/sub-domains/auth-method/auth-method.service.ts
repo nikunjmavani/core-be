@@ -118,7 +118,7 @@ export class AuthMethodService {
   }
 
   /**
-   * Revokes a user's auth method.
+   * Revokes a user's auth method identified by its opaque `public_id` (sec-new-B4).
    *
    * @remarks
    * sec-A5: refuses to revoke the user's LAST login-capable credential. Login-capable
@@ -129,22 +129,27 @@ export class AuthMethodService {
    * case — sec-A4). Without this guard, a user could revoke their only PASSWORD/OAUTH
    * and lock themselves out of every login surface — recovery requires admin intervention.
    */
-  async delete(userPublicId: string, methodId: number) {
+  async delete(userPublicId: string, methodPublicId: string) {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
     await withUserDatabaseContext(userPublicId, async () => {
-      const existing = await this.authMethodRepository.findByIdForUser(methodId, user.id);
+      const existing = await this.authMethodRepository.findByPublicIdForUser(
+        methodPublicId,
+        user.id,
+      );
       if (!existing) throw new NotFoundError('Auth method');
       if (LOGIN_CAPABLE_METHOD_TYPES.has(existing.method_type)) {
         const allActive = await this.authMethodRepository.listByUserId(user.id);
         const otherLoginCapableCount = allActive.filter(
-          (method) => method.id !== methodId && LOGIN_CAPABLE_METHOD_TYPES.has(method.method_type),
+          (method) =>
+            method.public_id !== methodPublicId &&
+            LOGIN_CAPABLE_METHOD_TYPES.has(method.method_type),
         ).length;
         if (otherLoginCapableCount === 0) {
           throw new ForbiddenError('errors:cannotRemoveLastAuthMethod');
         }
       }
-      const revoked = await this.authMethodRepository.revoke(methodId, user.id);
+      const revoked = await this.authMethodRepository.revoke(existing.id, user.id);
       if (!revoked) throw new NotFoundError('Auth method');
     });
   }
