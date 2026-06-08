@@ -66,11 +66,24 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
       Key: options.key,
       ContentType: options.contentType,
       ContentLength: options.contentLength,
+      // sec-r4-E1: require SSE-S3 on the uploaded object. The bucket default
+      // is defence-in-depth; binding the requirement into the presigned URL
+      // also forces the client to send `x-amz-server-side-encryption: AES256`,
+      // so a misconfigured bucket cannot accept an unencrypted upload via
+      // this presigned URL.
+      ServerSideEncryption: 'AES256',
     });
 
     return getSignedUrl(getS3Client(), command, {
       expiresIn: options.expiresInSeconds,
-      signableHeaders: new Set(['content-length', 'content-type', 'host']),
+      // sec-r4-E1: include the SSE header in the signed-headers set so the
+      // signature is invalidated if the client strips or rewrites it.
+      signableHeaders: new Set([
+        'content-length',
+        'content-type',
+        'host',
+        'x-amz-server-side-encryption',
+      ]),
     });
   }
 
@@ -92,10 +105,17 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
       Conditions: [
         ['content-length-range', options.minContentLength, options.maxContentLength],
         ['eq', '$Content-Type', options.contentType],
+        // sec-r4-E1: enforce AES256 server-side encryption on the uploaded
+        // object via a POST policy condition so the browser form must include
+        // the header and S3 rejects anything else.
+        ['eq', '$x-amz-server-side-encryption', 'AES256'],
         ...metadataConditions,
       ],
       Fields: {
         'Content-Type': options.contentType,
+        // sec-r4-E1: pre-populate the SSE field so a vanilla form upload
+        // satisfies the condition above without the client having to add it.
+        'x-amz-server-side-encryption': 'AES256',
         ...Object.fromEntries(
           Object.entries(options.metadata ?? {}).map(([metadataKey, value]) => [
             `x-amz-meta-${metadataKey}`,
