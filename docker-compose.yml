@@ -52,7 +52,16 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://core:core@postgres:5432/core
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: test-jwt-secret-min-32-chars-xxxxxxxx
+      # sec-r4-C5: JWT_SECRET is not a recognized env key (env-schema uses RS256
+      # via JWT_PRIVATE_KEY / JWT_PUBLIC_KEY). Set the real keys explicitly here
+      # so the env-schema required fields are visible to anyone reading this
+      # file — the Dockerfile only carries placeholders for `pnpm build` and
+      # those would silently leak through if compose forgot to override.
+      # These placeholder strings pass the schema (min(1)) and let the API
+      # container boot for health-endpoint smoke; any test that actually exercises
+      # token signing must supply real PEMs.
+      JWT_PRIVATE_KEY: smoke-test-private-key-placeholder
+      JWT_PUBLIC_KEY: smoke-test-public-key-placeholder
       # Required in every runtime by the env schema; a fixed all-zero test key is fine for smoke.
       SECRETS_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
       ALLOWED_ORIGINS: http://localhost:3000
