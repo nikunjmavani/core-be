@@ -409,6 +409,103 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
+  describe('POST /api/v1/tenancy/organizations/:id/invitations/:invitationId/resend (route-coverage gap-fill)', () => {
+    async function createPendingInvitationForResend() {
+      const { organization, token: adminToken, user: admin } = await createAuthorizedContext();
+      const invitee = await createTestUser({ email: `resend-${randomUUID()}@test.com` });
+      const memberRole = await createRoleWithPermissions({
+        organizationId: organization.id,
+        permissionCodes: [TENANCY_PERMISSIONS.MEMBERSHIP_READ],
+      });
+      const [inviteeMembership] = await database
+        .insert(memberships)
+        .values({
+          public_id: generatePublicId(),
+          user_id: invitee.id,
+          organization_id: organization.id,
+          role_id: memberRole.id,
+          status: 'INVITED',
+        })
+        .returning();
+      const invitationRepository = new MemberInvitationRepository();
+      const originalTokenHash = hashInvitationToken(`original-token-${randomUUID()}`);
+      const invitation = await invitationRepository.create({
+        membership_id: inviteeMembership!.id,
+        email: invitee.email,
+        token_hash: originalTokenHash,
+        invited_by_user_id: admin.id,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1_000),
+        created_by_user_id: admin.id,
+      });
+      return { organization, adminToken, invitation, originalTokenHash };
+    }
+
+    it('rotates the token_hash and extends expires_at on resend (200)', async () => {
+      const { organization, adminToken, invitation, originalTokenHash } =
+        await createPendingInvitationForResend();
+      const originalExpiresAt = invitation.expires_at.getTime();
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(
+          `/tenancy/organizations/${organization.public_id}/invitations/${invitation.public_id}/resend`,
+        ),
+        token: adminToken,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: { expires_in_days: 10 },
+      });
+      expect(response.statusCode).toBe(200);
+
+      const [rotated] = await database
+        .select()
+        .from(member_invitations)
+        .where(eq(member_invitations.id, invitation.id));
+      expect(rotated!.token_hash).not.toBe(originalTokenHash);
+      expect(rotated!.expires_at.getTime()).toBeGreaterThan(originalExpiresAt);
+      expect(rotated!.revoked_at).toBeNull();
+      expect(rotated!.accepted_at).toBeNull();
+    });
+
+    it('rejects resend on a revoked invitation (400)', async () => {
+      const { organization, adminToken, invitation } = await createPendingInvitationForResend();
+      // Pre-revoke the invitation.
+      await database
+        .update(member_invitations)
+        .set({ revoked_at: new Date() })
+        .where(eq(member_invitations.id, invitation.id));
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(
+          `/tenancy/organizations/${organization.public_id}/invitations/${invitation.public_id}/resend`,
+        ),
+        token: adminToken,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: { expires_in_days: 10 },
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('refuses cross-tenant resend with 404 (tenant isolation)', async () => {
+      const { invitation } = await createPendingInvitationForResend();
+      const { organization: orgB, token: orgBAdminToken } = await createAuthorizedContext();
+
+      const response = await injectAuthenticated(app, {
+        method: 'POST',
+        url: testApiPath(
+          `/tenancy/organizations/${orgB.public_id}/invitations/${invitation.public_id}/resend`,
+        ),
+        token: orgBAdminToken,
+        organizationPublicId: orgB.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: { expires_in_days: 10 },
+      });
+      expect(response.statusCode).toBe(404);
+    });
+  });
+
   describe('DELETE /api/v1/tenancy/organizations/:id/memberships/:membershipId', () => {
     it('refuses to remove the organization owner (403, no orphaned org)', async () => {
       const owner = await createTestUser();
