@@ -7,9 +7,9 @@ mapping intact across all dimensions.
 ## Canonical invariant
 
 Every hosted environment must be declared in **`tooling/setup/setup.config.json`**
-(`environments[]`). That manifest is the single source of truth; CI and GitHub
-sync consume the generated slim file `.github/sync.config.json` (do not edit by
-hand — run `pnpm tool:generate-project-identity` after manifest changes).
+(`environments[]`). That manifest is the single source of truth; run
+`pnpm tool:generate-project-identity` after manifest changes to regenerate project
+identity constants and the CI composite action.
 
 Example manifest excerpt:
 
@@ -32,7 +32,7 @@ artefact:
 
 | Dimension | Lives in |
 | --------- | -------- |
-| Branch ↔ environment mapping | `tooling/setup/setup.config.json` → generated `.github/sync.config.json` |
+| Branch ↔ environment mapping | `tooling/setup/setup.config.json` (canonical; read by `pnpm github:sync`) |
 | `NODE_ENV` enum value | `src/shared/config/env-schema.ts` |
 | `.github/environments/<env>.json` | committed protection config |
 | Branch ruleset | `.github/rulesets/<branch>.json` |
@@ -82,7 +82,7 @@ Edit `tooling/setup/setup.config.json` — add the new entry under `environments
 Then run:
 
 ```bash
-pnpm tool:generate-project-identity   # constants, sync.config.json, workflow branch/env maps
+pnpm tool:generate-project-identity   # constants, composite action, workflow branch/env maps
 pnpm github:sync                    # .env.<environment>, rulesets, GitHub Environment JSON
 ```
 

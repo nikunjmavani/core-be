@@ -54,13 +54,26 @@ Policy rules (architecture, import paths, naming, object params) attach on `src/
 
 ## Custom subagents
 
-Defined in [`.cursor/agents/`](../../.cursor/agents/):
+Defined in [`.cursor/agents/`](../../.cursor/agents/). All agents are **read-only** — they produce a structured report and never edit files. Each agent file includes a **Platform access** table for Cursor, Claude Code, and Codex.
 
-| Subagent | Use when |
-| --- | --- |
-| **production-reviewer** | Pre-release / deploy — read-only readiness plan |
-| **verifier** | Post-task validation — scoped tests and wiring |
-| **ci-investigator** | One failing CI job — isolated root-cause summary |
+| Subagent | Wraps skill | Use when |
+| --- | --- | --- |
+| **production-reviewer** | path-to-production-gate + production-hardening-guard | Pre-release / deploy — full readiness plan |
+| **verifier** | *(inline)* | Post-task validation — scoped tests and wiring check |
+| **ci-investigator** | ci-investigator | One failing CI job — isolated root-cause summary |
+| **production-hardening-reviewer** | production-hardening-guard | Targeted hardening sweep — security headers, DB/Redis/worker gaps |
+| **docs-auditor** | docs-audit | Full docs/ audit — stale links, index gaps, Mermaid issues |
+| **sql-design-reviewer** | sql-design-guard | Schema design review — indexes, constraints, conventions |
+| **dependency-auditor** | dependency-security | Dependency audit — vulnerabilities + prioritized fix plan |
+| **tsdoc-coverage-reviewer** | tsdoc-export-guard *(check phase)* | TSDoc coverage — missing summaries and @remarks before tsdoc:check |
+
+### Platform access summary
+
+| Tool | How agents are invoked |
+| ---- | ---------------------- |
+| **Cursor** | `@<agent-name>` in Agent mode; model also auto-invokes based on the `description` frontmatter field |
+| **Claude Code** | `"Read .cursor/agents/<name>.md and follow the procedure"` — Claude reads the file directly and runs the procedure in an isolated subagent context |
+| **Codex** | Reads the custom subagents table in `AGENTS.md` at project root; invoke by name in the prompt |
 
 Add new subagents with global **create-subagent** (`~/.cursor/skills-cursor/`). See [cursor-global-skills](../../.cursor/skills/cursor-global-skills/SKILL.md).
 

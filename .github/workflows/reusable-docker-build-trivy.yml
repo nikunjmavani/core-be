@@ -54,20 +54,6 @@ jobs:
       api_image: ${{ steps.push.outputs.api_image }}
       worker_image: ${{ steps.push.outputs.worker_image }}
     env:
-      # BEGIN GENERATED project-identity
-      PROJECT_SLUG: core-be
-      PROJECT_DISPLAY_NAME: core-be
-      API_IMAGE: core-be-api
-      WORKER_IMAGE: core-be-worker
-      DOCKER_LOCAL_API_TAG: core-be
-      GHCR_CACHE_SCOPE_API: core-be-api
-      GHCR_CACHE_SCOPE_WORKER: core-be-worker
-      GIT_DEFAULT_BRANCH: dev
-      GIT_PRODUCTION_BRANCH: main
-      GIT_NON_PRODUCTION_BRANCH: dev
-      PROTECTED_BRANCHES_JSON: '["dev","main"]'
-      BRANCH_ENV_MAP_JSON: '{"dev":"development","main":"production"}'
-      # END GENERATED project-identity
       DOCKER_BUILDKIT: 1
       MERGE_COMMIT_SHA: ${{ inputs.merge_commit_sha || github.sha }}
       TARGET_BRANCH: ${{ inputs.target_branch || github.ref_name }}
@@ -103,6 +89,9 @@ jobs:
         with:
           ref: ${{ env.MERGE_COMMIT_SHA }}
           fetch-depth: 1
+
+      - name: Setup project identity
+        uses: ./.github/actions/setup-project-identity
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm

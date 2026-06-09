@@ -2,7 +2,7 @@
 
 JSON files here declare protection rules for [GitHub Environments](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment) used by [reusable-railway-deploy.yml](../workflows/reusable-railway-deploy.yml).
 
-**Canonical mapping source:** [`tooling/setup/setup.config.json`](../../tooling/setup/setup.config.json). [`.github/sync.config.json`](../sync.config.json) is generated (`pnpm tool:generate-project-identity`).
+**Canonical mapping source:** [`tooling/setup/setup.config.json`](../../tooling/setup/setup.config.json). Run `pnpm tool:generate-project-identity` after manifest changes to regenerate identity constants and the CI composite action.
 
 | Branch | GitHub Environment | `NODE_ENV` |
 | ------ | ------------------ | ---------- |
@@ -21,7 +21,7 @@ JSON files here declare protection rules for [GitHub Environments](https://docs.
 **Bootstrap (first time):**
 
 ```bash
-pnpm tool:generate-project-identity  # refresh sync.config.json + CI env from setup.config.json
+pnpm tool:generate-project-identity  # refresh identity constants + CI composite action from setup.config.json
 pnpm github:sync              # creates missing .env.<environment> files from setup.config.json
 # Edit each file with real values (DB URL, JWT keys, Sentry DSN, etc.)
 pnpm github:sync              # branches + rulesets + environments + push values (confirms before push)
@@ -44,7 +44,7 @@ Preview without pushing: `pnpm github:sync <environment> --dry-run`.
 **Adding a new environment** (e.g. `staging`):
 
 1. Add `staging` to the `NODE_ENV` enum in `src/shared/config/env-schema.ts`.
-2. Add `{ "name": "staging", "branch": "staging" }` to `.github/sync.config.json`.
+2. Add `{ "name": "staging", "branch": "staging", "nodeEnvironment": "staging" }` to the `environments[]` array in `tooling/setup/setup.config.json`.
 3. `pnpm github:sync` — scaffolds local IaC and syncs remote shells.
 4. Edit `.env.staging` with real values; update `.github/workflows/reusable-railway-deploy.yml`.
 5. `pnpm github:sync staging` — push values to GitHub.

@@ -48,7 +48,7 @@ pnpm install
 
 Env files live at **project root only**. There is exactly one committed
 template — `.env.example` — and one gitignored file per environment created
-from `.github/sync.config.json` by `pnpm github:sync`:
+from `tooling/setup/setup.config.json` by `pnpm github:sync`:
 
 ```bash
 pnpm github:sync                    # creates missing .env.<environment> files

@@ -35,9 +35,9 @@ PORT=3000
 Every key sits under exactly one half. Sub-sections (`# --- Title ---`) group
 related keys for readability. Hosted environments are listed in
 `tooling/setup/setup.config.json` (canonical); `pnpm tool:generate-project-identity`
-regenerates `.github/sync.config.json`. `pnpm github:sync` creates missing
-`.env.<environment>` files from that generated config and reads the same structure
-when pushing to GitHub. The structure IS the classification.
+regenerates project identity constants and the CI composite action. `pnpm github:sync`
+reads `setup.config.json` directly and creates missing `.env.<environment>` files.
+The structure IS the classification.
 
 ## Decision tree — Secret or Variable
 
@@ -175,7 +175,7 @@ A rename is a delete + add, atomic in the same PR:
 - **Per-provider credential acquisition:** [`docs/integrations/credentials-and-env.md`](../../../docs/integrations/credentials-and-env.md).
 - **Schema:** `src/shared/config/env-schema.ts`
 - **Template:** `.env.example` (committed; two-half + sub-section structure)
-- **Setup manifest:** `tooling/setup/setup.config.json` (generates `.github/sync.config.json`)
+- **Setup manifest:** `tooling/setup/setup.config.json` (single source of truth for project identity)
 - **GitHub sync:** `tooling/setup/github/sync.ts`
 - **Environment value sync helper:** `tooling/setup/envs/sync-github.ts`
 - **Section parser shared by both:** `tooling/setup/envs/parse-env-sections.ts`
