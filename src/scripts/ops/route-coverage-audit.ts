@@ -74,20 +74,6 @@ const JUSTIFIED_GAPS = new Set<string>([
   // Operational endpoint protected by `METRICS_SCRAPE_TOKEN`. Not a
   // business flow; covered by ops procedures, not by application tests.
   'POST /internal/ops/circuit-breakers/:circuitName/reset',
-  // The next 9 entries are real flow gaps tracked as follow-up tasks
-  // spawned by docs/reviews/route-coverage-audit-2026-06-08.md.
-  // Each is allowlisted so the gate passes until the follow-up tests
-  // land; removing an entry MUST land with the matching integration
-  // test in the same PR.
-  'POST /api/v1/tenancy/invitations/:invitationId/decline',
-  'DELETE /api/v1/tenancy/organizations/:id/invitations/:invitationId',
-  'POST /api/v1/tenancy/organizations/:id/invitations/:invitationId/resend',
-  'POST /api/v1/tenancy/organizations/:id/leave',
-  'PUT /api/v1/tenancy/organizations/:id/logo',
-  'DELETE /api/v1/tenancy/organizations/:id/logo',
-  'GET /api/v1/tenancy/organizations/:id/memberships/:membershipId/permissions',
-  'POST /api/v1/tenancy/organizations/:id/transfer-ownership',
-  'POST /api/v1/uploads/:publicId/confirm',
 ]);
 
 function parseRoutesFile(): RouteEntry[] {
