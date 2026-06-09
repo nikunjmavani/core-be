@@ -7,7 +7,43 @@
       "mcp__codegraph__codegraph_callees",
       "mcp__codegraph__codegraph_impact",
       "mcp__codegraph__codegraph_node",
-      "mcp__codegraph__codegraph_status"
+      "mcp__codegraph__codegraph_status",
+      "Bash(pnpm validate*)",
+      "Bash(pnpm test*)",
+      "Bash(pnpm lint*)",
+      "Bash(pnpm typecheck*)",
+      "Bash(pnpm routes*)",
+      "Bash(pnpm docs*)",
+      "Bash(pnpm tsdoc*)",
+      "Bash(pnpm guard*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(gh pr*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/nikunjmavani/projects/core/core-be/ai/hooks/skill-reminder.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '\n📋 Done. Quick checks: pnpm validate:domain --strict && pnpm tsdoc:check\n   Skill map: ai/docs/skill-triggers.md'"
+          }
+        ]
+      }
     ]
   }
 }
