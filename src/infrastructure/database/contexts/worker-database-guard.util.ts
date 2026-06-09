@@ -26,6 +26,7 @@ const GUC_BY_CONTEXT_KIND: Record<
     key: 'app.session_retention_cleanup',
     label: 'session retention cleanup',
   },
+  audit_outbox_drain: { key: 'app.audit_outbox_drain', label: 'audit outbox drain' },
 };
 
 /**

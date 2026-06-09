@@ -486,6 +486,22 @@ const envSchemaBase = z.object({
    */
   UPLOAD_PENDING_SWEEP_GRACE_SECONDS: z.coerce.number().int().min(60).default(3600),
 
+  /**
+   * P0-#2 audit outbox drain — rows claimed per drain pass. Higher values amortise
+   * resolution lookups but increase per-pass duration; the worker's `lockDuration`
+   * (default 30s) is the hard upper bound. Default 500 keeps a typical pass under
+   * a second on a small DB and well under the lock window.
+   */
+  AUDIT_OUTBOX_DRAIN_BATCH_SIZE: z.coerce.number().int().min(1).max(10_000).optional(),
+  /**
+   * P0-#2 audit outbox drain — per-row attempt cap. After this many failed drain
+   * attempts the row is marked `FAILED` for operator triage. Default 5 mirrors
+   * BullMQ default attempts on side-effecting jobs.
+   */
+  AUDIT_OUTBOX_DRAIN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).optional(),
+  /** Cron pattern for the audit-outbox drain. Default every 30 seconds. */
+  AUDIT_OUTBOX_DRAIN_CRON: z.string().min(1).optional(),
+
   /** Bounded SCAN cap for idempotency Redis key cardinality sampling (worker). */
   IDEMPOTENCY_CARDINALITY_SCAN_MAX: z.coerce.number().int().min(1).default(200_000),
   IDEMPOTENCY_CARDINALITY_WARN_THRESHOLD: z.coerce.number().int().min(1).default(50_000),

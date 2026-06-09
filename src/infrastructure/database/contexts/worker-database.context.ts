@@ -24,7 +24,14 @@ export type WorkerDatabaseContextKind =
   | 'global_admin'
   | 'user'
   | 'session_retention_cleanup'
-  | 'system_table';
+  | 'system_table'
+  /**
+   * Audit-outbox drain worker. Pins `app.audit_outbox_drain = 'true'` so the worker
+   * is the only context that can SELECT / UPDATE / DELETE rows in `audit.outbox`.
+   * Per-row, the worker temporarily layers `app.current_organization_id` (or
+   * `app.system_audit_insert`) for the eventual `audit.logs` INSERT.
+   */
+  | 'audit_outbox_drain';
 
 /**
  * ALS payload describing the pinned database context for a worker job: the

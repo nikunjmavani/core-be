@@ -38,12 +38,20 @@ src/
     │   │   ├── audit.seed.ts
     │   │   └── index.ts
     │   ├── workers/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── audit-outbox-drain.processor.unit.test.ts
     │   │   ├── audit-export.constants.ts
     │   │   ├── audit-export.processor.ts
     │   │   ├── audit-export.worker.ts
+    │   │   ├── audit-outbox-drain.constants.ts
+    │   │   ├── audit-outbox-drain.processor.ts
+    │   │   ├── audit-outbox-drain.worker.ts
     │   │   ├── audit-retention.constants.ts
     │   │   ├── audit-retention.processor.ts
     │   │   └── audit-retention.worker.ts
+    │   ├── audit-outbox.repository.ts
+    │   ├── audit-outbox.schema.ts
     │   ├── audit.container.ts
     │   ├── audit.controller.ts
     │   ├── audit.dto.ts
@@ -990,6 +998,7 @@ src/
     │   │   │   ├── worker-context-database-handle.unit.test.ts
     │   │   │   └── worker-database.context.test.ts
     │   ├── contexts/
+    │   │   ├── audit-outbox-drain-database.context.ts
     │   │   ├── global-admin-database.context.ts
     │   │   ├── organization-database.context.ts
     │   │   ├── request-database.context.ts

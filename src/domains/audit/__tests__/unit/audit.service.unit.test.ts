@@ -9,10 +9,21 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   captureMessage: vi.fn(),
 }));
 
+const insertAuditOutboxRowMock = vi.hoisted(() => vi.fn().mockResolvedValue(1));
+
 /**
- * AuditService.record() wraps repository calls in `withUserDatabaseContext`, which opens
- * a real `database.transaction()` and would hang the unit test (repositories are mocked).
- * Run the inner callback directly so we still exercise service intent without Postgres.
+ * P0-#2 (audit outbox): `AuditService.record` now writes to `audit.outbox` via
+ * `insertAuditOutboxRow` instead of opening a new transaction and inserting into
+ * `audit.logs` directly. Mock the outbox repo so tests stay synchronous and we can
+ * assert the staged payload's shape directly.
+ */
+vi.mock('@/domains/audit/audit-outbox.repository.js', () => ({
+  insertAuditOutboxRow: (...args: unknown[]) => insertAuditOutboxRowMock(...args),
+}));
+
+/**
+ * `listForOrganization`/`listForAdmin` still use the DB context wrappers — mock them
+ * to invoke the inner callback so the tests run without Postgres.
  */
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
@@ -30,11 +41,6 @@ const globalAdminContextMock = vi.hoisted(() =>
   vi.fn((callback: () => Promise<unknown>) => callback()),
 );
 
-/**
- * `listForAdmin` wraps the read in `withGlobalAdminDatabaseContext`, which opens a real
- * transaction with `SET LOCAL app.global_admin = true`. Run the callback directly so the
- * unit test exercises service intent (and asserts the wrapper is used) without Postgres.
- */
 vi.mock('@/infrastructure/database/contexts/global-admin-database.context.js', () => ({
   withGlobalAdminDatabaseContext: globalAdminContextMock,
 }));
@@ -42,14 +48,12 @@ vi.mock('@/infrastructure/database/contexts/global-admin-database.context.js', (
 describe('AuditService', () => {
   const repository = {
     insert: vi.fn().mockResolvedValue(undefined),
-    resolveActorApiKeyId: vi.fn().mockResolvedValue(77),
     findWithFilters: vi.fn().mockResolvedValue({
       items: [{ action: 'user.login' }],
       total: 1,
       hasMore: false,
       nextCursor: null,
     }),
-    // sec-re-08: service now batch-resolves user/org public ids for each page.
     resolveUserPublicIdsByInternalIds: vi.fn().mockResolvedValue(new Map()),
     resolveOrganizationPublicIdsByInternalIds: vi.fn().mockResolvedValue(new Map()),
   } as unknown as AuditRepository;
@@ -67,195 +71,226 @@ describe('AuditService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue({
-      id: 5,
-      public_id: 'user_public',
-    } as never);
+    insertAuditOutboxRowMock.mockResolvedValue(1);
   });
 
-  it('record inserts audit row when actor exists', async () => {
-    await service.record({
-      actorUserPublicId: 'user_public',
-      action: 'user.login',
-      resource_type: 'user',
-    });
-    expect(repository.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ actor_user_id: 5, action: 'user.login' }),
-    );
-  });
+  describe('record (outbox path)', () => {
+    it('stages a row with the user actor public id and no per-row transaction', async () => {
+      await service.record({
+        actorUserPublicId: 'user_public',
+        action: 'user.login',
+        resource_type: 'user',
+        organization_public_id: 'org_public',
+        ip_address: '203.0.113.10',
+        user_agent: 'core-be-test/1.0',
+        metadata: { sessionId: 'sess_1' },
+      });
 
-  it('record skips insert when actor is unknown', async () => {
-    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
-    await service.record({
-      actorUserPublicId: 'missing',
-      action: 'user.login',
-      resource_type: 'user',
+      expect(insertAuditOutboxRowMock).toHaveBeenCalledExactlyOnceWith({
+        actorUserPublicId: 'user_public',
+        actorApiKeyPublicId: undefined,
+        targetUserPublicId: undefined,
+        organizationPublicId: 'org_public',
+        action: 'user.login',
+        resourceType: 'user',
+        resourceId: null,
+        ipAddress: '203.0.113.10',
+        userAgent: 'core-be-test/1.0',
+        severity: 'INFO',
+        metadata: { sessionId: 'sess_1' },
+      });
+      // Old path opened a new transaction per row — outbox path must not.
+      expect(repository.insert).not.toHaveBeenCalled();
     });
-    expect(repository.insert).not.toHaveBeenCalled();
-  });
 
-  it('record attributes API-key actions to actor_api_key_id (no acting user)', async () => {
-    await service.record({
-      actorApiKeyPublicId: 'key_public',
-      action: 'tenancy.role.create',
-      resource_type: 'role',
-      organization_id: 10,
-    });
-    expect(repository.resolveActorApiKeyId).toHaveBeenCalledWith('key_public');
-    expect(repository.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actor_api_key_id: 77,
+    it('stages a row attributed to an API key when no user actor is present', async () => {
+      await service.record({
+        actorApiKeyPublicId: 'key_public',
         action: 'tenancy.role.create',
-        organization_id: 10,
-      }),
-    );
-    // An API-key row carries no acting user.
-    expect(repository.insert).toHaveBeenCalledWith(
-      expect.not.objectContaining({ actor_user_id: expect.anything() }),
-    );
+        resource_type: 'role',
+        organization_public_id: 'org_public',
+      });
+
+      expect(insertAuditOutboxRowMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          actorApiKeyPublicId: 'key_public',
+          actorUserPublicId: undefined,
+          organizationPublicId: 'org_public',
+          action: 'tenancy.role.create',
+        }),
+      );
+    });
+
+    it('preserves target_user_public_id and resource_id on the staged row', async () => {
+      await service.record({
+        actorUserPublicId: 'admin_public',
+        target_user_public_id: 'victim_public',
+        action: 'user.locked',
+        resource_type: 'user',
+        resource_id: 42,
+        severity: 'WARNING',
+        organization_public_id: 'org_public',
+      });
+
+      expect(insertAuditOutboxRowMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          actorUserPublicId: 'admin_public',
+          targetUserPublicId: 'victim_public',
+          resourceId: 42,
+          severity: 'WARNING',
+        }),
+      );
+    });
+
+    it('skips outbox INSERT when neither user nor API-key actor is supplied', async () => {
+      await service.record({
+        action: 'tenancy.role.create',
+        resource_type: 'role',
+        organization_public_id: 'org_public',
+      });
+
+      expect(insertAuditOutboxRowMock).not.toHaveBeenCalled();
+    });
+
+    it('does NOT swallow a DB INSERT failure — caller wrappers (recordAuditEvent) must handle it', async () => {
+      // The previous path swallowed DB errors silently inside withOrganizationDatabaseContext;
+      // the outbox path propagates so `recordAuditEvent` catches + logs, preserving the
+      // "audit never fails the request" contract at the wrapper level (not the service).
+      insertAuditOutboxRowMock.mockRejectedValueOnce(new Error('outbox-rls-rejected'));
+
+      await expect(
+        service.record({
+          actorUserPublicId: 'user_public',
+          action: 'user.login',
+          resource_type: 'user',
+        }),
+      ).rejects.toThrow(/outbox-rls-rejected/);
+    });
   });
 
-  it('record skips an API-key actor that cannot be resolved', async () => {
-    vi.mocked(repository.resolveActorApiKeyId).mockResolvedValueOnce(null);
-    await service.record({
-      actorApiKeyPublicId: 'unknown_key',
-      action: 'tenancy.role.create',
-      resource_type: 'role',
-      organization_id: 10,
-    });
-    expect(repository.insert).not.toHaveBeenCalled();
-  });
-
-  it('record skips when there is neither a user nor an API-key actor', async () => {
-    await service.record({
-      action: 'tenancy.role.create',
-      resource_type: 'role',
-      organization_id: 10,
-    });
-    expect(repository.insert).not.toHaveBeenCalled();
-  });
-
-  it('list resolves organization and actor filters', async () => {
-    const organizationPublicId = generatePublicId();
-    const actorPublicId = generatePublicId();
-    const result = await service.list({
-      limit: 20,
-      organization_id: organizationPublicId,
-      actor_user_id: actorPublicId,
-      resource_type: 'user',
-      action: 'user.login',
-    });
-    expect(repository.findWithFilters).toHaveBeenCalledWith(
-      expect.objectContaining({
-        organization_id: 10,
-        actor_user_id: 5,
+  describe('list (read path unchanged)', () => {
+    it('resolves organization and actor filters', async () => {
+      const organizationPublicId = generatePublicId();
+      const actorPublicId = generatePublicId();
+      const result = await service.list({
+        limit: 20,
+        organization_id: organizationPublicId,
+        actor_user_id: actorPublicId,
         resource_type: 'user',
         action: 'user.login',
+      });
+      expect(repository.findWithFilters).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organization_id: 10,
+          actor_user_id: 5,
+          resource_type: 'user',
+          action: 'user.login',
+          limit: 20,
+        }),
+      );
+      expect(result.total).toBe(1);
+      expect(result.next_cursor).toBeNull();
+    });
+
+    it('returns empty page when organization public id is unknown without total by default', async () => {
+      vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
+      const result = await service.list({ limit: 20, organization_id: generatePublicId() });
+      expect(repository.findWithFilters).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        items: [],
+        total: null,
         limit: 20,
-      }),
-    );
-    expect(result.total).toBe(1);
-    expect(result.next_cursor).toBeNull();
-  });
-
-  it('list returns empty page when organization public id is unknown without total by default', async () => {
-    vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
-    const result = await service.list({ limit: 20, organization_id: generatePublicId() });
-    expect(repository.findWithFilters).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      items: [],
-      total: null,
-      limit: 20,
-      has_more: false,
-      next_cursor: null,
+        has_more: false,
+        next_cursor: null,
+      });
     });
-  });
 
-  it('list returns empty page with total zero when organization public id is unknown and include_total=true', async () => {
-    vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
-    const result = await service.list({
-      limit: 20,
-      organization_id: generatePublicId(),
-      include_total: 'true',
+    it('returns empty page with total zero when organization public id is unknown and include_total=true', async () => {
+      vi.mocked(organizationService.findOrganizationByPublicId).mockResolvedValue(null);
+      const result = await service.list({
+        limit: 20,
+        organization_id: generatePublicId(),
+        include_total: 'true',
+      });
+      expect(repository.findWithFilters).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        items: [],
+        total: 0,
+        limit: 20,
+        has_more: false,
+        next_cursor: null,
+      });
     });
-    expect(repository.findWithFilters).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      items: [],
-      total: 0,
-      limit: 20,
-      has_more: false,
-      next_cursor: null,
-    });
-  });
 
-  it('list returns empty page when actor public id is unknown without total by default', async () => {
-    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
-    const result = await service.list({ limit: 20, actor_user_id: generatePublicId() });
-    expect(repository.findWithFilters).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      items: [],
-      total: null,
-      limit: 20,
-      has_more: false,
-      next_cursor: null,
+    it('returns empty page when actor public id is unknown without total by default', async () => {
+      vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
+      const result = await service.list({ limit: 20, actor_user_id: generatePublicId() });
+      expect(repository.findWithFilters).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        items: [],
+        total: null,
+        limit: 20,
+        has_more: false,
+        next_cursor: null,
+      });
     });
-  });
 
-  it('list returns empty page with total zero when actor public id is unknown and include_total=true', async () => {
-    vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
-    const result = await service.list({
-      limit: 20,
-      actor_user_id: generatePublicId(),
-      include_total: 'true',
+    it('returns empty page with total zero when actor public id is unknown and include_total=true', async () => {
+      vi.mocked(userService.findUserRecordByPublicId).mockResolvedValue(null);
+      const result = await service.list({
+        limit: 20,
+        actor_user_id: generatePublicId(),
+        include_total: 'true',
+      });
+      expect(repository.findWithFilters).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        items: [],
+        total: 0,
+        limit: 20,
+        has_more: false,
+        next_cursor: null,
+      });
     });
-    expect(repository.findWithFilters).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      items: [],
-      total: 0,
-      limit: 20,
-      has_more: false,
-      next_cursor: null,
+
+    it('returns empty page when no rows', async () => {
+      vi.mocked(repository.findWithFilters).mockResolvedValue({
+        items: [],
+        total: 0,
+        hasMore: false,
+        nextCursor: null,
+      });
+      const result = await service.list({ limit: 20 });
+      expect(result.items).toEqual([]);
+      expect(result.total).toBe(0);
     });
-  });
 
-  it('list returns empty page when no rows', async () => {
-    vi.mocked(repository.findWithFilters).mockResolvedValue({
-      items: [],
-      total: 0,
-      hasMore: false,
-      nextCursor: null,
+    it('listForAdmin runs the listing inside the global-admin RLS context', async () => {
+      vi.mocked(repository.findWithFilters).mockResolvedValue({
+        items: [{ action: 'user.login' }],
+        total: 1,
+        hasMore: false,
+        nextCursor: null,
+      } as never);
+      const result = await service.listForAdmin({ limit: 20 });
+      expect(globalAdminContextMock).toHaveBeenCalledTimes(1);
+      expect(repository.findWithFilters).toHaveBeenCalled();
+      expect(result.total).toBe(1);
     });
-    const result = await service.list({ limit: 20 });
-    expect(result.items).toEqual([]);
-    expect(result.total).toBe(0);
-  });
 
-  it('listForAdmin runs the listing inside the global-admin RLS context', async () => {
-    vi.mocked(repository.findWithFilters).mockResolvedValue({
-      items: [{ action: 'user.login' }],
-      total: 1,
-      hasMore: false,
-      nextCursor: null,
-    } as never);
-    const result = await service.listForAdmin({ limit: 20 });
-    expect(globalAdminContextMock).toHaveBeenCalledTimes(1);
-    expect(repository.findWithFilters).toHaveBeenCalled();
-    expect(result.total).toBe(1);
-  });
-
-  it('list skips the total when include_total=false and derives has_more', async () => {
-    vi.mocked(repository.findWithFilters).mockResolvedValue({
-      items: [{ action: 'user.login' }],
-      total: null,
-      hasMore: true,
-      nextCursor: 'cursor_2',
-    } as never);
-    const result = await service.list({ limit: 20, include_total: 'false' });
-    expect(repository.findWithFilters).toHaveBeenCalledWith(
-      expect.objectContaining({ include_total: false }),
-    );
-    expect(result.total).toBeNull();
-    expect(result.has_more).toBe(true);
-    expect(result.next_cursor).toBe('cursor_2');
+    it('skips the total when include_total=false and derives has_more', async () => {
+      vi.mocked(repository.findWithFilters).mockResolvedValue({
+        items: [{ action: 'user.login' }],
+        total: null,
+        hasMore: true,
+        nextCursor: 'cursor_2',
+      } as never);
+      const result = await service.list({ limit: 20, include_total: 'false' });
+      expect(repository.findWithFilters).toHaveBeenCalledWith(
+        expect.objectContaining({ include_total: false }),
+      );
+      expect(result.total).toBeNull();
+      expect(result.has_more).toBe(true);
+      expect(result.next_cursor).toBe('cursor_2');
+    });
   });
 });
