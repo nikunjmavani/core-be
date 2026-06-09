@@ -56,7 +56,7 @@ flowchart TB
 
 | Doc                                                                                          | Description                                                                                                 |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| [getting-started/setup.md](getting-started/setup.md)                                         | Local setup, testing, links to deployment and credentials.                                                  |
+| [SETUP.md](../SETUP.md)                                                                       | Local setup, env vars, cloud infra, testing, CI/CD, troubleshooting.                                        |
 | [getting-started/api-testing.md](getting-started/api-testing.md)                             | Manual API checklist and smoke after `pnpm db:seed:full`.                                                   |
 | [getting-started/requirement-intake.md](getting-started/requirement-intake.md)               | Format for new requirements; which skills and rules to run.                                                 |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md)                                                     | Contributor quick start; **AGENTS.md** (author gate), **pr-review.md** (reviewers).                         |
