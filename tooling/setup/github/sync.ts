@@ -3,7 +3,7 @@
  *
  * Order:
  *   1. Consistency check (NODE_ENV ↔ config ↔ rulesets ↔ workflow ↔ GitHub env JSON).
- *   2. Scaffold missing local files from .github/sync.config.json (sync mode only).
+ *   2. Scaffold missing local files from tooling/setup/setup.config.json (sync mode only).
  *   3. Remote init (branches → rulesets → GitHub Environment shells).
  *   4. Reconcile .env.<environment> → GitHub Environments (sync mode only):
  *        - Push all secrets and variables from each local file.

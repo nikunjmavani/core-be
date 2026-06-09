@@ -1,7 +1,7 @@
 # How to get third-party credentials for `.env.<environment>`
 
 Run `pnpm github:sync` once to generate missing `.env.<environment>` files
-(both **gitignored**) from the committed `.env.example` template and `.github/sync.config.json`. Then edit
+(both **gitignored**) from the committed `.env.example` template (environments listed in `tooling/setup/setup.config.json`). Then edit
 each file with the values from the per-provider sections below. Push to GitHub
 with `pnpm github:sync <environment>` when ready. **Never commit any `.env.*`
 file other than `.env.example`.**

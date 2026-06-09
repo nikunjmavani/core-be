@@ -12,7 +12,7 @@ invariant. This runbook covers the **per-key lifecycle**.
 
 | What                                 | Command                                       |
 | ------------------------------------ | --------------------------------------------- |
-| Bootstrap local env files            | `pnpm github:sync` (from `tooling/setup/setup.config.json` → generated `.github/sync.config.json`) |
+| Bootstrap local env files            | `pnpm github:sync` (reads `tooling/setup/setup.config.json` directly)                              |
 | Edit values                          | open `.env.<environment>` (gitignored)        |
 | Full GitHub sync (branches + rulesets + env values) | `pnpm github:sync`              |
 | Sync one environment                 | `pnpm github:sync <environment>`              |
@@ -50,7 +50,7 @@ neighbours (sub-section grouping for readability).
 ```mermaid
 flowchart LR
   S[src/shared/config/env-schema.ts] -- "key names + Zod types" --> T[.env.example]
-  Cfg[".github/sync.config.json"] -- "branch + environment mapping" --> D[".env.&lt;environment&gt; (gitignored)"]
+  Cfg["tooling/setup/setup.config.json"] -- "branch + environment mapping" --> D[".env.&lt;environment&gt; (gitignored)"]
   T -- "template copied when missing" --> D
   D -- pnpm github:sync --> G["GitHub Environment\n(Secrets + Variables)"]
   G -- pulled at deploy --> R[Railway runtime]
@@ -67,7 +67,7 @@ pnpm github:sync
 
 That command:
 
-1. Reads `.github/sync.config.json`.
+1. Reads `tooling/setup/setup.config.json`.
 2. Creates any missing `.env.<environment>` files from `.env.example`.
 3. Creates any missing `.github/environments/<environment>.json` and `.github/rulesets/<branch>.json`.
 4. Applies branches, rulesets, and GitHub Environments.
@@ -102,7 +102,7 @@ every contributor to maintain a separate `.env.test`.
 | Change a value    | edit `.env.development` and restart `pnpm dev`                                                         |
 | See what's loaded | the dotenv loader logs `injected env (<n>) from .env.development` at startup                           |
 | Switch profile    | `NODE_ENV=production pnpm dev` to test prod settings locally (requires `.env.production` to be filled) |
-| Add a new env file | add the environment to `.github/sync.config.json`, then run `pnpm github:sync`                         |
+| Add a new env file | add the environment to `tooling/setup/setup.config.json`, run `pnpm tool:generate-project-identity`, then `pnpm github:sync` |
 
 `pnpm github:sync` does not overwrite existing `.env.<environment>` files; update
 existing files manually so real values are not discarded.
@@ -251,7 +251,7 @@ Run `pnpm github:sync --check`, `pnpm tool:sync-env-example`, and (when pushing 
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm dev` boot error "Missing or invalid environment variables"                                        | `.env.${NODE_ENV}` missing or stale schema key                    | Run `pnpm github:sync` to scaffold missing files, then edit values                                                                                         |
 | Zod refuses `KEY=""` for an `.optional()` field                                                         | Empty string is not `undefined`                                   | Loader strips empty values automatically; if you still hit this, ensure the key has no inline comment (e.g. `KEY= # foo` parses as a value with a comment) |
-| `pnpm github:sync` says `Missing .env.<env>`                                                            | The environment is not in `.github/sync.config.json`, or dry-run cannot scaffold files | Add it to `.github/sync.config.json`, then run `pnpm github:sync` without `--dry-run`                                                                       |
+| `pnpm github:sync` says `Missing .env.<env>`                                                            | The environment is not in `tooling/setup/setup.config.json`, or dry-run cannot scaffold files | Add it to `tooling/setup/setup.config.json`, run `pnpm tool:generate-project-identity`, then `pnpm github:sync` without `--dry-run`                          |
 | `pnpm github:sync` errors on the secret push                                                            | `gh auth status` failing or insufficient scope                    | Run `gh auth login` and grant `repo` + `admin:org` if it's an org repo                                                                                     |
 | A new env var landed in GitHub as a Variable but should be a Secret                                     | The key was placed in the wrong half of `.env.example`            | Move it under `# GitHub Secrets ###`, regen templates, delete the existing GitHub Variable, re-sync                                                        |
 | Local tests fail with `REDIS_BULLMQ_URL must be unset or point to the same Redis endpoint as REDIS_URL` | `REDIS_BULLMQ_URL` is set to a different host than `REDIS_URL`    | Leave `REDIS_BULLMQ_URL=` empty in `.env.development` (single-Redis topology)                                                                              |
@@ -268,7 +268,7 @@ see the dedicated runbook: **[add-new-environment.md](./add-new-environment.md)*
 - **Template (committed):** `.env.example`
 - **Operator templates (gitignored):** `.env.development`, `.env.production`
 - **Loader:** `src/shared/config/load-env-files.ts`
-- **GitHub sync config:** `.github/sync.config.json`
+- **Setup manifest (canonical):** `tooling/setup/setup.config.json`
 - **GitHub push:** `tooling/setup/github/sync.ts` (`pnpm github:sync`)
 - **Section parser shared by both:** `tooling/setup/envs/parse-env-sections.ts`
 - **Validator: schema ↔ template:** `src/scripts/validators/env/sync-env-example.ts` (`pnpm tool:sync-env-example`)

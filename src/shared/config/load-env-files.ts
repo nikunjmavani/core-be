@@ -4,7 +4,7 @@
  * Convention: a single file named `.env.<NODE_ENV>` per environment. Defaults to
  * `.env.development` when `NODE_ENV` is unset (local dev). The file is gitignored —
  * `.env.example` (committed) is the canonical template; `pnpm github:sync` creates
- * missing `.env.<environment>` files from `.github/sync.config.json` and pushes values.
+ * missing `.env.<environment>` files from `tooling/setup/setup.config.json` and pushes values.
  *
  * Local override: `.env.local` (gitignored, machine-specific) is loaded LAST with
  * `override: true` when `NODE_ENV` is not `production`. This lets a developer point

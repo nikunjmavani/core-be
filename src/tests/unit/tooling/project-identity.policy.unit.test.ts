@@ -19,21 +19,16 @@ describe('project identity policy', () => {
     expect(source).toContain(`export const PROJECT_SLUG = '${config.project.name}'`);
   });
 
-  it('sync.config.json matches manifest environments', () => {
+  it('composite action contains manifest identity values', () => {
     const config = loadConfig();
     const snapshot = buildProjectIdentitySnapshot(config);
-    const syncConfigPath = resolve(repositoryRoot, '.github/sync.config.json');
-    const expected = `${JSON.stringify(
-      {
-        environments: snapshot.environments.map((environment) => ({
-          name: environment.name,
-          branch: environment.branch,
-        })),
-      },
-      null,
-      2,
-    )}\n`;
-    expect(readFileSync(syncConfigPath, 'utf-8')).toBe(expected);
+    const actionPath = resolve(repositoryRoot, '.github/actions/setup-project-identity/action.yml');
+    expect(existsSync(actionPath)).toBe(true);
+    const source = readFileSync(actionPath, 'utf-8');
+    expect(source).toContain(`PROJECT_SLUG=${snapshot.slug}`);
+    expect(source).toContain(`API_IMAGE=${snapshot.artifacts.apiImage}`);
+    expect(source).toContain(`WORKER_IMAGE=${snapshot.artifacts.workerImage}`);
+    expect(source).toContain(`GIT_DEFAULT_BRANCH=${snapshot.git.defaultBranch}`);
   });
 
   it('workflows have no branch or image literals outside the manifest', () => {

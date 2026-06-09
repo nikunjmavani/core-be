@@ -60,7 +60,7 @@ flowchart TB
 | [getting-started/api-testing.md](getting-started/api-testing.md)                             | Manual API checklist and smoke after `pnpm db:seed:full`.                                                   |
 | [getting-started/requirement-intake.md](getting-started/requirement-intake.md)               | Format for new requirements; which skills and rules to run.                                                 |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md)                                                     | Contributor quick start; **AGENTS.md** (author gate), **pr-review.md** (reviewers).                         |
-| [deployment/runbooks/environment-variables.md](deployment/runbooks/environment-variables.md) | Env variable workflow (`.github/sync.config.json` → `pnpm github:sync` → edit values → `pnpm github:sync`). |
+| [deployment/runbooks/environment-variables.md](deployment/runbooks/environment-variables.md) | Env variable workflow (`tooling/setup/setup.config.json` → `pnpm github:sync` → edit values → `pnpm github:sync`). |
 | [integrations/credentials-and-env.md](integrations/credentials-and-env.md)                   | Per-provider credential acquisition (S3, Resend, OAuth, Stripe, Sentry, etc.).                              |
 
 ---
