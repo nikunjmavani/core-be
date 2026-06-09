@@ -4,11 +4,20 @@ import type { Job, Worker } from 'bullmq';
 
 const queueAddMock = vi.fn().mockResolvedValue(undefined);
 const queueCloseMock = vi.fn().mockResolvedValue(undefined);
+const queueConstructorArgsMock: { name: string; options: unknown }[] = [];
 const sentryCaptureExceptionMock = vi.fn();
 const insertDeadLetterJobMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('bullmq', () => ({
+  // P0-#6 regression: capture every Queue() constructor call so we can lock in the
+  // retention bounds applied to `*-dlq` queues. A regression here (removing the age
+  // bound, or making it absurdly large) silently turns the DLQ into an unbounded
+  // Redis sink — exactly the failure mode the recon flagged.
   Queue: class MockQueue {
+    constructor(name: string, options: unknown) {
+      queueConstructorArgsMock.push({ name, options });
+    }
+
     add = queueAddMock;
 
     close = queueCloseMock;
@@ -38,6 +47,7 @@ describe('dead-letter helpers', () => {
   afterEach(async () => {
     queueAddMock.mockClear();
     queueCloseMock.mockClear();
+    queueConstructorArgsMock.length = 0;
     sentryCaptureExceptionMock.mockClear();
     insertDeadLetterJobMock.mockClear();
     insertDeadLetterJobMock.mockResolvedValue(undefined);
@@ -84,6 +94,56 @@ describe('dead-letter helpers', () => {
     it('appends -dlq suffix', async () => {
       const { getDeadLetterQueueName } = await import('@/infrastructure/queue/dlq/dead-letter.js');
       expect(getDeadLetterQueueName('mail')).toBe('mail-dlq');
+    });
+  });
+
+  // P0-#6 regression: the DLQ queue itself must have bounded retention. Without
+  // queue-level `defaultJobOptions`, a DLQ job that never transitions out of
+  // `waiting` would sit in Redis forever — silently turning the dead-letter sink
+  // into an unbounded memory leak. The per-add removal options only fire on the
+  // complete/failed state transition, so they alone are not enough.
+  describe('DLQ retention bounds (P0-#6)', () => {
+    it('enqueueDeadLetter opens a *-dlq queue with bounded age + count defaults', async () => {
+      const { enqueueDeadLetter } = await import('@/infrastructure/queue/dlq/dead-letter.js');
+      const { THIRTY_DAYS_SECONDS } = await import('@/shared/constants/ttl.constants.js');
+
+      const job = {
+        id: 'job-retention',
+        name: 'dispatch-test',
+        data: {},
+        attemptsMade: 3,
+        opts: { attempts: 3 },
+      } as Job;
+
+      await enqueueDeadLetter('mail', job, new Error('boom'));
+
+      const dlqConstructorCall = queueConstructorArgsMock.find((call) => call.name === 'mail-dlq');
+      expect(dlqConstructorCall).toBeDefined();
+      const options = dlqConstructorCall!.options as {
+        defaultJobOptions?: {
+          removeOnComplete?: { age?: number; count?: number };
+          removeOnFail?: { age?: number; count?: number };
+        };
+      };
+
+      // Both arms (complete + fail) bounded by age AND count so a sustained burst
+      // cannot exhaust Redis even within the age window.
+      expect(options.defaultJobOptions?.removeOnComplete?.age).toBe(THIRTY_DAYS_SECONDS);
+      expect(options.defaultJobOptions?.removeOnComplete?.count).toBeGreaterThan(0);
+      expect(options.defaultJobOptions?.removeOnComplete?.count).toBeLessThanOrEqual(10_000);
+      expect(options.defaultJobOptions?.removeOnFail?.age).toBe(THIRTY_DAYS_SECONDS);
+      expect(options.defaultJobOptions?.removeOnFail?.count).toBeGreaterThan(0);
+      expect(options.defaultJobOptions?.removeOnFail?.count).toBeLessThanOrEqual(10_000);
+    });
+
+    it('audit-retention queue is in the canonical scheduler list so the Postgres DLQ ledger is bounded', async () => {
+      const { getScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
+      const { AUDIT_RETENTION_QUEUE_NAME } = await import(
+        '@/domains/audit/workers/audit-retention.constants.js'
+      );
+
+      const scheduled = getScheduledJobs().map((job) => job.queueName);
+      expect(scheduled).toContain(AUDIT_RETENTION_QUEUE_NAME);
     });
   });
 
