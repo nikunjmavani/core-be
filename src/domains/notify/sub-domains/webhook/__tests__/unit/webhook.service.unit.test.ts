@@ -11,7 +11,7 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
-import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { ConfigurationError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { WebhookService } from '@/domains/notify/sub-domains/webhook/webhook.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.repository.js';
@@ -174,29 +174,26 @@ describe('WebhookService', () => {
     expect(headers.get('X-Webhook-Timestamp')).toMatch(/^\d+$/);
   });
 
-  it('sec-re-09: testWebhook OMITS X-Webhook-Signature when the resolved signing secret is empty', async () => {
-    // The worker fix (sec-UP #8) added a `signingSecret.length > 0` guard so a
-    // legacy row whose encrypted_secret round-trips to '' wouldn't emit an
-    // attacker-reproducible empty-key HMAC. testWebhook never got the same
-    // treatment — it built the header unconditionally, so a customer verifier
-    // validating X-Webhook-Signature against an empty key would accept any
-    // forged "test delivery" indistinguishable from the platform's.
+  it('P0-#1: testWebhook fail-closes with ConfigurationError when the resolved signing secret is empty', async () => {
+    // Previously testWebhook (and the delivery worker) silently shipped the payload
+    // without X-Webhook-Signature when the decrypted secret was empty. That leaves
+    // the receiver unable to distinguish "secret rotated to empty" from "attacker
+    // stripped the header" — a forgery primitive against any verifier still trusting
+    // the request. The fail-closed contract: throw a ConfigurationError instead of
+    // delivering, page on-call via Sentry, never call the pinned fetch.
     const fieldSecretEncryption = await import(
       '@/shared/utils/security/field-secret-encryption.util.js'
     );
     vi.mocked(fieldSecretEncryption.decryptFieldSecret).mockReturnValueOnce('');
-    mockPinnedFetch.mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
 
-    await service.testWebhook({
-      organization_public_id: 'org_public',
-      webhook_public_id: 'webhook_public',
-    });
+    await expect(
+      service.testWebhook({
+        organization_public_id: 'org_public',
+        webhook_public_id: 'webhook_public',
+      }),
+    ).rejects.toBeInstanceOf(ConfigurationError);
 
-    expect(mockPinnedFetch).toHaveBeenCalledTimes(1);
-    const [, requestInit] = mockPinnedFetch.mock.calls[0] as [string, RequestInit];
-    const headers = new Headers(requestInit.headers);
-    // No signature → no header. X-Webhook-Timestamp may still be present.
-    expect(headers.get('X-Webhook-Signature')).toBeNull();
+    expect(mockPinnedFetch).not.toHaveBeenCalled();
   });
 
   it('testWebhook rejects (and records nothing) when the URL is no longer SSRF-safe', async () => {
