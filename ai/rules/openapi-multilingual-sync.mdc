@@ -1,0 +1,15 @@
+---
+description: When changing OpenAPI locale JSON or multilingual doc generation, run openapi-multilingual (after openapi-route-sync when routes changed).
+globs: src/shared/locales/*/openapi.json, src/scripts/codegen/generate-openapi.ts, src/scripts/codegen/openapi-enricher.ts
+alwaysApply: false
+---
+
+## OpenAPI multilingual sync
+
+When you create or modify matching files:
+
+1. **Read** `ai/skills/openapi-multilingual/SKILL.md`.
+2. If `*.routes.ts` also changed, run **openapi-route-sync** first to add `schema: { summary, description, tags }` on each Fastify route registration.
+3. Keep the same keys across all locale `openapi.json` files (add new keys to every locale).
+4. Regenerate specs: `pnpm docs:generate:multilang` (or `pnpm docs:generate` for en-only).
+5. CI/docs: `pnpm docs:check` when applicable.

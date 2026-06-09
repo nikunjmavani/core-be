@@ -1,0 +1,29 @@
+---
+description: Domain layout + route catalog when domain structure or routes change (single rule for containers, routes, src/routes.ts).
+globs: src/domains/**/*.container.ts, src/domains/**/*.routes.ts, src/routes.ts
+alwaysApply: false
+---
+
+## Domain and routes sync
+
+When any matching file is created or modified:
+
+### 1. Domain layout (`*.container.ts`, new scaffold)
+
+Read and follow `ai/skills/domain-generator/SKILL.md`:
+
+- Verify canonical layout: routes, controller, service, repository, dto, validator, serializer, types, container
+- Ensure DI wiring in the container matches services and repositories
+- Verify route registration in `src/routes.ts`
+
+### 2. Route catalog (`*.routes.ts` only)
+
+After all route additions/removals/changes in `*.routes.ts` files:
+
+1. Read `ai/skills/route-schema-doc-guard/SKILL.md` — add `schema: { summary, description, tags }` on each Fastify route registration
+2. For new tags, run **openapi-multilingual** (`src/shared/locales/*/openapi.json`)
+3. Read `ai/skills/route-catalog/SKILL.md` and run `pnpm routes:catalog` once
+4. Run `pnpm docs:generate:multilang` when operation text changed
+5. CI enforces route drift via `pnpm routes:catalog:check` — do not regenerate twice
+
+If routes affect seed data, also run **seed-maintainer** per skill-index.

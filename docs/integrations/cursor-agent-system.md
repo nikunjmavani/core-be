@@ -11,7 +11,7 @@ Map of skills, rules, subagents, and MCP tooling for coding agents and contribut
 | [AGENTS.md](../../AGENTS.md) | Onboarding checklist, CI gates, custom subagents |
 | [CLAUDE.md](../../CLAUDE.md) | Architecture, domains, commands |
 | [requirement-intake.md](../getting-started/requirement-intake.md) | New feature/API intake + Plan workflow |
-| [skill-index](../../.cursor/skills/skill-index/SKILL.md) | **Canonical** skill catalog, triggers, and auto-invoke rules |
+| [skill-index](../../ai/skills/skill-index/SKILL.md) | **Canonical** skill catalog, triggers, and auto-invoke rules |
 
 ```mermaid
 flowchart LR
@@ -27,7 +27,7 @@ flowchart LR
 
 ## Project skills (36)
 
-**36 total** — consult [skill-index](../../.cursor/skills/skill-index/SKILL.md) first. Includes **skill-index** (meta) and **cursor-global-skills** (reference to Cursor built-ins).
+**36 total** — consult [skill-index](../../ai/skills/skill-index/SKILL.md) first. Includes **skill-index** (meta) and **cursor-global-skills** (reference to Cursor built-ins).
 
 Common chains:
 
@@ -44,9 +44,9 @@ Common chains:
 
 ## Cursor rules (37)
 
-Two **always-on** rules: [engineering-principles.mdc](../../.cursor/rules/engineering-principles.mdc), [project-identity.mdc](../../.cursor/rules/project-identity.mdc).
+Two **always-on** rules: [engineering-principles.mdc](../../ai/rules/engineering-principles.mdc), [project-identity.mdc](../../ai/rules/project-identity.mdc).
 
-All others are **glob-scoped** — they auto-attach when matching files are edited. Full table: [skill-index → Auto-trigger rules](../../.cursor/skills/skill-index/SKILL.md#auto-trigger-rules).
+All others are **glob-scoped** — they auto-attach when matching files are edited. Full table: [skill-index → Auto-trigger rules](../../ai/skills/skill-index/SKILL.md#auto-trigger-rules).
 
 Policy rules (architecture, import paths, naming, object params) attach on `src/**/*.ts` without invoking a skill — they hold non-negotiable detail.
 
@@ -54,42 +54,37 @@ Policy rules (architecture, import paths, naming, object params) attach on `src/
 
 ## Custom subagents
 
-Defined in [`.cursor/agents/`](../../.cursor/agents/). All agents are **read-only** — they produce a structured report and never edit files. Each agent file includes a **Platform access** table for Cursor, Claude Code, and Codex.
+Defined in [`ai/agents/`](../../ai/agents/). All agents are **read-only**.
+Cursor reads them via `.cursor/agents` → `ai/agents/` symlink.
 
-| Subagent | Wraps skill | Use when |
-| --- | --- | --- |
-| **production-reviewer** | path-to-production-gate + production-hardening-guard | Pre-release / deploy — full readiness plan |
-| **verifier** | *(inline)* | Post-task validation — scoped tests and wiring check |
-| **ci-investigator** | ci-investigator | One failing CI job — isolated root-cause summary |
-| **production-hardening-reviewer** | production-hardening-guard | Targeted hardening sweep — security headers, DB/Redis/worker gaps |
-| **docs-auditor** | docs-audit | Full docs/ audit — stale links, index gaps, Mermaid issues |
-| **sql-design-reviewer** | sql-design-guard | Schema design review — indexes, constraints, conventions |
-| **dependency-auditor** | dependency-security | Dependency audit — vulnerabilities + prioritized fix plan |
-| **tsdoc-coverage-reviewer** | tsdoc-export-guard *(check phase)* | TSDoc coverage — missing summaries and @remarks before tsdoc:check |
-
-### Platform access summary
+| Reference | Link |
+| --------- | ---- |
+| Full catalog + use-when | [ai/docs/agents-catalog.md](../../ai/docs/agents-catalog.md) |
+| Platform invocation table | [ai/docs/platform-access.md](../../ai/docs/platform-access.md) |
 
 | Tool | How agents are invoked |
 | ---- | ---------------------- |
-| **Cursor** | `@<agent-name>` in Agent mode; model also auto-invokes based on the `description` frontmatter field |
-| **Claude Code** | `"Read .cursor/agents/<name>.md and follow the procedure"` — Claude reads the file directly and runs the procedure in an isolated subagent context |
-| **Codex** | Reads the custom subagents table in `AGENTS.md` at project root; invoke by name in the prompt |
+| **Cursor** | `@<agent-name>` in Agent mode; auto-invokes from `description` frontmatter |
+| **Claude Code** | `"Read ai/agents/<name>.md and follow the procedure"` |
+| **Codex** | Reads `AGENTS.md` custom subagents table; invoke by name |
 
-Add new subagents with global **create-subagent** (`~/.cursor/skills-cursor/`). See [cursor-global-skills](../../.cursor/skills/cursor-global-skills/SKILL.md).
+Add new agents with global **create-subagent**. See [cursor-global-skills](../../ai/skills/cursor-global-skills/SKILL.md).
 
 ---
 
 ## Global Cursor skills
 
-Ship with Cursor under `~/.cursor/skills-cursor/`. **Not required** for normal backend work. Use when editing `.cursor/skills`, `.cursor/rules`, `.cursor/agents`, hooks, or IDE automation.
+Ship with Cursor under `~/.cursor/skills-cursor/`. **Not required** for normal backend work. Use when editing `ai/skills`, `ai/rules`, `ai/agents`, hooks, or IDE automation.
 
-See [cursor-global-skills](../../.cursor/skills/cursor-global-skills/SKILL.md).
+See [cursor-global-skills](../../ai/skills/cursor-global-skills/SKILL.md).
 
 ---
 
 ## MCP servers
 
-Template: [`.cursor/mcp.example.json`](../../.cursor/mcp.example.json) → copy to `.cursor/mcp.json` (gitignored).
+Template: [`ai/mcp/mcp.example.json`](../../ai/mcp/mcp.example.json) → copy to `ai/mcp/mcp.json` (gitignored).
+Symlinked: `.cursor/mcp.json` → `ai/mcp/mcp.json` (Cursor), `.mcp.json` → `ai/mcp/mcp.json` (Claude Code).
+Configure once — all platforms read the same file.
 
 | Server | Purpose |
 | --- | --- |

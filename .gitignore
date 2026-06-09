@@ -79,9 +79,14 @@ TEST_REPORT.md
 # `pnpm setup:local` write the codegraph entry for you.
 .cursor/mcp.json
 .mcp.json
+ai/mcp/mcp.json
 
-# Claude Code worktrees (local agent sandboxes; never commit)
+# Claude Code — ignore everything except tracked project config
 .claude/
+!.claude/settings.json
+!.claude/agents
+!.claude/skills
+!.claude/hooks
 reports/
 **/reports/
 **/*-report.*

@@ -318,7 +318,10 @@ export function runPreCommitGuard(options: RunGuardOptions = {}): number {
   }
 
   const runnableSteps: Array<{ label: string; run: () => number }> = [
-    { label: 'lint-staged (Biome + markdownlint)', run: () => runPnpm('lint-staged') },
+    {
+      label: 'lint-staged (Biome + markdownlint)',
+      run: () => runPnpm('lint-staged', ['--no-stash']),
+    },
     { label: 'TypeScript typecheck', run: () => runPnpm('typecheck') },
     { label: 'Domain structure (strict)', run: () => runPnpm('validate:domain:strict') },
     {
