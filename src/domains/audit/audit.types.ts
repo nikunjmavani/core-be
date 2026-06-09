@@ -23,7 +23,10 @@ export interface AuditLogFilters {
 export type NewAuditLog = AuditLogInsert;
 
 /**
- * Server-internal audit input: resolves `actor_user_id` from the user's public id.
+ * Server-internal audit input. After P0-#2 (audit outbox) this carries only
+ * `*_public_id` fields — the drain worker resolves them to internal ids
+ * out-of-band, so the request handler never pays a lookup-then-insert tax
+ * (or a per-row transaction for bulk operations).
  */
 export interface AuditLogRecordInput {
   /** Public id of the acting user. Mutually exclusive with {@link actorApiKeyPublicId}. */
@@ -33,8 +36,10 @@ export interface AuditLogRecordInput {
   action: string;
   resource_type: string;
   resource_id?: number | null;
-  target_user_id?: number | null;
-  organization_id?: number | null;
+  /** Public id of the user being acted upon (NEW — replaces the old internal `target_user_id`). */
+  target_user_public_id?: string | null;
+  /** Organization public id (NEW — replaces the old internal `organization_id`). */
+  organization_public_id?: string | null;
   ip_address?: string | null;
   user_agent?: string | null;
   severity?: string;
