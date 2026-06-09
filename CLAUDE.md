@@ -2,24 +2,24 @@
 
 ## New requirements — intake format
 
-For **any new requirement** (new domain, routes, worker, schema, etc.), use the format and checklist in **`docs/getting-started/requirement-intake.md`**. That doc defines what details to provide and which skills/rules to invoke so the AI can perform best and keep docs, routes, tests, and lint in sync. Consult **`ai/skills/skill-index/SKILL.md`** first, then run the skills listed for the requirement type.
+For **any new requirement** (new domain, routes, worker, schema, etc.), use the format and checklist in **`docs/getting-started/requirement-intake.md`**. That doc defines what details to provide and which skills/rules to invoke so the AI can perform best and keep docs, routes, tests, and lint in sync. Consult **`agent-os/skills/skill-index/SKILL.md`** first, then run the skills listed for the requirement type.
 
-## AI agent references (`ai/`)
+## AI agent references (`agent-os/`)
 
-`ai/` at the repo root is the single source of truth for all AI tooling.
-Cursor reads agents/skills/rules via symlinks (`.cursor/agents → ai/agents`, etc.).
-Claude Code reads `ai/` directly via `.claude/` symlinks.
+`agent-os/` at the repo root is the single source of truth for all AI tooling.
+Cursor reads agents/skills/rules via symlinks (`.cursor/agents → agent-os/agents`, etc.).
+Claude Code reads `agent-os/` directly via `.claude/` symlinks.
 
 | File | Purpose |
 | ---- | ------- |
-| [`ai/docs/principles.md`](ai/docs/principles.md) | Engineering principles + project identity (full detail) |
-| [`ai/docs/skill-triggers.md`](ai/docs/skill-triggers.md) | File pattern → skill map (replaces reading 22 sync rules) |
-| [`ai/docs/agents-catalog.md`](ai/docs/agents-catalog.md) | All 8 agents with descriptions and use-when |
-| [`ai/docs/platform-access.md`](ai/docs/platform-access.md) | How to invoke agents on Cursor, Claude Code, Codex |
-| [`ai/agents/`](ai/agents/) | Agent definition files |
-| [`ai/skills/`](ai/skills/) | Skill definition files |
-| [`ai/rules/`](ai/rules/) | Cursor rule files (also accessible via `.cursor/rules/` symlink) |
-| [`ai/hooks/`](ai/hooks/) | Claude Code hook scripts |
+| [`agent-os/docs/principles.md`](agent-os/docs/principles.md) | Engineering principles + project identity (full detail) |
+| [`agent-os/docs/skill-triggers.md`](agent-os/docs/skill-triggers.md) | File pattern → skill map (replaces reading 22 sync rules) |
+| [`agent-os/docs/agents-catalog.md`](agent-os/docs/agents-catalog.md) | All 8 agents with descriptions and use-when |
+| [`agent-os/docs/platform-access.md`](agent-os/docs/platform-access.md) | How to invoke agents on Cursor, Claude Code, Codex |
+| [`agent-os/agents/`](agent-os/agents/) | Agent definition files |
+| [`agent-os/skills/`](agent-os/skills/) | Skill definition files |
+| [`agent-os/rules/`](agent-os/rules/) | Cursor rule files (also accessible via `.cursor/rules/` symlink) |
+| [`agent-os/hooks/`](agent-os/hooks/) | Claude Code hook scripts |
 
 ## Architecture Rules (Non-Negotiable)
 
