@@ -1,0 +1,28 @@
+---
+description: Drizzle schema design + conventions when *.schema.ts changes (single rule).
+globs: src/domains/**/*.schema.ts
+alwaysApply: false
+---
+
+## SQL design and schema conventions
+
+When you create or modify a Drizzle schema file (`*.schema.ts`) under `src/domains/`:
+
+### Conventions (required)
+
+1. **Location**: `<resource>.schema.ts` inside the domain/sub-domain folder
+2. **pgSchema import**: From `@/infrastructure/database/pg-schemas.js` (never create a local schema file)
+3. **Column naming**: `snake_case` matching Postgres column names exactly
+4. **Table naming**: Plural, snake_case (`organizations`, `webhook_events`)
+5. **Required columns**: `id` (bigserial), `created_at` (timestamp, defaultNow), `updated_at` where applicable
+6. **Public ID**: `public_id` (varchar 21, unique) for externally-exposed entities
+7. **Soft delete**: `deleted_at` (nullable timestamp) for soft-deletable entities
+8. **Cross-domain references**: `@/domains/...` absolute imports, never relative cross-domain
+
+### Design review
+
+1. Read and follow `agent-os/skills/sql-design-guard/SKILL.md` — run the full checklist
+2. Review table/column naming, types, indexes, constraints, partitioning suggestions
+3. Output the SQL Design Guard Review block when the schema change is non-trivial
+
+For scaffolding new schema files, also use `agent-os/skills/schema-generator/SKILL.md`.

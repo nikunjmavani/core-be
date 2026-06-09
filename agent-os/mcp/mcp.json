@@ -1,0 +1,62 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp",
+        "--api-key",
+        "ctx7sk-b6fe4eb4-fd75-4607-a5df-8d05e2e6b19c"
+      ]
+    },
+    "core-be:api": {
+      "url": "http://localhost:3000/api/v1/mcp"
+    },
+    "neon": {
+      "url": "https://mcp.neon.tech/mcp",
+      "headers": {}
+    },
+    "sentry": {
+      "url": "https://mcp.sentry.dev/mcp",
+      "headers": {}
+    },
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {}
+    },
+    "slack": {
+      "url": "https://slack.com/api/mcp",
+      "headers": {}
+    },
+    "railway": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@railway/mcp-server"
+      ]
+    },
+    "aws": {
+      "command": "uvx",
+      "args": [
+        "mcp-proxy-for-aws@latest",
+        "https://aws-mcp.us-east-1.api.aws/mcp",
+        "--metadata",
+        "AWS_REGION=ap-south-1"
+      ]
+    },
+    "stripe": {
+      "url": "https://mcp.stripe.com",
+      "headers": {}
+    },
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp",
+        "--path",
+        "/Users/nikunjmavani/projects/core/core-be"
+      ]
+    }
+  }
+}
