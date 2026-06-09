@@ -15,7 +15,7 @@ alwaysApply: false
 
 Do **not** put a domain’s main API test suite under `src/tests/`. Do **not** put cross-cutting security tests inside a domain folder.
 
-When adding or updating a feature, read **`.cursor/skills/test-generator/SKILL.md`** for the pyramid, checklist, and commands.
+When adding or updating a feature, read **`ai/skills/test-generator/SKILL.md`** for the pyramid, checklist, and commands.
 
 ## HTTP test stack (Vitest + fastify.inject)
 

@@ -13,19 +13,19 @@ This skill ensures that when the **project structure changes**, the repo's "sour
 
 Whenever you change code structure (e.g. add a domain, rename layers, add infrastructure), you **must** update the following so rules and skills stay in sync:
 
-- **Rules:** `.cursor/rules/core-be-src-architecture.mdc` — ensure it matches current layout and naming. `.cursor/rules/seed-conventions.mdc` (if the `seed/` dir layout or seed contract changed).
+- **Rules:** `ai/rules/core-be-src-architecture.mdc` — ensure it matches current layout and naming. `ai/rules/seed-conventions.mdc` (if the `seed/` dir layout or seed contract changed).
 - **Skills:**
-  - `.cursor/skills/domain-generator/SKILL.md` (scaffolding and sub-domain list)
-  - `.cursor/skills/workers-events/SKILL.md` (if events/queues/workers paths changed)
-  - `.cursor/skills/seed-maintainer/SKILL.md` (if the `seed/` dir layout, seed contract, or tiers changed)
-  - `.cursor/skills/supabase-porting/SKILL.md` (if Supabase porting conventions changed)
-  - `.cursor/skills/db-migration-maintainer/SKILL.md` (if SQL migration conventions changed)
-  - `.cursor/skills/test-generator/SKILL.md` (if test layout or scripts changed)
-  - `.cursor/skills/overview-doc-maintainer/SKILL.md` (if a new folder role appears that needs a new `OVERVIEW.md` template)
-  - `.cursor/skills/tsdoc-export-guard/SKILL.md` (if the TSDoc coverage gate inputs changed)
-  - Any other `.cursor/skills/*/SKILL.md` that references paths or layer names
+  - `ai/skills/domain-generator/SKILL.md` (scaffolding and sub-domain list)
+  - `ai/skills/workers-events/SKILL.md` (if events/queues/workers paths changed)
+  - `ai/skills/seed-maintainer/SKILL.md` (if the `seed/` dir layout, seed contract, or tiers changed)
+  - `ai/skills/supabase-porting/SKILL.md` (if Supabase porting conventions changed)
+  - `ai/skills/db-migration-maintainer/SKILL.md` (if SQL migration conventions changed)
+  - `ai/skills/test-generator/SKILL.md` (if test layout or scripts changed)
+  - `ai/skills/overview-doc-maintainer/SKILL.md` (if a new folder role appears that needs a new `OVERVIEW.md` template)
+  - `ai/skills/tsdoc-export-guard/SKILL.md` (if the TSDoc coverage gate inputs changed)
+  - Any other `ai/skills/*/SKILL.md` that references paths or layer names
 - **Docs:** `CLAUDE.md` (architecture and domain layout), `README.md` (project structure and diagrams), `AGENTS.md` (agent entry + custom subagents).
-- **Agents:** `.cursor/agents/*.md` — keep in sync with **AGENTS.md** custom subagents table when adding or renaming subagents.
+- **Agents:** `ai/agents/*.md` — keep in sync with **AGENTS.md** custom subagents table when adding or renaming subagents.
 - **System narratives**: when a new domain folder appears under `src/domains/`, also invoke **system-narrative-maintainer** to add the row to `src/OVERVIEW.md` Domains table.
 
 Then run the **Checklist** below and verify with `pnpm typecheck` (and tests if applicable).
@@ -64,7 +64,7 @@ Import: `@/domains/<domain>/sub-domains/<sub-domain>/...` or `@/domains/<domain>
 | `src/**/*.ts` | `@/domains/...`, `@/shared/...`, `@/infrastructure/...`, `@/core/...`; same-folder `./` | Parent-relative `../` |
 | `tooling/**/*.ts` | `@tooling/setup/...`, `@tooling/openapi/...`, etc.; same-folder `./` | Parent-relative `../` |
 
-Enforced by `src/tests/global/import-paths.global.test.ts`. Rule: `.cursor/rules/import-paths.mdc`.
+Enforced by `src/tests/global/import-paths.global.test.ts`. Rule: `ai/rules/import-paths.mdc`.
 
 ### Infrastructure layout
 
@@ -137,7 +137,7 @@ src/scripts/    # e.g. generate-openapi.ts → docs/openapi/openapi.json for Api
 
 - Every folder that **owns tables** (domain, sub-domain, nested sub-domain) carries a co-located `seed/` dir: `<name>.reference.seed.ts`, `<name>.bulk.seed.ts`, `<name>.faker.ts`, `index.ts`.
 - `seed/index.ts` exports a `SeedContribution` **except** a top-level domain's, which exports a `DomainSeedModule` (`name` + `dependsOn`). Parents fold children up with `composeContributions(...)`; the orchestrator (`src/scripts/seed/bulk.ts`) registers one module per domain.
-- Three tiers: `pnpm db:seed` (reference) · `pnpm db:seed:full` (demo) · `pnpm db:seed:bulk` (scaled). Detail: **seed-maintainer**, `.cursor/rules/seed-conventions.mdc`, `src/scripts/seed/OVERVIEW.md`.
+- Three tiers: `pnpm db:seed` (reference) · `pnpm db:seed:full` (demo) · `pnpm db:seed:bulk` (scaled). Detail: **seed-maintainer**, `ai/rules/seed-conventions.mdc`, `src/scripts/seed/OVERVIEW.md`.
 - **Validator allowlist**: `seed/` is permitted at domain root by the domain-structure validator (`src/scripts/validators/domain/validate-domain.ts`).
 
 ### Test layout
@@ -152,7 +152,7 @@ src/scripts/    # e.g. generate-openapi.ts → docs/openapi/openapi.json for Api
   - **Event handlers / emit**: `sub-domains/<r>/__tests__/unit/events/` (never `events/__tests__/`)
 - **Commands**: `pnpm test:unit` (unit + `__tests__/unit/events/`); `pnpm test:e2e` (excludes `__tests__/unit/`); `pnpm test` runs all.
 - **k6 load**: `src/tests/load/k6/` (not Vitest).
-- **Detail**: `.cursor/skills/test-generator/SKILL.md`, `.cursor/rules/testing-conventions.mdc`.
+- **Detail**: `ai/skills/test-generator/SKILL.md`, `ai/rules/testing-conventions.mdc`.
 
 ### Naming rules
 
@@ -164,21 +164,21 @@ src/scripts/    # e.g. generate-openapi.ts → docs/openapi/openapi.json for Api
 
 When any of the above conventions change, update these files so they remain accurate:
 
-- `.cursor/skills/skill-index/SKILL.md` (master skill trigger map and enforcement layers — update when adding skills or changing pre-commit/CI checks)
+- `ai/skills/skill-index/SKILL.md` (master skill trigger map and enforcement layers — update when adding skills or changing pre-commit/CI checks)
 - `CLAUDE.md` (human-facing architecture rules)
 - `README.md` (high-level structure overview + Architecture Diagrams: API Request Flow, Event-Bus and BullMQ Flow)
-- `.cursor/rules/core-be-src-architecture.mdc` (Cursor rule enforcement hints)
-- `.cursor/skills/domain-generator/SKILL.md` (scaffolding conventions)
-- `.cursor/skills/workers-events/SKILL.md` (events/queues/workers conventions)
-- `.cursor/skills/supabase-porting/SKILL.md` (Supabase porting)
-- `.cursor/skills/db-migration-maintainer/SKILL.md` (SQL migrations)
-- `.cursor/skills/test-generator/SKILL.md` (testing pyramid and layout)
-- `.cursor/skills/openapi-route-sync/SKILL.md` (OpenAPI route metadata)
-- `.cursor/skills/cursor-global-skills/SKILL.md` (Cursor built-in skills reference)
-- `.cursor/skills/route-catalog/SKILL.md` (route listing conventions)
-- `.cursor/skills/code-quality-guard/SKILL.md` (ESLint, pre-commit, CI security pipeline)
-- Any other `.cursor/skills/*/SKILL.md` that references paths or layer names
-- **Docs**: When docs are reorganized or renamed, run **docs-maintainer** to update `docs/README.md` and cross-links (see `.cursor/skills/docs-maintainer/SKILL.md`).
+- `ai/rules/core-be-src-architecture.mdc` (Cursor rule enforcement hints)
+- `ai/skills/domain-generator/SKILL.md` (scaffolding conventions)
+- `ai/skills/workers-events/SKILL.md` (events/queues/workers conventions)
+- `ai/skills/supabase-porting/SKILL.md` (Supabase porting)
+- `ai/skills/db-migration-maintainer/SKILL.md` (SQL migrations)
+- `ai/skills/test-generator/SKILL.md` (testing pyramid and layout)
+- `ai/skills/openapi-route-sync/SKILL.md` (OpenAPI route metadata)
+- `ai/skills/cursor-global-skills/SKILL.md` (Cursor built-in skills reference)
+- `ai/skills/route-catalog/SKILL.md` (route listing conventions)
+- `ai/skills/code-quality-guard/SKILL.md` (ESLint, pre-commit, CI security pipeline)
+- Any other `ai/skills/*/SKILL.md` that references paths or layer names
+- **Docs**: When docs are reorganized or renamed, run **docs-maintainer** to update `docs/README.md` and cross-links (see `ai/skills/docs-maintainer/SKILL.md`).
 - **Load-test docs**: `docs/reference/testing/load-testing.md` and `src/tests/load/k6/README.md` must stay in sync when k6 scenarios (`src/tests/load/k6/scenarios/*.js`), load-test scripts (`src/scripts/admin/load-test-credentials.ts`, `src/scripts/admin/admin-token.ts`), or npm scripts (`load:health`, `load:auth`, `tool:load-test-credentials`, `tool:admin-token`; legacy `scripts:*`) change.
 
 ## Checklist (run every time)
@@ -197,7 +197,7 @@ When any of the above conventions change, update these files so they remain accu
    - Sub-domain directories use domain prefix.
 
 4. **Update rule text**
-   - Ensure `.cursor/rules/core-be-src-architecture.mdc` matches the current structure and naming.
+   - Ensure `ai/rules/core-be-src-architecture.mdc` matches the current structure and naming.
 
 5. **Verify**
    - `pnpm typecheck`

@@ -41,7 +41,7 @@ Keep these aligned in `.vscode/settings.json`:
 
 - **Editor:** format on save, tab size 2, rulers [90], bracket pairs, sticky scroll, quickSuggestions.strings, codeActionsOnSave (`source.fixAll.biome`, organizeImports never).
 - **Files:** eol `\n`, trimTrailingWhitespace, insertFinalNewline, exclude (node_modules, dist, .git, coverage), watcherExclude.
-- **TypeScript:** workspace TS SDK, importModuleSpecifier non-relative (aligns with `.cursor/rules/import-paths.mdc` — `@/` in `src/`, `@tooling/` in tooling), importModuleSpecifierEnding `js`, autoImports, updateImportsOnFileMove always.
+- **TypeScript:** workspace TS SDK, importModuleSpecifier non-relative (aligns with `ai/rules/import-paths.mdc` — `@/` in `src/`, `@tooling/` in tooling), importModuleSpecifierEnding `js`, autoImports, updateImportsOnFileMove always.
 - **Biome:** `editor.defaultFormatter` = `biomejs.biome` for `[typescript]`, `[json]`, `[jsonc]` (markdown: markdownlint for lint; optional Biome format in editor).
 - **Search exclude:** node_modules, dist, .git, coverage, pnpm-lock.yaml.
 - **Terminal:** defaultProfile.osx zsh, scrollback 5000.

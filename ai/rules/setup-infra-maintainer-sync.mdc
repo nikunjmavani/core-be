@@ -8,7 +8,7 @@ alwaysApply: false
 
 When you add, remove, or change a third-party provider in the setup:infra flow:
 
-1. **Read** `.cursor/skills/setup-infra-maintainer/SKILL.md`.
+1. **Read** `ai/skills/setup-infra-maintainer/SKILL.md`.
 2. **Follow** the checklist for **ADD** (new provider) or **REMOVE** (removed provider) so every dependent file is updated:
    - Config schema and init defaults (`config.ts`, `init-wizard.ts`)
    - Secrets and .env.setup template (`secrets.ts`, `env-secrets.ts`)

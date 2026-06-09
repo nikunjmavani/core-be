@@ -38,3 +38,8 @@ You run in read-only mode: diagnose and report, never edit files or push. If a f
 ```
 
 Be thorough and concrete. Cite the exact command output as evidence. A green test file that does not actually exercise the code is not a pass.
+
+## Platform access
+
+See [ai/docs/platform-access.md](../docs/platform-access.md) — covers Cursor, Claude Code,
+and Codex invocation. This agent's `<agent-name>` is the `name:` value in the\nfrontmatter above.\n

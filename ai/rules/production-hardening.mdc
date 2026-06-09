@@ -8,7 +8,7 @@ alwaysApply: false
 
 When you create or modify matching files:
 
-1. **Read** `.cursor/skills/production-hardening-guard/SKILL.md` and follow its checklist.
+1. **Read** `ai/skills/production-hardening-guard/SKILL.md` and follow its checklist.
 2. Apply the quick rules below when the skill does not cover a case.
 
 ### Quick rules

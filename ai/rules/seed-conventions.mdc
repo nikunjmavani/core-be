@@ -69,7 +69,7 @@ The contract lives in `src/scripts/seed/seed-contract.ts`.
 
 ## Related
 
-- Skill: `.cursor/skills/seed-maintainer/SKILL.md` (workflow + checklist).
+- Skill: `ai/skills/seed-maintainer/SKILL.md` (workflow + checklist).
 - Overview: `src/scripts/seed/OVERVIEW.md`.
 - Import paths: `import-paths.mdc` — `@/` / same-folder `./` only, `.js` specifiers.
 - Architecture: `core-be-src-architecture.mdc` — domains seed only their own tables.

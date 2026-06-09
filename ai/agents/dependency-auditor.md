@@ -11,7 +11,7 @@ You are read-only. You produce a report and fix plan; you never edit `package.js
 
 ## Procedure
 
-Read and follow `.cursor/skills/dependency-security/SKILL.md` exactly.
+Read and follow `ai/skills/dependency-security/SKILL.md` exactly.
 
 1. Run `pnpm audit --json` to capture structured output.
 2. For each vulnerability: identify severity, package, affected version range, and recommended action.
@@ -40,8 +40,6 @@ Return only this report. Do not run updates.
 
 ## Platform access
 
-| Tool | How to invoke |
-| ---- | ------------- |
-| **Cursor** | `@dependency-auditor` in Agent mode, or model auto-invokes from description |
-| **Claude Code** | "Read `.cursor/agents/dependency-auditor.md` and follow the procedure" |
-| **Codex** | Listed in `AGENTS.md` custom subagents table — Codex reads it as a named agent |
+See [ai/docs/platform-access.md](../docs/platform-access.md) — covers Cursor, Claude Code,
+and Codex invocation. This agent's `<agent-name>` is the `name:` value in the
+frontmatter above.

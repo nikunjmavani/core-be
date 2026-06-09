@@ -8,7 +8,7 @@ alwaysApply: false
 
 When any matched route registration file is created or modified:
 
-1. **Read** `.cursor/skills/route-schema-doc-guard/SKILL.md`.
+1. **Read** `ai/skills/route-schema-doc-guard/SKILL.md`.
 2. **Ensure** every route has `schema: { summary, description, tags }` on the Fastify registration.
 3. For new tags, update locale tag dictionaries via **openapi-multilingual** (`src/shared/locales/*/openapi.json`).
 4. Then run **route-catalog** (`pnpm routes:catalog`) and `pnpm docs:generate:multilang` when operation text changed.

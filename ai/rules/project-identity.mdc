@@ -3,6 +3,8 @@ description: Canonical project slug, image names, and branch/environment mapping
 alwaysApply: true
 ---
 
+> **Source:** [`ai/docs/principles.md`](../../ai/docs/principles.md) — edit there for Claude Code / Codex; mirror changes here for Cursor auto-inject.
+
 # Project identity (names and branches)
 
 **Manifest (edit this):** `tooling/setup/setup.config.json` — `project.name`, `project.displayName`, `project.artifacts`, `environments[]`, optional `git`.
@@ -59,5 +61,5 @@ Import from `@/shared/constants/project-identity.constants.js`:
 ## Related
 
 - Deployment: `docs/deployment/runbooks/add-new-environment.md`, `docs/deployment/ci-cd/cicd-and-deployment.md`
-- Skill: `.cursor/skills/env-schema-add/SKILL.md` (hosted envs + manifest)
+- Skill: `ai/skills/env-schema-add/SKILL.md` (hosted envs + manifest)
 - Scoped sync rule: **project-identity-sync.mdc** when editing manifest, workflows, or codegen

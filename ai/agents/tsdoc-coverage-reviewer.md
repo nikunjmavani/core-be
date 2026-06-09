@@ -11,7 +11,7 @@ You are read-only. You produce a report; you never add TSDoc comments to source 
 
 ## Procedure
 
-Read the check phase of `.cursor/skills/tsdoc-export-guard/SKILL.md` (the audit portion, not the write portion).
+Read the check phase of `ai/skills/tsdoc-export-guard/SKILL.md` (the audit portion, not the write portion).
 
 1. Run `pnpm tsdoc:check` and capture the output.
 2. Parse `MISSING_DESCRIPTION` and `MISSING_REMARKS` counts against [`tooling/tsdoc-coverage/budget.json`](tooling/tsdoc-coverage/budget.json).
@@ -38,8 +38,6 @@ Return only this report. Do not edit source files.
 
 ## Platform access
 
-| Tool | How to invoke |
-| ---- | ------------- |
-| **Cursor** | `@tsdoc-coverage-reviewer` in Agent mode, or model auto-invokes from description |
-| **Claude Code** | "Read `.cursor/agents/tsdoc-coverage-reviewer.md` and follow the procedure" |
-| **Codex** | Listed in `AGENTS.md` custom subagents table — Codex reads it as a named agent |
+See [ai/docs/platform-access.md](../docs/platform-access.md) — covers Cursor, Claude Code,
+and Codex invocation. This agent's `<agent-name>` is the `name:` value in the
+frontmatter above.

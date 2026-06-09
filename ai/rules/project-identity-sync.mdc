@@ -8,7 +8,7 @@ alwaysApply: false
 
 When you change any matched file:
 
-1. **Read** `.cursor/rules/project-identity.mdc` (constant mapping table).
+1. **Read** `ai/rules/project-identity.mdc` (constant mapping table).
 2. **Edit** `tooling/setup/setup.config.json` for slug, artifacts, branches, or environments — not scattered literals.
 3. **Run** `pnpm tool:generate-project-identity` and stage all generated outputs (lint-staged does this when only the manifest is staged).
 4. **Verify** `pnpm tool:generate-project-identity:check` (includes workflow literal scan).

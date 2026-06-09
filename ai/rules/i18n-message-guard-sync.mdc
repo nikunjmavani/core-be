@@ -8,7 +8,7 @@ alwaysApply: false
 
 When you change any of the matched files:
 
-1. **Read** `.cursor/skills/i18n-message-guard/SKILL.md`.
+1. **Read** `ai/skills/i18n-message-guard/SKILL.md`.
 2. **Ensure** user-facing messages use translation keys (e.g. `errors:notFound`, `success:emailVerified`), not raw strings.
 3. **Add or update** keys in `src/shared/locales/en/errors.json` or `src/shared/locales/en/success.json` (and other locales if present).
 4. **Do not** leave raw user-facing strings in `throw new AppError(...)`, `throw new ValidationError(...)`, or `return { message: '...' }` that reach the client.

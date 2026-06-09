@@ -13,8 +13,8 @@ You are read-only. You produce a plan for the user to review; you never run a re
 
 Read and follow these project skills, in order:
 
-1. `.cursor/skills/path-to-production-gate/SKILL.md` — the overall gate, the extra codebase checks (TODOs/placeholders, i18n raw strings, Stripe idempotency, organization/RLS, sensitive defaults), and the plan template.
-2. `.cursor/skills/production-hardening-guard/SKILL.md` — the per-area hardening checklist that forms the core of the review.
+1. `ai/skills/path-to-production-gate/SKILL.md` — the overall gate, the extra codebase checks (TODOs/placeholders, i18n raw strings, Stripe idempotency, organization/RLS, sensitive defaults), and the plan template.
+2. `ai/skills/production-hardening-guard/SKILL.md` — the per-area hardening checklist that forms the core of the review.
 
 For each checklist item, verify against the actual code and mark **Satisfied** (with a file/config reference) or **Gap** (with file path + what to do).
 
@@ -40,3 +40,8 @@ Review this plan. Confirm whether to address gaps first or proceed with path-to-
 ```
 
 Hand the plan back to the parent agent for the user to approve. Do not proceed past the review.
+
+## Platform access
+
+See [ai/docs/platform-access.md](../docs/platform-access.md) — covers Cursor, Claude Code,
+and Codex invocation. This agent's `<agent-name>` is the `name:` value in the\nfrontmatter above.\n

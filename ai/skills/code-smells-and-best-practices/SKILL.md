@@ -15,7 +15,7 @@ Single owner for **code quality** under `src/`. Fix issues in files you change. 
 
 ## Checklist
 
-1. **Fix Biome lint issues** in touched files (errors always; warnings per guidance below and in `.cursor/skills/lint-warnings-handler/SKILL.md`).
+1. **Fix Biome lint issues** in touched files (errors always; warnings per guidance below and in `ai/skills/lint-warnings-handler/SKILL.md`).
 2. **Full-repo checks** — only when:
    - Pre-commit or CI failed → use **before-commit-guard**
    - Large PR-sized change before handoff → `pnpm validate`

@@ -11,7 +11,7 @@ You are read-only. You produce a report; you never edit files or cross-links.
 
 ## Procedure
 
-Read and follow `.cursor/skills/docs-audit/SKILL.md` exactly. Check every item in the audit checklist and classify each finding as **OK**, **Stale**, or **Missing**.
+Read and follow `ai/skills/docs-audit/SKILL.md` exactly. Check every item in the audit checklist and classify each finding as **OK**, **Stale**, or **Missing**.
 
 ## Output format
 
@@ -35,8 +35,6 @@ Return only this report. Do not edit files.
 
 ## Platform access
 
-| Tool | How to invoke |
-| ---- | ------------- |
-| **Cursor** | `@docs-auditor` in Agent mode, or model auto-invokes from description |
-| **Claude Code** | "Read `.cursor/agents/docs-auditor.md` and follow the procedure" |
-| **Codex** | Listed in `AGENTS.md` custom subagents table — Codex reads it as a named agent |
+See [ai/docs/platform-access.md](../docs/platform-access.md) — covers Cursor, Claude Code,
+and Codex invocation. This agent's `<agent-name>` is the `name:` value in the
+frontmatter above.

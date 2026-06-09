@@ -8,7 +8,7 @@ alwaysApply: false
 
 When you change any of the matched files:
 
-1. **Read** `.cursor/skills/env-schema-add/SKILL.md`.
+1. **Read** `ai/skills/env-schema-add/SKILL.md`.
 2. **Place** the new key under the correct top-level half (`# GitHub Secrets`
    or `# GitHub Variables`) and sub-section in `.env.example`. Section IS
    classification — `pnpm github:sync` pushes by section, no separate classifier.

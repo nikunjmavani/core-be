@@ -8,7 +8,7 @@ alwaysApply: false
 
 When the user requests **path to production**, **pre-production review**, **ready for production**, or similar:
 
-1. **Read** `.cursor/skills/path-to-production-gate/SKILL.md` and follow it.
+1. **Read** `ai/skills/path-to-production-gate/SKILL.md` and follow it.
 2. Run the full production-hardening checklist and additional codebase checks as described in the skill.
 3. **Produce a plan** using the skill's output format (Summary, Satisfied, Gaps, Optional improvements, Next step).
 4. **Ask the user to review the plan** and confirm before any production action (deploy, release, sign-off).

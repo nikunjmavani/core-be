@@ -5,7 +5,7 @@ description: Reference for Cursor-built-in skills in ~/.cursor/skills-cursor/. U
 
 # Cursor global skills (reference)
 
-These skills ship with **Cursor** under `~/.cursor/skills-cursor/`. They are **not** part of the core-be repo. Use **skill-index** and `.cursor/skills/*` for backend work in this project.
+These skills ship with **Cursor** under `~/.cursor/skills-cursor/`. They are **not** part of the core-be repo. Use **skill-index** and `ai/skills/*` for backend work in this project.
 
 ## When to use global vs project skills
 
@@ -16,7 +16,7 @@ These skills ship with **Cursor** under `~/.cursor/skills-cursor/`. They are **n
 | Diagnose one failing CI check on a PR              | **ci-investigator** (project)                                                      |
 | Split branch into multiple PRs                     | **split-to-prs** (project) — domain-aware slices                                   |
 | Create/edit project `.cursor/skills` or rules      | **create-skill**, **create-rule** (global)                                         |
-| Edit `.cursor/agents/` subagent definitions        | **create-subagent** (global)                                                       |
+| Edit `ai/agents/` subagent definitions        | **create-subagent** (global)                                                       |
 | Cursor hooks (`hooks.json`)                        | **create-hook**                                                                    |
 | Cursor IDE settings / extensions.json              | **update-cursor-settings** (user); **ide-productivity-guard** (project `.vscode/`) |
 | Programmatic Cursor agents (`@cursor/sdk`)         | **sdk**                                                                            |
@@ -33,7 +33,7 @@ These skills ship with **Cursor** under `~/.cursor/skills-cursor/`. They are **n
 | **babysit**                | Keep a PR merge-ready: triage comments, conflicts, CI      |
 | **canvas**                 | Standalone React canvas for visual/analytical deliverables |
 | **create-hook**            | Author Cursor hook scripts and `hooks.json`                |
-| **create-rule**            | Author `.cursor/rules/*.mdc`                               |
+| **create-rule**            | Author `ai/rules/*.mdc`                               |
 | **create-skill**           | Author `SKILL.md` files (project or user)                  |
 | **create-subagent**        | Define custom subagent types                               |
 | **loop**                   | Recurring prompt intervals (usually not needed for core-be) |
@@ -55,6 +55,6 @@ These skills ship with **Cursor** under `~/.cursor/skills-cursor/`. They are **n
 
 **36 total** — 34 actionable skills plus **skill-index** (meta) and **cursor-global-skills** (this reference). **lint-warnings-handler** is a detail skill invoked via **code-smells-and-best-practices**, not counted separately.
 
-For the full list and triggers, read **`.cursor/skills/skill-index/SKILL.md`**.
+For the full list and triggers, read **`ai/skills/skill-index/SKILL.md`**.
 
 Project copies of common global workflows: **pr-babysit**, **split-to-prs**, **ci-investigator**, **contract-test-maintainer**, **chaos-test-maintainer**.

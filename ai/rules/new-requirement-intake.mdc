@@ -9,7 +9,7 @@ alwaysApply: false
 When the user describes a **new requirement** or you are directed to **docs/getting-started/requirement-intake.md**:
 
 1. **Read** `docs/getting-started/requirement-intake.md` and identify the requirement type (new domain, new routes, new worker, schema, seed, migration, CI, infra, rename, or other).
-2. **Consult** `.cursor/skills/skill-index/SKILL.md` first.
+2. **Consult** `ai/skills/skill-index/SKILL.md` first.
 3. **Apply default assumptions** from the intake doc for any field the user did not specify; list assumed defaults in the Plan.
 4. **Build a Plan and confirm once** — post requirement type, provided vs assumed fields, skills in order, files to touch, and verification commands. Wait for **go**, **tweak …**, or **stop**. After **go**, do not ask further questions unless a destructive case in the intake doc applies (data loss, breaking API without acknowledgment, ambiguous cross-domain ownership).
 5. **Run the skills** listed for that requirement type **in the order given** in the intake doc.

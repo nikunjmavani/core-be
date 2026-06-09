@@ -8,7 +8,7 @@ alwaysApply: false
 
 When any system narrative file is created or modified:
 
-1. **Read** `.cursor/skills/system-narrative-maintainer/SKILL.md`.
+1. **Read** `ai/skills/system-narrative-maintainer/SKILL.md`.
 2. **Update** the relevant table or section (Domains, Patterns, Flows, Policies) — do not duplicate per-folder detail that belongs in `OVERVIEW.md`.
 3. **Cross-link** to folder overviews and skills when introducing a new cross-cutting pattern or policy constant.
 

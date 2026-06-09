@@ -8,7 +8,7 @@ alwaysApply: false
 
 When you create or modify matching files:
 
-1. **Read** `.cursor/skills/openapi-multilingual/SKILL.md`.
+1. **Read** `ai/skills/openapi-multilingual/SKILL.md`.
 2. If `*.routes.ts` also changed, run **openapi-route-sync** first to add `schema: { summary, description, tags }` on each Fastify route registration.
 3. Keep the same keys across all locale `openapi.json` files (add new keys to every locale).
 4. Regenerate specs: `pnpm docs:generate:multilang` (or `pnpm docs:generate` for en-only).

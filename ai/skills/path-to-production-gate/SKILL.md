@@ -25,7 +25,7 @@ Before any **path to production** action (release, deployment, or "ready for pro
 
 ### 1. Run the production-hardening checklist
 
-- Read **`.cursor/skills/production-hardening-guard/SKILL.md`**.
+- Read **`ai/skills/production-hardening-guard/SKILL.md`**.
 - For each checklist item (Security, Database, Redis, External Services, Logging, Worker Process, CI/CD), **verify** the codebase and note:
   - **Satisfied** — with a brief reference (e.g. file or config that implements it).
   - **Gap** — not satisfied; add to the plan as an action item with file path and what to do.
@@ -35,7 +35,7 @@ Before any **path to production** action (release, deployment, or "ready for pro
 Search and verify; add any findings to the plan:
 
 - **TODOs / placeholders**: Search `src/` for `TODO`, `FIXME`, `HACK`, `XXX`, `placeholder`, `not implemented`. If any affect production behavior or security, list them as items to fix or document.
-- **i18n**: Ensure no raw user-facing strings in API error/success responses (e.g. `detail: '...'` in middleware or error handler). All should use translation keys and `request.t()`. See **`.cursor/skills/i18n-message-guard/SKILL.md`**.
+- **i18n**: Ensure no raw user-facing strings in API error/success responses (e.g. `detail: '...'` in middleware or error handler). All should use translation keys and `request.t()`. See **`ai/skills/i18n-message-guard/SKILL.md`**.
 - **Stripe idempotency**: For billing write operations (e.g. subscription create), confirm `Idempotency-Key` from the request is passed through to Stripe when the client sends it. Note if it is missing as an optional improvement.
 - **Organization / RLS**: Confirm documentation or code exists for organization context: HTTP requests get organization context via tenant middleware; workers/scripts should not rely on RLS for organization isolation and should pass organization identifiers explicitly. Note if undocumented as a documentation task.
 - **Sensitive defaults**: Check that no production secrets or unsafe defaults are hardcoded (e.g. JWT secret, CORS origins in production).

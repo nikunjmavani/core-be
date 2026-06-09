@@ -26,7 +26,7 @@ Run a **full pass** over hand-written docs when the user asks to "review docs", 
    For each doc that describes a **process, flow, or structure**, confirm it has a Mermaid diagram (flowchart or sequence). Add one if missing so GitHub renders it.
 
 4. **Cross-links**  
-   Spot-check: README.md, CLAUDE.md, `.cursor/skills/**/SKILL.md`, `.cursor/rules/**/*.mdc`, src/tests/load/k6/README.md, .env.example, .github/workflows. Fix any references that still point to old flat paths (e.g. `docs/reference/load-testing.md` → `docs/reference/testing/load-testing.md`).
+   Spot-check: README.md, CLAUDE.md, `ai/skills/**/SKILL.md`, `ai/rules/**/*.mdc`, src/tests/load/k6/README.md, .env.example, .github/workflows. Fix any references that still point to old flat paths (e.g. `docs/reference/load-testing.md` → `docs/reference/testing/load-testing.md`).
 
 ## Output
 

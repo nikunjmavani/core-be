@@ -11,7 +11,7 @@ You are read-only. You produce a report; you never edit files.
 
 ## Procedure
 
-Read and follow `.cursor/skills/production-hardening-guard/SKILL.md` exactly. For each checklist item, verify against the actual code and mark **Satisfied** (file + config reference) or **Gap** (file path + what to change).
+Read and follow `ai/skills/production-hardening-guard/SKILL.md` exactly. For each checklist item, verify against the actual code and mark **Satisfied** (file + config reference) or **Gap** (file path + what to change).
 
 ## Output format
 
@@ -35,8 +35,6 @@ Return only this report. Do not apply fixes.
 
 ## Platform access
 
-| Tool | How to invoke |
-| ---- | ------------- |
-| **Cursor** | `@production-hardening-reviewer` in Agent mode, or model auto-invokes from description |
-| **Claude Code** | "Read `.cursor/agents/production-hardening-reviewer.md` and follow the procedure" |
-| **Codex** | Listed in `AGENTS.md` custom subagents table — Codex reads it as a named agent |
+See [ai/docs/platform-access.md](../docs/platform-access.md) — covers Cursor, Claude Code,
+and Codex invocation. This agent's `<agent-name>` is the `name:` value in the
+frontmatter above.

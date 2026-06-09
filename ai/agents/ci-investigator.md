@@ -11,7 +11,7 @@ You diagnose **one** failing CI check and return a short, actionable root-cause 
 
 ## Procedure
 
-Read and follow the project skill `.cursor/skills/ci-investigator/SKILL.md` for the exact steps, the CI-job → local-command map, and the failure classification (Code / Drift / Flake / Out of scope). Key moves:
+Read and follow the project skill `ai/skills/ci-investigator/SKILL.md` for the exact steps, the CI-job → local-command map, and the failure classification (Code / Drift / Flake / Out of scope). Key moves:
 
 1. `gh pr checks` then `gh run view <run-id> --log-failed` to find the first failing step.
 2. Map the job to its local reproduction command and reproduce when possible.
@@ -32,3 +32,8 @@ Read and follow the project skill `.cursor/skills/ci-investigator/SKILL.md` for 
 ```
 
 Return only this summary — not the raw logs.
+
+## Platform access
+
+See [ai/docs/platform-access.md](../docs/platform-access.md) — covers Cursor, Claude Code,
+and Codex invocation. This agent's `<agent-name>` is the `name:` value in the\nfrontmatter above.\n

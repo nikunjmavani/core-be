@@ -27,8 +27,8 @@ When **documentation under `docs/`** is added, renamed, or reorganized, this ski
    When a doc is renamed or moved, search the repo for the old path and update:
    - [README.md](../../../README.md)
    - [CLAUDE.md](../../../CLAUDE.md)
-   - `.cursor/skills/**/SKILL.md`
-   - `.cursor/rules/**/*.mdc`
+   - `ai/skills/**/SKILL.md`
+   - `ai/rules/**/*.mdc`
    - [.env.example](../../../.env.example)
    - [src/tests/load/k6/README.md](../../../src/tests/load/k6/README.md)
    - `.github/workflows/*.yml`

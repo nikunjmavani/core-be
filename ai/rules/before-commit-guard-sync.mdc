@@ -10,6 +10,6 @@ When any of the following happen, read and follow the **before-commit-guard** sk
 
 2. **User asks to fix commit errors / make code commit-ready / fix pre-commit** — Run **`pnpm guard:pre-commit`** (or the failing step only), then fix failures per the skill.
 
-3. **Pre-commit or lint-staged config is modified** — When `.husky/pre-commit`, `src/scripts/tooling/run-pre-commit-guard.ts`, `tooling/ci/run-named-step.sh`, or `package.json` (`guard:pre-commit`, lint-staged) is created or modified, read `.cursor/skills/before-commit-guard/SKILL.md` and ensure the hook steps and this skill stay in sync.
+3. **Pre-commit or lint-staged config is modified** — When `.husky/pre-commit`, `src/scripts/tooling/run-pre-commit-guard.ts`, `tooling/ci/run-named-step.sh`, or `package.json` (`guard:pre-commit`, lint-staged) is created or modified, read `ai/skills/before-commit-guard/SKILL.md` and ensure the hook steps and this skill stay in sync.
 
-Skill file: `.cursor/skills/before-commit-guard/SKILL.md`
+Skill file: `ai/skills/before-commit-guard/SKILL.md`

@@ -21,8 +21,8 @@ When you create or modify a Drizzle schema file (`*.schema.ts`) under `src/domai
 
 ### Design review
 
-1. Read and follow `.cursor/skills/sql-design-guard/SKILL.md` — run the full checklist
+1. Read and follow `ai/skills/sql-design-guard/SKILL.md` — run the full checklist
 2. Review table/column naming, types, indexes, constraints, partitioning suggestions
 3. Output the SQL Design Guard Review block when the schema change is non-trivial
 
-For scaffolding new schema files, also use `.cursor/skills/schema-generator/SKILL.md`.
+For scaffolding new schema files, also use `ai/skills/schema-generator/SKILL.md`.

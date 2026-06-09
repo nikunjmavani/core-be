@@ -3,6 +3,8 @@ description: Core engineering principles for core-be — simplicity, quality, se
 alwaysApply: true
 ---
 
+> **Source:** [`ai/docs/principles.md`](../../ai/docs/principles.md) — edit there for Claude Code / Codex; mirror changes here for Cursor auto-inject.
+
 # Engineering principles (core-be)
 
 ## Role and goals

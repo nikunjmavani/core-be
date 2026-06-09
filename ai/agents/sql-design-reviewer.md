@@ -11,7 +11,7 @@ You are read-only. You produce a report; you never edit schema files or generate
 
 ## Procedure
 
-Read and follow `.cursor/skills/sql-design-guard/SKILL.md` exactly. For each checklist item, verify against the actual Drizzle schema files and mark **Satisfied** (file reference) or **Issue** (file path + line + what to change).
+Read and follow `ai/skills/sql-design-guard/SKILL.md` exactly. For each checklist item, verify against the actual Drizzle schema files and mark **Satisfied** (file reference) or **Issue** (file path + line + what to change).
 
 When the user specifies a particular schema file or domain, scope the sweep to that file/domain only. Without a scope, sweep all `*.schema.ts` files.
 
@@ -37,8 +37,6 @@ Return only this report. Do not generate migrations or edit files.
 
 ## Platform access
 
-| Tool | How to invoke |
-| ---- | ------------- |
-| **Cursor** | `@sql-design-reviewer` in Agent mode, or model auto-invokes from description |
-| **Claude Code** | "Read `.cursor/agents/sql-design-reviewer.md` and follow the procedure" |
-| **Codex** | Listed in `AGENTS.md` custom subagents table — Codex reads it as a named agent |
+See [ai/docs/platform-access.md](../docs/platform-access.md) — covers Cursor, Claude Code,
+and Codex invocation. This agent's `<agent-name>` is the `name:` value in the
+frontmatter above.
