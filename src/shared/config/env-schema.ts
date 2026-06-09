@@ -492,6 +492,18 @@ const envSchemaBase = z.object({
   IDEMPOTENCY_CARDINALITY_CRITICAL_THRESHOLD: z.coerce.number().int().min(1).default(200_000),
   IDEMPOTENCY_CARDINALITY_CRON: z.string().min(1).optional(),
 
+  /**
+   * P0-#4: per-actor (user / API key) idempotency-key claim cap over
+   * {@link IDEMPOTENCY_PER_ACTOR_CAP_WINDOW_SECONDS}. A single misbehaving client sending
+   * unique keys per request would otherwise fill Redis with ~24h-lived entries. When an
+   * actor exceeds this cap inside the window, new claims respond 429 with `Retry-After`;
+   * cached replays of already-completed work are unaffected (they hit before this check).
+   * Default 1_000/hour leaves headroom for legitimate retry storms while bounding the
+   * worst-case memory footprint per actor to ~10 MB / hour.
+   */
+  IDEMPOTENCY_PER_ACTOR_CAP: z.coerce.number().int().min(1).default(1_000),
+  IDEMPOTENCY_PER_ACTOR_CAP_WINDOW_SECONDS: z.coerce.number().int().min(60).default(3_600),
+
   /** Alert when a dead-letter queue has at least this many waiting + failed jobs. */
   DLQ_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(10),
   DLQ_DEPTH_CRON: z.string().min(1).optional(),
