@@ -1275,7 +1275,6 @@ src/
     │       ├── validate-domain-coverage.ts
     │       └── validate-domain.ts
     │   ├── env/
-    │       ├── check-env-drift.ts
     │       └── sync-env-example.ts
     │   ├── locale/
     │       ├── locale-key-parity.util.ts
