@@ -1,0 +1,37 @@
+# Gate job that satisfies the required status check "unit / Unit + global" for
+# every PR — including docs-only PRs where the actual unit-tests job is skipped.
+#
+# Branch protection requires "unit / Unit + global" to pass. This reusable
+# workflow is called by the `unit` gate job in pr-ci.yml with `if: always()`.
+# It succeeds when the upstream unit-tests job succeeded or was legitimately
+# skipped (e.g. docs-only PR); it fails when unit-tests actually failed or was
+# cancelled.
+name: Reusable — unit gate
+
+on:
+  workflow_call:
+    inputs:
+      unit-tests-result:
+        description: Result of the upstream unit-tests job (success | skipped | failure | cancelled)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: Unit + global
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Evaluate unit-tests result
+        env:
+          RESULT: ${{ inputs.unit-tests-result }}
+        run: |
+          if [ "$RESULT" = "success" ] || [ "$RESULT" = "skipped" ]; then
+            echo "unit-tests: $RESULT — gate passes"
+          else
+            echo "unit-tests: $RESULT — gate fails"
+            exit 1
+          fi

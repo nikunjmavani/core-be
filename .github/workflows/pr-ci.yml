@@ -129,12 +129,22 @@ jobs:
         run: |
           pnpm tool:sync-env-example || (echo "::error::.env.example is out of sync with env schema or is missing the # GitHub Secrets / # GitHub Variables top-level halves. See log above. Run pnpm tool:sync-env-example (with --fix if needed)." && exit 1)
 
-  unit:
+  unit-tests:
     needs: [changes]
     if: |
       needs.changes.outputs.docs-only-md != 'true' &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.ci-config == 'true')
     uses: ./.github/workflows/reusable-vitest-unit-only.yml
+
+  # Required-status-check gate: satisfies the branch-protection rule
+  # "unit / Unit + global" on every PR — including docs-only PRs where
+  # unit-tests is legitimately skipped by the path filter.
+  unit:
+    needs: [changes, unit-tests]
+    if: always()
+    uses: ./.github/workflows/reusable-unit-gate.yml
+    with:
+      unit-tests-result: ${{ needs.unit-tests.result }}
 
   migration-lint:
     name: Migration lint
