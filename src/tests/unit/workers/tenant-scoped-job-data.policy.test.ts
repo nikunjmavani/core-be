@@ -13,6 +13,7 @@ const TENANT_SCOPING_EXEMPT_QUEUE_NAME_PATTERNS = [
   /mail\.worker/i,
   /stripe-webhook/i,
   /audit-export/i,
+  /audit-outbox-drain/i,
   /user-data-export/i,
   /pending-sweep/i,
 ] as const;

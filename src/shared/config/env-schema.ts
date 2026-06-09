@@ -115,6 +115,16 @@ const envSchemaBase = z.object({
    * single `JWT_PUBLIC_KEY` path exactly. Public key material → GitHub Variable.
    */
   JWT_PUBLIC_KEYS: z.string().min(1).optional(),
+  /**
+   * Legacy `kid`-less token acceptance gate. When `true` (default) tokens without a
+   * `kid` header fall back to `JWT_PUBLIC_KEY` — the pre-rotation behaviour required so
+   * already-issued access tokens keep verifying during a rolling deploy. Flip to `false`
+   * after every issued token carries a `kid` (the 15 min access-token TTL + a session-refresh
+   * cycle is the upper bound) to hard-reject any `kid`-less token, removing the permanent
+   * trust window on the original signing key. Uses {@link booleanString} so `"false"` actually
+   * parses to `false` (`z.coerce.boolean()` would treat `"false"` as truthy).
+   */
+  JWT_LEGACY_KEY_ENABLED: booleanString('true'),
   /** Comma-separated emails that receive super_admin in JWT on login/refresh (platform ops). */
   GLOBAL_ADMIN_EMAILS: z.string().optional(),
   /** Shorter access-token TTL (seconds) for GLOBAL_ADMIN_EMAILS super_admin JWTs. Default 300 (5 min). */
@@ -476,11 +486,39 @@ const envSchemaBase = z.object({
    */
   UPLOAD_PENDING_SWEEP_GRACE_SECONDS: z.coerce.number().int().min(60).default(3600),
 
+  /**
+   * P0-#2 audit outbox drain — rows claimed per drain pass. Higher values amortise
+   * resolution lookups but increase per-pass duration; the worker's `lockDuration`
+   * (default 30s) is the hard upper bound. Default 500 keeps a typical pass under
+   * a second on a small DB and well under the lock window.
+   */
+  AUDIT_OUTBOX_DRAIN_BATCH_SIZE: z.coerce.number().int().min(1).max(10_000).optional(),
+  /**
+   * P0-#2 audit outbox drain — per-row attempt cap. After this many failed drain
+   * attempts the row is marked `FAILED` for operator triage. Default 5 mirrors
+   * BullMQ default attempts on side-effecting jobs.
+   */
+  AUDIT_OUTBOX_DRAIN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).optional(),
+  /** Cron pattern for the audit-outbox drain. Default every 30 seconds. */
+  AUDIT_OUTBOX_DRAIN_CRON: z.string().min(1).optional(),
+
   /** Bounded SCAN cap for idempotency Redis key cardinality sampling (worker). */
   IDEMPOTENCY_CARDINALITY_SCAN_MAX: z.coerce.number().int().min(1).default(200_000),
   IDEMPOTENCY_CARDINALITY_WARN_THRESHOLD: z.coerce.number().int().min(1).default(50_000),
   IDEMPOTENCY_CARDINALITY_CRITICAL_THRESHOLD: z.coerce.number().int().min(1).default(200_000),
   IDEMPOTENCY_CARDINALITY_CRON: z.string().min(1).optional(),
+
+  /**
+   * P0-#4: per-actor (user / API key) idempotency-key claim cap over
+   * {@link IDEMPOTENCY_PER_ACTOR_CAP_WINDOW_SECONDS}. A single misbehaving client sending
+   * unique keys per request would otherwise fill Redis with ~24h-lived entries. When an
+   * actor exceeds this cap inside the window, new claims respond 429 with `Retry-After`;
+   * cached replays of already-completed work are unaffected (they hit before this check).
+   * Default 1_000/hour leaves headroom for legitimate retry storms while bounding the
+   * worst-case memory footprint per actor to ~10 MB / hour.
+   */
+  IDEMPOTENCY_PER_ACTOR_CAP: z.coerce.number().int().min(1).default(1_000),
+  IDEMPOTENCY_PER_ACTOR_CAP_WINDOW_SECONDS: z.coerce.number().int().min(60).default(3_600),
 
   /** Alert when a dead-letter queue has at least this many waiting + failed jobs. */
   DLQ_DEPTH_WARN_THRESHOLD: z.coerce.number().int().min(1).default(10),

@@ -1,6 +1,6 @@
 # Runbook: Development to Production
 
-Single runbook from local development through production sign-off and deploy. **Local setup:** [getting-started/setup.md](../../getting-started/setup.md). **CI/CD:** [cicd-and-deployment.md](../ci-cd/cicd-and-deployment.md).
+Single runbook from local development through production sign-off and deploy. **Local setup:** [SETUP.md](../../../SETUP.md). **CI/CD:** [cicd-and-deployment.md](../ci-cd/cicd-and-deployment.md).
 
 ---
 
@@ -20,7 +20,7 @@ flowchart TB
 
 ## 1. Local development
 
-Follow **[getting-started/setup.md §1](../../getting-started/setup.md#1-local-development-setup)** — `.env`, `pnpm compose:up`, `pnpm db:migrate`, optional seed, `pnpm dev` + `pnpm dev:worker`.
+Follow **[SETUP.md § Local development](../../../SETUP.md#local-development)** — `.env`, `pnpm compose:up`, `pnpm db:migrate`, optional seed, `pnpm dev` + `pnpm dev:worker`.
 
 ---
 
@@ -174,7 +174,7 @@ Ready response should show `"database":"connected"`, `"redis":"connected"`, `"bu
 
 | Stage          | Action                                                                      |
 | -------------- | --------------------------------------------------------------------------- |
-| Local          | [setup.md](../../getting-started/setup.md) — `pnpm dev` + `pnpm dev:worker` |
+| Local          | [SETUP.md](../../../SETUP.md) — `pnpm dev` + `pnpm dev:worker` |
 | Before release | `pnpm ci:local` → **path-to-production-gate** skill → user confirms plan    |
 | Prod env       | §4.2 checklist on API + worker                                              |
 | Prod migrate   | `pnpm db:migrate` (prod `DATABASE_URL` only; no seed)                       |

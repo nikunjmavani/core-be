@@ -1,0 +1,187 @@
+import { and, asc, eq, inArray, lt, sql as drizzleSql } from 'drizzle-orm';
+import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import type { RequestScopedPostgresDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
+import { assertWorkerRlsGucSet } from '@/infrastructure/database/contexts/worker-database-guard.util.js';
+import { audit_outbox, type AuditOutboxRow } from './audit-outbox.schema.js';
+
+/**
+ * Payload accepted by {@link insertAuditOutboxRow}. Mirrors {@link AuditLogInsert}
+ * but stores raw `*_public_id` fields so the caller's hot path stays a single
+ * INSERT (no per-row resolution lookups before the row is staged).
+ */
+export interface AuditOutboxInsertInput {
+  actorUserPublicId?: string | undefined;
+  actorApiKeyPublicId?: string | undefined;
+  targetUserPublicId?: string | undefined;
+  organizationPublicId?: string | undefined;
+  action: string;
+  resourceType: string;
+  resourceId?: number | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  severity?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Inserts a PENDING row into `audit.outbox` using the currently-pinned request
+ * database handle. Enrolls in the caller's transaction so the audit row commits
+ * atomically with the business write being audited — and rolls back with it if
+ * the business write fails (which is the whole point of the outbox pattern).
+ *
+ * @remarks
+ * - **Algorithm:** single `INSERT ... RETURNING id` against the request-scoped
+ *   handle resolved from ALS. Never opens its own transaction.
+ * - **Failure modes:** RLS rejects the INSERT when `app.current_organization_id`
+ *   does not match the supplied `organizationPublicId` (or, for tenantless
+ *   audits, when `app.system_audit_insert` is not `'true'`). The thrown error
+ *   bubbles back to the caller's audit-record wrapper, which catches and logs
+ *   so the business write itself is never failed by an audit problem.
+ * - **Side effects:** one INSERT in the caller's transaction.
+ * - **Notes:** never reachable from worker runtime — callers must already hold
+ *   a request DB context (HTTP request or system-audit-insert worker context).
+ */
+export async function insertAuditOutboxRow(input: AuditOutboxInsertInput): Promise<number> {
+  const database = getRequestDatabase();
+  const rows = await database
+    .insert(audit_outbox)
+    .values({
+      status: 'PENDING',
+      actor_user_public_id: input.actorUserPublicId ?? null,
+      actor_api_key_public_id: input.actorApiKeyPublicId ?? null,
+      target_user_public_id: input.targetUserPublicId ?? null,
+      organization_public_id: input.organizationPublicId ?? null,
+      action: input.action,
+      resource_type: input.resourceType,
+      resource_id: input.resourceId ?? null,
+      ip_address: input.ipAddress ?? null,
+      user_agent: input.userAgent ?? null,
+      severity: input.severity ?? 'INFO',
+      metadata: input.metadata ?? {},
+    })
+    .returning({ id: audit_outbox.id });
+  const id = rows[0]?.id;
+  if (id === undefined) {
+    throw new Error('audit.outbox INSERT returned no id');
+  }
+  return id;
+}
+
+/**
+ * Repository factory exposed to the audit-outbox drain worker. Takes the pinned
+ * drain-context database handle (from {@link withAuditOutboxDrainDatabaseContext})
+ * and returns the read/update queries the worker needs.
+ *
+ * @remarks
+ * - **Algorithm:** asserts the caller is inside `audit_outbox_drain` context (in
+ *   worker runtime) and binds every query to the supplied transaction handle.
+ * - **Failure modes:** {@link assertWorkerRlsGucSet} throws if the drain GUC is
+ *   missing — surfaces wiring bugs as a hard error rather than silent failure.
+ * - **Side effects:** none from the factory itself; per-query side effects are
+ *   documented on each returned method.
+ */
+export function createDrainAuditOutboxRepository(databaseHandle: RequestScopedPostgresDatabase) {
+  return {
+    /**
+     * Atomically claims up to `limit` PENDING rows using
+     * `FOR UPDATE SKIP LOCKED` so concurrent drain instances never double-process.
+     * Increments `attempt_count` so a row that fails repeatedly is bounded.
+     */
+    async claimPendingBatch(limit: number): Promise<AuditOutboxRow[]> {
+      await assertWorkerRlsGucSet(databaseHandle, 'audit_outbox_drain');
+      // Drizzle has no first-class FOR UPDATE SKIP LOCKED on `select()`, so use a
+      // raw SQL UPDATE..FROM..RETURNING which is both atomic and skip-locked.
+      const result = await databaseHandle.execute<AuditOutboxRow>(drizzleSql`
+        UPDATE audit.outbox
+           SET attempt_count = audit.outbox.attempt_count + 1,
+               updated_at = NOW()
+          FROM (
+            SELECT id
+              FROM audit.outbox
+             WHERE status = 'PENDING'
+             ORDER BY created_at ASC
+             LIMIT ${limit}
+             FOR UPDATE SKIP LOCKED
+          ) AS claimable
+         WHERE audit.outbox.id = claimable.id
+        RETURNING audit.outbox.*
+      `);
+      const rows = Array.isArray(result)
+        ? (result as AuditOutboxRow[])
+        : ((result as { rows?: AuditOutboxRow[] }).rows ?? []);
+      return rows;
+    },
+
+    /** Stamps a successful drain — `status='PROCESSED'`, `processed_at=NOW()`. */
+    async markProcessed(ids: number[]): Promise<void> {
+      if (ids.length === 0) return;
+      await databaseHandle
+        .update(audit_outbox)
+        .set({
+          status: 'PROCESSED',
+          processed_at: new Date(),
+          updated_at: new Date(),
+        })
+        .where(inArray(audit_outbox.id, ids));
+    },
+
+    /**
+     * Records a transient drain failure (status stays `PENDING`, error captured) so the
+     * row is retried on the next drain pass — the claim path already bumped
+     * `attempt_count`, so retries are bounded by {@link markPermanentlyFailed}.
+     */
+    async recordTransientFailure(id: number, error: string): Promise<void> {
+      await databaseHandle
+        .update(audit_outbox)
+        .set({
+          last_error: error.slice(0, 4_000),
+          updated_at: new Date(),
+        })
+        .where(eq(audit_outbox.id, id));
+    },
+
+    /**
+     * Marks a row terminally failed — drain stops retrying. Used when the row is
+     * unresolvable (e.g. organization deleted between insert and drain) or has
+     * exceeded the per-row attempt cap.
+     */
+    async markPermanentlyFailed(id: number, error: string): Promise<void> {
+      await databaseHandle
+        .update(audit_outbox)
+        .set({
+          status: 'FAILED',
+          last_error: error.slice(0, 4_000),
+          updated_at: new Date(),
+        })
+        .where(eq(audit_outbox.id, id));
+    },
+
+    /**
+     * Returns ids of PROCESSED rows older than `olderThan` so the retention worker
+     * can prune them. PROCESSED rows are safe to delete — the canonical record is
+     * in `audit.logs`.
+     */
+    async findProcessedRowsOlderThan(olderThan: Date, limit: number): Promise<number[]> {
+      const rows = await databaseHandle
+        .select({ id: audit_outbox.id })
+        .from(audit_outbox)
+        .where(and(eq(audit_outbox.status, 'PROCESSED'), lt(audit_outbox.processed_at, olderThan)))
+        .orderBy(asc(audit_outbox.processed_at))
+        .limit(limit);
+      return rows.map((row: { id: number }) => row.id);
+    },
+
+    /** Bulk delete drained outbox rows by id. */
+    async deleteByIds(ids: number[]): Promise<number> {
+      if (ids.length === 0) return 0;
+      const deleted = await databaseHandle
+        .delete(audit_outbox)
+        .where(inArray(audit_outbox.id, ids))
+        .returning({ id: audit_outbox.id });
+      return deleted.length;
+    },
+  };
+}
+
+/** Type alias to ease wiring in tests / DI. */
+export type DrainAuditOutboxRepository = ReturnType<typeof createDrainAuditOutboxRepository>;

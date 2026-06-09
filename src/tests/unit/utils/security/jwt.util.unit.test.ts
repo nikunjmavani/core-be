@@ -264,6 +264,73 @@ describe('jwt.util', () => {
     });
   });
 
+  describe('JWT_LEGACY_KEY_ENABLED sunset gate', () => {
+    const keyPair = generateRsaPemKeyPair();
+    const now = Math.floor(Date.now() / 1000);
+    let signingKey: CryptoKey;
+
+    beforeEach(async () => {
+      process.env.JWT_PRIVATE_KEY = keyPair.privateKey;
+      process.env.JWT_PUBLIC_KEY = keyPair.publicKey;
+      delete process.env.JWT_SIGNING_KID;
+      delete process.env.JWT_PUBLIC_KEYS;
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+      signingKey = await importPKCS8(keyPair.privateKey, 'RS256');
+    });
+
+    afterEach(() => {
+      delete process.env.JWT_LEGACY_KEY_ENABLED;
+      delete process.env.JWT_SIGNING_KID;
+      delete process.env.JWT_PUBLIC_KEYS;
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+    });
+
+    async function signKidlessToken(userId: string): Promise<string> {
+      return new SignJWT({})
+        .setProtectedHeader({ alg: 'RS256' })
+        .setSubject(userId)
+        .setIssuer(JWT_ISSUER)
+        .setAudience(JWT_AUDIENCE)
+        .setIssuedAt(now)
+        .setExpirationTime(now + 60)
+        .sign(signingKey);
+    }
+
+    it('accepts a kid-less token when JWT_LEGACY_KEY_ENABLED defaults to true', async () => {
+      const token = await signKidlessToken('user-kidless-default');
+      expect(decodeProtectedHeader(token).kid).toBeUndefined();
+
+      const payload = await verifyAccessToken(token);
+      expect(payload.userId).toBe('user-kidless-default');
+    });
+
+    it('rejects a kid-less token when JWT_LEGACY_KEY_ENABLED=false (sunset)', async () => {
+      process.env.JWT_LEGACY_KEY_ENABLED = 'false';
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+
+      const token = await signKidlessToken('user-kidless-rejected');
+      await expect(verifyAccessToken(token)).rejects.toThrow(
+        /legacy kid-less verification disabled/,
+      );
+    });
+
+    it('still accepts kid-bearing tokens via the keyring when JWT_LEGACY_KEY_ENABLED=false', async () => {
+      process.env.JWT_LEGACY_KEY_ENABLED = 'false';
+      process.env.JWT_SIGNING_KID = 'key-a';
+      process.env.JWT_PUBLIC_KEYS = JSON.stringify({ 'key-a': keyPair.publicKey });
+      resetEnvCacheForTests();
+      resetJwtCachesForTests();
+
+      const token = await signAccessToken({ userId: 'user-kid-accepted-after-sunset' });
+      expect(decodeProtectedHeader(token).kid).toBe('key-a');
+      const payload = await verifyAccessToken(token);
+      expect(payload.userId).toBe('user-kid-accepted-after-sunset');
+    });
+  });
+
   describe('RS256-only policy', () => {
     const sharedSecret = 'test-jwt-secret-min-32-chars-xxxxxxxx';
     const keyPair = generateRsaPemKeyPair();

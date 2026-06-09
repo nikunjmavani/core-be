@@ -10,6 +10,7 @@ Project core_be {
 TableGroup audit {
   audit.dead_letter_jobs
   audit.logs
+  audit.outbox
 }
 
 TableGroup auth {
@@ -95,6 +96,31 @@ Table audit.logs {
 
 Note audit.logs {
   'RLS: enabled\nPolicies: audit_logs_tenant_isolation, audit_logs_user_export_select, audit_logs_tenant_isolation_select, audit_logs_tenant_isolation_insert, audit_logs_tenant_isolation_delete\nFORCE ROW LEVEL SECURITY'
+}
+
+Table audit.outbox {
+  action varchar(100) [not null]
+  actor_api_key_public_id varchar(21)
+  actor_user_public_id is [not null]
+  attempt_count smallint [not null]
+  created_at timestamptz [not null]
+  id bigint [pk, increment]
+  ip_address varchar(45)
+  last_error text
+  metadata jsonb [not null]
+  organization_public_id varchar(21)
+  processed_at timestamptz
+  resource_id bigint
+  resource_type varchar(50) [not null]
+  severity varchar(20) [not null]
+  status varchar(20) [not null]
+  target_user_public_id varchar(21)
+  updated_at timestamptz [not null]
+  user_agent text
+}
+
+Note audit.outbox {
+  'RLS: enabled\nPolicies: audit_outbox_tenant_isolation_insert, audit_outbox_drain_select, audit_outbox_drain_update, audit_outbox_drain_delete'
 }
 
 Table auth.auth_methods {

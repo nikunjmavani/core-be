@@ -21,6 +21,7 @@
   "idempotencyKeyInFlight": "Una solicitud con esta clave de idempotencia aún está en curso. Vuelve a intentarlo cuando se complete la solicitud original.",
   "idempotencyKeyInvalid": "Idempotency-Key debe tener entre 1 y 255 caracteres y solo puede contener letras, dígitos y . _ : ~ + / = -",
   "idempotencyKeyReuse": "Esta clave de idempotencia ya se usó con una carga de solicitud diferente",
+  "idempotencyPerActorCapExceeded": "Demasiadas solicitudes idempotentes. Reutiliza una clave para reintentos o espera a que se restablezca la ventana.",
   "notImplemented": "Por favor, solicite esta función",
   "rateLimited": "Demasiadas solicitudes",
   "payloadTooLarge": "Carga demasiado grande",

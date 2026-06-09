@@ -63,6 +63,11 @@ export const webhooks = notifySchema
       uniqueIndex('idx_webhooks_organization_id_url_unique').on(table.organization_id, table.url),
       check('chk_webhooks_url', sql`${table.url} ~ '^https://'`),
       check('chk_webhooks_updated', sql`${table.updated_at} >= ${table.created_at}`),
+      // P0-#1 defense in depth: the worker fail-closes when the *decrypted* signing secret
+      // is empty, but the ciphertext column itself must also never be empty. The DTO bound,
+      // service guard, and worker check all prevent that today; this constraint blocks any
+      // future code path (or direct DB write) from regressing the invariant.
+      check('chk_webhooks_encrypted_secret_not_empty', sql`length(${table.encrypted_secret}) > 0`),
       pgPolicy('webhooks_tenant_isolation', {
         as: 'permissive',
         for: 'all',
