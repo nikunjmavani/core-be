@@ -25,12 +25,17 @@ Before changing this repository:
 
 ## Custom subagents
 
-Project-defined subagents in [`.cursor/agents/`](.cursor/agents/) run in isolation (read-only) for heavy diagnostics:
+Project-defined subagents in [`.cursor/agents/`](.cursor/agents/) run in isolation (read-only) for heavy diagnostics. Each agent file includes a **Platform access** table showing how to invoke it from Cursor, Claude Code, and Codex.
 
 | Subagent | File | Use when |
 | -------- | ---- | -------- |
 | **production-reviewer** | [`.cursor/agents/production-reviewer.md`](.cursor/agents/production-reviewer.md) | Pre-release / deploy sign-off — full readiness plan |
 | **verifier** | [`.cursor/agents/verifier.md`](.cursor/agents/verifier.md) | After claiming work complete — scoped validate/tests |
 | **ci-investigator** | [`.cursor/agents/ci-investigator.md`](.cursor/agents/ci-investigator.md) | One failing CI check — root cause without log noise |
+| **production-hardening-reviewer** | [`.cursor/agents/production-hardening-reviewer.md`](.cursor/agents/production-hardening-reviewer.md) | Hardening sweep — security headers, DB/Redis/worker gaps |
+| **docs-auditor** | [`.cursor/agents/docs-auditor.md`](.cursor/agents/docs-auditor.md) | Full docs/ audit — stale links, index gaps, Mermaid issues |
+| **sql-design-reviewer** | [`.cursor/agents/sql-design-reviewer.md`](.cursor/agents/sql-design-reviewer.md) | Schema design review — indexes, constraints, conventions |
+| **dependency-auditor** | [`.cursor/agents/dependency-auditor.md`](.cursor/agents/dependency-auditor.md) | Dependency audit — vulnerabilities + prioritized fix plan |
+| **tsdoc-coverage-reviewer** | [`.cursor/agents/tsdoc-coverage-reviewer.md`](.cursor/agents/tsdoc-coverage-reviewer.md) | TSDoc coverage check — missing summaries and @remarks |
 
 To add a subagent, use global **create-subagent** (see [cursor-global-skills](.cursor/skills/cursor-global-skills/SKILL.md)).
