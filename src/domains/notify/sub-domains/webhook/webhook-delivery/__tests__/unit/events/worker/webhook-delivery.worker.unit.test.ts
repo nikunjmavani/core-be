@@ -1,4 +1,6 @@
+import { UnrecoverableError } from 'bullmq';
 import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import * as fieldSecretEncryption from '@/shared/utils/security/field-secret-encryption.util.js';
 import {
   processWebhookDeliveryAttempt,
   type WebhookDeliveryFetch,
@@ -166,6 +168,52 @@ describe('processWebhookDeliveryAttempt', () => {
       status: 'FAILED',
       response_body: 'network unavailable',
       next_retry_at: null,
+    });
+  });
+
+  // P0-#1 regression: empty signing secret must NEVER produce an outbound delivery.
+  // Previously the worker silently dropped the X-Webhook-Signature header and shipped
+  // the payload, leaving the receiver unable to distinguish "secret rotated to empty"
+  // from "attacker stripped the header" — a forgery primitive against any receiver
+  // still trusting the request.
+  describe('empty signing secret (P0-#1 fail-closed)', () => {
+    beforeEach(() => {
+      vi.mocked(fieldSecretEncryption.decryptFieldSecret).mockReturnValueOnce('');
+    });
+
+    it('records FAILED terminally (no next_retry) before any network call', async () => {
+      const repository = createDeliveryAttemptRepositoryMock();
+
+      await expect(
+        processWebhookDeliveryAttempt(
+          1234,
+          'org_public_1',
+          { id: 'job-empty-secret', attemptsMade: 0 },
+          fetchMock,
+          repository as never,
+        ),
+      ).rejects.toThrow(/empty_signing_secret/);
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(repository.recordOutcome).toHaveBeenCalledExactlyOnceWith(1234, {
+        status: 'FAILED',
+        response_body: 'empty_signing_secret',
+        next_retry_at: null,
+      });
+    });
+
+    it('throws UnrecoverableError so BullMQ skips retries and lands in the DLQ', async () => {
+      const repository = createDeliveryAttemptRepositoryMock();
+
+      const error = await processWebhookDeliveryAttempt(
+        1235,
+        'org_public_1',
+        { id: 'job-empty-secret-2', attemptsMade: 2 },
+        fetchMock,
+        repository as never,
+      ).catch((rejection: unknown) => rejection);
+
+      expect(error).toBeInstanceOf(UnrecoverableError);
     });
   });
 });

@@ -85,4 +85,35 @@ describe('External SDK coverage (circuit breaker audit)', () => {
       expect(content, `${relativePath} must use outboundCall`).toContain('outboundCall');
     }
   });
+
+  // P0-#3 regression: a worker (`*.worker.ts` or `*.processor.ts`) that imports
+  // `node:http` / `node:https` directly skips the central `outboundCall` AbortSignal
+  // plumbing — meaning a BullMQ stall-timeout cannot cancel its outbound I/O and the
+  // job's side effect can execute twice when a second worker picks the stalled job
+  // back up. Force every worker through the wrappers so the signal is threaded by
+  // construction.
+  it('should not allow workers/processors to import node:http or node:https (must use outboundCall via wrapper)', () => {
+    const workerNodeHttpAllowlist = new Set<string>([
+      // The webhook delivery worker uses node:http/https indirectly via the pinned-fetch
+      // util (src/shared/utils/security/webhook-outbound-fetch.util.ts), NOT directly,
+      // so this allowlist is currently empty. Adding an entry is a maintainer decision
+      // and must be justified in PR review.
+    ]);
+
+    const violations: string[] = [];
+    for (const relativePath of collectTypeScriptFiles(SRC_DIR)) {
+      if (!(relativePath.endsWith('.worker.ts') || relativePath.endsWith('.processor.ts'))) {
+        continue;
+      }
+      if (workerNodeHttpAllowlist.has(relativePath)) continue;
+      const content = readFileSync(join(ROOT, relativePath), 'utf-8');
+      if (/from\s+['"]node:https?['"]/.test(content)) {
+        violations.push(`${relativePath}: direct node:http(s) import`);
+      }
+      if (/from\s+['"]undici['"]/.test(content)) {
+        violations.push(`${relativePath}: direct undici import`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
 });

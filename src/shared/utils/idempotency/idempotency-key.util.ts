@@ -116,3 +116,22 @@ export function buildIdempotencyCacheKey(idempotencyKey: string, scope: Idempote
   const organizationSegment = scope.organizationId ?? 'none';
   return `idempotency:${organizationSegment}:${actorSegment}:${idempotencyKey}`;
 }
+
+/**
+ * Returns `null` for an unauthenticated scope (those are rejected upstream) or a stable
+ * per-actor Redis key for the P0-#4 cardinality cap windowed counter.
+ *
+ * @remarks
+ * Keying by API key id or user id (in that priority) matches the cache key actor segment
+ * so the budget travels with the actor identity, not the organization context the request
+ * happens to carry.
+ */
+export function buildIdempotencyActorRateKey(scope: IdempotencyScope): string | null {
+  if (scope.apiKeyPublicId && scope.apiKeyPublicId.length > 0) {
+    return `idempotency:actor-rate:api-key:${scope.apiKeyPublicId}`;
+  }
+  if (scope.userId && scope.userId.length > 0) {
+    return `idempotency:actor-rate:user:${scope.userId}`;
+  }
+  return null;
+}
