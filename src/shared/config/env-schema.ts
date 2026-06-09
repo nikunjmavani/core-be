@@ -115,6 +115,16 @@ const envSchemaBase = z.object({
    * single `JWT_PUBLIC_KEY` path exactly. Public key material → GitHub Variable.
    */
   JWT_PUBLIC_KEYS: z.string().min(1).optional(),
+  /**
+   * Legacy `kid`-less token acceptance gate. When `true` (default) tokens without a
+   * `kid` header fall back to `JWT_PUBLIC_KEY` — the pre-rotation behaviour required so
+   * already-issued access tokens keep verifying during a rolling deploy. Flip to `false`
+   * after every issued token carries a `kid` (the 15 min access-token TTL + a session-refresh
+   * cycle is the upper bound) to hard-reject any `kid`-less token, removing the permanent
+   * trust window on the original signing key. Uses {@link booleanString} so `"false"` actually
+   * parses to `false` (`z.coerce.boolean()` would treat `"false"` as truthy).
+   */
+  JWT_LEGACY_KEY_ENABLED: booleanString('true'),
   /** Comma-separated emails that receive super_admin in JWT on login/refresh (platform ops). */
   GLOBAL_ADMIN_EMAILS: z.string().optional(),
   /** Shorter access-token TTL (seconds) for GLOBAL_ADMIN_EMAILS super_admin JWTs. Default 300 (5 min). */
