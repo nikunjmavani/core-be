@@ -80,8 +80,12 @@ TEST_REPORT.md
 .cursor/mcp.json
 .mcp.json
 
-# Claude Code worktrees (local agent sandboxes; never commit)
+# Claude Code — ignore everything except tracked project config
 .claude/
+!.claude/settings.json
+!.claude/agents
+!.claude/skills
+!.claude/hooks
 reports/
 **/reports/
 **/*-report.*
