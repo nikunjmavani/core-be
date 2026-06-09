@@ -1,6 +1,14 @@
 /**
  * Env Zod schema and key list only. Safe to import from scripts that must not run getEnv()
  * (e.g. sync-env-example). Application code should use env.config.ts for getEnv() and env.
+ *
+ * @remarks
+ * `.env.example` is the documented template. Keys whose empty state is intentional
+ * (disabled providers, optional features, deploy-time placeholders) carry a
+ * `# OPTIONAL — <condition>` marker in `.env.example`. `pnpm github:sync` correctly
+ * skips empty OPTIONAL keys rather than pushing `KEY=""` to GitHub Environments.
+ * When you add a new env key that's conditionally required, mark it OPTIONAL in
+ * `.env.example` and pair it with a corresponding `.optional()` / refinement here.
  */
 import { validateProductionRedisTopology } from '@/infrastructure/cache/redis-url.parse.util.js';
 import { PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS } from '@/shared/constants/ttl.constants.js';
