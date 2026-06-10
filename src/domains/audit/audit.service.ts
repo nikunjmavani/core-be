@@ -1,6 +1,7 @@
 import type { AuditRepository } from './audit.repository.js';
 import type { AuditLogFilters, AuditLogRecordInput } from './audit.types.js';
 import { validateListAuditLogsQuery } from './audit.validator.js';
+import { insertAuditOutboxRow } from './audit-outbox.repository.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
@@ -13,25 +14,26 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
  * Owns the canonical write + read paths for the audit log.
  *
  * @remarks
- * Algorithm:
- * 1. {@link AuditService.record} resolves the actor's internal user id from
- *    their public id inside `withUserDatabaseContext` so RLS sees the actor's
- *    organization scope, then inserts the audit row in the same context.
- * 2. {@link AuditService.list} validates query input via Zod, resolves
- *    organization / actor public ids to internal ids, and delegates to
- *    {@link AuditRepository.findWithFilters} for cursor-paginated reads.
+ * P0-#2 (audit outbox): {@link AuditService.record} now stages every audit row in
+ * `audit.outbox` inside the caller's business transaction instead of opening a
+ * fresh org-scoped transaction per row. The audit drain worker
+ * ({@link auditOutboxDrainProcessor}) reads PENDING rows out-of-band, resolves
+ * actor / target / organization public ids to internal ids, and inserts them into
+ * `audit.logs`. Effects:
+ *  - bulk operations no longer pay one new transaction per audit row;
+ *  - audit accuracy improves — the outbox row commits atomically with the
+ *    business write, so an audit can never appear without the action it audits
+ *    (and vice versa);
+ *  - the read path ({@link AuditService.list}) is unchanged.
  *
- * Failure modes:
- * - Unknown actor public id → logged at `warn`; no row written; caller is
- *   unaffected (writes are best-effort by contract).
- * - DB write failure inside the context → bubbles to the caller; callers
- *   should go through `recordAuditEvent` so the failure is caught and logged.
+ * Failure modes for `record`:
+ *  - RLS rejects the outbox INSERT when the caller's `app.current_organization_id`
+ *    does not match the supplied `organization_public_id`. The thrown error
+ *    bubbles to the audit-record wrapper, which catches + logs (the business
+ *    write itself is never failed by an audit problem).
  *
- * Side effects: one INSERT into `audit_logs.audit_log`. No events emitted —
- * audit is a write target, not an emitter.
- *
- * Notes: callers must never assume immediate-read-your-write through a
- * different organization context, because the row is RLS-scoped to the actor.
+ * Side effects: one INSERT into `audit.outbox`. No events emitted — audit is
+ * still a write target, not an emitter.
  */
 export class AuditService {
   constructor(
@@ -41,132 +43,45 @@ export class AuditService {
   ) {}
 
   /**
-   * Persists an audit log row inside the actor's user database context.
+   * Stages an audit row in `audit.outbox` for asynchronous drain into `audit.logs`.
    *
    * @remarks
    * Algorithm:
-   * 1. Resolve `actorUserPublicId` → internal user id inside
-   *    `withUserDatabaseContext`. Returning `null` means the actor was deleted
-   *    between event emission and audit recording; row is skipped.
-   * 2. INSERT the row inside the same context so RLS attributes it correctly.
+   * 1. Validate that the caller supplied at least one actor identifier
+   *    (`actorUserPublicId` or `actorApiKeyPublicId`) — otherwise we cannot
+   *    attribute the row and silently drop it (preserving the prior contract).
+   * 2. Build the outbox payload from the supplied public ids and free-form
+   *    metadata, then call {@link insertAuditOutboxRow} which enrolls in the
+   *    caller's request transaction.
    *
-   * Failure modes: unknown actor → silent skip (logged at warn). DB error →
-   * thrown; callers should wrap with `recordAuditEvent` for best-effort
-   * semantics.
+   * Failure modes:
+   * - Missing actor → logged at warn, no-op (best-effort by contract).
+   * - DB write failure → bubbles to caller; callers should go through
+   *   `recordAuditEvent` so the failure is caught and logged.
    *
-   * Side effects: one INSERT; no event emitted.
+   * Side effects: one INSERT in the caller's open transaction.
    */
   async record(input: AuditLogRecordInput): Promise<void> {
-    const actorUserPublicId = input.actorUserPublicId;
-    if (!actorUserPublicId) {
-      // No acting user — attribute to the organization API key when present (always org-scoped),
-      // otherwise skip rather than write an unattributable row.
-      if (input.actorApiKeyPublicId && input.organization_id) {
-        return this.recordApiKeyActorEvent(input.actorApiKeyPublicId, input.organization_id, input);
-      }
+    const hasActor =
+      (typeof input.actorUserPublicId === 'string' && input.actorUserPublicId.length > 0) ||
+      (typeof input.actorApiKeyPublicId === 'string' && input.actorApiKeyPublicId.length > 0);
+    if (!hasActor) {
       logger.warn({ action: input.action }, 'audit.record.missingActor');
       return;
     }
-    if (input.organization_id) {
-      const organization = await this.organizationService.findOrganizationByInternalId(
-        input.organization_id,
-      );
-      if (!organization) {
-        logger.warn(
-          { organizationId: input.organization_id },
-          'audit.record.unknownOrganizationId',
-        );
-        return;
-      }
-      return withOrganizationDatabaseContext(organization.public_id, async () => {
-        const user = await this.userService.findUserRecordByPublicId(actorUserPublicId);
-        if (!user) {
-          logger.warn(
-            { actorUserPublicId: actorUserPublicId },
-            'audit.record.unknownActorUserPublicId',
-          );
-          return;
-        }
-        await this.repository.insert({
-          actor_user_id: user.id,
-          action: input.action,
-          resource_type: input.resource_type,
-          resource_id: input.resource_id ?? null,
-          target_user_id: input.target_user_id ?? null,
-          organization_id: input.organization_id ?? null,
-          ip_address: input.ip_address ?? null,
-          user_agent: input.user_agent ?? null,
-          severity: input.severity ?? 'INFO',
-          metadata: input.metadata ?? {},
-        });
-      });
-    }
 
-    const user = await withUserDatabaseContext(actorUserPublicId, () =>
-      this.userService.findUserRecordByPublicId(actorUserPublicId),
-    );
-    if (!user) {
-      logger.warn(
-        { actorUserPublicId: actorUserPublicId },
-        'audit.record.unknownActorUserPublicId',
-      );
-      return;
-    }
-
-    await withUserDatabaseContext(actorUserPublicId, () =>
-      this.repository.insert({
-        actor_user_id: user.id,
-        action: input.action,
-        resource_type: input.resource_type,
-        resource_id: input.resource_id ?? null,
-        target_user_id: input.target_user_id ?? null,
-        organization_id: input.organization_id ?? null,
-        ip_address: input.ip_address ?? null,
-        user_agent: input.user_agent ?? null,
-        severity: input.severity ?? 'INFO',
-        metadata: input.metadata ?? {},
-      }),
-    );
-  }
-
-  /**
-   * Persists an audit row attributed to an organization API key (no acting user).
-   *
-   * @remarks
-   * Algorithm: resolve the organization, then under its RLS context resolve the API key's internal
-   * id (`tenancy.api_keys` is tenant-isolated) and INSERT the row with `actor_api_key_id` set and
-   * `actor_user_id` left null. Failure modes: unknown organization or unknown API key → logged at
-   * `warn`, no row written (best-effort, never fails the caller's request). Side effects: one INSERT.
-   */
-  private async recordApiKeyActorEvent(
-    actorApiKeyPublicId: string,
-    organizationId: number,
-    input: AuditLogRecordInput,
-  ): Promise<void> {
-    const organization =
-      await this.organizationService.findOrganizationByInternalId(organizationId);
-    if (!organization) {
-      logger.warn({ organizationId }, 'audit.record.unknownOrganizationId');
-      return;
-    }
-    await withOrganizationDatabaseContext(organization.public_id, async () => {
-      const apiKeyId = await this.repository.resolveActorApiKeyId(actorApiKeyPublicId);
-      if (apiKeyId === null) {
-        logger.warn({ actorApiKeyPublicId }, 'audit.record.unknownActorApiKeyPublicId');
-        return;
-      }
-      await this.repository.insert({
-        actor_api_key_id: apiKeyId,
-        action: input.action,
-        resource_type: input.resource_type,
-        resource_id: input.resource_id ?? null,
-        target_user_id: input.target_user_id ?? null,
-        organization_id: organizationId,
-        ip_address: input.ip_address ?? null,
-        user_agent: input.user_agent ?? null,
-        severity: input.severity ?? 'INFO',
-        metadata: input.metadata ?? {},
-      });
+    await insertAuditOutboxRow({
+      actorUserPublicId: input.actorUserPublicId,
+      actorApiKeyPublicId: input.actorApiKeyPublicId,
+      targetUserPublicId: input.target_user_public_id ?? undefined,
+      organizationPublicId: input.organization_public_id ?? undefined,
+      action: input.action,
+      resourceType: input.resource_type,
+      resourceId: input.resource_id ?? null,
+      ipAddress: input.ip_address ?? null,
+      userAgent: input.user_agent ?? null,
+      severity: input.severity ?? 'INFO',
+      metadata: input.metadata ?? {},
     });
   }
 

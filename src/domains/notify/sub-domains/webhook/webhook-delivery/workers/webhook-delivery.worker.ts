@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
-import { Worker } from 'bullmq';
+import { UnrecoverableError, Worker } from 'bullmq';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { buildOutboundCallOptions, outboundCall } from '@/infrastructure/outbound/index.js';
 import { createPinnedWebhookFetch } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
@@ -192,22 +193,35 @@ async function deliverClaimedWebhook(options: {
   const payloadString = JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000);
   const signingSecret = decryptFieldSecret(encryptedSecret);
-  // sec-UP finding #8 (defense in depth): when the resolved signing secret is empty
-  // (a regression of the DTO bound, or a legacy row that pre-dates the fix), do NOT
-  // emit a signature header at all. The prior code computed
-  // `createHmac('sha256', '').update(...).digest('hex')` — Node accepts an empty
-  // key and emits a deterministic, attacker-reproducible value, so customers
-  // verifying the signature would accept any forged request signed with the same
-  // empty key. Omitting the header makes the unsigned state explicit and
-  // observable instead of fake-authentic.
-  const signature =
-    signingSecret.length > 0 ? signPayload(signingSecret, payloadString, timestamp) : null;
-  if (signature === null) {
-    logger.warn(
+  // P0-#1: fail-closed on empty signing secret. Previously we skipped the signature header
+  // and shipped the payload anyway, leaving the receiver unable to distinguish "secret
+  // rotated to empty" from "attacker stripped the header". An attacker who can flip a
+  // webhook into that state — or read an unsigned legitimate delivery — gets forge
+  // capability against any receiver still trusting the request. Treat it as a
+  // configuration regression: record FAILED terminally, page on-call via Sentry, and
+  // mark the BullMQ job UnrecoverableError so it skips retries and lands in the DLQ.
+  if (signingSecret.length === 0) {
+    captureMessage('webhook.delivery.empty_signing_secret', {
+      level: 'error',
+      extra: { webhookId, deliveryAttemptId, eventType },
+    });
+    logger.error(
       { webhookId, deliveryAttemptId, eventType },
-      'webhook.delivery.empty_signing_secret_skipping_signature_header',
+      'webhook.delivery.empty_signing_secret',
     );
+    await recordWebhookDeliveryOutcome({
+      deliveryAttemptId,
+      organizationPublicId,
+      deliveryAttemptRepository,
+      outcome: {
+        status: 'FAILED',
+        response_body: 'empty_signing_secret',
+        next_retry_at: null,
+      },
+    });
+    throw new UnrecoverableError('webhook.delivery.empty_signing_secret');
   }
+  const signature = signPayload(signingSecret, payloadString, timestamp);
 
   // sec-N8: dual-sign while inside the rotation overlap window so a customer
   // who has not yet rolled their verifier still sees a matching signature.
@@ -271,9 +285,7 @@ async function deliverClaimedWebhook(options: {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                ...(signature !== null
-                  ? { 'X-Webhook-Signature': `t=${timestamp},v1=${signature}` }
-                  : {}),
+                'X-Webhook-Signature': `t=${timestamp},v1=${signature}`,
                 'X-Webhook-Event': eventType,
                 'X-Webhook-Timestamp': String(timestamp),
                 // sec-N3 + sec-new-B2: stable per-delivery public id (same BullMQ

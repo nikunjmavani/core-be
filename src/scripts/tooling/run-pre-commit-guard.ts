@@ -77,6 +77,11 @@ export function shouldRunStructureTreeCheck(stagedFiles: string[]): boolean {
   return stagedFiles.some((file) => file.startsWith('src/') || file.startsWith('tooling/'));
 }
 
+/** Returns whether staged files include domain TypeScript files (controllers, services, workers, any domain layer). */
+export function shouldRunGlobalTests(stagedFiles: string[]): boolean {
+  return stagedFiles.some((file) => file.startsWith('src/domains/') && file.endsWith('.ts'));
+}
+
 function runPnpm(scriptName: string, scriptArgs: string[] = []): number {
   const result = spawnSync('pnpm', [scriptName, ...scriptArgs], { stdio: 'inherit', shell: false });
   return result.status ?? 1;
@@ -163,6 +168,13 @@ export function buildGuardSteps(options: {
       label: 'Domain structure (strict)',
       when: 'always',
       description: 'pnpm validate:domain:strict',
+    },
+    {
+      id: '3b',
+      label: 'Architecture policy tests',
+      when: shouldRunGlobalTests(stagedFiles) ? 'always' : 'conditional',
+      description:
+        'pnpm test:global (service cross-domain boundary, no direct DB outside repos, import paths — when src/domains/**/*.ts staged)',
     },
     {
       id: '4',
@@ -306,9 +318,16 @@ export function runPreCommitGuard(options: RunGuardOptions = {}): number {
   }
 
   const runnableSteps: Array<{ label: string; run: () => number }> = [
-    { label: 'lint-staged (Biome + markdownlint)', run: () => runPnpm('lint-staged') },
+    {
+      label: 'lint-staged (Biome + markdownlint)',
+      run: () => runPnpm('lint-staged', ['--no-stash']),
+    },
     { label: 'TypeScript typecheck', run: () => runPnpm('typecheck') },
     { label: 'Domain structure (strict)', run: () => runPnpm('validate:domain:strict') },
+    {
+      label: 'Architecture policy tests',
+      run: () => (shouldRunGlobalTests(stagedFiles) ? runPnpm('test:global') : 0),
+    },
     { label: 'Scripts layout', run: () => runPnpm('validate:scripts-layout') },
     {
       label: 'Route catalog regenerate',

@@ -1,6 +1,6 @@
 # Git Branch Naming and PR Workflow
 
-Professional branch strategy and pull-request flow for core-be. For the full setup guide see [setup.md](../getting-started/setup.md). For CI/CD and deployment (including which tokens you need), see [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md).
+Professional branch strategy and pull-request flow for core-be. For the full setup guide see [SETUP.md](../../SETUP.md). For CI/CD and deployment (including which tokens you need), see [cicd-and-deployment.md](../deployment/ci-cd/cicd-and-deployment.md).
 
 ---
 

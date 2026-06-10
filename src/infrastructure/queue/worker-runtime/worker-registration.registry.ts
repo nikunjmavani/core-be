@@ -10,6 +10,8 @@ import { WEBHOOK_DELIVERY_QUEUE_NAME } from '@/domains/notify/sub-domains/webhoo
 import { createNotificationWorker } from '@/domains/notify/sub-domains/notification/workers/notification.worker.js';
 import { NOTIFICATION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/queues/notification.queue.js';
 import { createAuditRetentionWorker } from '@/domains/audit/workers/audit-retention.worker.js';
+import { AUDIT_OUTBOX_DRAIN_QUEUE_NAME } from '@/domains/audit/workers/audit-outbox-drain.constants.js';
+import { createAuditOutboxDrainWorker } from '@/domains/audit/workers/audit-outbox-drain.worker.js';
 import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retention.constants.js';
 import { createAuditExportWorker } from '@/domains/audit/workers/audit-export.worker.js';
 import { AUDIT_EXPORT_QUEUE_NAME } from '@/domains/audit/workers/audit-export.constants.js';
@@ -224,6 +226,12 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     family: 'retention',
     logLabel: 'audit retention worker',
     create: () => createAuditRetentionWorker(),
+  }),
+  retentionDefinition({
+    queueName: AUDIT_OUTBOX_DRAIN_QUEUE_NAME,
+    family: 'retention',
+    logLabel: 'audit outbox drain worker',
+    create: () => createAuditOutboxDrainWorker(),
   }),
   retentionDefinition({
     queueName: AUDIT_EXPORT_QUEUE_NAME,

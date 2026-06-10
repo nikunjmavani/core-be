@@ -5,7 +5,12 @@ import { ACCESS_TOKEN_EXPIRY_SECONDS } from '@/shared/constants/index.js';
 import { JWT_ISSUER } from '@/shared/constants/project-identity.constants.js';
 import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import { getEnv } from '@/shared/config/env.config.js';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+
+/** Throttle window so a steady flow of legacy-kid tokens cannot flood Sentry. */
+const JWT_LEGACY_FALLBACK_ALERT_INTERVAL_MS = 60_000;
+let lastJwtLegacyFallbackAlertAtMs = 0;
 
 const JWT_AUDIENCE = 'core-api';
 const JWT_ALGORITHM = 'RS256';
@@ -179,8 +184,29 @@ async function resolveVerifyKeyForToken(token: string): Promise<{
     }
     return { key: keyForKid, algorithm: JWT_ALGORITHM };
   }
-  // No kid (pre-rotation token) or no keyring — fall through to the single legacy verify key.
+  // No kid (pre-rotation token) or no keyring — fall back to the single legacy verify key
+  // only when JWT_LEGACY_KEY_ENABLED is true. Operators flip this to false after every issued
+  // token carries a `kid` to remove the permanent trust window on the original signing key.
+  if (!getEnv().JWT_LEGACY_KEY_ENABLED) {
+    throw new Error('JWT legacy kid-less verification disabled (JWT_LEGACY_KEY_ENABLED=false)');
+  }
+  reportJwtLegacyFallbackOnce();
   return getVerifyKey();
+}
+
+/**
+ * Surfaces every observed legacy-kid token verification as a throttled Sentry warning so
+ * operators can see the real volume of `kid`-less tokens still in flight before flipping
+ * `JWT_LEGACY_KEY_ENABLED` to false. Throttled to one event per
+ * {@link JWT_LEGACY_FALLBACK_ALERT_INTERVAL_MS} to avoid Sentry flooding.
+ */
+function reportJwtLegacyFallbackOnce(): void {
+  const now = Date.now();
+  if (now - lastJwtLegacyFallbackAlertAtMs < JWT_LEGACY_FALLBACK_ALERT_INTERVAL_MS) {
+    return;
+  }
+  lastJwtLegacyFallbackAlertAtMs = now;
+  captureMessage('jwt.verify.legacy_kidless_fallback', { level: 'warning' });
 }
 
 /**
@@ -213,6 +239,7 @@ export function resetJwtCachesForTests(): void {
   _verifyKey = null;
   _verifyKeyring = null;
   _verifyKeyringLoaded = false;
+  lastJwtLegacyFallbackAlertAtMs = 0;
 }
 
 export { JWT_ISSUER, JWT_AUDIENCE, ACCESS_TOKEN_EXPIRY_SECONDS };

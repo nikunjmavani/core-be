@@ -1,0 +1,43 @@
+---
+description: Enforces core-be Node/Fastify architecture for src/ (domains layout, dependency boundaries, Drizzle snake_case, events/workers patterns).
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+# core-be src/ architecture rules
+
+- Keep **domain layout** exact: `domains/<domain>/<domain>.{routes,container,...}.ts` at domain root; API resources in `domains/<domain>/sub-domains/<sub-domain>/` with `{controller,service,repository,dto,validator,serializer,types}.ts`. **Nested sub-domains** (aggregate children) live inside a parent sub-domain: `sub-domains/<parent>/<nested>/` (e.g. `webhook/webhook-event/`, `organization/organization-api-key/`). Flat domains (`audit`, `upload`) omit `sub-domains/`.
+- **Sub-domain directories** always prefixed with parent domain/resource name: `user-settings`, `organization-settings`, `member-role-permission`, `webhook-event`.
+- **Controllers are thin**: parse request → call service(s) → return response. No DB queries in controllers.
+- **Controllers naming**: `<resource>.controller.ts` exporting `create<Resource>Controller(...)`.
+- **Controllers use** shared helpers from `@/shared/utils/http/request.util.js`: `getRequestIdentifier(request)` for request IDs, `requireAuth(request)` for auth checks. Do NOT define local `getRequestId` or `requestIdentifier` helpers.
+- **Validators**: `<resource>.validator.ts` exporting function-based validators (e.g. `validateCreate<Resource>(data)`) using `.safeParse()` + throwing `ValidationError`. Do NOT use object-based validators or `.parse()`.
+- **DTOs**: `<resource>.dto.ts` containing Zod schemas for input validation. Sub-domains must have their own `.dto.ts` files — never define DTOs inline in services.
+- **Serializers**: `<resource>.serializer.ts` for response shaping. Use function-based serializers (e.g. `serialize<Resource>(row)`). Do NOT use pass-through generic serializers.
+- **Services**: express intent, use validators, call **same-domain** repositories, may emit events. Cross-domain coordination imports the other domain's **service** only.
+- **Services may import** other domains' **services** for cross-domain reads/writes. Services must **not** import another domain's **repository** or **schema** (use the owning domain's service instead).
+- **Repositories**: DB access only (Drizzle queries). Import from `@/infrastructure/database/connection.js` (`database`) and domain schema files (e.g. `@/domains/<domain>/<sub-domain>/<sub-domain>.schema.js`). May extend `@/infrastructure/database/base-repository.ts`. Repositories may import other domains' **schemas** for joins only.
+- **No orchestrator layer**: Multi-sub-domain domains use `<domain>.container.ts` to export services; controllers call the appropriate sub-domain service directly (see auth, user, billing, tenancy). Do not add `<domain>.orchestrator.ts`.
+- **Containers**: `<domain>.container.ts` at domain root handles dependency injection (instantiates repositories, services). Export services for route registration. Cross-domain deps are passed as constructor parameters.
+- **Cross-domain reads/writes** are handled via service imports (no separate use-cases layer).
+- **Import paths**: use `@/` for all cross-folder imports in `src/`; same-folder `./` only. Never `../`. See **[import-paths.mdc](import-paths.mdc)**.
+- **Routes**: All route files use `FastifyPluginAsync` pattern. Route files create controllers from services and register HTTP handlers. Route files should NOT instantiate repositories or services — that belongs in containers.
+- **Central routes.ts**: imports domain containers and domain routes, wires them together. Should be thin (~50 lines).
+- **Event bus vs BullMQ**: In-process `eventBus.emit` (API process) is not the same as BullMQ workers (`pnpm dev:worker`). Typical: service → emit → handler → `enqueueEmail()` → mail worker. See `CLAUDE.md` § Domain events vs BullMQ workers.
+- **Mail outbox**: `src/infrastructure/mail/mail-outbox.schema.ts` + repository are shared infrastructure (transactional outbox), not domain-owned.
+- **Events/queues/workers**:
+  - `domains/<domain>/events/index.ts`: aggregates `register<SubDomain>EventHandlers()` from sub-domains (and cross-resource handlers when needed)
+  - `domains/<domain>/sub-domains/<sub-domain>/events/*`: event types, handlers, and emit helpers for that resource; services emit from sub-domain services
+  - `domains/<domain>/sub-domains/<sub-domain>/queues/*`: BullMQ queue + enqueue helpers
+  - `domains/<domain>/sub-domains/<sub-domain>/workers/*`: BullMQ worker processors
+  - Services emit events; **event handlers** enqueue BullMQ jobs; workers process jobs. Event handler failure must not fail the HTTP request.
+- **Queue infrastructure** in `src/infrastructure/queue/`: connection, **scheduler** (repeatable job registration only), **dead-letter** (DLQ + Sentry on final job failure), bootstrap. **No** domain job processors in `infrastructure/queue/` — domain processors belong in their domain's `workers/` folder. Infrastructure-owned workers in `queue/dlq/` (DLQ auto-retry) and `observability/` are intentional exceptions.
+- **Drizzle schema**: table/column definitions and property names are **snake_case** and match Postgres exactly. Schemas are co-located: `src/domains/<domain>/sub-domains/<sub-domain>/<sub-domain>.schema.ts` or `.../sub-domains/<parent>/<nested>/<nested>.schema.ts`.
+- **Project identity**: JWT issuer, MCP URIs, OTEL service names, WebAuthn/MFA defaults, and similar product strings use **`@/shared/constants/project-identity.constants.js`** — see **[project-identity.mdc](project-identity.mdc)**. Do not add new `'core-be'` / `'core-be-api'` literals in `src/`.
+- **Tests**: Co-locate with code — domain `__tests__/` (e2e, unit, factories); sub-domain and nested `__tests__/unit/`; event handlers under `__tests__/unit/events/` (never `events/__tests__/`). Cross-cutting tests only in `src/tests/`. See **test-generator** skill and **testing-conventions.mdc**.
+- **Full names only**: `repository` not `repo`, `organization` not `org`, `database` not `db`, `request` not `req` (except Fastify conventions).
+- **Object parameters only** outside repositories: services, controllers, validators, serializers, workers/processors, queue helpers, event handlers, shared utils, scripts and their tests must accept a single named options object when they take 2+ inputs. Repositories (`*.repository.ts`) and repository unit tests (`*.repository.unit.test.ts`) keep positional params. Framework callbacks (Fastify, BullMQ, DI constructors, Vitest/Zod) stay as the framework requires. See **[object-params.mdc](object-params.mdc)**.
+- Prefer `src/shared/utils/infrastructure/logger.util.ts` logger; avoid `console.log` in production code.
+- **Middleware** (Fastify plugins) in `src/shared/middlewares/` — grouped under `core/`, `security/`, `session/`, `tenant/`, `rate-limit/`; register via `@/shared/middlewares/index.js`.
+- **Config** in `src/shared/config/env.config.ts`. Errors in `src/shared/errors/`. Types in `src/shared/types/`. Constants in `src/shared/constants/`.
+- **Build-time scripts**: `src/scripts/` for tooling (e.g. `generate-openapi.ts` → `docs/openapi/openapi.json` for ApiDog).

@@ -7,6 +7,10 @@ import { Queue } from 'bullmq';
 import { SEVEN_DAYS_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { getBullMQConnectionOptions } from '@/infrastructure/queue/connection.js';
 import { AUDIT_RETENTION_QUEUE_NAME } from '@/domains/audit/workers/audit-retention.constants.js';
+import {
+  AUDIT_OUTBOX_DRAIN_QUEUE_NAME,
+  DEFAULT_AUDIT_OUTBOX_DRAIN_CRON,
+} from '@/domains/audit/workers/audit-outbox-drain.constants.js';
 import { NOTIFICATION_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/notification/workers/notification-retention.constants.js';
 import { SESSION_CLEANUP_QUEUE_NAME } from '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.constants.js';
 import { WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-tombstone-retention.constants.js';
@@ -170,6 +174,12 @@ export function getScheduledJobs(): ScheduledJob[] {
       schedulerId: 'daily-audit-cleanup',
       jobName: 'cleanup-old-logs',
       cronPattern: env.AUDIT_RETENTION_CRON ?? DEFAULT_AUDIT_RETENTION_CRON,
+    }),
+    withSchedulerTimezone(timezone, {
+      queueName: AUDIT_OUTBOX_DRAIN_QUEUE_NAME,
+      schedulerId: 'audit-outbox-drain',
+      jobName: 'drain-pending-audit-outbox',
+      cronPattern: env.AUDIT_OUTBOX_DRAIN_CRON ?? DEFAULT_AUDIT_OUTBOX_DRAIN_CRON,
     }),
     withSchedulerTimezone(timezone, {
       queueName: NOTIFICATION_RETENTION_QUEUE_NAME,

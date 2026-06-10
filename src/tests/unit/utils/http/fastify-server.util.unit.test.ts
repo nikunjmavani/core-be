@@ -28,8 +28,17 @@ describe('fastify-server.util', () => {
     expect(PINO_REDACT_PATHS).toContain('req.headers.cookie');
   });
 
-  it('buildFastifyServerOptions uses env log level and disables trust proxy in test', () => {
-    const options = buildFastifyServerOptions();
+  it('buildFastifyServerOptions uses env log level and disables trust proxy in test', async () => {
+    // The static `buildFastifyServerOptions` imported at the top of this file binds to the
+    // REAL `env.config.js` (its top-level `env = getEnv()` evaluates once at module load,
+    // before the vi.mock factory can take effect on the binding). That makes the assertion
+    // depend on whatever CI / shell `LOG_LEVEL` is set to. Use the dynamic-import pattern
+    // the rest of this file already uses so the mock is honored consistently.
+    vi.resetModules();
+    const { buildFastifyServerOptions: build } = await import(
+      '@/shared/utils/http/fastify-server.util.js'
+    );
+    const options = build();
     expect(options.logger).toMatchObject({ level: 'info' });
     expect(options.trustProxy).toBe(false);
     expect(options.bodyLimit).toBe(1_048_576);

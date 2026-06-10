@@ -16,8 +16,9 @@ import {
 } from '@/shared/utils/security/webhook-outbound-fetch.util.js';
 import { invalidateWebhookOutboundCircuit } from '@/domains/notify/sub-domains/webhook/webhook-delivery/workers/webhook-outbound-circuit.js';
 import { buildOutboundFetchOptions, outboundFetch } from '@/infrastructure/outbound/index.js';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { buildWebhookSignatureHeader } from '@/shared/utils/security/webhook-signature.util.js';
-import { ConflictError, NotFoundError } from '@/shared/errors/index.js';
+import { ConfigurationError, ConflictError, NotFoundError } from '@/shared/errors/index.js';
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { safeWebhookUrlForLogs } from '@/shared/utils/security/safe-webhook-url-for-logs.util.js';
@@ -378,26 +379,32 @@ export class WebhookService {
     };
     const payloadString = JSON.stringify(testPayload);
     const signatureTimestamp = Math.floor(Date.now() / 1000);
-    // sec-re-09: mirror the worker's sec-UP #8 guard. When the resolved signing
-    // secret round-trips to '' (a legacy row that pre-dates the DTO .min(16)
-    // bound, or a corrupt envelope), buildWebhookSignatureHeader would compute
-    // `createHmac('sha256', '').update(...).digest('hex')` — Node accepts an
-    // empty key and emits a deterministic, attacker-reproducible value. A
-    // customer verifier validating X-Webhook-Signature against that empty key
-    // would accept any forged request signed the same way, indistinguishable
-    // from a legitimate test delivery from us. Omitting the header makes the
-    // unsigned state explicit and observable instead of fake-authentic.
+    // P0-#1: fail-closed on empty signing secret. Sending an unsigned test delivery would
+    // leave the customer verifier indistinguishable from "attacker stripped the header",
+    // so refuse to perform the test entirely. Operators see a Sentry error pointing them
+    // at the misconfigured row; users get a 500 telling them to rotate the secret.
     const signingSecret = decryptFieldSecret(webhook.encrypted_secret);
-    const signatureHeader =
-      signingSecret.length > 0
-        ? buildWebhookSignatureHeader(signingSecret, payloadString, signatureTimestamp)
-        : null;
-    if (signatureHeader === null) {
-      logger.warn(
+    if (signingSecret.length === 0) {
+      captureMessage('webhook.test.empty_signing_secret', {
+        level: 'error',
+        extra: {
+          webhookPublicId: webhook.public_id,
+          organizationPublicId: organization_public_id,
+        },
+      });
+      logger.error(
         { webhookPublicId: webhook.public_id, organizationPublicId: organization_public_id },
-        'webhook.test.empty_signing_secret_skipping_signature_header',
+        'webhook.test.empty_signing_secret',
+      );
+      throw new ConfigurationError(
+        `Webhook ${webhook.public_id} has an empty signing secret; rotate it before test delivery.`,
       );
     }
+    const signatureHeader = buildWebhookSignatureHeader(
+      signingSecret,
+      payloadString,
+      signatureTimestamp,
+    );
 
     const sentAt = new Date();
     let statusCode: number | null = null;
@@ -409,10 +416,8 @@ export class WebhookService {
       'User-Agent': 'core-be-webhook/1.0',
       'X-Webhook-Event': 'webhook.test',
       'X-Webhook-Timestamp': String(signatureTimestamp),
+      'X-Webhook-Signature': signatureHeader,
     };
-    if (signatureHeader !== null) {
-      requestHeaders['X-Webhook-Signature'] = signatureHeader;
-    }
 
     try {
       const response = await outboundFetch(

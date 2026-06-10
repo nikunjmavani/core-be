@@ -129,12 +129,22 @@ jobs:
         run: |
           pnpm tool:sync-env-example || (echo "::error::.env.example is out of sync with env schema or is missing the # GitHub Secrets / # GitHub Variables top-level halves. See log above. Run pnpm tool:sync-env-example (with --fix if needed)." && exit 1)
 
-  unit:
+  unit-tests:
     needs: [changes]
     if: |
       needs.changes.outputs.docs-only-md != 'true' &&
       (needs.changes.outputs.src-code == 'true' || needs.changes.outputs.ci-config == 'true')
     uses: ./.github/workflows/reusable-vitest-unit-only.yml
+
+  # Required-status-check gate: satisfies the branch-protection rule
+  # "unit / Unit + global" on every PR — including docs-only PRs where
+  # unit-tests is legitimately skipped by the path filter.
+  unit:
+    needs: [changes, unit-tests]
+    if: always()
+    uses: ./.github/workflows/reusable-unit-gate.yml
+    with:
+      unit-tests-result: ${{ needs.unit-tests.result }}
 
   migration-lint:
     name: Migration lint
@@ -229,25 +239,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      # BEGIN GENERATED project-identity
-      PROJECT_SLUG: core-be
-      PROJECT_DISPLAY_NAME: core-be
-      API_IMAGE: core-be-api
-      WORKER_IMAGE: core-be-worker
-      DOCKER_LOCAL_API_TAG: core-be
-      GHCR_CACHE_SCOPE_API: core-be-api
-      GHCR_CACHE_SCOPE_WORKER: core-be-worker
-      GIT_DEFAULT_BRANCH: dev
-      GIT_PRODUCTION_BRANCH: main
-      GIT_NON_PRODUCTION_BRANCH: dev
-      PROTECTED_BRANCHES_JSON: '["dev","main"]'
-      BRANCH_ENV_MAP_JSON: '{"dev":"development","main":"production"}'
-      # END GENERATED project-identity
       DOCKER_BUILDKIT: 1
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 1
+
+      - name: Setup project identity
+        uses: ./.github/actions/setup-project-identity
 
       - uses: ./.github/actions/setup-node-pnpm
 

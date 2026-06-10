@@ -15,6 +15,7 @@ const mockRedisGet = vi.fn();
 const mockRedisSet = vi.fn();
 const mockRedisIncr = vi.fn();
 const mockRedisDel = vi.fn();
+const mockRedisEval = vi.fn();
 
 vi.mock('@/infrastructure/cache/redis.client.js', () => ({
   redisConnection: {
@@ -22,6 +23,7 @@ vi.mock('@/infrastructure/cache/redis.client.js', () => ({
     set: (...arguments_: unknown[]) => mockRedisSet(...arguments_),
     incr: (...arguments_: unknown[]) => mockRedisIncr(...arguments_),
     del: (...arguments_: unknown[]) => mockRedisDel(...arguments_),
+    eval: (...arguments_: unknown[]) => mockRedisEval(...arguments_),
   },
 }));
 
@@ -169,6 +171,8 @@ describe('idempotency middleware happy paths and conflicts', () => {
     mockRedisSet.mockResolvedValue('OK');
     mockRedisIncr.mockResolvedValue(1);
     mockRedisDel.mockResolvedValue(1);
+    // P0-#4: default to "under cap" — Lua returns the new count after INCR.
+    mockRedisEval.mockResolvedValue(1);
   });
 
   it('replays completed cache entries when Redis already has an entry', async () => {
@@ -834,6 +838,121 @@ describe('idempotency middleware happy paths and conflicts', () => {
     expect(mockRedisIncr).toHaveBeenCalledTimes(1);
     const [counterKey] = mockRedisIncr.mock.calls.at(-1) as [string];
     expect(counterKey).toMatch(/^idempotency-claim-counter:shard:\d+$/);
+  });
+
+  // P0-#4: per-actor idempotency-key cap. A single misbehaving client sending unique keys
+  // per request would fill Redis with ~24h-lived entries. The cap rejects fresh claims with
+  // 429 + Retry-After once the per-actor counter crosses IDEMPOTENCY_PER_ACTOR_CAP inside
+  // the configured window; cache-hit replays of completed work are unaffected.
+  describe('per-actor cardinality cap (P0-#4)', () => {
+    it('responds 429 with Retry-After when the Lua check-and-incr returns -1 (over cap)', async () => {
+      mockRedisEval.mockResolvedValueOnce(-1);
+      const { claimPreHandler } = await registerIdempotencyHooks();
+      const request = {
+        method: 'POST',
+        headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
+        auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
+        _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+      } as unknown as FastifyRequest;
+
+      const send = vi.fn();
+      const header = vi.fn().mockReturnThis();
+      const reply = {
+        sent: false,
+        status: vi.fn().mockReturnThis(),
+        header,
+        send,
+      } as unknown as FastifyReply;
+
+      await claimPreHandler(request, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(429);
+      expect(header).toHaveBeenCalledWith('Retry-After', expect.any(String));
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            code: 'idempotency_per_actor_cap',
+            retryable: true,
+          }),
+        }),
+      );
+      // Never reach the SETNX claim or the shard counter when over cap.
+      expect(mockRedisSet).not.toHaveBeenCalled();
+      expect(mockRedisIncr).not.toHaveBeenCalled();
+    });
+
+    it('keys the rate counter by API key id when the actor authenticates with an API key', async () => {
+      const apiKeyPublicId = generatePublicId();
+      const { claimPreHandler } = await registerIdempotencyHooks();
+      const request = {
+        method: 'POST',
+        headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
+        auth: {
+          kind: 'apiKey' as const,
+          apiKeyPublicId,
+          apiKeyScopes: ['write:any'],
+          organizationPublicId: TEST_ORGANIZATION_PUBLIC_ID,
+        },
+        _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+      } as unknown as FastifyRequest;
+
+      await claimPreHandler(request, { sent: false } as FastifyReply);
+
+      expect(mockRedisEval).toHaveBeenCalledTimes(1);
+      const evalArgs = mockRedisEval.mock.calls.at(-1) as unknown[];
+      // EVAL signature: (script, numKeys, ...keys, ...args). KEY[0] is at index 2.
+      expect(evalArgs[2]).toBe(`idempotency:actor-rate:api-key:${apiKeyPublicId}`);
+    });
+
+    it('does NOT consume the cap on a cache-hit replay (cap protects only new claim allocations)', async () => {
+      mockRedisGet.mockResolvedValue(buildCompletedEntry(201, { id: 'replay' }));
+      const { claimPreHandler } = await registerIdempotencyHooks();
+      const request = {
+        method: 'POST',
+        headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
+        auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
+        _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+      } as unknown as FastifyRequest;
+
+      const reply = {
+        sent: false,
+        status: vi.fn().mockReturnThis(),
+        header: vi.fn().mockReturnThis(),
+        send: vi.fn(),
+      } as unknown as FastifyReply;
+
+      await claimPreHandler(request, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(201);
+      // Cache hit short-circuits before the cap eval — a legitimate retry of a completed
+      // request must never count against the actor's cardinality budget.
+      expect(mockRedisEval).not.toHaveBeenCalled();
+    });
+
+    it('fails open (allows the claim) when Redis EVAL throws so a transient outage does not turn the cap into a 5xx spike', async () => {
+      mockRedisEval.mockRejectedValueOnce(new Error('eval-failed'));
+      const { claimPreHandler } = await registerIdempotencyHooks();
+      const request = {
+        method: 'POST',
+        headers: { [IDEMPOTENCY_KEY_HEADER]: IDEMPOTENCY_TEST_KEY },
+        auth: { kind: 'user' as const, userId: TEST_USER_PUBLIC_ID },
+        _idempotencyKey: IDEMPOTENCY_TEST_KEY,
+      } as unknown as FastifyRequest;
+
+      const reply = {
+        sent: false,
+        status: vi.fn().mockReturnThis(),
+        header: vi.fn().mockReturnThis(),
+        send: vi.fn(),
+      } as unknown as FastifyReply;
+
+      await claimPreHandler(request, reply);
+
+      // SETNX still ran, the request proceeds; downstream Redis failures still hit the
+      // existing fail-closed 503 path.
+      expect(mockRedisSet).toHaveBeenCalled();
+      expect(reply.status).not.toHaveBeenCalledWith(429);
+    });
   });
 
   it('onResponse releases unclaimed placeholders when handler throws (no pending completion, statusCode 500)', async () => {

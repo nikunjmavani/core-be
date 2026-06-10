@@ -11,7 +11,7 @@ Map of skills, rules, subagents, and MCP tooling for coding agents and contribut
 | [AGENTS.md](../../AGENTS.md) | Onboarding checklist, CI gates, custom subagents |
 | [CLAUDE.md](../../CLAUDE.md) | Architecture, domains, commands |
 | [requirement-intake.md](../getting-started/requirement-intake.md) | New feature/API intake + Plan workflow |
-| [skill-index](../../.cursor/skills/skill-index/SKILL.md) | **Canonical** skill catalog, triggers, and auto-invoke rules |
+| [skill-index](../../agent-os/skills/skill-index/SKILL.md) | **Canonical** skill catalog, triggers, and auto-invoke rules |
 
 ```mermaid
 flowchart LR
@@ -27,7 +27,7 @@ flowchart LR
 
 ## Project skills (36)
 
-**36 total** — consult [skill-index](../../.cursor/skills/skill-index/SKILL.md) first. Includes **skill-index** (meta) and **cursor-global-skills** (reference to Cursor built-ins).
+**36 total** — consult [skill-index](../../agent-os/skills/skill-index/SKILL.md) first. Includes **skill-index** (meta) and **cursor-global-skills** (reference to Cursor built-ins).
 
 Common chains:
 
@@ -44,9 +44,9 @@ Common chains:
 
 ## Cursor rules (37)
 
-Two **always-on** rules: [engineering-principles.mdc](../../.cursor/rules/engineering-principles.mdc), [project-identity.mdc](../../.cursor/rules/project-identity.mdc).
+Two **always-on** rules: [engineering-principles.mdc](../../agent-os/rules/engineering-principles.mdc), [project-identity.mdc](../../agent-os/rules/project-identity.mdc).
 
-All others are **glob-scoped** — they auto-attach when matching files are edited. Full table: [skill-index → Auto-trigger rules](../../.cursor/skills/skill-index/SKILL.md#auto-trigger-rules).
+All others are **glob-scoped** — they auto-attach when matching files are edited. Full table: [skill-index → Auto-trigger rules](../../agent-os/skills/skill-index/SKILL.md#auto-trigger-rules).
 
 Policy rules (architecture, import paths, naming, object params) attach on `src/**/*.ts` without invoking a skill — they hold non-negotiable detail.
 
@@ -54,29 +54,37 @@ Policy rules (architecture, import paths, naming, object params) attach on `src/
 
 ## Custom subagents
 
-Defined in [`.cursor/agents/`](../../.cursor/agents/):
+Defined in [`agent-os/agents/`](../../agent-os/agents/). All agents are **read-only**.
+Cursor reads them via `.cursor/agents` → `agent-os/agents/` symlink.
 
-| Subagent | Use when |
-| --- | --- |
-| **production-reviewer** | Pre-release / deploy — read-only readiness plan |
-| **verifier** | Post-task validation — scoped tests and wiring |
-| **ci-investigator** | One failing CI job — isolated root-cause summary |
+| Reference | Link |
+| --------- | ---- |
+| Full catalog + use-when | [agent-os/docs/agents-catalog.md](../../agent-os/docs/agents-catalog.md) |
+| Platform invocation table | [agent-os/docs/platform-access.md](../../agent-os/docs/platform-access.md) |
 
-Add new subagents with global **create-subagent** (`~/.cursor/skills-cursor/`). See [cursor-global-skills](../../.cursor/skills/cursor-global-skills/SKILL.md).
+| Tool | How agents are invoked |
+| ---- | ---------------------- |
+| **Cursor** | `@<agent-name>` in Agent mode; auto-invokes from `description` frontmatter |
+| **Claude Code** | `"Read agent-os/agents/<name>.md and follow the procedure"` |
+| **Codex** | Reads `AGENTS.md` custom subagents table; invoke by name |
+
+Add new agents with global **create-subagent**. See [cursor-global-skills](../../agent-os/skills/cursor-global-skills/SKILL.md).
 
 ---
 
 ## Global Cursor skills
 
-Ship with Cursor under `~/.cursor/skills-cursor/`. **Not required** for normal backend work. Use when editing `.cursor/skills`, `.cursor/rules`, `.cursor/agents`, hooks, or IDE automation.
+Ship with Cursor under `~/.cursor/skills-cursor/`. **Not required** for normal backend work. Use when editing `agent-os/skills`, `agent-os/rules`, `agent-os/agents`, hooks, or IDE automation.
 
-See [cursor-global-skills](../../.cursor/skills/cursor-global-skills/SKILL.md).
+See [cursor-global-skills](../../agent-os/skills/cursor-global-skills/SKILL.md).
 
 ---
 
 ## MCP servers
 
-Template: [`.cursor/mcp.example.json`](../../.cursor/mcp.example.json) → copy to `.cursor/mcp.json` (gitignored).
+Template: [`agent-os/mcp/mcp.example.json`](../../agent-os/mcp/mcp.example.json) → copy to `agent-os/mcp/mcp.json` (gitignored).
+Symlinked: `.cursor/mcp.json` → `agent-os/mcp/mcp.json` (Cursor), `.mcp.json` → `agent-os/mcp/mcp.json` (Claude Code).
+Configure once — all platforms read the same file.
 
 | Server | Purpose |
 | --- | --- |

@@ -2,9 +2,11 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest, RouteOptions } f
 import fp from 'fastify-plugin';
 import { redisConnection } from '@/infrastructure/cache/redis.client.js';
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
+import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { ValidationError } from '@/shared/errors/index.js';
 import {
+  buildIdempotencyActorRateKey,
   buildIdempotencyCacheKey,
   hasAuthenticatedIdempotencyActor,
   parseIdempotencyKeyHeader,
@@ -30,6 +32,50 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Throttle window for the degraded-mode Sentry alert so a Redis outage cannot flood Sentry. */
 const IDEMPOTENCY_STORE_UNAVAILABLE_ALERT_INTERVAL_MS = 30_000;
 let lastIdempotencyStoreUnavailableAlertAtMs = 0;
+
+/** Throttle window for the per-actor-cap exceeded Sentry alert so a noisy client cannot flood Sentry. */
+const IDEMPOTENCY_PER_ACTOR_CAP_ALERT_INTERVAL_MS = 60_000;
+let lastIdempotencyPerActorCapAlertAtMs = 0;
+
+/**
+ * Atomic "check threshold then INCR + EXPIRE" so a concurrent burst from one actor cannot
+ * race past the cap (a TS-side GET-then-INCR would let N concurrent requests all read N-1
+ * and then each push the counter to N). Returns the new count, or `-1` if the actor is
+ * already at or above the cap (caller responds 429).
+ */
+const IDEMPOTENCY_PER_ACTOR_RATE_CHECK_AND_INCR_LUA = `
+local count = tonumber(redis.call('GET', KEYS[1]) or '0')
+local cap = tonumber(ARGV[1])
+if count >= cap then
+  return -1
+end
+local new_count = redis.call('INCR', KEYS[1])
+if new_count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+return new_count
+`;
+
+/**
+ * Surfaces a per-actor idempotency-key cap breach as a throttled Sentry warning so a noisy
+ * client (one sending unique keys per request) is observable to operators without flooding
+ * Sentry. Throttled to one event per {@link IDEMPOTENCY_PER_ACTOR_CAP_ALERT_INTERVAL_MS}.
+ */
+function alertIdempotencyPerActorCapExceeded(payload: {
+  actorRateKey: string;
+  cap: number;
+  windowSeconds: number;
+}): void {
+  const now = Date.now();
+  if (now - lastIdempotencyPerActorCapAlertAtMs < IDEMPOTENCY_PER_ACTOR_CAP_ALERT_INTERVAL_MS) {
+    return;
+  }
+  lastIdempotencyPerActorCapAlertAtMs = now;
+  captureMessage('idempotency.per_actor_cap.exceeded', {
+    level: 'warning',
+    extra: payload,
+  });
+}
 
 /**
  * Surfaces the idempotency store (Redis) being unavailable as a throttled Sentry event so a
@@ -236,6 +282,72 @@ function resolveIdempotencyRoutePath(request: FastifyRequest): string {
   return pathOnly && pathOnly.length > 0 ? pathOnly : '/';
 }
 
+/**
+ * Runs the atomic check-and-INCR for the per-actor idempotency claim cap (P0-#4).
+ * Returns `true` when the actor has crossed `IDEMPOTENCY_PER_ACTOR_CAP` inside the
+ * configured window and the request must be rejected with 429.
+ *
+ * @remarks
+ * Fails open on Redis errors (logs, returns `false`) so a transient Lua/EVAL outage does
+ * not turn the soft rate limit into a 5xx spike — the cache-level claim path (SETNX) still
+ * has its own fail-closed treatment via {@link respondIdempotencyStoreUnavailable}, which
+ * is the right escalation for a Redis outage.
+ */
+async function enforceIdempotencyPerActorCap(scope: {
+  userId?: string;
+  organizationId?: string;
+  apiKeyPublicId?: string;
+}): Promise<boolean> {
+  const actorRateKey = buildIdempotencyActorRateKey(scope);
+  if (actorRateKey === null) return false;
+
+  const cap = env.IDEMPOTENCY_PER_ACTOR_CAP;
+  const windowSeconds = env.IDEMPOTENCY_PER_ACTOR_CAP_WINDOW_SECONDS;
+  let result: unknown;
+  try {
+    result = await redisConnection.eval(
+      IDEMPOTENCY_PER_ACTOR_RATE_CHECK_AND_INCR_LUA,
+      1,
+      actorRateKey,
+      String(cap),
+      String(windowSeconds),
+    );
+  } catch (error) {
+    logger.warn({ error, actorRateKey }, 'idempotency.per_actor_cap.eval.failed');
+    return false;
+  }
+  if (typeof result !== 'number') return false;
+  if (result === -1) {
+    alertIdempotencyPerActorCapExceeded({ actorRateKey, cap, windowSeconds });
+    logger.warn({ actorRateKey, cap, windowSeconds }, 'idempotency.per_actor_cap.exceeded');
+    return true;
+  }
+  return false;
+}
+
+function sendIdempotencyPerActorCapExceeded(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): FastifyReply {
+  const retryAfterSeconds = env.IDEMPOTENCY_PER_ACTOR_CAP_WINDOW_SECONDS;
+  const detail = translateRequestMessage(
+    request,
+    'errors:idempotencyPerActorCapExceeded',
+    'Too many idempotent requests; reuse a key or wait for the window to reset',
+  );
+  reply.header('Retry-After', String(retryAfterSeconds));
+  reply.status(429);
+  return reply.send({
+    error: {
+      type: 'rate_limit_error',
+      code: 'idempotency_per_actor_cap',
+      detail,
+      retryable: true,
+      retryAfterSeconds,
+    },
+  });
+}
+
 async function idempotencyClaimPreHandler(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -284,6 +396,14 @@ async function idempotencyClaimPreHandler(
         parseIdempotencyEntry(cached),
         requestFingerprint,
       );
+    }
+
+    // P0-#4: per-actor claim cap. The cache-hit path above is intentionally before this check
+    // so legitimate replay traffic (same key, expecting the cached completed response) is never
+    // rate-limited; only attempts that would actually allocate a new Redis entry count.
+    const isOverCap = await enforceIdempotencyPerActorCap(scope);
+    if (isOverCap) {
+      return sendIdempotencyPerActorCapExceeded(request, reply);
     }
 
     const inFlightEntry: InFlightIdempotencyEntry = {

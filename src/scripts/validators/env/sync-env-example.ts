@@ -4,7 +4,7 @@
  *
  * `.env.example` is the single committed env template — every schema key must appear
  * (commented or uncommented). Per-environment `.env.<name>` files are gitignored copies
- * created by `pnpm github:sync` from `.github/sync.config.json` and are NOT validated here.
+ * created by `pnpm github:sync` from `tooling/setup/setup.config.json` and are NOT validated here.
  *
  * Usage:
  *   pnpm tool:sync-env-example           # Report only, print PR snippet

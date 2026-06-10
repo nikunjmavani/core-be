@@ -2,7 +2,24 @@
 
 ## New requirements — intake format
 
-For **any new requirement** (new domain, routes, worker, schema, etc.), use the format and checklist in **`docs/getting-started/requirement-intake.md`**. That doc defines what details to provide and which skills/rules to invoke so the AI can perform best and keep docs, routes, tests, and lint in sync. Consult **`.cursor/skills/skill-index/SKILL.md`** first, then run the skills listed for the requirement type.
+For **any new requirement** (new domain, routes, worker, schema, etc.), use the format and checklist in **`docs/getting-started/requirement-intake.md`**. That doc defines what details to provide and which skills/rules to invoke so the AI can perform best and keep docs, routes, tests, and lint in sync. Consult **`agent-os/skills/skill-index/SKILL.md`** first, then run the skills listed for the requirement type.
+
+## AI agent references (`agent-os/`)
+
+`agent-os/` at the repo root is the single source of truth for all AI tooling.
+Cursor reads agents/skills/rules via symlinks (`.cursor/agents → agent-os/agents`, etc.).
+Claude Code reads `agent-os/` directly via `.claude/` symlinks.
+
+| File | Purpose |
+| ---- | ------- |
+| [`agent-os/docs/principles.md`](agent-os/docs/principles.md) | Engineering principles + project identity (full detail) |
+| [`agent-os/docs/skill-triggers.md`](agent-os/docs/skill-triggers.md) | File pattern → skill map (replaces reading 22 sync rules) |
+| [`agent-os/docs/agents-catalog.md`](agent-os/docs/agents-catalog.md) | All 8 agents with descriptions and use-when |
+| [`agent-os/docs/platform-access.md`](agent-os/docs/platform-access.md) | How to invoke agents on Cursor, Claude Code, Codex |
+| [`agent-os/agents/`](agent-os/agents/) | Agent definition files |
+| [`agent-os/skills/`](agent-os/skills/) | Skill definition files |
+| [`agent-os/rules/`](agent-os/rules/) | Cursor rule files (also accessible via `.cursor/rules/` symlink) |
+| [`agent-os/hooks/`](agent-os/hooks/) | Claude Code hook scripts |
 
 ## Architecture Rules (Non-Negotiable)
 
@@ -246,7 +263,7 @@ Billing event helpers and types live with the billing sub-domains that emit them
 - **Tenant**: `X-Organization-Id` header → `request.organizationId` via `src/shared/middlewares/tenant/tenant.middleware.ts`
 - **Organization context / RLS**: Organization context is set only for HTTP requests via tenant middleware (`X-Organization-Id` → Postgres session variable `app.current_organization_id` for RLS). Workers and processors must not call or import `getRequestDatabase()` (enforced by global tests and code review; do not import `request-database.context` under `*.worker.ts` / `*.processor.ts`). Use context wrappers (`withOrganizationContext`, `withGlobalRetentionCleanupDatabaseContext`, `withUserDatabaseContext`, `withSessionRetentionCleanupDatabaseContext`) and pass the returned `databaseHandle` into `createWorker*Repository(databaseHandle)` factories or `runTenantScopedWorkerJob` / `runGlobalRetentionWorkerJob` / `runUserScopedWorkerJob` from `src/infrastructure/queue/worker-processor.util.ts`. Tenant-scoped jobs must include `organizationPublicId` in the job payload. See `src/infrastructure/database/contexts/retention-database.context.ts`; the `app.global_retention_cleanup` RLS bypass clauses are defined in the consolidated baseline migration `migrations/00000000000000_init.sql`.
 - **DB**: `src/infrastructure/database/connection.ts` singleton + Drizzle queries in repositories; repositories may extend `src/infrastructure/database/base-repository.ts` for `paginate()`
-- **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) and `.env.local` are gitignored. Hosted environment mapping lives in `tooling/setup/setup.config.json` (canonical); `.github/sync.config.json` is generated via `pnpm tool:generate-project-identity`. Scaffold and push with `pnpm github:sync`. Consistency and remote drift: `pnpm github:sync --check`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'development'}` then applies `.env.local` as an override (non-production only, gitignored, machine-specific — point `DATABASE_URL` / `REDIS_URL` at your local Docker Compose stack without editing `.env.development`).
+- **Config**: Environment variables from `src/shared/config/env.config.ts`. Env files are **root only**: `.env.example` is the single committed template; per-environment `.env.<environment>` files (e.g. `.env.development`, `.env.production`) and `.env.local` are gitignored. Hosted environment mapping lives in `tooling/setup/setup.config.json` (canonical); `pnpm github:sync` reads it directly. Project identity constants and the CI composite action are generated via `pnpm tool:generate-project-identity`. Scaffold and push with `pnpm github:sync`. Consistency and remote drift: `pnpm github:sync --check`. Runtime loader (`src/shared/config/load-env-files.ts`) reads `.env.${NODE_ENV ?? 'development'}` then applies `.env.local` as an override (non-production only, gitignored, machine-specific — point `DATABASE_URL` / `REDIS_URL` at your local Docker Compose stack without editing `.env.development`).
 
 ## Dependency Rules
 
