@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import { UserService } from '@/domains/user/user.service.js';
 import type { UserRepository } from '@/domains/user/user.repository.js';
@@ -99,6 +104,9 @@ describe('UserService', () => {
       userDataExportService: {
         deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
       } as never,
+      organizationOwnership: {
+        countOrganizationsOwnedByUser: vi.fn().mockResolvedValue(0),
+      } as never,
     });
   });
 
@@ -186,6 +194,45 @@ describe('UserService', () => {
     });
     await service.deleteMe(userRow.public_id);
     expect(repository.softDelete).toHaveBeenCalledWith(userRow.public_id);
+  });
+
+  it('route-audit-#2: deleteMe is blocked when the user still owns organizations', async () => {
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions: vi.fn() } as never,
+      authMethodService: {
+        revokeAllForUser: vi.fn(),
+        invalidateAllVerificationTokensForUser: vi.fn(),
+      } as never,
+      uploadService: { tombstoneAllByUserId: vi.fn() } as never,
+      userDataExportService: { deleteAllExportsForUser: vi.fn() } as never,
+      organizationOwnership: {
+        countOrganizationsOwnedByUser: vi.fn().mockResolvedValue(2),
+      } as never,
+    });
+
+    await expect(service.deleteMe(userRow.public_id)).rejects.toBeInstanceOf(ConflictError);
+    // Blocked before any mutation — no half-state.
+    expect(repository.markDeletionStarted).not.toHaveBeenCalled();
+    expect(repository.softDelete).not.toHaveBeenCalled();
+  });
+
+  it('route-audit-#2: deleteUser (admin) is blocked when the target still owns organizations', async () => {
+    resolveGlobalRoleForEmailMock.mockReturnValue(undefined); // target is not a protected admin
+    service.wireOffboardingServices({
+      authSessionService: { revokeAllSessions: vi.fn() } as never,
+      authMethodService: {
+        revokeAllForUser: vi.fn(),
+        invalidateAllVerificationTokensForUser: vi.fn(),
+      } as never,
+      uploadService: { tombstoneAllByUserId: vi.fn() } as never,
+      userDataExportService: { deleteAllExportsForUser: vi.fn() } as never,
+      organizationOwnership: {
+        countOrganizationsOwnedByUser: vi.fn().mockResolvedValue(1),
+      } as never,
+    });
+
+    await expect(service.deleteUser(userRow.public_id)).rejects.toBeInstanceOf(ConflictError);
+    expect(repository.softDelete).not.toHaveBeenCalled();
   });
 
   it('deleteMe soft-deletes before avatar storage cleanup', async () => {

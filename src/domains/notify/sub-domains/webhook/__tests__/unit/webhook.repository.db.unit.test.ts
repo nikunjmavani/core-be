@@ -258,4 +258,41 @@ describe('WebhookRepository (database)', () => {
       expect(afterDelete.total).toBe(1);
     });
   });
+
+  describe('chk_webhooks_updated invariant (updated_at never precedes created_at)', () => {
+    it('soft-delete and update succeed even when created_at is ahead of now()', async () => {
+      const user = await createTestUser({ email: 'webhook-updated-at@test.com' });
+      const organization = await createTestOrganization({ ownerUserId: user.id });
+      const created = await repository.create({
+        organization_id: organization.id,
+        url: 'https://example.com/future-hook',
+        encrypted_secret: 'secret',
+        events: ['subscription.updated'],
+        is_enabled: true,
+        created_by_user_id: user.id,
+      });
+
+      // Force the flake condition: created_at AHEAD of now() (set updated_at too so the row stays
+      // valid). Previously a later mutation's `updated_at = now()` would be < created_at and violate
+      // chk_webhooks_updated; greatest(created_at, now()) keeps the invariant true.
+      const future = new Date(Date.now() + 60 * 60 * 1000);
+      await database
+        .update(webhooks)
+        .set({ created_at: future, updated_at: future })
+        .where(eq(webhooks.public_id, created.public_id));
+
+      // update() must not violate the CHECK...
+      const updated = await repository.update(
+        created.public_id,
+        organization.id,
+        { is_enabled: false },
+        user.id,
+      );
+      expect(updated?.is_enabled).toBe(false);
+
+      // ...and neither must soft-delete.
+      const deleted = await repository.softDelete(created.public_id, organization.id);
+      expect(deleted?.deleted_at).not.toBeNull();
+    });
+  });
 });

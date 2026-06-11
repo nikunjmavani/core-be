@@ -1,4 +1,9 @@
-import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { resolveGlobalRoleForEmail } from '@/shared/utils/auth/global-admin-role.util.js';
 import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
@@ -26,23 +31,44 @@ import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructur
 const ALLOWED_AVATAR_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 
 /**
+ * Structural port for the organization-ownership check during user offboarding (route-audit-#2).
+ *
+ * @remarks
+ * - **Algorithm:** a minimal interface (not an import of `OrganizationService`) so user offboarding
+ *   can count the user's owned organizations without user depending on tenancy at the type level.
+ * - **Failure modes:** the implementer surfaces DB errors; offboarding propagates them.
+ * - **Side effects:** none on this type — the implementer runs the count read.
+ * - **Notes:** the composition root supplies `OrganizationService` structurally (it already exposes
+ *   `countOrganizationsOwnedByUser`).
+ */
+export type UserOrganizationOwnershipPort = {
+  countOrganizationsOwnedByUser(userPublicId: string, userInternalId: number): Promise<number>;
+};
+
+/**
  * Cross-domain services injected lazily into {@link UserService} so account deletion can fan out
  * its side effects.
  *
  * @remarks
  * - **Algorithm:** wired post-construction by `wireOffboardingServices` so the user container can
- *   be built before the auth, upload, and data-export containers exist (breaks circular DI).
+ *   be built before the auth, upload, data-export, and tenancy containers exist (breaks circular DI).
  * - **Failure modes:** if any dependency is missing at deletion time, the service falls back to a
  *   plain soft-delete and emits no fan-out (see {@link UserService} `softDeleteUserWithOffboarding`).
  * - **Side effects:** none directly — the hosted services are responsible for queue / DB / S3 effects.
  * - **Notes:** intentionally typed as a record rather than an interface so the optional wiring path
- *   stays explicit at the call site.
+ *   stays explicit at the call site; `organizationOwnership` is optional (offboarding still runs
+ *   without it, just without the owned-organizations guard).
  */
 export type UserOffboardingDependencies = {
   authSessionService: AuthSessionService;
   authMethodService: AuthMethodService;
   uploadService: UploadService;
   userDataExportService: UserDataExportService;
+  /**
+   * route-audit-#2 follow-up: blocks deleting a user who still owns organizations (the org — with
+   * its members + billing — would be orphaned at a tombstoned owner). Require transfer/delete first.
+   */
+  organizationOwnership?: UserOrganizationOwnershipPort | undefined;
 };
 
 /**
@@ -74,6 +100,7 @@ export type UserOffboardingDependencies = {
 export class UserService {
   private offboardingUploadService: UploadService | null = null;
   private offboardingUserDataExportService: UserDataExportService | null = null;
+  private offboardingOrganizationOwnership: UserOrganizationOwnershipPort | null = null;
   private authSessionService: AuthSessionService | null = null;
   private authMethodService: AuthMethodService | null = null;
 
@@ -87,6 +114,7 @@ export class UserService {
     this.authMethodService = dependencies.authMethodService;
     this.offboardingUploadService = dependencies.uploadService;
     this.offboardingUserDataExportService = dependencies.userDataExportService;
+    this.offboardingOrganizationOwnership = dependencies.organizationOwnership ?? null;
   }
 
   private get offboardingDependencies(): UserOffboardingDependencies | null {
@@ -105,6 +133,7 @@ export class UserService {
       authMethodService: this.authMethodService,
       uploadService: this.offboardingUploadService,
       userDataExportService: this.offboardingUserDataExportService,
+      organizationOwnership: this.offboardingOrganizationOwnership ?? undefined,
     };
   }
 
@@ -141,6 +170,19 @@ export class UserService {
       );
       if (!deleted) throw new NotFoundError('User');
       return;
+    }
+    // route-audit-#2 follow-up: refuse to delete a user who still owns organizations — the org (and
+    // its members + active subscription) would be orphaned at a tombstoned owner. The user must
+    // transfer ownership (or delete the org, which now cancels its subscription) first. Checked
+    // before markDeletionStarted so a blocked delete leaves no half-state.
+    if (offboarding.organizationOwnership) {
+      const ownedCount = await offboarding.organizationOwnership.countOrganizationsOwnedByUser(
+        user.public_id,
+        user.id,
+      );
+      if (ownedCount > 0) {
+        throw new ConflictError('errors:userOwnsOrganizations');
+      }
     }
     const marked = await withUserDatabaseContext(public_id, () =>
       this.repository.markDeletionStarted(public_id),
