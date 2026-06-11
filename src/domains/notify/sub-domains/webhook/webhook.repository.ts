@@ -12,6 +12,17 @@ import {
   parseListCursor,
 } from '@/shared/utils/http/pagination.util.js';
 
+/**
+ * `updated_at` value for webhook mutations: `greatest(created_at, now())` rather than bare `now()`.
+ *
+ * Postgres `now()` is the TRANSACTION start time. Under heavy parallel test load a mutation's
+ * transaction can begin before a webhook row that was created in a later-started transaction which
+ * committed first, making `now() < created_at` and violating the `chk_webhooks_updated`
+ * (`updated_at >= created_at`) CHECK on soft-delete/update. `greatest` keeps the invariant — and
+ * "updated_at never precedes created_at" — true regardless of transaction-start timing.
+ */
+const webhookUpdatedAtTimestamp: SQL = sql`greatest(${webhooks.created_at}, now())`;
+
 /** Drizzle row type inferred from the `notify.webhooks` table. */
 export type WebhookRow = typeof webhooks.$inferSelect;
 
@@ -208,7 +219,7 @@ export class WebhookRepository {
     const baseSet: Record<string, unknown> = {
       ...data,
       events: data.events as Record<string, unknown> | undefined,
-      updated_at: databaseNowTimestamp,
+      updated_at: webhookUpdatedAtTimestamp,
       updated_by_user_id: updated_by_user_id ?? undefined,
     };
     if (rotatingSecret) {
@@ -232,7 +243,7 @@ export class WebhookRepository {
   async softDelete(public_id: string, organization_id: number) {
     const rows = await getRequestDatabase()
       .update(webhooks)
-      .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .set({ deleted_at: databaseNowTimestamp, updated_at: webhookUpdatedAtTimestamp })
       .where(
         and(
           eq(webhooks.public_id, public_id),
