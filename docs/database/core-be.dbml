@@ -146,6 +146,7 @@ Note auth.auth_methods {
 
 Table auth.mail_outbox {
   created_at timestamptz [not null]
+  dedupe_key varchar(255)
   html text [not null]
   id bigint [pk, increment, not null]
   reply_to varchar(320)
@@ -343,7 +344,7 @@ Table billing.plans {
 }
 
 Note billing.plans {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: plans_deny_all, plans_app_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table billing.stripe_webhook_events {
@@ -575,7 +576,7 @@ Table tenancy.permissions {
 }
 
 Note tenancy.permissions {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: permissions_deny_all, permissions_app_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table tenancy.role_permissions {
@@ -640,6 +641,8 @@ Ref: audit.logs.organization_id > tenancy.organizations.id [delete: set null]
 Ref: audit.logs.target_user_id > auth.users.id [delete: set null]
 Ref: auth.auth_methods.created_by_user_id > auth.users.id [delete: no action]
 Ref: auth.auth_methods.user_id > auth.users.id [delete: cascade]
+Ref: auth.mfa_methods.created_by_user_id > auth.users.id [delete: set null]
+Ref: auth.mfa_methods.user_id > auth.users.id [delete: cascade]
 Ref: auth.mfa_recovery_codes.user_id > auth.users.id [delete: cascade]
 Ref: auth.sessions.organization_id > tenancy.organizations.id [delete: set null]
 Ref: auth.sessions.user_id > auth.users.id [delete: cascade]

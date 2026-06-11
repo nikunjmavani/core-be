@@ -168,6 +168,29 @@ export class OrganizationApiKeyRepository extends BaseRepository {
     return (rows[0] ?? null) as OrganizationApiKeyRow | null;
   }
 
+  /**
+   * Revokes (soft-deletes) every active API key created by a user within an organization —
+   * called when that member is removed/leaves so their keys lose access too (reaudit-#7).
+   * Returns the number of keys revoked.
+   */
+  async revokeAllByCreatorInOrganization(
+    organization_id: number,
+    creator_user_id: number,
+  ): Promise<number> {
+    const rows = await getRequestDatabase()
+      .update(api_keys)
+      .set({ deleted_at: databaseNowTimestamp, updated_at: databaseNowTimestamp })
+      .where(
+        and(
+          eq(api_keys.organization_id, organization_id),
+          eq(api_keys.created_by_user_id, creator_user_id),
+          isNull(api_keys.deleted_at),
+        ),
+      )
+      .returning({ id: api_keys.id });
+    return rows.length;
+  }
+
   async softDelete(
     public_id: string,
     organization_id: number,

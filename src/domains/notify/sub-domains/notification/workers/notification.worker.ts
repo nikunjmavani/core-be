@@ -84,7 +84,11 @@ async function dispatchNotificationEmail(options: {
   });
 
   // Persist the durable outbox row FIRST. If this throws, no marker was written, so
-  // a BullMQ retry simply re-inserts — the email is never lost.
+  // a BullMQ retry simply re-inserts — the email is never lost. reaudit-#4: pass a
+  // dedupeKey so the insert is idempotent at the DB layer — two concurrent runs of the
+  // same notification (stall → redelivery) converge on ONE outbox row (the second gets
+  // back the existing id), closing the duplicate-email window the Redis marker alone left
+  // open. The Redis marker below is now just a fast-path to skip the DB insert on retry.
   let mailOutboxId: number | undefined;
   await withSystemTableWorkerContext(async () => {
     mailOutboxId = await recordOutboxEmail({
@@ -92,13 +96,13 @@ async function dispatchNotificationEmail(options: {
       subject,
       html,
       tags: [{ name: 'category', value: `notification-${type}` }],
+      dedupeKey: `notification:${notificationId}:email:${email.toLowerCase()}`,
     });
   });
 
-  // The outbox row is the durability commit. Mark dispatched ONLY now so retries
-  // skip. A hard crash between the insert above and this mark can cause a rare
-  // duplicate on retry — an at-least-once trade chosen because a lost notification
-  // is worse than a rare duplicate.
+  // Fast-path marker so a plain BullMQ retry skips re-touching the row. Correctness no
+  // longer depends on it (the DB dedupe_key is the authority); a crash before this mark
+  // just means the retry re-runs the idempotent insert and resolves to the same id.
   await markNotificationEmailDispatched({ notificationId, recipient: email });
 
   // Do NOT throw on dispatch failure — the mail-outbox sweeper re-enqueues the row.

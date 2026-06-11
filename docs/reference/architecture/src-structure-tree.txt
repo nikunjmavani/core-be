@@ -172,6 +172,7 @@ src/
     │   │   │   │   ├── integration/
     │   │   │   │   │   └── auth-mfa.integration.test.ts
     │   │   │   │   └── unit/
+    │   │   │   │   │   ├── auth-mfa-method.cascade.db.unit.test.ts
     │   │   │   │   │   ├── auth-mfa-recovery-code.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.repository.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.service.org-policy-on-delete.unit.test.ts
@@ -1042,6 +1043,7 @@ src/
     │   ├── __tests__/
     │   │   └── unit/
     │   │   │   ├── mail-outbox-sweeper.processor.unit.test.ts
+    │   │   │   ├── mail-outbox.dedupe.db.unit.test.ts
     │   │   │   └── mail.processor.unit.test.ts
     │   ├── queues/
     │   │   ├── __tests__/
@@ -1087,6 +1089,9 @@ src/
     │   │   ├── opentelemetry.unit.test.ts
     │   │   └── sentry.unit.test.ts
     │   ├── dlq-depth/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── dlq-depth.coverage.unit.test.ts
     │   │   ├── db-pool-alert.service.ts
     │   │   ├── dlq-depth.constants.ts
     │   │   ├── dlq-depth.service.ts

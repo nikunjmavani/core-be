@@ -42,13 +42,17 @@ async function rederiveSuperAdminRole(
   }
   const user = await userService.findUserRecordByPublicId(userPublicId);
   if (!user) return undefined;
+  // reaudit-#10: gate the SUPER_ADMIN re-grant on the live account state. Previously only the
+  // non-allowlist branch checked status, so a suspended/inactive super-admin whose email is
+  // still allowlisted kept admin via this path. Drop the role for any non-active account
+  // (defense in depth alongside the session-layer status check).
+  if (user.status !== 'ACTIVE') return undefined;
   const currentGlobalRole = resolveGlobalRoleForEmail(user.email);
   if (currentGlobalRole === GLOBAL_ROLES.SUPER_ADMIN) {
     return GLOBAL_ROLES.SUPER_ADMIN;
   }
-  // Email no longer in the allowlist — downgrade to USER if the account is still active,
-  // otherwise drop the role entirely.
-  return user.status === 'ACTIVE' ? GLOBAL_ROLES.USER : undefined;
+  // Active but no longer in the allowlist — downgrade to USER.
+  return GLOBAL_ROLES.USER;
 }
 
 async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {

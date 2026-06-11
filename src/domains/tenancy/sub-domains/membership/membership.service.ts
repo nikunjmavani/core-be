@@ -25,6 +25,7 @@ import {
 } from './membership.validator.js';
 import { serializeMembership } from './membership.serializer.js';
 import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
+import type { OrganizationApiKeyRepository } from '@/domains/tenancy/sub-domains/organization/organization-api-key/organization-api-key.repository.js';
 
 /**
  * HTTP response shape for `GET
@@ -90,7 +91,26 @@ export class MembershipService {
     private readonly permissionRepository: PermissionRepository,
     private readonly organizationSettingsService?: OrganizationSettingsService,
     private readonly userSettingsService?: UserSettingsService,
+    // reaudit-#7: optional so minimal test harnesses can omit it; the container always wires it.
+    private readonly organizationApiKeyRepository?: OrganizationApiKeyRepository,
   ) {}
+
+  /**
+   * Revokes every API key the departing member created in this organization (reaudit-#7), so a
+   * removed/left member's keys lose access along with their session. Runs inside the caller's
+   * organization DB context (RLS-scoped). Best-effort: skipped when the api-key repository is not
+   * wired (minimal test harness).
+   */
+  private async revokeApiKeysForDepartedMember(
+    userId: number,
+    organizationId: number,
+  ): Promise<void> {
+    if (!this.organizationApiKeyRepository) return;
+    await this.organizationApiKeyRepository.revokeAllByCreatorInOrganization(
+      organizationId,
+      userId,
+    );
+  }
 
   private async invalidatePermissionsForMembership(
     user_internal_id: number,
@@ -345,6 +365,8 @@ export class MembershipService {
         }
         throw new NotFoundError('Membership');
       }
+      // reaudit-#7: revoke the removed member's API keys so they lose access too.
+      await this.revokeApiKeysForDepartedMember(deleted.user_id, organization.id);
       await this.invalidatePermissionsForMembership(deleted.user_id, organization_public_id);
     });
   }
@@ -403,6 +425,8 @@ export class MembershipService {
         }
         throw new NotFoundError('Membership');
       }
+      // reaudit-#7: revoke the departing member's API keys so they lose access too.
+      await this.revokeApiKeysForDepartedMember(userId, organization.id);
       await invalidatePermissions(user_public_id, organization_public_id);
     });
   }

@@ -67,3 +67,53 @@ describe('OrganizationApiKeyRepository.touchLastUsedAt (audit-#8 throttle)', () 
     expect(updated!.getTime()).toBeGreaterThan(stale.getTime());
   });
 });
+
+describe('OrganizationApiKeyRepository.revokeAllByCreatorInOrganization (reaudit-#7)', () => {
+  const repository = new OrganizationApiKeyRepository();
+
+  beforeEach(async () => {
+    await cleanupDatabase();
+  });
+
+  async function seedKeyByCreator(organizationId: number, creatorUserId: number) {
+    const public_id = generatePublicId();
+    await database.insert(api_keys).values({
+      public_id,
+      organization_id: organizationId,
+      name: 'revoke-test',
+      key_hash: `hash-${public_id}`,
+      key_prefix: 'ak_test',
+      created_by_user_id: creatorUserId,
+    });
+    return public_id;
+  }
+
+  async function isDeleted(public_id: string) {
+    const rows = await database
+      .select({ deleted_at: api_keys.deleted_at })
+      .from(api_keys)
+      .where(eq(api_keys.public_id, public_id));
+    return rows[0]!.deleted_at !== null;
+  }
+
+  it('revokes only the keys created by the departing member, leaving others active', async () => {
+    const departing = await createTestUser();
+    const remaining = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: remaining.id });
+
+    const departingKeyA = await seedKeyByCreator(organization.id, departing.id);
+    const departingKeyB = await seedKeyByCreator(organization.id, departing.id);
+    const remainingKey = await seedKeyByCreator(organization.id, remaining.id);
+
+    const revokedCount = await repository.revokeAllByCreatorInOrganization(
+      organization.id,
+      departing.id,
+    );
+
+    expect(revokedCount).toBe(2);
+    expect(await isDeleted(departingKeyA)).toBe(true);
+    expect(await isDeleted(departingKeyB)).toBe(true);
+    // A key created by a still-active member is untouched.
+    expect(await isDeleted(remainingKey)).toBe(false);
+  });
+});

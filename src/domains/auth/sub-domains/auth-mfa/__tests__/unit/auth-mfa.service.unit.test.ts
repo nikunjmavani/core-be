@@ -137,6 +137,41 @@ describe('MfaService', () => {
     expect(consumeMfaRecoveryCode).toHaveBeenCalledWith(user.id, 'ABCD-1234');
   });
 
+  it('reaudit-#3: a TOTP-locked-out user can STILL log in with a valid recovery code', async () => {
+    const { consumeMfaRecoveryCode } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
+    );
+    redis.get.mockResolvedValue('10'); // >= MAX_MFA_VERIFICATION_ATTEMPTS — TOTP is locked
+    vi.mocked(consumeMfaRecoveryCode).mockResolvedValueOnce(true);
+
+    // TOTP is rejected while locked...
+    await expect(
+      service.verifyLoginMfa({ mfa_session_token: 'token', totp_code: '123456' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+
+    // ...but the recovery (break-glass) code still works — the lockout does not gate it.
+    const result = await service.verifyLoginMfa(
+      { mfa_session_token: 'token', recovery_code: 'ABCD-1234' },
+      '127.0.0.1',
+    );
+    expect(result.access_token).toBe('access-token');
+  });
+
+  it('reaudit-#3: a wrong recovery code does NOT increment the TOTP lockout counter', async () => {
+    const { consumeMfaRecoveryCode } = await import(
+      '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
+    );
+    vi.mocked(consumeMfaRecoveryCode).mockResolvedValueOnce(false);
+
+    await expect(
+      service.verifyLoginMfa(
+        { mfa_session_token: 'token', recovery_code: 'WRONG-9999' },
+        '127.0.0.1',
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(redis.incr).not.toHaveBeenCalled();
+  });
+
   it('verifyLoginMfa rejects already-used recovery codes', async () => {
     const { consumeMfaRecoveryCode } = await import(
       '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
