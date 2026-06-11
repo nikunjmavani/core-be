@@ -344,7 +344,7 @@ Table billing.plans {
 }
 
 Note billing.plans {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: plans_deny_all, plans_app_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table billing.stripe_webhook_events {
@@ -576,7 +576,7 @@ Table tenancy.permissions {
 }
 
 Note tenancy.permissions {
-  'RLS: not enabled'
+  'RLS: enabled\nPolicies: permissions_deny_all, permissions_app_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table tenancy.role_permissions {
