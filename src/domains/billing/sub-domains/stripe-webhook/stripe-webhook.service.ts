@@ -4,6 +4,7 @@ import { createWorkerSubscriptionRepository } from '@/domains/billing/sub-domain
 import type { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
 import { ConflictError } from '@/shared/errors/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { PlanRepository } from '@/domains/billing/sub-domains/plan/plan.repository.js';
 import type { StripeWebhookEventRepository } from './stripe-webhook-event.repository.js';
@@ -225,10 +226,20 @@ export class StripeWebhookService {
         resolvedPlanId = matchedPlan.id;
         matchedPlanForCreate = matchedPlan;
       } else {
+        // audit-#13: a Stripe price id with no matching local plan means the
+        // plan↔Stripe catalog has drifted (Dashboard price created/changed
+        // without syncing `billing.plans`). The row keeps its existing plan_id
+        // (never nulled), but the drift must be visible — promote it from a bare
+        // log line to a Sentry alert with the offending ids so operators can
+        // reconcile the catalog instead of relying on log scraping.
         logger.warn(
           { providerSubscriptionId, stripePriceId },
           'stripe.webhook.plan_id_resolution_miss',
         );
+        captureMessage('stripe.webhook.plan_id_resolution_miss', {
+          level: 'warning',
+          extra: { providerSubscriptionId, stripePriceId },
+        });
       }
     }
 
