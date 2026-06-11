@@ -77,7 +77,11 @@ export function createDomainContainers(
     userDataExportService: userDomain.userDataExportService,
   });
 
-  tenancyDomain.organizationService.wireOffboardingUploadService(uploadDomain.uploadService);
+  tenancyDomain.organizationService.wireOffboardingUploadService(
+    uploadDomain.uploadService,
+    // route-audit-#2: cancel the org's active subscription on org delete so billing stops.
+    billingDomain.subscriptionService,
+  );
 
   userDomain.userDataExportService.wireCrossDomainServices({
     authSessionService: authDomain.authSessionService,
