@@ -125,7 +125,9 @@ export class MfaService {
       // guessable). Recovery codes are single-use high-entropy break-glass and are
       // intentionally NOT subject to it — otherwise an attacker who knows the password could
       // burn TOTP attempts to also lock the victim out of their recovery path (victim DoS).
-      await this.assertMfaVerificationNotLockedOut(user.id);
+      // route-audit-#4: atomically count this attempt up-front so concurrent guesses can't
+      // overspend the budget; a successful verify clears the counter below.
+      await this.consumeMfaVerificationAttempt(user.id);
       // auth.auth_methods is FORCE RLS (audit #7); pin the owner context for every credential
       // read/write — the MFA session already authenticated this user.
       const totpMethod = await withUserDatabaseContext(user.public_id, () =>
@@ -140,7 +142,7 @@ export class MfaService {
         epochTolerance: MFA_TOTP_TOLERANCE_STEPS * TOTP_STEP_SECONDS,
       });
       if (!result.valid) {
-        await this.recordMfaVerificationFailure(user.id);
+        // The attempt was already counted in consumeMfaVerificationAttempt above (route-audit-#4).
         throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
       }
       await this.rejectReplayedTotpCode(user.id, parsed.totp_code);
@@ -189,34 +191,33 @@ export class MfaService {
   }
 
   /**
-   * Rejects further MFA verification once the per-user failure counter reaches
-   * {@link MAX_MFA_VERIFICATION_ATTEMPTS} (audit-#12).
+   * Atomically registers one MFA verification attempt and rejects once the per-user budget of
+   * {@link MAX_MFA_VERIFICATION_ATTEMPTS} is exhausted (audit-#12 + route-audit-#4).
    *
    * @remarks
-   * Closes the brute-force gap on `/auth/mfa/verify` + `/auth/mfa/login`, which previously had
-   * only a rate limit and no account-level lockout (a stolen-but-valid bearer token could guess
-   * TOTP codes indefinitely). The response stays the generic invalid-code error so the lockout
-   * state is not itself an oracle; the lockout is logged server-side. Mirrors the password
-   * account-lockout model.
+   * Closes the brute-force gap on `/auth/mfa/verify` + `/auth/mfa/login`, which had only a rate
+   * limit and no account-level lockout. route-audit-#4: the previous design did a read-only GET
+   * check BEFORE verifying the code and INCR'd the counter separately on failure, so N concurrent
+   * wrong codes all passed the gate before any increment landed — a burst could spend far more
+   * than the budget in one window. Now the `INCR` happens atomically UP FRONT and its returned
+   * value gates the attempt, so concurrent requests get distinct counts and everything past the
+   * budget is rejected. A successful verification clears the counter (see
+   * {@link clearMfaVerificationFailures}), so legitimate retries never lock out. The response
+   * stays the generic invalid-code error so the lockout is not an oracle; the lockout is logged.
    */
-  private async assertMfaVerificationNotLockedOut(userId: number): Promise<void> {
-    const raw = await this.redis.get(`${MFA_VERIFICATION_FAILURE_KEY_PREFIX}${userId}`);
-    if (raw !== null && Number(raw) >= MAX_MFA_VERIFICATION_ATTEMPTS) {
-      logger.warn({ userId }, 'auth.mfa.verification_locked_out');
-      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
-    }
-  }
-
-  /** Increments the per-user failed-verification counter, stamping the lockout window on the first failure. */
-  private async recordMfaVerificationFailure(userId: number): Promise<void> {
+  private async consumeMfaVerificationAttempt(userId: number): Promise<void> {
     const key = `${MFA_VERIFICATION_FAILURE_KEY_PREFIX}${userId}`;
     const count = await this.redis.incr(key);
     if (count === 1) {
       await this.redis.expire(key, MFA_VERIFICATION_LOCKOUT_TTL_SECONDS);
     }
+    if (count > MAX_MFA_VERIFICATION_ATTEMPTS) {
+      logger.warn({ userId }, 'auth.mfa.verification_locked_out');
+      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
+    }
   }
 
-  /** Clears the per-user failed-verification counter after a successful verification. */
+  /** Clears the per-user verification-attempt counter after a successful verification. */
   private async clearMfaVerificationFailures(userId: number): Promise<void> {
     await this.redis.del(`${MFA_VERIFICATION_FAILURE_KEY_PREFIX}${userId}`);
   }
@@ -258,8 +259,9 @@ export class MfaService {
     const parsed = validateMfaVerify(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
-    // audit-#12: per-user lockout — reject once too many recent verifications failed.
-    await this.assertMfaVerificationNotLockedOut(user.id);
+    // audit-#12 / route-audit-#4: atomically count this attempt up-front and reject once the
+    // per-user budget is exhausted — concurrent guesses can no longer overspend it.
+    await this.consumeMfaVerificationAttempt(user.id);
     const totpMethod = await withUserDatabaseContext(user.public_id, () =>
       this.authMethodService.findTotpByUserId(user.id),
     );
@@ -272,7 +274,7 @@ export class MfaService {
       epochTolerance: MFA_TOTP_TOLERANCE_STEPS * TOTP_STEP_SECONDS,
     });
     if (!result.valid) {
-      await this.recordMfaVerificationFailure(user.id);
+      // Already counted in consumeMfaVerificationAttempt above (route-audit-#4).
       throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
     await this.rejectReplayedTotpCode(user.id, parsed.code);
