@@ -52,6 +52,8 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
   zodApplication.patch(
     '/:userId',
     {
+      // route-#4: bound admin user-mutations so a compromised admin token cannot bulk-edit accounts.
+      ...MODERATE_AUTHED_RATE_LIMIT,
       onRequest: [app.authenticate],
       preHandler: [requireRole(GLOBAL_ROLES.SUPER_ADMIN, GLOBAL_ROLES.ADMIN)],
       schema: {
@@ -66,6 +68,8 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
   zodApplication.delete(
     '/:userId',
     {
+      // route-#4: stronger bound on the destructive admin delete (matches DELETE /me).
+      ...EXPENSIVE_AUTHED_RATE_LIMIT,
       onRequest: [app.authenticate],
       preHandler: [requireRole(GLOBAL_ROLES.SUPER_ADMIN, GLOBAL_ROLES.ADMIN)],
       schema: {
@@ -79,6 +83,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
   zodApplication.post(
     '/:userId/suspend',
     {
+      ...MODERATE_AUTHED_RATE_LIMIT,
       onRequest: [app.authenticate],
       preHandler: [requireRole(GLOBAL_ROLES.SUPER_ADMIN, GLOBAL_ROLES.ADMIN)],
       schema: {
@@ -93,6 +98,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
   zodApplication.post(
     '/:userId/unsuspend',
     {
+      ...MODERATE_AUTHED_RATE_LIMIT,
       onRequest: [app.authenticate],
       preHandler: [requireRole(GLOBAL_ROLES.SUPER_ADMIN, GLOBAL_ROLES.ADMIN)],
       schema: {

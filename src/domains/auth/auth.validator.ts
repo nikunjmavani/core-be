@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ValidationError } from '@/shared/errors/index.js';
+import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type {
   LoginInput,
   MagicLinkSendInput,
@@ -231,15 +232,12 @@ export function validateAuthMethodPublicIdParam(authMethodPublicId: string): str
   return authMethodPublicId;
 }
 
-/** Parses the `:mfaMethodId` path param on MFA routes into a positive integer; throws {@link ValidationError} otherwise. */
-export function validateMfaMethodIdParam(mfaMethodId: string): number {
-  const mfaMethodIdNumber = Number(mfaMethodId);
-  if (!Number.isInteger(mfaMethodIdNumber) || mfaMethodIdNumber < 1) {
-    throw new ValidationError('errors:validation.invalidMfaMethodId', undefined, {
-      mfaMethodId: ['Must be a positive integer'],
-    });
-  }
-  return mfaMethodIdNumber;
+/**
+ * Validates the `:mfaMethodId` path param on MFA routes as an opaque public id (route-#10);
+ * throws {@link ValidationError} otherwise.
+ */
+export function validateMfaMethodIdParam(mfaMethodId: string): string {
+  return validatePublicIdParam(mfaMethodId, 'mfaMethodId');
 }
 
 // Note: validateRefreshToken removed — refresh is now session-based via httpOnly cookie.

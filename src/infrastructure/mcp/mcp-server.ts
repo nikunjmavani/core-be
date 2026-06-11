@@ -189,9 +189,12 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
         };
       }
       try {
-        // Strip headers that could override authentication or session identity.
-        // The MCP endpoint itself is admin-authenticated; the injected sub-request must not
-        // be able to impersonate a different principal via caller-supplied header overrides.
+        // Strip headers that could override authentication, session identity, or tenant context.
+        // The MCP endpoint itself is admin-authenticated; the injected sub-request must not be
+        // able to impersonate a different principal or pivot tenant context via caller-supplied
+        // header overrides. route-#8: x-organization-id is the tenant selector (→ RLS GUC), so a
+        // caller must not be able to set it on the proxied sub-request; the sub-request derives
+        // its org the same way every other request does.
         const BLOCKED_HEADERS = new Set([
           'authorization',
           'cookie',
@@ -199,6 +202,7 @@ export function createMcpServer(options: CreateMcpServerOptions, sdk: McpSdk): M
           'x-csrf-token',
           'x-forwarded-for',
           'x-real-ip',
+          'x-organization-id',
         ]);
         const safeHeaders: Record<string, string> = {};
         for (const [key, value] of Object.entries(data.headers ?? {})) {

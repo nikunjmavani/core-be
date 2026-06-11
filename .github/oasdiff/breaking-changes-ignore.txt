@@ -74,3 +74,16 @@ api post /api/v1/uploads the `filesize` request property's max was decreased to 
 #     Exposing the bigserial id allows row-count enumeration. Callers must use the public-id path.
 #     Pinned by auth.test.ts which asserts 400 for numeric (old) params.
 api delete /api/v1/auth/me/auth-methods/{id} removed the success response with the status `204`
+
+# 11. POST /api/v1/auth/me/auth-methods narrowed `method_type` from the full auth-method enum to
+#     MAGIC_LINK only (route-#3 security hardening). create() inserts a credential-less row, so
+#     PASSWORD (needs a hash) / MFA_* (need an encrypted secret) / OAUTH (verified-callback only)
+#     could only ever be inserted here as NON-FUNCTIONAL phantom rows that the last-login-capable
+#     credential guard miscounted — letting a user delete their only real method and lock
+#     themselves out. Only MAGIC_LINK is functional via this endpoint. Pinned by
+#     auth.validator.unit.test.ts (rejects PASSWORD/OAUTH/MFA_*).
+api post /api/v1/auth/me/auth-methods removed the enum value `password` of the request property `method_type`
+api post /api/v1/auth/me/auth-methods removed the enum value `oauth` of the request property `method_type`
+api post /api/v1/auth/me/auth-methods removed the enum value `mfa_totp` of the request property `method_type`
+api post /api/v1/auth/me/auth-methods removed the enum value `mfa_sms` of the request property `method_type`
+api post /api/v1/auth/me/auth-methods removed the enum value `mfa_email` of the request property `method_type`

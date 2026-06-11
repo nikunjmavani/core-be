@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import { UserService } from '@/domains/user/user.service.js';
 import type { UserRepository } from '@/domains/user/user.repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -25,6 +26,12 @@ vi.mock('@/infrastructure/database/contexts/global-admin-database.context.js', (
 
 vi.mock('@/shared/utils/infrastructure/postgres-error.util.js', () => ({
   runInsertWithPublicIdentifierRetry: async (operation: () => Promise<unknown>) => operation(),
+}));
+
+// route-#1: control whether the admin-mutation target resolves as a protected super-admin.
+const resolveGlobalRoleForEmailMock = vi.fn().mockReturnValue(undefined);
+vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
+  resolveGlobalRoleForEmail: (...args: unknown[]) => resolveGlobalRoleForEmailMock(...args),
 }));
 
 const userRow = {
@@ -74,6 +81,7 @@ describe('UserService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resolveGlobalRoleForEmailMock.mockReturnValue(undefined);
     vi.mocked(repository.findByPublicId).mockResolvedValue(userRow as never);
     vi.mocked(repository.softDelete).mockResolvedValue(userRow as never);
     vi.mocked(repository.markDeletionStarted).mockResolvedValue(userRow as never);
@@ -508,5 +516,37 @@ describe('UserService', () => {
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
     await service.uploadAvatar(userRow.public_id, { avatarKey });
     expect(repository.update).toHaveBeenCalled();
+  });
+
+  describe('protected super-admin guard (route-#1)', () => {
+    it('suspendUser refuses a target whose email is a global super-admin', async () => {
+      resolveGlobalRoleForEmailMock.mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
+      await expect(service.suspendUser(userRow.public_id)).rejects.toBeInstanceOf(ForbiddenError);
+      expect(repository.suspend).not.toHaveBeenCalled();
+    });
+
+    it('deleteUser refuses a target whose email is a global super-admin', async () => {
+      resolveGlobalRoleForEmailMock.mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
+      await expect(service.deleteUser(userRow.public_id)).rejects.toBeInstanceOf(ForbiddenError);
+      expect(repository.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('adminUpdateUser refuses to deactivate a protected super-admin', async () => {
+      resolveGlobalRoleForEmailMock.mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
+      await expect(
+        service.adminUpdateUser(userRow.public_id, { status: 'SUSPENDED' }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(repository.adminUpdate).not.toHaveBeenCalled();
+    });
+
+    it('suspendUser proceeds for a normal (non-admin) target', async () => {
+      // default mock returns undefined → not a protected admin
+      vi.mocked(repository.suspend).mockResolvedValue({
+        ...userRow,
+        suspended_at: new Date(),
+      } as never);
+      await service.suspendUser(userRow.public_id);
+      expect(repository.suspend).toHaveBeenCalledWith(userRow.public_id);
+    });
   });
 });

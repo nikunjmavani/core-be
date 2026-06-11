@@ -355,6 +355,7 @@ src/
     │   │   │       └── unit/
     │   │   │       │   ├── payment-provider.port.unit.test.ts
     │   │   │       │   ├── stripe-payment-provider.email.unit.test.ts
+    │   │   │       │   ├── subscription-routes-rate-limit.policy.unit.test.ts
     │   │   │       │   ├── subscription.controller.auth-matrix.unit.test.ts
     │   │   │       │   ├── subscription.controller.unit.test.ts
     │   │   │       │   ├── subscription.repository.db.unit.test.ts
@@ -1077,6 +1078,9 @@ src/
     │   ├── OVERVIEW.md
     │   └── resend-api.error.ts
     ├── mcp/
+    │   ├── __tests__/
+    │   │   └── unit/
+    │   │   │   └── mcp-blocked-headers.policy.unit.test.ts
     │   ├── mcp-capabilities.ts
     │   ├── mcp-server.ts
     │   └── OVERVIEW.md

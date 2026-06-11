@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
-import { UnauthorizedError } from '@/shared/errors/index.js';
+import { ConflictError, UnauthorizedError } from '@/shared/errors/index.js';
 import { requireAllowedSourceOriginForCookieSessionRoute } from '@/shared/middlewares/session/cookie-session-origin.pre-handler.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
@@ -63,6 +63,12 @@ export function createAuthSessionHandlers({
       reply: FastifyReply,
     ) => {
       const auth = requireAuth(request);
+      // route-#9: this endpoint revokes OTHER sessions; revoking the current one leaves a stale
+      // session cookie and contradicts the documented contract — direct the caller to logout
+      // (which also clears the cookie) instead of silently 401-ing their own next request.
+      if (auth.sessionPublicId !== undefined && auth.sessionPublicId === request.params.id) {
+        throw new ConflictError('errors:cannotRevokeCurrentSession');
+      }
       await authSessionService.revoke(auth.userId, request.params.id);
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,

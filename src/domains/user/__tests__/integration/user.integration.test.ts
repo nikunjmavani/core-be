@@ -118,22 +118,12 @@ describe('User Domain — Integration', () => {
         payload: { code: await generateTotp({ secret: enrollSecret }) },
       });
       expect(confirmResponse.statusCode).toBe(200);
-      // sec-new-B4: serializer was renamed to return `method_public_id: string`
-      // (the bigserial id is no longer exposed). The DELETE /auth/mfa/:mfaMethodId
-      // route still validates numeric ids though, so we look up the row id from
-      // the returned public id to drive the DELETE below. When/if the DELETE
-      // route migrates to accept public ids, the lookup goes away.
+      // route-#10: the serializer returns `method_public_id` and DELETE /auth/mfa/:mfaMethodId
+      // now accepts that opaque public id directly (the bigserial id is never exposed).
       const methodPublicId = (confirmResponse.json() as { data: Record<string, unknown> }).data
         .method_public_id as string;
       expect(typeof methodPublicId).toBe('string');
       expect(methodPublicId).toMatch(/^[a-z0-9]{21}$/);
-      const [methodRow] = await database
-        .select({ id: auth_methods.id })
-        .from(auth_methods)
-        .where(eq(auth_methods.public_id, methodPublicId))
-        .limit(1);
-      expect(methodRow).toBeDefined();
-      const methodId = methodRow!.id;
 
       const meAfterEnroll = await getMeWithRetry(app, token);
       expect(meAfterEnroll.statusCode).toBe(200);
@@ -145,7 +135,7 @@ describe('User Domain — Integration', () => {
 
       const deleteResponse = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: testApiPath(`/auth/mfa/${methodId}`),
+        url: testApiPath(`/auth/mfa/${methodPublicId}`),
         token: token,
       });
       expect(deleteResponse.statusCode).toBe(204);
