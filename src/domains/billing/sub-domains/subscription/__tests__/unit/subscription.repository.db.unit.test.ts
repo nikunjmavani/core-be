@@ -175,4 +175,43 @@ describe('SubscriptionRepository (database)', () => {
     const refetched = await repository.findByPublicId(seeded.public_id, organization.id);
     expect(refetched?.status).toBe('CANCELED');
   });
+
+  it('audit-#1: an INCOMPLETE_EXPIRED subscription releases the slot and allows re-subscription', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+
+    // Simulate an abandoned checkout that Stripe transitioned to incomplete_expired.
+    const expired = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      createdByUserId: owner.id,
+    });
+    await database
+      .update(subscriptions)
+      .set({ status: 'INCOMPLETE_EXPIRED' })
+      .where(eq(subscriptions.id, expired.id));
+
+    // The expired row no longer counts as the org's active subscription
+    // (previously it did, producing a permanent 409 on re-subscribe).
+    const active = await repository.findActiveByOrganization(organization.id);
+    expect(active).toBeNull();
+
+    // A fresh subscription can be created without tripping idx_subscriptions_org.
+    const resubscribed = await repository.create({
+      organization_id: organization.id,
+      plan_id: plan.id,
+      billing_cycle: 'MONTHLY',
+      status: 'INCOMPLETE',
+      current_period_start: new Date(),
+      current_period_end: new Date(Date.now() + 86_400_000),
+      created_by_user_id: owner.id,
+    });
+    expect(resubscribed.public_id).toBeTruthy();
+    expect(resubscribed.public_id).not.toBe(expired.public_id);
+
+    // The new row is now the active subscription; the expired row stays excluded.
+    const newActive = await repository.findActiveByOrganization(organization.id);
+    expect(newActive?.public_id).toBe(resubscribed.public_id);
+  });
 });

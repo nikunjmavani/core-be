@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { and, eq, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { plans } from '@/domains/billing/sub-domains/plan/plan.schema.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
@@ -12,6 +12,21 @@ import { subscriptions } from '@/domains/billing/sub-domains/subscription/subscr
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import type { SubscriptionCreateData, SubscriptionUpdateData } from './subscription.types.js';
+
+/**
+ * Subscription statuses that release the per-organization subscription slot.
+ *
+ * @remarks
+ * A subscription in one of these states neither occupies the single-subscription
+ * slot (so the org can create a fresh subscription) nor is mutable. This list is
+ * the single source of truth shared by three call sites that must agree
+ * (audit-#1): the `idx_subscriptions_org` partial-unique index predicate, the
+ * {@link SubscriptionRepository.findActiveByOrganization} filter, and the
+ * service-layer `TERMINAL_STATUSES` guard. `INCOMPLETE_EXPIRED` is included so an
+ * abandoned-checkout subscription cannot permanently lock the organization out
+ * of re-subscribing.
+ */
+export const INACTIVE_SUBSCRIPTION_STATUSES = ['CANCELED', 'INCOMPLETE_EXPIRED'] as const;
 
 /**
  * Drizzle `select` projection that mirrors every {@link subscriptions} column and adds
@@ -101,7 +116,11 @@ export class SubscriptionRepository {
       .where(
         and(
           eq(subscriptions.organization_id, organization_id),
-          ne(subscriptions.status, 'CANCELED'),
+          // audit-#1: exclude every slot-releasing status (CANCELED AND
+          // INCOMPLETE_EXPIRED), kept in lockstep with the idx_subscriptions_org
+          // partial-unique predicate so an abandoned-checkout row does not block
+          // re-subscription.
+          notInArray(subscriptions.status, [...INACTIVE_SUBSCRIPTION_STATUSES]),
         ),
       )
       .limit(1);

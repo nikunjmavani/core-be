@@ -1,5 +1,8 @@
 import { ConflictError, NotFoundError, UnprocessableEntityError } from '@/shared/errors/index.js';
 
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import { INACTIVE_SUBSCRIPTION_STATUSES } from './subscription.repository.js';
+
 /**
  * Subscription statuses that are considered terminal (non-mutable).
  *
@@ -9,10 +12,11 @@ import { ConflictError, NotFoundError, UnprocessableEntityError } from '@/shared
  * spurious Stripe API call against an already-inactive subscription, which
  * produces a Stripe error, surfaces as 503 to the caller, and may confuse
  * downstream event reconciliation. Guard every mutating method with this set
- * before reaching the payment provider (sec-new-B1).
+ * before reaching the payment provider (sec-new-B1). Sourced from
+ * {@link INACTIVE_SUBSCRIPTION_STATUSES} so the "mutable" and "occupies the
+ * subscription slot" definitions stay in lockstep (audit-#1).
  */
-const TERMINAL_STATUSES = new Set(['CANCELED', 'INCOMPLETE_EXPIRED']);
-import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
+const TERMINAL_STATUSES = new Set<string>(INACTIVE_SUBSCRIPTION_STATUSES);
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.service.js';
 import type { PaymentProvider } from './payment-provider.port.js';
