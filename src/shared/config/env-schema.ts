@@ -433,6 +433,12 @@ const envSchemaBase = z.object({
   TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
   /** Terminal Stripe webhook ledger rows older than this are purged (failed rows kept for replay). */
   STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  /**
+   * Webhook delivery-attempt rows older than this are purged (audit-#3). These rows retain the
+   * full event payload + response body, so a shorter default than tombstone retention bounds both
+   * storage growth and PII retention for long-lived active webhooks.
+   */
+  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
 
   // BullMQ repeatable jobs (retention / cleanup schedules)
   SCHEDULER_ENABLED: z
@@ -446,6 +452,8 @@ const envSchemaBase = z.object({
   NOTIFICATION_RETENTION_CRON: z.string().min(1).optional(),
   AUTH_SESSION_CLEANUP_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RETENTION_CRON: z.string().min(1).optional(),
+  /** Cron for the webhook delivery-attempt retention sweep (audit-#3); omit to use the default. */
+  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
   STRIPE_WEBHOOK_EVENT_RECLAIM_CRON: z.string().min(1).optional(),
   /** Daily audit cold export to S3 (disabled when S3_BUCKET unset). */

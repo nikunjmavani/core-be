@@ -446,6 +446,7 @@ src/
     │   │   │       ├── integration/
     │   │   │       │   └── webhook.integration.test.ts
     │   │   │       └── unit/
+    │   │   │       │   ├── webhook-delivery-attempt-retention.processor.db.unit.test.ts
     │   │   │       │   ├── webhook-subscription.util.unit.test.ts
     │   │   │       │   ├── webhook-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │       │   ├── webhook-tombstone-retention.worker.unit.test.ts
@@ -512,6 +513,9 @@ src/
     │   │   │       ├── webhook-event.service.ts
     │   │   │       └── webhook-event.types.ts
     │   │   │   ├── workers/
+    │   │   │       ├── webhook-delivery-attempt-retention.constants.ts
+    │   │   │       ├── webhook-delivery-attempt-retention.processor.ts
+    │   │   │       ├── webhook-delivery-attempt-retention.worker.ts
     │   │   │       ├── webhook-tombstone-retention.constants.ts
     │   │   │       ├── webhook-tombstone-retention.processor.ts
     │   │   │       └── webhook-tombstone-retention.worker.ts

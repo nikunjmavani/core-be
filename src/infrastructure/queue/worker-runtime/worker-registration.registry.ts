@@ -19,6 +19,8 @@ import { createSessionCleanupWorker } from '@/domains/auth/sub-domains/auth-sess
 import { SESSION_CLEANUP_QUEUE_NAME } from '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.constants.js';
 import { createWebhookTombstoneRetentionWorker } from '@/domains/notify/sub-domains/webhook/workers/webhook-tombstone-retention.worker.js';
 import { WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-tombstone-retention.constants.js';
+import { createWebhookDeliveryAttemptRetentionWorker } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery-attempt-retention.worker.js';
+import { WEBHOOK_DELIVERY_ATTEMPT_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery-attempt-retention.constants.js';
 import { createOrganizationNotificationPolicyTombstoneRetentionWorker } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/workers/organization-notification-policy-tombstone-retention.worker.js';
 import { ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/workers/organization-notification-policy-tombstone-retention.constants.js';
 import { createUserTombstoneRetentionWorker } from '@/domains/user/workers/user-tombstone-retention.worker.js';
@@ -269,6 +271,12 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     family: 'retention',
     logLabel: 'webhook tombstone retention worker',
     create: () => createWebhookTombstoneRetentionWorker(),
+  }),
+  retentionDefinition({
+    queueName: WEBHOOK_DELIVERY_ATTEMPT_RETENTION_QUEUE_NAME,
+    family: 'retention',
+    logLabel: 'webhook delivery attempt retention worker',
+    create: () => createWebhookDeliveryAttemptRetentionWorker(),
   }),
   retentionDefinition({
     queueName: ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME,

@@ -128,6 +128,8 @@ export const webhook_delivery_attempts = notifySchema
         table.id,
       ),
       index('idx_webhook_attempts_retry').on(table.status, table.next_retry_at),
+      // audit-#3: supports the time-based retention sweep (DELETE WHERE created_at < cutoff).
+      index('idx_webhook_attempts_created_at').on(table.created_at),
       uniqueIndex('idx_webhook_delivery_attempts_public_id').on(table.public_id),
       uniqueIndex('idx_webhook_delivery_attempts_pending_event_key')
         .on(table.webhook_id, table.event_key)
