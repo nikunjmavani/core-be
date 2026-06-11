@@ -176,6 +176,39 @@ describe('SubscriptionRepository (database)', () => {
     expect(refetched?.status).toBe('CANCELED');
   });
 
+  it('audit-#10: rejects a second subscription with a duplicate provider_subscription_id', async () => {
+    const owner1 = await createTestUser();
+    const organization1 = await createTestOrganization({ ownerUserId: owner1.id });
+    const owner2 = await createTestUser();
+    const organization2 = await createTestOrganization({ ownerUserId: owner2.id });
+    const plan = await createTestPlan();
+    const providerSubscriptionId = `sub_dup_${Date.now()}`;
+
+    await repository.create({
+      organization_id: organization1.id,
+      plan_id: plan.id,
+      billing_cycle: 'MONTHLY',
+      status: 'ACTIVE',
+      current_period_start: new Date(),
+      current_period_end: new Date(Date.now() + 86_400_000),
+      provider_subscription_id: providerSubscriptionId,
+    });
+
+    // A second local row pointing at the SAME Stripe subscription id (even for a
+    // different org) is now blocked by idx_subscriptions_provider_subscription_id_unique.
+    await expect(
+      repository.create({
+        organization_id: organization2.id,
+        plan_id: plan.id,
+        billing_cycle: 'MONTHLY',
+        status: 'ACTIVE',
+        current_period_start: new Date(),
+        current_period_end: new Date(Date.now() + 86_400_000),
+        provider_subscription_id: providerSubscriptionId,
+      }),
+    ).rejects.toThrow();
+  });
+
   it('audit-#6: a same-second cancel deterministically wins even when the update arrives first', async () => {
     const owner = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: owner.id });
