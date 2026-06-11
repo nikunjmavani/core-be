@@ -54,6 +54,42 @@ describe('WebhookRepository (database)', () => {
     expect(subscribed).toHaveLength(0);
   });
 
+  it('audit-#4: re-creating at a soft-deleted URL resurrects the row (upsert), no unique violation', async () => {
+    // Verifies the audit-#4 finding is a non-issue: create() upserts ON CONFLICT
+    // (organization_id, url) and clears deleted_at, so re-adding a webhook at a
+    // previously deleted URL succeeds by resurrecting the existing row rather than
+    // throwing a unique violation. The full unique index is required for this.
+    const user = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: user.id });
+    const url = 'https://example.com/recreatable-hook';
+
+    const first = await repository.create({
+      organization_id: organization.id,
+      url,
+      encrypted_secret: 'secret-v1',
+      events: ['subscription.updated'],
+      is_enabled: true,
+      created_by_user_id: user.id,
+    });
+    const deleted = await repository.softDelete(first.public_id, organization.id);
+    expect(deleted?.deleted_at).not.toBeNull();
+
+    const recreated = await repository.create({
+      organization_id: organization.id,
+      url,
+      encrypted_secret: 'secret-v2',
+      events: ['subscription.updated'],
+      is_enabled: true,
+      created_by_user_id: user.id,
+    });
+
+    // Same row, resurrected: deleted_at cleared and the secret/events updated.
+    expect(recreated.public_id).toBe(first.public_id);
+    expect(recreated.deleted_at).toBeNull();
+    const found = await repository.findByPublicId(recreated.public_id, organization.id);
+    expect(found?.url).toBe(url);
+  });
+
   it('listEnabledSubscribedToEvent returns enabled webhooks for event', async () => {
     const user = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: user.id });
