@@ -141,7 +141,7 @@ describe('MfaService', () => {
     const { consumeMfaRecoveryCode } = await import(
       '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
     );
-    redis.get.mockResolvedValue('10'); // >= MAX_MFA_VERIFICATION_ATTEMPTS — TOTP is locked
+    redis.incr.mockResolvedValue(11); // > MAX_MFA_VERIFICATION_ATTEMPTS — atomic counter says locked
     vi.mocked(consumeMfaRecoveryCode).mockResolvedValueOnce(true);
 
     // TOTP is rejected while locked...
@@ -201,13 +201,22 @@ describe('MfaService', () => {
     expect(redis.incr).toHaveBeenCalledWith('mfa:verify:fail:1');
   });
 
-  it('verify locks out before checking the code once the failure threshold is reached (audit-#12)', async () => {
-    redis.get.mockResolvedValue('10'); // >= MAX_MFA_VERIFICATION_ATTEMPTS
+  it('verify locks out atomically before checking the code once the budget is exhausted (audit-#12 / route-audit-#4)', async () => {
+    redis.incr.mockResolvedValue(11); // > MAX_MFA_VERIFICATION_ATTEMPTS — atomic counter says locked
     const { verify } = await import('otplib');
     await expect(service.verify('user_public', { code: '123456' })).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
     expect(verify).not.toHaveBeenCalled();
+  });
+
+  it('route-audit-#4: counts the attempt with an atomic INCR up-front, not a read-only GET', async () => {
+    redis.incr.mockResolvedValue(1); // under budget
+    await service.verify('user_public', { code: '123456' });
+    // The counter is incremented atomically per attempt (so concurrent guesses get distinct
+    // counts and cannot overspend the budget); the old non-atomic read-only GET check is gone.
+    expect(redis.incr).toHaveBeenCalledWith('mfa:verify:fail:1');
+    expect(redis.get).not.toHaveBeenCalled();
   });
 
   it('verify clears the failure counter on success (audit-#12)', async () => {

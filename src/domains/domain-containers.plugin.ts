@@ -26,6 +26,8 @@ async function registerDomainContainers(application: FastifyInstance): Promise<v
 
   application.tenancyDomain.organizationService.wireOffboardingUploadService(
     application.uploadDomain.uploadService,
+    // route-audit-#2: cancel the org's active subscription on org delete so billing stops.
+    application.billingDomain.subscriptionService,
   );
 
   application.userDomain.userDataExportService.wireCrossDomainServices({

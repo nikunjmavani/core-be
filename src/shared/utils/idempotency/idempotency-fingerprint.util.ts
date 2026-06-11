@@ -28,6 +28,14 @@ const IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES = new Set([
   'raw_key',
   'mfa_session_token',
   'refresh_token',
+  // route-audit-#3: single-use / signed-URL secrets returned exactly once whose names carry no
+  // sensitive fragment, so `isSensitiveKey` misses them — without this they get neither the
+  // `cache-control: no-store` response header (compress.middleware) nor exclusion from the
+  // idempotency response cache. `recovery_codes` = plaintext MFA-bypass codes; `download_url`
+  // (GDPR data export) and `uploadUrl` (upload presign) embed time-boxed `X-Amz-Signature` grants.
+  'recovery_codes',
+  'download_url',
+  'uploadUrl',
 ]);
 
 /**

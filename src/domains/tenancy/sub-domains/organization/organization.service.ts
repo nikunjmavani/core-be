@@ -24,23 +24,41 @@ import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js'
 import type { UploadService } from '@/domains/upload/upload.service.js';
 
 /**
+ * Structural port for the billing side of organization offboarding (route-audit-#2).
+ *
+ * @remarks
+ * - **Algorithm:** declared as a minimal interface (not an import of `SubscriptionService`) so a
+ *   call to `delete` can cancel the org's subscription without tenancy depending on billing.
+ * - **Failure modes:** the implementer throws on a payment-provider outage, aborting the delete.
+ * - **Side effects:** none on this type — the implementer makes the Stripe call + local write.
+ * - **Notes:** billing already depends on tenancy, so importing the concrete service here would
+ *   create a cycle; the composition root supplies `SubscriptionService` structurally.
+ */
+export type OrganizationSubscriptionOffboardingPort = {
+  cancelActiveForOrganizationOffboarding(organizationPublicId: string): Promise<void>;
+};
+
+/**
  * Optional collaborators wired into {@link OrganizationService} after the
- * upload domain has booted, used to tombstone tenant uploads and confirm S3
- * keys during logo attachment.
+ * upload (and billing) domains have booted, used to tombstone tenant uploads,
+ * confirm S3 keys during logo attachment, and cancel the org's subscription on delete.
  *
  * @remarks
  * - **Algorithm:** populated lazily by `wireOffboardingUploadService` so the
- *   tenancy container can be constructed before the upload container exists.
+ *   tenancy container can be constructed before the upload/billing containers exist.
  * - **Failure modes:** until wired, `uploadLogo` and `delete` either throw
  *   (logo confirmation requires the upload service) or silently skip the
- *   upload-tombstone step.
+ *   upload-tombstone / subscription-cancel step.
  * - **Side effects:** none on construction; downstream calls invoke
- *   `UploadService.tombstoneAllByOrganizationId` and `assertKeyConfirmed`.
+ *   `UploadService.tombstoneAllByOrganizationId`, `assertKeyConfirmed`, and
+ *   `OrganizationSubscriptionOffboardingPort.cancelActiveForOrganizationOffboarding`.
  * - **Notes:** the public {@link OrganizationService.offboardingUploadService}
  *   reference exists for composition-root assertions only.
  */
 export type OrganizationOffboardingDependencies = {
   uploadService: UploadService;
+  /** route-audit-#2: cancels the org's active subscription on delete so billing stops. */
+  subscriptionService?: OrganizationSubscriptionOffboardingPort | undefined;
 };
 
 /**
@@ -78,8 +96,11 @@ export class OrganizationService {
     private readonly objectStorage: ObjectStoragePort,
   ) {}
 
-  wireOffboardingUploadService(uploadService: UploadService): void {
-    this.offboardingDependencies = { uploadService };
+  wireOffboardingUploadService(
+    uploadService: UploadService,
+    subscriptionService?: OrganizationSubscriptionOffboardingPort,
+  ): void {
+    this.offboardingDependencies = { uploadService, subscriptionService };
     this.offboardingUploadService = uploadService;
   }
 
@@ -391,6 +412,12 @@ export class OrganizationService {
     if (this.offboardingDependencies) {
       await this.offboardingDependencies.uploadService.tombstoneAllByOrganizationId(
         organization.id,
+      );
+      // route-audit-#2: cancel the org's active subscription so deleting the org stops Stripe
+      // billing (offboarding previously never touched billing). Done BEFORE the soft-delete so a
+      // Stripe failure aborts the whole delete instead of soft-deleting an org that keeps billing.
+      await this.offboardingDependencies.subscriptionService?.cancelActiveForOrganizationOffboarding(
+        public_id,
       );
     }
     const deleted = await withOrganizationDatabaseContext(public_id, () =>

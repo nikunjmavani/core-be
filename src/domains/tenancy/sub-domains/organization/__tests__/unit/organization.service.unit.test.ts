@@ -150,6 +150,31 @@ describe('OrganizationService', () => {
     expect(uploadService.tombstoneAllByOrganizationId).toHaveBeenCalledWith(organizationRow.id);
   });
 
+  it('route-audit-#2: delete cancels the org active subscription so billing stops', async () => {
+    const uploadService = { tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(0) };
+    const subscriptionService = {
+      cancelActiveForOrganizationOffboarding: vi.fn().mockResolvedValue(undefined),
+    };
+    service.wireOffboardingUploadService(uploadService as never, subscriptionService);
+    await service.delete(organizationRow.public_id);
+    expect(subscriptionService.cancelActiveForOrganizationOffboarding).toHaveBeenCalledWith(
+      organizationRow.public_id,
+    );
+  });
+
+  it('route-audit-#2: a Stripe cancel failure aborts the delete (no soft-delete of a billing org)', async () => {
+    const uploadService = { tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(0) };
+    const subscriptionService = {
+      cancelActiveForOrganizationOffboarding: vi
+        .fn()
+        .mockRejectedValue(new Error('stripe unavailable')),
+    };
+    service.wireOffboardingUploadService(uploadService as never, subscriptionService);
+    await expect(service.delete(organizationRow.public_id)).rejects.toThrow();
+    // The soft-delete must NOT have run after the failed cancel.
+    expect(repository.softDelete).not.toHaveBeenCalled();
+  });
+
   it('delete invalidates the organization permission cache so access stops immediately', async () => {
     await service.delete(organizationRow.public_id);
     expect(invalidateOrganizationPermissionsMock).toHaveBeenCalledWith(organizationRow.public_id);

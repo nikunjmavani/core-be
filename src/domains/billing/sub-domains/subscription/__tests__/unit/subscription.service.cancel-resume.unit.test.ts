@@ -59,6 +59,7 @@ function buildService() {
   const repository = {
     listByOrganization: vi.fn().mockResolvedValue([]),
     findByPublicId: vi.fn().mockResolvedValue(baseSubscriptionRow),
+    findActiveByOrganization: vi.fn().mockResolvedValue(null),
     create: vi.fn().mockResolvedValue(baseSubscriptionRow),
     update: vi.fn().mockResolvedValue({ ...baseSubscriptionRow, cancel_at_period_end: true }),
     syncFromStripeProviderSubscription: vi.fn(),
@@ -143,6 +144,36 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
 
     await expect(service.cancel('org_public', 'sub_public')).rejects.toBeInstanceOf(NotFoundError);
     expect(paymentProvider.cancelSubscriptionAtPeriodEnd).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('route-audit-#2: cancelActiveForOrganizationOffboarding cancels the active sub immediately', async () => {
+    const { service, repository, paymentProvider } = context;
+    vi.mocked(repository.findActiveByOrganization).mockResolvedValueOnce({
+      ...baseSubscriptionRow,
+      status: 'ACTIVE',
+    } as never);
+
+    await service.cancelActiveForOrganizationOffboarding('org_public');
+
+    // Immediate Stripe cancel (org is going away — stop billing now, not at period end)...
+    expect(paymentProvider.cancelSubscriptionImmediately).toHaveBeenCalledWith('sub_provider');
+    expect(paymentProvider.cancelSubscriptionAtPeriodEnd).not.toHaveBeenCalled();
+    // ...and the local row is set CANCELED.
+    expect(repository.update).toHaveBeenCalledWith(
+      'sub_public',
+      organization.id,
+      expect.objectContaining({ status: 'CANCELED' }),
+    );
+  });
+
+  it('route-audit-#2: cancelActiveForOrganizationOffboarding is a no-op when no active subscription', async () => {
+    const { service, repository, paymentProvider } = context;
+    vi.mocked(repository.findActiveByOrganization).mockResolvedValueOnce(null);
+
+    await service.cancelActiveForOrganizationOffboarding('org_public');
+
+    expect(paymentProvider.cancelSubscriptionImmediately).not.toHaveBeenCalled();
     expect(repository.update).not.toHaveBeenCalled();
   });
 

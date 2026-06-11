@@ -433,6 +433,46 @@ export class SubscriptionService {
     return updated;
   }
 
+  /**
+   * Immediately cancels the organization's active subscription as part of organization offboarding
+   * (route-audit-#2). Idempotent: a no-op when there is no active subscription.
+   *
+   * @remarks
+   * - **Algorithm:** resolve the org + its active subscription; if one exists, cancel it at Stripe
+   *   NOW (not at period end — the org is going away) and set the local row `CANCELED`.
+   * - **Failure modes:** a Stripe outage throws `ServiceUnavailableError` (propagated), so the
+   *   caller's organization delete aborts rather than soft-deleting an org that keeps billing.
+   * - **Side effects:** Stripe cancel + a local `subscriptions` update.
+   * - **Notes:** deleting an org previously left its subscription billing forever — no offboarding
+   *   path touched billing. Re-running after a partial failure finds no active sub → no-op.
+   */
+  async cancelActiveForOrganizationOffboarding(organization_public_id: string): Promise<void> {
+    const { organization, subscription } = await withOrganizationDatabaseContext(
+      organization_public_id,
+      async () => {
+        const organization =
+          await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+        const subscription = await this.repository.findActiveByOrganization(organization.id);
+        return { organization, subscription };
+      },
+    );
+    if (!subscription) return;
+
+    // Stripe network call — outside any database context.
+    if (subscription.provider_subscription_id) {
+      await this.paymentProvider.cancelSubscriptionImmediately(
+        subscription.provider_subscription_id,
+      );
+    }
+    await withOrganizationDatabaseContext(organization_public_id, async () =>
+      this.repository.update(subscription.public_id, organization.id, {
+        status: 'CANCELED',
+        canceled_at: new Date(),
+        last_stripe_event_created_at: new Date(),
+      }),
+    );
+  }
+
   async resume(
     organization_public_id: string,
     subscription_public_id: string,

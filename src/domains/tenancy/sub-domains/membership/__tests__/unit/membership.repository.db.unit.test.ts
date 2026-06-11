@@ -114,6 +114,41 @@ describe('MembershipRepository (database)', () => {
     expect(await repository.softDelete('missing_membership', organization.id)).toBeNull();
   });
 
+  it('route-audit-#1: activateForInvitationAccept only activates an INVITED membership', async () => {
+    const owner = await createTestUser({ email: 'activate-owner@test.com' });
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const role = await createRoleWithPermissions({
+      organizationId: organization.id,
+      permissionCodes: [],
+    });
+
+    // The legitimate accept path: a still-INVITED membership activates.
+    const invitee = await createTestUser({ email: 'activate-invited@test.com' });
+    const invited = await createMembership({
+      userId: invitee.id,
+      organizationId: organization.id,
+      roleId: role.id,
+      status: 'INVITED',
+    });
+    const activated = await repository.activateForInvitationAccept(invited.id, organization.id);
+    expect(activated?.status).toBe('ACTIVE');
+    expect(activated?.joined_at).not.toBeNull();
+
+    // The exploit: a SUSPENDED member (per-org ban) must NOT be able to self-restore to ACTIVE
+    // by accepting a still-pending invitation — activate is a no-op and the ban stands.
+    const banned = await createTestUser({ email: 'activate-banned@test.com' });
+    const suspended = await createMembership({
+      userId: banned.id,
+      organizationId: organization.id,
+      roleId: role.id,
+      status: 'SUSPENDED',
+    });
+    const rejected = await repository.activateForInvitationAccept(suspended.id, organization.id);
+    expect(rejected).toBeNull();
+    const stillSuspended = await repository.findById(suspended.id);
+    expect(stillSuspended?.status).toBe('SUSPENDED');
+  });
+
   it('softDelete refuses to remove the organization owner (atomic owner-guard)', async () => {
     const owner = await createTestUser({ email: 'owner-guard@test.com' });
     const organization = await createTestOrganization({ ownerUserId: owner.id });

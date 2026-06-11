@@ -27,6 +27,7 @@ overrides:
   esbuild: '>=0.25.0'
   '@esbuild-kit/core-utils>esbuild': '>=0.25.0'
   lodash: '>=4.17.24'
+  '@grpc/grpc-js': '>=1.14.4'
   js-yaml: '>=4.1.1'
   fast-xml-parser: '>=5.7.0'
   hono: '>=4.12.21'
