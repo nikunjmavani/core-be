@@ -172,6 +172,7 @@ src/
     │   │   │   │   ├── integration/
     │   │   │   │   │   └── auth-mfa.integration.test.ts
     │   │   │   │   └── unit/
+    │   │   │   │   │   ├── auth-mfa-method.cascade.db.unit.test.ts
     │   │   │   │   │   ├── auth-mfa-recovery-code.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.repository.unit.test.ts
     │   │   │   │   │   ├── auth-mfa.service.org-policy-on-delete.unit.test.ts
