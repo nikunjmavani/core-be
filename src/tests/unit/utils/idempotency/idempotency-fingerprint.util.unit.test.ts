@@ -57,4 +57,23 @@ describe('responseBodyContainsSecretFields', () => {
       responseBodyContainsSecretFields(JSON.stringify({ data: { id: 'org-1', name: 'Acme' } })),
     ).toBe(false);
   });
+
+  it('route-audit-#3: flags recovery codes and presigned-URL fields (no-store + no idempotency cache)', () => {
+    // MFA recovery codes — plaintext single-use MFA-bypass material.
+    expect(
+      responseBodyContainsSecretFields(
+        JSON.stringify({ data: { recovery_codes: ['ABCD-1234'], method_public_id: 'm1' } }),
+      ),
+    ).toBe(true);
+    // GDPR data-export presigned download URL (carries X-Amz-Signature).
+    expect(
+      responseBodyContainsSecretFields(
+        JSON.stringify({ data: { download_url: 'https://s3/...' } }),
+      ),
+    ).toBe(true);
+    // Upload presign URL.
+    expect(
+      responseBodyContainsSecretFields(JSON.stringify({ data: { uploadUrl: 'https://s3/...' } })),
+    ).toBe(true);
+  });
 });
