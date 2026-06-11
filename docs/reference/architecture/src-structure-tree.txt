@@ -1089,6 +1089,9 @@ src/
     │   │   ├── opentelemetry.unit.test.ts
     │   │   └── sentry.unit.test.ts
     │   ├── dlq-depth/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── dlq-depth.coverage.unit.test.ts
     │   │   ├── db-pool-alert.service.ts
     │   │   ├── dlq-depth.constants.ts
     │   │   ├── dlq-depth.service.ts

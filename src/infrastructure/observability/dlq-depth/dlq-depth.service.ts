@@ -12,6 +12,10 @@ import { STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME } from '@/domains/billing/sub
 import { STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME } from '@/domains/billing/sub-domains/stripe-webhook/workers/stripe-webhook-event-reclaim.constants.js';
 import { SESSION_CLEANUP_QUEUE_NAME } from '@/domains/auth/sub-domains/auth-session/workers/session-cleanup.constants.js';
 import { WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-tombstone-retention.constants.js';
+import { WEBHOOK_DELIVERY_ATTEMPT_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery-attempt-retention.constants.js';
+import { USER_DATA_EXPORT_RETENTION_QUEUE_NAME } from '@/domains/user/sub-domains/user-data-export/workers/user-data-export-retention.constants.js';
+import { UPLOAD_PENDING_SWEEP_QUEUE_NAME } from '@/domains/upload/workers/upload-pending-sweep.constants.js';
+import { AUDIT_OUTBOX_DRAIN_QUEUE_NAME } from '@/domains/audit/workers/audit-outbox-drain.constants.js';
 import { ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/workers/organization-notification-policy-tombstone-retention.constants.js';
 import { USER_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/user/workers/user-tombstone-retention.constants.js';
 import { ORGANIZATION_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/workers/organization-tombstone-retention.constants.js';
@@ -25,7 +29,19 @@ import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js'
 import { env } from '@/shared/config/env.config.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
-const SOURCE_QUEUE_NAMES_FOR_DLQ_MONITORING = [
+/**
+ * Source queues whose `<queue>-dlq` depth is sampled each pass (reaudit-#5).
+ *
+ * @remarks
+ * - **Algorithm:** {@link sampleDeadLetterQueueDepths} iterates this list and reads
+ *   `<queue>-dlq` waiting+failed counts, warning/Sentry-ing past the threshold.
+ * - **Failure modes:** a queue omitted here is never sampled, so a stuck cleanup
+ *   dead-letters silently.
+ * - **Side effects:** none (declaration only).
+ * - **Notes:** every `family: 'retention'` worker MUST appear here — enforced by
+ *   `dlq-depth.coverage.unit.test.ts`, which fails on any omission so the list cannot drift.
+ */
+export const SOURCE_QUEUE_NAMES_FOR_DLQ_MONITORING = [
   MAIL_QUEUE_NAME,
   MAIL_OUTBOX_SWEEPER_QUEUE_NAME,
   WEBHOOK_DELIVERY_QUEUE_NAME,
@@ -33,10 +49,15 @@ const SOURCE_QUEUE_NAMES_FOR_DLQ_MONITORING = [
   NOTIFICATION_RETENTION_QUEUE_NAME,
   AUDIT_EXPORT_QUEUE_NAME,
   AUDIT_RETENTION_QUEUE_NAME,
+  AUDIT_OUTBOX_DRAIN_QUEUE_NAME,
   STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME,
   STRIPE_WEBHOOK_EVENT_RECLAIM_QUEUE_NAME,
   SESSION_CLEANUP_QUEUE_NAME,
   WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME,
+  // reaudit-#5: retention workers that were missing from monitoring.
+  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_QUEUE_NAME,
+  USER_DATA_EXPORT_RETENTION_QUEUE_NAME,
+  UPLOAD_PENDING_SWEEP_QUEUE_NAME,
   ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME,
   USER_TOMBSTONE_RETENTION_QUEUE_NAME,
   ORGANIZATION_TOMBSTONE_RETENTION_QUEUE_NAME,
