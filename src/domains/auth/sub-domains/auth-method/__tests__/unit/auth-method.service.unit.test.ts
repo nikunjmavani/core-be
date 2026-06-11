@@ -71,6 +71,7 @@ describe('AuthMethodService', () => {
     listByUserId: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({ id: 2 }),
     revoke: vi.fn().mockResolvedValue({ id: 2 }),
+    revokeUnlessLastLoginCapable: vi.fn().mockResolvedValue({ id: 2 }),
     revokeAllByUserId: vi.fn().mockResolvedValue(1),
     findByProviderUserId: vi.fn().mockResolvedValue(null),
     findTotpByUserId: vi.fn().mockResolvedValue(null),

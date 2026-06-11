@@ -32,6 +32,7 @@ describe('MfaService.deleteMfa — organization MFA policy guard (sec-A4)', () =
     findAuthMethodByPublicIdForUser: vi.fn(),
     revokeAuthMethod: vi.fn().mockResolvedValue(undefined),
     listMfaMethodsByUserId: vi.fn(),
+    acquireCredentialMutationLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as AuthMethodService;
 
   const authSessionService = {} as AuthSessionService;

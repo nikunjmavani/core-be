@@ -78,6 +78,7 @@ describe('MfaService', () => {
     listMfaMethodsByUserId: vi.fn().mockResolvedValue([]),
     revokeAuthMethod: vi.fn(),
     findAuthMethodByPublicIdForUser: vi.fn(),
+    acquireCredentialMutationLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as AuthMethodService;
 
   const authSessionService = {
@@ -91,6 +92,8 @@ describe('MfaService', () => {
     del: vi.fn().mockResolvedValue(1),
     incr: vi.fn().mockResolvedValue(1),
     expire: vi.fn().mockResolvedValue(1),
+    // route-audit C5: lockout counter now uses an atomic INCR+EXPIRE Lua via redis.eval.
+    eval: vi.fn().mockResolvedValue(1),
   };
 
   const service = new MfaService(
@@ -106,6 +109,7 @@ describe('MfaService', () => {
     redis.get.mockResolvedValue(null);
     redis.incr.mockResolvedValue(1);
     redis.expire.mockResolvedValue(1);
+    redis.eval.mockResolvedValue(1);
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
     vi.mocked(authMethodService.findTotpByUserId).mockResolvedValue({
       id: 5,
@@ -141,7 +145,7 @@ describe('MfaService', () => {
     const { consumeMfaRecoveryCode } = await import(
       '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
     );
-    redis.incr.mockResolvedValue(11); // > MAX_MFA_VERIFICATION_ATTEMPTS — atomic counter says locked
+    redis.eval.mockResolvedValue(11); // > MAX_MFA_VERIFICATION_ATTEMPTS — atomic counter says locked
     vi.mocked(consumeMfaRecoveryCode).mockResolvedValueOnce(true);
 
     // TOTP is rejected while locked...
@@ -169,7 +173,7 @@ describe('MfaService', () => {
         '127.0.0.1',
       ),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(redis.incr).not.toHaveBeenCalled();
+    expect(redis.eval).not.toHaveBeenCalled();
   });
 
   it('verifyLoginMfa rejects already-used recovery codes', async () => {
@@ -198,11 +202,16 @@ describe('MfaService', () => {
     await expect(service.verify('user_public', { code: '000000' })).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
-    expect(redis.incr).toHaveBeenCalledWith('mfa:verify:fail:1');
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'mfa:verify:fail:1',
+      expect.any(String),
+    );
   });
 
   it('verify locks out atomically before checking the code once the budget is exhausted (audit-#12 / route-audit-#4)', async () => {
-    redis.incr.mockResolvedValue(11); // > MAX_MFA_VERIFICATION_ATTEMPTS — atomic counter says locked
+    redis.eval.mockResolvedValue(11); // > MAX_MFA_VERIFICATION_ATTEMPTS — atomic counter says locked
     const { verify } = await import('otplib');
     await expect(service.verify('user_public', { code: '123456' })).rejects.toBeInstanceOf(
       UnauthorizedError,
@@ -211,11 +220,16 @@ describe('MfaService', () => {
   });
 
   it('route-audit-#4: counts the attempt with an atomic INCR up-front, not a read-only GET', async () => {
-    redis.incr.mockResolvedValue(1); // under budget
+    redis.eval.mockResolvedValue(1); // under budget
     await service.verify('user_public', { code: '123456' });
     // The counter is incremented atomically per attempt (so concurrent guesses get distinct
     // counts and cannot overspend the budget); the old non-atomic read-only GET check is gone.
-    expect(redis.incr).toHaveBeenCalledWith('mfa:verify:fail:1');
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'mfa:verify:fail:1',
+      expect.any(String),
+    );
     expect(redis.get).not.toHaveBeenCalled();
   });
 
@@ -233,7 +247,12 @@ describe('MfaService', () => {
         '127.0.0.1',
       ),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(redis.incr).toHaveBeenCalledWith('mfa:verify:fail:1');
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'mfa:verify:fail:1',
+      expect.any(String),
+    );
   });
 
   it('verify rejects when MFA not enabled', async () => {

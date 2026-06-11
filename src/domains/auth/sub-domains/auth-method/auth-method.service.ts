@@ -134,19 +134,21 @@ export class AuthMethodService {
         user.id,
       );
       if (!existing) throw new NotFoundError('Auth method');
-      if (LOGIN_CAPABLE_METHOD_TYPES.has(existing.method_type)) {
-        const allActive = await this.authMethodRepository.listByUserId(user.id);
-        const otherLoginCapableCount = allActive.filter(
-          (method) =>
-            method.public_id !== methodPublicId &&
-            LOGIN_CAPABLE_METHOD_TYPES.has(method.method_type),
-        ).length;
-        if (otherLoginCapableCount === 0) {
-          throw new ForbiddenError('errors:cannotRemoveLastAuthMethod');
-        }
+      const isLoginCapable = LOGIN_CAPABLE_METHOD_TYPES.has(existing.method_type);
+      // Atomic count-aware revoke: the "is another login-capable method still active?" check and
+      // the revoke run in ONE statement, so two concurrent deletes cannot each see "one other left"
+      // and both succeed, zeroing out the user's credentials (route-audit C1 lockout race).
+      const revoked = await this.authMethodRepository.revokeUnlessLastLoginCapable(
+        existing.id,
+        user.id,
+        [...LOGIN_CAPABLE_METHOD_TYPES],
+      );
+      if (!revoked) {
+        // `existing` was found above, so a zero-row update means either the last-login-capable guard
+        // tripped (for a login-capable method) or the row was concurrently revoked.
+        if (isLoginCapable) throw new ForbiddenError('errors:cannotRemoveLastAuthMethod');
+        throw new NotFoundError('Auth method');
       }
-      const revoked = await this.authMethodRepository.revoke(existing.id, user.id);
-      if (!revoked) throw new NotFoundError('Auth method');
 
       // sec-r5-auth-session-info-1: revoking the PASSWORD auth_method row only
       // flipped `auth_methods.revoked_at` but left the stale `users.password_hash`
@@ -236,6 +238,15 @@ export class AuthMethodService {
 
   async listMfaMethodsByUserId(userId: number) {
     return this.authMethodRepository.listMfaByUserId(userId);
+  }
+
+  /**
+   * Serializes concurrent credential mutations for one user via a transaction-scoped advisory lock.
+   * Must be called inside the caller's `withUserDatabaseContext` transaction, before a
+   * count-then-mutate, so concurrent requests cannot interleave the count and the write.
+   */
+  async acquireCredentialMutationLock(userId: number): Promise<void> {
+    await this.authMethodRepository.acquireCredentialMutationLock(userId);
   }
 
   async revokeAuthMethod(methodId: number, userId: number): Promise<void> {

@@ -26,6 +26,7 @@ import {
   TOTP_STEP_SECONDS,
 } from '@/shared/constants/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { incrementWithExpiryOnFirst } from '@/shared/utils/infrastructure/redis-counter.util.js';
 import { TOTP_ISSUER } from '@/shared/constants/project-identity.constants.js';
 import {
   validateMfaVerify,
@@ -207,10 +208,13 @@ export class MfaService {
    */
   private async consumeMfaVerificationAttempt(userId: number): Promise<void> {
     const key = `${MFA_VERIFICATION_FAILURE_KEY_PREFIX}${userId}`;
-    const count = await this.redis.incr(key);
-    if (count === 1) {
-      await this.redis.expire(key, MFA_VERIFICATION_LOCKOUT_TTL_SECONDS);
-    }
+    // Atomic INCR + first-increment EXPIRE (route-audit C5) — a crash between a separate INCR and
+    // EXPIRE would otherwise leave a no-TTL counter that locks the user out indefinitely.
+    const count = await incrementWithExpiryOnFirst(
+      this.redis,
+      key,
+      MFA_VERIFICATION_LOCKOUT_TTL_SECONDS,
+    );
     if (count > MAX_MFA_VERIFICATION_ATTEMPTS) {
       logger.warn({ userId }, 'auth.mfa.verification_locked_out');
       throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
@@ -447,6 +451,10 @@ export class MfaService {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
     await withUserDatabaseContext(user.public_id, async () => {
+      // route-audit C1 (deleteMfa sibling): serialize concurrent credential mutations for this user
+      // so the "would this remove the last MFA factor?" count + revoke cannot interleave with a
+      // sibling delete and strip the user to zero factors in an MFA-required org.
+      await this.authMethodService.acquireCredentialMutationLock(user.id);
       // route-#10: resolve by opaque public id (not the leaked sequential id); the resolved row
       // still yields its numeric id for the user-scoped revoke below.
       const found = await this.authMethodService.findAuthMethodByPublicIdForUser(
