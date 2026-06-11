@@ -70,6 +70,7 @@ function buildService() {
     getProviderPriceId: vi.fn().mockReturnValue('price_provider'),
     createSubscription: vi.fn().mockResolvedValue({ providerSubscriptionId: 'sub_provider' }),
     cancelSubscriptionAtPeriodEnd: vi.fn().mockResolvedValue(undefined),
+    cancelSubscriptionImmediately: vi.fn().mockResolvedValue(undefined),
     resumeSubscription: vi.fn().mockResolvedValue(undefined),
     updateSubscriptionPrice: vi.fn().mockResolvedValue(undefined),
     compensateFailedCreate: vi.fn().mockResolvedValue(undefined),
@@ -106,6 +107,33 @@ describe('SubscriptionService cancel / resume / changePlan guards', () => {
       'sub_public',
       organization.id,
       expect.objectContaining({ cancel_at_period_end: true }),
+    );
+  });
+
+  it('reaudit-#6: cancel on an INCOMPLETE subscription cancels immediately and frees the slot', async () => {
+    const { service, repository, paymentProvider } = context;
+    vi.mocked(repository.findByPublicId).mockResolvedValueOnce({
+      ...baseSubscriptionRow,
+      status: 'INCOMPLETE',
+    } as never);
+    vi.mocked(repository.update).mockResolvedValueOnce({
+      ...baseSubscriptionRow,
+      status: 'CANCELED',
+    } as never);
+
+    await service.cancel('org_public', 'sub_public');
+
+    // Immediate Stripe cancel (not at-period-end, which is a no-op on an incomplete sub)...
+    expect(paymentProvider.cancelSubscriptionImmediately).toHaveBeenCalledWith(
+      'sub_provider',
+      undefined,
+    );
+    expect(paymentProvider.cancelSubscriptionAtPeriodEnd).not.toHaveBeenCalled();
+    // ...and the local row is set CANCELED, which releases the per-org subscription slot.
+    expect(repository.update).toHaveBeenCalledWith(
+      'sub_public',
+      organization.id,
+      expect.objectContaining({ status: 'CANCELED' }),
     );
   });
 

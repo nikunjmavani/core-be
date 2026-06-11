@@ -162,6 +162,25 @@ export class StripePaymentProvider implements PaymentProvider {
     }
   }
 
+  async cancelSubscriptionImmediately(
+    providerSubscriptionId: string,
+    idempotencyKey?: string,
+  ): Promise<void> {
+    if (!isStripeConfigured()) return;
+    try {
+      // reaudit-#6: `false` = cancel now (not at period end), the only meaningful cancel for a
+      // never-activated INCOMPLETE subscription.
+      await cancelStripeSubscription(
+        providerSubscriptionId,
+        false,
+        idempotencyKey !== undefined ? { idempotencyKey } : undefined,
+      );
+    } catch (error) {
+      logger.error({ error }, 'stripe.subscription.cancel_immediate.failed');
+      throw new ServiceUnavailableError('errors:paymentProviderUnavailable');
+    }
+  }
+
   async resumeSubscription(providerSubscriptionId: string, idempotencyKey?: string): Promise<void> {
     if (!isStripeConfigured()) return;
     try {

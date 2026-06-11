@@ -390,6 +390,29 @@ export class SubscriptionService {
       },
     );
 
+    // reaudit-#6: a never-activated INCOMPLETE subscription has no active period, so
+    // `cancel_at_period_end` is a no-op and the row would keep occupying the org's single
+    // subscription slot until a Stripe `incomplete_expired` webhook arrives — if that webhook
+    // never lands, the org is permanently locked out of re-subscribing. Cancel it immediately
+    // (at Stripe and locally) so the slot is freed now, giving a programmatic exit.
+    if (subscription.status === 'INCOMPLETE') {
+      if (subscription.provider_subscription_id) {
+        await this.paymentProvider.cancelSubscriptionImmediately(
+          subscription.provider_subscription_id,
+          idempotencyKey,
+        );
+      }
+      const canceled = await withOrganizationDatabaseContext(organization_public_id, async () =>
+        this.repository.update(subscription_public_id, organization.id, {
+          status: 'CANCELED',
+          canceled_at: new Date(),
+          last_stripe_event_created_at: new Date(),
+        }),
+      );
+      if (!canceled) throw new NotFoundError('Subscription');
+      return canceled;
+    }
+
     // Stripe network call — outside any database context.
     if (subscription.provider_subscription_id) {
       await this.paymentProvider.cancelSubscriptionAtPeriodEnd(
