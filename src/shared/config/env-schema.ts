@@ -860,6 +860,29 @@ export const envSchema = envSchemaBase
   )
   .refine(
     (data) => {
+      // audit-#15b: once a JWT verification keyring (JWT_PUBLIC_KEYS) is configured
+      // in production, the legacy kid-less fallback must be CLOSED. Leaving
+      // JWT_LEGACY_KEY_ENABLED=true alongside a keyring keeps the original single
+      // signing key as a permanent trust anchor that key rotation / revocation
+      // cannot retire — a leaked original key would keep minting valid tokens.
+      // Deployments WITHOUT a keyring are unaffected: the legacy single-key path
+      // stays available until they migrate to the keyring.
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      if (!data.JWT_PUBLIC_KEYS) {
+        return true;
+      }
+      return data.JWT_LEGACY_KEY_ENABLED === false;
+    },
+    {
+      message:
+        'JWT_LEGACY_KEY_ENABLED must be false in production once JWT_PUBLIC_KEYS (the verification keyring) is configured — close the legacy kid-less trust window after migrating to the keyring.',
+      path: ['JWT_LEGACY_KEY_ENABLED'],
+    },
+  )
+  .refine(
+    (data) => {
       // sec-UP10: presigned PUT has no client-side min-size enforcement, so a
       // zero-byte upload can occupy a row + presigned slot until the sweeper
       // reclaims it. Presigned POST policy carries `content-length-range` that
