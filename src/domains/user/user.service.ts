@@ -1,4 +1,6 @@
-import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { resolveGlobalRoleForEmail } from '@/shared/utils/auth/global-admin-role.util.js';
+import { GLOBAL_ROLES } from '@/shared/constants/roles.constants.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { buildUserAvatarKeyPrefix } from '@/domains/upload/upload.constants.js';
@@ -412,8 +414,32 @@ export class UserService {
     return UserSerializer.one(user);
   }
 
+  /**
+   * Guards an admin mutation that would deactivate/remove a target (reaudit route-#1).
+   *
+   * @remarks
+   * Refuses to suspend / delete / deactivate a user whose email is in the global-admin allowlist.
+   * Super-admins are managed exclusively via `GLOBAL_ADMIN_EMAILS` (env), so the admin API must
+   * not be able to suspend or delete one — which previously let a super-admin self-lock-out, take
+   * down a peer admin, or remove the LAST super-admin (total admin-tier lockout). To rotate a
+   * super-admin, change the env allowlist, not this endpoint.
+   */
+  private async assertTargetNotProtectedAdmin(targetPublicId: string): Promise<void> {
+    const target = await withGlobalAdminDatabaseContext(() =>
+      this.repository.findByPublicId(targetPublicId),
+    );
+    if (!target) throw new NotFoundError('User');
+    if (resolveGlobalRoleForEmail(target.email) === GLOBAL_ROLES.SUPER_ADMIN) {
+      throw new ForbiddenError('errors:cannotModifyProtectedAdmin');
+    }
+  }
+
   async adminUpdateUser(publicId: string, body: unknown): Promise<UserOutput> {
     const parsed = validateAdminUpdateUser(body);
+    // Only a status change away from ACTIVE is destructive; profile-only edits stay allowed.
+    if (parsed.status !== undefined && parsed.status !== 'ACTIVE') {
+      await this.assertTargetNotProtectedAdmin(publicId);
+    }
     const user = await withGlobalAdminDatabaseContext(() =>
       this.repository.adminUpdate(publicId, omitUndefined(parsed)),
     );
@@ -425,10 +451,12 @@ export class UserService {
   }
 
   async deleteUser(publicId: string): Promise<void> {
+    await this.assertTargetNotProtectedAdmin(publicId);
     await this.softDeleteUserWithOffboarding(publicId);
   }
 
   async suspendUser(publicId: string): Promise<UserOutput> {
+    await this.assertTargetNotProtectedAdmin(publicId);
     const user = await withGlobalAdminDatabaseContext(() => this.repository.suspend(publicId));
     if (!user) throw new NotFoundError('User');
     await this.revokeAllSessionsForDeactivatedUser(publicId);
