@@ -146,6 +146,7 @@ Note auth.auth_methods {
 
 Table auth.mail_outbox {
   created_at timestamptz [not null]
+  dedupe_key varchar(255)
   html text [not null]
   id bigint [pk, increment, not null]
   reply_to varchar(320)
