@@ -159,6 +159,7 @@ describe('SubscriptionService', () => {
   });
 
   it('create persists local subscription without Stripe', async () => {
+    stripeMocks.isStripeConfigured.mockReturnValue(false);
     const result = await service.create(
       'org_public',
       { plan_id: 'plan_public', billing_cycle: 'monthly' },
@@ -166,6 +167,36 @@ describe('SubscriptionService', () => {
     );
     expect(repository.create).toHaveBeenCalled();
     expect(result).toEqual(subscriptionRow);
+    // audit-#2: a local-only subscription (no Stripe) leaves status unset so the
+    // repository default (TRIALING) applies — there is no payment to be pending on.
+    const createPayload = vi.mocked(repository.create).mock.calls[0]![0] as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(createPayload).not.toHaveProperty('status');
+  });
+
+  it('create persists status INCOMPLETE when Stripe backs the subscription (audit-#2)', async () => {
+    stripeMocks.isStripeConfigured.mockReturnValue(true);
+    vi.mocked(planService.requireActivePlanByPublicId).mockResolvedValue({
+      ...plan,
+      stripe_price_monthly_id: 'price_monthly',
+    } as never);
+
+    await service.create(
+      'org_public',
+      { plan_id: 'plan_public', billing_cycle: 'monthly' },
+      'user_public',
+    );
+
+    const createPayload = vi.mocked(repository.create).mock.calls[0]![0] as unknown as Record<
+      string,
+      unknown
+    >;
+    // The Stripe subscription is `incomplete` (default_incomplete) with no payment
+    // yet, so the local row must NOT over-report as the entitled TRIALING state.
+    expect(createPayload.status).toBe('INCOMPLETE');
+    expect(createPayload.provider_subscription_id).toBe('sub_stripe');
   });
 
   it('update rejects cancel_at_period_end (sec-B1: use /cancel + /resume instead)', async () => {

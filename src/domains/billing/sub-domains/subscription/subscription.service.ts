@@ -233,6 +233,14 @@ export class SubscriptionService {
             organization_id: organization.id,
             plan_id: plan.id,
             billing_cycle: parsed.billing_cycle.toUpperCase() as 'MONTHLY' | 'YEARLY',
+            // audit-#2: a Stripe-backed subscription is created with
+            // `payment_behavior: 'default_incomplete'`, i.e. Stripe status
+            // `incomplete` with NO successful payment yet. Persist the local row
+            // as INCOMPLETE so entitlement never over-reports as TRIALING (an
+            // entitled state) before the first `customer.subscription.updated`
+            // webhook reconciles the real status. Local-only subscriptions (no
+            // Stripe) keep the repository's TRIALING default.
+            status: paymentResult.providerSubscriptionId ? 'INCOMPLETE' : undefined,
             current_period_start: now,
             current_period_end: periodEnd,
             created_by_user_id: createdByUserInternalId ?? undefined,
