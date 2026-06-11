@@ -89,6 +89,13 @@ ARG IMAGE_SOURCE
 LABEL org.opencontainers.image.source="${IMAGE_SOURCE}"
 LABEL org.opencontainers.image.revision="${BUILD_REVISION}"
 
+# audit-#15c: the worker serves /livez on WORKER_HEALTH_PORT (default 9090). Give the
+# worker image its own liveness probe for parity with the API image (docker run /
+# compose-local liveness; platform probes still apply in hosted deploys).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:9090/livez').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+EXPOSE 9090
 CMD ["node", "dist/src/worker.js"]
 
 FROM runtime AS api
