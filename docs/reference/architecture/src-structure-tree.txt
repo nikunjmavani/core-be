@@ -1078,6 +1078,9 @@ src/
     │   ├── OVERVIEW.md
     │   └── resend-api.error.ts
     ├── mcp/
+    │   ├── __tests__/
+    │   │   └── unit/
+    │   │   │   └── mcp-blocked-headers.policy.unit.test.ts
     │   ├── mcp-capabilities.ts
     │   ├── mcp-server.ts
     │   └── OVERVIEW.md
