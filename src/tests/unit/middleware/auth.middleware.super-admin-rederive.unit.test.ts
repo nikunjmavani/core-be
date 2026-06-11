@@ -108,6 +108,34 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
     await application.close();
   });
 
+  it('reaudit-#10: drops SUPER_ADMIN when the account is suspended even if the email is still allowlisted', async () => {
+    vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
+    findUserRecordByPublicId.mockResolvedValue({
+      id: 1,
+      public_id: 'user_pub',
+      email: 'admin@example.com',
+      status: 'SUSPENDED',
+      is_email_verified: true,
+    });
+    await setup();
+    const userPublicId = generatePublicId();
+    const accessToken = await signAccessToken({
+      userId: userPublicId,
+      role: GLOBAL_ROLES.SUPER_ADMIN,
+    });
+
+    const response = await application.inject({
+      method: 'GET',
+      url: '/protected',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    // The email is still in the allowlist, but the account is suspended → role is dropped.
+    expect((response.json() as { role?: string }).role).toBeUndefined();
+    await application.close();
+  });
+
   it('does NOT call findUserRecordByPublicId for a non-admin JWT (hot-path stays unchanged)', async () => {
     vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(undefined);
     await setup();
