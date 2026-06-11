@@ -214,9 +214,20 @@ export class OrganizationApiKeyRepository extends BaseRepository {
   }
 
   async touchLastUsedAt(public_id: string): Promise<void> {
+    // audit-#8: throttle the write. Previously every authenticated API-key request
+    // issued an unconditional UPDATE of last_used_at, so a single hot key serialized
+    // writes to one row (row-lock contention, dead-tuple churn, autovacuum pressure).
+    // Bucket to ~1 minute: the predicate makes the statement a no-op for most
+    // requests, so last_used_at stays approximately accurate without write
+    // amplification.
     await getRequestDatabase()
       .update(api_keys)
       .set({ last_used_at: sql`now()`, updated_at: databaseNowTimestamp })
-      .where(eq(api_keys.public_id, public_id));
+      .where(
+        and(
+          eq(api_keys.public_id, public_id),
+          sql`(${api_keys.last_used_at} IS NULL OR ${api_keys.last_used_at} < now() - interval '1 minute')`,
+        ),
+      );
   }
 }
