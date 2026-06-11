@@ -9,6 +9,7 @@
   "mfaStepUpRequired": "Multi-factor authentication is required for this step-up; verify via the MFA endpoint instead of password.",
   "lastMfaRequiredByOrganization": "Cannot remove your last MFA method while your organization requires MFA. Disable the organization-level MFA requirement first or transfer your membership.",
   "cannotRemoveLastAuthMethod": "Cannot remove your last login method (password, OAuth, or magic link). Add another login method first to avoid being locked out.",
+  "cannotRevokeCurrentSession": "You cannot revoke the session you are currently using; sign out instead to end it.",
   "cannotDeleteSystemRole": "System roles cannot be deleted; they are required for the organization's default permission tiers.",
   "cannotModifySystemRole": "System roles cannot be modified; they are required for the organization's default permission tiers.",
   "roleHasActiveMembers": "Cannot delete a role that is currently assigned to one or more active members. Reassign those members to a different role first.",
