@@ -50,14 +50,26 @@ export async function appendCommitDispatchTask({
     .exec();
 }
 
+/** A pending task paired with its raw serialized form, used to acknowledge it after execution. */
+export interface PendingCommitDispatchTask {
+  task: CommitDispatchTask;
+  raw: string;
+}
+
 /**
- * Loads all pending tasks for a request and removes the durable index entry.
+ * Reads all pending tasks for a request WITHOUT removing them (reaudit-#2).
  *
  * @remarks
- * - **Algorithm:** LRANGE the pending list, DEL the list, ZREM the recovery index, parse JSON tasks.
- * - **Failure modes:** invalid JSON entries are logged and skipped; Redis errors propagate.
- * - **Side effects:** mutates Redis keys for `requestId`.
- * - **Notes:** returns an empty array when nothing is pending.
+ * - **Algorithm:** LRANGE the pending list, parse + validate JSON tasks, returning each alongside
+ *   its raw serialized form. Invalid entries are removed (they can never execute) so they do not
+ *   wedge the recovery sweeper.
+ * - **Failure modes:** invalid JSON entries are logged, LREM'd, and skipped; Redis errors propagate.
+ * - **Side effects:** read-only except for pruning invalid entries; the recovery index entry is
+ *   removed only when the list is already empty.
+ * - **Notes:** tasks are NOT destroyed here — the caller must
+ *   {@link acknowledgeCommitDispatchTask} each one AFTER it executes successfully, so a crash
+ *   between read and execute leaves the task for the recovery sweeper (no lost side effect), and a
+ *   per-task failure never re-runs the already-acknowledged tasks in the batch.
  */
 export async function consumeCommitDispatchTasks({
   requestId,
@@ -65,7 +77,7 @@ export async function consumeCommitDispatchTasks({
 }: {
   requestId: string;
   redis?: Redis;
-}): Promise<CommitDispatchTask[]> {
+}): Promise<PendingCommitDispatchTask[]> {
   const client = resolveRedis(redis);
   const listKey = pendingListKey(requestId);
   const serializedTasks = await client.lrange(listKey, 0, -1);
@@ -74,10 +86,7 @@ export async function consumeCommitDispatchTasks({
     return [];
   }
 
-  await client.del(listKey);
-  await client.zrem(COMMIT_DISPATCH_RECOVERY_ZSET, requestId);
-
-  const tasks: CommitDispatchTask[] = [];
+  const tasks: PendingCommitDispatchTask[] = [];
   for (const serializedTask of serializedTasks) {
     try {
       const parsed = JSON.parse(serializedTask) as unknown;
@@ -87,14 +96,46 @@ export async function consumeCommitDispatchTasks({
           { requestId, serializedTask, issues: validated.error.issues },
           'commit-dispatch.task.invalid',
         );
+        // Poison entry — remove it so it cannot wedge the recovery sweeper forever.
+        await client.lrem(listKey, 0, serializedTask);
         continue;
       }
-      tasks.push(validated.data);
+      tasks.push({ task: validated.data, raw: serializedTask });
     } catch (error) {
       logger.error({ error, requestId, serializedTask }, 'commit-dispatch.task.parse_failed');
+      await client.lrem(listKey, 0, serializedTask);
     }
   }
   return tasks;
+}
+
+/**
+ * Removes one successfully-executed task from the durable list (reaudit-#2).
+ *
+ * @remarks
+ * - **Algorithm:** `LREM listKey 1 raw`; when the list becomes empty, `DEL` it and `ZREM` the
+ *   recovery index so the request is no longer swept.
+ * - **Failure modes:** Redis errors propagate to the caller (which logs and lets recovery retry).
+ * - **Side effects:** mutates the pending list and the recovery index.
+ * - **Notes:** call ONLY after the task's side effect succeeded — an unacknowledged task is
+ *   retried by the recovery sweeper.
+ */
+export async function acknowledgeCommitDispatchTask({
+  requestId,
+  raw,
+  redis,
+}: {
+  requestId: string;
+  raw: string;
+  redis?: Redis;
+}): Promise<void> {
+  const client = resolveRedis(redis);
+  const listKey = pendingListKey(requestId);
+  await client.lrem(listKey, 1, raw);
+  const remaining = await client.llen(listKey);
+  if (remaining === 0) {
+    await client.multi().del(listKey).zrem(COMMIT_DISPATCH_RECOVERY_ZSET, requestId).exec();
+  }
 }
 
 /**

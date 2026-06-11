@@ -1,4 +1,5 @@
 import {
+  acknowledgeCommitDispatchTask,
   COMMIT_DISPATCH_RECOVERY_AFTER_MS,
   consumeCommitDispatchTasks,
   listStaleCommitDispatchRequestIds,
@@ -40,9 +41,12 @@ export async function runCommitDispatchRecoveryJob(): Promise<CommitDispatchReco
   let executedCount = 0;
   for (const requestId of staleRequestIds) {
     const tasks = await consumeCommitDispatchTasks({ requestId });
-    for (const task of tasks) {
+    for (const { task, raw } of tasks) {
       try {
         await executeCommitDispatchTask(task);
+        // reaudit-#2: acknowledge (remove) only after the side effect succeeded, so a crash
+        // mid-replay does not lose the remaining tasks and does not re-run the done ones.
+        await acknowledgeCommitDispatchTask({ requestId, raw });
         executedCount += 1;
       } catch (error) {
         logger.warn({ error, requestId, task }, 'commit-dispatch-recovery.task.failed');
