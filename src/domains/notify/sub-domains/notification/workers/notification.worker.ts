@@ -15,8 +15,8 @@ import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts
 import { isMailConfigured } from '@/infrastructure/mail/mail.service.js';
 import { buildNotificationEmailHtml } from './notification-email-content.js';
 import {
-  claimNotificationEmailDispatch,
-  releaseNotificationEmailDispatch,
+  isNotificationEmailDispatched,
+  markNotificationEmailDispatched,
 } from './notification-email-idempotency.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { getWorkerConcurrencyNotify } from '@/shared/config/worker-concurrency.util.js';
@@ -67,8 +67,12 @@ async function dispatchNotificationEmail(options: {
     return null;
   }
 
-  const claimed = await claimNotificationEmailDispatch({ notificationId, recipient: email });
-  if (!claimed) {
+  // audit-#7: durability-first dedup. Skip only when a prior run already PERSISTED
+  // the mail-outbox row (durable marker set AFTER the insert). The previous
+  // claim-before-insert model lost the email if the worker was hard-killed between
+  // the claim and the insert: the fast BullMQ retry saw the claim, returned
+  // `email:deduplicated` as success, and nothing ever sent.
+  if (await isNotificationEmailDispatched({ notificationId, recipient: email })) {
     logger.info({ notificationId, type }, 'notification.worker.email_already_dispatched');
     return 'email:deduplicated';
   }
@@ -79,26 +83,25 @@ async function dispatchNotificationEmail(options: {
     actionUrl: actionUrl ?? null,
   });
 
+  // Persist the durable outbox row FIRST. If this throws, no marker was written, so
+  // a BullMQ retry simply re-inserts — the email is never lost.
   let mailOutboxId: number | undefined;
-  try {
-    await withSystemTableWorkerContext(async () => {
-      mailOutboxId = await recordOutboxEmail({
-        to: email,
-        subject,
-        html,
-        tags: [{ name: 'category', value: `notification-${type}` }],
-      });
+  await withSystemTableWorkerContext(async () => {
+    mailOutboxId = await recordOutboxEmail({
+      to: email,
+      subject,
+      html,
+      tags: [{ name: 'category', value: `notification-${type}` }],
     });
-  } catch (error) {
-    // No outbox row was persisted — releasing the claim lets a BullMQ retry try again.
-    await releaseNotificationEmailDispatch({ notificationId, recipient: email });
-    throw error;
-  }
+  });
 
-  // The row is the durability commit. Do NOT release the claim and do NOT throw on dispatch
-  // failure — the mail-outbox sweeper will eventually re-enqueue the row, and any in-flight
-  // BullMQ retry that re-runs this job must hit `claimed = false` and skip to prevent a
-  // duplicate INSERT (and therefore duplicate Resend send via differing Idempotency-Keys).
+  // The outbox row is the durability commit. Mark dispatched ONLY now so retries
+  // skip. A hard crash between the insert above and this mark can cause a rare
+  // duplicate on retry — an at-least-once trade chosen because a lost notification
+  // is worse than a rare duplicate.
+  await markNotificationEmailDispatched({ notificationId, recipient: email });
+
+  // Do NOT throw on dispatch failure — the mail-outbox sweeper re-enqueues the row.
   if (mailOutboxId !== undefined) {
     try {
       await dispatchOutboxEmail(mailOutboxId, requestId ? { requestId } : undefined);

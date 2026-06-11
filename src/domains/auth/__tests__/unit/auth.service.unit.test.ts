@@ -35,6 +35,12 @@ vi.mock('@/infrastructure/observability/sentry/sentry.js', () => ({
   captureMessage: vi.fn(),
 }));
 
+// audit-#15d: spy the timing floor so we can assert both login failure branches apply it.
+vi.mock('@/shared/utils/security/anti-enumeration.util.js', () => ({
+  enforceMinimumDuration: vi.fn().mockResolvedValue(undefined),
+  ANTI_ENUMERATION_MINIMUM_DURATION_MS: 300,
+}));
+
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
     callback(),
@@ -175,6 +181,30 @@ describe('AuthService', () => {
       service.login({ email: 'unknown@example.com', password: 'WrongPassword1!' }, '127.0.0.1'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
     expect(verifyPassword).toHaveBeenCalledWith('WrongPassword1!', DUMMY_ARGON2_HASH);
+  });
+
+  it('applies the timing floor on both login failure branches (audit-#15d)', async () => {
+    const { enforceMinimumDuration } = await import(
+      '@/shared/utils/security/anti-enumeration.util.js'
+    );
+    const { verifyPassword } = await import('@/shared/utils/security/password.util.js');
+
+    // Unknown-email branch.
+    vi.mocked(enforceMinimumDuration).mockClear();
+    vi.mocked(userService.findByEmail).mockResolvedValue(null);
+    await expect(
+      service.login({ email: 'unknown@example.com', password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(enforceMinimumDuration).toHaveBeenCalledTimes(1);
+
+    // Wrong-password branch (known email) — the branch with the extra Postgres write.
+    vi.mocked(enforceMinimumDuration).mockClear();
+    vi.mocked(userService.findByEmail).mockResolvedValue(user as never);
+    vi.mocked(verifyPassword).mockResolvedValueOnce({ valid: false, needsRehash: false });
+    await expect(
+      service.login({ email: user.email, password: 'WrongPassword1!' }, '127.0.0.1'),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(enforceMinimumDuration).toHaveBeenCalledTimes(1);
   });
 
   it('login rejects a locked account only when the password is also wrong', async () => {

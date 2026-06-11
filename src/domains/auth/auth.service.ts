@@ -6,6 +6,7 @@ import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { DUMMY_ARGON2_HASH, verifyPassword } from '@/shared/utils/security/password.util.js';
+import { enforceMinimumDuration } from '@/shared/utils/security/anti-enumeration.util.js';
 import {
   ACCOUNT_LOCKOUT_MINUTES,
   IP_FAILED_LOGIN_THRESHOLD,
@@ -122,6 +123,14 @@ export class AuthService {
     // Fail open on Redis errors so a Redis outage never locks out legitimate users.
     await this.checkIpLoginLimit(ipAddress);
 
+    // audit-#15d: floor every failure branch to a common minimum duration. argon2 is
+    // equalized between unknown-email and wrong-password, but the wrong-password branch
+    // additionally performs a Postgres write (registerFailedLoginAttempt) that the
+    // unknown-email branch lacks — a residual timing oracle the other anti-enumeration
+    // endpoints (magic-link, forgot-password) already mask. Measure from before the
+    // branch divergence (the user lookup) so both paths share the same floor.
+    const startedAtMillis = Date.now();
+
     const user = await this.userService.findByEmail(parsed.email);
     if (!user?.password_hash) {
       // Run a verification against a fixed dummy hash and discard the result so
@@ -129,6 +138,7 @@ export class AuthService {
       // preventing user enumeration via response timing.
       await verifyPassword(parsed.password, DUMMY_ARGON2_HASH);
       await this.recordIpFailedLogin(ipAddress);
+      await enforceMinimumDuration(startedAtMillis);
       throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 
@@ -166,6 +176,9 @@ export class AuthService {
       if (isLockedOut) {
         logger.info({ user_public_id: user.public_id }, 'auth.login.attempt_during_lockout');
       }
+      // audit-#15d: same floor as the unknown-email branch so the extra Postgres write
+      // above is not observable as a latency difference.
+      await enforceMinimumDuration(startedAtMillis);
       throw new UnauthorizedError('errors:invalidEmailOrPassword');
     }
 

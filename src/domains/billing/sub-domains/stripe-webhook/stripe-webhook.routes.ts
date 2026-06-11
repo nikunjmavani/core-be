@@ -110,8 +110,19 @@ export function stripeWebhookRoutes(): FastifyPluginAsync {
 const STRIPE_WEBHOOK_BODY_LIMIT_BYTES = 5 * 1024 * 1024;
 
 /**
- * Placeholder Sunset date for the deprecated `/api/v1/billing/stripe/webhook` alias
- * (sec-new-M2). No firm removal date is set yet. Update this constant — and notify
- * all Stripe Dashboard / CLI forwarder operators — once a real sunset is agreed.
+ * Sunset date for the deprecated `/api/v1/billing/stripe/webhook` alias
+ * (sec-new-M2, audit-#15a).
+ *
+ * @remarks
+ * Replaces the prior `2030-01-01` placeholder, which advertised a ~6-year
+ * grace period and meant the redundant unauthenticated money-handler entry
+ * point would effectively never be retired. This is a concrete near-term date
+ * (~6 months' notice) emitted via the RFC 8594 `Sunset` / RFC 9745
+ * `Deprecation` headers so operators migrate to the canonical
+ * `/api/v1/billing/webhook`. NOTE: this only advertises the date — the endpoint
+ * stays live and functional. Physically removing the alias registration is a
+ * deliberate follow-up to be done only after delivery telemetry confirms zero
+ * traffic on the legacy path (avoids breaking a still-pointed Stripe forwarder).
+ * The exact date is operations-confirmable.
  */
-const STRIPE_WEBHOOK_ALIAS_SUNSET = new Date('2030-01-01T00:00:00Z');
+const STRIPE_WEBHOOK_ALIAS_SUNSET = new Date('2026-12-31T00:00:00Z');

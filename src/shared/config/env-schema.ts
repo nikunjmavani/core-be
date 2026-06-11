@@ -433,6 +433,12 @@ const envSchemaBase = z.object({
   TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
   /** Terminal Stripe webhook ledger rows older than this are purged (failed rows kept for replay). */
   STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  /**
+   * Webhook delivery-attempt rows older than this are purged (audit-#3). These rows retain the
+   * full event payload + response body, so a shorter default than tombstone retention bounds both
+   * storage growth and PII retention for long-lived active webhooks.
+   */
+  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
 
   // BullMQ repeatable jobs (retention / cleanup schedules)
   SCHEDULER_ENABLED: z
@@ -446,6 +452,8 @@ const envSchemaBase = z.object({
   NOTIFICATION_RETENTION_CRON: z.string().min(1).optional(),
   AUTH_SESSION_CLEANUP_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RETENTION_CRON: z.string().min(1).optional(),
+  /** Cron for the webhook delivery-attempt retention sweep (audit-#3); omit to use the default. */
+  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_CRON: z.string().min(1).optional(),
   STRIPE_WEBHOOK_EVENT_RECLAIM_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
   STRIPE_WEBHOOK_EVENT_RECLAIM_CRON: z.string().min(1).optional(),
   /** Daily audit cold export to S3 (disabled when S3_BUCKET unset). */
@@ -848,6 +856,29 @@ export const envSchema = envSchemaBase
       message:
         'COOKIE_SECURE must be true in production and staging (cookies sent over HTTPS only).',
       path: ['COOKIE_SECURE'],
+    },
+  )
+  .refine(
+    (data) => {
+      // audit-#15b: once a JWT verification keyring (JWT_PUBLIC_KEYS) is configured
+      // in production, the legacy kid-less fallback must be CLOSED. Leaving
+      // JWT_LEGACY_KEY_ENABLED=true alongside a keyring keeps the original single
+      // signing key as a permanent trust anchor that key rotation / revocation
+      // cannot retire — a leaked original key would keep minting valid tokens.
+      // Deployments WITHOUT a keyring are unaffected: the legacy single-key path
+      // stays available until they migrate to the keyring.
+      if (data.NODE_ENV !== 'production') {
+        return true;
+      }
+      if (!data.JWT_PUBLIC_KEYS) {
+        return true;
+      }
+      return data.JWT_LEGACY_KEY_ENABLED === false;
+    },
+    {
+      message:
+        'JWT_LEGACY_KEY_ENABLED must be false in production once JWT_PUBLIC_KEYS (the verification keyring) is configured — close the legacy kid-less trust window after migrating to the keyring.',
+      path: ['JWT_LEGACY_KEY_ENABLED'],
     },
   )
   .refine(

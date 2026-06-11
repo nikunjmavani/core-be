@@ -60,6 +60,12 @@ export const webhooks = notifySchema
       index('idx_webhooks_org_created_id_active')
         .on(table.organization_id, table.created_at, table.id)
         .where(sql`${table.deleted_at} IS NULL`),
+      // audit-#4 (verified non-issue): this is a FULL unique index on purpose.
+      // WebhookRepository.create() upserts ON CONFLICT (organization_id, url) and
+      // resurrects a soft-deleted row (sets deleted_at = NULL), so re-creating a
+      // webhook at a previously deleted URL already works WITHOUT a unique
+      // violation. A partial (deleted_at IS NULL) index would break that ON
+      // CONFLICT inference (Postgres 42P10), so it is intentionally kept full.
       uniqueIndex('idx_webhooks_organization_id_url_unique').on(table.organization_id, table.url),
       check('chk_webhooks_url', sql`${table.url} ~ '^https://'`),
       check('chk_webhooks_updated', sql`${table.updated_at} >= ${table.created_at}`),
@@ -122,6 +128,8 @@ export const webhook_delivery_attempts = notifySchema
         table.id,
       ),
       index('idx_webhook_attempts_retry').on(table.status, table.next_retry_at),
+      // audit-#3: supports the time-based retention sweep (DELETE WHERE created_at < cutoff).
+      index('idx_webhook_attempts_created_at').on(table.created_at),
       uniqueIndex('idx_webhook_delivery_attempts_public_id').on(table.public_id),
       uniqueIndex('idx_webhook_delivery_attempts_pending_event_key')
         .on(table.webhook_id, table.event_key)

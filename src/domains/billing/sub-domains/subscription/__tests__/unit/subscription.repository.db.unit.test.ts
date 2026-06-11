@@ -175,4 +175,109 @@ describe('SubscriptionRepository (database)', () => {
     const refetched = await repository.findByPublicId(seeded.public_id, organization.id);
     expect(refetched?.status).toBe('CANCELED');
   });
+
+  it('audit-#10: rejects a second subscription with a duplicate provider_subscription_id', async () => {
+    const owner1 = await createTestUser();
+    const organization1 = await createTestOrganization({ ownerUserId: owner1.id });
+    const owner2 = await createTestUser();
+    const organization2 = await createTestOrganization({ ownerUserId: owner2.id });
+    const plan = await createTestPlan();
+    const providerSubscriptionId = `sub_dup_${Date.now()}`;
+
+    await repository.create({
+      organization_id: organization1.id,
+      plan_id: plan.id,
+      billing_cycle: 'MONTHLY',
+      status: 'ACTIVE',
+      current_period_start: new Date(),
+      current_period_end: new Date(Date.now() + 86_400_000),
+      provider_subscription_id: providerSubscriptionId,
+    });
+
+    // A second local row pointing at the SAME Stripe subscription id (even for a
+    // different org) is now blocked by idx_subscriptions_provider_subscription_id_unique.
+    await expect(
+      repository.create({
+        organization_id: organization2.id,
+        plan_id: plan.id,
+        billing_cycle: 'MONTHLY',
+        status: 'ACTIVE',
+        current_period_start: new Date(),
+        current_period_end: new Date(Date.now() + 86_400_000),
+        provider_subscription_id: providerSubscriptionId,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('audit-#6: a same-second cancel deterministically wins even when the update arrives first', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+    const providerSubscriptionId = `sub_same_second_reverse_${Date.now()}`;
+    const seeded = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      providerSubscriptionId,
+    });
+
+    const eventAt = new Date('2026-07-01T09:00:00.000Z');
+    // In-place update lands FIRST at T.
+    const updated = await repository.syncFromStripeProviderSubscription(
+      providerSubscriptionId,
+      { status: 'ACTIVE' },
+      eventAt,
+    );
+    expect(updated?.status).toBe('ACTIVE');
+
+    // Cancel lands SECOND at the SAME second T — the `<=` guard lets the terminal
+    // event win. Combined with the cancel-then-update test above, this proves the
+    // tie-break is order-independent (both orders converge on CANCELED).
+    const canceled = await repository.markCanceledByProviderSubscriptionId(
+      providerSubscriptionId,
+      eventAt,
+    );
+    expect(canceled?.status).toBe('CANCELED');
+
+    const refetched = await repository.findByPublicId(seeded.public_id, organization.id);
+    expect(refetched?.status).toBe('CANCELED');
+  });
+
+  it('audit-#1: an INCOMPLETE_EXPIRED subscription releases the slot and allows re-subscription', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+
+    // Simulate an abandoned checkout that Stripe transitioned to incomplete_expired.
+    const expired = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      createdByUserId: owner.id,
+    });
+    await database
+      .update(subscriptions)
+      .set({ status: 'INCOMPLETE_EXPIRED' })
+      .where(eq(subscriptions.id, expired.id));
+
+    // The expired row no longer counts as the org's active subscription
+    // (previously it did, producing a permanent 409 on re-subscribe).
+    const active = await repository.findActiveByOrganization(organization.id);
+    expect(active).toBeNull();
+
+    // A fresh subscription can be created without tripping idx_subscriptions_org.
+    const resubscribed = await repository.create({
+      organization_id: organization.id,
+      plan_id: plan.id,
+      billing_cycle: 'MONTHLY',
+      status: 'INCOMPLETE',
+      current_period_start: new Date(),
+      current_period_end: new Date(Date.now() + 86_400_000),
+      created_by_user_id: owner.id,
+    });
+    expect(resubscribed.public_id).toBeTruthy();
+    expect(resubscribed.public_id).not.toBe(expired.public_id);
+
+    // The new row is now the active subscription; the expired row stays excluded.
+    const newActive = await repository.findActiveByOrganization(organization.id);
+    expect(newActive?.public_id).toBe(resubscribed.public_id);
+  });
 });

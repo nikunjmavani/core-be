@@ -17,12 +17,15 @@ import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/a
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import {
+  MAX_MFA_VERIFICATION_ATTEMPTS,
   MFA_RECOVERY_CODE_COUNT,
   MFA_TOTP_CODE_REPLAY_TTL_SECONDS,
   MFA_TOTP_ENROLLMENT_STAGE_TTL_SECONDS,
   MFA_TOTP_TOLERANCE_STEPS,
+  MFA_VERIFICATION_LOCKOUT_TTL_SECONDS,
   TOTP_STEP_SECONDS,
 } from '@/shared/constants/index.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { TOTP_ISSUER } from '@/shared/constants/project-identity.constants.js';
 import {
   validateMfaVerify,
@@ -47,6 +50,9 @@ const ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE = 'errors:mfaInvalidOrExpiredCode';
 
 /** Redis key prefix marking a TOTP code consumed by a user, used to reject replay within its validity window. */
 const MFA_TOTP_CONSUMED_KEY_PREFIX = 'mfa:totp:consumed:';
+
+/** Redis key prefix for the per-user failed-MFA-verification counter (audit-#12 lockout). */
+const MFA_VERIFICATION_FAILURE_KEY_PREFIX = 'mfa:verify:fail:';
 
 /**
  * Redis key prefix for the staged TOTP enrollment secret keyed by user public id
@@ -113,6 +119,9 @@ export class MfaService {
     // sec-U1: also rejects soft-deleted users.
     assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
+    // audit-#12: per-user lockout — reject once too many recent verifications failed.
+    await this.assertMfaVerificationNotLockedOut(user.id);
+
     let verified = false;
     if (parsed.totp_code) {
       // auth.auth_methods is FORCE RLS (audit #7); pin the owner context for every credential
@@ -129,6 +138,7 @@ export class MfaService {
         epochTolerance: MFA_TOTP_TOLERANCE_STEPS * TOTP_STEP_SECONDS,
       });
       if (!result.valid) {
+        await this.recordMfaVerificationFailure(user.id);
         throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
       }
       await this.rejectReplayedTotpCode(user.id, parsed.totp_code);
@@ -144,6 +154,7 @@ export class MfaService {
         consumeMfaRecoveryCode(user.id, recoveryCode),
       );
       if (!consumed) {
+        await this.recordMfaVerificationFailure(user.id);
         throw new UnauthorizedError('errors:mfaInvalidOrExpiredRecoveryCode');
       }
       verified = true;
@@ -153,6 +164,8 @@ export class MfaService {
       throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
 
+    // audit-#12: successful second factor clears the failure counter.
+    await this.clearMfaVerificationFailures(user.id);
     return this.issueAccessTokenAndSession(user, ipAddress, userAgent);
   }
 
@@ -169,6 +182,39 @@ export class MfaService {
     if (stored === null) {
       throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
+  }
+
+  /**
+   * Rejects further MFA verification once the per-user failure counter reaches
+   * {@link MAX_MFA_VERIFICATION_ATTEMPTS} (audit-#12).
+   *
+   * @remarks
+   * Closes the brute-force gap on `/auth/mfa/verify` + `/auth/mfa/login`, which previously had
+   * only a rate limit and no account-level lockout (a stolen-but-valid bearer token could guess
+   * TOTP codes indefinitely). The response stays the generic invalid-code error so the lockout
+   * state is not itself an oracle; the lockout is logged server-side. Mirrors the password
+   * account-lockout model.
+   */
+  private async assertMfaVerificationNotLockedOut(userId: number): Promise<void> {
+    const raw = await this.redis.get(`${MFA_VERIFICATION_FAILURE_KEY_PREFIX}${userId}`);
+    if (raw !== null && Number(raw) >= MAX_MFA_VERIFICATION_ATTEMPTS) {
+      logger.warn({ userId }, 'auth.mfa.verification_locked_out');
+      throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
+    }
+  }
+
+  /** Increments the per-user failed-verification counter, stamping the lockout window on the first failure. */
+  private async recordMfaVerificationFailure(userId: number): Promise<void> {
+    const key = `${MFA_VERIFICATION_FAILURE_KEY_PREFIX}${userId}`;
+    const count = await this.redis.incr(key);
+    if (count === 1) {
+      await this.redis.expire(key, MFA_VERIFICATION_LOCKOUT_TTL_SECONDS);
+    }
+  }
+
+  /** Clears the per-user failed-verification counter after a successful verification. */
+  private async clearMfaVerificationFailures(userId: number): Promise<void> {
+    await this.redis.del(`${MFA_VERIFICATION_FAILURE_KEY_PREFIX}${userId}`);
   }
 
   private async issueAccessTokenAndSession(
@@ -208,6 +254,8 @@ export class MfaService {
     const parsed = validateMfaVerify(body);
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
+    // audit-#12: per-user lockout — reject once too many recent verifications failed.
+    await this.assertMfaVerificationNotLockedOut(user.id);
     const totpMethod = await withUserDatabaseContext(user.public_id, () =>
       this.authMethodService.findTotpByUserId(user.id),
     );
@@ -220,9 +268,12 @@ export class MfaService {
       epochTolerance: MFA_TOTP_TOLERANCE_STEPS * TOTP_STEP_SECONDS,
     });
     if (!result.valid) {
+      await this.recordMfaVerificationFailure(user.id);
       throw new UnauthorizedError(ERROR_KEY_MFA_INVALID_OR_EXPIRED_CODE);
     }
     await this.rejectReplayedTotpCode(user.id, parsed.code);
+    // audit-#12: successful step-up clears the failure counter.
+    await this.clearMfaVerificationFailures(user.id);
     await withUserDatabaseContext(user.public_id, () =>
       this.authMethodService.updateAuthMethodLastUsedAt(totpMethod.id, user.id),
     );

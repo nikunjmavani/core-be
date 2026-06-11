@@ -17,6 +17,14 @@ vi.mock('@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-organizatio
   ),
 }));
 
+// audit-#13: spy captureMessage (keep all other sentry exports real) so the
+// plan↔Stripe drift alert can be asserted.
+vi.mock('@/infrastructure/observability/sentry/sentry.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/infrastructure/observability/sentry/sentry.js')>()),
+  captureMessage: vi.fn(),
+}));
+import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
+
 /**
  * Mutation-hardened to ~97% (Stryker, scoped). The one residual survivor is an equivalent
  * mutant: emptying the `statusMap` object literal cannot change behaviour, because every key
@@ -382,6 +390,15 @@ describe('StripeWebhookService', () => {
       // A drift-tracking metric is fine here; silently clobbering plan_id
       // to NULL would corrupt every cached entitlement.
       expect((payload as Record<string, unknown>).plan_id).toBeUndefined();
+      // audit-#13: the drift is surfaced as a Sentry alert with the offending ids,
+      // not just a log line, so operators can reconcile the catalog.
+      expect(vi.mocked(captureMessage)).toHaveBeenCalledWith(
+        'stripe.webhook.plan_id_resolution_miss',
+        expect.objectContaining({
+          level: 'warning',
+          extra: expect.objectContaining({ stripePriceId: 'price_unknown' }),
+        }),
+      );
     });
 
     it('omits plan_id when items.data is empty (no price to resolve)', async () => {

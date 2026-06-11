@@ -14,6 +14,19 @@ export const MAX_FAILED_LOGIN_ATTEMPTS = 10;
 /** Account lockout duration after max failed login attempts (minutes). */
 export const ACCOUNT_LOCKOUT_MINUTES = 30;
 
+/**
+ * Failed MFA verification attempts (TOTP or recovery code) per user before MFA
+ * verification is temporarily locked (audit-#12).
+ *
+ * @remarks
+ * The `/auth/mfa/verify` step-up and `/auth/mfa/login` second factor were gated only by
+ * a per-user rate limit with no account-level lockout, unlike the password path. With a
+ * stolen-but-valid bearer token an attacker could keep guessing TOTP codes indefinitely.
+ * This per-user counter mirrors {@link MAX_FAILED_LOGIN_ATTEMPTS} and locks verification
+ * for {@link MFA_VERIFICATION_LOCKOUT_TTL_SECONDS} after the threshold.
+ */
+export const MAX_MFA_VERIFICATION_ATTEMPTS = 10;
+
 /** Failed login attempts from a single IP before that IP is blocked for the window. */
 export const IP_FAILED_LOGIN_THRESHOLD = 50;
 

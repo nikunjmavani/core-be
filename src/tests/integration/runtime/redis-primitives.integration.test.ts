@@ -85,6 +85,44 @@ describe.runIf(runRedisTests)('Integration: Redis primitives', () => {
   );
 
   it.runIf(() => redisAvailable)(
+    'a concurrent waiter awaits the lock holder and does not stampede a second recompute (audit-#9)',
+    async () => {
+      const userId = `${testKeyPrefix}:stampede-user`;
+      const organizationId = `${testKeyPrefix}:stampede-org`;
+      let recomputeCount = 0;
+
+      const holder = withPermissionCacheRecomputeLock(userId, organizationId, async () => {
+        recomputeCount += 1;
+        // A non-trivial recompute: the waiter must poll and wait for the cache to
+        // populate rather than falling through to its own uncached recompute.
+        await new Promise<void>((resolve) => setTimeout(resolve, 300));
+        await setCachedPermissions(userId, organizationId, ['member:read'], 300);
+        return ['member:read'];
+      });
+
+      // Let the holder acquire the lock before the waiter starts.
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+
+      const waiter = withPermissionCacheRecomputeLock(userId, organizationId, async () => {
+        recomputeCount += 1; // must NOT run — the waiter should read the holder's cached value
+        return ['member:read'];
+      });
+
+      const [holderResult, waiterResult] = await Promise.all([holder, waiter]);
+      expect(holderResult).toEqual(['member:read']);
+      expect(waiterResult).toEqual(['member:read']);
+      expect(recomputeCount).toBe(1);
+
+      await redisConnection.del(
+        `perm:0:${userId}:${organizationId}`,
+        `perm:lock:${userId}:${organizationId}`,
+        `perm:org:${organizationId}:v`,
+      );
+    },
+    70_000,
+  );
+
+  it.runIf(() => redisAvailable)(
     'invalidates organization permission cache via version INCR',
     async () => {
       const userId = `${testKeyPrefix}:version-user`;
