@@ -119,11 +119,13 @@ export class MfaService {
     // sec-U1: also rejects soft-deleted users.
     assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
-    // audit-#12: per-user lockout — reject once too many recent verifications failed.
-    await this.assertMfaVerificationNotLockedOut(user.id);
-
     let verified = false;
     if (parsed.totp_code) {
+      // audit-#12 / reaudit-#3: the brute-force lockout gates ONLY the TOTP path (6-digit,
+      // guessable). Recovery codes are single-use high-entropy break-glass and are
+      // intentionally NOT subject to it — otherwise an attacker who knows the password could
+      // burn TOTP attempts to also lock the victim out of their recovery path (victim DoS).
+      await this.assertMfaVerificationNotLockedOut(user.id);
       // auth.auth_methods is FORCE RLS (audit #7); pin the owner context for every credential
       // read/write — the MFA session already authenticated this user.
       const totpMethod = await withUserDatabaseContext(user.public_id, () =>
@@ -154,7 +156,9 @@ export class MfaService {
         consumeMfaRecoveryCode(user.id, recoveryCode),
       );
       if (!consumed) {
-        await this.recordMfaVerificationFailure(user.id);
+        // reaudit-#3: a wrong recovery code does NOT increment the TOTP lockout counter,
+        // so recovery attempts can never lock the user out of TOTP (or vice versa). Recovery
+        // codes are bounded by the route rate limit + their own high entropy + single use.
         throw new UnauthorizedError('errors:mfaInvalidOrExpiredRecoveryCode');
       }
       verified = true;
