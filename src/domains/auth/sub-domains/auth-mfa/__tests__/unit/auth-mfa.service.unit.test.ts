@@ -77,7 +77,7 @@ describe('MfaService', () => {
       .mockResolvedValue({ id: 99, public_id: 'testpublicmid0000000' }),
     listMfaMethodsByUserId: vi.fn().mockResolvedValue([]),
     revokeAuthMethod: vi.fn(),
-    findAuthMethodByIdForUser: vi.fn(),
+    findAuthMethodByPublicIdForUser: vi.fn(),
   } as unknown as AuthMethodService;
 
   const authSessionService = {
@@ -436,23 +436,31 @@ describe('MfaService', () => {
   });
 
   it('deleteMfa revokes method and disables MFA when last method removed', async () => {
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue({
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue({
       id: 5,
       method_type: 'MFA_TOTP',
     } as never);
     vi.mocked(authMethodService.revokeAuthMethod).mockResolvedValue({ id: 5 } as never);
     vi.mocked(authMethodService.listMfaMethodsByUserId).mockResolvedValue([]);
 
-    await service.deleteMfa('user_public', 5);
+    await service.deleteMfa('user_public', 'mfamethodpublicid0001');
     expect(userService.updateMfaEnabled).toHaveBeenCalledWith('user_public', false);
   });
 
-  it('listMfaMethods returns enrolled methods', async () => {
+  it('listMfaMethods returns enrolled methods with the opaque public id (route-#10)', async () => {
     vi.mocked(authMethodService.listMfaMethodsByUserId).mockResolvedValue([
-      { id: 5, method_type: 'MFA_TOTP', last_used_at: null, created_at: new Date() },
+      {
+        id: 5,
+        public_id: 'mfamethodpublicid0001',
+        method_type: 'MFA_TOTP',
+        last_used_at: null,
+        created_at: new Date(),
+      },
     ] as never);
     const methods = await service.listMfaMethods('user_public');
     expect(methods).toHaveLength(1);
+    // route-#10: the serialized `id` is the opaque public id, never the sequential DB id.
+    expect(methods[0]?.id).toBe('mfamethodpublicid0001');
   });
 
   it('verify rejects invalid TOTP codes', async () => {
@@ -464,7 +472,7 @@ describe('MfaService', () => {
   });
 
   it('deleteMfa keeps MFA enabled when other methods remain', async () => {
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue({
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue({
       id: 5,
       method_type: 'MFA_TOTP',
     } as never);
@@ -473,35 +481,43 @@ describe('MfaService', () => {
       { id: 6, method_type: 'MFA_TOTP' },
     ] as never);
 
-    await service.deleteMfa('user_public', 5);
+    await service.deleteMfa('user_public', 'mfamethodpublicid0001');
     expect(userService.updateMfaEnabled).not.toHaveBeenCalledWith('user_public', false);
   });
 
   it('deleteMfa rejects unknown or non-TOTP methods', async () => {
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue(null);
-    await expect(service.deleteMfa('user_public', 99)).rejects.toBeInstanceOf(UnauthorizedError);
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue(null);
+    await expect(service.deleteMfa('user_public', 'mfamethodpublicid0001')).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
 
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue({
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue({
       id: 5,
       method_type: 'OAUTH',
     } as never);
-    await expect(service.deleteMfa('user_public', 5)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.deleteMfa('user_public', 'mfamethodpublicid0001')).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
   });
 
   it('deleteMfa rejects when user record is missing', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(null as never);
-    await expect(service.deleteMfa('missing', 5)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.deleteMfa('missing', 'mfamethodpublicid0001')).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
   });
 
   it('deleteMfa rejects when revoke fails', async () => {
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValue({
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValue({
       id: 5,
       method_type: 'MFA_TOTP',
     } as never);
     vi.mocked(authMethodService.revokeAuthMethod).mockRejectedValue(
       new UnauthorizedError('errors:mfaMethodNotFound'),
     );
-    await expect(service.deleteMfa('user_public', 5)).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(service.deleteMfa('user_public', 'mfamethodpublicid0001')).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
   });
 
   it('sec-new-A4: updateMfaEnabled is called inside the withUserDatabaseContext transaction (no TOCTOU window)', async () => {
@@ -521,7 +537,7 @@ describe('MfaService', () => {
       },
     );
 
-    vi.mocked(authMethodService.findAuthMethodByIdForUser).mockResolvedValueOnce({
+    vi.mocked(authMethodService.findAuthMethodByPublicIdForUser).mockResolvedValueOnce({
       id: 5,
       method_type: 'MFA_TOTP',
     } as never);
@@ -537,7 +553,7 @@ describe('MfaService', () => {
       return null as never;
     });
 
-    await service.deleteMfa('user_public', 5);
+    await service.deleteMfa('user_public', 'mfamethodpublicid0001');
 
     // updateMfaEnabled must happen INSIDE the transaction (between txn_start and txn_end)
     expect(callOrder).toContain('updateMfaEnabled');

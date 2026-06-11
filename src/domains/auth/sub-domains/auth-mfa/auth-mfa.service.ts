@@ -441,11 +441,16 @@ export class MfaService {
    * when the policy would be violated. Non-last deletions and users in MFA-non-required
    * orgs are unaffected.
    */
-  async deleteMfa(userPublicId: string, mfaMethodId: number): Promise<void> {
+  async deleteMfa(userPublicId: string, mfaMethodPublicId: string): Promise<void> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new UnauthorizedError(ERROR_KEY_MFA_USER_NOT_FOUND);
     await withUserDatabaseContext(user.public_id, async () => {
-      const found = await this.authMethodService.findAuthMethodByIdForUser(mfaMethodId, user.id);
+      // route-#10: resolve by opaque public id (not the leaked sequential id); the resolved row
+      // still yields its numeric id for the user-scoped revoke below.
+      const found = await this.authMethodService.findAuthMethodByPublicIdForUser(
+        mfaMethodPublicId,
+        user.id,
+      );
       if (!found) throw new UnauthorizedError('errors:mfaMethodNotFound');
       if (found.method_type !== 'MFA_TOTP') {
         throw new UnauthorizedError('errors:mfaNotTotpMethod');
@@ -462,7 +467,7 @@ export class MfaService {
           throw new ForbiddenError('errors:lastMfaRequiredByOrganization');
         }
       }
-      await this.authMethodService.revokeAuthMethod(mfaMethodId, user.id);
+      await this.authMethodService.revokeAuthMethod(found.id, user.id);
       const remaining = await this.authMethodService.listMfaMethodsByUserId(user.id);
       // sec-new-A4: flip is_mfa_enabled INSIDE the same withUserDatabaseContext
       // transaction as the revoke so there is no TOCTOU window where a concurrent
@@ -482,7 +487,9 @@ export class MfaService {
       this.authMethodService.listMfaMethodsByUserId(user.id),
     );
     return methods.map((method) => ({
-      id: method.id,
+      // route-#10: expose the opaque public id (not the sequential DB id); DELETE /mfa/:mfaMethodId
+      // accepts this value, so the round-trip is unchanged for clients.
+      id: method.public_id,
       method_type: method.method_type,
       last_used_at: method.last_used_at,
       created_at: method.created_at,

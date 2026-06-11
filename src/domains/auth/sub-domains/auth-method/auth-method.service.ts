@@ -229,6 +229,11 @@ export class AuthMethodService {
     return this.authMethodRepository.findByIdForUser(methodId, userId);
   }
 
+  /** route-#10: resolves an auth method by its opaque public id (scoped to the owning user). */
+  async findAuthMethodByPublicIdForUser(methodPublicId: string, userId: number) {
+    return this.authMethodRepository.findByPublicIdForUser(methodPublicId, userId);
+  }
+
   async listMfaMethodsByUserId(userId: number) {
     return this.authMethodRepository.listMfaByUserId(userId);
   }

@@ -179,10 +179,19 @@ export const oauthProviderParamsDto = z
 /** Inferred input type of {@link oauthProviderParamsDto}. */
 export type OauthProviderParamsInput = z.infer<typeof oauthProviderParamsDto>;
 
-/** Zod schema for the `:mfaMethodId` path parameter on `/api/v1/auth/mfa/:mfaMethodId`. */
+/**
+ * Zod schema for the `:mfaMethodId` path parameter on `/api/v1/auth/mfa/:mfaMethodId`.
+ *
+ * route-#10: the param is an opaque 21-char public id (not the sequential DB id). `GET /mfa`
+ * returns each method's public id as `id`, so this is round-trip compatible; it stops leaking
+ * monotonic row ids and matches the public-id convention used everywhere else.
+ */
 export const mfaMethodIdParamsDto = z
   .object({
-    mfaMethodId: z.string().trim().regex(/^\d+$/),
+    mfaMethodId: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9_-]{21}$/),
   })
   .strict();
 /** Inferred input type of {@link mfaMethodIdParamsDto}. */
