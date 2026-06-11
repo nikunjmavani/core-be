@@ -236,7 +236,10 @@ describe('createAuthController', () => {
     );
     await controller.listMfaMethods(mockRequest(), mockReply());
     const deleteReply = mockReply();
-    await controller.deleteMfa(mockRequest({ params: { mfaMethodId: '5' } }), deleteReply);
+    await controller.deleteMfa(
+      mockRequest({ params: { mfaMethodId: 'mfamethodpublicid0001' } }),
+      deleteReply,
+    );
     expect(mfaService.enrollInit).toHaveBeenCalled();
     expect(mfaService.enrollConfirm).toHaveBeenCalled();
     expect(mfaService.verifyLoginMfa).toHaveBeenCalled();
