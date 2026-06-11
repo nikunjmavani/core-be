@@ -6,6 +6,7 @@ import {
   type ManagedCircuitBreakerName,
 } from '@/infrastructure/resilience/circuit-breaker.js';
 import { isBearerTokenValid } from '@/shared/utils/security/bearer-token.util.js';
+import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 
 function requireOpsBearerToken(authorizationHeader: string | undefined): void {
   const bearerToken = getEnv().METRICS_SCRAPE_TOKEN;
@@ -63,8 +64,18 @@ const opsMiddleware: FastifyPluginAsync = async (application) => {
       requireOpsBearerToken(request.headers.authorization);
       const { circuitName } = request.params as { circuitName: string };
       const circuitBreaker = resolveManagedCircuitBreaker(circuitName);
+      const previousState = await circuitBreaker.getState();
       await circuitBreaker.reset();
-      return { name: circuitName, state: await circuitBreaker.getState() };
+      const newState = await circuitBreaker.getState();
+      // route-#5: a manual reset is a security-relevant operator override (it can re-enable calls
+      // to a failing/abused provider — e.g. force the captcha or Stripe breaker closed). The ops
+      // routes are token-authenticated (no user actor for the audit log), so emit a WARN with the
+      // breaker + source IP so the action is attributable in logs/alerting instead of silent.
+      logger.warn(
+        { circuitName, previousState, newState, sourceIp: request.ip },
+        'ops.circuit_breaker.reset',
+      );
+      return { name: circuitName, state: newState };
     },
   );
 };

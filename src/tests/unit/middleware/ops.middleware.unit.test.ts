@@ -16,6 +16,11 @@ vi.mock('@/infrastructure/resilience/circuit-breaker.js', () => ({
   },
 }));
 
+const loggerWarnMock = vi.fn();
+vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({
+  logger: { warn: loggerWarnMock, info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
 describe('ops.middleware', () => {
   const originalMetricsEnabled = process.env.METRICS_ENABLED;
   const originalMetricsBearer = process.env.METRICS_SCRAPE_TOKEN;
@@ -68,6 +73,29 @@ describe('ops.middleware', () => {
         { name: 'resend', state: 'OPEN' },
       ],
     });
+    await application.close();
+  });
+
+  it('route-#5: emits an attributable warning when a circuit breaker is reset', async () => {
+    process.env.METRICS_SCRAPE_TOKEN = METRICS_TOKEN_FIXTURE;
+    vi.resetModules();
+    loggerWarnMock.mockClear();
+    const { default: opsMiddleware } = await import('@/shared/middlewares/core/ops.middleware.js');
+    const application = Fastify();
+    await application.register(opsMiddleware);
+
+    const response = await application.inject({
+      method: 'POST',
+      url: '/internal/ops/circuit-breakers/stripe/reset',
+      headers: { authorization: `Bearer ${METRICS_TOKEN_FIXTURE}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    // The operator override must be logged with the breaker name (attribution), not silent.
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      expect.objectContaining({ circuitName: 'stripe' }),
+      'ops.circuit_breaker.reset',
+    );
     await application.close();
   });
 });
