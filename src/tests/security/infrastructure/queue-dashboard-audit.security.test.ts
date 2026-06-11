@@ -9,12 +9,18 @@ import {
   injectAuthenticated,
   injectUnauthenticated,
 } from '@/tests/helpers/test-http-inject.helper.js';
-import { logs } from '@/domains/audit/audit.schema.js';
+import { audit_outbox } from '@/domains/audit/audit-outbox.schema.js';
 import type { FastifyInstance } from 'fastify';
 
 /**
- * Mutating Bull Board API calls (2xx) under /admin/queues/api are written to audit.logs.
+ * Mutating Bull Board API calls (2xx) under /admin/queues/api are audited.
  * ENABLE_QUEUE_DASHBOARD is set in test setup so the route is registered.
+ *
+ * Audit writes go through the transactional outbox (P0-#2): `auditService.record`
+ * stages the row in `audit.outbox` synchronously within the request; the
+ * audit-outbox-drain worker (not running in this test app) later resolves the
+ * public ids and copies it into `audit.logs`. This suite asserts on the outbox —
+ * the synchronous durability point — rather than the post-drain `audit.logs`.
  */
 describe('Security: Queue dashboard audit', () => {
   let app: FastifyInstance;
@@ -55,7 +61,7 @@ describe('Security: Queue dashboard audit', () => {
     });
     expect(response.statusCode).toBe(401);
 
-    const rows = await database.select().from(logs);
+    const rows = await database.select().from(audit_outbox);
     expect(rows).toHaveLength(0);
   });
 
@@ -72,9 +78,12 @@ describe('Security: Queue dashboard audit', () => {
     expect(response.statusCode).toBe(200);
 
     await vi.waitFor(async () => {
-      const rows = await database.select().from(logs).where(eq(logs.action, 'queue.pause'));
+      const rows = await database
+        .select()
+        .from(audit_outbox)
+        .where(eq(audit_outbox.action, 'queue.pause'));
       expect(rows).toHaveLength(1);
-      expect(rows[0]!.actor_user_id).toBe(user.id);
+      expect(rows[0]!.actor_user_public_id).toBe(user.public_id);
       expect(rows[0]!.resource_type).toBe('queue');
       expect(rows[0]!.metadata).toMatchObject({
         queue: 'mail',
