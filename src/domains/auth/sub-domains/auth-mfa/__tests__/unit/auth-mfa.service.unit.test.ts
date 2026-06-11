@@ -86,9 +86,11 @@ describe('MfaService', () => {
 
   const redis = {
     set: vi.fn().mockResolvedValue('OK'),
-    get: vi.fn(),
+    get: vi.fn().mockResolvedValue(null),
     getdel: vi.fn().mockResolvedValue(null),
     del: vi.fn().mockResolvedValue(1),
+    incr: vi.fn().mockResolvedValue(1),
+    expire: vi.fn().mockResolvedValue(1),
   };
 
   const service = new MfaService(
@@ -101,6 +103,9 @@ describe('MfaService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     redis.set.mockResolvedValue('OK');
+    redis.get.mockResolvedValue(null);
+    redis.incr.mockResolvedValue(1);
+    redis.expire.mockResolvedValue(1);
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
     vi.mocked(authMethodService.findTotpByUserId).mockResolvedValue({
       id: 5,
@@ -150,6 +155,41 @@ describe('MfaService', () => {
     const result = await service.verify('user_public', { code: '123456' });
     expect(result.verified).toBe(true);
     expect(authMethodService.updateAuthMethodLastUsedAt).toHaveBeenCalled();
+  });
+
+  it('verify records a failure and rejects on an invalid TOTP code (audit-#12)', async () => {
+    const { verify } = await import('otplib');
+    vi.mocked(verify).mockResolvedValueOnce({ valid: false } as never);
+    await expect(service.verify('user_public', { code: '000000' })).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
+    expect(redis.incr).toHaveBeenCalledWith('mfa:verify:fail:1');
+  });
+
+  it('verify locks out before checking the code once the failure threshold is reached (audit-#12)', async () => {
+    redis.get.mockResolvedValue('10'); // >= MAX_MFA_VERIFICATION_ATTEMPTS
+    const { verify } = await import('otplib');
+    await expect(service.verify('user_public', { code: '123456' })).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
+    expect(verify).not.toHaveBeenCalled();
+  });
+
+  it('verify clears the failure counter on success (audit-#12)', async () => {
+    await service.verify('user_public', { code: '123456' });
+    expect(redis.del).toHaveBeenCalledWith('mfa:verify:fail:1');
+  });
+
+  it('verifyLoginMfa records a failure on an invalid TOTP code (audit-#12)', async () => {
+    const { verify } = await import('otplib');
+    vi.mocked(verify).mockResolvedValueOnce({ valid: false } as never);
+    await expect(
+      service.verifyLoginMfa(
+        { mfa_session_token: 'session-token', totp_code: '000000' },
+        '127.0.0.1',
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(redis.incr).toHaveBeenCalledWith('mfa:verify:fail:1');
   });
 
   it('verify rejects when MFA not enabled', async () => {
