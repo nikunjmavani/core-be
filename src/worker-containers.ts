@@ -75,6 +75,8 @@ export function createDomainContainers(
     authMethodService: authDomain.authMethodService,
     uploadService: uploadDomain.uploadService,
     userDataExportService: userDomain.userDataExportService,
+    // route-audit-#2 follow-up: block deleting a user who still owns organizations.
+    organizationOwnership: tenancyDomain.organizationService,
   });
 
   tenancyDomain.organizationService.wireOffboardingUploadService(

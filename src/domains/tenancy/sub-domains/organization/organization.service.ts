@@ -145,6 +145,20 @@ export class OrganizationService {
     };
   }
 
+  /**
+   * Counts the active organizations owned by a user (route-audit-#2 follow-up). Runs in the user's
+   * discovery context so the `organizations_user_discovery` RLS policy resolves the owned rows; used
+   * by user offboarding to block deleting a user who still owns organizations.
+   */
+  async countOrganizationsOwnedByUser(
+    userPublicId: string,
+    userInternalId: number,
+  ): Promise<number> {
+    return withUserDatabaseContext(userPublicId, () =>
+      this.repository.countActiveOwnedByUser(userInternalId),
+    );
+  }
+
   async requireOrganizationMembershipByPublicId(
     public_id: string,
   ): Promise<OrganizationMembershipContext> {

@@ -261,6 +261,18 @@ export class OrganizationRepository extends BaseRepository {
     return (rows[0] ?? null) as Organization | null;
   }
 
+  /**
+   * Counts the active (not soft-deleted) organizations owned by a user (route-audit-#2 follow-up).
+   * Used to block deleting a user who still owns organizations (require ownership transfer first).
+   */
+  async countActiveOwnedByUser(owner_user_id: number): Promise<number> {
+    const rows = await getRequestDatabase()
+      .select({ value: sql<number>`count(*)::int` })
+      .from(organizations)
+      .where(and(eq(organizations.owner_user_id, owner_user_id), isNull(organizations.deleted_at)));
+    return rows[0]?.value ?? 0;
+  }
+
   async updateStripeCustomerId(
     organization_id: number,
     stripe_customer_id: string,
