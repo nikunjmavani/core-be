@@ -107,6 +107,8 @@ describe('AuthService', () => {
     get: vi.fn().mockResolvedValue(null),
     incr: vi.fn().mockResolvedValue(1),
     expire: vi.fn().mockResolvedValue(1),
+    // route-audit C5: per-IP failed-login counter now uses an atomic INCR+EXPIRE Lua via redis.eval.
+    eval: vi.fn().mockResolvedValue(1),
   } as unknown as Redis;
 
   const service = new AuthService(
@@ -443,7 +445,7 @@ describe('AuthService', () => {
     await expect(
       service.login({ email: user.email, password: 'WrongPassword1!' }, '10.0.0.1'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(redis.incr).toHaveBeenCalled();
+    expect(redis.eval).toHaveBeenCalled();
   });
 
   it('login increments the per-IP counter when the email is not found', async () => {
@@ -451,7 +453,7 @@ describe('AuthService', () => {
     await expect(
       service.login({ email: 'nobody@example.com', password: 'WrongPassword1!' }, '10.0.0.2'),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-    expect(redis.incr).toHaveBeenCalled();
+    expect(redis.eval).toHaveBeenCalled();
   });
 
   it('login fails open on Redis error during IP check (does not block legitimate user)', async () => {

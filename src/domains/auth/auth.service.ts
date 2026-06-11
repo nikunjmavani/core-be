@@ -15,6 +15,7 @@ import {
 } from '@/shared/constants/index.js';
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { incrementWithExpiryOnFirst } from '@/shared/utils/infrastructure/redis-counter.util.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { AuthSessionService } from './sub-domains/auth-session/auth-session.service.js';
@@ -92,10 +93,13 @@ export class AuthService {
   private async recordIpFailedLogin(ipAddress: string): Promise<void> {
     try {
       const key = this.buildIpKey(ipAddress);
-      const count = await this.redis.incr(key);
-      if (count === 1) {
-        await this.redis.expire(key, IP_FAILED_LOGIN_WINDOW_SECONDS);
-      }
+      // Atomic INCR + first-increment EXPIRE (route-audit C5) — a crash between a separate INCR and
+      // EXPIRE would otherwise leave a no-TTL counter that throttles the IP indefinitely.
+      const count = await incrementWithExpiryOnFirst(
+        this.redis,
+        key,
+        IP_FAILED_LOGIN_WINDOW_SECONDS,
+      );
       if (count === IP_FAILED_LOGIN_THRESHOLD) {
         captureMessage('auth.ip_failed_login.threshold_reached', {
           level: 'warning',

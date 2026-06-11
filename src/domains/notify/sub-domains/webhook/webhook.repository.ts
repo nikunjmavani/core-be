@@ -175,7 +175,6 @@ export class WebhookRepository {
   }
 
   async create(data: WebhookCreateData) {
-    const now = new Date();
     return runInsertWithPublicIdentifierRetry(async () => {
       const public_id = generatePublicId();
       const rows = await getRequestDatabase()
@@ -196,7 +195,11 @@ export class WebhookRepository {
             encrypted_secret: data.encrypted_secret,
             events: data.events as Record<string, unknown>,
             is_enabled: data.is_enabled ?? true,
-            updated_at: now,
+            // route-audit C3: greatest(created_at, now()) — the revived row's created_at is the
+            // original DB-clock value; a bare JS `new Date()` here could be < created_at under
+            // host/DB clock skew and violate chk_webhooks_updated. Reuses the same expression as
+            // update()/softDelete().
+            updated_at: webhookUpdatedAtTimestamp,
             updated_by_user_id: data.created_by_user_id ?? undefined,
           },
         })

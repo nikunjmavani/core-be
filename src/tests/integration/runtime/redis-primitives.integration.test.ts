@@ -157,4 +157,26 @@ describe.runIf(runRedisTests)('Integration: Redis primitives', () => {
       await circuit.reset();
     },
   );
+
+  it.runIf(() => redisAvailable)(
+    'route-audit C5: incrementWithExpiryOnFirst increments and sets TTL atomically on the first hit',
+    async () => {
+      const { incrementWithExpiryOnFirst } = await import(
+        '@/shared/utils/infrastructure/redis-counter.util.js'
+      );
+      const key = `${testKeyPrefix}:counter`;
+
+      // First increment → count 1 AND a TTL is set (no INCR-then-EXPIRE gap).
+      expect(await incrementWithExpiryOnFirst(redisConnection, key, 100)).toBe(1);
+      const ttlAfterFirst = await redisConnection.ttl(key);
+      expect(ttlAfterFirst).toBeGreaterThan(0);
+      expect(ttlAfterFirst).toBeLessThanOrEqual(100);
+
+      // Second increment → count 2; the window is anchored to the first hit, not extended.
+      expect(await incrementWithExpiryOnFirst(redisConnection, key, 100)).toBe(2);
+      const ttlAfterSecond = await redisConnection.ttl(key);
+      expect(ttlAfterSecond).toBeGreaterThan(0);
+      expect(ttlAfterSecond).toBeLessThanOrEqual(ttlAfterFirst);
+    },
+  );
 });

@@ -14,32 +14,25 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
 
 // Stable 21-char test public ids used across all scenarios in this suite.
 const METHOD_PUB_A = 'testmethodpuba123456'; // being deleted
-const METHOD_PUB_B = 'testmethodpubb123456'; // second method (e.g. OAUTH)
-const METHOD_PUB_MFA = 'testmethodpubm12345'; // MFA_TOTP method
 
 /**
- * Regression for sec-A5 (Medium): `DELETE /me/auth-methods/:publicId` previously called the
- * repository revoke without counting what would remain, so a user could revoke their
- * PASSWORD (or every OAUTH/MAGIC_LINK) credential and lock themselves out — every login
- * surface gone, recovery requires admin intervention.
+ * Regression for sec-A5 (Medium): `DELETE /me/auth-methods/:publicId` must refuse to revoke the
+ * user's last login-capable credential (PASSWORD/OAUTH/MAGIC_LINK), or the user is locked out.
  *
- * sec-new-B4: the route now accepts a `publicId` string path param instead of a bigserial
- * integer, and the service resolves by `findByPublicIdForUser` before revoking by internal id.
+ * route-audit C1: the "is another login-capable method active?" check and the revoke now run in ONE
+ * statement (`revokeUnlessLastLoginCapable` — an `EXISTS` over the user's other active rows), so two
+ * concurrent deletes cannot each read "one other left" and both succeed. A zero-row result for a
+ * login-capable method surfaces as `ForbiddenError('cannotRemoveLastAuthMethod')`.
  */
-describe('AuthMethodService.delete — last-method guard (sec-A5)', () => {
+describe('AuthMethodService.delete — last-method guard (sec-A5 / route-audit C1 atomic)', () => {
   const userService = {
     requireUserRecordByPublicId: vi.fn(),
-    // sec-r5-auth-session-info-1: PASSWORD revocation now atomically clears
-    // users.password_hash so the user-facing "I removed my password" view
-    // matches the auth view. The service path calls this when the revoked
-    // method's type is PASSWORD.
     clearPasswordHash: vi.fn().mockResolvedValue(null),
   } as unknown as UserService;
 
   const authMethodRepository = {
     findByPublicIdForUser: vi.fn(),
-    listByUserId: vi.fn(),
-    revoke: vi.fn(),
+    revokeUnlessLastLoginCapable: vi.fn(),
   } as unknown as AuthMethodRepository;
 
   const verificationTokenRepository = {} as VerificationTokenRepository;
@@ -57,7 +50,11 @@ describe('AuthMethodService.delete — last-method guard (sec-A5)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue(user as never);
-    vi.mocked(authMethodRepository.revoke).mockResolvedValue({ id: 42, user_id: 1 } as never);
+    // Default: the guarded revoke succeeds (another login-capable method remains / not login-capable).
+    vi.mocked(authMethodRepository.revokeUnlessLastLoginCapable).mockResolvedValue({
+      id: 42,
+      user_id: 1,
+    } as never);
   });
 
   it('refuses to delete the last login-capable method (PASSWORD only)', async () => {
@@ -68,14 +65,11 @@ describe('AuthMethodService.delete — last-method guard (sec-A5)', () => {
       method_type: 'PASSWORD',
       revoked_at: null,
     } as never);
-    // Only the method being deleted is login-capable — the user would have no way to log in.
-    vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([
-      { id: 42, public_id: METHOD_PUB_A, user_id: 1, method_type: 'PASSWORD' },
-      { id: 99, public_id: METHOD_PUB_MFA, user_id: 1, method_type: 'MFA_TOTP' }, // MFA is NOT login-capable on its own.
-    ] as never);
+    // Atomic guard matches zero rows — no other login-capable method remains.
+    vi.mocked(authMethodRepository.revokeUnlessLastLoginCapable).mockResolvedValue(null as never);
 
     await expect(service.delete('user_pub', METHOD_PUB_A)).rejects.toBeInstanceOf(ForbiddenError);
-    expect(authMethodRepository.revoke).not.toHaveBeenCalled();
+    expect(userService.clearPasswordHash).not.toHaveBeenCalled();
   });
 
   it('allows deletion of one of several login-capable methods (PASSWORD when OAUTH remains)', async () => {
@@ -86,20 +80,19 @@ describe('AuthMethodService.delete — last-method guard (sec-A5)', () => {
       method_type: 'PASSWORD',
       revoked_at: null,
     } as never);
-    vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([
-      { id: 42, public_id: METHOD_PUB_A, user_id: 1, method_type: 'PASSWORD' },
-      { id: 50, public_id: METHOD_PUB_B, user_id: 1, method_type: 'OAUTH' },
-    ] as never);
 
     await expect(service.delete('user_pub', METHOD_PUB_A)).resolves.toBeUndefined();
-    // revoke is called with the internal id resolved from findByPublicIdForUser
-    expect(authMethodRepository.revoke).toHaveBeenCalledWith(42, user.id);
+    // The login-capable type set is passed so the repository can build the EXISTS guard.
+    expect(authMethodRepository.revokeUnlessLastLoginCapable).toHaveBeenCalledWith(
+      42,
+      user.id,
+      expect.arrayContaining(['PASSWORD', 'OAUTH', 'MAGIC_LINK']),
+    );
+    // PASSWORD revocation also clears the stale hash.
+    expect(userService.clearPasswordHash).toHaveBeenCalledWith('user_pub');
   });
 
   it('allows deletion of an MFA method even when it is the only credential — the guard is login-capable-only', async () => {
-    // The login-capable guard is intentionally narrow (PASSWORD/OAUTH/MAGIC_LINK).
-    // MFA-method deletion goes through MfaService.deleteMfa, which has its own
-    // org-policy guard (sec-A4) — this service path stays a thin revoke.
     vi.mocked(authMethodRepository.findByPublicIdForUser).mockResolvedValue({
       id: 42,
       public_id: METHOD_PUB_A,
@@ -107,19 +100,20 @@ describe('AuthMethodService.delete — last-method guard (sec-A5)', () => {
       method_type: 'MFA_TOTP',
       revoked_at: null,
     } as never);
-    vi.mocked(authMethodRepository.listByUserId).mockResolvedValue([
-      { id: 42, public_id: METHOD_PUB_A, user_id: 1, method_type: 'MFA_TOTP' },
-    ] as never);
 
     await expect(service.delete('user_pub', METHOD_PUB_A)).resolves.toBeUndefined();
-    expect(authMethodRepository.revoke).toHaveBeenCalledWith(42, user.id);
+    expect(authMethodRepository.revokeUnlessLastLoginCapable).toHaveBeenCalledWith(
+      42,
+      user.id,
+      expect.any(Array),
+    );
+    expect(userService.clearPasswordHash).not.toHaveBeenCalled();
   });
 
-  it('throws NotFoundError when the method does not exist (no count + no revoke)', async () => {
+  it('throws NotFoundError when the method does not exist (no guarded revoke)', async () => {
     vi.mocked(authMethodRepository.findByPublicIdForUser).mockResolvedValue(null);
 
     await expect(service.delete('user_pub', METHOD_PUB_A)).rejects.toBeInstanceOf(NotFoundError);
-    expect(authMethodRepository.listByUserId).not.toHaveBeenCalled();
-    expect(authMethodRepository.revoke).not.toHaveBeenCalled();
+    expect(authMethodRepository.revokeUnlessLastLoginCapable).not.toHaveBeenCalled();
   });
 });
