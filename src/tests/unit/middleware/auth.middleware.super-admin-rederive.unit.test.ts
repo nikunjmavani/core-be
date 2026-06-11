@@ -136,6 +136,32 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
     await application.close();
   });
 
+  it('route-#6: re-derives an ADMIN JWT claim against live state instead of trusting it', async () => {
+    // No code path mints `admin` today, but if a stale/forged admin claim ever appeared it must
+    // be re-validated (not honored for the token lifetime). resolveGlobalRoleForEmail returns the
+    // user's TRUE role; a non-allowlisted account is downgraded to USER.
+    vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(undefined);
+    await setup();
+    const adminUserPublicId = generatePublicId();
+    const accessToken = await signAccessToken({
+      userId: adminUserPublicId,
+      role: GLOBAL_ROLES.ADMIN,
+    });
+
+    const response = await application.inject({
+      method: 'GET',
+      url: '/protected',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    // The ADMIN claim triggered the live re-derivation (not a blind trust)...
+    expect(findUserRecordByPublicId).toHaveBeenCalledWith(adminUserPublicId);
+    // ...and downgraded to USER since the email is not in the allowlist.
+    expect((response.json() as { role?: string }).role).toBe(GLOBAL_ROLES.USER);
+    await application.close();
+  });
+
   it('does NOT call findUserRecordByPublicId for a non-admin JWT (hot-path stays unchanged)', async () => {
     vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(undefined);
     await setup();

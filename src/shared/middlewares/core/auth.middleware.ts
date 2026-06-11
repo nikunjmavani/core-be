@@ -82,14 +82,19 @@ async function authenticate(request: FastifyRequest, _reply: FastifyReply): Prom
       payload.userId,
     );
 
-    // sec-A6: re-derive SUPER_ADMIN per request so removal from GLOBAL_ADMIN_EMAILS
-    // takes effect immediately, not at next token refresh (default 5-minute window).
+    // sec-A6 / route-#6: re-derive ANY privileged claim (super_admin OR admin) per request against
+    // live state, so removal from GLOBAL_ADMIN_EMAILS or account suspension takes effect
+    // immediately (not at next token refresh, default 5-minute window) and a stale or forged
+    // privileged claim is never trusted for the token lifetime. rederiveSuperAdminRole only ever
+    // returns super_admin / user / undefined, so an `admin` claim is downgraded to the user's TRUE
+    // role. (No code path mints `admin` today, but re-deriving it fails closed if one ever does.)
     // Regular users skip the lookup — preserves the existing hot-path latency.
     const claimedRole = payload.role ? (payload.role as GlobalRole) : undefined;
-    const effectiveRole =
-      claimedRole === GLOBAL_ROLES.SUPER_ADMIN
-        ? await rederiveSuperAdminRole(request, payload.userId)
-        : claimedRole;
+    const isPrivilegedClaim =
+      claimedRole === GLOBAL_ROLES.SUPER_ADMIN || claimedRole === GLOBAL_ROLES.ADMIN;
+    const effectiveRole = isPrivilegedClaim
+      ? await rederiveSuperAdminRole(request, payload.userId)
+      : claimedRole;
 
     request.auth = omitUndefined({
       kind: 'user',
