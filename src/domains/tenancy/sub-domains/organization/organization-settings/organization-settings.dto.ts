@@ -4,8 +4,15 @@ import { z } from 'zod';
  * Prototype-pollution-prone keys rejected from the `security_policy` JSONB record (route-audit
  * hardening). The record is stored opaquely today, but blocking these at the edge prevents a
  * future consumer that spreads/merges the policy into a runtime object from being polluted.
+ *
+ * @remarks
+ * `constructor`/`prototype` arrive as ordinary own keys and are caught by the Zod refine below.
+ * `__proto__` is special: Zod's record reconstruction (and Fastify's secure JSON parser) drop it
+ * before the refine ever runs, so the refine alone cannot *reject* it — the validator does a
+ * raw-key scan with this set BEFORE Zod so an explicit `__proto__` is rejected, not silently dropped
+ * (route-audit C4).
  */
-const PROTO_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+export const PROTO_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /**
  * Zod schema for `PATCH /api/v1/organizations/:id/settings`. All fields are

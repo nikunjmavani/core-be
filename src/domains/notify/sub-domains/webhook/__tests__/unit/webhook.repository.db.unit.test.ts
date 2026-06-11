@@ -294,5 +294,40 @@ describe('WebhookRepository (database)', () => {
       const deleted = await repository.softDelete(created.public_id, organization.id);
       expect(deleted?.deleted_at).not.toBeNull();
     });
+
+    it('route-audit C3: re-adding a soft-deleted webhook with created_at ahead of now() holds the invariant', async () => {
+      const user = await createTestUser({ email: 'webhook-c3@test.com' });
+      const organization = await createTestOrganization({ ownerUserId: user.id });
+      const created = await repository.create({
+        organization_id: organization.id,
+        url: 'https://example.com/c3-hook',
+        encrypted_secret: 'secret',
+        events: ['subscription.updated'],
+        is_enabled: true,
+        created_by_user_id: user.id,
+      });
+
+      // Soft-delete, then force created_at (and updated_at, to stay valid) into the future.
+      await repository.softDelete(created.public_id, organization.id);
+      const future = new Date(Date.now() + 60 * 60 * 1000);
+      await database
+        .update(webhooks)
+        .set({ created_at: future, updated_at: future })
+        .where(eq(webhooks.public_id, created.public_id));
+
+      // Re-add (same org+url) resurrects the row via onConflictDoUpdate. Pre-fix, updated_at =
+      // new Date() (JS clock) could be < the future created_at and violate chk_webhooks_updated;
+      // greatest(created_at, now()) keeps it valid.
+      const revived = await repository.create({
+        organization_id: organization.id,
+        url: 'https://example.com/c3-hook',
+        encrypted_secret: 'secret-rotated',
+        events: ['subscription.updated'],
+        is_enabled: true,
+        created_by_user_id: user.id,
+      });
+      expect(revived.public_id).toBe(created.public_id);
+      expect(revived.deleted_at).toBeNull();
+    });
   });
 });

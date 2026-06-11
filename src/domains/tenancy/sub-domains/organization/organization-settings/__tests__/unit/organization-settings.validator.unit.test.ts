@@ -24,12 +24,12 @@ describe('organization-settings validators', () => {
     }
   });
 
-  it('route-audit hardening: a __proto__ key cannot pollute or survive into the parsed policy', () => {
-    const result = validateUpdateOrganizationSettings({
-      security_policy: { ['__proto__']: 'x', safe: 'ok' },
-    });
-    // The __proto__ key is neutralized by the record reconstruction — never stored, no pollution.
-    expect(Object.keys(result.security_policy ?? {})).not.toContain('__proto__');
+  it('route-audit C4: rejects an explicit __proto__ key in security_policy (raw scan before Zod)', () => {
+    // A computed-key `['__proto__']` is an OWN property; the validator's raw-key scan rejects it
+    // BEFORE Zod (which would otherwise silently drop it and return 200). No pollution either way.
+    expect(() =>
+      validateUpdateOrganizationSettings({ security_policy: { ['__proto__']: 'x', safe: 'ok' } }),
+    ).toThrow(ValidationError);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 });

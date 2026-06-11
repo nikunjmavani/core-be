@@ -14,27 +14,25 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
 import { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { MemberRoleRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role.repository.js';
-import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 
 /**
  * Regression for sec-T3 (High): role-delete must refuse to silently strip every member
  * holding the role.
  *
- * Two guards added in this PR:
+ * Two guards:
  *   1. `is_system` guard — system roles (Admin, Member seeds) cannot be deleted.
- *      Previously the route's OpenAPI doc claimed this but the implementation didn't
- *      enforce it; combined with `createMemberRoleDto` accepting `is_system: true`
- *      from the client, tenants could even create roles indistinguishable from seeds.
- *   2. Active-membership guard — a role currently assigned to N active memberships
- *      cannot be deleted (clients must reassign members first). Previously, soft-
- *      deleting a role silently stripped every member's permission set because the
- *      permission-resolution join filters `isNull(roles.deleted_at)`.
+ *   2. Active-membership guard — a role currently assigned to active members cannot be
+ *      deleted (clients must reassign first); soft-deleting a role otherwise silently strips
+ *      every member's permission set (the permission-resolution join filters
+ *      `isNull(roles.deleted_at)`).
  *
- * The first guard fires before the second so the error message is the most actionable
- * one available (operators see "system role" before "members assigned").
+ * route-audit C2: the active-membership check + the soft-delete now run in ONE statement
+ * (`softDeleteIfNoActiveMembers` — a `NOT EXISTS` over memberships), so a concurrent
+ * member-assignment can't slip between a separate count and the delete. A zero-row result means
+ * active members remain → `ConflictError`.
  */
-describe('MemberRoleService.delete — sec-T3 guards', () => {
+describe('MemberRoleService.delete — sec-T3 guards (route-audit C2 atomic)', () => {
   const organization = { id: 1, public_id: 'org_public', owner_user_id: 99 };
 
   const systemRole = {
@@ -70,25 +68,18 @@ describe('MemberRoleService.delete — sec-T3 guards', () => {
 
   const memberRoleRepository = {
     findByPublicId: vi.fn(),
-    softDelete: vi.fn(),
+    softDeleteIfNoActiveMembers: vi.fn(),
   } as unknown as MemberRoleRepository;
 
-  const membershipRepository = {
-    countActiveByRoleId: vi.fn(),
-  } as unknown as MembershipRepository;
-
-  const service = new MemberRoleService(
-    organizationService,
-    memberRoleRepository,
-    membershipRepository,
-  );
+  const service = new MemberRoleService(organizationService, memberRoleRepository);
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValue(
       organization as never,
     );
-    vi.mocked(memberRoleRepository.softDelete).mockImplementation(
+    // Default: the guarded delete succeeds (no active members).
+    vi.mocked(memberRoleRepository.softDeleteIfNoActiveMembers).mockImplementation(
       async (publicId) => ({ public_id: publicId, organization_id: organization.id }) as never,
     );
   });
@@ -100,44 +91,42 @@ describe('MemberRoleService.delete — sec-T3 guards', () => {
       ForbiddenError,
     );
 
-    expect(memberRoleRepository.softDelete).not.toHaveBeenCalled();
+    expect(memberRoleRepository.softDeleteIfNoActiveMembers).not.toHaveBeenCalled();
     expect(invalidateOrganizationPermissions).not.toHaveBeenCalled();
   });
 
   it('refuses to delete a non-system role that has active members (ConflictError)', async () => {
     vi.mocked(memberRoleRepository.findByPublicId).mockResolvedValue(customRoleAssigned as never);
-    vi.mocked(membershipRepository.countActiveByRoleId).mockResolvedValue(3);
+    // Atomic guard matches zero rows because active members remain.
+    vi.mocked(memberRoleRepository.softDeleteIfNoActiveMembers).mockResolvedValue(null as never);
 
     await expect(service.delete('org_public', customRoleAssigned.public_id)).rejects.toBeInstanceOf(
       ConflictError,
     );
 
-    expect(memberRoleRepository.softDelete).not.toHaveBeenCalled();
     expect(invalidateOrganizationPermissions).not.toHaveBeenCalled();
   });
 
   it('allows deletion of an unused non-system role (control case — happy path)', async () => {
     vi.mocked(memberRoleRepository.findByPublicId).mockResolvedValue(customRoleEmpty as never);
-    vi.mocked(membershipRepository.countActiveByRoleId).mockResolvedValue(0);
 
     await expect(service.delete('org_public', customRoleEmpty.public_id)).resolves.toBeUndefined();
 
-    expect(memberRoleRepository.softDelete).toHaveBeenCalledWith(
+    expect(memberRoleRepository.softDeleteIfNoActiveMembers).toHaveBeenCalledWith(
       customRoleEmpty.public_id,
       organization.id,
     );
     expect(invalidateOrganizationPermissions).toHaveBeenCalledWith('org_public');
   });
 
-  it('throws NotFoundError when the role does not exist (membership count is skipped)', async () => {
+  it('throws NotFoundError when the role does not exist (guarded delete is skipped)', async () => {
     vi.mocked(memberRoleRepository.findByPublicId).mockResolvedValue(null);
 
     await expect(service.delete('org_public', 'role_missing')).rejects.toBeInstanceOf(
       NotFoundError,
     );
 
-    expect(membershipRepository.countActiveByRoleId).not.toHaveBeenCalled();
-    expect(memberRoleRepository.softDelete).not.toHaveBeenCalled();
+    expect(memberRoleRepository.softDeleteIfNoActiveMembers).not.toHaveBeenCalled();
   });
 });
 
@@ -184,15 +173,7 @@ describe('MemberRoleService.update — sec-T3 is_system guard', () => {
     update: vi.fn(),
   } as unknown as MemberRoleRepository;
 
-  const membershipRepoForUpdate = {
-    countActiveByRoleId: vi.fn(),
-  } as unknown as MembershipRepository;
-
-  const updateService = new MemberRoleService(
-    orgServiceForUpdate,
-    roleRepoForUpdate,
-    membershipRepoForUpdate,
-  );
+  const updateService = new MemberRoleService(orgServiceForUpdate, roleRepoForUpdate);
 
   beforeEach(() => {
     vi.clearAllMocks();

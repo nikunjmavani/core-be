@@ -3,7 +3,6 @@ import { ConflictError, ForbiddenError, NotFoundError } from '@/shared/errors/in
 import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
-import type { MembershipRepository } from '@/domains/tenancy/sub-domains/membership/membership.repository.js';
 import type { MemberRoleRepository } from './member-role.repository.js';
 import type { MemberRoleOutput, MemberRoleRow } from './member-role.types.js';
 import {
@@ -44,7 +43,6 @@ export class MemberRoleService {
   constructor(
     private readonly organizationService: OrganizationService,
     private readonly memberRoleRepository: MemberRoleRepository,
-    private readonly membershipRepository: MembershipRepository,
   ) {}
 
   async list(organization_public_id: string, pagination: CursorPaginationInput) {
@@ -252,15 +250,19 @@ export class MemberRoleService {
       if (role.is_system) {
         throw new ForbiddenError('errors:cannotDeleteSystemRole');
       }
-      const activeMembershipCount = await this.membershipRepository.countActiveByRoleId(
-        role.id,
+      // Atomic guarded delete: the "no active members?" check and the soft-delete run in ONE
+      // statement (a NOT EXISTS over memberships), so a concurrent member-assignment to this role
+      // cannot interleave a separate count and the delete and leave a member on a deleted role —
+      // which permission resolution would then silently strip of all permissions (route-audit C2).
+      // `role` was found above, so a zero-row result means active members remain (or a concurrent
+      // delete) → surface the actionable conflict rather than NotFound.
+      const deleted = await this.memberRoleRepository.softDeleteIfNoActiveMembers(
+        role_public_id,
         organization.id,
       );
-      if (activeMembershipCount > 0) {
+      if (!deleted) {
         throw new ConflictError('errors:roleHasActiveMembers');
       }
-      const deleted = await this.memberRoleRepository.softDelete(role_public_id, organization.id);
-      if (!deleted) throw new NotFoundError('Role');
       await invalidateOrganizationPermissions(organization_public_id);
     });
   }

@@ -10,7 +10,7 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
   invalidateOrganizationPermissions: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
@@ -47,21 +47,10 @@ describe('MemberRoleService', () => {
     countActiveByOrganization: vi.fn().mockResolvedValue(0),
     create: vi.fn().mockResolvedValue(roleRow),
     update: vi.fn().mockResolvedValue(roleRow),
-    softDelete: vi.fn().mockResolvedValue(roleRow),
+    softDeleteIfNoActiveMembers: vi.fn().mockResolvedValue(roleRow),
   } as unknown as MemberRoleRepository;
 
-  // sec-T3: `MemberRoleService.delete` now reads `membershipRepository.countActiveByRoleId`
-  // before soft-deleting; this test exercises the existing list/get/create/update paths
-  // (which do not touch memberships), so the default count is irrelevant.
-  const membershipRepository = {
-    countActiveByRoleId: vi.fn().mockResolvedValue(0),
-  } as never;
-
-  const service = new MemberRoleService(
-    organizationService,
-    memberRoleRepository,
-    membershipRepository,
-  );
+  const service = new MemberRoleService(organizationService, memberRoleRepository);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -72,7 +61,7 @@ describe('MemberRoleService', () => {
     vi.mocked(memberRoleRepository.findByPublicId).mockResolvedValue(roleRow as never);
     vi.mocked(memberRoleRepository.findByInternalId).mockResolvedValue(roleRow as never);
     vi.mocked(memberRoleRepository.update).mockResolvedValue(roleRow as never);
-    vi.mocked(memberRoleRepository.softDelete).mockResolvedValue(roleRow as never);
+    vi.mocked(memberRoleRepository.softDeleteIfNoActiveMembers).mockResolvedValue(roleRow as never);
     vi.mocked(memberRoleRepository.create).mockResolvedValue(roleRow as never);
   });
 
@@ -159,7 +148,7 @@ describe('MemberRoleService', () => {
     );
     await service.delete(organization.public_id, roleRow.public_id);
     expect(memberRoleRepository.update).toHaveBeenCalled();
-    expect(memberRoleRepository.softDelete).toHaveBeenCalled();
+    expect(memberRoleRepository.softDeleteIfNoActiveMembers).toHaveBeenCalled();
   });
 
   it('delete invalidates the entire organization permission namespace', async () => {
@@ -213,10 +202,12 @@ describe('MemberRoleService', () => {
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('delete throws when soft delete returns null', async () => {
-    vi.mocked(memberRoleRepository.softDelete).mockResolvedValue(null);
+  it('delete throws Conflict when the guarded soft-delete matches no row (active members)', async () => {
+    // route-audit C2: softDeleteIfNoActiveMembers returns null when active members remain (or a
+    // concurrent delete), which the service surfaces as the actionable roleHasActiveMembers conflict.
+    vi.mocked(memberRoleRepository.softDeleteIfNoActiveMembers).mockResolvedValue(null);
     await expect(service.delete(organization.public_id, roleRow.public_id)).rejects.toBeInstanceOf(
-      NotFoundError,
+      ConflictError,
     );
   });
 
