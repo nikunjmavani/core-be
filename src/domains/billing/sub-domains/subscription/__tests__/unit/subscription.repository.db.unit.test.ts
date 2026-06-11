@@ -176,6 +176,39 @@ describe('SubscriptionRepository (database)', () => {
     expect(refetched?.status).toBe('CANCELED');
   });
 
+  it('audit-#6: a same-second cancel deterministically wins even when the update arrives first', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+    const providerSubscriptionId = `sub_same_second_reverse_${Date.now()}`;
+    const seeded = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      providerSubscriptionId,
+    });
+
+    const eventAt = new Date('2026-07-01T09:00:00.000Z');
+    // In-place update lands FIRST at T.
+    const updated = await repository.syncFromStripeProviderSubscription(
+      providerSubscriptionId,
+      { status: 'ACTIVE' },
+      eventAt,
+    );
+    expect(updated?.status).toBe('ACTIVE');
+
+    // Cancel lands SECOND at the SAME second T — the `<=` guard lets the terminal
+    // event win. Combined with the cancel-then-update test above, this proves the
+    // tie-break is order-independent (both orders converge on CANCELED).
+    const canceled = await repository.markCanceledByProviderSubscriptionId(
+      providerSubscriptionId,
+      eventAt,
+    );
+    expect(canceled?.status).toBe('CANCELED');
+
+    const refetched = await repository.findByPublicId(seeded.public_id, organization.id);
+    expect(refetched?.status).toBe('CANCELED');
+  });
+
   it('audit-#1: an INCOMPLETE_EXPIRED subscription releases the slot and allows re-subscription', async () => {
     const owner = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: owner.id });
