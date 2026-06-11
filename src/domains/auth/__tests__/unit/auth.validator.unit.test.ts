@@ -52,6 +52,24 @@ describe('auth.validator', () => {
     ).toThrow(ValidationError);
   });
 
+  // route-#3: only MAGIC_LINK is a functional credential-less row; PASSWORD/MFA_*/OAUTH would be
+  // non-functional phantom rows that defeat the last-login-capable-credential guard.
+  it.each([
+    'PASSWORD',
+    'OAUTH',
+    'MFA_TOTP',
+    'MFA_SMS',
+    'MFA_EMAIL',
+  ])('validateCreateAuthMethod rejects credential-bearing type %s (phantom-row lockout)', (methodType) => {
+    expect(() => validateCreateAuthMethod({ method_type: methodType })).toThrow(ValidationError);
+  });
+
+  it('validateCreateAuthMethod accepts MAGIC_LINK (the only valid bare-row type)', () => {
+    expect(validateCreateAuthMethod({ method_type: 'MAGIC_LINK' })).toMatchObject({
+      method_type: 'MAGIC_LINK',
+    });
+  });
+
   it('validateChangePassword rejects short new password', () => {
     expect(() =>
       validateChangePassword({

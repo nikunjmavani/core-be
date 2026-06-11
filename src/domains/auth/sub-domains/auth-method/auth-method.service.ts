@@ -94,15 +94,11 @@ export class AuthMethodService {
   }
 
   async create(userPublicId: string, body: unknown) {
+    // route-#3: the DTO restricts method_type to MAGIC_LINK — the only type that is a functional
+    // credential-less row. PASSWORD/MFA_* (need a stored secret) and OAUTH (proves an external
+    // identity, written only by the verified callback) are rejected at validation, so none can be
+    // inserted here as non-functional phantom rows that the last-credential guard would miscount.
     const parsed = validateCreateAuthMethod(body);
-    // OAuth credentials prove possession of an external identity and may only be written by the
-    // verified OAuth callback (linkOAuthProviderIfMissing). Allowing a manual OAUTH link here would
-    // let a user bind an arbitrary provider account — and be logged in as its real owner.
-    if (parsed.method_type === AUTH_METHOD_TYPE.OAUTH) {
-      throw new ValidationError('errors:invalidInput', undefined, undefined, [
-        { field: 'method_type', messageKey: 'errors:oauthLinkNotManual' },
-      ]);
-    }
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (!user) throw new NotFoundError('User');
     return withUserDatabaseContext(userPublicId, () =>
