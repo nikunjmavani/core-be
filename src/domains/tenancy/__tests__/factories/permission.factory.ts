@@ -35,7 +35,7 @@ export interface CreateRoleWithPermissionsOptions {
  * Create a role and assign permission codes to it in a single operation.
  */
 export async function createRoleWithPermissions(options: CreateRoleWithPermissionsOptions) {
-  const publicId = generatePublicId();
+  const publicId = generatePublicId('memberRole');
 
   const [role] = await database
     .insert(roles)
@@ -72,7 +72,7 @@ export interface CreateMembershipOptions {
  * Create a membership linking a user to an organization with a specific role.
  */
 export async function createMembership(options: CreateMembershipOptions) {
-  const publicId = generatePublicId();
+  const publicId = generatePublicId('memberRole');
 
   const [membership] = await database
     .insert(memberships)

@@ -13,7 +13,7 @@ export interface CreatePlanOptions {
  * Create a test plan in the database.
  */
 export async function createTestPlan(options: CreatePlanOptions = {}) {
-  const publicId = generatePublicId();
+  const publicId = generatePublicId('plan');
 
   const [plan] = await database
     .insert(plans)

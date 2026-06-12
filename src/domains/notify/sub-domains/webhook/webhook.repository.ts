@@ -176,7 +176,7 @@ export class WebhookRepository {
 
   async create(data: WebhookCreateData) {
     return runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('webhook');
       const rows = await getRequestDatabase()
         .insert(webhooks)
         .values({
@@ -226,8 +226,8 @@ export class WebhookRepository {
       updated_by_user_id: updated_by_user_id ?? undefined,
     };
     if (rotatingSecret) {
-      baseSet['encrypted_secret_previous'] = sql`${webhooks.encrypted_secret}`;
-      baseSet['secret_rotated_at'] = databaseNowTimestamp;
+      baseSet.encrypted_secret_previous = sql`${webhooks.encrypted_secret}`;
+      baseSet.secret_rotated_at = databaseNowTimestamp;
     }
     const rows = await getRequestDatabase()
       .update(webhooks)

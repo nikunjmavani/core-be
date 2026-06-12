@@ -5,7 +5,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    auth: { kind: 'user' as const, userId: generatePublicId(), role: 'USER' },
+    auth: { kind: 'user' as const, userId: generatePublicId('user'), role: 'USER' },
     params: {},
     body: {},
     query: {},
@@ -23,7 +23,7 @@ function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
 }
 
 describe('createUserController', () => {
-  const userPublicId = generatePublicId();
+  const userPublicId = generatePublicId('user');
   const userService = {
     getMe: vi.fn().mockResolvedValue({ id: userPublicId }),
     updateMe: vi.fn().mockResolvedValue({ id: userPublicId }),
@@ -111,21 +111,24 @@ describe('createUserController', () => {
   });
 
   it('admin user handlers delegate to user service', async () => {
-    const targetId = generatePublicId();
+    const targetId = generatePublicId('user');
     await controller.listUsers(mockRequest({ query: { limit: 20 } }), {} as FastifyReply);
-    await controller.getUser(mockRequest({ params: { userId: targetId } }), {} as FastifyReply);
+    await controller.getUser(mockRequest({ params: { user_id: targetId } }), {} as FastifyReply);
     await controller.updateUser(
-      mockRequest({ params: { userId: targetId }, body: { status: 'SUSPENDED' } }),
+      mockRequest({ params: { user_id: targetId }, body: { status: 'SUSPENDED' } }),
       {} as FastifyReply,
     );
-    await controller.suspendUser(mockRequest({ params: { userId: targetId } }), {} as FastifyReply);
+    await controller.suspendUser(
+      mockRequest({ params: { user_id: targetId } }),
+      {} as FastifyReply,
+    );
     await controller.unsuspendUser(
-      mockRequest({ params: { userId: targetId } }),
+      mockRequest({ params: { user_id: targetId } }),
       {} as FastifyReply,
     );
     const deleteReply = { status: vi.fn().mockReturnThis(), send: vi.fn() };
     await controller.deleteUser(
-      mockRequest({ params: { userId: targetId } }),
+      mockRequest({ params: { user_id: targetId } }),
       deleteReply as unknown as FastifyReply,
     );
     expect(userService.listUsers).toHaveBeenCalled();

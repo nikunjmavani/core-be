@@ -36,8 +36,8 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
-const userPublicId = generatePublicId();
-const uploadPublicId = generatePublicId();
+const userPublicId = generatePublicId('user');
+const uploadPublicId = generatePublicId('upload');
 const user = { id: 1, public_id: userPublicId };
 const uploadRow = {
   id: 2,
@@ -176,7 +176,7 @@ describe('UploadService', () => {
 
   it('getUpload returns serialized upload', async () => {
     const result = await service.getUpload(uploadPublicId, userPublicId);
-    expect(result.publicId).toBe(uploadPublicId);
+    expect(result.id).toBe(uploadPublicId);
   });
 
   it('deleteUpload removes upload for user', async () => {

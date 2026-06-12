@@ -42,7 +42,7 @@ export interface UploadCreateData {
 export class UploadRepository {
   async create(data: UploadCreateData): Promise<UploadRow> {
     return runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('upload');
       const rows = await getRequestDatabase()
         .insert(uploads)
         .values({

@@ -19,10 +19,10 @@
  *   tenancy   — GET /tenancy/organizations, GET …/:id, GET …/:id/settings,
  *               PATCH …/:id/settings, GET …/:id/memberships, GET …/:id/roles,
  *               GET …/:id/api-keys
- *   billing   — GET /billing/plans, GET /billing/organizations/:id/subscriptions
+ *   billing   — GET /billing/plans, GET /billing/organizations/:organization_id/subscriptions
  *   notify    — GET /notify/notifications, GET …/unread-count,
  *               POST …/mark-all-read (write),
- *               GET /notify/organizations/:id/webhooks,
+ *               GET /notify/organizations/:organization_id/webhooks,
  *               POST + DELETE one webhook per iteration (write + cleanup)
  *   upload    — POST /uploads (presigned URL request only — no actual S3 upload)
  *

@@ -93,7 +93,7 @@ describe('UserDataExportService (database)', () => {
   it('buildExportPayload includes session activity for the user', async () => {
     const user = await createTestUser({ email: 'export-sessions@example.com' });
     await database.insert(sessions).values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('userDataExport'),
       user_id: user.id,
       token_hash: 'a'.repeat(64),
       ip_address: '203.0.113.10',

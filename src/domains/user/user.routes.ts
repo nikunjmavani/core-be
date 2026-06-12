@@ -37,7 +37,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.listUsers,
   );
   zodApplication.get(
-    '/:userId',
+    '/:user_id',
     {
       onRequest: [app.authenticate],
       preHandler: [requireRole(GLOBAL_ROLES.SUPER_ADMIN, GLOBAL_ROLES.ADMIN)],
@@ -50,7 +50,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.getUser,
   );
   zodApplication.patch(
-    '/:userId',
+    '/:user_id',
     {
       // route-#4: bound admin user-mutations so a compromised admin token cannot bulk-edit accounts.
       ...MODERATE_AUTHED_RATE_LIMIT,
@@ -66,7 +66,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.updateUser,
   );
   zodApplication.delete(
-    '/:userId',
+    '/:user_id',
     {
       // route-#4: stronger bound on the destructive admin delete (matches DELETE /me).
       ...EXPENSIVE_AUTHED_RATE_LIMIT,
@@ -81,7 +81,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.deleteUser,
   );
   zodApplication.post(
-    '/:userId/suspend',
+    '/:user_id/suspend',
     {
       ...MODERATE_AUTHED_RATE_LIMIT,
       onRequest: [app.authenticate],
@@ -96,7 +96,7 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
     controller.suspendUser,
   );
   zodApplication.post(
-    '/:userId/unsuspend',
+    '/:user_id/unsuspend',
     {
       ...MODERATE_AUTHED_RATE_LIMIT,
       onRequest: [app.authenticate],
@@ -263,14 +263,14 @@ export const userRoutesPlugin: FastifyPluginAsync = async (app) => {
       schema: {
         summary: 'Request GDPR data export',
         description:
-          'Enqueues an async export of all personal data. Poll GET /users/me/data-export/{exportId} for status and a time-limited download URL (15-minute lifetime).',
+          'Enqueues an async export of all personal data. Poll GET /users/me/data-export/{export_id} for status and a time-limited download URL (15-minute lifetime).',
         tags: ['User', 'Privacy'],
       },
     },
     dataExportController.requestExport,
   );
   zodApplication.get(
-    '/me/data-export/:exportId',
+    '/me/data-export/:export_id',
     {
       onRequest: [app.authenticate],
       // sec-U6: every successful poll while status === COMPLETED mints a fresh

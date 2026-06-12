@@ -26,7 +26,7 @@ export async function seedNotifications(items: SeedNotificationPayload[]) {
     const [row] = await getRequestDatabase()
       .insert(notifications)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('user'),
         user_id: item.user_id,
         organization_id: item.organization_id,
         type: item.type,
@@ -121,7 +121,7 @@ export async function seedWebhook(payload: SeedWebhookPayload) {
   const [row] = await getRequestDatabase()
     .insert(webhooks)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('user'),
       organization_id: payload.organization_id,
       url: payload.url,
       encrypted_secret: encryptFieldSecret('seed-webhook-secret'),

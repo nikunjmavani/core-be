@@ -128,7 +128,7 @@ export class AuthMethodRepository {
   async create(data: AuthMethodCreateData) {
     const rows = await getRequestDatabase()
       .insert(auth_methods)
-      .values({ ...data, public_id: generatePublicId() })
+      .values({ ...data, public_id: generatePublicId('authMethod') })
       .returning();
     return rows[0]!;
   }

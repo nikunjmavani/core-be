@@ -6,9 +6,9 @@ import {
 
 describe('route-catalog-auth', () => {
   it('materializeRouteCatalogPath replaces path parameters', () => {
-    expect(materializeRouteCatalogPath('/api/v1/tenancy/organizations/:id/settings')).toBe(
-      '/api/v1/tenancy/organizations/000000000000000000000/settings',
-    );
+    expect(
+      materializeRouteCatalogPath('/api/v1/tenancy/organizations/:organization_id/settings'),
+    ).toBe('/api/v1/tenancy/organizations/000000000000000000000/settings');
   });
 
   it('loadProtectedRoutesFromCatalog includes AUTH and PERM routes', () => {

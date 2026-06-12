@@ -105,7 +105,7 @@ export class OrganizationNotificationPolicyRepository {
     const rows = await getRequestDatabase()
       .insert(organization_notification_policies)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('organizationNotificationPolicy'),
         organization_id: data.organization_id,
         notification_type: data.notification_type,
         channel: data.channel,

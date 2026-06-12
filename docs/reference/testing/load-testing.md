@@ -73,7 +73,7 @@ To gain confidence in the **whole system** (not just health endpoints), run both
      pnpm load:stress:api
      ```
 
-   - Hits: `GET /api/v1/users/me`, `GET /api/v1/tenancy/organizations`, `GET /api/v1/notify/notifications`, `GET /api/v1/notify/notifications/unread-count`, `GET /api/v1/tenancy/organizations/:id/memberships` with up to 100 VUs.
+   - Hits: `GET /api/v1/users/me`, `GET /api/v1/tenancy/organizations`, `GET /api/v1/notify/notifications`, `GET /api/v1/notify/notifications/unread-count`, `GET /api/v1/tenancy/organizations/:organization_id/memberships` with up to 100 VUs.
 
 3. **Optional — auth flow**: `pnpm load:auth`
    - Stresses login + profile + list orgs (ramping load profile; see thresholds in `src/tests/load/k6/scenarios/auth-onboarding.js`).
@@ -128,7 +128,7 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
 - **Auth**: Bearer token (TEST_TOKEN) + TEST_ORG_ID for memberships
 - **Env**: `TEST_TOKEN` (required), `TEST_ORG_ID` (required for memberships). Get via `pnpm tool:load-test-credentials`.
 - **Run**: `pnpm load:stress:api` after exporting TEST_TOKEN and TEST_ORG_ID.
-- **Routes**: users/me, tenancy/organizations, notify/notifications, notify/notifications/unread-count, tenancy/organizations/:id/memberships. Stress profile: 20→50→100 VUs.
+- **Routes**: users/me, tenancy/organizations, notify/notifications, notify/notifications/unread-count, tenancy/organizations/:organization_id/memberships. Stress profile: 20→50→100 VUs.
 
 ### 3. Auth onboarding
 

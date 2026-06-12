@@ -13,7 +13,7 @@ import type { FastifyInstance } from 'fastify';
  * (`/internal/ops/circuit-breakers*`, Bearer `METRICS_SCRAPE_TOKEN`). ops has no
  * `src/domains/ops/` folder, so this suite — picked up by the global HTTP-test
  * scan via `loadRoutesForDomain('ops')` — provides the route-HTTP-coverage gate's
- * Tier-A signal for every ops route, including the `:circuitName` param route.
+ * Tier-A signal for every ops route, including the `:circuit_name` param route.
  */
 const opsRoutes = loadRoutesForDomain('ops');
 // ops routes are not organization-scoped; the materializer only substitutes `:id`,
@@ -54,13 +54,13 @@ describe('Ops route smoke (catalog)', () => {
       expect(body.circuits.map((circuit) => circuit.name)).toContain('stripe');
     });
 
-    it('POST /internal/ops/circuit-breakers/:circuitName/reset resets a managed circuit', async () => {
+    it('POST /internal/ops/circuit-breakers/:circuit_name/reset resets a managed circuit', async () => {
       const response = await injectRoute(app, {
         method: 'POST',
         url: '/internal/ops/circuit-breakers/stripe/reset',
         headers: { authorization: `Bearer ${bearerToken}` },
       });
-      expect(response.statusCode, response.body).toBe(200);
+      expect(response.statusCode, response.body).toBe(201);
     });
   });
 });

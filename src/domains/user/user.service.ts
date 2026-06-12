@@ -271,7 +271,7 @@ export class UserService {
     // enter that user's context, then insert with the exact id so the policy passes. The retry
     // regenerates id + re-enters context on the (rare) public_id unique collision.
     return runInsertWithPublicIdentifierRetry(async () => {
-      const publicId = generatePublicId();
+      const publicId = generatePublicId('user');
       return withUserDatabaseContext(publicId, () =>
         this.repository.insertOAuthUser(publicId, data),
       );

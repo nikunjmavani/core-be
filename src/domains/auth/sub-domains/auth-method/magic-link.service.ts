@@ -137,7 +137,7 @@ export class MagicLinkService {
     const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
     /** Atomic UPDATE prevents two concurrent verifies from both producing a session. */
     const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-    if (!record || record.token_type !== 'MAGIC_LINK') {
+    if (record?.token_type !== 'MAGIC_LINK') {
       throw new UnauthorizedError('errors:invalidOrExpiredMagicLink');
     }
     const user = await this.userService.findById(record.user_id);

@@ -167,7 +167,7 @@ describe('Webhook Sub-Domain — Integration', () => {
     });
   });
 
-  describe('GET /api/v1/notify/organizations/:id/webhooks/:webhookId/delivery-attempts', () => {
+  describe('GET /api/v1/notify/organizations/:id/webhooks/:webhook_id/delivery-attempts', () => {
     it('paginates delivery attempts with after cursor (newest first)', {
       timeout: 30_000,
     }, async () => {
@@ -238,7 +238,7 @@ describe('Webhook Sub-Domain — Integration', () => {
     });
   });
 
-  describe('DELETE /api/v1/notify/organizations/:id/webhooks/:webhookId', () => {
+  describe('DELETE /api/v1/notify/organizations/:id/webhooks/:webhook_id', () => {
     it('returns 204 with webhook manage permission', async () => {
       const { user, organization, token } = await createAuthorizedContext();
       const webhook = await createTestWebhook({

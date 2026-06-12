@@ -1,6 +1,7 @@
 import { EXTERNAL_ERROR_MESSAGE } from '@/shared/constants/index.js';
 import { loadRouteSuccessStatusMap } from '@/tests/helpers/route-success-status.helper.js';
 import { routeResponseMap } from '@tooling/openapi/response-map/index.js';
+import { routeQuerySchemaMap } from '@tooling/openapi/query-schema-map.js';
 import { loadCapturedRouteExamples } from '@tooling/openapi/route-examples/loader.js';
 
 /** Sanitized request/response samples captured from real test-suite API calls. */
@@ -39,7 +40,7 @@ function withCapturedExample(
  */
 const successStatusByOpenApiKey: Record<string, number> = Object.fromEntries(
   Object.entries(loadRouteSuccessStatusMap()).map(([routeKey, statusCode]) => [
-    routeKey.replace(/:([A-Za-z]+)/g, '{$1}'),
+    routeKey.replace(/:([A-Za-z_]+)/g, '{$1}'),
     statusCode,
   ]),
 );
@@ -102,8 +103,20 @@ export function buildResponses(
         statusCode === 201
           ? translate('created', 'Resource created successfully')
           : translate('success', 'Successful operation');
+      const isMutatingSuccess = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method);
       responses[String(statusCode)] = {
         description,
+        ...(isMutatingSuccess
+          ? {
+              headers: {
+                'X-Idempotency-Replay': {
+                  description:
+                    'Present and `true` when this response was replayed from the idempotency cache for a reused Idempotency-Key.',
+                  schema: { type: 'string', enum: ['true'] },
+                },
+              },
+            }
+          : {}),
         content: {
           'application/json': withCapturedExample(routeKey, statusCode, {
             schema,
@@ -125,30 +138,45 @@ export function buildResponses(
     responses[String(statusCode)] = { description };
   }
 
-  responses['400'] = {
-    description: translate('validationError', 'Validation error'),
-    content: {
-      'application/json': withCapturedExample(routeKey, 400, {
-        schema: errorResponseSchema,
-        example: {
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request body',
-            details: [{ field: 'email', message: 'Invalid email format' }],
+  // Any body-carrying method can 400 (malformed JSON hits the parser even when the
+  // route maps no JSON body; Stripe webhooks 400 on signature failure) — only
+  // param-less, query-less GET/DELETE have truly nothing to validate.
+  const acceptsBody = ['POST', 'PATCH', 'PUT'].includes(method);
+  const hasPathParams = routeKey.includes('{');
+  const hasQueryParams = routeKey in routeQuerySchemaMap;
+  if (acceptsBody || hasPathParams || hasQueryParams) {
+    responses['400'] = {
+      description: translate('validationError', 'Validation error'),
+      content: {
+        'application/json': withCapturedExample(routeKey, 400, {
+          schema: errorResponseSchema,
+          example: {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'Invalid request body',
+              details: [{ field: 'email', message: 'Invalid email format' }],
+            },
+            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
           },
-          meta: { request_id: 'req_a1b2c3d4e5f6' },
-        },
-      }),
-    },
-  };
+        }),
+      },
+    };
+  }
   responses['401'] = {
-    description: translate('unauthorized', 'Unauthorized'),
+    description: translate(
+      'unauthorized',
+      'Unauthorized — the Authorization header is missing, malformed, or carries an expired/revoked access token. Obtain a token via POST /api/v1/auth/login (or /auth/refresh) and send it as `Authorization: Bearer <ACCESS_TOKEN>`.',
+    ),
     content: {
       'application/json': withCapturedExample(routeKey, 401, {
         schema: errorResponseSchema,
         example: {
-          error: { code: 'UNAUTHORIZED', message: 'Missing or invalid bearer token' },
-          meta: { request_id: 'req_a1b2c3d4e5f6' },
+          error: {
+            code: 'UNAUTHORIZED',
+            message:
+              'Access token missing, expired, or revoked — authenticate via POST /api/v1/auth/login and retry with Authorization: Bearer <ACCESS_TOKEN>',
+          },
+          meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
         },
       }),
     },
@@ -160,7 +188,7 @@ export function buildResponses(
         schema: errorResponseSchema,
         example: {
           error: { code: 'FORBIDDEN', message: 'Insufficient permissions' },
-          meta: { request_id: 'req_a1b2c3d4e5f6' },
+          meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
         },
       }),
     },
@@ -172,7 +200,7 @@ export function buildResponses(
         schema: errorResponseSchema,
         example: {
           error: { code: 'NOT_FOUND', message: 'Resource not found' },
-          meta: { request_id: 'req_a1b2c3d4e5f6' },
+          meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
         },
       }),
     },
@@ -186,7 +214,7 @@ export function buildResponses(
           schema: errorResponseSchema,
           example: {
             error: { code: 'NOT_ACCEPTABLE', message: 'Accept header missing or unsupported' },
-            meta: { request_id: 'req_a1b2c3d4e5f6' },
+            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
           },
         }),
       },
@@ -203,7 +231,7 @@ export function buildResponses(
           schema: errorResponseSchema,
           example: {
             error: { code: 'CONFLICT', message: 'Resource already exists or state conflict' },
-            meta: { request_id: 'req_a1b2c3d4e5f6' },
+            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
           },
         }),
       },
@@ -221,7 +249,7 @@ export function buildResponses(
               code: 'UNPROCESSABLE_ENTITY',
               message: 'Business rule violation or idempotency key reused with a different payload',
             },
-            meta: { request_id: 'req_a1b2c3d4e5f6' },
+            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
           },
         }),
       },
@@ -236,7 +264,7 @@ export function buildResponses(
           schema: errorResponseSchema,
           example: {
             error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body exceeds the size limit' },
-            meta: { request_id: 'req_a1b2c3d4e5f6' },
+            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
           },
         }),
       },
@@ -248,7 +276,7 @@ export function buildResponses(
           schema: errorResponseSchema,
           example: {
             error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Unsupported content type' },
-            meta: { request_id: 'req_a1b2c3d4e5f6' },
+            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
           },
         }),
       },
@@ -257,12 +285,30 @@ export function buildResponses(
   // Every route sits behind the global + per-route rate limits.
   responses['429'] = {
     description: translate('tooManyRequests', 'Too Many Requests'),
+    headers: {
+      'Retry-After': {
+        description: 'Seconds to wait before retrying.',
+        schema: { type: 'integer' },
+      },
+      'X-RateLimit-Limit': {
+        description: 'Request budget for the current window.',
+        schema: { type: 'integer' },
+      },
+      'X-RateLimit-Remaining': {
+        description: 'Requests left in the current window.',
+        schema: { type: 'integer' },
+      },
+      'X-RateLimit-Reset': {
+        description: 'Seconds until the window resets.',
+        schema: { type: 'integer' },
+      },
+    },
     content: {
       'application/json': withCapturedExample(routeKey, 429, {
         schema: errorResponseSchema,
         example: {
           error: { code: 'RATE_LIMITED', message: 'Too many requests, retry later' },
-          meta: { request_id: 'req_a1b2c3d4e5f6' },
+          meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
         },
       }),
     },
@@ -274,7 +320,7 @@ export function buildResponses(
         schema: errorResponseSchema,
         example: {
           error: { code: 'internal_error', detail: EXTERNAL_ERROR_MESSAGE },
-          meta: { request_id: 'req_a1b2c3d4e5f6' },
+          meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
         },
       }),
     },

@@ -46,7 +46,7 @@ export function getAuthenticatedActorId(auth: AuthContext): string {
  */
 export function requireAuth(request: FastifyRequest): UserAuthContext {
   const auth = request.auth;
-  if (!auth || auth.kind !== 'user') throw new UnauthorizedError();
+  if (auth?.kind !== 'user') throw new UnauthorizedError();
   return auth;
 }
 

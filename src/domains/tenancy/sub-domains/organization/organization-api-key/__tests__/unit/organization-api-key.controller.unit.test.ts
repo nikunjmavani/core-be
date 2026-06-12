@@ -6,9 +6,9 @@ import { UnauthorizedError } from '@/shared/errors/index.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 describe('createOrganizationApiKeyController', () => {
-  const organizationPublicId = generatePublicId();
-  const apiKeyPublicId = generatePublicId();
-  const userPublicId = generatePublicId();
+  const organizationPublicId = generatePublicId('organization');
+  const apiKeyPublicId = generatePublicId('organizationApiKey');
+  const userPublicId = generatePublicId('user');
 
   const service = {
     create: vi.fn().mockResolvedValue({
@@ -16,7 +16,7 @@ describe('createOrganizationApiKeyController', () => {
       raw_key: 'ak_test_secret',
     }),
     rotate: vi.fn().mockResolvedValue({
-      api_key: { id: generatePublicId() },
+      api_key: { id: generatePublicId('organizationApiKey') },
       raw_key: 'ak_rotated_secret',
     }),
     update: vi.fn().mockResolvedValue({ id: apiKeyPublicId }),
@@ -38,7 +38,7 @@ describe('createOrganizationApiKeyController', () => {
   function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
     return {
       auth: { userId: userPublicId },
-      params: { id: organizationPublicId, apiKeyId: apiKeyPublicId },
+      params: { organization_id: organizationPublicId, api_key_id: apiKeyPublicId },
       body: {},
       query: {},
       headers: {},

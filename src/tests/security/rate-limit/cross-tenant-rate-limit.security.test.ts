@@ -58,7 +58,7 @@ describe('Security: cross-tenant org rate-limit isolation (audit #14)', () => {
     };
 
     app.post(
-      '/organizations/:id/resource',
+      '/organizations/:organization_id/resource',
       {
         preHandler: [requireMembership],
         config: {

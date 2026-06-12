@@ -81,7 +81,7 @@ describe('Member Roles Sub-Domain — Integration', () => {
     });
   });
 
-  describe('PUT /api/v1/tenancy/organizations/:id/roles/:roleId/permissions', () => {
+  describe('PUT /api/v1/tenancy/organizations/:id/roles/:role_id/permissions', () => {
     it('should replace role permissions', async () => {
       const { organization, token } = await createAuthorizedContext();
       const targetRole = await createRoleWithPermissions({

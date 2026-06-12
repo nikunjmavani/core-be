@@ -5,14 +5,14 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
 import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 
-const organizationPublicId = generatePublicId();
-const subscriptionPublicId = generatePublicId();
-const planPublicId = generatePublicId();
+const organizationPublicId = generatePublicId('organization');
+const subscriptionPublicId = generatePublicId('subscription');
+const planPublicId = generatePublicId('plan');
 
 function buildRequest(overrides: Record<string, unknown> = {}): never {
   return {
-    auth: { userId: generatePublicId(), role: 'user' },
-    params: { id: organizationPublicId, subscriptionId: subscriptionPublicId },
+    auth: { userId: generatePublicId('user'), role: 'user' },
+    params: { organization_id: organizationPublicId, subscription_id: subscriptionPublicId },
     body: {},
     headers: {},
     id: 'request-id',
@@ -94,7 +94,9 @@ describe('createSubscriptionController auth matrix', () => {
 
   it('mutating handlers throw ValidationError when organization public id param is invalid', async () => {
     const invalidParamRequest = () =>
-      buildRequest({ params: { id: 'not-a-public-id', subscriptionId: subscriptionPublicId } });
+      buildRequest({
+        params: { organization_id: 'not-a-public-id', subscription_id: subscriptionPublicId },
+      });
 
     await expect(
       controller.createSubscription(invalidParamRequest(), buildReply()),

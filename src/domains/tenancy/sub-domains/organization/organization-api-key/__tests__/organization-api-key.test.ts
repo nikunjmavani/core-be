@@ -122,7 +122,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
   });
 
-  describe('GET /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId', () => {
+  describe('GET /api/v1/tenancy/organizations/:id/api-keys/:api_key_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         url: apiKeysResourcePath('unauthenticated-organization-route', 'some-key-id'),
@@ -149,7 +149,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: apiKeysResourcePath(organization.public_id, 'yyyyyyyyyyyyyyyyyyyyy'),
+        url: apiKeysResourcePath(organization.public_id, 'key_yyyyyyyyyyyyyyyyyyyyy'),
         token,
       });
       expect(response.statusCode).toBe(404);
@@ -268,7 +268,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
   });
 
-  describe('PATCH /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId', () => {
+  describe('PATCH /api/v1/tenancy/organizations/:id/api-keys/:api_key_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'PATCH',
@@ -367,7 +367,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
   });
 
-  describe('DELETE /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId', () => {
+  describe('DELETE /api/v1/tenancy/organizations/:id/api-keys/:api_key_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
@@ -419,7 +419,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',
-        url: apiKeysResourcePath(organization.public_id, 'yyyyyyyyyyyyyyyyyyyyy'),
+        url: apiKeysResourcePath(organization.public_id, 'key_yyyyyyyyyyyyyyyyyyyyy'),
         token,
       });
       expect(response.statusCode).toBe(404);
@@ -461,7 +461,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
   });
 
-  describe('POST /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId/rotate', () => {
+  describe('POST /api/v1/tenancy/organizations/:id/api-keys/:api_key_id/rotate', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
@@ -513,7 +513,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: `${apiKeysResourcePath(organization.public_id, 'yyyyyyyyyyyyyyyyyyyyy')}/rotate`,
+        url: `${apiKeysResourcePath(organization.public_id, 'key_yyyyyyyyyyyyyyyyyyyyy')}/rotate`,
         token,
       });
       expect(response.statusCode).toBe(404);

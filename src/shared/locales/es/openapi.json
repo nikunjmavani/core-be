@@ -54,7 +54,7 @@
     "payloadTooLarge": "El cuerpo de la solicitud excede el límite de tamaño",
     "success": "Operación correcta",
     "tooManyRequests": "Demasiadas solicitudes — límite de velocidad excedido",
-    "unauthorized": "No autorizado",
+    "unauthorized": "No autorizado: falta la cabecera Authorization, es inválida o el token de acceso expiró o fue revocado. Obtén un token con POST /api/v1/auth/login (o /auth/refresh) y envíalo como `Authorization: Bearer <ACCESS_TOKEN>`.",
     "unprocessableEntity": "Entidad no procesable — violación de regla de negocio o clave de idempotencia reutilizada con un payload diferente",
     "unsupportedMediaType": "Tipo de contenido no compatible",
     "validationError": "Error de validación"

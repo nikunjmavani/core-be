@@ -1,0 +1,110 @@
+/**
+ * Per-operation request-header documentation. Mirrors the runtime middleware
+ * truth: tenant resolution (`X-Organization-Id`), idempotency (`Idempotency-Key`,
+ * required on the eight writes that register `idempotencyRequired: true`),
+ * captcha on the public auth surface (`X-Captcha-Token`), CSRF on the cookie
+ * refresh flow (`X-CSRF-Token`), and Stripe's own `Stripe-Signature` on
+ * webhook ingestion. `Authorization: Bearer <ACCESS_TOKEN>` is expressed via
+ * the OpenAPI security scheme, not a literal parameter.
+ */
+
+const IDEMPOTENCY_REQUIRED_ROUTE_KEYS = new Set([
+  'POST /api/v1/tenancy/organizations',
+  'POST /api/v1/tenancy/organizations/{organization_id}/memberships',
+  'POST /api/v1/tenancy/organizations/{organization_id}/transfer-ownership',
+  'POST /api/v1/tenancy/organizations/{organization_id}/invitations',
+  'POST /api/v1/billing/organizations/{organization_id}/subscriptions',
+  'POST /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/change-plan',
+  'POST /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/cancel',
+  'POST /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/resume',
+]);
+
+const CAPTCHA_ROUTE_KEYS = new Set([
+  'POST /api/v1/auth/login',
+  'POST /api/v1/auth/magic-link/send',
+  'POST /api/v1/auth/password/forgot',
+  'POST /api/v1/auth/password/reset',
+  'POST /api/v1/auth/email/verify',
+  'POST /api/v1/auth/webauthn/authenticate/options',
+  'GET /api/v1/auth/oauth/{provider}',
+]);
+
+const WEBHOOK_ROUTE_KEYS = new Set([
+  'POST /api/v1/billing/webhook',
+  'POST /api/v1/billing/stripe/webhook',
+]);
+
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/** Builds the documented request-header parameters for one operation. */
+export function buildHeaderParameters(method: string, routeKey: string): object[] {
+  const headers: object[] = [];
+
+  if (routeKey.includes('{organization_id}')) {
+    headers.push({
+      name: 'X-Organization-Id',
+      in: 'header',
+      required: false,
+      description:
+        'Organization context (`org_…` ID). Optional when the path already carries `{organization_id}` — if both are present they must match, otherwise the request is rejected.',
+      schema: { type: 'string', pattern: '^org_[a-z0-9]{21}$' },
+      example: 'org_a1b2c3d4e5f6g7h8i9j0k',
+    });
+  }
+
+  if (
+    MUTATING_METHODS.has(method) &&
+    !WEBHOOK_ROUTE_KEYS.has(routeKey) &&
+    !routeKey.includes('/api/v1/mcp')
+  ) {
+    const required = IDEMPOTENCY_REQUIRED_ROUTE_KEYS.has(routeKey);
+    headers.push({
+      name: 'Idempotency-Key',
+      in: 'header',
+      required,
+      description: required
+        ? 'Required. A unique key (UUID recommended) making this write retry-safe: replays return the cached response (`X-Idempotency-Replay: true`), key reuse with a different payload is rejected with 422.'
+        : 'Optional but recommended — auto-generate one per write in your API client. Replays within 24h return the cached response (`X-Idempotency-Replay: true`); reusing a key with a different payload is rejected with 422.',
+      schema: { type: 'string', minLength: 16, maxLength: 64 },
+      example: '7f9c2b4e-0d1a-4e5f-9c3b-2a1d4e5f6a7b',
+    });
+  }
+
+  if (CAPTCHA_ROUTE_KEYS.has(routeKey)) {
+    headers.push({
+      name: 'X-Captcha-Token',
+      in: 'header',
+      required: true,
+      description:
+        'Cloudflare Turnstile token for this public auth form (bot protection). Not used on authenticated routes.',
+      schema: { type: 'string' },
+      example: '0.4AAAAABkT1n…',
+    });
+  }
+
+  if (routeKey === 'POST /api/v1/auth/refresh') {
+    headers.push({
+      name: 'X-CSRF-Token',
+      in: 'header',
+      required: true,
+      description:
+        'Echo of the `csrf_token` cookie issued with the session — double-submit CSRF protection for the cookie-based refresh flow.',
+      schema: { type: 'string' },
+      example: 'b41c6f0e6a7d4f0c9d2e8a5b3c7d1e9f',
+    });
+  }
+
+  if (WEBHOOK_ROUTE_KEYS.has(routeKey)) {
+    headers.push({
+      name: 'Stripe-Signature',
+      in: 'header',
+      required: true,
+      description:
+        'Set by Stripe when it delivers the event (t=timestamp,v1=HMAC signature). Your application never sends this header; the endpoint verifies it against the webhook signing secret.',
+      schema: { type: 'string' },
+      example: 't=1718200000,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd',
+    });
+  }
+
+  return headers;
+}

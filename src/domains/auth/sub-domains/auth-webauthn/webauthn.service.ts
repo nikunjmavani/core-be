@@ -222,7 +222,7 @@ export class WebauthnService {
     // measurable timing oracle that re-opens what the decoy closes. Run the SAME user-context lookup
     // on both paths; an unknown/credential-less email uses a non-resolvable synthetic context (the
     // RLS policy + `user_id = 0` filter return zero rows), so the DB work matches.
-    const lookupUserPublicId = user?.public_id ?? `decoy:${generatePublicId()}`;
+    const lookupUserPublicId = user?.public_id ?? `decoy:${generatePublicId('authMethod')}`;
     const lookupUserId = user?.id ?? 0;
     const credentials = await withUserDatabaseContext(lookupUserPublicId, () =>
       this.credentialRepository.listActiveByUserId(lookupUserId),
@@ -294,7 +294,7 @@ export class WebauthnService {
     const challengeToken = await createWebauthnChallenge(
       this.redis,
       'authentication',
-      `decoy:${generatePublicId()}`,
+      `decoy:${generatePublicId('authMethod')}`,
       options.challenge,
     );
 

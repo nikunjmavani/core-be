@@ -58,7 +58,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
         url: testApiPath('/auth/login'),
         payload: { email: user.email, password },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       expect(
         (response.json() as { data?: { access_token?: string } }).data?.access_token,
       ).toBeDefined();
@@ -72,7 +72,7 @@ describe('Auth Method Sub-Domain — Integration', () => {
         url: testApiPath('/auth/magic-link/send'),
         payload: { email: 'magic-link-integration@test.com' },
       });
-      expect([200, 202, 204]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(201);
     });
   });
 
@@ -102,12 +102,12 @@ describe('Auth Method Sub-Domain — Integration', () => {
         token,
         payload: { password },
       });
-      expect(stepUp.statusCode, stepUp.body).toBe(200);
+      expect(stepUp.statusCode, stepUp.body).toBe(201);
 
       // The last-login-capable guard counts auth_methods rows; give the user a
       // PASSWORD method row so removing the magic-link is not removing the last one.
       await database.insert(auth_methods).values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('authMethod'),
         user_id: user.id,
         method_type: 'PASSWORD',
         is_primary: true,

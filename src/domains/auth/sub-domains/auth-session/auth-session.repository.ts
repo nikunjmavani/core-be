@@ -196,7 +196,7 @@ export class AuthSessionRepository {
 
   async create(data: AuthSessionCreateData) {
     return runInsertWithPublicIdentifierRetry(async () => {
-      const publicId = generatePublicId();
+      const publicId = generatePublicId('authSession');
       const rows = await getRequestDatabase()
         .insert(sessions)
         .values({

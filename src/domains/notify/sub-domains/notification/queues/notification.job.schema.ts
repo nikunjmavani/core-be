@@ -12,7 +12,7 @@ import { dlqReplayJobFieldsSchema } from '@/infrastructure/queue/dlq/dlq-replay-
 export const notificationJobDataSchema = z
   .object({
     notificationId: z.number().int().positive(),
-    organizationPublicId: z.string().min(1).max(21).nullable(),
+    organizationPublicId: z.string().min(1).max(28).nullable(),
     requestId: z.string().min(1).max(128).optional(),
   })
   .extend(traceContextJobFieldsSchema.shape)

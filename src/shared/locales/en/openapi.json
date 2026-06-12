@@ -54,7 +54,7 @@
     "payloadTooLarge": "Request body exceeds the size limit",
     "success": "Successful operation",
     "tooManyRequests": "Too many requests — rate limit exceeded",
-    "unauthorized": "Unauthorized",
+    "unauthorized": "Unauthorized — the Authorization header is missing, malformed, or carries an expired/revoked access token. Obtain a token via POST /api/v1/auth/login (or /auth/refresh) and send it as `Authorization: Bearer <ACCESS_TOKEN>`.",
     "unprocessableEntity": "Unprocessable entity — business rule violation or idempotency key reused with a different payload",
     "unsupportedMediaType": "Unsupported media type",
     "validationError": "Validation error"

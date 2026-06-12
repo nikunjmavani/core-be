@@ -5,13 +5,13 @@ import { serializeWebhookEventList } from './webhook-event.serializer.js';
 import type { WebhookEventService } from './webhook-event.service.js';
 
 /**
- * Build the Fastify handler map for `GET /organizations/:id/webhook-events` — returns the
+ * Build the Fastify handler map for `GET /organizations/:organization_id/webhook-events` — returns the
  * static catalog of dispatchable webhook event types.
  */
 export function createWebhookEventController(service: WebhookEventService) {
   return {
     listWebhookEvents: async (
-      request: FastifyRequest<{ Params: { id: string } }>,
+      request: FastifyRequest<{ Params: { organization_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);

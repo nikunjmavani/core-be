@@ -15,7 +15,7 @@ export interface CreateUploadInput {
  * expiry metadata.
  */
 export interface UploadCreateOutput {
-  publicId: string;
+  id: string;
   uploadUrl: string;
   /** Final storage key to pass to attach endpoints after `POST /confirm` succeeds. */
   key: string;
@@ -31,7 +31,7 @@ export interface UploadCreateOutput {
 
 /** Response body for the upload metadata endpoints (`GET`, `POST /confirm`). */
 export interface UploadDetailOutput {
-  publicId: string;
+  id: string;
   fileName: string;
   mimeType: string;
   fileSize: number;

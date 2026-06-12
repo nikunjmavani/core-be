@@ -3,7 +3,6 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
-  injectAuthenticated,
   injectAuthenticatedOrganizationMutation,
   injectRoute,
 } from '@/tests/helpers/test-http-inject.helper.js';
@@ -103,7 +102,7 @@ describe('Billing subscription — happy paths (mocked payment provider)', () =>
     expect(response.statusCode, response.body).toBe(201);
   });
 
-  it('PATCH /billing/organizations/:id/subscriptions/:subscriptionId returns the subscription (200)', async () => {
+  it('PATCH /billing/organizations/:id/subscriptions/:subscription_id returns the subscription (200)', async () => {
     const { organization, token } = await createAuthorizedBillingContext();
     const plan = await createTestPlan();
     const subscription = await createTestSubscription({

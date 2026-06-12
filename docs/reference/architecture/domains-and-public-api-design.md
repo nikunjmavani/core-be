@@ -99,7 +99,7 @@ Nested sub-domains use the same layer files and optional `events/`, `queues/`, `
 
 ```ts
 app.get(
-  '/api/v1/tenancy/organizations/:organizationId',
+  '/api/v1/tenancy/organizations/:organization_id',
   {
     schema: {
       summary: 'Get organization',
@@ -264,33 +264,33 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
 ### 4.1 auth — sub-domain: users
 
 - **Path:** `src/domains/auth/` (controller, service, repos; sub-domains: auth-method, auth-session, auth-mfa, auth-webauthn).
-- **Routes:** Auth flows `POST /api/v1/auth/login`, `logout`, `magic-link`, `oauth/:provider`, `mfa/verify`; current user `GET|PATCH /api/v1/auth/me`; under me: `GET|PATCH /api/v1/auth/me/settings`, `GET|PUT /api/v1/auth/me/notification-preferences`, `GET|POST|DELETE /api/v1/auth/me/auth-methods`, `GET /api/v1/auth/me/sessions`, `DELETE /api/v1/auth/me/sessions/:id`.
+- **Routes:** Auth flows `POST /api/v1/auth/login`, `logout`, `magic-link`, `oauth/:provider`, `mfa/verify`; current user `GET|PATCH /api/v1/auth/me`; under me: `GET|PATCH /api/v1/auth/me/settings`, `GET|PUT /api/v1/auth/me/notification-preferences`, `GET|POST|DELETE /api/v1/auth/me/auth-methods`, `GET /api/v1/auth/me/sessions`, `DELETE /api/v1/auth/me/sessions/:session_id`.
 
 ### 4.2 tenancy — sub-domains: organizations, roles, permissions, membership
 
 - **Paths:** `src/domains/tenancy/sub-domains/organization/`, `sub-domains/membership/`, etc. (each with controller, service, repository, etc.).
 - **Routes (prefix `/api/v1/tenancy`):**
-  - Organizations: `GET|POST /api/v1/tenancy/organizations`, `GET|PATCH|DELETE /api/v1/tenancy/organizations/:id`, `GET /api/v1/tenancy/organizations/by-slug/:slug`.
-  - Settings: `GET|PATCH /api/v1/tenancy/organizations/:id/settings` (can live under organizations sub-domain or a separate sub-domain).
-  - Notification policies: `GET|POST /api/v1/tenancy/organizations/:id/notification-policies`, `PATCH|DELETE .../notification-policies/:policyId`.
-  - Roles: `GET|POST /api/v1/tenancy/organizations/:id/roles`, `GET|PATCH|DELETE .../roles/:roleId`; role permissions `GET|PUT .../roles/:roleId/permissions`.
-  - Memberships: `GET|POST /api/v1/tenancy/organizations/:id/memberships`, `GET|PATCH|DELETE .../memberships/:membershipId`.
-  - Member invitations: `GET|POST .../member-invitations`, `POST .../member-invitations/:invitationId/accept`, `.../revoke`.
+  - Organizations: `GET|POST /api/v1/tenancy/organizations`, `GET|PATCH|DELETE /api/v1/tenancy/organizations/:organization_id`, `GET /api/v1/tenancy/organizations/by-slug/:slug`.
+  - Settings: `GET|PATCH /api/v1/tenancy/organizations/:organization_id/settings` (can live under organizations sub-domain or a separate sub-domain).
+  - Notification policies: `GET|POST /api/v1/tenancy/organizations/:organization_id/notification-policies`, `PATCH|DELETE .../notification-policies/:policy_id`.
+  - Roles: `GET|POST /api/v1/tenancy/organizations/:organization_id/roles`, `GET|PATCH|DELETE .../roles/:role_id`; role permissions `GET|PUT .../roles/:role_id/permissions`.
+  - Memberships: `GET|POST /api/v1/tenancy/organizations/:organization_id/memberships`, `GET|PATCH|DELETE .../memberships/:membership_id`.
+  - Member invitations: `GET|POST .../member-invitations`, `POST .../member-invitations/:invitation_id/accept`, `.../revoke`.
   - Permissions (global): `GET /api/v1/tenancy/permissions`.
 
 All `:id` params are **public_id**. Organization **slug** is unique; `getBySlug(slug)` returns same shape as get by id.
 
-**Organization context (HTTP):** Clients should send `X-Organization-Id` with the organization public id on org-scoped routes. Invalid header values are ignored; when the header is absent, the tenant middleware may infer the id from `/organizations/:id/` in the URL. If header and path disagree, the header wins. See **[api-testing.md](../../getting-started/api-testing.md)** (`X-Organization-Id` behavior table). Avatars and logos are attached only via presigned upload keys (`avatarKey` / logo `key`), not arbitrary URLs on PATCH.
+**Organization context (HTTP):** Clients should send `X-Organization-Id` with the organization public id on org-scoped routes. Invalid header values are ignored; when the header is absent, the tenant middleware may infer the id from `/organizations/:organization_id/` in the URL. If header and path disagree, the header wins. See **[api-testing.md](../../getting-started/api-testing.md)** (`X-Organization-Id` behavior table). Avatars and logos are attached only via presigned upload keys (`avatarKey` / logo `key`), not arbitrary URLs on PATCH.
 
 ### 4.3 billing — sub-domains: plans, subscriptions
 
 - **Paths:** `src/domains/billing/sub-domains/plan/`, `sub-domains/subscription/`, `sub-domains/stripe-webhook/`.
-- **Routes:** Plans `GET /api/v1/billing/plans`, `GET /api/v1/billing/plans/:id`. Org-scoped subscriptions under `/api/v1/billing/organizations/:id/subscriptions` (and lifecycle actions: change-plan, cancel, resume).
+- **Routes:** Plans `GET /api/v1/billing/plans`, `GET /api/v1/billing/plans/:plan_id`. Org-scoped subscriptions under `/api/v1/billing/organizations/:organization_id/subscriptions` (and lifecycle actions: change-plan, cancel, resume).
 
 ### 4.4 notify — sub-domains: notifications, webhooks
 
 - **Paths:** `src/domains/notify/sub-domains/notification/`, `sub-domains/webhook/`.
-- **Routes:** User notifications `GET /api/v1/notify/notifications`, `GET .../notifications/:id`, `PATCH .../notifications/:id/read`. Webhooks `GET|POST /api/v1/tenancy/organizations/:id/webhooks`, `GET|PATCH|DELETE .../webhooks/:webhookId`; delivery attempts `GET .../webhooks/:webhookId/delivery-attempts`.
+- **Routes:** User notifications `GET /api/v1/notify/notifications`, `GET .../notifications/:notification_id`, `PATCH .../notifications/:notification_id/read`. Webhooks `GET|POST /api/v1/tenancy/organizations/:organization_id/webhooks`, `GET|PATCH|DELETE .../webhooks/:webhook_id`; delivery attempts `GET .../webhooks/:webhook_id/delivery-attempts`.
 
 ### 4.5 audit — sub-domain: logs
 

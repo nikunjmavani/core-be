@@ -49,12 +49,12 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
   // Ownership validation
   if (input.for === UPLOAD_TARGETS.USER && input.organizationId) {
     throw new ValidationError('errors:uploadOrganizationIdNotAllowed', undefined, undefined, [
-      { field: 'organizationId', messageKey: 'errors:uploadOrganizationIdNotAllowed' },
+      { field: 'organization_id', messageKey: 'errors:uploadOrganizationIdNotAllowed' },
     ]);
   }
   if (input.for === UPLOAD_TARGETS.ORGANIZATION && !input.organizationId) {
     throw new ValidationError('errors:uploadOrganizationIdRequired', undefined, undefined, [
-      { field: 'organizationId', messageKey: 'errors:uploadOrganizationIdRequired' },
+      { field: 'organization_id', messageKey: 'errors:uploadOrganizationIdRequired' },
     ]);
   }
   // sec-UP3: when present, organizationId must match the canonical public-id
@@ -64,7 +64,7 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
   // char id; arbitrary 1-255-char strings are rejected with ValidationError
   // before any downstream side effect.
   if (input.organizationId !== undefined) {
-    validatePublicIdParam(input.organizationId, 'organizationId');
+    validatePublicIdParam(input.organizationId, 'organization_id');
   }
 
   // Content type validation
@@ -164,7 +164,7 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
  * and the shared public-id format check; returns the normalized public id.
  */
 export function validateUploadPublicIdParam(public_id: string): string {
-  const parsed = uploadPublicIdParamDto.safeParse({ publicId: public_id });
+  const parsed = uploadPublicIdParamDto.safeParse({ upload_id: public_id });
   if (!parsed.success) {
     throw new ValidationError(
       'errors:invalidInput',
@@ -172,5 +172,5 @@ export function validateUploadPublicIdParam(public_id: string): string {
       z.flattenError(parsed.error).fieldErrors,
     );
   }
-  return validatePublicIdParam(parsed.data.publicId, 'publicId');
+  return validatePublicIdParam(parsed.data.upload_id, 'publicId');
 }

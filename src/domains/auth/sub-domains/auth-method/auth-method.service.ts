@@ -323,7 +323,7 @@ export class AuthMethodService {
       runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
         // Atomic UPDATE also prevents two concurrent resets from both succeeding.
         const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-        if (!record || record.token_type !== 'PASSWORD_RESET') {
+        if (record?.token_type !== 'PASSWORD_RESET') {
           throw new UnauthorizedError('errors:invalidOrExpiredResetToken');
         }
 
@@ -409,7 +409,7 @@ export class AuthMethodService {
 
     /** Atomic UPDATE prevents two concurrent verifies from both succeeding. */
     const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-    if (!record || record.token_type !== 'EMAIL_VERIFICATION') {
+    if (record?.token_type !== 'EMAIL_VERIFICATION') {
       throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
     }
 

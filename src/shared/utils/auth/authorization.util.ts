@@ -90,7 +90,7 @@ export function requireRole(
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const auth = request.auth;
-    if (!auth || auth.kind !== 'user') throw new UnauthorizedError();
+    if (auth?.kind !== 'user') throw new UnauthorizedError();
     if (!(auth.role && allowedRoles.includes(auth.role))) {
       await emitPermissionDenyAudit(
         request,
@@ -112,14 +112,14 @@ export function requireRole(
  * Looks up: user -> membership -> role -> role_permissions
  *
  * @param permissionCode - The permission code to check (use domain constants, never bare strings)
- * @param paramName - The route param name for org ID (default: 'organizationId')
+ * @param paramName - The route param name for org ID (default: 'organization_id')
  *
  * Usage:
  *   { preHandler: [app.authenticate, requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)] }
  */
 export function requireOrganizationPermission(
   permissionCode: string,
-  paramName = 'organizationId',
+  paramName = 'organization_id',
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const auth = request.auth;

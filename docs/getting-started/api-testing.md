@@ -28,10 +28,10 @@ TEST_PASSWORD=DemoPassword123!
 | Demo organization slug | `demo-org`                                          |
 | Demo organization name | Demo Organization                                   |
 
-After seed, note **public IDs** from logs (`userId`, `organizationId`) or fetch them via the flows below. Example from a recent seed:
+After seed, note the resource ids from logs or fetch them via the flows below. Every id is prefixed by entity (`org_…`, `usr_…`, `pln_…`):
 
-- Organization public id: use `GET /api/v1/tenancy/organizations` (first item)
-- User public id: use `GET /api/v1/users/me`
+- Organization id: use `GET /api/v1/tenancy/organizations` (first item)
+- User id: use `GET /api/v1/users/me`
 
 Permissions, plans, demo org, admin role, membership, an extra org/user, and one pending invitation are created. See `src/scripts/seed/full.ts`.
 
@@ -40,7 +40,7 @@ Permissions, plans, demo org, admin role, membership, an extra org/user, and one
 | Header              | Value                                           |
 | ------------------- | ----------------------------------------------- |
 | `Authorization`     | `Bearer <access_token>` from login              |
-| `X-Organization-Id` | Organization **public id** (see behavior below) |
+| `X-Organization-Id` | Organization id (`org_…`, see behavior below)   |
 | `Content-Type`      | `application/json`                              |
 | `Accept-Language`   | `en` or `es` (optional)                         |
 
@@ -48,13 +48,13 @@ Permissions, plans, demo org, admin role, membership, an extra org/user, and one
 
 | Scenario                                                | Effect on `request.organizationId` / RLS                                                                                                                           |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Org-scoped route, valid header**                      | Set to the 21-character public id; Postgres RLS session variable is set for the request. **Send this header on all org-scoped calls** for reliable tenant context. |
-| **Invalid format** (not exactly 21 URL-safe characters) | Header is **ignored**; organization context stays unset (may yield 403 or empty RLS scope — not a data leak to another tenant).                                    |
-| **Header absent, URL contains `/organizations/:id/`**   | Organization id is **inferred from the path** when `:id` matches the public id format.                                                                             |
+| **Org-scoped route, valid header**                      | Set to the `org_<21 chars>` id; Postgres RLS session variable is set for the request. **Send this header on all org-scoped calls** for reliable tenant context.    |
+| **Invalid format** (not `org_` + 21 `[a-z0-9]` chars)   | Header is **ignored**; organization context stays unset (may yield 403 or empty RLS scope — not a data leak to another tenant).                                    |
+| **Header absent, URL contains `/organizations/{organization_id}/`** | Organization id is **inferred from the path** when it matches the `org_…` format.                                                                      |
 | **Header and path both present but differ**             | **Header wins**; path id is not used for RLS.                                                                                                                      |
 | **Neither valid header nor inferrable path id**         | Organization context unset; permission checks and RLS still apply per route.                                                                                       |
 
-Route handlers also validate `:id` path params with the shared public-id validator (400 on malformed ids).
+Route handlers also validate `{organization_id}`-style path params against the entity's `^org_[a-z0-9]{21}$` pattern (400 on malformed ids). Status policy reference: [response-codes.md](../reference/api/response-codes.md).
 
 ## Manual test checklist
 
@@ -78,7 +78,7 @@ curl -sS -w '\nHTTP %{http_code}\n' http://localhost:3000/readyz
 
 | #   | Method | Path                                  | Expected                 |
 | --- | ------ | ------------------------------------- | ------------------------ |
-| 2.1 | POST   | `/api/v1/auth/login`                  | 200, `data.access_token` |
+| 2.1 | POST   | `/api/v1/auth/login`                  | 201, `data.access_token` |
 | 2.2 | POST   | `/api/v1/auth/login` (wrong password) | 401                      |
 | 2.3 | GET    | `/api/v1/users/me` (no token)         | 401                      |
 
@@ -109,9 +109,9 @@ curl -s http://localhost:3000/api/v1/users/me \
 | #   | Method | Path                                            | Expected                         |
 | --- | ------ | ----------------------------------------------- | -------------------------------- |
 | 4.1 | GET    | `/api/v1/tenancy/organizations`                 | 200, includes demo org           |
-| 4.2 | GET    | `/api/v1/tenancy/organizations/:id`             | 200 (use org public id + header) |
-| 4.3 | GET    | `/api/v1/tenancy/organizations/:id/memberships` | 200                              |
-| 4.4 | GET    | `/api/v1/tenancy/organizations/:id/roles`       | 200, includes Admin              |
+| 4.2 | GET    | `/api/v1/tenancy/organizations/{organization_id}`             | 200 (use org public id + header) |
+| 4.3 | GET    | `/api/v1/tenancy/organizations/{organization_id}/memberships` | 200                              |
+| 4.4 | GET    | `/api/v1/tenancy/organizations/{organization_id}/roles`       | 200, includes Admin              |
 
 ```bash
 ORGS=$(curl -s http://localhost:3000/api/v1/tenancy/organizations \
@@ -129,8 +129,8 @@ curl -s "http://localhost:3000/api/v1/tenancy/organizations/$ORG_ID" \
 | #   | Method | Path                                              | Expected           |
 | --- | ------ | ------------------------------------------------- | ------------------ |
 | 5.1 | GET    | `/api/v1/billing/plans`                           | 200 (seeded plans) |
-| 5.2 | GET    | `/api/v1/billing/organizations/:id/subscriptions` | 200 (may be empty) |
-| 5.3 | GET    | `/api/v1/billing/organizations/:id/entitlements`  | 200                |
+| 5.2 | GET    | `/api/v1/billing/organizations/{organization_id}/subscriptions` | 200 (may be empty) |
+| 5.3 | GET    | `/api/v1/billing/organizations/{organization_id}/entitlements`  | 200                |
 
 ```bash
 curl -s http://localhost:3000/api/v1/billing/plans \
@@ -142,14 +142,14 @@ curl -s http://localhost:3000/api/v1/billing/plans \
 
 | #   | Method | Path                                        | Expected                 |
 | --- | ------ | ------------------------------------------- | ------------------------ |
-| 6.1 | GET    | `/api/v1/notify/organizations/:id/webhooks` | 200 (list, may be empty) |
+| 6.1 | GET    | `/api/v1/notify/organizations/{organization_id}/webhooks` | 200 (list, may be empty) |
 
 ### 7. Negative cases
 
 | #   | Method | Path                                                                        | Expected   |
 | --- | ------ | --------------------------------------------------------------------------- | ---------- |
-| 7.1 | GET    | `/api/v1/tenancy/organizations/:id/memberships` without `X-Organization-Id` | 403 or 400 |
-| 7.2 | POST   | `/api/v1/auth/login` with `{}` body                                         | 400 or 422 |
+| 7.1 | GET    | `/api/v1/tenancy/organizations/{organization_id}/memberships` without `X-Organization-Id` | 403 or 400 |
+| 7.2 | POST   | `/api/v1/auth/login` with `{}` body                                         | 400        |
 
 ## Automated smoke test (all domains)
 

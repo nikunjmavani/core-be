@@ -125,7 +125,7 @@ describe('Tenancy Domain — Integration', () => {
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath('/tenancy/organizations/zzzzzzzzzzzzzzzzzzzzz'),
+        url: testApiPath('/tenancy/organizations/org_zzzzzzzzzzzzzzzzzzzzz'),
         token: token,
       });
       expect(response.statusCode).toBe(404);

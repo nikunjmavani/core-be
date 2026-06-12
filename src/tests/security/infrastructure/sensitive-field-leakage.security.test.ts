@@ -86,7 +86,7 @@ describe('Security: sensitive-field leakage sweep', () => {
     const { user, token } = await userWithToken();
     // Seed a TOTP method carrying credential material + PII that must never be serialized.
     await database.insert(auth_methods).values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('user'),
       user_id: user.id,
       method_type: 'MFA_TOTP',
       encrypted_secret: 'leaked-totp-seed-ciphertext',
@@ -159,7 +159,7 @@ describe('Security: sensitive-field leakage sweep', () => {
       },
     });
     expect(createResponse.statusCode).toBe(201);
-    const publicId = (createResponse.json() as { data: { publicId: string } }).data.publicId;
+    const publicId = (createResponse.json() as { data: { id: string } }).data.id;
 
     const detailResponse = await injectAuthenticated(app, {
       method: 'GET',

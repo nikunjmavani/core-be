@@ -55,7 +55,7 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
 
 const user = {
   id: 1,
-  public_id: generatePublicId(),
+  public_id: generatePublicId('authSession'),
   email: 'user@example.com',
   password_hash: 'hash',
   failed_login_count: 0,

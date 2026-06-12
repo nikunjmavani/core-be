@@ -4,13 +4,13 @@ import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /**
- * Zod schema for the `:id` path param on `GET /organizations/:id/invitations`;
+ * Zod schema for the `:id` path param on `GET /organizations/:organization_id/invitations`;
  * re-exports the shared organization id params shape.
  */
 export const listMemberInvitationsParamsDto = organizationIdParamsDto;
 
 /**
- * Zod schema for the `GET /organizations/:id/invitations` query string —
+ * Zod schema for the `GET /organizations/:organization_id/invitations` query string —
  * cursor pagination plus an `include_total=true|false` opt-in for the
  * expensive `COUNT(*)` total.
  */
@@ -26,20 +26,20 @@ export const listMemberInvitationsQueryDto = cursorPaginationSchema
  */
 export const memberInvitationIdParamsDto = z
   .object({
-    invitationId: trimmedStringMinMax(1, 21),
+    invitation_id: trimmedStringMinMax(1, 28),
   })
   .strict();
 
 /**
  * Zod schema for routes that carry both the organization `id` and the
- * `invitationId` (cancel / resend under `/organizations/:id/invitations`).
+ * `invitationId` (cancel / resend under `/organizations/:organization_id/invitations`).
  */
 export const organizationInvitationParamsDto = organizationIdParamsDto.extend({
-  invitationId: trimmedStringMinMax(1, 21),
+  invitation_id: trimmedStringMinMax(1, 28),
 });
 
 /**
- * Zod schema for the `POST /organizations/:id/invitations` request body.
+ * Zod schema for the `POST /organizations/:organization_id/invitations` request body.
  * Carries only `membership_id` and `expires_in_days`; the invitee email is
  * derived server-side from the membership's actual user record and is never
  * accepted from the client. `expires_in_days` clamps to 1–365 with a 7-day
@@ -47,13 +47,13 @@ export const organizationInvitationParamsDto = organizationIdParamsDto.extend({
  */
 export const createMemberInvitationDto = z
   .object({
-    membership_id: trimmedStringMinMax(1, 21),
+    membership_id: trimmedStringMinMax(1, 28),
     expires_in_days: z.number().int().min(1).max(365).optional().default(7),
   })
   .strict();
 
 /**
- * Zod schema for the `POST /invitations/:invitationId/accept` request body —
+ * Zod schema for the `POST /invitations/:invitation_id/accept` request body —
  * carries the raw invitation token that is SHA-256 compared against the stored
  * `token_hash`.
  */
@@ -64,7 +64,7 @@ export const acceptMemberInvitationDto = z
   .strict();
 
 /**
- * Zod schema for the `POST /organizations/:id/invitations/:invitationId/resend`
+ * Zod schema for the `POST /organizations/:organization_id/invitations/:invitation_id/resend`
  * request body. Regenerates the token and pushes the expiry by the supplied
  * number of days (1–365, default 7).
  */

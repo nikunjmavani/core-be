@@ -7,8 +7,8 @@ import type { OrganizationService } from '@/domains/tenancy/sub-domains/organiza
 import type { AuditService } from '@/domains/audit/audit.service.js';
 
 describe('createOrganizationController', () => {
-  const organizationPublicId = generatePublicId();
-  const userPublicId = generatePublicId();
+  const organizationPublicId = generatePublicId('organization');
+  const userPublicId = generatePublicId('user');
 
   function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
     return {
@@ -94,7 +94,7 @@ describe('createOrganizationController', () => {
 
   it('getOrganization delegates to service', async () => {
     await controller.getOrganization(
-      mockRequest({ params: { id: organizationPublicId } }),
+      mockRequest({ params: { organization_id: organizationPublicId } }),
       mockReply(),
     );
     expect(service.getByPublicId).toHaveBeenCalledWith(organizationPublicId, userPublicId, 'USER');
@@ -117,7 +117,7 @@ describe('createOrganizationController', () => {
 
   it('updateOrganization delegates to service', async () => {
     await controller.updateOrganization(
-      mockRequest({ params: { id: organizationPublicId }, body: { name: 'New' } }),
+      mockRequest({ params: { organization_id: organizationPublicId }, body: { name: 'New' } }),
       mockReply(),
     );
     expect(service.update).toHaveBeenCalled();
@@ -126,7 +126,7 @@ describe('createOrganizationController', () => {
   it('deleteOrganization returns 204', async () => {
     const reply = mockReply();
     await controller.deleteOrganization(
-      mockRequest({ params: { id: organizationPublicId } }),
+      mockRequest({ params: { organization_id: organizationPublicId } }),
       reply,
     );
     expect(service.delete).toHaveBeenCalledWith(organizationPublicId);
@@ -136,14 +136,17 @@ describe('createOrganizationController', () => {
   it('uploadLogo and deleteLogo delegate to service', async () => {
     await controller.uploadLogo(
       mockRequest({
-        params: { id: organizationPublicId },
+        params: { organization_id: organizationPublicId },
         body: { key: `organization-logos/${organizationPublicId}/logo.png` },
       }),
       mockReply(),
     );
     expect(service.uploadLogo).toHaveBeenCalled();
 
-    await controller.deleteLogo(mockRequest({ params: { id: organizationPublicId } }), mockReply());
+    await controller.deleteLogo(
+      mockRequest({ params: { organization_id: organizationPublicId } }),
+      mockReply(),
+    );
     expect(service.deleteLogo).toHaveBeenCalled();
   });
 
@@ -156,7 +159,7 @@ describe('createOrganizationController', () => {
       next_cursor: 'audit_cursor_2',
     } as never);
     const response = await controller.listOrganizationAuditLogs(
-      mockRequest({ params: { id: organizationPublicId }, query: { limit: '20' } }),
+      mockRequest({ params: { organization_id: organizationPublicId }, query: { limit: '20' } }),
       mockReply(),
     );
     expect(auditService.listForOrganization).toHaveBeenCalled();
@@ -171,14 +174,17 @@ describe('createOrganizationController', () => {
       controller.getOrganization(mockRequest({ params: {} }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.getOrganization(mockRequest({ params: { id: invalidId } }), mockReply()),
+      controller.getOrganization(
+        mockRequest({ params: { organization_id: invalidId } }),
+        mockReply(),
+      ),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.updateOrganization(mockRequest({ params: {}, body: { name: 'X' } }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.updateOrganization(
-        mockRequest({ params: { id: '' }, body: { name: 'X' } }),
+        mockRequest({ params: { organization_id: '' }, body: { name: 'X' } }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -186,14 +192,17 @@ describe('createOrganizationController', () => {
       controller.deleteOrganization(mockRequest({ params: {} }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.deleteOrganization(mockRequest({ params: { id: invalidId } }), mockReply()),
+      controller.deleteOrganization(
+        mockRequest({ params: { organization_id: invalidId } }),
+        mockReply(),
+      ),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.uploadLogo(mockRequest({ params: {}, body: { key: 'k' } }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.uploadLogo(
-        mockRequest({ params: { id: invalidId }, body: { key: 'k' } }),
+        mockRequest({ params: { organization_id: invalidId }, body: { key: 'k' } }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -201,13 +210,16 @@ describe('createOrganizationController', () => {
       controller.deleteLogo(mockRequest({ params: {} }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.deleteLogo(mockRequest({ params: { id: '' } }), mockReply()),
+      controller.deleteLogo(mockRequest({ params: { organization_id: '' } }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.listOrganizationAuditLogs(mockRequest({ params: {} }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.listOrganizationAuditLogs(mockRequest({ params: { id: invalidId } }), mockReply()),
+      controller.listOrganizationAuditLogs(
+        mockRequest({ params: { organization_id: invalidId } }),
+        mockReply(),
+      ),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -226,7 +238,7 @@ describe('createOrganizationController', () => {
       next_cursor: null,
     } as never);
     const response = await controller.listOrganizationAuditLogs(
-      mockRequest({ params: { id: organizationPublicId }, query: { after: '100' } }),
+      mockRequest({ params: { organization_id: organizationPublicId }, query: { after: '100' } }),
       mockReply(),
     );
     expect(response).toMatchObject({
@@ -238,7 +250,7 @@ describe('createOrganizationController', () => {
     const controllerWithoutAudit = createOrganizationController(service);
     await expect(
       controllerWithoutAudit.listOrganizationAuditLogs(
-        mockRequest({ params: { id: organizationPublicId } }),
+        mockRequest({ params: { organization_id: organizationPublicId } }),
         mockReply(),
       ),
     ).rejects.toThrow('Audit service not configured');

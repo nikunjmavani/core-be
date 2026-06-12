@@ -26,7 +26,7 @@ import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock
 
 const organizationRow = {
   id: 1,
-  public_id: generatePublicId(),
+  public_id: generatePublicId('organization'),
   name: 'Acme',
   slug: 'acme',
   status: 'ACTIVE',
@@ -209,7 +209,7 @@ describe('OrganizationService', () => {
   });
 
   it('uploadLogo rejects keys outside organization prefix', async () => {
-    const otherOrganizationKey = `organization-logos/${generatePublicId()}/logo.png`;
+    const otherOrganizationKey = `organization-logos/${generatePublicId('organization')}/logo.png`;
     await expect(
       service.uploadLogo(organizationRow.public_id, { key: otherOrganizationKey }, 'owner_public'),
     ).rejects.toMatchObject({ name: 'ValidationError' });

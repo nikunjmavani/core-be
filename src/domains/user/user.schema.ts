@@ -26,7 +26,7 @@ export const users = authSchema
     'users',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
-      public_id: varchar('public_id', { length: 21 }).notNull(),
+      public_id: varchar('public_id', { length: 28 }).notNull(),
       email: varchar('email', { length: 255 }).notNull(),
       email_hash: varchar('email_hash', { length: 64 }).notNull(),
       is_email_verified: boolean('is_email_verified').notNull().default(false),

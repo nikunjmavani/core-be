@@ -15,7 +15,7 @@ import type {
 } from './membership.dto.js';
 
 /**
- * Validates a `POST /organizations/:id/memberships` body against
+ * Validates a `POST /organizations/:organization_id/memberships` body against
  * {@link createMembershipDto}; throws `ValidationError('errors:invalidInput')`
  * with per-field details on failure.
  */
@@ -32,7 +32,7 @@ export function validateCreateMembership(data: unknown): CreateMembershipInput {
 }
 
 /**
- * Validates a `PATCH /organizations/:id/memberships/:membershipId` body
+ * Validates a `PATCH /organizations/:organization_id/memberships/:membership_id` body
  * against {@link updateMembershipDto}; throws
  * `ValidationError('errors:invalidInput')` on failure.
  */
@@ -49,7 +49,7 @@ export function validateUpdateMembership(data: unknown): UpdateMembershipInput {
 }
 
 /**
- * Validates the `GET /organizations/:id/memberships` query string. Rejects
+ * Validates the `GET /organizations/:organization_id/memberships` query string. Rejects
  * legacy page-number pagination first, then parses against
  * {@link listMembershipsQueryDto}.
  */
@@ -67,7 +67,7 @@ export function validateListMembershipsQuery(data: unknown): ListMembershipsQuer
 }
 
 /**
- * Validates a `POST /organizations/:id/transfer-ownership` body against
+ * Validates a `POST /organizations/:organization_id/transfer-ownership` body against
  * {@link transferOwnershipDto}; throws `ValidationError('errors:invalidInput')`
  * on failure.
  */

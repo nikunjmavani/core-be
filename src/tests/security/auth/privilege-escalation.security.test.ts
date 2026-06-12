@@ -192,7 +192,7 @@ describe('Security: Privilege escalation', () => {
       organizationPublicId: organization.public_id,
     });
     // If we can list (200), grab the id; otherwise pick a placeholder
-    let membershipId = '000000000000000000000';
+    let membershipId = 'mem_000000000000000000000';
     if (listResponse.statusCode === 200) {
       const body = listResponse.json() as {
         data: { memberships: { id: string; userId: string }[] };
@@ -208,7 +208,7 @@ describe('Security: Privilege escalation', () => {
       ),
       token,
       organizationPublicId: organization.public_id,
-      payload: { role_id: '000000000000000000000' },
+      payload: { role_id: 'rol_000000000000000000000' },
     });
 
     expect(upgradeRoleResponse.statusCode).toBe(403);
@@ -227,8 +227,8 @@ describe('Security: Privilege escalation', () => {
       organizationPublicId: organization.public_id,
       headers: { 'idempotency-key': randomUUID() },
       payload: {
-        user_id: '000000000000000000000',
-        role_id: '000000000000000000000',
+        user_id: 'usr_000000000000000000000',
+        role_id: 'rol_000000000000000000000',
         status: 'ACTIVE',
       },
     });

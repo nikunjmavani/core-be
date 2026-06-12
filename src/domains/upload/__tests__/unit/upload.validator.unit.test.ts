@@ -74,7 +74,7 @@ describe('upload.validator', () => {
       validateCreateUpload({
         purpose: 'avatar',
         for: 'organization',
-        organizationId: 'abcdefghijklmnopqrstu',
+        organizationId: 'org_abcdefghijklmnopqrstu',
         contentType: 'image/png',
         fileName: 'photo.png',
         fileSize: 1024,
@@ -86,7 +86,7 @@ describe('upload.validator', () => {
     const input = {
       purpose: 'organization-logo',
       for: 'organization',
-      organizationId: 'abcdefghijklmnopqrstu',
+      organizationId: 'org_abcdefghijklmnopqrstu',
       contentType: 'image/png',
       fileName: 'logo.png',
       fileSize: 1024,

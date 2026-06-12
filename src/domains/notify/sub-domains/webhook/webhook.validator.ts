@@ -13,7 +13,7 @@ import {
 } from './webhook.dto.js';
 
 /**
- * Reject legacy page/per_page callers, then parse the `GET /organizations/:id/webhooks` query
+ * Reject legacy page/per_page callers, then parse the `GET /organizations/:organization_id/webhooks` query
  * string with {@link listWebhooksQueryDto}; throws `ValidationError('errors:invalidInput')`.
  */
 export function validateListWebhooksQuery(data: unknown): ListWebhooksQueryInput {
@@ -49,7 +49,7 @@ export function validateListWebhookDeliveryAttemptsQuery(
 }
 
 /**
- * Parse the `POST /organizations/:id/webhooks` request body via {@link CreateWebhookDto};
+ * Parse the `POST /organizations/:organization_id/webhooks` request body via {@link CreateWebhookDto};
  * throws `ValidationError('errors:invalidInput')` with field-level errors on failure.
  */
 export function validateCreateWebhook(data: unknown): CreateWebhookInput {
@@ -65,7 +65,7 @@ export function validateCreateWebhook(data: unknown): CreateWebhookInput {
 }
 
 /**
- * Parse the `PATCH /organizations/:id/webhooks/:webhookId` request body via
+ * Parse the `PATCH /organizations/:organization_id/webhooks/:webhook_id` request body via
  * {@link UpdateWebhookDto}; throws `ValidationError('errors:invalidInput')` on failure.
  */
 export function validateUpdateWebhook(data: unknown): UpdateWebhookInput {

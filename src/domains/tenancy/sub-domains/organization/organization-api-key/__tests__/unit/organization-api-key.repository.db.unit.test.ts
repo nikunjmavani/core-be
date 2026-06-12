@@ -16,7 +16,7 @@ describe('OrganizationApiKeyRepository.touchLastUsedAt (audit-#8 throttle)', () 
   });
 
   async function seedApiKey(organizationId: number) {
-    const public_id = generatePublicId();
+    const public_id = generatePublicId('organizationApiKey');
     await database.insert(api_keys).values({
       public_id,
       organization_id: organizationId,
@@ -76,7 +76,7 @@ describe('OrganizationApiKeyRepository.revokeAllByCreatorInOrganization (reaudit
   });
 
   async function seedKeyByCreator(organizationId: number, creatorUserId: number) {
-    const public_id = generatePublicId();
+    const public_id = generatePublicId('organizationApiKey');
     await database.insert(api_keys).values({
       public_id,
       organization_id: organizationId,

@@ -35,18 +35,20 @@ describe('route success-status map', () => {
   });
 
   it('pins documented non-200 happy paths', () => {
-    expect(successStatusMap['POST /api/v1/auth/logout']).toBe(204);
+    expect(successStatusMap['POST /api/v1/auth/logout']).toBe(201);
     expect(successStatusMap['DELETE /api/v1/auth/me/sessions']).toBe(204);
     expect(successStatusMap['POST /api/v1/tenancy/organizations']).toBe(201);
     expect(successStatusMap['POST /api/v1/uploads']).toBe(201);
     expect(
-      successStatusMap['POST /api/v1/tenancy/organizations/:id/api-keys/:apiKeyId/rotate'],
+      successStatusMap[
+        'POST /api/v1/tenancy/organizations/:organization_id/api-keys/:api_key_id/rotate'
+      ],
     ).toBe(201);
-    expect(successStatusMap['POST /api/v1/users/me/data-export']).toBe(202);
+    expect(successStatusMap['POST /api/v1/users/me/data-export']).toBe(201);
   });
 
-  it('pins documented 200 happy paths for reads and token flows', () => {
-    expect(successStatusMap['POST /api/v1/auth/login']).toBe(200);
+  it('pins documented happy paths per the method-status policy', () => {
+    expect(successStatusMap['POST /api/v1/auth/login']).toBe(201);
     expect(successStatusMap['GET /api/v1/users/me']).toBe(200);
     expect(successStatusMap['GET /readyz']).toBe(200);
   });
@@ -62,7 +64,7 @@ describe('route success-status map', () => {
   });
 
   it('getDeclaredSuccessStatus resolves catalog routes and rejects unknown ones', () => {
-    expect(getDeclaredSuccessStatus({ method: 'POST', path: '/api/v1/auth/logout' })).toBe(204);
+    expect(getDeclaredSuccessStatus({ method: 'POST', path: '/api/v1/auth/logout' })).toBe(201);
     expect(() =>
       getDeclaredSuccessStatus({ method: 'GET', path: '/api/v1/does-not-exist' }),
     ).toThrow(/No declared success status/);

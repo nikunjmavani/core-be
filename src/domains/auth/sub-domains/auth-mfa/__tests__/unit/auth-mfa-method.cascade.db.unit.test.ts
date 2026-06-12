@@ -15,7 +15,7 @@ describe('auth.mfa_methods user FK (reaudit-#1)', () => {
   it('cascade-deletes MFA methods (and their encrypted secrets) when the user row is hard-deleted', async () => {
     const user = await createTestUser();
     await database.insert(mfa_methods).values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('authMfaMethod'),
       user_id: user.id,
       method_type: 'TOTP',
       encrypted_secret: 'enc-secret',
@@ -42,7 +42,7 @@ describe('auth.mfa_methods user FK (reaudit-#1)', () => {
   it('rejects an MFA method row whose user_id does not exist (FK enforced)', async () => {
     await expect(
       database.insert(mfa_methods).values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('authMfaMethod'),
         user_id: 999_999_999,
         method_type: 'TOTP',
         encrypted_secret: 'enc-secret',

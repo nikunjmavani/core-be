@@ -55,7 +55,7 @@ describe('Chaos resilience: BullMQ webhook delivery survives transient Postgres 
     const [pendingWebhookDeliveryAttemptAwaitingIsolation] = await database
       .insert(webhook_delivery_attempts)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('webhook'),
         webhook_id: webhookAwaitingDeliveryJobIsolation.id,
         event_type: 'chaos.webhooks.delivery.probe',
         payload: { simulatedEvent: true },

@@ -119,49 +119,53 @@ export const routeSchemaMap: Record<string, ZodTypeAny> = {
   'PUT /api/v1/users/me/notification-preferences': PutNotificationPreferencesDto,
 
   // ── Admin: Users ──
-  'PATCH /api/v1/users/{userId}': AdminUpdateUserDto,
+  'PATCH /api/v1/users/{user_id}': AdminUpdateUserDto,
 
   // ── Organizations ──
   'POST /api/v1/tenancy/organizations': createOrganizationDto,
-  'PATCH /api/v1/tenancy/organizations/{id}': updateOrganizationDto,
-  'PUT /api/v1/tenancy/organizations/{id}/logo': uploadLogoDto,
-  'PATCH /api/v1/tenancy/organizations/{id}/settings': updateOrganizationSettingsDto,
+  'PATCH /api/v1/tenancy/organizations/{organization_id}': updateOrganizationDto,
+  'PUT /api/v1/tenancy/organizations/{organization_id}/logo': uploadLogoDto,
+  'PATCH /api/v1/tenancy/organizations/{organization_id}/settings': updateOrganizationSettingsDto,
 
   // ── Organization: API Keys ──
-  'POST /api/v1/tenancy/organizations/{id}/api-keys': createOrganizationApiKeyDto,
-  'PATCH /api/v1/tenancy/organizations/{id}/api-keys/{apiKeyId}': updateOrganizationApiKeyDto,
+  'POST /api/v1/tenancy/organizations/{organization_id}/api-keys': createOrganizationApiKeyDto,
+  'PATCH /api/v1/tenancy/organizations/{organization_id}/api-keys/{api_key_id}':
+    updateOrganizationApiKeyDto,
 
   // ── Organization: Notification Policies ──
-  'POST /api/v1/tenancy/organizations/{id}/notification-policies':
+  'POST /api/v1/tenancy/organizations/{organization_id}/notification-policies':
     createOrganizationNotificationPolicyDto,
-  'PATCH /api/v1/tenancy/organizations/{id}/notification-policies/{policyId}':
+  'PATCH /api/v1/tenancy/organizations/{organization_id}/notification-policies/{policy_id}':
     updateOrganizationNotificationPolicyDto,
 
   // ── Memberships ──
-  'POST /api/v1/tenancy/organizations/{id}/memberships': createMembershipDto,
-  'PATCH /api/v1/tenancy/organizations/{id}/memberships/{membershipId}': updateMembershipDto,
-  'POST /api/v1/tenancy/organizations/{id}/transfer-ownership': transferOwnershipDto,
+  'POST /api/v1/tenancy/organizations/{organization_id}/memberships': createMembershipDto,
+  'PATCH /api/v1/tenancy/organizations/{organization_id}/memberships/{membership_id}':
+    updateMembershipDto,
+  'POST /api/v1/tenancy/organizations/{organization_id}/transfer-ownership': transferOwnershipDto,
 
   // ── Invitations ──
-  'POST /api/v1/tenancy/organizations/{id}/invitations': createMemberInvitationDto,
-  'POST /api/v1/tenancy/invitations/{invitationId}/accept': acceptMemberInvitationDto,
-  'POST /api/v1/tenancy/organizations/{id}/invitations/{invitationId}/resend':
+  'POST /api/v1/tenancy/organizations/{organization_id}/invitations': createMemberInvitationDto,
+  'POST /api/v1/tenancy/invitations/{invitation_id}/accept': acceptMemberInvitationDto,
+  'POST /api/v1/tenancy/organizations/{organization_id}/invitations/{invitation_id}/resend':
     resendMemberInvitationDto,
 
   // ── Roles ──
-  'POST /api/v1/tenancy/organizations/{id}/roles': createMemberRoleDto,
-  'PATCH /api/v1/tenancy/organizations/{id}/roles/{roleId}': updateMemberRoleDto,
-  'PUT /api/v1/tenancy/organizations/{id}/roles/{roleId}/permissions': putMemberRolePermissionsDto,
+  'POST /api/v1/tenancy/organizations/{organization_id}/roles': createMemberRoleDto,
+  'PATCH /api/v1/tenancy/organizations/{organization_id}/roles/{role_id}': updateMemberRoleDto,
+  'PUT /api/v1/tenancy/organizations/{organization_id}/roles/{role_id}/permissions':
+    putMemberRolePermissionsDto,
 
   // ── Billing: Subscriptions ──
-  'POST /api/v1/billing/organizations/{id}/subscriptions': CreateSubscriptionDto,
-  'PATCH /api/v1/billing/organizations/{id}/subscriptions/{subscriptionId}': UpdateSubscriptionDto,
-  'POST /api/v1/billing/organizations/{id}/subscriptions/{subscriptionId}/change-plan':
+  'POST /api/v1/billing/organizations/{organization_id}/subscriptions': CreateSubscriptionDto,
+  'PATCH /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}':
+    UpdateSubscriptionDto,
+  'POST /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/change-plan':
     ChangePlanDto,
 
   // ── Webhooks ──
-  'POST /api/v1/notify/organizations/{id}/webhooks': CreateWebhookDto,
-  'PATCH /api/v1/notify/organizations/{id}/webhooks/{webhookId}': UpdateWebhookDto,
+  'POST /api/v1/notify/organizations/{organization_id}/webhooks': CreateWebhookDto,
+  'PATCH /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}': UpdateWebhookDto,
 
   // ── Upload ──
   'POST /api/v1/uploads': createUploadDto,

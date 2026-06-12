@@ -6,7 +6,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    auth: { kind: 'user' as const, userId: generatePublicId(), role: 'USER' },
+    auth: { kind: 'user' as const, userId: generatePublicId('user'), role: 'USER' },
     params: {},
     body: {},
     query: { limit: 20 },
@@ -24,8 +24,8 @@ function mockReply(): FastifyReply {
 }
 
 describe('createMembershipController', () => {
-  const organizationPublicId = generatePublicId();
-  const membershipPublicId = generatePublicId();
+  const organizationPublicId = generatePublicId('organization');
+  const membershipPublicId = generatePublicId('membership');
   const membership = { id: membershipPublicId };
   const service = {
     list: vi.fn().mockResolvedValue({
@@ -48,7 +48,7 @@ describe('createMembershipController', () => {
 
   it('listMemberships returns paginated memberships', async () => {
     const response = await controller.listMemberships(
-      mockRequest({ params: { id: organizationPublicId } }),
+      mockRequest({ params: { organization_id: organizationPublicId } }),
       {} as FastifyReply,
     );
     expect(service.list).toHaveBeenCalled();
@@ -61,7 +61,9 @@ describe('createMembershipController', () => {
 
   it('getMembership returns membership', async () => {
     await controller.getMembership(
-      mockRequest({ params: { id: organizationPublicId, membershipId: membershipPublicId } }),
+      mockRequest({
+        params: { organization_id: organizationPublicId, membership_id: membershipPublicId },
+      }),
       {} as FastifyReply,
     );
     expect(service.getByPublicId).toHaveBeenCalled();
@@ -71,8 +73,8 @@ describe('createMembershipController', () => {
     const reply = { code: vi.fn().mockReturnThis(), send: vi.fn() };
     await controller.createMembership(
       mockRequest({
-        params: { id: organizationPublicId },
-        body: { user_id: generatePublicId(), role_id: generatePublicId() },
+        params: { organization_id: organizationPublicId },
+        body: { user_id: generatePublicId('user'), role_id: generatePublicId('memberRole') },
       }),
       reply as unknown as FastifyReply,
     );
@@ -82,14 +84,16 @@ describe('createMembershipController', () => {
   it('updateMembership and deleteMembership delegate to service', async () => {
     await controller.updateMembership(
       mockRequest({
-        params: { id: organizationPublicId, membershipId: membershipPublicId },
+        params: { organization_id: organizationPublicId, membership_id: membershipPublicId },
         body: { status: 'ACTIVE' },
       }),
       {} as FastifyReply,
     );
     const reply = { code: vi.fn().mockReturnThis(), send: vi.fn() };
     await controller.deleteMembership(
-      mockRequest({ params: { id: organizationPublicId, membershipId: membershipPublicId } }),
+      mockRequest({
+        params: { organization_id: organizationPublicId, membership_id: membershipPublicId },
+      }),
       reply as unknown as FastifyReply,
     );
     expect(service.update).toHaveBeenCalled();
@@ -98,18 +102,20 @@ describe('createMembershipController', () => {
 
   it('getMembershipPermissions leave and transferOwnership delegate to service', async () => {
     await controller.getMembershipPermissions(
-      mockRequest({ params: { id: organizationPublicId, membershipId: membershipPublicId } }),
+      mockRequest({
+        params: { organization_id: organizationPublicId, membership_id: membershipPublicId },
+      }),
       {} as FastifyReply,
     );
     const leaveReply = { code: vi.fn().mockReturnThis(), send: vi.fn() };
     await controller.leaveOrganization(
-      mockRequest({ params: { id: organizationPublicId } }),
+      mockRequest({ params: { organization_id: organizationPublicId } }),
       leaveReply as unknown as FastifyReply,
     );
     await controller.transferOwnership(
       mockRequest({
-        params: { id: organizationPublicId },
-        body: { new_owner_user_id: generatePublicId() },
+        params: { organization_id: organizationPublicId },
+        body: { new_owner_user_id: generatePublicId('user') },
       }),
       {} as FastifyReply,
     );
@@ -127,7 +133,7 @@ describe('createMembershipController', () => {
       next_cursor: null,
     } as never);
     const response = await controller.listMemberships(
-      mockRequest({ params: { id: organizationPublicId } }),
+      mockRequest({ params: { organization_id: organizationPublicId } }),
       mockReply(),
     );
     expect(response).toMatchObject({
@@ -141,31 +147,45 @@ describe('createMembershipController', () => {
       controller.listMemberships(mockRequest({ params: {} }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.listMemberships(mockRequest({ params: { id: invalidId } }), mockReply()),
+      controller.listMemberships(
+        mockRequest({ params: { organization_id: invalidId } }),
+        mockReply(),
+      ),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.createMembership(mockRequest({ params: {}, body: {} }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.createMembership(mockRequest({ params: { id: '' }, body: {} }), mockReply()),
+      controller.createMembership(
+        mockRequest({ params: { organization_id: '' }, body: {} }),
+        mockReply(),
+      ),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.leaveOrganization(mockRequest({ params: {} }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.leaveOrganization(mockRequest({ params: { id: invalidId } }), mockReply()),
+      controller.leaveOrganization(
+        mockRequest({ params: { organization_id: invalidId } }),
+        mockReply(),
+      ),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.transferOwnership(mockRequest({ params: {} }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.transferOwnership(mockRequest({ params: { id: 'bad' }, body: {} }), mockReply()),
+      controller.transferOwnership(
+        mockRequest({ params: { organization_id: 'bad' }, body: {} }),
+        mockReply(),
+      ),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('getMembershipPermissions delegates to service with valid params', async () => {
     await controller.getMembershipPermissions(
-      mockRequest({ params: { id: organizationPublicId, membershipId: membershipPublicId } }),
+      mockRequest({
+        params: { organization_id: organizationPublicId, membership_id: membershipPublicId },
+      }),
       mockReply(),
     );
     expect(service.getPermissions).toHaveBeenCalledWith(organizationPublicId, membershipPublicId);
@@ -175,8 +195,12 @@ describe('createMembershipController', () => {
     const reply = mockReply();
     await controller.createMembership(
       mockRequest({
-        params: { id: organizationPublicId },
-        body: { user_id: generatePublicId(), role_id: generatePublicId(), status: 'ACTIVE' },
+        params: { organization_id: organizationPublicId },
+        body: {
+          user_id: generatePublicId('user'),
+          role_id: generatePublicId('memberRole'),
+          status: 'ACTIVE',
+        },
       }),
       reply,
     );
@@ -201,14 +225,14 @@ describe('createMembershipController', () => {
     vi.mocked(service.delete).mockClear();
     await expect(
       controller.updateMembership(
-        mockRequest({ params: { membershipId: membershipPublicId }, body: { status: 'ACTIVE' } }),
+        mockRequest({ params: { membership_id: membershipPublicId }, body: { status: 'ACTIVE' } }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
     expect(service.update).not.toHaveBeenCalled();
     await expect(
       controller.deleteMembership(
-        mockRequest({ params: { membershipId: membershipPublicId } }),
+        mockRequest({ params: { membership_id: membershipPublicId } }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -256,14 +280,18 @@ describe('createMembershipController', () => {
     vi.mocked(service.getPermissions).mockClear();
     await expect(
       controller.getMembership(
-        mockRequest({ params: { id: organizationPublicId, membershipId: 'not-a-public-id' } }),
+        mockRequest({
+          params: { organization_id: organizationPublicId, membership_id: 'not-a-public-id' },
+        }),
         {} as FastifyReply,
       ),
     ).rejects.toBeInstanceOf(ValidationError);
     expect(service.getByPublicId).not.toHaveBeenCalled();
     await expect(
       controller.getMembershipPermissions(
-        mockRequest({ params: { id: organizationPublicId, membershipId: 'not-a-public-id' } }),
+        mockRequest({
+          params: { organization_id: organizationPublicId, membership_id: 'not-a-public-id' },
+        }),
         {} as FastifyReply,
       ),
     ).rejects.toBeInstanceOf(ValidationError);

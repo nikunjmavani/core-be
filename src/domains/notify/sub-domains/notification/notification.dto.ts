@@ -2,17 +2,17 @@ import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
-/** Zod schema for `GET /notifications/:id` and `PATCH /notifications/:id/read` path params. */
+/** Zod schema for `GET /notifications/:notification_id` and `PATCH /notifications/:notification_id/read` path params. */
 export const getNotificationParamsDto = z
   .object({
-    id: trimmedStringMinMax(1, 21),
+    notification_id: trimmedStringMinMax(1, 28),
   })
   .strict();
 
-/** Zod schema for `DELETE /notifications/:notificationId` path params. */
+/** Zod schema for `DELETE /notifications/:notification_id` path params. */
 export const deleteNotificationParamsDto = z
   .object({
-    notificationId: trimmedStringMinMax(1, 21),
+    notification_id: trimmedStringMinMax(1, 28),
   })
   .strict();
 

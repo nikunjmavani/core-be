@@ -10,7 +10,7 @@ export type CapturedRouteExamples = {
 
 /**
  * Loads the committed captured-example fixture re-keyed to the OpenAPI
- * `{param}` path style (`"METHOD /api/v1/users/{userId}"`). Returns an empty
+ * `{param}` path style (`"METHOD /api/v1/users/{user_id}"`). Returns an empty
  * map when the fixture has not been generated yet, so docs generation works on
  * fresh clones before the first capture run.
  */
@@ -25,7 +25,7 @@ export function loadCapturedRouteExamples(): Record<string, CapturedRouteExample
   >;
   return Object.fromEntries(
     Object.entries(raw).map(([routeKey, examples]) => [
-      routeKey.replace(/:([A-Za-z]+)/g, '{$1}'),
+      routeKey.replace(/:([A-Za-z_]+)/g, '{$1}'),
       examples,
     ]),
   );

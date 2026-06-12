@@ -19,7 +19,7 @@ describe('Auth - Magic Link', () => {
       .post('/api/v1/auth/magic-link/send')
       .send({ email: 'nonexistent@example.com' });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     expect((response.body as { data: { message: string } }).data.message).toContain('magic link');
   });
 

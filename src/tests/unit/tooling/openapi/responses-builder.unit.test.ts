@@ -9,7 +9,7 @@ describe('responses-builder', () => {
   it('buildResponses includes standard error responses', () => {
     const responses = buildResponses('GET', 'GET /readyz', {});
 
-    expect(responses['400']).toBeDefined();
+    expect(responses['400']).toBeUndefined(); // /readyz has no body/params/query
     expect(responses['401']).toBeDefined();
     expect(responses['404']).toBeDefined();
     expect(responses['500']).toBeDefined();

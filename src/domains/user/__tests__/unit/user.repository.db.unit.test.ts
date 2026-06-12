@@ -71,7 +71,7 @@ describe('UserRepository (database)', () => {
   });
 
   it('insertOAuthUser inserts oauth user with the supplied public_id', async () => {
-    const publicId = generatePublicId();
+    const publicId = generatePublicId('user');
     const oauthUser = await repository.insertOAuthUser(publicId, {
       email: 'oauth-user@example.com',
       first_name: 'OAuth',

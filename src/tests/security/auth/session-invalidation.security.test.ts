@@ -111,7 +111,7 @@ describe('Security: Session invalidation', () => {
    *
    * @remarks
    * The endpoint returns the active session rows as a plain array under `data`,
-   * each carrying a `public_id` (the id accepted by DELETE /auth/me/sessions/:id).
+   * each carrying a `public_id` (the id accepted by DELETE /auth/me/sessions/:session_id).
    */
   async function listSessionPublicIds(token: string): Promise<string[]> {
     const listResponse = await injectAuthenticated(app, {
@@ -127,7 +127,7 @@ describe('Security: Session invalidation', () => {
 
   // NEGATIVE — a revoked (non-current) session's token must be rejected.
   //
-  // DELETE /auth/me/sessions/:id revokes OTHER devices, not the caller's current
+  // DELETE /auth/me/sessions/:session_id revokes OTHER devices, not the caller's current
   // session, so we revoke a second session (device B) using device A's token and
   // assert device B's token is then rejected while device A's still works. This
   // proves the auth middleware enforces per-session revocation (verifyActiveAccessToken).

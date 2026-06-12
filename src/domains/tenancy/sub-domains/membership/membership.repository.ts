@@ -206,7 +206,7 @@ export class MembershipRepository extends BaseRepository {
     created_by_user_id?: number | null;
   }) {
     return runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('membership');
       const row = {
         public_id,
         organization_id: data.organization_id,

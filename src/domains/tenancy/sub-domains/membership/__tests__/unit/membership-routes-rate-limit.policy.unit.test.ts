@@ -30,27 +30,27 @@ describe('membership routes rate-limit policy (sec-r4-I3)', () => {
     return match[1] ?? '';
   }
 
-  it('POST /organizations/:id/leave has MODERATE_AUTHED_RATE_LIMIT applied', () => {
-    expect(findRouteBlock('post', '/organizations/:id/leave')).toContain(
+  it('POST /organizations/:organization_id/leave has MODERATE_AUTHED_RATE_LIMIT applied', () => {
+    expect(findRouteBlock('post', '/organizations/:organization_id/leave')).toContain(
       '...MODERATE_AUTHED_RATE_LIMIT',
     );
   });
 
-  it('POST /organizations/:id/transfer-ownership has EXPENSIVE_AUTHED_RATE_LIMIT applied (irreversible)', () => {
+  it('POST /organizations/:organization_id/transfer-ownership has EXPENSIVE_AUTHED_RATE_LIMIT applied (irreversible)', () => {
     // Merged into a single config object to preserve idempotencyRequired.
-    expect(findRouteBlock('post', '/organizations/:id/transfer-ownership')).toContain(
+    expect(findRouteBlock('post', '/organizations/:organization_id/transfer-ownership')).toContain(
       'EXPENSIVE_AUTHED_RATE_LIMIT.config',
     );
   });
 
-  it('DELETE /organizations/:id/invitations/:invitationId has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT', () => {
-    expect(findRouteBlock('delete', '/organizations/:id/invitations/:invitationId')).toContain(
-      '...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT',
-    );
+  it('DELETE /organizations/:organization_id/invitations/:invitation_id has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT', () => {
+    expect(
+      findRouteBlock('delete', '/organizations/:organization_id/invitations/:invitation_id'),
+    ).toContain('...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT');
   });
 
-  it('POST /invitations/:invitationId/decline has MODERATE_AUTHED_RATE_LIMIT applied', () => {
-    expect(findRouteBlock('post', '/invitations/:invitationId/decline')).toContain(
+  it('POST /invitations/:invitation_id/decline has MODERATE_AUTHED_RATE_LIMIT applied', () => {
+    expect(findRouteBlock('post', '/invitations/:invitation_id/decline')).toContain(
       '...MODERATE_AUTHED_RATE_LIMIT',
     );
   });

@@ -20,13 +20,13 @@ export const routeQuerySchemaMap: Record<string, ZodTypeAny> = {
   'GET /api/v1/audit/logs': ListAuditLogsQueryDto,
   'GET /api/v1/users': ListUsersDto,
   'GET /api/v1/tenancy/organizations': listOrganizationsQueryDto,
-  'GET /api/v1/tenancy/organizations/{id}/audit-logs': ListAuditLogsQueryDto,
-  'GET /api/v1/tenancy/organizations/{id}/api-keys': listOrganizationApiKeysQueryDto,
-  'GET /api/v1/tenancy/organizations/{id}/memberships': listMembershipsQueryDto,
-  'GET /api/v1/tenancy/organizations/{id}/roles': listMemberRolesQueryDto,
+  'GET /api/v1/tenancy/organizations/{organization_id}/audit-logs': ListAuditLogsQueryDto,
+  'GET /api/v1/tenancy/organizations/{organization_id}/api-keys': listOrganizationApiKeysQueryDto,
+  'GET /api/v1/tenancy/organizations/{organization_id}/memberships': listMembershipsQueryDto,
+  'GET /api/v1/tenancy/organizations/{organization_id}/roles': listMemberRolesQueryDto,
   'GET /api/v1/notify/notifications': listNotificationsQueryDto,
-  'GET /api/v1/tenancy/organizations/{id}/invitations': listMemberInvitationsQueryDto,
-  'GET /api/v1/notify/organizations/{id}/webhooks/{webhookId}/delivery-attempts':
+  'GET /api/v1/tenancy/organizations/{organization_id}/invitations': listMemberInvitationsQueryDto,
+  'GET /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}/delivery-attempts':
     listLimitQuerySchema,
   'GET /api/v1/auth/oauth/{provider}/callback': OauthCallbackQueryDto,
 };

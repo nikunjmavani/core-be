@@ -177,7 +177,7 @@ export class UploadService {
     const expiresAt = new Date(Date.now() + PRESIGNED_URL_EXPIRY_SECONDS * 1000);
 
     return serializeUploadCreate({
-      publicId: row.public_id,
+      id: row.public_id,
       uploadUrl,
       key,
       expiresAt,
@@ -454,7 +454,7 @@ export class UploadService {
       );
       if (!failedRow) throw new NotFoundError('Upload');
       logger.warn(
-        { publicId: validatedPublicId, fileKey: sourceKey },
+        { id: validatedPublicId, fileKey: sourceKey },
         'upload.confirm.legacyInPlaceRefused',
       );
       throw new ValidationError('errors:uploadVerificationFailed', undefined, {
@@ -479,7 +479,7 @@ export class UploadService {
       }
     } catch (error) {
       logger.warn(
-        { publicId: validatedPublicId, fileKey: sourceKey, error },
+        { id: validatedPublicId, fileKey: sourceKey, error },
         'upload.confirm.verifyFailed',
       );
       verified = false;
@@ -507,7 +507,7 @@ export class UploadService {
       const pendingObjectDeleted = await this.objectStorage.deleteObject(sourceKey);
       if (!pendingObjectDeleted) {
         logger.warn(
-          { publicId: validatedPublicId, pendingKey: sourceKey },
+          { id: validatedPublicId, pendingKey: sourceKey },
           'upload.confirm.pendingObjectDeleteFailed',
         );
       }
@@ -617,7 +617,7 @@ export class UploadService {
     const objectDeleted = await this.objectStorage.deleteObject(row.file_key);
     if (!objectDeleted) {
       logger.warn(
-        { publicId: validatedPublicId, fileKey: row.file_key },
+        { id: validatedPublicId, fileKey: row.file_key },
         'upload.delete.s3ObjectDeleteFailed',
       );
     }

@@ -56,7 +56,7 @@ describe('Integration: empty-body JSON parser (sec-r5-runtime)', () => {
     // Either 200 or 204 acceptable; both indicate the route reached its
     // handler and completed normally. 500 means the parser blew up before
     // the handler ran.
-    expect([200, 204]).toContain(response.statusCode);
+    expect([201]).toContain(response.statusCode);
   });
 
   it('Unauthenticated POST /auth/logout with empty body still 401 (not 500)', async () => {

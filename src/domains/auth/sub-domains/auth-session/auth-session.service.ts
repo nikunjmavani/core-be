@@ -204,7 +204,7 @@ export class AuthSessionService {
     // (first request per 60 s window) to avoid a per-request DB round-trip.
     // findUserRecordByPublicId wraps withUserDatabaseContext internally.
     const user = await this.userService.findUserRecordByPublicId(userPublicId);
-    if (!user || user.status !== 'ACTIVE' || user.deleted_at !== null) {
+    if (user?.status !== 'ACTIVE' || user.deleted_at !== null) {
       throw new UnauthorizedError('errors:accountNotActive');
     }
 
