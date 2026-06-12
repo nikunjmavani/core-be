@@ -90,7 +90,7 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'POST /api/v1/tenancy/organizations/{id}/api-keys/{apiKeyId}/rotate': {
-    statusCode: 200,
+    statusCode: 201,
     schema: wrapSuccess(
       {
         ...schemas.apiKeySchema,

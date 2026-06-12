@@ -113,9 +113,14 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
   'GET /api/v1/auth/oauth/{provider}': {
-    statusCode: 302,
-    schema: { type: 'object', properties: { redirect_url: { type: 'string', format: 'uri' } } },
-    example: { redirect_url: 'https://accounts.google.com/o/oauth2/v2/auth?...' },
+    // 200 with the authorize URL in the JSON body — the API does not 302; the
+    // client performs the redirect itself (verified by the observed-status gate).
+    statusCode: 200,
+    schema: wrapSuccess(
+      { type: 'object', properties: { redirect_url: { type: 'string', format: 'uri' } } },
+      { redirect_url: 'https://accounts.google.com/o/oauth2/v2/auth?...' },
+    ),
+    example: null,
   },
   'GET /api/v1/auth/oauth/{provider}/callback': {
     statusCode: 200,
@@ -205,7 +210,11 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     }),
     example: null,
   },
-  'DELETE /api/v1/auth/me/auth-methods/{id}': { statusCode: 204, schema: null, example: null },
+  'DELETE /api/v1/auth/me/auth-methods/{publicId}': {
+    statusCode: 204,
+    schema: null,
+    example: null,
+  },
 
   // ── User: Me ──
   'GET /api/v1/users/me': {

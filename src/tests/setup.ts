@@ -65,6 +65,13 @@ process.env.METRICS_SCRAPE_TOKEN = 'test-metrics-token-min-32-characters';
 // SUPER_ADMIN from this email list per request). CI sets the same value via the
 // test-env action; `??=` keeps any explicit value.
 process.env.GLOBAL_ADMIN_EMAILS ??= 'ops@example.com';
+// Fake OAuth client credentials so GET /auth/oauth/:provider builds its authorize
+// URL (pure string work, no outbound call) deterministically on CI runners that
+// have no sandbox apps configured. `??=` keeps real local sandbox values.
+process.env.OAUTH_GOOGLE_CLIENT_ID ??= 'test-google-client-id';
+process.env.OAUTH_GOOGLE_CLIENT_SECRET ??= 'test-google-client-secret';
+process.env.OAUTH_GITHUB_CLIENT_ID ??= 'test-github-client-id';
+process.env.OAUTH_GITHUB_CLIENT_SECRET ??= 'test-github-client-secret';
 delete process.env.REDIS_KEY_PREFIX;
 delete process.env.WEBHOOK_URL_ALLOWLIST;
 

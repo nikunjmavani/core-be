@@ -424,12 +424,13 @@ describe('Auth Domain — Integration', () => {
       expect(response.statusCode).toBe(404);
     });
 
-    it('should return 501 when provider not configured (no client ID)', async () => {
-      // Without OAUTH_GOOGLE_CLIENT_ID set, returns NotImplementedError
+    it('should return 200 with the authorize redirect URL', async () => {
+      // setup.ts pins fake OAuth client credentials, so the authorize URL is
+      // built deterministically in every environment.
       const response = await injectUnauthenticated(app, {
         url: testApiPath('/auth/oauth/google'),
       });
-      expect([200, 501]).toContain(response.statusCode);
+      expect(response.statusCode).toBe(200);
     });
   });
 

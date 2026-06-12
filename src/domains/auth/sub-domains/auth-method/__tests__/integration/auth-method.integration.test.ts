@@ -76,6 +76,20 @@ describe('Auth Method Sub-Domain — Integration', () => {
     });
   });
 
+  describe('GET /api/v1/auth/oauth/:provider', () => {
+    it('returns the provider authorize redirect URL (200)', async () => {
+      // setup.ts pins fake OAuth client credentials, so the authorize URL is
+      // built deterministically (pure string work, no outbound call).
+      const response = await injectUnauthenticated(app, {
+        method: 'GET',
+        url: testApiPath('/auth/oauth/google'),
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      const body = (response.json() as { data: { redirect_url?: string } }).data;
+      expect(body.redirect_url).toContain('accounts.google.com');
+    });
+  });
+
   describe('self-service auth-method management — happy paths', () => {
     it('POST then DELETE /auth/me/auth-methods round-trips a MAGIC_LINK method', async () => {
       const { user, password } = await createTestUserWithPassword();
