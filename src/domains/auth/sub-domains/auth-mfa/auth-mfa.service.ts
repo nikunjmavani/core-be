@@ -390,6 +390,11 @@ export class MfaService {
     const recoveryCodeHashes = plaintextRecoveryCodes.map(hashMfaRecoveryCode);
 
     const record = await withUserDatabaseContext(user.public_id, async () => {
+      // Serialize against every other credential mutation for this user (deleteMfa takes the same
+      // lock) so the revoke-old → insert-new → flip-is_mfa_enabled sequence can't interleave with a
+      // concurrent enroll/delete under READ COMMITTED and leave is_mfa_enabled inconsistent with the
+      // actual method rows (route-audit D3 — the lock was previously only half-deployed).
+      await this.authMethodService.acquireCredentialMutationLock(user.id);
       // sec-re-04: a re-enrollment (lost device, new phone) must replace the
       // previous TOTP factor — not silently add a second active one. Without
       // this dedup, two active MFA_TOTP rows existed and login picked an

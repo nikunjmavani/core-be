@@ -373,6 +373,9 @@ describe('MfaService', () => {
       '@/domains/auth/sub-domains/auth-mfa/auth-mfa-recovery-code.repository.js'
     );
     const callOrder: string[] = [];
+    vi.mocked(authMethodService.acquireCredentialMutationLock).mockImplementation(async () => {
+      callOrder.push('acquireCredentialMutationLock');
+    });
     vi.mocked(authMethodService.listMfaMethodsByUserId).mockImplementation(async () => {
       callOrder.push('listMfaMethodsByUserId');
       return [
@@ -418,6 +421,13 @@ describe('MfaService', () => {
     expect(invalidateIndex).toBeGreaterThanOrEqual(0);
     expect(revokeIndex).toBeLessThan(createIndex);
     expect(invalidateIndex).toBeLessThan(insertCodesIndex);
+
+    // route-audit D3: the credential-mutation advisory lock is taken FIRST — before reading the
+    // existing methods — so a concurrent enroll/delete serializes on the same lock deleteMfa uses.
+    const lockIndex = callOrder.indexOf('acquireCredentialMutationLock');
+    const listIndex = callOrder.indexOf('listMfaMethodsByUserId');
+    expect(lockIndex).toBe(0);
+    expect(lockIndex).toBeLessThan(listIndex);
   });
 
   it('sec-re-04: enrollConfirm proceeds normally when no existing TOTP methods are present (first-time enrollment)', async () => {
