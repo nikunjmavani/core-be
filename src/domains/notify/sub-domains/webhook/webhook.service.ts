@@ -200,6 +200,29 @@ export class WebhookService {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
+
+      // route-audit: rotating the signing secret AGAIN while a PRIOR rotation is still inside its
+      // dual-sign overlap window would overwrite `encrypted_secret_previous` with the CURRENT secret,
+      // evicting the still-valid OLD secret — receivers not yet migrated to the most recent key would
+      // start failing signature verification, defeating the whole point of zero-downtime rotation.
+      // There is only one previous-secret slot, so refuse a re-rotation until the window elapses.
+      if (parsed.secret !== undefined) {
+        const current = await this.webhookRepository.findByPublicId(
+          webhook_public_id,
+          organization.id,
+        );
+        if (!current) throw new NotFoundError('Webhook');
+        const rotatedAtMs = current.secret_rotated_at
+          ? new Date(current.secret_rotated_at).getTime()
+          : null;
+        const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
+        if (rotatedAtMs !== null && Date.now() < rotatedAtMs + overlapWindowMs) {
+          throw new ConflictError('errors:webhookSecretRotationTooSoon', {
+            retryAfter: new Date(rotatedAtMs + overlapWindowMs).toISOString(),
+          });
+        }
+      }
+
       const userId =
         await this.organizationService.resolveUserInternalIdByPublicId(updated_by_user_public_id);
       const updatePayload = omitUndefined({

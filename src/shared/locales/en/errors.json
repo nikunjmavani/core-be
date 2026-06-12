@@ -80,6 +80,7 @@
   "membershipAlreadyExists": "This user is already a member of the organization",
   "webhookUrlExists": "A webhook for \"{{url}}\" already exists in this organization",
   "webhookMaxReached": "Maximum number of webhooks ({{max}}) reached for this organization. Delete an existing webhook before adding another.",
+  "webhookSecretRotationTooSoon": "The signing secret was rotated recently and the previous secret is still within its dual-sign overlap window. Rotating again now would invalidate it for receivers that haven't migrated yet. Retry after {{retryAfter}}.",
   "organizationApiKeyMaxReached": "Maximum number of API keys ({{max}}) reached for this organization. Delete an existing API key before adding another.",
   "memberRoleMaxReached": "Maximum number of custom roles ({{max}}) reached for this organization. Delete an existing role before adding another.",
   "organizationNotificationPolicyMaxReached": "Maximum number of notification policies ({{max}}) reached for this organization. Delete an existing policy before adding another.",
