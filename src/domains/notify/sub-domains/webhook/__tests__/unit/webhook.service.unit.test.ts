@@ -11,7 +11,12 @@ vi.mock('@/infrastructure/database/contexts/organization-database.context.js', (
   ),
 }));
 
-import { ConfigurationError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConfigurationError,
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { WebhookService } from '@/domains/notify/sub-domains/webhook/webhook.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { WebhookRepository } from '@/domains/notify/sub-domains/webhook/webhook.repository.js';
@@ -358,6 +363,33 @@ describe('WebhookService', () => {
       expect.objectContaining({ encrypted_secret: expect.stringMatching(/^v1:/) }),
       10,
     );
+  });
+
+  it('route-audit: rejects a re-rotation while the previous rotation is still in its overlap window', async () => {
+    // secret_rotated_at 1h ago is well within the 24h default dual-sign overlap; rotating again now
+    // would evict the still-valid previous secret, so refuse with a conflict and no write.
+    vi.mocked(webhookRepository.findByPublicId).mockResolvedValueOnce({
+      ...webhook,
+      secret_rotated_at: new Date(Date.now() - 60 * 60 * 1000),
+    } as never);
+    await expect(
+      service.update('org_public', 'webhook_public', { secret: 'another-new-secret-value' }, 'u'),
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(webhookRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('route-audit: allows a re-rotation once the previous overlap window has elapsed', async () => {
+    vi.mocked(webhookRepository.findByPublicId).mockResolvedValueOnce({
+      ...webhook,
+      secret_rotated_at: new Date(Date.now() - 48 * 60 * 60 * 1000), // past the 24h window
+    } as never);
+    await service.update(
+      'org_public',
+      'webhook_public',
+      { secret: 'another-new-secret-value' },
+      'user_public',
+    );
+    expect(webhookRepository.update).toHaveBeenCalled();
   });
 
   it('listDeliveryAttempts throws when webhook id is undefined', async () => {
