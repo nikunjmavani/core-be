@@ -24,7 +24,7 @@ export const plans = billingSchema.table(
   'plans',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
-    public_id: varchar('public_id', { length: 21 }).notNull(),
+    public_id: varchar('public_id', { length: 28 }).notNull(),
     name: varchar('name', { length: 100 }).notNull(),
     description: text('description'),
     price_monthly: decimal('price_monthly', { precision: 10, scale: 2 }).notNull(),

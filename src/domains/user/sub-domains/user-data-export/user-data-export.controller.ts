@@ -14,7 +14,7 @@ export function createUserDataExportController(userDataExportService: UserDataEx
   return {
     /**
      * POST /api/v1/users/me/data-export
-     * GDPR: enqueue async export; poll GET :exportId for download URL.
+     * GDPR: enqueue async export; poll GET :export_id for download URL.
      */
     async requestExport(request: FastifyRequest, reply: FastifyReply) {
       const requestId = getRequestIdentifier(request);
@@ -24,7 +24,7 @@ export function createUserDataExportController(userDataExportService: UserDataEx
     },
 
     /**
-     * GET /api/v1/users/me/data-export/:exportId
+     * GET /api/v1/users/me/data-export/:export_id
      *
      * @remarks
      * sec-U6: every successful URL mint (download_url non-null on the response)
@@ -38,7 +38,7 @@ export function createUserDataExportController(userDataExportService: UserDataEx
     async getExportStatus(request: FastifyRequest, _reply: FastifyReply) {
       const requestId = getRequestIdentifier(request);
       const auth = requireAuth(request);
-      const { exportId } = validateExportIdParam(request.params);
+      const { export_id: exportId } = validateExportIdParam(request.params);
       const data = await userDataExportService.getExportStatus(auth.userId, exportId);
       if (
         data !== null &&

@@ -18,7 +18,7 @@ export interface CreateUserOptions {
  * Create a test user in the database.
  */
 export async function createTestUser(options: CreateUserOptions = {}) {
-  const publicId = generatePublicId();
+  const publicId = generatePublicId('user');
   const email = options.email ?? faker.internet.email().toLowerCase();
   const emailHash = createHash('sha256').update(email).digest('hex');
 

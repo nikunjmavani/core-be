@@ -10,10 +10,13 @@ async function createTenantApp() {
   application.get('/probe', async (request) => ({
     organizationId: request.organizationId,
   }));
-  application.get('/api/v1/tenancy/organizations/:id/memberships', async (request) => ({
-    organizationId: request.organizationId,
-  }));
-  application.get('/api/v1/tenancy/organizations/:id/settings', async (request) => ({
+  application.get(
+    '/api/v1/tenancy/organizations/:organization_id/memberships',
+    async (request) => ({
+      organizationId: request.organizationId,
+    }),
+  );
+  application.get('/api/v1/tenancy/organizations/:organization_id/settings', async (request) => ({
     organizationId: request.organizationId,
   }));
   await application.ready();
@@ -31,7 +34,7 @@ describe('tenant.middleware', () => {
 
   it('sets organizationId from valid X-Organization-Id header', async () => {
     application = await createTenantApp();
-    const organizationPublicId = generatePublicId();
+    const organizationPublicId = generatePublicId('organization');
 
     const response = await application.inject({
       method: 'GET',
@@ -54,9 +57,9 @@ describe('tenant.middleware', () => {
     expect(response.json()).toEqual({ organizationId: null });
   });
 
-  it('infers organizationId from /organizations/:id/ URL when header is absent', async () => {
+  it('infers organizationId from /organizations/:organization_id/ URL when header is absent', async () => {
     application = await createTenantApp();
-    const organizationPublicId = generatePublicId();
+    const organizationPublicId = generatePublicId('organization');
 
     const response = await application.inject({
       method: 'GET',
@@ -68,8 +71,8 @@ describe('tenant.middleware', () => {
 
   it('returns 400 when header and path organization ids differ', async () => {
     application = await createTenantApp();
-    const headerOrganizationId = generatePublicId();
-    const pathOrganizationId = generatePublicId();
+    const headerOrganizationId = generatePublicId('organization');
+    const pathOrganizationId = generatePublicId('organization');
 
     const response = await application.inject({
       method: 'GET',

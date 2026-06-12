@@ -84,7 +84,7 @@ describe('MFA Sub-Domain — Integration', () => {
     });
   });
 
-  describe('DELETE /api/v1/auth/mfa/:mfaMethodId', () => {
+  describe('DELETE /api/v1/auth/mfa/:mfa_method_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
@@ -105,7 +105,7 @@ describe('MFA Sub-Domain — Integration', () => {
         token,
         payload: { password },
       });
-      expect(stepUp.statusCode, stepUp.body).toBe(200);
+      expect(stepUp.statusCode, stepUp.body).toBe(201);
 
       const enroll = await injectAuthenticated(app, {
         method: 'POST',
@@ -113,7 +113,7 @@ describe('MFA Sub-Domain — Integration', () => {
         token,
         payload: { method_type: 'MFA_TOTP' },
       });
-      expect(enroll.statusCode, enroll.body).toBe(200);
+      expect(enroll.statusCode, enroll.body).toBe(201);
       const { secret } = (enroll.json() as { data: { secret: string } }).data;
       expect(secret).toBeTypeOf('string');
 
@@ -123,7 +123,7 @@ describe('MFA Sub-Domain — Integration', () => {
         token,
         payload: { code: await generateTotpCode({ secret }) },
       });
-      expect(confirm.statusCode, confirm.body).toBe(200);
+      expect(confirm.statusCode, confirm.body).toBe(201);
 
       // Authenticated step-up verification. Consumed codes are replay-protected
       // within their window, so use the NEXT 30s window (server tolerance ±1 step).
@@ -136,7 +136,7 @@ describe('MFA Sub-Domain — Integration', () => {
           code: await generateTotpCode({ secret, epoch: Math.floor(Date.now() / 1000) + 30 }),
         },
       });
-      expect(verify.statusCode, verify.body).toBe(200);
+      expect(verify.statusCode, verify.body).toBe(201);
 
       // Password login now returns the MFA challenge envelope instead of a token.
       const login = await injectUnauthenticated(app, {
@@ -144,7 +144,7 @@ describe('MFA Sub-Domain — Integration', () => {
         url: testApiPath('/auth/login'),
         payload: { email: user.email, password },
       });
-      expect(login.statusCode, login.body).toBe(200);
+      expect(login.statusCode, login.body).toBe(201);
       const loginBody = (
         login.json() as { data: { mfa_required?: boolean; mfa_session_token?: string } }
       ).data;
@@ -161,7 +161,7 @@ describe('MFA Sub-Domain — Integration', () => {
           totp_code: await generateTotpCode({ secret, epoch: Math.floor(Date.now() / 1000) - 30 }),
         },
       });
-      expect(mfaLogin.statusCode, mfaLogin.body).toBe(200);
+      expect(mfaLogin.statusCode, mfaLogin.body).toBe(201);
       const mfaLoginBody = (mfaLogin.json() as { data: { access_token?: string } }).data;
       expect(mfaLoginBody.access_token).toBeTypeOf('string');
     });

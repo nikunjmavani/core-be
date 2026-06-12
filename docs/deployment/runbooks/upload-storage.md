@@ -15,7 +15,7 @@ sequenceDiagram
     API->>API: validate purpose/content-type/extension/size, count PENDING quota
     API->>API: row PENDING + return presigned URL (PUT or POST)
     Client->>S3: upload bytes directly
-    Client->>API: POST /api/v1/uploads/:publicId/confirm
+    Client->>API: POST /api/v1/uploads/{upload_id}/confirm
     API->>S3: HEAD object (verify type/length)
     API->>API: row UPLOADED (or FAILED on mismatch)
     Note over Sweeper,S3: Hourly cron reconciles rows whose<br/>client skipped the confirm step.
@@ -51,7 +51,7 @@ Applied in [src/domains/upload/upload.validator.ts](../../../src/domains/upload/
 
 ## Confirm and attach gate
 
-`POST /api/v1/uploads/:publicId/confirm` runs:
+`POST /api/v1/uploads/{upload_id}/confirm` runs:
 
 1. `HEAD` the S3 object via the storage port.
 2. Compare reported `Content-Length` and (when present) `Content-Type` with the declared values.

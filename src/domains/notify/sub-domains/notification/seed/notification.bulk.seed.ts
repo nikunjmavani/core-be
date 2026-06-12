@@ -46,7 +46,7 @@ function buildNotification(
   const content = generateBulkNotification(context.faker);
   const isRead = options.index % 3 === 0;
   return {
-    public_id: generatePublicId(),
+    public_id: generatePublicId('notification'),
     user_id: options.userId,
     organization_id: options.organizationId,
     type: content.type,

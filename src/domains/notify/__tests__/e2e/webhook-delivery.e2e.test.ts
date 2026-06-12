@@ -70,7 +70,7 @@ describe('Notify e2e: webhook delivery', () => {
         events: ['subscription.created'],
       },
     });
-    expect([200, 201]).toContain(createResponse.statusCode);
+    expect([201]).toContain(createResponse.statusCode);
 
     const listResponse = await injectAuthenticated(app, {
       method: 'GET',

@@ -6,7 +6,8 @@ Skills live in [`agent-os/skills/`](../skills/).
 
 | File pattern | Invoke skill(s) | Notes |
 | ------------ | --------------- | ----- |
-| `src/domains/**/*.routes.ts` | route-schema-doc-guard → route-catalog → seed-maintainer | Also openapi-multilingual if tags changed |
+| `src/domains/**/*.routes.ts` | api-contract-guard → route-schema-doc-guard → route-catalog → seed-maintainer | Also openapi-multilingual if tags changed |
+| Route params / public ids / response statuses / request headers | api-contract-guard | Status policy: `docs/reference/api/response-codes.md` |
 | `src/domains/**/*.schema.ts` | sql-design-guard → db-migration-maintainer | |
 | `src/domains/**/*.container.ts`, `src/routes.ts` | domain-generator (check wiring) | |
 | `migrations/*.sql` | db-migration-maintainer | |

@@ -30,13 +30,13 @@ export async function seedSubscription(payload: SeedSubscriptionPayload) {
   const [row] = await getRequestDatabase()
     .insert(subscriptions)
     .values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('subscription'),
       organization_id: payload.organization_id,
       plan_id: payload.plan_id,
       billing_cycle: 'MONTHLY',
       status: payload.status ?? 'ACTIVE',
       provider: 'stripe',
-      provider_subscription_id: `sub_seed_${generatePublicId()}`,
+      provider_subscription_id: `sub_seed_${generatePublicId('subscription')}`,
       current_period_start: now,
       current_period_end: periodEnd,
       created_by_user_id: payload.created_by_user_id,

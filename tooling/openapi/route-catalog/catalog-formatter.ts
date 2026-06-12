@@ -91,7 +91,7 @@ export function buildCatalogContent(routes: ParsedRoute[]): string {
     '',
     '  Optional on all POST/PUT/PATCH/DELETE when header is present (24h Redis cache).',
     '  Strongly recommended (forwarded to Stripe) on:',
-    '    POST /api/v1/billing/organizations/{id}/subscriptions',
+    '    POST /api/v1/billing/organizations/{organization_id}/subscriptions',
     '',
     '  See docs/reference/reliability/idempotency.md and OpenAPI operation descriptions.',
     '',

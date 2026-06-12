@@ -205,7 +205,7 @@ describe('Security: Input Validation', () => {
         url: testApiPath('/auth/magic-link/send'),
         payload: { email: 'test@yopmail.com' },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
     });
 
     it('when switch is off, password forgot accepts disposable email', async () => {
@@ -214,7 +214,7 @@ describe('Security: Input Validation', () => {
         url: testApiPath('/auth/password/forgot'),
         payload: { email: 'user@mailinator.com' },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
     });
   });
 });

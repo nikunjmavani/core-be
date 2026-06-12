@@ -28,7 +28,7 @@ export const webhooks = notifySchema
     'webhooks',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
-      public_id: varchar('public_id', { length: 21 }).notNull(),
+      public_id: varchar('public_id', { length: 28 }).notNull(),
       organization_id: bigint('organization_id', { mode: 'number' })
         .notNull()
         .references(() => organizations.id, { onDelete: 'cascade' }),
@@ -101,7 +101,7 @@ export const webhook_delivery_attempts = notifySchema
       id: bigserial('id', { mode: 'number' }).primaryKey(),
       // sec-new-B2: opaque public identifier used as the X-Webhook-Delivery-Id outbound
       // header value so receivers get a stable dedupe key without exposing the bigserial.
-      public_id: varchar('public_id', { length: 21 }).notNull(),
+      public_id: varchar('public_id', { length: 28 }).notNull(),
       webhook_id: bigint('webhook_id', { mode: 'number' })
         .notNull()
         .references(() => webhooks.id, { onDelete: 'cascade' }),

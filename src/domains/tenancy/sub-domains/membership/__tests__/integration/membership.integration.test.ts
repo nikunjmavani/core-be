@@ -96,9 +96,9 @@ describe('Membership Sub-Domain — Integration', () => {
       const items = body.data ?? [];
       expect(items.length).toBeGreaterThan(0);
       const member = items[0]!;
-      // 21-char public ids, never the internal bigserial ids ("1", "42", ...).
-      expect(member.user_id).toMatch(/^[A-Za-z0-9]{21}$/);
-      expect(member.role_id).toMatch(/^[A-Za-z0-9]{21}$/);
+      // Prefixed public ids, never the internal bigserial ids ("1", "42", ...).
+      expect(member.user_id).toMatch(/^usr_[a-z0-9]{21}$/);
+      expect(member.role_id).toMatch(/^rol_[a-z0-9]{21}$/);
       expect(member.user_id).not.toMatch(/^\d+$/);
       expect(member.role_id).not.toMatch(/^\d+$/);
     });
@@ -329,7 +329,7 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
-  describe('POST /api/v1/invitations/:invitationId/accept (membership activation)', () => {
+  describe('POST /api/v1/invitations/:invitation_id/accept (membership activation)', () => {
     async function createPendingInvitation() {
       const { organization, token, user: admin } = await createAuthorizedContext();
       const invitee = await createTestUser({ email: `invitee-${randomUUID()}@test.com` });
@@ -340,7 +340,7 @@ describe('Membership Sub-Domain — Integration', () => {
       const [inviteeMembership] = await database
         .insert(memberships)
         .values({
-          public_id: generatePublicId(),
+          public_id: generatePublicId('membership'),
           user_id: invitee.id,
           organization_id: organization.id,
           role_id: memberRole.id,
@@ -377,7 +377,7 @@ describe('Membership Sub-Domain — Integration', () => {
         token: inviteeToken,
         payload: { token: rawToken },
       });
-      expect(acceptResponse.statusCode).toBe(200);
+      expect(acceptResponse.statusCode).toBe(201);
 
       const [updated] = await database
         .select()
@@ -410,7 +410,7 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
-  describe('POST /api/v1/tenancy/invitations/:invitationId/decline (route-coverage gap-fill)', () => {
+  describe('POST /api/v1/tenancy/invitations/:invitation_id/decline (route-coverage gap-fill)', () => {
     async function createPendingInvitationForDecline() {
       const { organization, user: admin } = await createAuthorizedContext();
       const invitee = await createTestUser({ email: `decliner-${randomUUID()}@test.com` });
@@ -421,7 +421,7 @@ describe('Membership Sub-Domain — Integration', () => {
       const [inviteeMembership] = await database
         .insert(memberships)
         .values({
-          public_id: generatePublicId(),
+          public_id: generatePublicId('membership'),
           user_id: invitee.id,
           organization_id: organization.id,
           role_id: memberRole.id,
@@ -450,7 +450,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/invitations/${invitation.public_id}/decline`),
         token: inviteeToken,
       });
-      expect(response.statusCode).toBe(204);
+      expect(response.statusCode).toBe(201);
 
       const [postDeclineInvitation] = await database
         .select()
@@ -495,7 +495,7 @@ describe('Membership Sub-Domain — Integration', () => {
         url: testApiPath(`/tenancy/invitations/${invitation.public_id}/decline`),
         token: inviteeToken,
       });
-      expect(first.statusCode).toBe(204);
+      expect(first.statusCode).toBe(201);
 
       const second = await injectAuthenticated(app, {
         method: 'POST',
@@ -510,7 +510,7 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
-  describe('DELETE /api/v1/tenancy/organizations/:id/invitations/:invitationId (route-coverage gap-fill)', () => {
+  describe('DELETE /api/v1/tenancy/organizations/:id/invitations/:invitation_id (route-coverage gap-fill)', () => {
     async function createPendingInvitationForAdminRevoke() {
       const { organization, token: adminToken, user: admin } = await createAuthorizedContext();
       const invitee = await createTestUser({ email: `admin-revoke-${randomUUID()}@test.com` });
@@ -521,7 +521,7 @@ describe('Membership Sub-Domain — Integration', () => {
       const [inviteeMembership] = await database
         .insert(memberships)
         .values({
-          public_id: generatePublicId(),
+          public_id: generatePublicId('membership'),
           user_id: invitee.id,
           organization_id: organization.id,
           role_id: memberRole.id,
@@ -622,7 +622,7 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
-  describe('POST /api/v1/tenancy/organizations/:id/invitations/:invitationId/resend (route-coverage gap-fill)', () => {
+  describe('POST /api/v1/tenancy/organizations/:id/invitations/:invitation_id/resend (route-coverage gap-fill)', () => {
     async function createPendingInvitationForResend() {
       const { organization, token: adminToken, user: admin } = await createAuthorizedContext();
       const invitee = await createTestUser({ email: `resend-${randomUUID()}@test.com` });
@@ -633,7 +633,7 @@ describe('Membership Sub-Domain — Integration', () => {
       const [inviteeMembership] = await database
         .insert(memberships)
         .values({
-          public_id: generatePublicId(),
+          public_id: generatePublicId('membership'),
           user_id: invitee.id,
           organization_id: organization.id,
           role_id: memberRole.id,
@@ -668,7 +668,7 @@ describe('Membership Sub-Domain — Integration', () => {
         headers: { 'idempotency-key': `idem-${randomUUID()}` },
         payload: { expires_in_days: 10 },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
 
       const [rotated] = await database
         .select()
@@ -740,7 +740,7 @@ describe('Membership Sub-Domain — Integration', () => {
         token: memberToken,
         organizationPublicId: organization.public_id,
       });
-      expect(response.statusCode).toBe(204);
+      expect(response.statusCode).toBe(201);
 
       const [softDeleted] = await database
         .select()
@@ -862,7 +862,7 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
-  describe('GET /api/v1/tenancy/organizations/:id/memberships/:membershipId/permissions (route-coverage gap-fill)', () => {
+  describe('GET /api/v1/tenancy/organizations/:id/memberships/:membership_id/permissions (route-coverage gap-fill)', () => {
     it('returns the resolved permission codes for a membership (200)', async () => {
       const { organization, token, membership } = await createAuthorizedContext();
 
@@ -956,7 +956,7 @@ describe('Membership Sub-Domain — Integration', () => {
         headers: { 'idempotency-key': `idem-${randomUUID()}` },
         payload: { new_owner_user_id: newOwner.public_id },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
 
       const [updatedOrg] = await database
         .select()
@@ -1019,7 +1019,7 @@ describe('Membership Sub-Domain — Integration', () => {
     });
   });
 
-  describe('DELETE /api/v1/tenancy/organizations/:id/memberships/:membershipId', () => {
+  describe('DELETE /api/v1/tenancy/organizations/:id/memberships/:membership_id', () => {
     it('refuses to remove the organization owner (403, no orphaned org)', async () => {
       const owner = await createTestUser();
       const organization = await createTestOrganization({ ownerUserId: owner.id });

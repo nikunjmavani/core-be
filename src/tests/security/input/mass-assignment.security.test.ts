@@ -40,7 +40,7 @@ const TENANCY_PERMISSIONS = {
 const ADMIN_PERMISSIONS = Object.values(TENANCY_PERMISSIONS);
 
 function idempotent(): { 'idempotency-key': string } {
-  return { 'idempotency-key': generatePublicId() };
+  return { 'idempotency-key': generatePublicId('organization') };
 }
 
 function expectRejected(statusCode: number): void {
@@ -96,7 +96,7 @@ describe('Security: mass-assignment / over-posting', () => {
         method: 'POST',
         url: testApiPath('/tenancy/organizations'),
         token,
-        payload: { name: 'Acme Inc', slug: `acme-${generatePublicId()}` },
+        payload: { name: 'Acme Inc', slug: `acme-${generatePublicId('organization').slice(4)}` },
         headers: idempotent(),
       });
       expect(response.statusCode).toBe(201);
@@ -108,7 +108,11 @@ describe('Security: mass-assignment / over-posting', () => {
         method: 'POST',
         url: testApiPath('/tenancy/organizations'),
         token,
-        payload: { name: 'Acme Inc', slug: `acme-${generatePublicId()}`, public_id: 'attacker' },
+        payload: {
+          name: 'Acme Inc',
+          slug: `acme-${generatePublicId('organization').slice(4)}`,
+          public_id: 'attacker',
+        },
         headers: idempotent(),
       });
       expectRejected(response.statusCode);
@@ -123,7 +127,7 @@ describe('Security: mass-assignment / over-posting', () => {
         token,
         payload: {
           name: 'Acme Inc',
-          slug: `acme-${generatePublicId()}`,
+          slug: `acme-${generatePublicId('organization').slice(4)}`,
           owner_user_id: otherUser.public_id,
         },
         headers: idempotent(),
@@ -139,7 +143,7 @@ describe('Security: mass-assignment / over-posting', () => {
         token,
         payload: {
           name: 'Acme Inc',
-          slug: `acme-${generatePublicId()}`,
+          slug: `acme-${generatePublicId('organization').slice(4)}`,
           created_by_user_id: 1,
           created_at: '2000-01-01T00:00:00.000Z',
           deleted_at: null,
@@ -150,9 +154,9 @@ describe('Security: mass-assignment / over-posting', () => {
     });
   });
 
-  // ─── Organization update (PATCH /tenancy/organizations/:id) ─────────────────
+  // ─── Organization update (PATCH /tenancy/organizations/:organization_id) ─────────────────
 
-  describe('PATCH /api/v1/tenancy/organizations/:id', () => {
+  describe('PATCH /api/v1/tenancy/organizations/:organization_id', () => {
     it('rejects an injected owner_user_id (no privilege transfer via update)', async () => {
       const { organization, token } = await createOrgAdminContext();
       const otherUser = await createTestUser();
@@ -194,9 +198,9 @@ describe('Security: mass-assignment / over-posting', () => {
     });
   });
 
-  // ─── Organization settings (PATCH /tenancy/organizations/:id/settings) ──────
+  // ─── Organization settings (PATCH /tenancy/organizations/:organization_id/settings) ──────
 
-  describe('PATCH /api/v1/tenancy/organizations/:id/settings', () => {
+  describe('PATCH /api/v1/tenancy/organizations/:organization_id/settings', () => {
     it('rejects an injected organization_id (tenant binding is from the URL)', async () => {
       const { organization, token } = await createOrgAdminContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
@@ -211,9 +215,9 @@ describe('Security: mass-assignment / over-posting', () => {
     });
   });
 
-  // ─── Webhook create (POST /notify/organizations/:id/webhooks) ───────────────
+  // ─── Webhook create (POST /notify/organizations/:organization_id/webhooks) ───────────────
 
-  describe('POST /api/v1/notify/organizations/:id/webhooks', () => {
+  describe('POST /api/v1/notify/organizations/:organization_id/webhooks', () => {
     it('rejects an injected organization_id (cross-tenant binding attempt)', async () => {
       const { organization, token } = await createOrgAdminContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {

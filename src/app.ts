@@ -3,6 +3,7 @@ import { Sentry, isSentryInitialized } from '@/infrastructure/observability/sent
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { env, getEnv } from '@/shared/config/env.config.js';
 import { registerMiddleware } from '@/shared/middlewares/index.js';
+import { registerMethodStatusPolicy } from '@/shared/middlewares/core/method-status-policy.middleware.js';
 import { registerEventHandlers } from '@/core/events/register-event-handlers.js';
 import { registerRoutes } from '@/routes.js';
 import { buildFastifyServerOptions } from '@/shared/utils/http/fastify-server.util.js';
@@ -40,7 +41,7 @@ export type RegisteredRouteCapture = {
 
 /**
  * One routed response reported to {@link BuildAppOptions.observeResponses}:
- * the HTTP method, the registered route pattern (e.g. `/api/v1/users/:userId`),
+ * the HTTP method, the registered route pattern (e.g. `/api/v1/users/:user_id`),
  * and the final response status code. `requestBody` / `responseBody` are only
  * populated when {@link BuildAppOptions.captureBodies} is set (JSON payloads
  * only — streams and hijacked replies are skipped).
@@ -127,6 +128,8 @@ export async function buildApp(options?: BuildAppOptions) {
       });
     });
   }
+
+  registerMethodStatusPolicy(app);
 
   const keepAliveTimeoutMs = env.FASTIFY_KEEP_ALIVE_TIMEOUT_MS ?? 72_000;
   const headersTimeoutMs = env.FASTIFY_HEADERS_TIMEOUT_MS ?? 73_000;

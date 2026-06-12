@@ -127,7 +127,7 @@ describe('Security: Organization API key authentication', () => {
       TENANCY_PERMISSIONS.API_KEY_MANAGE,
     ]);
 
-    // GET /organizations/:id resolves "my organizations" for the authenticated user and
+    // GET /organizations/:organization_id resolves "my organizations" for the authenticated user and
     // calls requireAuth (no org-permission preHandler), so an API-key principal must be
     // rejected with 401 even though it could satisfy an org-permission check elsewhere.
     const response = await injectRoute(app, {

@@ -97,7 +97,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
   });
 
-  describe('GET /api/v1/tenancy/organizations/:id/notification-policies/:policyId', () => {
+  describe('GET /api/v1/tenancy/organizations/:id/notification-policies/:policy_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         url: notificationPolicyResourcePath(
@@ -114,7 +114,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: notificationPolicyResourcePath(organization.public_id, 'pol_arbitrary00000000'),
+        url: notificationPolicyResourcePath(organization.public_id, 'pol_arbitrary000000000000'),
         token,
       });
       expect(response.statusCode).toBe(403);
@@ -142,7 +142,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
 
       const response = await injectAuthenticated(app, {
         // sec-T5: 21-char-ish well-formed public id that no row carries.
-        url: notificationPolicyResourcePath(organization.public_id, 'pol_doesnotexist00000'),
+        url: notificationPolicyResourcePath(organization.public_id, 'pol_doesnotexist000000000'),
         token,
       });
       expect(response.statusCode).toBe(404);
@@ -305,7 +305,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
   });
 
-  describe('PATCH /api/v1/tenancy/organizations/:id/notification-policies/:policyId', () => {
+  describe('PATCH /api/v1/tenancy/organizations/:id/notification-policies/:policy_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'PATCH',
@@ -441,7 +441,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
   });
 
-  describe('DELETE /api/v1/tenancy/organizations/:id/notification-policies/:policyId', () => {
+  describe('DELETE /api/v1/tenancy/organizations/:id/notification-policies/:policy_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
@@ -496,7 +496,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',
-        url: notificationPolicyResourcePath(organization.public_id, 'pol_doesnotexist00000'),
+        url: notificationPolicyResourcePath(organization.public_id, 'pol_doesnotexist000000000'),
         token,
       });
       expect(response.statusCode).toBe(404);

@@ -38,11 +38,11 @@ export function createAuthAuthMethodHandlers({
       return successResponse(AuthSerializer.authMethod(data), getRequestIdentifier(request));
     },
     deleteAuthMethod: async (
-      request: FastifyRequest<{ Params: { publicId: string } }>,
+      request: FastifyRequest<{ Params: { auth_method_id: string } }>,
       reply: FastifyReply,
     ) => {
       const auth = requireAuth(request);
-      const publicId = validateAuthMethodPublicIdParam(request.params.publicId);
+      const publicId = validateAuthMethodPublicIdParam(request.params.auth_method_id);
       await authMethodService.delete(auth.userId, publicId);
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,

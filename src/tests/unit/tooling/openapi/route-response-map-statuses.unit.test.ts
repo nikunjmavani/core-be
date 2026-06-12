@@ -7,7 +7,7 @@ import {
 import { routeResponseMap } from '@tooling/openapi/response-map/index.js';
 
 function toOpenApiKey(catalogKey: string): string {
-  return catalogKey.replace(/:([A-Za-z]+)/g, '{$1}');
+  return catalogKey.replace(/:([A-Za-z_]+)/g, '{$1}');
 }
 
 /**

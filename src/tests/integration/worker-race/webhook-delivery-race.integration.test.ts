@@ -34,7 +34,7 @@ describe('Integration: webhook-delivery worker concurrency race', () => {
     const [pendingAttempt] = await database
       .insert(webhook_delivery_attempts)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('webhook'),
         webhook_id: webhook.id,
         event_type: 'webhook.test',
         payload: { race: true },

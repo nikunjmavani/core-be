@@ -11,7 +11,7 @@ import { dlqReplayJobFieldsSchema } from '@/infrastructure/queue/dlq/dlq-replay-
 export const webhookDeliveryJobDataSchema = z
   .object({
     deliveryAttemptId: z.number().int().positive(),
-    organizationPublicId: z.string().min(1).max(21),
+    organizationPublicId: z.string().min(1).max(28),
     requestId: z.string().min(1).max(128).optional(),
   })
   .extend(traceContextJobFieldsSchema.shape)

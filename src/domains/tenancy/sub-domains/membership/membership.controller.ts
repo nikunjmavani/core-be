@@ -11,7 +11,7 @@ import type { MembershipService } from './membership.service.js';
 
 /**
  * Builds the HTTP handler map for the organization membership routes under
- * `/organizations/:id/memberships` plus the self-service `leave` and
+ * `/organizations/:organization_id/memberships` plus the self-service `leave` and
  * `transfer-ownership` actions that take an organization id as the only
  * path param.
  */
@@ -19,7 +19,7 @@ export function createMembershipController(service: MembershipService) {
   return {
     listMemberships: async (request: FastifyRequest, _reply: FastifyReply) => {
       const organizationId = validatePublicIdParam(
-        (request.params as { id: string }).id ?? '',
+        (request.params as { organization_id: string }).organization_id ?? '',
         'id',
       );
       const result = await service.list(organizationId, request.query);
@@ -31,22 +31,25 @@ export function createMembershipController(service: MembershipService) {
       });
     },
     getMembership: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const rawParams = (request.params as { id: string; membershipId: string }) ?? {
+      const rawParams = (request.params as { organization_id: string; membership_id: string }) ?? {
         id: '',
-        membershipId: '',
+        membership_id: '',
       };
       // sec-re-18 (sec-B10 class): bind path params at the boundary so an
       // attacker-supplied string never flows into Sentry breadcrumbs, log
       // payloads, or metric labels with unbounded cardinality.
-      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
-      const membershipId = validatePublicIdParam(rawParams.membershipId ?? '', 'membershipId');
+      const organizationId = validatePublicIdParam(
+        rawParams.organization_id ?? '',
+        'organization_id',
+      );
+      const membershipId = validatePublicIdParam(rawParams.membership_id ?? '', 'membership_id');
       const data = await service.getByPublicId(organizationId, membershipId);
       return successResponse(data, getRequestIdentifier(request));
     },
     createMembership: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const organizationId = validatePublicIdParam(
-        (request.params as { id: string }).id ?? '',
+        (request.params as { organization_id: string }).organization_id ?? '',
         'id',
       );
       const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
@@ -55,15 +58,18 @@ export function createMembershipController(service: MembershipService) {
     },
     updateMembership: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const rawParams = (request.params as { id: string; membershipId: string }) ?? {
+      const rawParams = (request.params as { organization_id: string; membership_id: string }) ?? {
         id: '',
-        membershipId: '',
+        membership_id: '',
       };
       // sec-re-18 (sec-B10 class): bind path params at the boundary so an
       // attacker-supplied string never flows into Sentry breadcrumbs, log
       // payloads, or metric labels with unbounded cardinality.
-      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
-      const membershipId = validatePublicIdParam(rawParams.membershipId ?? '', 'membershipId');
+      const organizationId = validatePublicIdParam(
+        rawParams.organization_id ?? '',
+        'organization_id',
+      );
+      const membershipId = validatePublicIdParam(rawParams.membership_id ?? '', 'membership_id');
       const data = await service.update(
         organizationId,
         membershipId,
@@ -74,35 +80,41 @@ export function createMembershipController(service: MembershipService) {
     },
     deleteMembership: async (request: FastifyRequest, reply: FastifyReply) => {
       requirePrincipal(request);
-      const rawParams = (request.params as { id: string; membershipId: string }) ?? {
+      const rawParams = (request.params as { organization_id: string; membership_id: string }) ?? {
         id: '',
-        membershipId: '',
+        membership_id: '',
       };
       // sec-re-18 (sec-B10 class): bind path params at the boundary so an
       // attacker-supplied string never flows into Sentry breadcrumbs, log
       // payloads, or metric labels with unbounded cardinality.
-      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
-      const membershipId = validatePublicIdParam(rawParams.membershipId ?? '', 'membershipId');
+      const organizationId = validatePublicIdParam(
+        rawParams.organization_id ?? '',
+        'organization_id',
+      );
+      const membershipId = validatePublicIdParam(rawParams.membership_id ?? '', 'membership_id');
       await service.delete(organizationId, membershipId);
       return reply.code(204).send();
     },
     getMembershipPermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const rawParams = (request.params as { id: string; membershipId: string }) ?? {
+      const rawParams = (request.params as { organization_id: string; membership_id: string }) ?? {
         id: '',
-        membershipId: '',
+        membership_id: '',
       };
       // sec-re-18 (sec-B10 class): bind path params at the boundary so an
       // attacker-supplied string never flows into Sentry breadcrumbs, log
       // payloads, or metric labels with unbounded cardinality.
-      const organizationId = validatePublicIdParam(rawParams.id ?? '', 'id');
-      const membershipId = validatePublicIdParam(rawParams.membershipId ?? '', 'membershipId');
+      const organizationId = validatePublicIdParam(
+        rawParams.organization_id ?? '',
+        'organization_id',
+      );
+      const membershipId = validatePublicIdParam(rawParams.membership_id ?? '', 'membership_id');
       const data = await service.getPermissions(organizationId, membershipId);
       return successResponse(data, getRequestIdentifier(request));
     },
     leaveOrganization: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
       const organizationId = validatePublicIdParam(
-        (request.params as { id: string }).id ?? '',
+        (request.params as { organization_id: string }).organization_id ?? '',
         'id',
       );
       await service.leaveOrganization(organizationId, auth.userId);
@@ -111,7 +123,7 @@ export function createMembershipController(service: MembershipService) {
     transferOwnership: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
       const organizationId = validatePublicIdParam(
-        (request.params as { id: string }).id ?? '',
+        (request.params as { organization_id: string }).organization_id ?? '',
         'id',
       );
       const data = await service.transferOwnership(organizationId, request.body, auth.userId);

@@ -52,7 +52,7 @@ api patch /api/v1/users/me/settings request property `preferred_locales` max ite
 api post /api/v1/auth/webauthn/authenticate/options the request property `email` became required
 
 # 8. POST /api/v1/notify/organizations/{id}/webhooks and PATCH
-#    .../webhooks/{webhookId} now require `secret` to be ≥16 chars (sec-UP finding
+#    .../webhooks/{webhook_id} now require `secret` to be ≥16 chars (sec-UP finding
 #    #8). The prior `.max(255).optional()` accepted empty strings, which on the
 #    worker path round-tripped through `decryptFieldSecret('')` and emitted a
 #    deterministic `createHmac('sha256', '')` value — customers verifying the
@@ -90,7 +90,7 @@ api post /api/v1/auth/me/auth-methods removed the enum value `mfa_email` of the 
 
 # 12. Spec-truth correction (PR #575): four operations documented a spurious `200`
 #     success that the API never returned — POST /uploads and POST .../api-keys/
-#     {apiKeyId}/rotate have always replied 201, DELETE /uploads/{publicId} and
+#     {api_key_id}/rotate have always replied 201, DELETE /uploads/{publicId} and
 #     DELETE /auth/me/auth-methods/{publicId} reply 204 (the latter's response-map
 #     entry was keyed to the retired `{id}` param, so the generator fell back to a
 #     generic 200). The success statuses now come from the runtime-verified
@@ -100,3 +100,168 @@ api delete /api/v1/auth/me/auth-methods/{publicid} removed the success response 
 api post /api/v1/tenancy/organizations/{id}/api-keys/{apikeyid}/rotate removed the success response with the status `200`
 api post /api/v1/uploads removed the success response with the status `200`
 api delete /api/v1/uploads/{publicid} removed the success response with the status `200`
+
+# 13. API-contract overhaul (semantic snake_case params + Paddle-style prefixed ids +
+#     uniform method->status policy + documented request headers). Three intentional
+#     find groups, all runtime-verified:
+#     - response-success-status-removed: POSTs now uniformly return 201 (and logout/
+#       DELETE-style POST-era statuses normalized) via method-status-policy.middleware.ts;
+#       declared in route-success-statuses.json, enforced by validate:route-success-coverage.
+#     - request-parameter-pattern-added: every path id param now documents its
+#       `^<prefix>_[a-z0-9]{21}$` pattern (PARAM_NAME_TO_ENTITY); runtime validators
+#       enforce the same shape, so the docs only state existing behaviour.
+#     - new-required-request-parameter: headers the runtime ALREADY required are now
+#       documented (Idempotency-Key on the 8 idempotencyRequired writes, X-Captcha-Token
+#       on public auth forms, X-CSRF-Token on refresh, Stripe-Signature on webhooks).
+#     Generated from oasdiff JSON output for this promotion; see
+#     docs/reference/api/response-codes.md and api-contract-guard SKILL.
+api delete /api/v1/auth/me/auth-methods/{publicid} added the pattern `^am_[a-z0-9]{21}$` to the `path` request parameter `publicid`
+api delete /api/v1/auth/me/sessions/{id} added the pattern `^ses_[a-z0-9]{21}$` to the `path` request parameter `id`
+api delete /api/v1/auth/mfa/{mfamethodid} added the pattern `^am_[a-z0-9]{21}$` to the `path` request parameter `mfamethodid`
+api delete /api/v1/notify/notifications/{notificationid} added the pattern `^ntf_[a-z0-9]{21}$` to the `path` request parameter `notificationid`
+api delete /api/v1/notify/organizations/{id}/webhooks/{webhookid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api delete /api/v1/notify/organizations/{id}/webhooks/{webhookid} added the pattern `^whk_[a-z0-9]{21}$` to the `path` request parameter `webhookid`
+api delete /api/v1/tenancy/organizations/{id} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api delete /api/v1/tenancy/organizations/{id}/api-keys/{apikeyid} added the pattern `^key_[a-z0-9]{21}$` to the `path` request parameter `apikeyid`
+api delete /api/v1/tenancy/organizations/{id}/api-keys/{apikeyid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api delete /api/v1/tenancy/organizations/{id}/invitations/{invitationid} added the pattern `^inv_[a-z0-9]{21}$` to the `path` request parameter `invitationid`
+api delete /api/v1/tenancy/organizations/{id}/invitations/{invitationid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api delete /api/v1/tenancy/organizations/{id}/logo added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api delete /api/v1/tenancy/organizations/{id}/memberships/{membershipid} added the pattern `^mem_[a-z0-9]{21}$` to the `path` request parameter `membershipid`
+api delete /api/v1/tenancy/organizations/{id}/memberships/{membershipid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api delete /api/v1/tenancy/organizations/{id}/notification-policies/{policyid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api delete /api/v1/tenancy/organizations/{id}/notification-policies/{policyid} added the pattern `^pol_[a-z0-9]{21}$` to the `path` request parameter `policyid`
+api delete /api/v1/tenancy/organizations/{id}/roles/{roleid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api delete /api/v1/tenancy/organizations/{id}/roles/{roleid} added the pattern `^rol_[a-z0-9]{21}$` to the `path` request parameter `roleid`
+api delete /api/v1/uploads/{publicid} added the pattern `^upl_[a-z0-9]{21}$` to the `path` request parameter `publicid`
+api delete /api/v1/users/{userid} added the pattern `^usr_[a-z0-9]{21}$` to the `path` request parameter `userid`
+api get /api/v1/auth/oauth/{provider} added the new required `header` request parameter `x-captcha-token`
+api get /api/v1/billing/organizations/{id}/subscriptions added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid} added the pattern `^sub_[a-z0-9]{21}$` to the `path` request parameter `subscriptionid`
+api get /api/v1/billing/plans/{id} added the pattern `^pln_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/notify/notifications/{id} added the pattern `^ntf_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/notify/organizations/{id}/webhook-events added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/notify/organizations/{id}/webhooks added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/notify/organizations/{id}/webhooks/{webhookid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/notify/organizations/{id}/webhooks/{webhookid} added the pattern `^whk_[a-z0-9]{21}$` to the `path` request parameter `webhookid`
+api get /api/v1/notify/organizations/{id}/webhooks/{webhookid}/delivery-attempts added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/notify/organizations/{id}/webhooks/{webhookid}/delivery-attempts added the pattern `^whk_[a-z0-9]{21}$` to the `path` request parameter `webhookid`
+api get /api/v1/tenancy/organizations/{id} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/api-keys added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/api-keys/{apikeyid} added the pattern `^key_[a-z0-9]{21}$` to the `path` request parameter `apikeyid`
+api get /api/v1/tenancy/organizations/{id}/api-keys/{apikeyid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/audit-logs added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/invitations added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/memberships added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/memberships/{membershipid} added the pattern `^mem_[a-z0-9]{21}$` to the `path` request parameter `membershipid`
+api get /api/v1/tenancy/organizations/{id}/memberships/{membershipid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/memberships/{membershipid}/permissions added the pattern `^mem_[a-z0-9]{21}$` to the `path` request parameter `membershipid`
+api get /api/v1/tenancy/organizations/{id}/memberships/{membershipid}/permissions added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/notification-policies added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/notification-policies/{policyid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/notification-policies/{policyid} added the pattern `^pol_[a-z0-9]{21}$` to the `path` request parameter `policyid`
+api get /api/v1/tenancy/organizations/{id}/roles added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/roles/{roleid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/roles/{roleid} added the pattern `^rol_[a-z0-9]{21}$` to the `path` request parameter `roleid`
+api get /api/v1/tenancy/organizations/{id}/roles/{roleid}/permissions added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/tenancy/organizations/{id}/roles/{roleid}/permissions added the pattern `^rol_[a-z0-9]{21}$` to the `path` request parameter `roleid`
+api get /api/v1/tenancy/organizations/{id}/settings added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api get /api/v1/uploads/{publicid} added the pattern `^upl_[a-z0-9]{21}$` to the `path` request parameter `publicid`
+api get /api/v1/users/me/data-export/{exportid} added the pattern `^exp_[a-z0-9]{21}$` to the `path` request parameter `exportid`
+api get /api/v1/users/{userid} added the pattern `^usr_[a-z0-9]{21}$` to the `path` request parameter `userid`
+api patch /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api patch /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid} added the pattern `^sub_[a-z0-9]{21}$` to the `path` request parameter `subscriptionid`
+api patch /api/v1/notify/notifications/{id}/read added the pattern `^ntf_[a-z0-9]{21}$` to the `path` request parameter `id`
+api patch /api/v1/notify/organizations/{id}/webhooks/{webhookid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api patch /api/v1/notify/organizations/{id}/webhooks/{webhookid} added the pattern `^whk_[a-z0-9]{21}$` to the `path` request parameter `webhookid`
+api patch /api/v1/tenancy/organizations/{id} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api patch /api/v1/tenancy/organizations/{id}/api-keys/{apikeyid} added the pattern `^key_[a-z0-9]{21}$` to the `path` request parameter `apikeyid`
+api patch /api/v1/tenancy/organizations/{id}/api-keys/{apikeyid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api patch /api/v1/tenancy/organizations/{id}/memberships/{membershipid} added the pattern `^mem_[a-z0-9]{21}$` to the `path` request parameter `membershipid`
+api patch /api/v1/tenancy/organizations/{id}/memberships/{membershipid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api patch /api/v1/tenancy/organizations/{id}/notification-policies/{policyid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api patch /api/v1/tenancy/organizations/{id}/notification-policies/{policyid} added the pattern `^pol_[a-z0-9]{21}$` to the `path` request parameter `policyid`
+api patch /api/v1/tenancy/organizations/{id}/roles/{roleid} added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api patch /api/v1/tenancy/organizations/{id}/roles/{roleid} added the pattern `^rol_[a-z0-9]{21}$` to the `path` request parameter `roleid`
+api patch /api/v1/tenancy/organizations/{id}/settings added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api patch /api/v1/users/{userid} added the pattern `^usr_[a-z0-9]{21}$` to the `path` request parameter `userid`
+api post /api/v1/auth/email/resend-verification removed the success response with the status `200`
+api post /api/v1/auth/email/verify added the new required `header` request parameter `x-captcha-token`
+api post /api/v1/auth/email/verify removed the success response with the status `200`
+api post /api/v1/auth/login added the new required `header` request parameter `x-captcha-token`
+api post /api/v1/auth/login removed the success response with the status `200`
+api post /api/v1/auth/logout removed the success response with the status `204`
+api post /api/v1/auth/magic-link/send added the new required `header` request parameter `x-captcha-token`
+api post /api/v1/auth/magic-link/send removed the success response with the status `200`
+api post /api/v1/auth/magic-link/verify removed the success response with the status `200`
+api post /api/v1/auth/mfa/enroll removed the success response with the status `200`
+api post /api/v1/auth/mfa/enroll/confirm removed the success response with the status `200`
+api post /api/v1/auth/mfa/login removed the success response with the status `200`
+api post /api/v1/auth/mfa/verify removed the success response with the status `200`
+api post /api/v1/auth/password/change removed the success response with the status `204`
+api post /api/v1/auth/password/forgot added the new required `header` request parameter `x-captcha-token`
+api post /api/v1/auth/password/forgot removed the success response with the status `200`
+api post /api/v1/auth/password/reset added the new required `header` request parameter `x-captcha-token`
+api post /api/v1/auth/password/reset removed the success response with the status `204`
+api post /api/v1/auth/refresh added the new required `header` request parameter `x-csrf-token`
+api post /api/v1/auth/refresh removed the success response with the status `200`
+api post /api/v1/auth/step-up removed the success response with the status `200`
+api post /api/v1/auth/webauthn/authenticate/options added the new required `header` request parameter `x-captcha-token`
+api post /api/v1/auth/webauthn/authenticate/options removed the success response with the status `200`
+api post /api/v1/auth/webauthn/authenticate/verify removed the success response with the status `200`
+api post /api/v1/auth/webauthn/register/options removed the success response with the status `200`
+api post /api/v1/auth/webauthn/register/verify removed the success response with the status `200`
+api post /api/v1/billing/organizations/{id}/subscriptions added the new required `header` request parameter `idempotency-key`
+api post /api/v1/billing/organizations/{id}/subscriptions added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/cancel added the new required `header` request parameter `idempotency-key`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/cancel added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/cancel added the pattern `^sub_[a-z0-9]{21}$` to the `path` request parameter `subscriptionid`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/cancel removed the success response with the status `200`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/change-plan added the new required `header` request parameter `idempotency-key`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/change-plan added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/change-plan added the pattern `^sub_[a-z0-9]{21}$` to the `path` request parameter `subscriptionid`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/change-plan removed the success response with the status `200`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/resume added the new required `header` request parameter `idempotency-key`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/resume added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/resume added the pattern `^sub_[a-z0-9]{21}$` to the `path` request parameter `subscriptionid`
+api post /api/v1/billing/organizations/{id}/subscriptions/{subscriptionid}/resume removed the success response with the status `200`
+api post /api/v1/billing/stripe/webhook added the new required `header` request parameter `stripe-signature`
+api post /api/v1/billing/webhook added the new required `header` request parameter `stripe-signature`
+api post /api/v1/notify/notifications/mark-all-read removed the success response with the status `200`
+api post /api/v1/notify/organizations/{id}/webhooks added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/notify/organizations/{id}/webhooks/{webhookid}/test added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/notify/organizations/{id}/webhooks/{webhookid}/test added the pattern `^whk_[a-z0-9]{21}$` to the `path` request parameter `webhookid`
+api post /api/v1/notify/organizations/{id}/webhooks/{webhookid}/test removed the success response with the status `200`
+api post /api/v1/tenancy/invitations/{invitationid}/accept added the pattern `^inv_[a-z0-9]{21}$` to the `path` request parameter `invitationid`
+api post /api/v1/tenancy/invitations/{invitationid}/accept removed the success response with the status `200`
+api post /api/v1/tenancy/invitations/{invitationid}/decline added the pattern `^inv_[a-z0-9]{21}$` to the `path` request parameter `invitationid`
+api post /api/v1/tenancy/invitations/{invitationid}/decline removed the success response with the status `204`
+api post /api/v1/tenancy/organizations added the new required `header` request parameter `idempotency-key`
+api post /api/v1/tenancy/organizations/{id}/api-keys added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/tenancy/organizations/{id}/api-keys/{apikeyid}/rotate added the pattern `^key_[a-z0-9]{21}$` to the `path` request parameter `apikeyid`
+api post /api/v1/tenancy/organizations/{id}/api-keys/{apikeyid}/rotate added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/tenancy/organizations/{id}/invitations added the new required `header` request parameter `idempotency-key`
+api post /api/v1/tenancy/organizations/{id}/invitations added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/tenancy/organizations/{id}/invitations/{invitationid}/resend added the pattern `^inv_[a-z0-9]{21}$` to the `path` request parameter `invitationid`
+api post /api/v1/tenancy/organizations/{id}/invitations/{invitationid}/resend added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/tenancy/organizations/{id}/invitations/{invitationid}/resend removed the success response with the status `200`
+api post /api/v1/tenancy/organizations/{id}/leave added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/tenancy/organizations/{id}/leave removed the success response with the status `204`
+api post /api/v1/tenancy/organizations/{id}/memberships added the new required `header` request parameter `idempotency-key`
+api post /api/v1/tenancy/organizations/{id}/memberships added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/tenancy/organizations/{id}/notification-policies added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/tenancy/organizations/{id}/roles added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/tenancy/organizations/{id}/transfer-ownership added the new required `header` request parameter `idempotency-key`
+api post /api/v1/tenancy/organizations/{id}/transfer-ownership added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api post /api/v1/tenancy/organizations/{id}/transfer-ownership removed the success response with the status `200`
+api post /api/v1/uploads/{publicid}/confirm added the pattern `^upl_[a-z0-9]{21}$` to the `path` request parameter `publicid`
+api post /api/v1/uploads/{publicid}/confirm removed the success response with the status `200`
+api post /api/v1/users/me/data-export removed the success response with the status `202`
+api post /api/v1/users/{userid}/suspend added the pattern `^usr_[a-z0-9]{21}$` to the `path` request parameter `userid`
+api post /api/v1/users/{userid}/suspend removed the success response with the status `200`
+api post /api/v1/users/{userid}/unsuspend added the pattern `^usr_[a-z0-9]{21}$` to the `path` request parameter `userid`
+api post /api/v1/users/{userid}/unsuspend removed the success response with the status `200`
+api put /api/v1/tenancy/organizations/{id}/logo added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api put /api/v1/tenancy/organizations/{id}/roles/{roleid}/permissions added the pattern `^org_[a-z0-9]{21}$` to the `path` request parameter `id`
+api put /api/v1/tenancy/organizations/{id}/roles/{roleid}/permissions added the pattern `^rol_[a-z0-9]{21}$` to the `path` request parameter `roleid`

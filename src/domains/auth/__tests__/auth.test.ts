@@ -102,7 +102,7 @@ describe('Auth Domain — Integration', () => {
           password,
         },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: Record<string, unknown> };
       expect(body.data).toHaveProperty('access_token');
     });
@@ -117,7 +117,7 @@ describe('Auth Domain — Integration', () => {
           password,
         },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: { access_token: string } };
       expect(body.data).toHaveProperty('access_token');
       expect(typeof body.data.access_token).toBe('string');
@@ -151,8 +151,8 @@ describe('Auth Domain — Integration', () => {
         }),
       ]);
 
-      expect(firstLogin.statusCode).toBe(200);
-      expect(secondLogin.statusCode).toBe(200);
+      expect(firstLogin.statusCode).toBe(201);
+      expect(secondLogin.statusCode).toBe(201);
       const firstBody = firstLogin.json() as { data: { access_token: string } };
       const secondBody = secondLogin.json() as { data: { access_token: string } };
       expect(firstBody.data.access_token).not.toBe(secondBody.data.access_token);
@@ -167,7 +167,7 @@ describe('Auth Domain — Integration', () => {
         url: testApiPath('/auth/login'),
         payload: { email: user.email, password },
       });
-      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.statusCode).toBe(201);
       const accessToken = (loginResponse.json() as { data: { access_token: string } }).data
         .access_token;
       const beforeSuspend = await injectAuthenticated(app, {
@@ -221,7 +221,7 @@ describe('Auth Domain — Integration', () => {
           password,
         },
       });
-      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.statusCode).toBe(201);
       const loginBody = loginResponse.json() as { data: { access_token: string } };
       const accessToken = loginBody.data.access_token;
 
@@ -230,7 +230,7 @@ describe('Auth Domain — Integration', () => {
         url: testApiPath('/auth/logout'),
         token: accessToken,
       });
-      expect([200, 204]).toContain(logoutResponse.statusCode);
+      expect([201]).toContain(logoutResponse.statusCode);
     });
   });
 
@@ -258,7 +258,7 @@ describe('Auth Domain — Integration', () => {
           password,
         },
       });
-      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.statusCode).toBe(201);
 
       const sessionId = sessionIdCookieValueFromLoginHeaders(loginResponse.headers);
 
@@ -269,7 +269,7 @@ describe('Auth Domain — Integration', () => {
         headers: { referer: 'http://localhost:3000/' },
         payload: {},
       });
-      expect(refreshResponse.statusCode).toBe(200);
+      expect(refreshResponse.statusCode).toBe(201);
       const refreshBody = refreshResponse.json() as { data?: { access_token?: string } };
       expect(refreshBody.data).toHaveProperty('access_token');
       const newToken = refreshBody.data?.access_token;
@@ -287,7 +287,7 @@ describe('Auth Domain — Integration', () => {
           password,
         },
       });
-      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.statusCode).toBe(201);
 
       const sessionId = sessionIdCookieValueFromLoginHeaders(loginResponse.headers);
 
@@ -311,7 +311,7 @@ describe('Auth Domain — Integration', () => {
           password,
         },
       });
-      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.statusCode).toBe(201);
 
       const sessionId = sessionIdCookieValueFromLoginHeaders(loginResponse.headers);
 
@@ -322,7 +322,7 @@ describe('Auth Domain — Integration', () => {
         headers: { origin: 'http://localhost:3000' },
         payload: {},
       });
-      expect(refreshResponse.statusCode).toBe(200);
+      expect(refreshResponse.statusCode).toBe(201);
       const refreshBody = refreshResponse.json() as { data?: { access_token?: string } };
       expect(refreshBody.data).toHaveProperty('access_token');
     });
@@ -346,8 +346,8 @@ describe('Auth Domain — Integration', () => {
         url: testApiPath('/auth/magic-link/send'),
         payload: { email: 'test@example.com' },
       });
-      // May return 200 (sent) or 404 (user not found) depending on config
-      expect([200, 404]).toContain(response.statusCode);
+      // May return 201 (sent) or 404 (user not found) depending on config
+      expect([201, 404]).toContain(response.statusCode);
     });
 
     it('when BLOCK_DISPOSABLE_EMAIL is off, magic-link send accepts disposable email', async () => {
@@ -356,7 +356,7 @@ describe('Auth Domain — Integration', () => {
         url: testApiPath('/auth/magic-link/send'),
         payload: { email: 'test@yopmail.com' },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: { message?: string } };
       expect(body.data.message).toBeDefined();
     });
@@ -368,7 +368,7 @@ describe('Auth Domain — Integration', () => {
         headers: { 'accept-language': 'es' },
         payload: { email: 'unknown-magic-link-user@example.com' },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: { message?: string } };
       expect(body.data.message).toBeDefined();
       expect([
@@ -453,7 +453,7 @@ describe('Auth Domain — Integration', () => {
         url: testApiPath('/auth/password/forgot'),
         payload: { email: user.email },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: Record<string, unknown> };
       expect(body.data).toHaveProperty('message');
     });
@@ -464,7 +464,7 @@ describe('Auth Domain — Integration', () => {
         url: testApiPath('/auth/password/forgot'),
         payload: { email: 'nobody@nonexistent.com' },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: Record<string, unknown> };
       expect(body.data).toHaveProperty('message');
     });
@@ -475,7 +475,7 @@ describe('Auth Domain — Integration', () => {
         url: testApiPath('/auth/password/forgot'),
         payload: { email: 'test@yopmail.com' },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: Record<string, unknown> };
       expect(body.data).toHaveProperty('message');
     });
@@ -529,7 +529,7 @@ describe('Auth Domain — Integration', () => {
           password: newPassword,
         },
       });
-      expect(resetResponse.statusCode).toBe(204);
+      expect(resetResponse.statusCode).toBe(201);
 
       // Login with new password
       const loginResponse = await injectUnauthenticated(app, {
@@ -540,7 +540,7 @@ describe('Auth Domain — Integration', () => {
           password: newPassword,
         },
       });
-      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.statusCode).toBe(201);
       const loginBody = loginResponse.json() as { data: Record<string, unknown> };
       expect(loginBody.data).toHaveProperty('access_token');
     });
@@ -584,7 +584,7 @@ describe('Auth Domain — Integration', () => {
           new_password: newPassword,
         },
       });
-      expect(response.statusCode).toBe(204);
+      expect(response.statusCode).toBe(201);
 
       // Verify login works with new password
       const loginResponse = await injectUnauthenticated(app, {
@@ -595,7 +595,7 @@ describe('Auth Domain — Integration', () => {
           password: newPassword,
         },
       });
-      expect(loginResponse.statusCode).toBe(200);
+      expect(loginResponse.statusCode).toBe(201);
     });
   });
 
@@ -642,7 +642,7 @@ describe('Auth Domain — Integration', () => {
         token,
         payload: { password },
       });
-      expect(stepUp.statusCode).toBe(200);
+      expect(stepUp.statusCode).toBe(201);
 
       // After an explicit step-up the same gated route is reachable.
       const afterStepUp = await injectAuthenticated(app, {
@@ -697,7 +697,7 @@ describe('Auth Domain — Integration', () => {
         url: testApiPath('/auth/email/verify'),
         payload: { token: rawToken },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: { message: string } };
       expect(body.data).toHaveProperty('message');
       expect(body.data.message).toContain('verified');
@@ -722,7 +722,7 @@ describe('Auth Domain — Integration', () => {
         url: testApiPath('/auth/email/resend-verification'),
         token,
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: Record<string, unknown> };
       expect(body.data).toHaveProperty('message');
     });
@@ -735,7 +735,7 @@ describe('Auth Domain — Integration', () => {
         url: testApiPath('/auth/email/resend-verification'),
         token,
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: { message: string } };
       expect(body.data.message).toContain('already verified');
     });
@@ -777,7 +777,7 @@ describe('Auth Domain — Integration', () => {
         token,
         headers: { 'accept-language': 'es' },
       });
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(201);
       const body = response.json() as { data: { message: string } };
       expect(body.data.message).toBeDefined();
       expect(body.data.message).toMatch(/verified|verificado/);
@@ -845,7 +845,7 @@ describe('Auth Domain — Integration', () => {
     });
   });
 
-  describe('DELETE /api/v1/auth/mfa/:mfaMethodId', () => {
+  describe('DELETE /api/v1/auth/mfa/:mfa_method_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
@@ -921,7 +921,7 @@ describe('Auth Domain — Integration', () => {
       // response has an item to inspect for the B4 (public_id, no bigserial)
       // shape contract.
       await database.insert(auth_methods).values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('authMethod'),
         user_id: user.id,
         method_type: 'MAGIC_LINK',
         is_primary: true,
@@ -938,7 +938,7 @@ describe('Auth Domain — Integration', () => {
       expect(body.data.length).toBeGreaterThan(0);
       for (const item of body.data) {
         expect(typeof item.public_id).toBe('string');
-        expect(item.public_id).toMatch(/^[a-z0-9]{21}$/);
+        expect(item.public_id).toMatch(/^am_[a-z0-9]{21}$/);
         // sec-new-B4: bigserial id must not be returned
         expect(item.id).toBeUndefined();
       }

@@ -24,7 +24,7 @@ export const user_data_exports = authSchema
     'user_data_exports',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
-      public_id: varchar('public_id', { length: 21 }).notNull().unique(),
+      public_id: varchar('public_id', { length: 28 }).notNull().unique(),
       user_id: bigint('user_id', { mode: 'number' })
         .notNull()
         .references(() => users.id, { onDelete: 'cascade' }),

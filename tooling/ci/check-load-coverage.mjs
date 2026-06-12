@@ -9,7 +9,7 @@
  *
  * What counts as "covered": the scenario file contains the static path prefix
  * (everything before the first path parameter). For example:
- *   /api/v1/tenancy/organizations/:id/settings
+ *   /api/v1/tenancy/organizations/:organizationId/settings
  *     → looks for "/organizations/" AND "/settings" in the same file.
  *
  * What is excluded from the required set:
@@ -101,8 +101,8 @@ function loadScenarios() {
 //
 // Examples:
 //   /api/v1/users/me               → must contain "/users/me"
-//   /api/v1/organizations/:id      → must contain "/organizations/"
-//   /api/v1/organizations/:id/settings → prefix "/organizations/" + suffix "settings"
+//   /api/v1/organizations/:organizationId      → must contain "/organizations/"
+//   /api/v1/organizations/:organizationId/settings → prefix "/organizations/" + suffix "settings"
 // --------------------------------------------------------------------------
 
 function staticSegments(path) {

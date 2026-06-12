@@ -50,7 +50,7 @@ const opsMiddleware: FastifyPluginAsync = async (application) => {
   );
 
   application.post(
-    '/internal/ops/circuit-breakers/:circuitName/reset',
+    '/internal/ops/circuit-breakers/:circuit_name/reset',
     {
       config: { raw_response: true },
       schema: {
@@ -62,7 +62,7 @@ const opsMiddleware: FastifyPluginAsync = async (application) => {
     },
     async (request) => {
       requireOpsBearerToken(request.headers.authorization);
-      const { circuitName } = request.params as { circuitName: string };
+      const { circuit_name: circuitName } = request.params as { circuit_name: string };
       const circuitBreaker = resolveManagedCircuitBreaker(circuitName);
       const previousState = await circuitBreaker.getState();
       await circuitBreaker.reset();

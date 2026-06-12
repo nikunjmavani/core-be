@@ -9,7 +9,7 @@ import type { FastifyInstance } from 'fastify';
 
 /**
  * Admin user-management happy paths (`ROLE: super_admin, admin` routes) — the
- * declared success status of every /users/:userId admin route observed with a
+ * declared success status of every /users/:user_id admin route observed with a
  * super_admin caller.
  */
 describe('User admin routes — happy paths', () => {
@@ -33,7 +33,7 @@ describe('User admin routes — happy paths', () => {
     adminToken = await generateTestToken({ userId: admin.public_id, role: 'super_admin' });
   });
 
-  it('GET /users/:userId returns the target profile', async () => {
+  it('GET /users/:user_id returns the target profile', async () => {
     const target = await createTestUser();
     const response = await injectAuthenticated(app, {
       method: 'GET',
@@ -43,7 +43,7 @@ describe('User admin routes — happy paths', () => {
     expect(response.statusCode, response.body).toBe(200);
   });
 
-  it('PATCH /users/:userId updates profile fields', async () => {
+  it('PATCH /users/:user_id updates profile fields', async () => {
     const target = await createTestUser();
     const response = await injectAuthenticated(app, {
       method: 'PATCH',
@@ -54,7 +54,7 @@ describe('User admin routes — happy paths', () => {
     expect(response.statusCode, response.body).toBe(200);
   });
 
-  it('POST /users/:userId/suspend then /unsuspend round-trips status', async () => {
+  it('POST /users/:user_id/suspend then /unsuspend round-trips status', async () => {
     const target = await createTestUser();
 
     const suspend = await injectAuthenticated(app, {
@@ -62,17 +62,17 @@ describe('User admin routes — happy paths', () => {
       url: testApiPath(`/users/${target.public_id}/suspend`),
       token: adminToken,
     });
-    expect(suspend.statusCode, suspend.body).toBe(200);
+    expect(suspend.statusCode, suspend.body).toBe(201);
 
     const unsuspend = await injectAuthenticated(app, {
       method: 'POST',
       url: testApiPath(`/users/${target.public_id}/unsuspend`),
       token: adminToken,
     });
-    expect(unsuspend.statusCode, unsuspend.body).toBe(200);
+    expect(unsuspend.statusCode, unsuspend.body).toBe(201);
   });
 
-  it('DELETE /users/:userId soft-deletes the target', async () => {
+  it('DELETE /users/:user_id soft-deletes the target', async () => {
     const target = await createTestUser();
     const response = await injectAuthenticated(app, {
       method: 'DELETE',

@@ -44,8 +44,8 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
       },
       controller.getUnreadCount,
     );
-    zodApplication.get<{ Params: { id: string } }>(
-      '/notifications/:id',
+    zodApplication.get<{ Params: { notification_id: string } }>(
+      '/notifications/:notification_id',
       {
         onRequest: [app.authenticate],
         schema: {
@@ -57,8 +57,8 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
       },
       controller.getNotification,
     );
-    zodApplication.patch<{ Params: { id: string } }>(
-      '/notifications/:id/read',
+    zodApplication.patch<{ Params: { notification_id: string } }>(
+      '/notifications/:notification_id/read',
       {
         onRequest: [app.authenticate],
         schema: {
@@ -83,8 +83,8 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
       },
       controller.markAllRead,
     );
-    zodApplication.delete<{ Params: { notificationId: string } }>(
-      '/notifications/:notificationId',
+    zodApplication.delete<{ Params: { notification_id: string } }>(
+      '/notifications/:notification_id',
       {
         onRequest: [app.authenticate],
         schema: {

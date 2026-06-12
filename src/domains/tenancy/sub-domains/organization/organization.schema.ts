@@ -25,7 +25,7 @@ export const organizations = tenancySchema
     'organizations',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
-      public_id: varchar('public_id', { length: 21 }).notNull(),
+      public_id: varchar('public_id', { length: 28 }).notNull(),
       name: varchar('name', { length: 255 }).notNull(),
       slug: varchar('slug', { length: 100 }).notNull(),
       owner_user_id: bigint('owner_user_id', { mode: 'number' })

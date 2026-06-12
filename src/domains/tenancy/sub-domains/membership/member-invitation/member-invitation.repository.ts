@@ -217,7 +217,7 @@ export class MemberInvitationRepository {
     created_by_user_id?: number | null;
   }) {
     return runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('memberInvitation');
       const rows = await getRequestDatabase()
         .insert(member_invitations)
         .values({

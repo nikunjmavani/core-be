@@ -17,5 +17,5 @@ export const auditUploadRouteResponses: Record<string, ResponseDefinition> = {
     schema: wrapSuccess(schemas.uploadSchema, schemas.uploadExample),
     example: null,
   },
-  'DELETE /api/v1/uploads/{publicId}': { statusCode: 204, schema: null, example: null },
+  'DELETE /api/v1/uploads/{upload_id}': { statusCode: 204, schema: null, example: null },
 };

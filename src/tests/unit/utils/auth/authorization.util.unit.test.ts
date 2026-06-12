@@ -18,7 +18,7 @@ const mockedResolvePermissions = vi.mocked(resolveUserOrganizationPermissions);
 function mockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
     auth: { kind: 'user' as const, userId: 'user-1', role: GLOBAL_ROLES.USER },
-    params: { organizationId: 'org-public' },
+    params: { organization_id: 'org-public' },
     ...overrides,
   } as FastifyRequest;
 }
@@ -83,7 +83,7 @@ describe('authorization.util', () => {
     });
 
     it('throws ForbiddenError when only a differently-named param is present (no fallback)', async () => {
-      const handler = requireOrganizationPermission('membership:read', 'organizationId');
+      const handler = requireOrganizationPermission('membership:read');
       await expect(
         handler(mockRequest({ params: { id: 'org-by-id' } as Record<string, string> }), mockReply),
       ).rejects.toThrow(ForbiddenError);

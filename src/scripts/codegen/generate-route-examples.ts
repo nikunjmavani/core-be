@@ -23,6 +23,7 @@
  * The fixture only changes when this command is re-run — docs generation reads
  * the committed file, keeping `pnpm docs:check` deterministic.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { loadRouteRegistryFromCatalog } from '@/tests/helpers/route-catalog-registry.js';
@@ -68,6 +69,29 @@ const SECRET_VALUE_PATTERNS: RegExp[] = [
   /^[A-Fa-f0-9]{32,}$/, // long hex blobs (hashes, raw tokens)
 ];
 
+const KNOWN_PUBLIC_ID_PREFIXES = [
+  'usr',
+  'org',
+  'mem',
+  'inv',
+  'rol',
+  'key',
+  'pol',
+  'ses',
+  'am',
+  'mfa',
+  'ntf',
+  'whk',
+  'pln',
+  'sub',
+  'upl',
+  'exp',
+  'wda',
+];
+const PREFIXED_PUBLIC_ID_PATTERN = new RegExp(
+  `^(${KNOWN_PUBLIC_ID_PREFIXES.join('|')})_[a-z0-9]{21}$`,
+);
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
@@ -92,6 +116,10 @@ function sanitizeString(value: string): string {
   // Opaque base64-JSON pagination cursors ("eyJ…", no dots) embed timestamps
   // and internal ids — normalize before the JWT check (JWTs have dots).
   if (/^eyJ[A-Za-z0-9+/=_-]{8,}$/.test(value)) return '<opaque-cursor>';
+  // Prefixed public ids normalize to a stable per-entity placeholder BEFORE the
+  // credential patterns (which would otherwise redact every typed id).
+  const prefixedId = PREFIXED_PUBLIC_ID_PATTERN.exec(value);
+  if (prefixedId) return `${prefixedId[1]}_example00000000000000`;
   for (const pattern of SECRET_VALUE_PATTERNS) {
     if (pattern.test(value)) return REDACTED;
   }
@@ -182,7 +210,15 @@ function main(): void {
       if (key.slice(0, lastSpace) !== routeKey) continue;
       if (Number(status) >= 500) continue; // 5xx bodies are not contract examples
       if (sample.response_body !== undefined && responses[status] === undefined) {
-        responses[status] = sanitize(sample.response_body);
+        const sanitized = sanitize(sample.response_body) as Record<string, unknown>;
+        if (sanitized && typeof sanitized === 'object' && sanitized.meta) {
+          // Deterministic, realistic-looking request id derived from the route+status
+          // so examples read like production traffic while staying reproducible.
+          const digest = createHash('sha256').update(`${routeKey} ${status}`).digest('hex');
+          (sanitized.meta as Record<string, unknown>).request_id =
+            `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-9${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+        }
+        responses[status] = sanitized;
         responseCount += 1;
       }
       if (String(declaredStatus) === status && sample.request_body !== undefined) {

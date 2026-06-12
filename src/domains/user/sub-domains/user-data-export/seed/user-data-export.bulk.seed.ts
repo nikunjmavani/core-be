@@ -53,7 +53,7 @@ export async function seedUserDataExportsBulk(context: SeedContext): Promise<voi
     await database
       .insert(user_data_exports)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('userDataExport'),
         user_id: user.id,
         status: profile.status,
         s3_key: profile.s3_key,
@@ -72,7 +72,7 @@ export async function seedUserDataExportsBulk(context: SeedContext): Promise<voi
       await database
         .insert(user_data_exports)
         .values({
-          public_id: generatePublicId(),
+          public_id: generatePublicId('userDataExport'),
           user_id: pendingUser.id,
           status: 'pending',
         })

@@ -18,7 +18,7 @@
 -- CREATE UNIQUE INDEX CONCURRENTLY (requires its own non-transactional migration).
 
 ALTER TABLE notify.webhook_delivery_attempts
-  ADD COLUMN IF NOT EXISTS public_id varchar(21);
+  ADD COLUMN IF NOT EXISTS public_id varchar(28);
 
 UPDATE notify.webhook_delivery_attempts
 SET public_id = left(replace(gen_random_uuid()::text, '-', ''), 21)

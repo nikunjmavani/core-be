@@ -6,14 +6,14 @@ describe('serializeUploadCreate', () => {
     const expiresAt = new Date('2026-05-16T12:00:00.000Z');
     expect(
       serializeUploadCreate({
-        publicId: 'abc123xyz',
+        id: 'abc123xyz',
         uploadUrl: 'https://s3.example.com/presigned',
         key: 'avatars/user/abc.png',
         expiresAt,
         uploadMethod: 'PUT',
       }),
     ).toEqual({
-      publicId: 'abc123xyz',
+      id: 'abc123xyz',
       uploadUrl: 'https://s3.example.com/presigned',
       key: 'avatars/user/abc.png',
       expiresAt: expiresAt.toISOString(),

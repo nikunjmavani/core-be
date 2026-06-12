@@ -34,7 +34,10 @@ describe('captured route examples fixture', () => {
     const leakPatterns: Array<[string, RegExp]> = [
       ['JWT', /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\./],
       ['Stripe-style secret', /"(sk|whsec|rk)_[A-Za-z0-9_]{8,}"/],
-      ['prefixed opaque credential', /"[a-z]{2,8}_[A-Za-z0-9]{16,}"/],
+      [
+        'prefixed opaque credential',
+        /"(?!(?:usr|org|mem|inv|rol|key|pol|ses|am|mfa|ntf|whk|pln|sub|upl|exp|wda)_)[a-z]{2,8}_[A-Za-z0-9]{16,}"/,
+      ],
       ['otpauth URI', /otpauth:\/\//],
       ['long hex blob', /"[A-Fa-f0-9]{40,}"/],
       ['non-placeholder email', /"[^"\s@]+@(?!example\.com")[^"\s@]+\.[^"\s@]+"/],

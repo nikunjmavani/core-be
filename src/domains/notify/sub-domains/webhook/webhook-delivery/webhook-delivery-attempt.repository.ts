@@ -257,7 +257,7 @@ export class WebhookDeliveryAttemptRepository {
         // NULL constraint introduced by the migration is satisfied on both the
         // event-driven path (createPendingWebhookDeliveryAttempt) and this
         // test-delivery / direct-insert path.
-        public_id: generatePublicId(),
+        public_id: generatePublicId('webhookDeliveryAttempt'),
       })
       .returning();
     return rows[0]!;

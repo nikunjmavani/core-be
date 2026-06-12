@@ -35,12 +35,13 @@ describe('Property-based: billing money', () => {
 });
 
 describe('Property-based: public identifiers', () => {
-  it('generatePublicId always matches slug-style length and charset', () => {
+  it('generatePublicId always emits the prefixed shape with a slug-safe core', () => {
     fc.assert(
       fc.property(fc.integer({ min: 1, max: 50 }), () => {
-        const identifier = generatePublicId();
-        expect(identifier).toHaveLength(21);
-        expect(SLUG_REGEX.test(identifier)).toBe(true);
+        const identifier = generatePublicId('subscription');
+        expect(identifier).toMatch(/^sub_[a-z0-9]{21}$/);
+        // the random core (after the prefix) stays slug-charset safe
+        expect(SLUG_REGEX.test(identifier.slice(4))).toBe(true);
       }),
       propertyOptions,
     );

@@ -59,22 +59,25 @@ export function createAuthSessionHandlers({
       return successResponse(serializeAuthSessions(data), getRequestIdentifier(request));
     },
     revokeSession: async (
-      request: FastifyRequest<{ Params: { id: string } }>,
+      request: FastifyRequest<{ Params: { session_id: string } }>,
       reply: FastifyReply,
     ) => {
       const auth = requireAuth(request);
       // route-#9: this endpoint revokes OTHER sessions; revoking the current one leaves a stale
       // session cookie and contradicts the documented contract — direct the caller to logout
       // (which also clears the cookie) instead of silently 401-ing their own next request.
-      if (auth.sessionPublicId !== undefined && auth.sessionPublicId === request.params.id) {
+      if (
+        auth.sessionPublicId !== undefined &&
+        auth.sessionPublicId === request.params.session_id
+      ) {
         throw new ConflictError('errors:cannotRevokeCurrentSession');
       }
-      await authSessionService.revoke(auth.userId, request.params.id);
+      await authSessionService.revoke(auth.userId, request.params.session_id);
       await recordScopedAuditEvent(request, {
         actorUserPublicId: auth.userId,
         action: 'auth.session.revoke',
         resource_type: 'session',
-        metadata: { session_public_id: request.params.id },
+        metadata: { session_public_id: request.params.session_id },
       });
       return reply.code(204).send();
     },

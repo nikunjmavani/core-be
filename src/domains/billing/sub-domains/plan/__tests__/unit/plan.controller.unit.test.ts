@@ -6,7 +6,7 @@ import type { PlanService } from '@/domains/billing/sub-domains/plan/plan.servic
 import { ValidationError } from '@/shared/errors/index.js';
 
 describe('createPlanController', () => {
-  const plan = { public_id: generatePublicId(), name: 'Pro' };
+  const plan = { public_id: generatePublicId('plan'), name: 'Pro' };
   const service = {
     list: vi.fn().mockResolvedValue([plan]),
     getByPublicId: vi.fn().mockResolvedValue(plan),
@@ -29,7 +29,7 @@ describe('createPlanController', () => {
     expect(listResponse).toMatchObject({ data: [plan] });
 
     await controller.getPlan(
-      { id: 'req', params: { id: plan.public_id } } as FastifyRequest,
+      { id: 'req', params: { plan_id: plan.public_id } } as FastifyRequest,
       {} as FastifyReply,
     );
     expect(service.getByPublicId).toHaveBeenCalledWith(plan.public_id);
@@ -41,7 +41,10 @@ describe('createPlanController', () => {
     ).rejects.toBeInstanceOf(ValidationError);
 
     await expect(
-      controller.getPlan({ id: 'req', params: { id: '' } } as FastifyRequest, {} as FastifyReply),
+      controller.getPlan(
+        { id: 'req', params: { plan_id: '' } } as FastifyRequest,
+        {} as FastifyReply,
+      ),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 

@@ -59,7 +59,7 @@ describe('Tenancy e2e: member role permission', () => {
       organizationPublicId: organization.public_id,
       payload: { name: 'E2E Custom Role', description: 'e2e' },
     });
-    expect([200, 201]).toContain(createRoleResponse.statusCode);
+    expect([201]).toContain(createRoleResponse.statusCode);
 
     const listRolesResponse = await injectAuthenticated(app, {
       method: 'GET',

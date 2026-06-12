@@ -37,7 +37,7 @@ const ORGANIZATION_SLUG_PUBLIC_ID_SUFFIX_LENGTH = 10;
  * for assertion purposes.
  */
 export async function createTestOrganization(options: CreateOrganizationOptions) {
-  const publicId = generatePublicId();
+  const publicId = generatePublicId('organization');
   const name = options.name ?? faker.company.name();
   const slug = options.slug ?? buildCollisionResistantSlug(name, publicId);
 
@@ -60,7 +60,9 @@ export async function createTestOrganization(options: CreateOrganizationOptions)
  * and is guaranteed unique per call (the public id supplies the entropy).
  */
 function buildCollisionResistantSlug(name: string, publicId: string): string {
-  const suffix = `-${publicId.slice(0, ORGANIZATION_SLUG_PUBLIC_ID_SUFFIX_LENGTH)}`;
+  // Slug column only allows [a-z0-9-]; skip the `org_` prefix and use the random core.
+  const publicIdCore = publicId.slice(publicId.indexOf('_') + 1);
+  const suffix = `-${publicIdCore.slice(0, ORGANIZATION_SLUG_PUBLIC_ID_SUFFIX_LENGTH)}`;
   const prefixBudget = ORGANIZATION_SLUG_MAX_LENGTH - suffix.length;
   const prefix = faker.helpers.slugify(name).toLowerCase().slice(0, prefixBudget);
   return `${prefix}${suffix}`;

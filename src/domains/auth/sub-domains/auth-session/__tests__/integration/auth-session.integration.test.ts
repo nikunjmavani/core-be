@@ -83,7 +83,7 @@ describe('Auth Session Sub-Domain — Integration', () => {
       // ONLY the current session, not every revoke.
       const response = await injectAuthenticated(app, {
         method: 'DELETE',
-        url: testApiPath(`/auth/me/sessions/${generatePublicId()}`),
+        url: testApiPath(`/auth/me/sessions/${generatePublicId('authSession')}`),
         token,
       });
       expect(response.statusCode).toBe(404);

@@ -20,9 +20,9 @@
  *
  * Notes:
  *   The matcher tolerates path-parameter substitution: a route declared as
- *   `/api/v1/tenancy/organizations/:id` is considered exercised by a test that
+ *   `/api/v1/tenancy/organizations/:organization_id` is considered exercised by a test that
  *   contains `/tenancy/organizations/${ORG_ID}`, `/tenancy/organizations/test-org`,
- *   `/tenancy/organizations/:id`, `organizations/\${organization.public_id}`,
+ *   `/tenancy/organizations/:organization_id`, `organizations/\${organization.public_id}`,
  *   etc. The path is normalised by stripping `/api/v1/` and lowercasing.
  */
 import { readFileSync } from 'node:fs';
@@ -322,7 +322,7 @@ async function main(): Promise<void> {
     [
       '- Match is anchored on the full URL after stripping `/api/v1/` and replacing param tokens (`:id`, `:publicId`, etc.) with `[^/]+`, so a test that hits ',
       '`/tenancy/organizations/' + '$' + '{organization.public_id}/api-keys` ',
-      'is correctly associated with `GET /api/v1/tenancy/organizations/:id/api-keys`.',
+      'is correctly associated with `GET /api/v1/tenancy/organizations/:organization_id/api-keys`.',
     ].join(''),
   );
   reportLines.push(

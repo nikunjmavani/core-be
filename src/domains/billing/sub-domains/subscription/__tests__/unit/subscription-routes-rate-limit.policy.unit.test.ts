@@ -32,11 +32,11 @@ describe('subscription routes rate-limit policy (route-#2)', () => {
   }
 
   const MUTATIONS: Array<[string, string]> = [
-    ['post', '/organizations/:id/subscriptions'],
-    ['patch', '/organizations/:id/subscriptions/:subscriptionId'],
-    ['post', '/organizations/:id/subscriptions/:subscriptionId/change-plan'],
-    ['post', '/organizations/:id/subscriptions/:subscriptionId/cancel'],
-    ['post', '/organizations/:id/subscriptions/:subscriptionId/resume'],
+    ['post', '/organizations/:organization_id/subscriptions'],
+    ['patch', '/organizations/:organization_id/subscriptions/:subscription_id'],
+    ['post', '/organizations/:organization_id/subscriptions/:subscription_id/change-plan'],
+    ['post', '/organizations/:organization_id/subscriptions/:subscription_id/cancel'],
+    ['post', '/organizations/:organization_id/subscriptions/:subscription_id/resume'],
   ];
 
   for (const [method, url] of MUTATIONS) {
@@ -47,7 +47,7 @@ describe('subscription routes rate-limit policy (route-#2)', () => {
 
   it('the two READ routes are NOT required to carry the mutation cap', () => {
     // Sanity: list/get are reads; the policy targets mutations only.
-    expect(findRouteBlock('get', '/organizations/:id/subscriptions')).not.toContain(
+    expect(findRouteBlock('get', '/organizations/:organization_id/subscriptions')).not.toContain(
       'ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config',
     );
   });

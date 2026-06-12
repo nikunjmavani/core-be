@@ -42,7 +42,7 @@ describe('Cross-domain e2e: billing onboarding', () => {
       url: testApiPath('/auth/login'),
       payload: { email: user.email, password },
     });
-    expect(loginResponse.statusCode).toBe(200);
+    expect(loginResponse.statusCode).toBe(201);
     const token =
       (loginResponse.json() as { data?: { access_token?: string } }).data?.access_token ??
       (await generateTestToken({ userId: user.public_id }));

@@ -29,7 +29,7 @@ import type { OrganizationApiKeyRepository } from '@/domains/tenancy/sub-domains
 
 /**
  * HTTP response shape for `GET
- * /organizations/:id/memberships/:membershipId/permissions` — the resolved
+ * /organizations/:organization_id/memberships/:membership_id/permissions` — the resolved
  * permission codes for the membership's current role.
  *
  * @remarks
@@ -456,7 +456,7 @@ export class MembershipService {
         newOwnerUserId,
         organization.id,
       );
-      if (!newOwnerMembership || newOwnerMembership.status !== 'ACTIVE') {
+      if (newOwnerMembership?.status !== 'ACTIVE') {
         throw new NotFoundError('New owner must be an active member');
       }
       await this.organizationService.transferOrganizationOwnership(

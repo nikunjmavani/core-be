@@ -2,10 +2,10 @@ import { z } from 'zod';
 import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedSlug, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
-/** Shared path params for org-scoped routes (`/organizations/:id/...`). */
+/** Shared path params for org-scoped routes (`/organizations/:organization_id/...`). */
 export const organizationIdParamsDto = z
   .object({
-    id: trimmedStringMinMax(1, 21),
+    organization_id: trimmedStringMinMax(1, 28),
   })
   .strict();
 
@@ -16,19 +16,19 @@ export const organizationSlugParamsDto = z
   })
   .strict();
 
-/** Path params for member-role routes scoped under an organization (`/organizations/:id/roles/:roleId`). */
+/** Path params for member-role routes scoped under an organization (`/organizations/:organization_id/roles/:role_id`). */
 export const organizationRoleParamsDto = organizationIdParamsDto.extend({
-  roleId: trimmedStringMinMax(1, 21),
+  role_id: trimmedStringMinMax(1, 28),
 });
 
-/** Path params for organization API-key routes (`/organizations/:id/api-keys/:apiKeyId`). */
+/** Path params for organization API-key routes (`/organizations/:organization_id/api-keys/:api_key_id`). */
 export const organizationApiKeyParamsDto = organizationIdParamsDto.extend({
-  apiKeyId: trimmedStringMinMax(1, 21),
+  api_key_id: trimmedStringMinMax(1, 28),
 });
 
-/** Path params for notification-policy routes (`/organizations/:id/notification-policies/:policyId`). */
+/** Path params for notification-policy routes (`/organizations/:organization_id/notification-policies/:policy_id`). */
 export const organizationNotificationPolicyParamsDto = organizationIdParamsDto.extend({
-  policyId: trimmedStringMinMax(1, 21),
+  policy_id: trimmedStringMinMax(1, 28),
 });
 
 /** Zod schema for the `POST /api/v1/organizations` request body (name + URL-friendly slug). */
@@ -40,7 +40,7 @@ export const createOrganizationDto = z
   .strict();
 
 /**
- * Zod schema for the `PATCH /api/v1/organizations/:id` request body. All
+ * Zod schema for the `PATCH /api/v1/organizations/:organization_id` request body. All
  * fields optional; `status` is constrained to the lifecycle values stored
  * in `tenancy.organizations.status`.
  */
@@ -56,7 +56,7 @@ export const updateOrganizationDto = z
 export const listOrganizationsQueryDto = cursorPaginationSchema.strict();
 
 /**
- * Zod schema for the `PUT /api/v1/organizations/:id/logo` request body.
+ * Zod schema for the `PUT /api/v1/organizations/:organization_id/logo` request body.
  * Enforces that `key` lives under the `organization-logos/` S3 prefix; the
  * service additionally checks the key belongs to this organization.
  */

@@ -48,16 +48,16 @@ export const audit_outbox = auditSchema
       /** Lifecycle: `PENDING` → `PROCESSED` (drained) | `FAILED` (max retries). */
       status: varchar('status', { length: 20 }).notNull().default('PENDING'),
       /** Actor user public id (NanoID 21). One of actor_user_public_id / actor_api_key_public_id is required. */
-      actor_user_public_id: varchar('actor_user_public_id', { length: 21 }),
+      actor_user_public_id: varchar('actor_user_public_id', { length: 28 }),
       /** Actor organization API key public id (NanoID 21). Used for tenantless-actor (API key) writes. */
-      actor_api_key_public_id: varchar('actor_api_key_public_id', { length: 21 }),
+      actor_api_key_public_id: varchar('actor_api_key_public_id', { length: 28 }),
       /** Optional target user public id (NanoID 21). */
-      target_user_public_id: varchar('target_user_public_id', { length: 21 }),
+      target_user_public_id: varchar('target_user_public_id', { length: 28 }),
       /**
        * Organization public id (NanoID 21). `NULL` for tenantless system audits (DLQ replay etc.)
        * and gated by the RLS system-audit arm.
        */
-      organization_public_id: varchar('organization_public_id', { length: 21 }),
+      organization_public_id: varchar('organization_public_id', { length: 28 }),
       /** Audit action verb (e.g. `user.created`, `webhook.deleted`). */
       action: varchar('action', { length: 100 }).notNull(),
       /** Resource type (e.g. `user`, `webhook`). */

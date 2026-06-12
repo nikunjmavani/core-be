@@ -44,7 +44,7 @@ export async function seedOrganizationNotificationPoliciesBulk(
     await database
       .insert(organization_notification_policies)
       .values({
-        public_id: generatePublicId(),
+        public_id: generatePublicId('organizationNotificationPolicy'),
         organization_id: organization.id,
         notification_type: SEED_NOTIFICATION_TYPE,
         channel: SEED_CHANNEL,

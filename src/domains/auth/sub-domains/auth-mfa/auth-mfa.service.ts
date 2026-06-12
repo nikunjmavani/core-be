@@ -502,7 +502,7 @@ export class MfaService {
       this.authMethodService.listMfaMethodsByUserId(user.id),
     );
     return methods.map((method) => ({
-      // route-#10: expose the opaque public id (not the sequential DB id); DELETE /mfa/:mfaMethodId
+      // route-#10: expose the opaque public id (not the sequential DB id); DELETE /mfa/:mfa_method_id
       // accepts this value, so the round-trip is unchanged for clients.
       id: method.public_id,
       method_type: method.method_type,

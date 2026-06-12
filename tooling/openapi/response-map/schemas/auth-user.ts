@@ -10,14 +10,19 @@ export const userSchema = {
     first_name: { type: 'string', nullable: true },
     last_name: { type: 'string', nullable: true },
     avatar_url: { type: 'string', nullable: true },
-    status: { type: 'string' },
+    status: {
+      type: 'string',
+      enum: ['ACTIVE', 'LOCKED', 'SUSPENDED'],
+      description: 'Possible values: ACTIVE | LOCKED | SUSPENDED',
+      example: 'ACTIVE',
+    },
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
   },
 };
 
 export const userExample = {
-  id: 'usr_k7x9m2pqr4w8n1v3',
+  id: 'usr_k7x9m2pqr4w8n1v3a1b2c',
   email: 'john.doe@example.com',
   is_email_verified: true,
   is_mfa_enabled: false,
@@ -44,7 +49,7 @@ export const userSettingsSchema = {
 };
 
 export const userSettingsExample = {
-  user_id: 'usr_k7x9m2pqr4w8n1v3',
+  user_id: 'usr_k7x9m2pqr4w8n1v3a1b2c',
   is_dark_mode_enabled: false,
   is_notifications_enabled: true,
   language: 'en',
@@ -58,7 +63,12 @@ export const notificationPreferenceSchema = {
   type: 'object',
   properties: {
     notification_type: { type: 'string' },
-    channel: { type: 'string' },
+    channel: {
+      type: 'string',
+      enum: ['EMAIL', 'SMS', 'PUSH', 'IN_APP'],
+      description: 'Possible values: EMAIL | SMS | PUSH | IN_APP',
+      example: 'EMAIL',
+    },
     organization_id: { type: 'string', nullable: true },
     is_enabled: { type: 'boolean' },
   },
@@ -74,7 +84,7 @@ export const notificationPreferenceExamples = [
   {
     notification_type: 'member.invited',
     channel: 'push',
-    organization_id: 'org_k7x9m2pqr4w8n1v3',
+    organization_id: 'org_k7x9m2pqr4w8n1v3a1b2c',
     is_enabled: false,
   },
 ];
@@ -159,7 +169,13 @@ export const authMethodSchema = {
   type: 'object',
   properties: {
     id: { type: 'integer' },
-    method_type: { type: 'string' },
+    method_type: {
+      type: 'string',
+      enum: ['PASSWORD', 'MAGIC_LINK', 'OAUTH', 'MFA_TOTP', 'MFA_SMS', 'MFA_EMAIL'],
+      description:
+        'Possible values: PASSWORD | MAGIC_LINK | OAUTH | MFA_TOTP | MFA_SMS | MFA_EMAIL',
+      example: 'PASSWORD',
+    },
     provider: { type: 'string', nullable: true },
     is_primary: { type: 'boolean' },
     created_at: { type: 'string', format: 'date-time' },
@@ -188,7 +204,7 @@ export const sessionSchema = {
 };
 
 export const sessionExample = {
-  id: 'ses_m7n2p5q8w1r4x9k3',
+  id: 'ses_m7n2p5q8w1r4x9k3a1b2c',
   ip_address: '203.0.113.42',
   user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
   last_active_at: '2026-02-14T08:30:00.000Z',
@@ -201,14 +217,19 @@ export const mfaMethodSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    method_type: { type: 'string' },
+    method_type: {
+      type: 'string',
+      enum: ['MFA_TOTP', 'MFA_SMS', 'MFA_EMAIL'],
+      description: 'Possible values: MFA_TOTP | MFA_SMS | MFA_EMAIL',
+      example: 'MFA_TOTP',
+    },
     is_verified: { type: 'boolean' },
     created_at: { type: 'string', format: 'date-time' },
   },
 };
 
 export const mfaMethodExample = {
-  id: 'mfa_t6m3n7p2q8w5k1r4',
+  id: 'mfa_t6m3n7p2q8w5k1r4a1b2c',
   method_type: 'MFA_TOTP',
   is_verified: true,
   created_at: '2026-01-20T09:00:00.000Z',

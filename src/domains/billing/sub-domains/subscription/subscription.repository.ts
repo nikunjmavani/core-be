@@ -165,7 +165,7 @@ export class SubscriptionRepository {
 
   async create(data: SubscriptionCreateData) {
     const inserted = await runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('subscription');
       const rows = await this.db()
         .insert(subscriptions)
         .values({

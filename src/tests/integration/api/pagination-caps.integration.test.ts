@@ -43,7 +43,7 @@ describe('Pagination caps — integration', () => {
     expect(response.statusCode).toBe(400);
   });
 
-  it('GET /organizations/{id}/invitations rejects limit above 100', async () => {
+  it('GET /organizations/{organization_id}/invitations rejects limit above 100', async () => {
     const user = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: user.id });
     const role = await createRoleWithPermissions({

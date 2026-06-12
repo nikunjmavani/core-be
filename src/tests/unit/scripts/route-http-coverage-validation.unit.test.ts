@@ -21,7 +21,7 @@ const DOMAINS_DIR = resolve(process.cwd(), 'src/domains');
 
 const sampleRoute = (overrides: Partial<RouteEntry>): RouteEntry => ({
   method: 'GET',
-  path: '/api/v1/tenancy/organizations/:id',
+  path: '/api/v1/tenancy/organizations/:organization_id',
   domain: 'tenancy',
   access: 'org-permission',
   description: 'sample',
@@ -98,16 +98,20 @@ describe('route-http-coverage-validation.util', () => {
 
   it('flags missing route literals and mutating method references', () => {
     const registry = [
-      sampleRoute({ path: '/api/v1/tenancy/organizations/:id/missing', method: 'PATCH' }),
+      sampleRoute({
+        path: '/api/v1/tenancy/organizations/:organization_id/missing',
+        method: 'PATCH',
+      }),
     ];
-    const combined = "inject({ method: 'GET', url: '/api/v1/tenancy/organizations/:id' })";
+    const combined =
+      "inject({ method: 'GET', url: '/api/v1/tenancy/organizations/:organization_id' })";
     const result = evaluateRouteHttpCoverage(registry, combined, [], DOMAINS_DIR);
     expect(result.missingRouteLiterals[0]).toContain('missing');
     expect(
       mutatingMethodReferencedForPath(
         combined,
         'PATCH',
-        '/api/v1/tenancy/organizations/:id/missing',
+        '/api/v1/tenancy/organizations/:organization_id/missing',
       ),
     ).toBe(false);
   });

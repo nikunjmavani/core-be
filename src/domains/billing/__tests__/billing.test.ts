@@ -199,10 +199,10 @@ describe('Billing Domain — Integration', () => {
         payload: { type: 'test' },
       });
       // The Deprecation header must be present regardless of status code
-      expect(response.headers['deprecation']).toBe('true');
+      expect(response.headers.deprecation).toBe('true');
       // Sunset must be a well-formed HTTP-date (RFC 7231)
-      expect(typeof response.headers['sunset']).toBe('string');
-      expect(response.headers['sunset']).toMatch(/\w{3}, \d{2} \w{3} \d{4}/);
+      expect(typeof response.headers.sunset).toBe('string');
+      expect(response.headers.sunset).toMatch(/\w{3}, \d{2} \w{3} \d{4}/);
     });
   });
 });

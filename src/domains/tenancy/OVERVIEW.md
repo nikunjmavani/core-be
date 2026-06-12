@@ -9,7 +9,7 @@ Multi-tenant primitives for the platform: organizations, memberships, member rol
 What it owns:
 
 - The `tenancy.organizations`, `tenancy.memberships`, `tenancy.member_roles`, `tenancy.permissions`, `tenancy.member_invitations`, and `tenancy.organization_api_keys` tables (plus settings + notification policy children).
-- Organization slug uniqueness, organization-id format (URL-safe public ids).
+- Organization slug uniqueness, x-organization-id format (URL-safe public ids).
 - The Redis-backed permission cache (`PERMISSION_CACHE_DEFAULT_TTL_SECONDS = 300`) and the `requireOrganizationPermission` Fastify preHandler.
 - The invitation token issuance (parallel construction to magic-link tokens).
 
@@ -80,7 +80,7 @@ stateDiagram-v2
 
 ## Failure modes
 
-- **Header / path organization-id mismatch** → 400.
+- **Header / path x-organization-id mismatch** → 400.
 - **Permission cache miss while a process is recomputing** → SETNX lock holds for `PERMISSION_CACHE_RECOMPUTE_LOCK_TTL_SECONDS = 15`; other processes wait or recompute on lock expiry.
 - **Permission cache invalidation gap on multi-process deploy** → bounded by `PERMISSION_CACHE_DEFAULT_TTL_SECONDS = 300` (revoked permissions auto-expire within 5 min).
 - **Invitation token replay** → atomic accept consumes the row exactly once.

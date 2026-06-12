@@ -19,7 +19,7 @@ describe('buildIdempotencyRequestFingerprint', () => {
     });
     const differentRoute = buildIdempotencyRequestFingerprint({
       method: 'POST',
-      routePath: '/organizations/:id/memberships',
+      routePath: '/organizations/:organization_id/memberships',
       body: { name: 'A' },
     });
     const differentBody = buildIdempotencyRequestFingerprint({
@@ -38,7 +38,7 @@ describe('isIdempotencyRouteExcluded', () => {
     expect(isIdempotencyRouteExcluded('/login')).toBe(true);
     expect(isIdempotencyRouteExcluded('/magic-link/verify')).toBe(true);
     expect(isIdempotencyRouteExcluded('/oauth/google/callback')).toBe(true);
-    expect(isIdempotencyRouteExcluded('/organizations/:id/api-keys')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/organizations/:organization_id/api-keys')).toBe(true);
     expect(isIdempotencyRouteExcluded('/tenancy/organizations')).toBe(false);
   });
 });

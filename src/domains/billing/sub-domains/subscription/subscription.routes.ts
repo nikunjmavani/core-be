@@ -19,11 +19,11 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
 
   return async (app) => {
     const zodApplication = app.withTypeProvider<ZodTypeProvider>();
-    zodApplication.get<{ Params: { id: string } }>(
-      '/organizations/:id/subscriptions',
+    zodApplication.get<{ Params: { organization_id: string } }>(
+      '/organizations/:organization_id/subscriptions',
       {
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ, 'id')],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
         schema: {
           summary: 'List subscriptions',
           description:
@@ -33,11 +33,11 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       },
       controller.listSubscriptions,
     );
-    zodApplication.get<{ Params: { id: string; subscriptionId: string } }>(
-      '/organizations/:id/subscriptions/:subscriptionId',
+    zodApplication.get<{ Params: { organization_id: string; subscription_id: string } }>(
+      '/organizations/:organization_id/subscriptions/:subscription_id',
       {
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ, 'id')],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
         schema: {
           summary: 'Get subscription',
           description:
@@ -47,8 +47,8 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       },
       controller.getSubscription,
     );
-    zodApplication.post<{ Params: { id: string } }>(
-      '/organizations/:id/subscriptions',
+    zodApplication.post<{ Params: { organization_id: string } }>(
+      '/organizations/:organization_id/subscriptions',
       {
         config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
@@ -59,12 +59,12 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
           body: CreateSubscriptionDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
       },
       controller.createSubscription,
     );
-    zodApplication.patch<{ Params: { id: string; subscriptionId: string } }>(
-      '/organizations/:id/subscriptions/:subscriptionId',
+    zodApplication.patch<{ Params: { organization_id: string; subscription_id: string } }>(
+      '/organizations/:organization_id/subscriptions/:subscription_id',
       {
         config: { ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
@@ -75,12 +75,12 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
           body: UpdateSubscriptionDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
       },
       controller.updateSubscription,
     );
-    zodApplication.post<{ Params: { id: string; subscriptionId: string } }>(
-      '/organizations/:id/subscriptions/:subscriptionId/change-plan',
+    zodApplication.post<{ Params: { organization_id: string; subscription_id: string } }>(
+      '/organizations/:organization_id/subscriptions/:subscription_id/change-plan',
       {
         config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
@@ -91,16 +91,16 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
           body: ChangePlanDto,
         },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
       },
       controller.changePlan,
     );
-    zodApplication.post<{ Params: { id: string; subscriptionId: string } }>(
-      '/organizations/:id/subscriptions/:subscriptionId/cancel',
+    zodApplication.post<{ Params: { organization_id: string; subscription_id: string } }>(
+      '/organizations/:organization_id/subscriptions/:subscription_id/cancel',
       {
         config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
         schema: {
           summary: 'Cancel subscription',
           description:
@@ -110,12 +110,12 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       },
       controller.cancelSubscription,
     );
-    zodApplication.post<{ Params: { id: string; subscriptionId: string } }>(
-      '/organizations/:id/subscriptions/:subscriptionId/resume',
+    zodApplication.post<{ Params: { organization_id: string; subscription_id: string } }>(
+      '/organizations/:organization_id/subscriptions/:subscription_id/resume',
       {
         config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         onRequest: [app.authenticate],
-        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE, 'id')],
+        preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_MANAGE)],
         schema: {
           summary: 'Resume cancelled subscription',
           description:

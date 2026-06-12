@@ -11,7 +11,7 @@ import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { FastifyInstance } from 'fastify';
 
 async function insertNotificationFor(userId: number): Promise<string> {
-  const publicId = generatePublicId();
+  const publicId = generatePublicId('notification');
   await database.insert(notifications).values({
     public_id: publicId,
     user_id: userId,
@@ -25,7 +25,7 @@ async function insertNotificationFor(userId: number): Promise<string> {
 /**
  * Happy paths for the user-scoped notification detail routes — declared
  * statuses observed for GET `:id` (200), PATCH `:id/read` (200), and
- * DELETE `:notificationId` (204).
+ * DELETE `:notification_id` (204).
  */
 describe('Notification detail — happy paths', () => {
   let app: FastifyInstance;
@@ -69,7 +69,7 @@ describe('Notification detail — happy paths', () => {
     expect(response.statusCode, response.body).toBe(200);
   });
 
-  it('DELETE /notify/notifications/:notificationId removes it', async () => {
+  it('DELETE /notify/notifications/:notification_id removes it', async () => {
     const user = await createTestUser();
     const token = await generateTestToken({ userId: user.public_id });
     const notificationId = await insertNotificationFor(user.id);

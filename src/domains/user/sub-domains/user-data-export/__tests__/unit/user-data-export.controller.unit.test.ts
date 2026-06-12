@@ -16,7 +16,7 @@ import type { UserDataExportService } from '@/domains/user/sub-domains/user-data
 
 function mockRequest(overrides: Partial<FastifyRequest> = {}): never {
   return {
-    auth: { userId: generatePublicId(), role: 'user' },
+    auth: { userId: generatePublicId('user'), role: 'user' },
     params: {},
     body: {},
     headers: {},
@@ -34,9 +34,9 @@ function mockReply(): FastifyReply {
 
 describe('createUserDataExportController', () => {
   it('requestExport returns 202 with export payload', async () => {
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     const exportPayload = {
-      export_id: generatePublicId(),
+      export_id: generatePublicId('userDataExport'),
       status: USER_DATA_EXPORT_STATUSES.PENDING,
       download_url: null,
       expires_at: null,
@@ -61,8 +61,8 @@ describe('createUserDataExportController', () => {
   });
 
   it('getExportStatus delegates to service', async () => {
-    const userPublicId = generatePublicId();
-    const exportId = generatePublicId();
+    const userPublicId = generatePublicId('user');
+    const exportId = generatePublicId('userDataExport');
     const service = {
       getExportStatus: vi.fn().mockResolvedValue({
         export_id: exportId,
@@ -74,7 +74,7 @@ describe('createUserDataExportController', () => {
     const response = await controller.getExportStatus(
       mockRequest({
         auth: { kind: 'user' as const, userId: userPublicId, role: 'user' },
-        params: { exportId },
+        params: { export_id: exportId },
       }),
       mockReply(),
     );
@@ -91,8 +91,8 @@ describe('createUserDataExportController', () => {
   // notifications, audit). Every URL mint must leave a row in `audit.events`
   // so the user (and admins) can see post-hoc who pulled the bundle when.
   it('records a user.data_export.url_minted audit event when download_url is returned', async () => {
-    const userPublicId = generatePublicId();
-    const exportId = generatePublicId();
+    const userPublicId = generatePublicId('user');
+    const exportId = generatePublicId('userDataExport');
     recordScopedAuditEventSpy.mockClear();
     const service = {
       getExportStatus: vi.fn().mockResolvedValue({
@@ -106,7 +106,7 @@ describe('createUserDataExportController', () => {
     await controller.getExportStatus(
       mockRequest({
         auth: { kind: 'user' as const, userId: userPublicId, role: 'user' },
-        params: { exportId },
+        params: { export_id: exportId },
       }),
       mockReply(),
     );
@@ -123,8 +123,8 @@ describe('createUserDataExportController', () => {
   });
 
   it('does NOT record an audit event when no download_url is returned (status != COMPLETED)', async () => {
-    const userPublicId = generatePublicId();
-    const exportId = generatePublicId();
+    const userPublicId = generatePublicId('user');
+    const exportId = generatePublicId('userDataExport');
     recordScopedAuditEventSpy.mockClear();
     const service = {
       getExportStatus: vi.fn().mockResolvedValue({
@@ -138,7 +138,7 @@ describe('createUserDataExportController', () => {
     await controller.getExportStatus(
       mockRequest({
         auth: { kind: 'user' as const, userId: userPublicId, role: 'user' },
-        params: { exportId },
+        params: { export_id: exportId },
       }),
       mockReply(),
     );

@@ -180,7 +180,7 @@ export const oauthProviderParamsDto = z
 export type OauthProviderParamsInput = z.infer<typeof oauthProviderParamsDto>;
 
 /**
- * Zod schema for the `:mfaMethodId` path parameter on `/api/v1/auth/mfa/:mfaMethodId`.
+ * Zod schema for the `:mfa_method_id` path parameter on `/api/v1/auth/mfa/:mfa_method_id`.
  *
  * route-#10: the param is an opaque 21-char public id (not the sequential DB id). `GET /mfa`
  * returns each method's public id as `id`, so this is round-trip compatible; it stops leaking
@@ -188,31 +188,31 @@ export type OauthProviderParamsInput = z.infer<typeof oauthProviderParamsDto>;
  */
 export const mfaMethodIdParamsDto = z
   .object({
-    mfaMethodId: z
+    mfa_method_id: z
       .string()
       .trim()
-      .regex(/^[A-Za-z0-9_-]{21}$/),
+      .regex(/^am_[a-z0-9]{21}$/),
   })
   .strict();
 /** Inferred input type of {@link mfaMethodIdParamsDto}. */
 export type MfaMethodIdParamsInput = z.infer<typeof mfaMethodIdParamsDto>;
 
-/** Zod schema for the `:publicId` path parameter on `DELETE /api/v1/auth/me/auth-methods/:publicId` (sec-new-B4). */
+/** Zod schema for the `:auth_method_id` path parameter on `DELETE /api/v1/auth/me/auth-methods/:auth_method_id` (sec-new-B4). */
 export const authMethodPublicIdParamsDto = z
   .object({
-    publicId: z
+    auth_method_id: z
       .string()
       .trim()
-      .regex(/^[a-z0-9]{21}$/),
+      .regex(/^am_[a-z0-9]{21}$/),
   })
   .strict();
 /** Inferred input type of {@link authMethodPublicIdParamsDto}. */
 export type AuthMethodPublicIdParamsInput = z.infer<typeof authMethodPublicIdParamsDto>;
 
-/** Zod schema for the `:id` (session public id) path parameter on `/api/v1/auth/me/sessions/:id`. */
+/** Zod schema for the `:session_id` (session public id) path parameter on `/api/v1/auth/me/sessions/:session_id`. */
 export const sessionIdParamsDto = z
   .object({
-    id: trimmedStringMinMax(1, 21),
+    session_id: trimmedStringMinMax(1, 28),
   })
   .strict();
 /** Inferred input type of {@link sessionIdParamsDto}. */

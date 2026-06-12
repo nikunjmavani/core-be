@@ -7,9 +7,9 @@ import {
 describe('operation-helpers', () => {
   it('generateOperationId builds camelCase operation ids', () => {
     expect(generateOperationId('GET', '/api/v1/auth/me')).toMatch(/^getAuth/i);
-    expect(generateOperationId('POST', '/api/v1/tenancy/organizations/{id}/invitations')).toMatch(
-      /^postTenancy/i,
-    );
+    expect(
+      generateOperationId('POST', '/api/v1/tenancy/organizations/{organization_id}/invitations'),
+    ).toMatch(/^postTenancy/i);
   });
 
   it('inferTagFromPath title-cases the first API segment', () => {

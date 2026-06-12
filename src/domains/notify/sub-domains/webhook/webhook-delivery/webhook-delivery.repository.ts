@@ -190,7 +190,7 @@ export async function createPendingWebhookDeliveryAttempt(input: {
     attempt_count: 0,
     // sec-new-B2: generate once at insert so every retry of the same job reads the
     // same public_id from the DB and emits a stable X-Webhook-Delivery-Id header.
-    public_id: generatePublicId(),
+    public_id: generatePublicId('webhookDeliveryAttempt'),
   };
   const insertBuilder = getRequestDatabase().insert(webhook_delivery_attempts);
   if (input.eventKey !== undefined) {

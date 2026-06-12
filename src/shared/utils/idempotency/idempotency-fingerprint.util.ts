@@ -41,7 +41,7 @@ const IDEMPOTENCY_SECRET_RESPONSE_FIELD_NAMES = new Set([
 /**
  * Normalizes a request path for idempotency fingerprinting: strips the query string and
  * collapses duplicate slashes. Prefer the Fastify route template when available so
- * `/organizations/:id` and concrete ids hash consistently.
+ * `/organizations/:organization_id` and concrete ids hash consistently.
  */
 export function normalizeIdempotencyRoutePath(routePath: string): string {
   if (routePath.length === 0) return '/';

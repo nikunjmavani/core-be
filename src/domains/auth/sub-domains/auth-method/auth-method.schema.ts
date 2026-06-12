@@ -30,7 +30,7 @@ export const auth_methods = authSchema
       // sec-new-B4: opaque public identifier returned by the auth-method management API
       // (GET /me/auth-methods, POST /me/auth-methods) and accepted as the path parameter
       // on DELETE /me/auth-methods/:publicId so the bigserial is never exposed to callers.
-      public_id: varchar('public_id', { length: 21 }).notNull(),
+      public_id: varchar('public_id', { length: 28 }).notNull(),
       user_id: bigint('user_id', { mode: 'number' })
         .notNull()
         .references(() => users.id, { onDelete: 'cascade' }),

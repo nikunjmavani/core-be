@@ -201,7 +201,7 @@ export class OrganizationRepository extends BaseRepository {
     created_by_user_id: number | null;
   }) {
     return runInsertWithPublicIdentifierRetry(async () => {
-      const public_id = generatePublicId();
+      const public_id = generatePublicId('organization');
       const row = {
         public_id,
         name: data.name,

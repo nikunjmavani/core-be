@@ -33,14 +33,25 @@ function declaredSuccessStatus(route: RouteEntry): number {
   });
 }
 
-const PATH_PARAM_PLACEHOLDER = '000000000000000000000';
+import {
+  PARAM_NAME_TO_ENTITY,
+  publicIdPlaceholderFor,
+} from '@/shared/utils/identity/public-id.util.js';
+
+/** Entity-correct placeholder for a path param (valid prefixed shape, never a real row). */
+function placeholderForParamName(paramName: string): string {
+  const entity = PARAM_NAME_TO_ENTITY[paramName as keyof typeof PARAM_NAME_TO_ENTITY];
+  return entity ? publicIdPlaceholderFor(entity) : 'placeholder';
+}
 
 export function loadRoutesForDomain(domain: string): RouteEntry[] {
   return getRoutesByDomain(domain);
 }
 
 export function materializeRoutePath(path: string, organizationPublicId: string): string {
-  return path.replace(':id', organizationPublicId).replace(/:[a-zA-Z]+/g, PATH_PARAM_PLACEHOLDER);
+  return path
+    .replace(':organization_id', organizationPublicId)
+    .replace(/:([a-zA-Z_]+)/g, (_, name: string) => placeholderForParamName(name));
 }
 
 export function buildRouteSmokeCases(
@@ -57,7 +68,7 @@ export function buildRouteSmokeCases(
           ? 404
           : hasPathParam
             ? 400
-            : 200;
+            : declaredSuccessStatus(route);
       return {
         route,
         materializedPath,

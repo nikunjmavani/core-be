@@ -7,6 +7,7 @@ import {
 import {
   getPathParameterDescription,
   getPathParameterExample,
+  getPathParameterSchema,
 } from '@tooling/openapi/enrichers/path-parameters.js';
 import type { OpenApiLocaleStrings } from '@tooling/openapi/extractors/locale-loader.js';
 import { collectRoutes } from '@tooling/openapi/extractors/route-extractor.js';
@@ -25,6 +26,7 @@ import {
   getMcpComponentSchemas,
   isMcpOpenApiPath,
 } from '@tooling/openapi/mcp-openapi.js';
+import { buildHeaderParameters } from './header-parameters.js';
 import { buildResponses } from './responses-builder.js';
 import { loadCapturedRouteExamples } from '@tooling/openapi/route-examples/loader.js';
 import { PROJECT_OPENAPI_TITLE } from '@/shared/constants/project-identity.constants.js';
@@ -79,7 +81,7 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
         in: 'path',
         required: true,
         description: getPathParameterDescription(parameterName),
-        schema: { type: 'string' },
+        schema: getPathParameterSchema(parameterName),
         example: getPathParameterExample(parameterName),
       });
     }
@@ -88,7 +90,8 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
     for (const tag of tags) tagSet.add(tag);
 
     const queryParameters = getQueryParameters(method, openapiPath);
-    const allParameters = [...pathParameters, ...queryParameters];
+    const headerParameters = buildHeaderParameters(method, routeKey);
+    const allParameters = [...pathParameters, ...queryParameters, ...headerParameters];
 
     const baseDescription = metadata?.description;
     let description = CURSOR_PAGINATED_LIST_ROUTE_KEYS.includes(

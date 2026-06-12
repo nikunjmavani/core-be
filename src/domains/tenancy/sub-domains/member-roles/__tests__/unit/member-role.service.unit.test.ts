@@ -17,10 +17,10 @@ import type { OrganizationService } from '@/domains/tenancy/sub-domains/organiza
 import type { MemberRoleRepository } from '@/domains/tenancy/sub-domains/member-roles/member-role.repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 
-const organization = { id: 1, public_id: generatePublicId() };
+const organization = { id: 1, public_id: generatePublicId('memberRole') };
 const roleRow = {
   id: 2,
-  public_id: generatePublicId(),
+  public_id: generatePublicId('memberRole'),
   organization_id: 1,
   name: 'Admin',
   description: 'Admin role',

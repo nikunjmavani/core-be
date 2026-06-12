@@ -41,7 +41,7 @@ vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
 
 const userRow = {
   id: 1,
-  public_id: generatePublicId(),
+  public_id: generatePublicId('user'),
   email: 'user@example.com',
   first_name: 'Test',
   last_name: 'User',

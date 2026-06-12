@@ -38,7 +38,7 @@ describe('Security: mutation audit logs', () => {
       url: testApiPath('/auth/login'),
       payload: { email: user.email, password },
     });
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(201);
 
     const rows = await database
       .select()
@@ -64,7 +64,7 @@ describe('Security: mutation audit logs', () => {
       url: testApiPath('/auth/logout'),
       headers: { authorization: `Bearer ${accessToken}` },
     });
-    expect(logoutResponse.statusCode).toBe(204);
+    expect(logoutResponse.statusCode).toBe(201);
 
     const rows = await database
       .select()

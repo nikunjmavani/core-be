@@ -124,7 +124,7 @@ describe('Tenancy Domain — Integration', () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const response = await injectAuthenticated(app, {
-        url: testApiPath('/tenancy/organizations/zzzzzzzzzzzzzzzzzzzzz'),
+        url: testApiPath('/tenancy/organizations/org_zzzzzzzzzzzzzzzzzzzzz'),
         token,
       });
       expect(response.statusCode).toBe(404);
@@ -407,7 +407,7 @@ describe('Tenancy Domain — Integration', () => {
 
   // ─── Role Permissions ─────────────────────────────────────────
 
-  describe('GET /api/v1/tenancy/organizations/:id/roles/:roleId/permissions', () => {
+  describe('GET /api/v1/tenancy/organizations/:id/roles/:role_id/permissions', () => {
     it('should return role permissions', async () => {
       const { organization, role, token } = await createAuthorizedUserAndOrganization();
       const response = await injectAuthenticated(app, {
@@ -420,7 +420,7 @@ describe('Tenancy Domain — Integration', () => {
     });
   });
 
-  describe('PUT /api/v1/tenancy/organizations/:id/roles/:roleId/permissions', () => {
+  describe('PUT /api/v1/tenancy/organizations/:id/roles/:role_id/permissions', () => {
     it('should replace role permissions', async () => {
       const { organization, token } = await createAuthorizedUserAndOrganization();
       const targetRole = await createRoleWithPermissions({

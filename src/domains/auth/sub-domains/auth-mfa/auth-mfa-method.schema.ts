@@ -22,7 +22,7 @@ export const mfa_methods = authSchema
     'mfa_methods',
     {
       id: bigserial('id', { mode: 'number' }).primaryKey(),
-      public_id: varchar('public_id', { length: 21 }).notNull().unique(),
+      public_id: varchar('public_id', { length: 28 }).notNull().unique(),
       user_id: bigint('user_id', { mode: 'number' })
         .notNull()
         // reaudit-#1: FK + cascade so a user delete purges its MFA secrets (no GDPR orphan).

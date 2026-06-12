@@ -67,7 +67,7 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
   it('downgrades a SUPER_ADMIN JWT to USER when the email is no longer in GLOBAL_ADMIN_EMAILS', async () => {
     vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(undefined);
     await setup();
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     const accessToken = await signAccessToken({
       userId: userPublicId,
       role: GLOBAL_ROLES.SUPER_ADMIN,
@@ -91,7 +91,7 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
   it('keeps SUPER_ADMIN when the email is still in GLOBAL_ADMIN_EMAILS', async () => {
     vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(GLOBAL_ROLES.SUPER_ADMIN);
     await setup();
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     const accessToken = await signAccessToken({
       userId: userPublicId,
       role: GLOBAL_ROLES.SUPER_ADMIN,
@@ -118,7 +118,7 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
       is_email_verified: true,
     });
     await setup();
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     const accessToken = await signAccessToken({
       userId: userPublicId,
       role: GLOBAL_ROLES.SUPER_ADMIN,
@@ -142,7 +142,7 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
     // user's TRUE role; a non-allowlisted account is downgraded to USER.
     vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(undefined);
     await setup();
-    const adminUserPublicId = generatePublicId();
+    const adminUserPublicId = generatePublicId('user');
     const accessToken = await signAccessToken({
       userId: adminUserPublicId,
       role: GLOBAL_ROLES.ADMIN,
@@ -165,7 +165,7 @@ describe('auth.middleware — super_admin per-request re-derive (sec-A6)', () =>
   it('does NOT call findUserRecordByPublicId for a non-admin JWT (hot-path stays unchanged)', async () => {
     vi.mocked(resolveGlobalRoleForEmail).mockReturnValue(undefined);
     await setup();
-    const userPublicId = generatePublicId();
+    const userPublicId = generatePublicId('user');
     const accessToken = await signAccessToken({ userId: userPublicId, role: GLOBAL_ROLES.USER });
 
     const response = await application.inject({

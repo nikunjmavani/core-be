@@ -14,7 +14,7 @@ export interface CreateWebhookOptions {
  * Create a test webhook in the database.
  */
 export async function createTestWebhook(options: CreateWebhookOptions) {
-  const publicId = generatePublicId();
+  const publicId = generatePublicId('webhook');
   const [webhook] = await database
     .insert(webhooks)
     .values({

@@ -125,7 +125,7 @@ async function seedSubscriptionsForOrganization(options: {
     const window = generateBulkSubscriptionWindow(context.faker);
 
     await database.insert(subscriptions).values({
-      public_id: generatePublicId(),
+      public_id: generatePublicId('subscription'),
       organization_id: organization.id,
       plan_id: plan.id,
       provider: BULK_PROVIDER,

@@ -159,7 +159,7 @@ function main(): void {
     const registry = loadRouteRegistryFromCatalog();
     const documentedStatusesByKey = new Map<string, ReadonlySet<string>>();
     for (const route of registry) {
-      const specPathKey = route.path.replace(/:([A-Za-z]+)/g, '{$1}');
+      const specPathKey = route.path.replace(/:([A-Za-z_]+)/g, '{$1}');
       const operation = spec.paths[specPathKey]?.[route.method.toLowerCase()];
       if (operation?.responses) {
         documentedStatusesByKey.set(

@@ -278,7 +278,7 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id',
+      name: 'GET /api/v1/tenancy/organizations/:organization_id',
       path: () => `${API_PREFIX}/tenancy/organizations/${organizationId()}`,
       authenticated: true,
       needsOrganization: true,
@@ -292,55 +292,55 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/settings',
+      name: 'GET /api/v1/tenancy/organizations/:organization_id/settings',
       path: () => organizationPath('/settings'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/roles',
+      name: 'GET /api/v1/tenancy/organizations/:organization_id/roles',
       path: () => organizationPath('/roles'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/roles/:roleId',
+      name: 'GET /api/v1/tenancy/organizations/:organization_id/roles/:role_id',
       path: () => organizationPath(`/roles/${roleId()}`),
       needsOrganization: true,
       expectedStatus: [200, 404],
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/roles/:roleId/permissions',
+      name: 'GET /api/v1/tenancy/organizations/:organization_id/roles/:role_id/permissions',
       path: () => organizationPath(`/roles/${roleId()}/permissions`),
       needsOrganization: true,
       expectedStatus: [200, 404],
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/memberships',
+      name: 'GET /api/v1/tenancy/organizations/:organization_id/memberships',
       path: () => organizationPath('/memberships'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/invitations',
+      name: 'GET /api/v1/tenancy/organizations/:organization_id/invitations',
       path: () => organizationPath('/invitations'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/api-keys',
+      name: 'GET /api/v1/tenancy/organizations/:organization_id/api-keys',
       path: () => organizationPath('/api-keys'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/notification-policies',
+      name: 'GET /api/v1/tenancy/organizations/:organization_id/notification-policies',
       path: () => organizationPath('/notification-policies'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:id/audit-logs',
+      name: 'GET /api/v1/tenancy/organizations/:organization_id/audit-logs',
       path: () => organizationPath('/audit-logs'),
       needsOrganization: true,
       expectedStatus: 200,
@@ -354,14 +354,14 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/billing/plans/:id',
+      name: 'GET /api/v1/billing/plans/:plan_id',
       path: () => `${API_PREFIX}/billing/plans/${planId()}`,
       authenticated: true,
       needsOrganization: true,
       expectedStatus: [200, 404],
     },
     {
-      name: 'GET /api/v1/billing/organizations/:id/subscriptions',
+      name: 'GET /api/v1/billing/organizations/:organization_id/subscriptions',
       path: () => billingOrganizationPath('/subscriptions'),
       needsOrganization: true,
       expectedStatus: 200,
@@ -380,13 +380,13 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: [200, 403],
     },
     {
-      name: 'GET /api/v1/notify/organizations/:id/webhooks',
+      name: 'GET /api/v1/notify/organizations/:organization_id/webhooks',
       path: () => notifyOrganizationPath('/webhooks'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/notify/organizations/:id/webhook-events',
+      name: 'GET /api/v1/notify/organizations/:organization_id/webhook-events',
       path: () => notifyOrganizationPath('/webhook-events'),
       needsOrganization: true,
       expectedStatus: 200,
@@ -447,7 +447,15 @@ const SWEEP_EXPECTED_OVERRIDES: Record<string, number[]> = {
   'GET /api/v1/mcp': [403, 404],
 };
 
-const SWEEP_PATH_PARAM_PLACEHOLDER = '000000000000000000000';
+import {
+  PARAM_NAME_TO_ENTITY,
+  publicIdPlaceholderFor,
+} from '@/shared/utils/identity/public-id.util.js';
+
+function sweepPlaceholderFor(paramName: string): string {
+  const entity = PARAM_NAME_TO_ENTITY[paramName as keyof typeof PARAM_NAME_TO_ENTITY];
+  return entity ? publicIdPlaceholderFor(entity) : 'placeholder';
+}
 
 function sweepExpectedStatus(route: RouteEntry, declaredStatus: number): number[] {
   const override = SWEEP_EXPECTED_OVERRIDES[routeSuccessStatusKey(route)];
@@ -484,8 +492,8 @@ function buildCatalogReadOnlySweepProbes(organizationId: string): RouteProbe[] {
     .map((route) => {
       const declaredStatus = successStatusMap[routeSuccessStatusKey(route)] ?? 200;
       const materializedPath = route.path
-        .replace(':id', organizationId)
-        .replace(/:[a-zA-Z]+/g, SWEEP_PATH_PARAM_PLACEHOLDER);
+        .replace(':organization_id', organizationId)
+        .replace(/:([a-zA-Z_]+)/g, (_, name) => sweepPlaceholderFor(name));
       const usesAuthentication = route.access !== 'public' && route.access !== 'bearer-token';
       return {
         name: `sweep: GET ${route.path}`,

@@ -85,16 +85,16 @@ async function createUploadAndConfirm(options: {
   expect(create.statusCode, create.body).toBe(201);
   // `key` is only exposed at create time ("final storage key to pass to attach
   // endpoints after POST /confirm succeeds"); the detail serializer hides it.
-  const created = (create.json() as { data: { publicId: string; key: string } }).data;
+  const created = (create.json() as { data: { id: string; key: string } }).data;
 
   const confirm = await injectAuthenticated(app, {
     method: 'POST',
-    url: testApiPath(`/uploads/${created.publicId}/confirm`),
+    url: testApiPath(`/uploads/${created.id}/confirm`),
     token,
     ...(organizationPublicId ? { organizationPublicId } : {}),
   });
-  expect(confirm.statusCode, confirm.body).toBe(200);
-  return { uploadPublicId: created.publicId, key: created.key };
+  expect(confirm.statusCode, confirm.body).toBe(201);
+  return { uploadPublicId: created.id, key: created.key };
 }
 
 /**
@@ -156,7 +156,7 @@ describe('Storage-backed routes — happy paths (mocked S3 port)', () => {
     expect(response.statusCode, response.body).toBe(200);
   });
 
-  it('PUT /tenancy/organizations/:id/logo attaches a confirmed logo upload', async () => {
+  it('PUT /tenancy/organizations/:organization_id/logo attaches a confirmed logo upload', async () => {
     // organization:update gates the logo attach; upload:manage gates creating
     // an organization-target upload in the first place.
     await seedPermissions(['organization:update', 'upload:manage']);
