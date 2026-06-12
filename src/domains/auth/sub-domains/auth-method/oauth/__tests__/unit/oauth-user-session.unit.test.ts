@@ -159,4 +159,27 @@ describe('completeOAuthUserSession', () => {
     expect(userService.createFromOAuth).toHaveBeenCalledTimes(1);
     expect('session_public_id' in result && result.session_public_id).toBe('session_public');
   });
+
+  it('route-audit: normalizes a mixed-case/padded provider email (no duplicate-account fork)', async () => {
+    userService.findByEmail.mockResolvedValue(null);
+
+    await completeOAuthUserSession({
+      userService: userService as never,
+      authMethodService: authMethodService as never,
+      authSessionService: authSessionService as never,
+      organizationSettingsService: organizationSettingsService as never,
+      mfaService: mfaService as never,
+      provider: 'google',
+      profile: { email: '  Victim@Example.COM ', provider_user_id: 'google-1' },
+      ipAddress: '127.0.0.1',
+    });
+
+    // Lookup uses the lowercased email — otherwise it would miss an existing `victim@example.com`
+    // row (case-sensitive unique index) and fork a second account, sidestepping the link guard.
+    expect(userService.findByEmail).toHaveBeenCalledWith('victim@example.com');
+    // And a first-time signup persists the normalized email, not the raw mixed-case/padded one.
+    expect(userService.createFromOAuth).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'victim@example.com' }),
+    );
+  });
 });

@@ -40,6 +40,7 @@ describe('setCachedSessionTokenValid (bounded TTL)', () => {
       'sess_long',
       'EX',
       SESSION_TOKEN_CACHE_TTL_SECONDS,
+      'NX',
     );
   });
 
@@ -52,7 +53,7 @@ describe('setCachedSessionTokenValid (bounded TTL)', () => {
       sessionPublicId: 'sess_short',
       sessionExpiresAt: new Date(NOW + 10_000),
     });
-    expect(redisSet).toHaveBeenCalledWith('session:tok:hash-short', 'sess_short', 'EX', 10);
+    expect(redisSet).toHaveBeenCalledWith('session:tok:hash-short', 'sess_short', 'EX', 10, 'NX');
   });
 
   it('does not cache when the session has already expired', async () => {
@@ -91,5 +92,41 @@ describe('setCachedSessionTokenValid (bounded TTL)', () => {
         sessionExpiresAt: new Date(NOW + 60_000),
       }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("revocation tombstone (route-audit session-#1: revoke can't be repopulated)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("invalidate writes a short-lived REVOKED tombstone (not a DEL) so a racing populate can't un-revoke", async () => {
+    const { invalidateCachedSessionToken } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
+    await invalidateCachedSessionToken('hash-revoked');
+    expect(redisSet).toHaveBeenCalledWith(
+      'session:tok:hash-revoked',
+      '__revoked__',
+      'EX',
+      SESSION_TOKEN_CACHE_TTL_SECONDS,
+    );
+    expect(redisDel).not.toHaveBeenCalled();
+  });
+
+  it('reads a tombstoned hash as a cache MISS so the caller re-checks Postgres (which denies it)', async () => {
+    redisGet.mockResolvedValueOnce('__revoked__');
+    const { getCachedSessionTokenValid } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
+    expect(await getCachedSessionTokenValid('hash-revoked')).toBeNull();
+  });
+
+  it('returns the cached session public id on a normal (non-tombstone) hit', async () => {
+    redisGet.mockResolvedValueOnce('sess_live');
+    const { getCachedSessionTokenValid } = await import(
+      '@/domains/auth/sub-domains/auth-session/session-token-cache.service.js'
+    );
+    expect(await getCachedSessionTokenValid('hash-live')).toBe('sess_live');
   });
 });

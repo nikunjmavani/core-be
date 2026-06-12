@@ -50,22 +50,28 @@ export async function completeOAuthUserSession(parameters: {
   // callbacks carry no organization, falling back to the request pool checkout.
   return withTransaction((transaction) =>
     runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
-      let user = await userService.findByEmail(profile.email);
+      // route-audit: normalize the provider email (case-insensitive mailbox) the SAME way every
+      // other entry point does (login/magic-link/forgot all use trimmedEmail → lowercase). Without
+      // this, OAuth find-or-create exact-matched the raw mixed-case email against the case-sensitive
+      // `idx_users_email_unique`, so `Victim@x.com` FORKED a second account instead of matching the
+      // existing `victim@x.com` — duplicating identity and sidestepping the link-into-verified guard.
+      const normalizedEmail = profile.email.trim().toLowerCase();
+      let user = await userService.findByEmail(normalizedEmail);
       if (!user) {
-        if (isDisposableEmailBlocked(profile.email)) {
+        if (isDisposableEmailBlocked(normalizedEmail)) {
           throw new ForbiddenError('errors:disposableEmail');
         }
         const nameParts = profile.name?.split(' ') ?? [];
         user = await userService.createFromOAuth(
           omitUndefined({
-            email: profile.email,
+            email: normalizedEmail,
             first_name: nameParts[0],
             last_name: nameParts.slice(1).join(' ') || undefined,
             avatar_url: profile.avatar_url,
             is_email_verified: true,
           }),
         );
-        logger.info({ email: profile.email, provider }, 'oauth.user.created');
+        logger.info({ email: normalizedEmail, provider }, 'oauth.user.created');
       } else {
         // Account-takeover guard: a pre-existing account (e.g. created by password)
         // must not be silently merged into via find-or-link. Only auto-link when this
