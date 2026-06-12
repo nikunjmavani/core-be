@@ -1,5 +1,6 @@
-import { describe, it, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestApp } from '@/tests/helpers/test-app.js';
+import { injectRoute } from '@/tests/helpers/test-http-inject.helper.js';
 import {
   loadRoutesForDomain,
   buildRouteSmokeCases,
@@ -37,4 +38,29 @@ describe('Ops route smoke (catalog)', () => {
       await assertRouteSmokeUnauthenticated(app, smokeCase);
     });
   }
+
+  describe('happy path with the metrics bearer token', () => {
+    // src/tests/setup.ts pins METRICS_SCRAPE_TOKEN for every test run.
+    const bearerToken = process.env.METRICS_SCRAPE_TOKEN as string;
+
+    it('GET /internal/ops/circuit-breakers lists managed circuits', async () => {
+      const response = await injectRoute(app, {
+        method: 'GET',
+        url: '/internal/ops/circuit-breakers',
+        headers: { authorization: `Bearer ${bearerToken}` },
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      const body = JSON.parse(response.body) as { circuits: Array<{ name: string }> };
+      expect(body.circuits.map((circuit) => circuit.name)).toContain('stripe');
+    });
+
+    it('POST /internal/ops/circuit-breakers/:circuitName/reset resets a managed circuit', async () => {
+      const response = await injectRoute(app, {
+        method: 'POST',
+        url: '/internal/ops/circuit-breakers/stripe/reset',
+        headers: { authorization: `Bearer ${bearerToken}` },
+      });
+      expect(response.statusCode, response.body).toBe(200);
+    });
+  });
 });

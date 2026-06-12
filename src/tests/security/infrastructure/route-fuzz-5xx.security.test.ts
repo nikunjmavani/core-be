@@ -60,17 +60,6 @@ const FUZZ_PAYLOAD = {
 };
 
 /**
- * Routes allowed to answer junk input with a *typed* 501 (`NotImplementedError`,
- * `src/shared/errors/auth.error.ts`) — a deliberate contract for naming an
- * unconfigured feature (e.g. an unknown OAuth provider), not an unhandled
- * failure. Keep this list minimal and justified; any other ≥500 fails.
- */
-const DELIBERATE_501_KEYS: ReadonlySet<string> = new Set([
-  // Unknown / unconfigured OAuth provider name in the path.
-  'GET /api/v1/auth/oauth/:provider',
-]);
-
-/**
  * Catalog-wide negative sweep — an authenticated caller with every permission
  * sending junk payloads and placeholder path params must never produce a 5xx
  * on any of the 129 routes. Validation (400/422), not-found (404), auth
@@ -128,14 +117,6 @@ describe('Security: route fuzz — authenticated junk never 5xx', () => {
             }
           : {}),
       });
-
-      if (DELIBERATE_501_KEYS.has(routeKey(route)) && response.statusCode === 501) {
-        const body = JSON.parse(response.body) as { error?: { code?: string } };
-        expect(body.error?.code, 'deliberate 501 must be the typed NOT_IMPLEMENTED error').toBe(
-          'not_implemented',
-        );
-        return;
-      }
 
       expect(
         response.statusCode,

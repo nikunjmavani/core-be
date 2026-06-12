@@ -265,6 +265,20 @@ jobs:
           path: coverage-unit/
           retention-days: ${{ github.event_name == 'pull_request' && 30 || 14 }}
 
+      # Route-status observations from the unit + global lane — without this
+      # the merged route success-status gate sees one lane less than ci:local.
+      - name: Rename route-status observations for unit lane
+        if: always() && hashFiles('route-coverage-observed/**') != ''
+        run: mv route-coverage-observed route-observed-unit
+
+      - name: Upload route-status observation artifact
+        if: always() && hashFiles('route-observed-unit/**') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: route-observed-unit
+          path: route-observed-unit/
+          retention-days: ${{ github.event_name == 'pull_request' && 30 || 14 }}
+
   coverage-gate:
     name: Coverage
     needs: [run, unit-coverage]

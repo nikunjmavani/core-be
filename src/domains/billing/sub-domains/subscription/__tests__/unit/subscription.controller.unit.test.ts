@@ -17,7 +17,8 @@ function mockRequest(overrides: Partial<FastifyRequest> = {}): never {
 }
 
 function mockReply(): FastifyReply {
-  return {} as FastifyReply;
+  const reply = { code: () => reply } as unknown as FastifyReply;
+  return reply;
 }
 
 describe('createSubscriptionController', () => {
