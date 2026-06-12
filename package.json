@@ -133,6 +133,7 @@
     "docs:generate:multilang": "OPENAPI_LOCALE=en pnpm docs:generate && OPENAPI_LOCALE=es pnpm docs:generate",
     "docs:postman": "tsx src/scripts/codegen/generate-postman-collection.ts",
     "docs:all": "pnpm docs:generate:multilang && pnpm docs:postman",
+    "docs:breaking": "tsx tooling/openapi/breaking/check-breaking-changes.ts",
     "docs:validate:openapi": "tsx src/scripts/validators/docs/validate-openapi.ts",
     "docs:upload": "tsx src/scripts/codegen/upload-postman-collection.ts",
     "docs:upload:scalar": "tsx src/scripts/codegen/upload-scalar-registry.ts",

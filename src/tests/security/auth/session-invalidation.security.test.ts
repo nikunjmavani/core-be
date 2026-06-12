@@ -111,7 +111,7 @@ describe('Security: Session invalidation', () => {
    *
    * @remarks
    * The endpoint returns the active session rows as a plain array under `data`,
-   * each carrying a `public_id` (the id accepted by DELETE /auth/me/sessions/:session_id).
+   * each carrying an `id` (the value accepted by DELETE /auth/me/sessions/:session_id).
    */
   async function listSessionPublicIds(token: string): Promise<string[]> {
     const listResponse = await injectAuthenticated(app, {
@@ -120,9 +120,9 @@ describe('Security: Session invalidation', () => {
       token,
     });
     expect(listResponse.statusCode).toBe(200);
-    const sessions = (listResponse.json() as { data: { public_id: string }[] }).data;
+    const sessions = (listResponse.json() as { data: { id: string }[] }).data;
     expect(Array.isArray(sessions)).toBe(true);
-    return sessions.map((session) => session.public_id);
+    return sessions.map((session) => session.id);
   }
 
   // NEGATIVE — a revoked (non-current) session's token must be rejected.

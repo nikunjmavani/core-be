@@ -41,11 +41,8 @@ export const tenancyRouteResponses: Record<string, ResponseDefinition> = {
     example: null,
   },
   'DELETE /api/v1/tenancy/organizations/{organization_id}/logo': {
-    statusCode: 200,
-    schema: wrapSuccess(schemas.organizationSchema, {
-      ...schemas.organizationExample,
-      logo_url: null,
-    }),
+    statusCode: 204,
+    schema: null,
     example: null,
   },
 

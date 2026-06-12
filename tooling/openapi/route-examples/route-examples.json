@@ -22,7 +22,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -33,7 +33,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:recentStepUpRequired",
+          "detail": "Recent step-up authentication is required for this action",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -48,7 +48,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -59,7 +59,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:recentStepUpRequired",
+          "detail": "Recent step-up authentication is required for this action",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -74,7 +74,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -85,7 +85,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:recentStepUpRequired",
+          "detail": "Recent step-up authentication is required for this action",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -96,7 +96,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -107,7 +107,7 @@
         "error": {
           "type": "request_error",
           "code": "conflict",
-          "detail": "errors:cannotRevokeCurrentSession",
+          "detail": "You cannot revoke the session you are currently using; sign out instead to end it.",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -122,7 +122,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -133,7 +133,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:recentStepUpRequired",
+          "detail": "Recent step-up authentication is required for this action",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -148,7 +148,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -159,7 +159,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -174,7 +174,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -185,7 +185,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -196,7 +196,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -211,7 +211,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -222,7 +222,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -237,7 +237,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -248,7 +248,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -259,7 +259,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -274,7 +274,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -285,7 +285,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -296,7 +296,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -307,25 +307,11 @@
   },
   "DELETE /api/v1/tenancy/organizations/:organization_id/logo": {
     "responses": {
-      "200": {
-        "data": {
-          "id": "org_example00000000000000",
-          "name": "Erdman - Rolfson",
-          "slug": "erdman---rolfson-g8ghq8d8ve",
-          "status": "ACTIVE",
-          "logo_url": null,
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "0f2ced96-2105-442a-9fe8-17b556efaa83"
-        }
-      },
       "401": {
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -336,7 +322,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -351,7 +337,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -362,7 +348,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:ownerCannotBeRemoved",
+          "detail": "The organization owner cannot be removed; transfer ownership first",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -373,7 +359,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -388,7 +374,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -399,7 +385,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -410,7 +396,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -425,7 +411,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -436,7 +422,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -447,7 +433,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -462,7 +448,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -473,7 +459,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientUploadPermissions",
+          "detail": "Insufficient organization permissions for upload",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -484,7 +470,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -499,7 +485,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -510,7 +496,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientRolePrivileges",
+          "detail": "Insufficient role privileges",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -525,7 +511,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -536,28 +522,11 @@
   },
   "DELETE /api/v1/users/me/avatar": {
     "responses": {
-      "200": {
-        "data": {
-          "id": "usr_example00000000000000",
-          "email": "user@example.com",
-          "is_email_verified": false,
-          "is_mfa_enabled": false,
-          "first_name": "Amelia",
-          "last_name": "Connelly",
-          "avatar_url": null,
-          "status": "ACTIVE",
-          "created_at": "2026-01-01T00:00:00.000Z",
-          "updated_at": "2026-01-01T00:00:00.000Z"
-        },
-        "meta": {
-          "request_id": "31c72b82-89c8-4201-9761-299eb750e29f"
-        }
-      },
       "401": {
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -583,7 +552,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
@@ -600,7 +569,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -611,7 +580,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientRolePrivileges",
+          "detail": "Insufficient role privileges",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -632,7 +601,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -646,7 +615,7 @@
       "200": {
         "data": [
           {
-            "public_id": "ses_example00000000000000",
+            "id": "ses_example00000000000000",
             "ip_address": "127.0.0.1",
             "user_agent": "lightMyRequest",
             "last_active_at": "2026-01-01T00:00:00.000Z",
@@ -662,7 +631,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:invalidOrExpiredSession",
+          "detail": "Invalid or expired session",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -683,7 +652,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -706,7 +675,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -742,7 +711,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:oauthInvalidState",
+          "detail": "Invalid or expired OAuth state. Please try again.",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -775,7 +744,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -786,7 +755,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -820,7 +789,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -831,7 +800,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -842,7 +811,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -872,7 +841,7 @@
       "200": {
         "data": {
           "id": "pln_example00000000000000",
-          "name": "Test Plan pln_k0zjowt2lju0f1qqkuphm",
+          "name": "Test Plan pln_ctjw0xe82pw6qre10mf5j",
           "description": null,
           "price_monthly": "9.99",
           "price_yearly": "99.99",
@@ -889,7 +858,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -904,7 +873,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -915,7 +884,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientRolePrivileges",
+          "detail": "Insufficient role privileges",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -958,7 +927,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -990,7 +959,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1001,7 +970,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1024,7 +993,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1054,7 +1023,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1065,7 +1034,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1091,7 +1060,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1102,7 +1071,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1131,7 +1100,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1142,7 +1111,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1153,7 +1122,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1200,7 +1169,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1211,7 +1180,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1222,7 +1191,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1243,7 +1212,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1286,7 +1255,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1300,8 +1269,8 @@
       "200": {
         "data": {
           "id": "org_example00000000000000",
-          "name": "Casper, Boehm and Kozey",
-          "slug": "casper-boehm-and-kozey-motr4ij8pj",
+          "name": "Satterfield Inc",
+          "slug": "satterfield-inc-p0uuwdjblq",
           "status": "ACTIVE",
           "logo_url": null,
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -1315,12 +1284,12 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
               "field": "organization_id",
-              "message": "Must be a valid public id"
+              "message": "Must be a valid id (entity prefix + 21 lowercase alphanumerics, e.g. org_a1b2c3d4e5f6g7h8i9j0k)"
             }
           ]
         },
@@ -1332,7 +1301,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1343,7 +1312,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1369,7 +1338,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1380,7 +1349,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1396,7 +1365,7 @@
           "id": "key_example00000000000000",
           "organization_id": "org_example00000000000000",
           "name": "Listing Test Key",
-          "key_prefix": "ak_f0fab",
+          "key_prefix": "ak_f9c02",
           "last_used_at": null,
           "expires_at": "2026-01-01T00:00:00.000Z",
           "status": "ACTIVE",
@@ -1411,7 +1380,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1422,7 +1391,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1433,7 +1402,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1459,7 +1428,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1470,7 +1439,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1513,7 +1482,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1524,7 +1493,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1561,7 +1530,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1572,7 +1541,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1602,7 +1571,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1613,7 +1582,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1624,7 +1593,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1637,7 +1606,7 @@
     "responses": {
       "200": {
         "data": {
-          "permissions": ["invitation:manage", "membership:manage"]
+          "permissions": ["membership:read", "membership:manage"]
         },
         "meta": {
           "request_id": "312c7dd3-bfe4-42c3-99d3-04c4f675269e"
@@ -1647,7 +1616,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1658,7 +1627,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1669,7 +1638,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1690,7 +1659,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1701,7 +1670,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1732,12 +1701,12 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
               "field": "policy_id",
-              "message": "Must be a valid public id"
+              "message": "Must be a valid id (entity prefix + 21 lowercase alphanumerics, e.g. org_a1b2c3d4e5f6g7h8i9j0k)"
             }
           ]
         },
@@ -1749,7 +1718,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1760,7 +1729,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1771,7 +1740,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1786,7 +1755,7 @@
         "data": [
           {
             "id": "rol_example00000000000000",
-            "name": "Test Role rol_94sg7z7neuh03u2ai19os",
+            "name": "Test Role rol_lxd3el324rc63dxa5fkph",
             "description": null,
             "is_system": false,
             "created_at": "2026-01-01T00:00:00.000Z",
@@ -1806,7 +1775,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1817,7 +1786,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1845,7 +1814,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1856,7 +1825,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1867,7 +1836,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1905,7 +1874,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1916,7 +1885,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1927,7 +1896,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1955,7 +1924,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1966,7 +1935,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -1980,7 +1949,7 @@
       "200": {
         "data": {
           "id": "org_example00000000000000",
-          "name": "Waelchi, Walsh and Cronin",
+          "name": "Zieme, Gusikowski and Hickle",
           "slug": "my-org",
           "status": "ACTIVE",
           "logo_url": null,
@@ -1995,7 +1964,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2006,7 +1975,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2048,7 +2017,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2079,7 +2048,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2090,7 +2059,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientUploadPermissions",
+          "detail": "Insufficient organization permissions for upload",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2101,7 +2070,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2116,7 +2085,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2127,7 +2096,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientRolePrivileges",
+          "detail": "Insufficient role privileges",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2144,8 +2113,8 @@
           "email": "user@example.com",
           "is_email_verified": false,
           "is_mfa_enabled": false,
-          "first_name": "Muhammad",
-          "last_name": "MacGyver",
+          "first_name": "Cameron",
+          "last_name": "Hahn",
           "avatar_url": null,
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -2159,7 +2128,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2170,7 +2139,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientRolePrivileges",
+          "detail": "Insufficient role privileges",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2187,8 +2156,8 @@
           "email": "user@example.com",
           "is_email_verified": false,
           "is_mfa_enabled": false,
-          "first_name": "Glennie",
-          "last_name": "Koelpin",
+          "first_name": "Sandra",
+          "last_name": "Schoen",
           "avatar_url": null,
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -2202,7 +2171,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2232,7 +2201,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2243,7 +2212,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2264,7 +2233,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2290,7 +2259,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2305,7 +2274,7 @@
         "circuits": [
           {
             "name": "stripe",
-            "state": "OPEN"
+            "state": "CLOSED"
           },
           {
             "name": "s3",
@@ -2317,7 +2286,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:invalidMetricsToken",
+          "detail": "Invalid or missing metrics token",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2339,7 +2308,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:invalidMetricsToken",
+          "detail": "Invalid or missing metrics token",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2356,9 +2325,9 @@
         "redis": "connected",
         "bullmq": "connected",
         "latencyMs": {
-          "database": 40,
+          "database": 55,
           "redis": 1,
-          "bullmq": 11
+          "bullmq": 20
         }
       }
     }
@@ -2406,7 +2375,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2417,7 +2386,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2428,7 +2397,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2460,7 +2429,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2471,7 +2440,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2503,7 +2472,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2514,7 +2483,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2525,7 +2494,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2536,7 +2505,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2547,7 +2516,7 @@
         "error": {
           "type": "request_error",
           "code": "conflict",
-          "detail": "errors:webhookUrlExists",
+          "detail": "A webhook for \"{{url}}\" already exists in this organization",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2565,7 +2534,7 @@
         "data": {
           "id": "org_example00000000000000",
           "name": "Updated Org",
-          "slug": "monahan-gerlach-and-sauer-59mgnwk52w",
+          "slug": "bayer-and-sons-k0bm46iqvi",
           "status": "ACTIVE",
           "logo_url": null,
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -2596,7 +2565,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2607,7 +2576,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2638,7 +2607,7 @@
           "id": "key_example00000000000000",
           "organization_id": "org_example00000000000000",
           "name": "After Rename",
-          "key_prefix": "ak_46227",
+          "key_prefix": "ak_47095",
           "last_used_at": null,
           "expires_at": null,
           "status": "REVOKED",
@@ -2670,7 +2639,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2681,7 +2650,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2692,7 +2661,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2725,7 +2694,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2736,7 +2705,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2747,7 +2716,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:membershipActivationRequiresInvitationAccept",
+          "detail": "Membership can only be activated by accepting the invitation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2758,7 +2727,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2810,7 +2779,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2821,7 +2790,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2832,7 +2801,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2863,7 +2832,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2874,7 +2843,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2885,7 +2854,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2896,7 +2865,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2949,7 +2918,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2960,7 +2929,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -2981,7 +2950,7 @@
           "is_email_verified": false,
           "is_mfa_enabled": false,
           "first_name": "Updated",
-          "last_name": "Schumm",
+          "last_name": "Douglas",
           "avatar_url": null,
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -3012,7 +2981,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3033,7 +3002,7 @@
           "is_email_verified": false,
           "is_mfa_enabled": false,
           "first_name": "Updated",
-          "last_name": "Hermiston",
+          "last_name": "Fritsch",
           "avatar_url": null,
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -3064,7 +3033,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3110,7 +3079,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3133,7 +3102,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3176,7 +3145,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:invalidOrExpiredVerificationToken",
+          "detail": "Invalid or expired verification token",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3194,7 +3163,7 @@
       "201": {
         "data": {
           "access_token": "<redacted>",
-          "session_public_id": "ses_example00000000000000"
+          "session_id": "ses_example00000000000000"
         },
         "meta": {
           "request_id": "5dfe3c58-0a4b-4cab-9cf7-4bb5d8f32a46"
@@ -3225,7 +3194,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:invalidEmailOrPassword",
+          "detail": "Invalid email or password",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3262,7 +3231,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3312,7 +3281,7 @@
       "201": {
         "data": {
           "access_token": "<redacted>",
-          "session_public_id": "ses_example00000000000000"
+          "session_id": "ses_example00000000000000"
         },
         "meta": {
           "request_id": "f2d58703-a630-4c9b-9814-f966efd6cec4"
@@ -3339,7 +3308,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:invalidOrExpiredMagicLink",
+          "detail": "Invalid or expired magic link",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3356,7 +3325,7 @@
     "responses": {
       "201": {
         "data": {
-          "public_id": "am_example00000000000000",
+          "id": "am_example00000000000000",
           "method_type": "MAGIC_LINK",
           "provider": null,
           "is_primary": false,
@@ -3393,7 +3362,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3441,7 +3410,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3452,7 +3421,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:recentStepUpRequired",
+          "detail": "Recent step-up authentication is required for this action",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3463,13 +3432,13 @@
   },
   "POST /api/v1/auth/mfa/enroll/confirm": {
     "request_body": {
-      "code": "848965"
+      "code": "009308"
     },
     "responses": {
       "201": {
         "data": {
           "recovery_codes": ["<redacted>"],
-          "method_public_id": "am_example00000000000000"
+          "mfa_method_id": "am_example00000000000000"
         },
         "meta": {
           "request_id": "8330647d-4bc0-4e36-97bb-92dce95cde4b"
@@ -3500,7 +3469,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3512,13 +3481,13 @@
   "POST /api/v1/auth/mfa/login": {
     "request_body": {
       "mfa_session_token": "<redacted>",
-      "totp_code": "966933"
+      "totp_code": "340065"
     },
     "responses": {
       "201": {
         "data": {
           "access_token": "<redacted>",
-          "session_public_id": "ses_example00000000000000"
+          "session_id": "ses_example00000000000000"
         },
         "meta": {
           "request_id": "192d1d93-c772-4d8c-92fc-1f3e008469d7"
@@ -3545,7 +3514,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:mfaInvalidOrExpiredSession",
+          "detail": "Invalid or expired MFA session. Please log in again.",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3556,7 +3525,7 @@
   },
   "POST /api/v1/auth/mfa/verify": {
     "request_body": {
-      "code": "524053"
+      "code": "696343"
     },
     "responses": {
       "201": {
@@ -3592,7 +3561,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3632,7 +3601,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3704,7 +3673,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:invalidOrExpiredResetToken",
+          "detail": "Invalid or expired reset token",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3728,7 +3697,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingSessionCookie",
+          "detail": "Missing session cookie",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3739,7 +3708,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:originNotAllowed",
+          "detail": "Request origin is not allowed for this operation.",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3786,7 +3755,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -3804,7 +3773,7 @@
         "data": {
           "options": {
             "rpId": "localhost",
-            "challenge": "2P56FOgJ-iIoBQrSFFJ6O3pwjT8teh4oJM1nQictZXk",
+            "challenge": "k3GZOK77sMGQ0MkU1kXNQJOeS1AJWOy51S0MrnxbdI8",
             "allowCredentials": [
               {
                 "id": "e2e-test-credential-id",
@@ -3858,7 +3827,7 @@
       "201": {
         "data": {
           "access_token": "<redacted>",
-          "session_public_id": "ses_example00000000000000"
+          "session_id": "ses_example00000000000000"
         },
         "meta": {
           "request_id": "2603bfbb-0ece-4c13-9f27-29e8a6edfe00"
@@ -3893,13 +3862,13 @@
       "201": {
         "data": {
           "options": {
-            "challenge": "7D9cPFpKjlX9Tt1OKsDzx6onfM6m_YQ0xV1XNmUNK8o",
+            "challenge": "XqKmPP2KnvdZ-OX7Aap9T94VZcaddslssEYv1POfg5o",
             "rp": {
               "name": "YourApp",
               "id": "localhost"
             },
             "user": {
-              "id": "dXNyX2U1MnFrb2RuMnBhdnV2NWc4Ync0YQ",
+              "id": "dXNyX3N5MTVyeXd6dHc3cGNlYXd4cDY4eQ",
               "name": "user@example.com",
               "displayName": "user@example.com"
             },
@@ -3953,7 +3922,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4010,7 +3979,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4021,7 +3990,7 @@
         "error": {
           "type": "request_error",
           "code": "conflict",
-          "detail": "errors:webauthnCredentialExists",
+          "detail": "This passkey is already registered",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4080,7 +4049,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4091,7 +4060,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "errors:idempotencyKeyRequired",
+          "detail": "Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4125,7 +4094,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4136,7 +4105,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4147,7 +4116,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4158,7 +4127,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "errors:idempotencyKeyRequired",
+          "detail": "Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4216,7 +4185,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4227,7 +4196,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4238,7 +4207,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4249,7 +4218,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "errors:idempotencyKeyRequired",
+          "detail": "Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4283,7 +4252,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4294,7 +4263,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4305,7 +4274,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4316,7 +4285,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "errors:idempotencyKeyRequired",
+          "detail": "Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4327,10 +4296,10 @@
   },
   "POST /api/v1/billing/stripe/webhook": {
     "request_body": {
-      "id": "evt_dup_1781293440605",
+      "id": "evt_dup_1781296361564",
       "object": "event",
       "type": "customer.subscription.updated",
-      "created": 1781293440,
+      "created": 1781296361,
       "data": {
         "object": {
           "id": "<redacted>",
@@ -4339,8 +4308,8 @@
           "items": {
             "data": [
               {
-                "current_period_start": 1781293440,
-                "current_period_end": 1781379840
+                "current_period_start": 1781296361,
+                "current_period_end": 1781382761
               }
             ]
           }
@@ -4360,7 +4329,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:missingStripeSignature",
+          "detail": "Missing stripe-signature header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4371,10 +4340,10 @@
   },
   "POST /api/v1/billing/webhook": {
     "request_body": {
-      "id": "evt_legacy_1781293384758",
+      "id": "evt_legacy_1781296337989",
       "object": "event",
       "type": "customer.subscription.updated",
-      "created": 1781293384,
+      "created": 1781296337,
       "data": {
         "object": {
           "id": "<redacted>",
@@ -4383,8 +4352,8 @@
           "items": {
             "data": [
               {
-                "current_period_start": 1781293384,
-                "current_period_end": 1781379784
+                "current_period_start": 1781296337,
+                "current_period_end": 1781382737
               }
             ]
           }
@@ -4404,7 +4373,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:missingStripeSignature",
+          "detail": "Missing stripe-signature header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4432,7 +4401,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4443,7 +4412,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientRolePrivileges",
+          "detail": "Insufficient role privileges",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4473,7 +4442,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4506,7 +4475,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
@@ -4527,7 +4496,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4538,7 +4507,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4564,7 +4533,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4575,7 +4544,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4586,7 +4555,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4618,7 +4587,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
@@ -4635,7 +4604,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4650,7 +4619,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4661,7 +4630,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:declineOwnInvitationOnly",
+          "detail": "You can only decline invitations sent to your email",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4672,7 +4641,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4722,7 +4691,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4740,7 +4709,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "errors:idempotencyKeyRequired",
+          "detail": "Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4762,7 +4731,7 @@
             "id": "key_example00000000000000",
             "organization_id": "org_example00000000000000",
             "name": "Listing Test Key",
-            "key_prefix": "ak_f0fab",
+            "key_prefix": "ak_f9c02",
             "last_used_at": null,
             "expires_at": "2026-01-01T00:00:00.000Z",
             "status": "ACTIVE",
@@ -4800,7 +4769,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4811,7 +4780,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4828,7 +4797,7 @@
             "id": "key_example00000000000000",
             "organization_id": "org_example00000000000000",
             "name": "Rotation Source",
-            "key_prefix": "ak_c871b",
+            "key_prefix": "ak_82dac",
             "last_used_at": null,
             "expires_at": null,
             "status": "ACTIVE",
@@ -4845,7 +4814,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4856,7 +4825,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4867,7 +4836,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4903,7 +4872,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
@@ -4920,7 +4889,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4931,7 +4900,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4942,7 +4911,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "errors:idempotencyKeyRequired",
+          "detail": "Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4977,7 +4946,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:validation.invitationRevoked",
+          "detail": "Invitation revoked",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4988,7 +4957,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -4999,7 +4968,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5010,7 +4979,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5025,7 +4994,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5036,7 +5005,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:ownerCannotLeave",
+          "detail": "Organization owner cannot leave; transfer ownership first",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5070,7 +5039,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
@@ -5091,7 +5060,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:membershipActivationRequiresInvitationAccept",
+          "detail": "Membership can only be activated by accepting the invitation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5102,7 +5071,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5113,7 +5082,7 @@
         "error": {
           "type": "request_error",
           "code": "conflict",
-          "detail": "errors:membershipAlreadyExists",
+          "detail": "This user is already a member of the organization",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5124,7 +5093,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "errors:idempotencyKeyRequired",
+          "detail": "Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5178,7 +5147,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5189,7 +5158,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5221,7 +5190,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
@@ -5238,7 +5207,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5249,7 +5218,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5260,7 +5229,7 @@
         "error": {
           "type": "request_error",
           "code": "conflict",
-          "detail": "errors:roleNameExists",
+          "detail": "A role named \"{{name}}\" already exists in this organization",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5293,7 +5262,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
@@ -5310,7 +5279,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:onlyOwnerCanTransfer",
+          "detail": "Only the organization owner can transfer ownership",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5321,7 +5290,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5332,7 +5301,7 @@
         "error": {
           "type": "request_error",
           "code": "unprocessable_entity",
-          "detail": "errors:idempotencyKeyRequired",
+          "detail": "Idempotency-Key header is required for this operation",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5354,7 +5323,7 @@
         "data": {
           "id": "upl_example00000000000000",
           "uploadUrl": "https://example.com/resource",
-          "key": "avatars/usr_uhyr46koxf3bqo2l3fr8s/6581fcf4-4ee9-4118-ab0f-b5ae91e0e7bb.png",
+          "key": "avatars/usr_qdh0ar0rmn37chmhizykm/47f0f778-a6d5-4e5b-9913-4df96bcaef94.png",
           "expiresAt": "2026-01-01T00:00:00.000Z",
           "uploadMethod": "POST",
           "fields": {
@@ -5390,7 +5359,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5401,7 +5370,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientUploadPermissions",
+          "detail": "Insufficient organization permissions for upload",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5433,7 +5402,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5444,7 +5413,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5461,8 +5430,8 @@
           "email": "user@example.com",
           "is_email_verified": false,
           "is_mfa_enabled": false,
-          "first_name": "Yvette",
-          "last_name": "Reichel",
+          "first_name": "Kirk",
+          "last_name": "Herzog",
           "avatar_url": null,
           "status": "SUSPENDED",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -5476,7 +5445,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5487,7 +5456,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientRolePrivileges",
+          "detail": "Insufficient role privileges",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5504,8 +5473,8 @@
           "email": "user@example.com",
           "is_email_verified": false,
           "is_mfa_enabled": false,
-          "first_name": "Yvette",
-          "last_name": "Reichel",
+          "first_name": "Kirk",
+          "last_name": "Herzog",
           "avatar_url": null,
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -5519,7 +5488,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5530,7 +5499,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientRolePrivileges",
+          "detail": "Insufficient role privileges",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5561,7 +5530,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5580,7 +5549,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:invalidMetricsToken",
+          "detail": "Invalid or missing metrics token",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5591,14 +5560,14 @@
   },
   "PUT /api/v1/tenancy/organizations/:organization_id/logo": {
     "request_body": {
-      "key": "organization-logos/org_lhvcnh8xyllb82hydgv95/baee9d54-f9f6-4ab0-908a-56f21cb2fbc3.png"
+      "key": "organization-logos/org_6hdmsko6prwmrzwjdydz2/fd466c1c-7156-4ff9-8009-c56215d43930.png"
     },
     "responses": {
       "200": {
         "data": {
           "id": "org_example00000000000000",
-          "name": "Strosin, Gutkowski and Lueilwitz",
-          "slug": "strosin-gutkowski-and-lueilwitz-lhvcnh8xyl",
+          "name": "Schaden LLC",
+          "slug": "schaden-llc-6hdmsko6pr",
           "status": "ACTIVE",
           "logo_url": "https://example.com/resource",
           "created_at": "2026-01-01T00:00:00.000Z",
@@ -5612,7 +5581,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:validation.logoKeyNotOwned",
+          "detail": "Logo key does not belong to this organization",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
@@ -5629,7 +5598,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5640,7 +5609,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5670,7 +5639,7 @@
         "error": {
           "type": "validation_error",
           "code": "invalid_field",
-          "detail": "errors:invalidInput",
+          "detail": "Invalid input",
           "documentation_url": "https://example.com/resource",
           "errors": [
             {
@@ -5687,7 +5656,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5698,7 +5667,7 @@
         "error": {
           "type": "request_error",
           "code": "forbidden",
-          "detail": "errors:insufficientOrganizationPermissions",
+          "detail": "Insufficient organization permissions",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5709,7 +5678,7 @@
         "error": {
           "type": "request_error",
           "code": "not_found",
-          "detail": "errors:notFound",
+          "detail": "{{resource}} not found",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5720,7 +5689,7 @@
   },
   "PUT /api/v1/users/me/avatar": {
     "request_body": {
-      "avatarKey": "avatars/usr_y3evbdgf9e6agvcgo57wf/7d9702c7-ab87-4b1c-85b2-95a16d737cdc.png"
+      "avatarKey": "avatars/usr_arzi19wy5c5xomc3qvr4r/25a86e0e-45e5-4d13-b9fa-7f0e30f07860.png"
     },
     "responses": {
       "200": {
@@ -5729,9 +5698,9 @@
           "email": "user@example.com",
           "is_email_verified": false,
           "is_mfa_enabled": false,
-          "first_name": "Julie",
-          "last_name": "Pollich",
-          "avatar_url": "avatars/usr_y3evbdgf9e6agvcgo57wf/7d9702c7-ab87-4b1c-85b2-95a16d737cdc.png",
+          "first_name": "Bradford",
+          "last_name": "Rath",
+          "avatar_url": "avatars/usr_arzi19wy5c5xomc3qvr4r/25a86e0e-45e5-4d13-b9fa-7f0e30f07860.png",
           "status": "ACTIVE",
           "created_at": "2026-01-01T00:00:00.000Z",
           "updated_at": "2026-01-01T00:00:00.000Z"
@@ -5765,7 +5734,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {
@@ -5822,7 +5791,7 @@
         "error": {
           "type": "request_error",
           "code": "unauthorized",
-          "detail": "errors:missingAuthorizationHeader",
+          "detail": "Missing Authorization header",
           "documentation_url": "https://example.com/resource"
         },
         "meta": {

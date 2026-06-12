@@ -848,7 +848,7 @@ describe('Membership Sub-Domain — Integration', () => {
         expect(response.statusCode).toBe(403);
       });
 
-      it('is a no-op (200) when no logo is set — does not touch S3', async () => {
+      it('is a no-op (204) when no logo is set — does not touch S3', async () => {
         const { organization, token } = await createAuthorizedContext();
 
         const response = await injectAuthenticated(app, {
@@ -857,7 +857,7 @@ describe('Membership Sub-Domain — Integration', () => {
           token,
           organizationPublicId: organization.public_id,
         });
-        expect(response.statusCode).toBe(200);
+        expect(response.statusCode).toBe(204);
       });
     });
   });

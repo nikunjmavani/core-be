@@ -152,5 +152,7 @@
   "captchaRequired": "CAPTCHA verification is required",
   "captchaInvalid": "CAPTCHA verification failed",
   "captchaProviderUnavailable": "CAPTCHA verification is temporarily unavailable",
-  "queueDashboardReadOnly": "Queue dashboard mutations are disabled in this environment"
+  "queueDashboardReadOnly": "Queue dashboard mutations are disabled in this environment",
+  "idempotencyKeyRequired": "Idempotency-Key header is required for this operation",
+  "invalidMetricsToken": "Invalid or missing metrics token"
 }

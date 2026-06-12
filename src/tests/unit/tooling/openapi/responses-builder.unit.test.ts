@@ -35,7 +35,7 @@ describe('responses-builder', () => {
   describe('error-status matrix', () => {
     it('documents 429 on every operation', () => {
       expect(statuses('GET', 'GET /api/v1/users/me')).toContain('429');
-      expect(statuses('DELETE', 'DELETE /api/v1/uploads/{publicId}')).toContain('429');
+      expect(statuses('DELETE', 'DELETE /api/v1/uploads/{upload_id}')).toContain('429');
     });
 
     it('documents 409 and 422 on all mutating methods including DELETE', () => {
@@ -43,7 +43,7 @@ describe('responses-builder', () => {
         ['POST', 'POST /api/v1/tenancy/organizations'],
         ['PATCH', 'PATCH /api/v1/users/me'],
         ['PUT', 'PUT /api/v1/users/me/avatar'],
-        ['DELETE', 'DELETE /api/v1/uploads/{publicId}'],
+        ['DELETE', 'DELETE /api/v1/uploads/{upload_id}'],
       ] as const) {
         const documented = statuses(method, key);
         expect(documented, `${key} should document 409`).toContain('409');

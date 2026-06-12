@@ -84,10 +84,10 @@ describe('Auth e2e: magic link flow', () => {
     expect(verifyResponse.statusCode).toBe(201);
 
     const verifyBody = verifyResponse.json() as {
-      data: { access_token: string; session_public_id?: string };
+      data: { access_token: string; session_id?: string };
     };
     expect(verifyBody.data.access_token).toBeTruthy();
-    expect(verifyBody.data.session_public_id).toBeTruthy();
+    expect(verifyBody.data.session_id).toBeTruthy();
 
     const cookies = verifyResponse.headers['set-cookie'];
     const sessionCookie = Array.isArray(cookies)

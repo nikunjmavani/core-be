@@ -2,6 +2,11 @@ import { EXTERNAL_ERROR_MESSAGE } from '@/shared/constants/index.js';
 import { loadRouteSuccessStatusMap } from '@/tests/helpers/route-success-status.helper.js';
 import { routeResponseMap } from '@tooling/openapi/response-map/index.js';
 import { routeQuerySchemaMap } from '@tooling/openapi/query-schema-map.js';
+import { routeSchemaMap } from '@tooling/openapi/schema-map.js';
+import {
+  PARAM_NAME_TO_ENTITY,
+  PUBLIC_ID_PREFIXES,
+} from '@/shared/utils/identity/public-id.util.js';
 import { loadCapturedRouteExamples } from '@tooling/openapi/route-examples/loader.js';
 
 /** Sanitized request/response samples captured from real test-suite API calls. */
@@ -51,31 +56,113 @@ const errorResponseSchema = {
     error: {
       type: 'object',
       properties: {
-        code: { type: 'string', description: 'Machine-readable error code' },
-        message: { type: 'string', description: 'Human-readable error message' },
-        details: {
+        type: {
+          type: 'string',
+          enum: ['request_error', 'validation_error'],
+          description:
+            'Possible values: request_error | validation_error — validation_error carries the per-field `errors` array',
+          example: 'request_error',
+        },
+        code: {
+          type: 'string',
+          description:
+            'Machine-readable snake_case error code (e.g. unauthorized, forbidden, not_found, conflict, invalid_field)',
+        },
+        detail: { type: 'string', description: 'Human-readable explanation of what went wrong' },
+        documentation_url: {
+          type: 'string',
+          description: 'Link to the documentation page for this error code',
+        },
+        errors: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              field: { type: 'string' },
+              field: {
+                type: 'string',
+                description:
+                  'Offending field, prefixed by its location: `body.<field>`, `params.<param>`, or `query.<field>`',
+              },
               message: { type: 'string' },
             },
           },
-          description: 'Field-level validation errors (only for 400 responses)',
-          nullable: true,
+          description: 'Per-field validation errors (400 validation_error responses only)',
         },
       },
-      required: ['code', 'message'],
+      required: ['type', 'code', 'detail'],
     },
     meta: {
       type: 'object',
       properties: {
-        request_id: { type: 'string' },
+        request_id: {
+          type: 'string',
+          description: 'Server-minted request UUID — quote it in support tickets',
+        },
       },
+      required: ['request_id'],
     },
   },
 };
+
+const EXAMPLE_REQUEST_ID = '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b';
+const EXAMPLE_DOCUMENTATION_URL = 'https://example.com/resource';
+
+/** Builds a real-envelope error example: `{ error: { type, code, detail, documentation_url, errors? }, meta }`. */
+function errorExample(
+  type: 'request_error' | 'validation_error',
+  code: string,
+  detail: string,
+  errors?: { field: string; message: string }[],
+): Record<string, unknown> {
+  return {
+    error: {
+      type,
+      code,
+      detail,
+      documentation_url: EXAMPLE_DOCUMENTATION_URL,
+      ...(errors?.length ? { errors } : {}),
+    },
+    meta: { request_id: EXAMPLE_REQUEST_ID },
+  };
+}
+
+/**
+ * Derives this route's own per-field 400 `errors` array — body fields first
+ * (from the request schema map), then path params (with their exact id
+ * pattern), then query fields — so every fallback 400 example names fields the
+ * route actually validates instead of a generic placeholder.
+ */
+function validationErrorsFor(routeKey: string): { field: string; message: string }[] {
+  const bodySchema = routeSchemaMap[routeKey] as { shape?: Record<string, unknown> } | undefined;
+  const bodyFields = bodySchema?.shape ? Object.keys(bodySchema.shape) : [];
+  if (bodyFields.length > 0) {
+    return bodyFields.slice(0, 2).map((field) => ({
+      field: `body.${field}`,
+      message: 'Required',
+    }));
+  }
+  const paramMatch = /\{([a-z_]+)\}/.exec(routeKey);
+  if (paramMatch) {
+    const param = paramMatch[1]!;
+    const entity = PARAM_NAME_TO_ENTITY[param as keyof typeof PARAM_NAME_TO_ENTITY];
+    return [
+      {
+        field: `params.${param}`,
+        message: entity
+          ? `Invalid string: must match pattern /^${PUBLIC_ID_PREFIXES[entity]}_[a-z0-9]{21}$/`
+          : 'Invalid value',
+      },
+    ];
+  }
+  const querySchema = routeQuerySchemaMap[routeKey] as
+    | { shape?: Record<string, unknown> }
+    | undefined;
+  const queryFields = querySchema?.shape ? Object.keys(querySchema.shape) : [];
+  if (queryFields.length > 0) {
+    return [{ field: `query.${queryFields[0]}`, message: 'Invalid value' }];
+  }
+  return [{ field: 'body', message: 'Malformed JSON body' }];
+}
 
 export function buildResponses(
   method: string,
@@ -150,14 +237,12 @@ export function buildResponses(
       content: {
         'application/json': withCapturedExample(routeKey, 400, {
           schema: errorResponseSchema,
-          example: {
-            error: {
-              code: 'VALIDATION_ERROR',
-              message: 'Invalid request body',
-              details: [{ field: 'email', message: 'Invalid email format' }],
-            },
-            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-          },
+          example: errorExample(
+            'validation_error',
+            'invalid_field',
+            'Invalid values for fields in request',
+            validationErrorsFor(routeKey),
+          ),
         }),
       },
     };
@@ -170,14 +255,11 @@ export function buildResponses(
     content: {
       'application/json': withCapturedExample(routeKey, 401, {
         schema: errorResponseSchema,
-        example: {
-          error: {
-            code: 'UNAUTHORIZED',
-            message:
-              'Access token missing, expired, or revoked — authenticate via POST /api/v1/auth/login and retry with Authorization: Bearer <ACCESS_TOKEN>',
-          },
-          meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-        },
+        example: errorExample(
+          'request_error',
+          'unauthorized',
+          'Access token missing, expired, or revoked — authenticate via POST /api/v1/auth/login and retry with Authorization: Bearer <ACCESS_TOKEN>',
+        ),
       }),
     },
   };
@@ -186,10 +268,11 @@ export function buildResponses(
     content: {
       'application/json': withCapturedExample(routeKey, 403, {
         schema: errorResponseSchema,
-        example: {
-          error: { code: 'FORBIDDEN', message: 'Insufficient permissions' },
-          meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-        },
+        example: errorExample(
+          'request_error',
+          'forbidden',
+          'Your role lacks the permission this operation requires in the current organization',
+        ),
       }),
     },
   };
@@ -198,10 +281,7 @@ export function buildResponses(
     content: {
       'application/json': withCapturedExample(routeKey, 404, {
         schema: errorResponseSchema,
-        example: {
-          error: { code: 'NOT_FOUND', message: 'Resource not found' },
-          meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-        },
+        example: errorExample('request_error', 'not_found', 'Resource not found'),
       }),
     },
   };
@@ -212,10 +292,11 @@ export function buildResponses(
       content: {
         'application/json': withCapturedExample(routeKey, 406, {
           schema: errorResponseSchema,
-          example: {
-            error: { code: 'NOT_ACCEPTABLE', message: 'Accept header missing or unsupported' },
-            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-          },
+          example: errorExample(
+            'request_error',
+            'not_acceptable',
+            'Accept header missing or names an unsupported media type',
+          ),
         }),
       },
     };
@@ -229,10 +310,11 @@ export function buildResponses(
       content: {
         'application/json': withCapturedExample(routeKey, 409, {
           schema: errorResponseSchema,
-          example: {
-            error: { code: 'CONFLICT', message: 'Resource already exists or state conflict' },
-            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-          },
+          example: errorExample(
+            'request_error',
+            'conflict',
+            'Resource already exists or the current state does not allow this transition',
+          ),
         }),
       },
     };
@@ -244,13 +326,11 @@ export function buildResponses(
       content: {
         'application/json': withCapturedExample(routeKey, 422, {
           schema: errorResponseSchema,
-          example: {
-            error: {
-              code: 'UNPROCESSABLE_ENTITY',
-              message: 'Business rule violation or idempotency key reused with a different payload',
-            },
-            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-          },
+          example: errorExample(
+            'request_error',
+            'unprocessable_entity',
+            'Business rule violation or Idempotency-Key reused with a different payload',
+          ),
         }),
       },
     };
@@ -262,10 +342,11 @@ export function buildResponses(
       content: {
         'application/json': withCapturedExample(routeKey, 413, {
           schema: errorResponseSchema,
-          example: {
-            error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body exceeds the size limit' },
-            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-          },
+          example: errorExample(
+            'request_error',
+            'payload_too_large',
+            'Request body exceeds the size limit',
+          ),
         }),
       },
     };
@@ -274,10 +355,11 @@ export function buildResponses(
       content: {
         'application/json': withCapturedExample(routeKey, 415, {
           schema: errorResponseSchema,
-          example: {
-            error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Unsupported content type' },
-            meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-          },
+          example: errorExample(
+            'request_error',
+            'unsupported_media_type',
+            'Content-Type must be application/json',
+          ),
         }),
       },
     };
@@ -306,10 +388,11 @@ export function buildResponses(
     content: {
       'application/json': withCapturedExample(routeKey, 429, {
         schema: errorResponseSchema,
-        example: {
-          error: { code: 'RATE_LIMITED', message: 'Too many requests, retry later' },
-          meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-        },
+        example: errorExample(
+          'request_error',
+          'rate_limited',
+          'Too many requests — wait Retry-After seconds before retrying',
+        ),
       }),
     },
   };
@@ -318,10 +401,7 @@ export function buildResponses(
     content: {
       'application/json': withCapturedExample(routeKey, 500, {
         schema: errorResponseSchema,
-        example: {
-          error: { code: 'internal_error', detail: EXTERNAL_ERROR_MESSAGE },
-          meta: { request_id: '018f2c7a-3b4d-4e5f-9a6b-7c8d9e0f1a2b' },
-        },
+        example: errorExample('request_error', 'internal_error', EXTERNAL_ERROR_MESSAGE),
       }),
     },
   };

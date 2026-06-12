@@ -60,3 +60,4 @@ The policy is enforced centrally in `method-status-policy.middleware.ts`; declar
 3. `ROUTE_EXAMPLE_CAPTURE=1 pnpm test && pnpm routes:examples` to refresh captured samples.
 4. `pnpm docs:generate:multilang && pnpm docs:postman` then `pnpm docs:check`.
 5. Gates: `validate:route-success-statuses`, `validate:route-success-coverage`, unit suites for the response map and examples fixture.
+6. Breaking changes: `pnpm docs:breaking` (local mirror of the CI oasdiff gate); intentional breaks get narrow entries in `.github/oasdiff/breaking-changes-ignore.txt`.

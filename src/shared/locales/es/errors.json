@@ -152,5 +152,7 @@
   "captchaRequired": "Se requiere verificación CAPTCHA",
   "captchaInvalid": "La verificación CAPTCHA falló",
   "captchaProviderUnavailable": "La verificación CAPTCHA no está disponible temporalmente",
-  "queueDashboardReadOnly": "Las mutaciones del panel de colas están deshabilitadas en este entorno"
+  "queueDashboardReadOnly": "Las mutaciones del panel de colas están deshabilitadas en este entorno",
+  "idempotencyKeyRequired": "El encabezado Idempotency-Key es obligatorio para esta operación",
+  "invalidMetricsToken": "Token de métricas inválido o ausente"
 }

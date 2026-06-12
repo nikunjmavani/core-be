@@ -81,14 +81,14 @@ export function createOrganizationController(
       const data = await service.uploadLogo(id, request.body, getActingUserPublicId(auth));
       return successResponse(data, getRequestIdentifier(request));
     },
-    deleteLogo: async (request: FastifyRequest, _reply: FastifyReply) => {
+    deleteLogo: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const id = validatePublicIdParam(
         (request.params as { organization_id: string }).organization_id ?? '',
         'organization_id',
       );
-      const data = await service.deleteLogo(id, getActingUserPublicId(auth));
-      return successResponse(data, getRequestIdentifier(request));
+      await service.deleteLogo(id, getActingUserPublicId(auth));
+      return reply.code(204).send();
     },
     listOrganizationAuditLogs: async (request: FastifyRequest, _reply: FastifyReply) => {
       if (!auditService) throw new Error('Audit service not configured');

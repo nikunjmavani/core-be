@@ -372,6 +372,7 @@ Local SonarQube quality gate (pre-push): `pnpm sonar:up` / `sonar:scan` / `sonar
 - `pnpm docs:postman` — convert OpenAPI spec to Postman Collection at `docs/postman-collection.json`
 - `pnpm docs:upload` — upload Postman Collection to workspace (requires `POSTMAN_API_KEY` + `POSTMAN_WORKSPACE_ID`)
 - `pnpm docs:all` — generate OpenAPI spec + Postman Collection in one step
+- `pnpm docs:breaking` — local mirror of the CI oasdiff breaking-change gate (pinned checksum-verified binary in `.cache/oasdiff/`; base spec from `origin/dev` worktree; honors `.github/oasdiff/breaking-changes-ignore.txt`)
 - `pnpm test` — run all Vitest tests (serial)
 - `pnpm test:unit` — unit only (`--project unit` in `tooling/vitest/projects.ts`: `src/tests/unit` + domain `__tests__/unit/`)
 - `pnpm test:integration` — `src/tests/integration`

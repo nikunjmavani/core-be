@@ -83,10 +83,10 @@ export function createUserController({
       return successResponse(data, getRequestIdentifier(request));
     },
 
-    deleteAvatar: async (request: FastifyRequest, _reply: FastifyReply) => {
+    deleteAvatar: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const data = await userService.deleteAvatar(auth.userId);
-      return successResponse(data, getRequestIdentifier(request));
+      await userService.deleteAvatar(auth.userId);
+      return reply.code(204).send();
     },
 
     // ── Admin ─────────────────────────────────────────────────

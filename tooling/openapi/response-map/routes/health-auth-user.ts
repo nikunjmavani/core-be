@@ -263,8 +263,8 @@ export const healthAuthUserRouteResponses: Record<string, ResponseDefinition> = 
     example: null,
   },
   'DELETE /api/v1/users/me/avatar': {
-    statusCode: 200,
-    schema: wrapSuccess(schemas.userSchema, { ...schemas.userExample, avatar_url: null }),
+    statusCode: 204,
+    schema: null,
     example: null,
   },
   'POST /api/v1/users/me/data-export': {
