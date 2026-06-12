@@ -91,7 +91,6 @@
   "onlyOwnerCanTransfer": "Solo el propietario puede transferir la propiedad",
   "membershipActivationRequiresInvitationAccept": "La membresía solo puede activarse aceptando la invitación",
   "oauthProviderNotConfigured": "El proveedor OAuth \"{{provider}}\" no está configurado.",
-  "oauthProviderNotSupported": "El proveedor OAuth \"{{provider}}\" no es compatible.",
   "oauthNotImplemented": "OAuth para \"{{provider}}\" no está implementado.",
   "googleOAuthNotConfigured": "Credenciales de Google OAuth no configuradas.",
   "googleExchangeFailed": "Error al intercambiar el código de autorización de Google",

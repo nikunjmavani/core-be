@@ -71,9 +71,8 @@ const CHECK_MODE = process.argv.includes('--check');
  * task chips so the gap is owned, not silently ignored.
  */
 const JUSTIFIED_GAPS = new Set<string>([
-  // Operational endpoint protected by `METRICS_SCRAPE_TOKEN`. Not a
-  // business flow; covered by ops procedures, not by application tests.
-  'POST /internal/ops/circuit-breakers/:circuitName/reset',
+  // (empty — every route currently has an explicit test reference; add entries
+  // only with a written justification)
 ]);
 
 function parseRoutesFile(): RouteEntry[] {

@@ -1,5 +1,20 @@
 import { EXTERNAL_ERROR_MESSAGE } from '@/shared/constants/index.js';
+import { loadRouteSuccessStatusMap } from '@/tests/helpers/route-success-status.helper.js';
 import { routeResponseMap } from '@tooling/openapi/response-map/index.js';
+
+/**
+ * Declared happy-path status per route from the success-status registry
+ * (`tooling/openapi/route-catalog/route-success-statuses.json`), re-keyed to
+ * the OpenAPI `{param}` path style. The registry is runtime truth (enforced by
+ * the observed-status gate), so it is authoritative over the response map's
+ * `statusCode` — a unit gate keeps the two aligned.
+ */
+const successStatusByOpenApiKey: Record<string, number> = Object.fromEntries(
+  Object.entries(loadRouteSuccessStatusMap()).map(([routeKey, statusCode]) => [
+    routeKey.replace(/:([A-Za-z]+)/g, '{$1}'),
+    statusCode,
+  ]),
+);
 
 const errorResponseSchema = {
   type: 'object',
@@ -42,10 +57,17 @@ export function buildResponses(
   const responses: Record<string, object> = {};
   const translate = (key: string, fallback: string) => responseStrings[key] ?? fallback;
 
-  if (responseDefinition) {
-    const { statusCode, schema } = responseDefinition;
+  // The registry is authoritative for the success status; the response map
+  // contributes the body schema/example. Routes outside the registry (none
+  // today — the catalog sync gate guarantees registry completeness) fall back
+  // to the response map's own statusCode, then 200.
+  const declaredStatus = successStatusByOpenApiKey[routeKey];
 
-    if (schema === null) {
+  if (responseDefinition) {
+    const statusCode = declaredStatus ?? responseDefinition.statusCode;
+    const { schema } = responseDefinition;
+
+    if (schema === null || statusCode === 204) {
       responses[String(statusCode)] = { description: translate('noContent', 'No Content') };
     } else {
       const description =
@@ -65,7 +87,14 @@ export function buildResponses(
       };
     }
   } else {
-    responses['200'] = { description: translate('success', 'Successful operation') };
+    const statusCode = declaredStatus ?? 200;
+    const description =
+      statusCode === 204
+        ? translate('noContent', 'No Content')
+        : statusCode === 201
+          ? translate('created', 'Resource created successfully')
+          : translate('success', 'Successful operation');
+    responses[String(statusCode)] = { description };
   }
 
   responses['400'] = {
