@@ -57,14 +57,18 @@ describe('WebauthnService.generateAuthenticationOptions', () => {
     );
   });
 
-  it('returns decoy options (not an error) for an unknown email to avoid enumeration', async () => {
+  it('returns decoy options for an unknown email AND runs the credential lookup to equalize timing (route-audit D1)', async () => {
     vi.mocked(userService.findByEmail).mockResolvedValue(null);
+    vi.mocked(credentialRepository.listActiveByUserId).mockResolvedValue([] as never);
 
     const result = await service.generateAuthenticationOptions({ email: 'missing@example.com' });
 
     expect(result.challenge_token).toBe('challenge-token');
     expect(result.options.allowCredentials).toHaveLength(1);
-    expect(credentialRepository.listActiveByUserId).not.toHaveBeenCalled();
+    // D1: the lookup now runs even for an unknown email (synthetic context, user_id 0) so the DB
+    // round-trip — and thus response latency — matches the known-email path. Pre-fix it was skipped,
+    // leaving a timing oracle that re-opened the enumeration channel the decoy was built to close.
+    expect(credentialRepository.listActiveByUserId).toHaveBeenCalledWith(0);
   });
 
   it('returns decoy options for a known email that has no registered passkeys', async () => {
