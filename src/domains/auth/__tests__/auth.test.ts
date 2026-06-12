@@ -415,12 +415,13 @@ describe('Auth Domain — Integration', () => {
   });
 
   describe('GET /api/v1/auth/oauth/:provider', () => {
-    it('should return 501 for unsupported provider', async () => {
+    it('should return 404 for an unknown provider name', async () => {
       const response = await injectUnauthenticated(app, {
         url: testApiPath('/auth/oauth/twitter'),
       });
-      // Server returns 501 NotImplementedError; accept 501 or 200 (redirect URL) depending on error handling
-      expect([200, 501]).toContain(response.statusCode);
+      // Unknown provider names are a missing resource (404); the typed 501 is
+      // reserved for supported-but-unconfigured providers.
+      expect(response.statusCode).toBe(404);
     });
 
     it('should return 501 when provider not configured (no client ID)', async () => {

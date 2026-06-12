@@ -57,7 +57,7 @@ describe('Webhook Sub-Domain — Integration', () => {
       roleId: role.id,
     });
     const token = await generateTestToken({ userId: user.public_id });
-    return { organization, token };
+    return { user, organization, token };
   }
 
   describe('GET /api/v1/notify/organizations/:id/webhooks', () => {
@@ -235,6 +235,27 @@ describe('Webhook Sub-Domain — Integration', () => {
       };
       expect(page1Body.data.length + page2Body.data.length).toBe(3);
       expect(page2Body.meta?.pagination).toMatchObject({ has_more: false, next: null });
+    });
+  });
+
+  describe('DELETE /api/v1/notify/organizations/:id/webhooks/:webhookId', () => {
+    it('returns 204 with webhook manage permission', async () => {
+      const { user, organization, token } = await createAuthorizedContext();
+      const webhook = await createTestWebhook({
+        organizationId: organization.id,
+        url: 'https://example.com/delete-happy-path',
+        createdByUserId: user.id,
+      });
+
+      const response = await injectAuthenticated(app, {
+        method: 'DELETE',
+        url: testApiPath(
+          `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}`,
+        ),
+        token,
+        organizationPublicId: organization.public_id,
+      });
+      expect(response.statusCode, response.body).toBe(204);
     });
   });
 });

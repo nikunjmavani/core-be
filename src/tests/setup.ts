@@ -61,6 +61,10 @@ process.env.ENABLE_QUEUE_DASHBOARD_MUTATIONS = 'true';
  */
 process.env.METRICS_ENABLED = 'true';
 process.env.METRICS_SCRAPE_TOKEN = 'test-metrics-token-min-32-characters';
+// Global-admin allowlist for ROLE-guarded route tests (auth middleware re-derives
+// SUPER_ADMIN from this email list per request). CI sets the same value via the
+// test-env action; `??=` keeps any explicit value.
+process.env.GLOBAL_ADMIN_EMAILS ??= 'ops@example.com';
 delete process.env.REDIS_KEY_PREFIX;
 delete process.env.WEBHOOK_URL_ALLOWLIST;
 

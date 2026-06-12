@@ -351,6 +351,7 @@ src/
     │   │   └── subscription/
     │   │   │   ├── __tests__/
     │   │   │       ├── integration/
+    │   │   │       │   ├── subscription-happy.integration.test.ts
     │   │   │       │   └── subscription.integration.test.ts
     │   │   │       └── unit/
     │   │   │       │   ├── payment-provider.port.unit.test.ts
@@ -404,6 +405,7 @@ src/
     │   │   ├── notification/
     │   │   │   ├── __tests__/
     │   │   │   │   ├── integration/
+    │   │   │   │   │   ├── notification-detail.integration.test.ts
     │   │   │   │   │   └── notification.integration.test.ts
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── events/
@@ -544,6 +546,7 @@ src/
     │   │   ├── factories/
     │   │   │   └── permission.factory.ts
     │   │   ├── integration/
+    │   │   │   ├── tenancy-detail-happy.integration.test.ts
     │   │   │   ├── tenancy-route-smoke.integration.test.ts
     │   │   │   └── tenancy.integration.test.ts
     │   │   ├── unit/
@@ -856,6 +859,7 @@ src/
     ├── user/
     │   ├── __tests__/
     │   │   ├── integration/
+    │   │   │   ├── user-admin.integration.test.ts
     │   │   │   ├── user-route-smoke.integration.test.ts
     │   │   │   └── user.integration.test.ts
     │   │   ├── unit/
@@ -1660,8 +1664,10 @@ src/
     │   │   ├── webhook-delivery-race.integration.test.ts
     │   │   └── webhook-reclaim.integration.test.ts
     │   ├── empty-body-json-parser.integration.test.ts
+    │   ├── mcp-route.integration.test.ts
     │   ├── ops-route-smoke.integration.test.ts
-    │   └── OVERVIEW.md
+    │   ├── OVERVIEW.md
+    │   └── storage-routes-happy.integration.test.ts
     ├── load/
     │   ├── k6/
     │   │   ├── data/

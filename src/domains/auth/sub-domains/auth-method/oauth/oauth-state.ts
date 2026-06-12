@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { Redis } from 'ioredis';
-import { NotImplementedError, UnauthorizedError } from '@/shared/errors/index.js';
+import { NotFoundError, UnauthorizedError } from '@/shared/errors/index.js';
 import { OAUTH_STATE_TTL_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { SUPPORTED_OAUTH_PROVIDERS, type OAuthProvider } from './oauth.types.js';
 import { generatePkceCodeVerifier } from './oauth-pkce.js';
@@ -14,11 +14,17 @@ export function normalizeOAuthProvider(provider: string): string {
   return provider.toLowerCase();
 }
 
-/** Normalises the provider slug and ensures it belongs to {@link SUPPORTED_OAUTH_PROVIDERS}; otherwise throws `NotImplementedError`. */
+/**
+ * Normalises the provider slug and ensures it belongs to
+ * {@link SUPPORTED_OAUTH_PROVIDERS}; otherwise throws `NotFoundError` (404) —
+ * an unknown provider name is a missing resource, not an unimplemented
+ * feature. The 501 `NotImplementedError` is reserved for providers that are
+ * in the supported list but lack a configured implementation.
+ */
 export function assertOAuthProviderSupported(provider: string): OAuthProvider {
   const normalizedProvider = normalizeOAuthProvider(provider);
   if (!SUPPORTED_OAUTH_PROVIDERS.includes(normalizedProvider as OAuthProvider)) {
-    throw new NotImplementedError('errors:oauthProviderNotSupported');
+    throw new NotFoundError('OAuth provider');
   }
   return normalizedProvider as OAuthProvider;
 }

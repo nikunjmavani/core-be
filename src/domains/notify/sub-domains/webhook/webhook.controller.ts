@@ -100,7 +100,7 @@ export function createWebhookController(service: WebhookService) {
     },
     createWebhook: async (
       request: FastifyRequest<{ Params: { id: string } }>,
-      _reply: FastifyReply,
+      reply: FastifyReply,
     ) => {
       const auth = requirePrincipal(request);
       const data = await service.create(
@@ -108,6 +108,7 @@ export function createWebhookController(service: WebhookService) {
         request.body,
         getActingUserPublicId(auth),
       );
+      reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },
     updateWebhook: async (

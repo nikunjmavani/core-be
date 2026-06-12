@@ -443,8 +443,6 @@ const healthProbes: RouteProbe[] = [
  * generic tolerance is wrong for a documented reason. Keep minimal.
  */
 const SWEEP_EXPECTED_OVERRIDES: Record<string, number[]> = {
-  // Placeholder provider name → typed 501 NotImplementedError (deliberate contract).
-  'GET /api/v1/auth/oauth/:provider': [200, 404, 501],
   // 403 for the demo (non-admin) user; 404 when ENABLE_MCP_SERVER=false in the target env.
   'GET /api/v1/mcp': [403, 404],
 };

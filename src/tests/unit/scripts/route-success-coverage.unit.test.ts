@@ -96,16 +96,17 @@ describe('evaluateRouteSuccessCoverage', () => {
     expect(result.uncoveredRoutes).toContain('GET /api/v1/widgets');
   });
 
-  it('skips drift for exempt keys but still requires coverage', () => {
-    const exemptRegistry = [route('GET', '/api/v1/mcp')];
+  it('skips drift for exempt keys but still requires coverage unless coverage-exempt', () => {
+    const exemptRegistry = [route('POST', '/api/v1/mcp')];
     const result = evaluateRouteSuccessCoverage({
       registry: exemptRegistry,
-      successStatusMap: { 'GET /api/v1/mcp': 200 },
-      observedLines: ['GET /api/v1/mcp 405'],
+      successStatusMap: { 'POST /api/v1/mcp': 200 },
+      observedLines: ['POST /api/v1/mcp 405'],
       driftExemptKeys: ROUTE_SUCCESS_DRIFT_EXEMPT_KEYS,
+      coverageExemptKeys: new Set<string>(),
     });
     expect(result.driftFailures).toEqual([]);
-    expect(result.uncoveredRoutes).toEqual(['GET /api/v1/mcp']);
+    expect(result.uncoveredRoutes).toEqual(['POST /api/v1/mcp']);
   });
 
   it('normalizes trailing slashes from Fastify prefix-root registrations', () => {
@@ -115,6 +116,29 @@ describe('evaluateRouteSuccessCoverage', () => {
       observedLines: ['GET /api/v1/widgets/ 200'],
     });
     expect(result.coveredRoutes).toEqual(['GET /api/v1/widgets']);
+  });
+
+  it('skips coverage-exempt keys but still counts them when observed', () => {
+    const exemptRegistry = [route('GET', '/api/v1/streaming'), route('GET', '/api/v1/widgets')];
+    const map = { 'GET /api/v1/streaming': 200, 'GET /api/v1/widgets': 200 };
+    const exempt = new Set(['GET /api/v1/streaming']);
+
+    const unobserved = evaluateRouteSuccessCoverage({
+      registry: exemptRegistry,
+      successStatusMap: map,
+      observedLines: ['GET /api/v1/widgets 200'],
+      coverageExemptKeys: exempt,
+    });
+    expect(unobserved.uncoveredRoutes).toEqual([]);
+    expect(unobserved.coveredRoutes).toEqual(['GET /api/v1/widgets']);
+
+    const observed = evaluateRouteSuccessCoverage({
+      registry: exemptRegistry,
+      successStatusMap: map,
+      observedLines: ['GET /api/v1/streaming 200', 'GET /api/v1/widgets 200'],
+      coverageExemptKeys: exempt,
+    });
+    expect(observed.coveredRoutes).toEqual(['GET /api/v1/streaming', 'GET /api/v1/widgets']);
   });
 
   it('ignores malformed lines and unknown routes', () => {

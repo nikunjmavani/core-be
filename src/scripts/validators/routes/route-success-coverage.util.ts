@@ -16,6 +16,24 @@ export const ROUTE_SUCCESS_DRIFT_EXEMPT_KEYS: ReadonlySet<string> = new Set([
   'POST /api/v1/mcp',
 ]);
 
+/**
+ * Catalog routes exempt from the observed-coverage requirement (still
+ * drift-checked when observed). Each entry must explain why the declared
+ * success is not reachable from `fastify.inject()`:
+ *
+ * - `GET /api/v1/mcp` — the success response is a long-lived SSE stream on a
+ *   hijacked reply; injecting it would hang the test. The POST transport leg
+ *   (JSON response mode) is covered instead.
+ * - `GET /api/v1/auth/oauth/:provider/callback` — a real 200 requires a code
+ *   exchange round-trip against the external IdP (undici fetch, not
+ *   interceptable by the nock toolchain used here); state/rejection paths are
+ *   covered and the exchange logic is unit-tested.
+ */
+export const ROUTE_SUCCESS_COVERAGE_EXEMPT_KEYS: ReadonlySet<string> = new Set([
+  'GET /api/v1/mcp',
+  'GET /api/v1/auth/oauth/:provider/callback',
+]);
+
 /** Outcome of evaluating observed route statuses against the declared success map. */
 export type RouteSuccessCoverageResult = {
   /** Catalog keys whose declared success status was observed at least once. */
@@ -62,8 +80,10 @@ export function evaluateRouteSuccessCoverage(options: {
   successStatusMap: RouteSuccessStatusMap;
   observedLines: string[];
   driftExemptKeys?: ReadonlySet<string>;
+  coverageExemptKeys?: ReadonlySet<string>;
 }): RouteSuccessCoverageResult {
   const driftExemptKeys = options.driftExemptKeys ?? ROUTE_SUCCESS_DRIFT_EXEMPT_KEYS;
+  const coverageExemptKeys = options.coverageExemptKeys ?? ROUTE_SUCCESS_COVERAGE_EXEMPT_KEYS;
 
   const observedStatusesByKey = new Map<string, Set<number>>();
   for (const line of options.observedLines) {
@@ -91,7 +111,9 @@ export function evaluateRouteSuccessCoverage(options: {
       continue;
     }
     if (!observedStatuses) {
-      uncoveredRoutes.push(key);
+      if (!coverageExemptKeys.has(key)) {
+        uncoveredRoutes.push(key);
+      }
       continue;
     }
 
@@ -118,7 +140,7 @@ export function evaluateRouteSuccessCoverage(options: {
 
     if (successObservations.includes(declaredStatus)) {
       coveredRoutes.push(key);
-    } else {
+    } else if (!coverageExemptKeys.has(key)) {
       uncoveredRoutes.push(key);
     }
   }
