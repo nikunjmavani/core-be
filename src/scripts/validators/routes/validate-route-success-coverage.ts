@@ -23,8 +23,14 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { loadRouteRegistryFromCatalog } from '@/tests/helpers/route-catalog-registry.js';
-import { loadRouteSuccessStatusMap } from '@/tests/helpers/route-success-status.helper.js';
-import { evaluateRouteSuccessCoverage } from '@/scripts/validators/routes/route-success-coverage.util.js';
+import {
+  loadRouteSuccessStatusMap,
+  routeSuccessStatusKey,
+} from '@/tests/helpers/route-success-status.helper.js';
+import {
+  evaluateRouteSuccessCoverage,
+  findUndocumentedObservedStatuses,
+} from '@/scripts/validators/routes/route-success-coverage.util.js';
 import {
   ROUTE_COVERAGE_OBSERVED_DIRECTORY_NAME,
   ROUTE_SUCCESS_COVERAGE_BUDGET_PATH,
@@ -139,6 +145,49 @@ function main(): void {
     console.log(
       `Coverage improved — lower maxUncoveredRoutes to ${result.uncoveredRoutes.length} in ${ROUTE_SUCCESS_COVERAGE_BUDGET_PATH} to lock it in.`,
     );
+  }
+
+  // Error-side check: every observed sub-500 status must appear in the
+  // generated OpenAPI document. Runs only when the spec artifact exists
+  // (ci:local generates it via docs:check; the CI coverage job runs
+  // `pnpm docs:generate` first). Routes outside the public spec are skipped.
+  const specPath = resolve(process.cwd(), 'docs', 'openapi', 'openapi.json');
+  if (existsSync(specPath)) {
+    const spec = JSON.parse(readFileSync(specPath, 'utf-8')) as {
+      paths: Record<string, Record<string, { responses?: Record<string, unknown> }>>;
+    };
+    const registry = loadRouteRegistryFromCatalog();
+    const documentedStatusesByKey = new Map<string, ReadonlySet<string>>();
+    for (const route of registry) {
+      const specPathKey = route.path.replace(/:([A-Za-z]+)/g, '{$1}');
+      const operation = spec.paths[specPathKey]?.[route.method.toLowerCase()];
+      if (operation?.responses) {
+        documentedStatusesByKey.set(
+          routeSuccessStatusKey(route),
+          new Set(Object.keys(operation.responses)),
+        );
+      }
+    }
+    const undocumented = findUndocumentedObservedStatuses({
+      registry,
+      observedLines,
+      documentedStatusesByKey,
+    });
+    if (undocumented.length > 0) {
+      console.error('\nObserved statuses missing from the OpenAPI document:');
+      for (const failure of undocumented) {
+        console.error(`  - ${failure}`);
+      }
+      console.error(
+        'Document the status in tooling/openapi/emitters/responses-builder.ts (or fix the route).',
+      );
+      exitFailure();
+    }
+    console.log(
+      `Error-status documentation check passed (${documentedStatusesByKey.size} routes in spec).`,
+    );
+  } else {
+    console.log('OpenAPI artifact not found — skipped the error-status documentation check.');
   }
 
   console.log('✅ validate-route-success-coverage passed');

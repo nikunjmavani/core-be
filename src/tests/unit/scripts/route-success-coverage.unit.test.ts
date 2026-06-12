@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RouteEntry } from '@/tests/helpers/route-catalog-registry.js';
 import {
   evaluateRouteSuccessCoverage,
+  findUndocumentedObservedStatuses,
   ROUTE_SUCCESS_DRIFT_EXEMPT_KEYS,
 } from '@/scripts/validators/routes/route-success-coverage.util.js';
 
@@ -155,5 +156,48 @@ describe('evaluateRouteSuccessCoverage', () => {
     });
     expect(result.coveredRoutes).toEqual(['DELETE /api/v1/widgets/:widgetId']);
     expect(result.driftFailures).toEqual([]);
+  });
+});
+
+/**
+ * Error-side documentation check — every observed sub-500 status must be in
+ * the OpenAPI document's responses for that route.
+ */
+describe('findUndocumentedObservedStatuses', () => {
+  const registry = [route('POST', '/api/v1/widgets')];
+  const documented = new Map<string, ReadonlySet<string>>([
+    ['POST /api/v1/widgets', new Set(['201', '400', '401', '429'])],
+  ]);
+
+  it('passes when all observed statuses are documented', () => {
+    const failures = findUndocumentedObservedStatuses({
+      registry,
+      observedLines: ['POST /api/v1/widgets 201', 'POST /api/v1/widgets 429'],
+      documentedStatusesByKey: documented,
+    });
+    expect(failures).toEqual([]);
+  });
+
+  it('flags an observed status missing from the document', () => {
+    const failures = findUndocumentedObservedStatuses({
+      registry,
+      observedLines: ['POST /api/v1/widgets 422'],
+      documentedStatusesByKey: documented,
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain('observed 422');
+  });
+
+  it('exempts 304, 5xx, and routes outside the document', () => {
+    const failures = findUndocumentedObservedStatuses({
+      registry: [...registry, route('GET', '/internal/thing')],
+      observedLines: [
+        'POST /api/v1/widgets 304',
+        'POST /api/v1/widgets 503',
+        'GET /internal/thing 418',
+      ],
+      documentedStatusesByKey: documented,
+    });
+    expect(failures).toEqual([]);
   });
 });

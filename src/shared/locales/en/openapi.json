@@ -44,14 +44,19 @@
     "bearerAuthDescription": "JWT access token obtained from the login or token refresh endpoint."
   },
   "responses": {
-    "success": "Successful operation",
-    "created": "Resource created successfully",
-    "noContent": "No Content",
-    "validationError": "Validation error",
-    "unauthorized": "Unauthorized",
-    "forbidden": "Forbidden",
-    "notFound": "Not Found",
     "conflict": "Conflict",
-    "internalError": "Internal Server Error"
+    "created": "Resource created successfully",
+    "forbidden": "Forbidden",
+    "internalError": "Internal Server Error",
+    "noContent": "No Content",
+    "notAcceptable": "Not acceptable — required Accept header missing or unsupported",
+    "notFound": "Not Found",
+    "payloadTooLarge": "Request body exceeds the size limit",
+    "success": "Successful operation",
+    "tooManyRequests": "Too many requests — rate limit exceeded",
+    "unauthorized": "Unauthorized",
+    "unprocessableEntity": "Unprocessable entity — business rule violation or idempotency key reused with a different payload",
+    "unsupportedMediaType": "Unsupported media type",
+    "validationError": "Validation error"
   }
 }

@@ -67,6 +67,49 @@ function parseObservedLine(line: string): { key: string; statusCode: number } | 
 }
 
 /**
+ * Finds observed sub-500 statuses that the OpenAPI document does not declare
+ * for the route. `304` is exempt (protocol-level conditional GET), as is any
+ * route absent from `documentedStatusesByKey` (e.g. the token-guarded internal
+ * surface that is deliberately outside the public spec).
+ */
+export function findUndocumentedObservedStatuses(options: {
+  registry: RouteEntry[];
+  observedLines: string[];
+  documentedStatusesByKey: ReadonlyMap<string, ReadonlySet<string>>;
+}): string[] {
+  const observedStatusesByKey = new Map<string, Set<number>>();
+  for (const line of options.observedLines) {
+    const parsed = parseObservedLine(line);
+    if (!parsed) {
+      continue;
+    }
+    const statuses = observedStatusesByKey.get(parsed.key) ?? new Set<number>();
+    statuses.add(parsed.statusCode);
+    observedStatusesByKey.set(parsed.key, statuses);
+  }
+
+  const failures: string[] = [];
+  for (const route of options.registry) {
+    const key = routeSuccessStatusKey(route);
+    const documented = options.documentedStatusesByKey.get(key);
+    if (!documented) {
+      continue;
+    }
+    for (const status of observedStatusesByKey.get(key) ?? []) {
+      if (status >= 500 || status === 304) {
+        continue;
+      }
+      if (!documented.has(String(status))) {
+        failures.push(
+          `${key}: observed ${status} is not documented in the OpenAPI responses (${[...documented].sort().join(', ')})`,
+        );
+      }
+    }
+  }
+  return failures.sort();
+}
+
+/**
  * Evaluates observed `"METHOD /route/pattern status"` lines against the
  * declared success-status map for every catalog route.
  *
