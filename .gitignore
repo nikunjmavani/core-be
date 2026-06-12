@@ -42,6 +42,7 @@ npm-debug.log*
 # Coverage
 coverage/
 coverage-*/
+route-coverage-observed/
 
 # SonarQube scanner working dir (analysis task metadata)
 .scannerwork/

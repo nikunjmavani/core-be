@@ -11,6 +11,14 @@
  */
 import '@/shared/config/load-env-files.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import {
+  loadRouteRegistryFromCatalog,
+  type RouteEntry,
+} from '@/tests/helpers/route-catalog-registry.js';
+import {
+  loadRouteSuccessStatusMap,
+  routeSuccessStatusKey,
+} from '@/tests/helpers/route-success-status.helper.js';
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
 const API_PREFIX = '/api/v1';
@@ -62,9 +70,10 @@ async function requestJson(
     }
   }
   if (expectedStatus !== undefined) {
+    // assertStatus already rejects any status outside the allowed list, so an
+    // explicitly expected status (e.g. a documented typed 501) is not re-flagged.
     assertStatus(response.status, expectedStatus, `${fetchOptions.method ?? 'GET'} ${path}`);
-  }
-  if (response.status >= 500) {
+  } else if (response.status >= 500) {
     throw new Error(`${path}: server error ${response.status} — ${text.slice(0, 200)}`);
   }
   return { status: response.status, body };
@@ -429,6 +438,67 @@ const healthProbes: RouteProbe[] = [
   },
 ];
 
+/**
+ * Per-route expected-status overrides for the catalog GET sweep, where the
+ * generic tolerance is wrong for a documented reason. Keep minimal.
+ */
+const SWEEP_EXPECTED_OVERRIDES: Record<string, number[]> = {
+  // Placeholder provider name → typed 501 NotImplementedError (deliberate contract).
+  'GET /api/v1/auth/oauth/:provider': [200, 404, 501],
+  // 403 for the demo (non-admin) user; 404 when ENABLE_MCP_SERVER=false in the target env.
+  'GET /api/v1/mcp': [403, 404],
+};
+
+const SWEEP_PATH_PARAM_PLACEHOLDER = '000000000000000000000';
+
+function sweepExpectedStatus(route: RouteEntry, declaredStatus: number): number[] {
+  const override = SWEEP_EXPECTED_OVERRIDES[routeSuccessStatusKey(route)];
+  if (override) {
+    return override;
+  }
+  const hasPathParam = route.path.includes(':');
+  if (route.access === 'bearer-token') {
+    // Probed without the metrics token on purpose — must reject (401), serve
+    // openly when the target env has no scrape token configured, or 404 when
+    // the operational endpoint is disabled in that env. Never 5xx.
+    return [declaredStatus, 401, 404];
+  }
+  if (route.access === 'public') {
+    return hasPathParam ? [declaredStatus, 400, 404] : [declaredStatus];
+  }
+  // Authenticated / role / permission reads: the seeded demo user may lack a
+  // permission (403); placeholder params resolve to nothing (404) or fail
+  // strict param validation (400).
+  return hasPathParam ? [declaredStatus, 400, 403, 404] : [declaredStatus, 403];
+}
+
+/**
+ * Read-only sweep over every GET route in docs/routes.txt: each route must
+ * answer with its declared success status or an allowed, documented
+ * alternative for this caller — never a 5xx. Mutating routes stay with the
+ * curated probes above; a live smoke must not write to a deployed environment.
+ */
+function buildCatalogReadOnlySweepProbes(organizationId: string): RouteProbe[] {
+  const successStatusMap = loadRouteSuccessStatusMap();
+
+  return loadRouteRegistryFromCatalog()
+    .filter((route) => route.method === 'GET')
+    .map((route) => {
+      const declaredStatus = successStatusMap[routeSuccessStatusKey(route)] ?? 200;
+      const materializedPath = route.path
+        .replace(':id', organizationId)
+        .replace(/:[a-zA-Z]+/g, SWEEP_PATH_PARAM_PLACEHOLDER);
+      const usesAuthentication = route.access !== 'public' && route.access !== 'bearer-token';
+      return {
+        name: `sweep: GET ${route.path}`,
+        method: 'GET' as const,
+        path: materializedPath,
+        ...(usesAuthentication ? { authenticated: true, needsOrganization: true } : {}),
+        expectedStatus: sweepExpectedStatus(route, declaredStatus),
+      };
+    });
+}
+
 async function main(): Promise<void> {
   console.log(`API smoke tests (all domains) → ${BASE_URL}`);
   console.log(`User: ${EMAIL}\n`);
@@ -473,8 +543,15 @@ async function main(): Promise<void> {
     await runCase(probe.name, () => runProbe(probe));
   }
 
+  const sweepProbes = buildCatalogReadOnlySweepProbes(requireOrganizationId());
+  for (const probe of sweepProbes) {
+    await runCase(probe.name, () => runProbe(probe));
+  }
+
   console.log(
-    `\n${passed} passed, ${failed} failed (${domainProbes.length + healthProbes.length + 3} checks)`,
+    `\n${passed} passed, ${failed} failed (${
+      domainProbes.length + sweepProbes.length + healthProbes.length + 3
+    } checks)`,
   );
 
   if (smokeContext.accessToken && smokeContext.organizationId) {

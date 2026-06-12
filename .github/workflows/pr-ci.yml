@@ -116,6 +116,9 @@ jobs:
       - name: Validate route HTTP coverage
         run: pnpm validate:route-http-coverage
 
+      - name: Validate route success-status map in sync
+        run: pnpm validate:route-success-statuses
+
       - uses: ./.github/actions/test-env
 
       - name: OpenAPI specs in sync

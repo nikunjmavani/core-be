@@ -39,12 +39,29 @@ export type RegisteredRouteCapture = {
 };
 
 /**
+ * One routed response reported to {@link BuildAppOptions.observeResponses}:
+ * the HTTP method, the registered route pattern (e.g. `/api/v1/users/:userId`),
+ * and the final response status code.
+ */
+export type ObservedRouteResponse = {
+  method: string;
+  routeUrl: string;
+  statusCode: number;
+};
+
+/**
  * Optional knobs for {@link buildApp} consumed by tests. Production callers
  * (`src/index.ts`, the worker entry) pass nothing.
  */
 export type BuildAppOptions = {
   /** When set, every registered HTTP route is appended (used by route parity tests). */
   captureRegisteredRoutes?: RegisteredRouteCapture[];
+  /**
+   * When set, every routed response is reported after it is sent (used by the
+   * route success-status coverage gate). Registered before middleware and
+   * routes so all encapsulated contexts inherit the hook.
+   */
+  observeResponses?: (observation: ObservedRouteResponse) => void;
 };
 
 /**
@@ -67,6 +84,21 @@ export async function buildApp(options?: BuildAppOptions) {
         if (method === 'HEAD') continue;
         captures.push({ method: method.toUpperCase(), url: routeOptions.url });
       }
+    });
+  }
+
+  if (options?.observeResponses) {
+    const observeResponses = options.observeResponses;
+    app.addHook('onResponse', async (request, reply) => {
+      const routeUrl = request.routeOptions.url;
+      if (!routeUrl) {
+        return;
+      }
+      observeResponses({
+        method: request.method.toUpperCase(),
+        routeUrl,
+        statusCode: reply.statusCode,
+      });
     });
   }
 
