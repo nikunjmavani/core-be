@@ -22,8 +22,10 @@
  * `tooling/ci/coverage-thresholds.json`.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { ROUTE_COVERAGE_OBSERVED_DIRECTORY_NAME } from '@tooling/route-coverage/constants.js';
 
 type Lane = {
   name: string;
@@ -179,6 +181,13 @@ async function runMergedCoverageGate(): Promise<number> {
 async function main(): Promise<void> {
   const overallStart = performance.now();
   const results: LaneResult[] = [];
+
+  // Full-run start: drop stale route-status observations so
+  // `pnpm validate:route-success-coverage` only credits this run.
+  rmSync(resolve(process.cwd(), ROUTE_COVERAGE_OBSERVED_DIRECTORY_NAME), {
+    recursive: true,
+    force: true,
+  });
 
   for (const lane of LANES) {
     const laneResults = await runLane(lane);

@@ -1310,7 +1310,10 @@ src/
     │   ├── routes/
     │       ├── route-http-coverage-validation.util.ts
     │       ├── route-http-coverage.allowlist.ts
-    │       └── validate-route-http-coverage.ts
+    │       ├── route-success-coverage.util.ts
+    │       ├── validate-route-http-coverage.ts
+    │       ├── validate-route-success-coverage.ts
+    │       └── validate-route-success-statuses.ts
     │   └── tests/
     │       ├── validate-subdomain-unit-matrix.ts
     │       ├── validate-test-api-prefix.ts
@@ -1604,6 +1607,8 @@ src/
     │   ├── route-catalog-auth.ts
     │   ├── route-catalog-registry.ts
     │   ├── route-http-coverage.helper.ts
+    │   ├── route-status-observer.ts
+    │   ├── route-success-status.helper.ts
     │   ├── test-api-prefix.helper.ts
     │   ├── test-app.ts
     │   ├── test-auth.ts
@@ -1736,6 +1741,7 @@ src/
     │   │   ├── queue-dashboard-readonly.security.test.ts
     │   │   ├── queue-dashboard.security.test.ts
     │   │   ├── role-name-conflict.security.test.ts
+    │   │   ├── route-fuzz-5xx.security.test.ts
     │   │   ├── sensitive-field-leakage.security.test.ts
     │   │   ├── slug-uniqueness-race.security.test.ts
     │   │   ├── unique-violation-conflict.security.test.ts
@@ -1918,6 +1924,8 @@ src/
     │   │   ├── rotate-field-secrets.unit.test.ts
     │   │   ├── route-catalog-registry.unit.test.ts
     │   │   ├── route-http-coverage-validation.unit.test.ts
+    │   │   ├── route-success-coverage.unit.test.ts
+    │   │   ├── route-success-status.unit.test.ts
     │   │   ├── run-ci-local-guard.unit.test.ts
     │   │   ├── run-pre-commit-guard.unit.test.ts
     │   │   └── validate-test-naming.unit.test.ts

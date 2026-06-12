@@ -162,6 +162,20 @@ jobs:
           path: coverage-${{ matrix.shard.id }}/
           retention-days: ${{ github.event_name == 'pull_request' && 30 || 14 }}
 
+      # Route-status observations (route success-status coverage gate) — flushed
+      # by createTestApp()'s observer; merged and evaluated in the coverage job.
+      - name: Rename route-status observations for shard
+        if: always() && hashFiles('route-coverage-observed/**') != ''
+        run: mv route-coverage-observed "route-observed-${{ matrix.shard.id }}"
+
+      - name: Upload route-status observation artifact
+        if: always() && hashFiles(format('route-observed-{0}/**', matrix.shard.id)) != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: route-observed-${{ matrix.shard.id }}
+          path: route-observed-${{ matrix.shard.id }}/
+          retention-days: ${{ github.event_name == 'pull_request' && 30 || 14 }}
+
       - name: Send test result email
         if: always() && env.RESEND_API_KEY != '' && env.TEST_REPORT_EMAIL_TO != ''
         env:
@@ -264,12 +278,32 @@ jobs:
         with:
           ref: ${{ inputs.merge_commit_sha || github.sha }}
 
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
       - name: Download all shard coverage artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: coverage-*
           path: coverage-shards
           merge-multiple: false
+
+      - name: Download route-status observation artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: route-observed-*
+          path: route-observed-shards
+          merge-multiple: false
+
+      - name: Route success-status coverage gate (merged shards)
+        run: |
+          set -euo pipefail
+          report_only_flag=""
+          if [ "${{ inputs.target_branch }}" = "dev" ]; then
+            # Dev post-merge lane reports route success coverage but does not block.
+            report_only_flag="--report-only"
+          fi
+          pnpm validate:route-success-coverage --observed-dir route-observed-shards ${report_only_flag}
 
       - name: Merge coverage and check thresholds
         run: |

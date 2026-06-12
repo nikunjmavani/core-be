@@ -2,6 +2,10 @@ import { expect } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { getRoutesByDomain, type RouteEntry } from '@/tests/helpers/route-catalog-registry.js';
 import {
+  getDeclaredSuccessStatus,
+  loadRouteSuccessStatusMap,
+} from '@/tests/helpers/route-success-status.helper.js';
+import {
   injectAuthenticated,
   injectUnauthenticated,
   type InjectHttpResult,
@@ -12,8 +16,22 @@ export type RouteSmokeCase = {
   materializedPath: string;
   expectUnauthenticated: number | number[];
   expectForbidden?: number;
-  expectSuccess?: number;
+  /**
+   * Declared happy-path status from tooling/openapi/route-catalog/route-success-statuses.json
+   * (200/201/202/204) — what the route returns for a correctly authorized, valid request.
+   */
+  expectSuccess: number;
 };
+
+const successStatusMap = loadRouteSuccessStatusMap();
+
+function declaredSuccessStatus(route: RouteEntry): number {
+  return getDeclaredSuccessStatus({
+    method: route.method,
+    path: route.path,
+    map: successStatusMap,
+  });
+}
 
 const PATH_PARAM_PLACEHOLDER = '000000000000000000000';
 
@@ -44,6 +62,7 @@ export function buildRouteSmokeCases(
         route,
         materializedPath,
         expectUnauthenticated,
+        expectSuccess: declaredSuccessStatus(route),
       };
     }
     case 'authenticated': {
@@ -60,7 +79,7 @@ export function buildRouteSmokeCases(
         route,
         materializedPath,
         expectUnauthenticated: unauthenticatedStatus,
-        expectSuccess: 200,
+        expectSuccess: declaredSuccessStatus(route),
       };
     }
     case 'global-role':
@@ -69,7 +88,7 @@ export function buildRouteSmokeCases(
         materializedPath,
         expectUnauthenticated: 401,
         expectForbidden: 403,
-        expectSuccess: 200,
+        expectSuccess: declaredSuccessStatus(route),
       };
     case 'org-permission': {
       const unauthenticatedStatus =
@@ -81,7 +100,7 @@ export function buildRouteSmokeCases(
         materializedPath,
         expectUnauthenticated: unauthenticatedStatus,
         expectForbidden: 403,
-        expectSuccess: 200,
+        expectSuccess: declaredSuccessStatus(route),
       };
     }
     default:
@@ -89,6 +108,7 @@ export function buildRouteSmokeCases(
         route,
         materializedPath,
         expectUnauthenticated: 401,
+        expectSuccess: declaredSuccessStatus(route),
       };
   }
 }
