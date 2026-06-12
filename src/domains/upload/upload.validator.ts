@@ -3,7 +3,11 @@ import path from 'node:path';
 import { ValidationError } from '@/shared/errors/index.js';
 import { createUploadDto, uploadPublicIdParamDto } from './upload.dto.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
-import { UPLOAD_PURPOSE_CONFIG, UPLOAD_TARGETS } from './upload.constants.js';
+import {
+  UPLOAD_PURPOSE_CONFIG,
+  UPLOAD_PURPOSE_REQUIRED_TARGET,
+  UPLOAD_TARGETS,
+} from './upload.constants.js';
 import {
   getAllowedContentTypesForPurpose,
   getAllowedExtensionsForContentType,
@@ -31,6 +35,16 @@ export function validateCreateUpload(data: unknown): CreateUploadInput {
   const input = result.data;
   const config = UPLOAD_PURPOSE_CONFIG[input.purpose];
   const allowedTypes = getAllowedContentTypesForPurpose(input.purpose);
+
+  // route-audit L3: the purpose must match its required target BEFORE the org-id checks and key
+  // construction — otherwise e.g. { purpose: organization-logo, for: user } builds an
+  // `organization-logos/undefined/...` key on a user-scoped row (namespace pollution + erodes the
+  // "key prefix encodes scope" invariant the attach binding relies on).
+  if (input.for !== UPLOAD_PURPOSE_REQUIRED_TARGET[input.purpose]) {
+    throw new ValidationError('errors:uploadPurposeTargetMismatch', undefined, undefined, [
+      { field: 'for', messageKey: 'errors:uploadPurposeTargetMismatch' },
+    ]);
+  }
 
   // Ownership validation
   if (input.for === UPLOAD_TARGETS.USER && input.organizationId) {

@@ -54,4 +54,43 @@ describe('upload.validator', () => {
       }),
     ).toThrow(ValidationError);
   });
+
+  it('route-audit L3: rejects a purpose/target mismatch (organization-logo with for=user)', () => {
+    // Pre-fix this passed validation and built an `organization-logos/undefined/...` key on a
+    // user-scoped row. The purpose↔target cross-check now rejects it before key construction.
+    expect(() =>
+      validateCreateUpload({
+        purpose: 'organization-logo',
+        for: 'user',
+        contentType: 'image/png',
+        fileName: 'logo.png',
+        fileSize: 1024,
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('route-audit L3: rejects avatar with for=organization', () => {
+    expect(() =>
+      validateCreateUpload({
+        purpose: 'avatar',
+        for: 'organization',
+        organizationId: 'abcdefghijklmnopqrstu',
+        contentType: 'image/png',
+        fileName: 'photo.png',
+        fileSize: 1024,
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('route-audit L3: accepts a matching organization purpose/target', () => {
+    const input = {
+      purpose: 'organization-logo',
+      for: 'organization',
+      organizationId: 'abcdefghijklmnopqrstu',
+      contentType: 'image/png',
+      fileName: 'logo.png',
+      fileSize: 1024,
+    };
+    expect(validateCreateUpload(input)).toEqual(input);
+  });
 });

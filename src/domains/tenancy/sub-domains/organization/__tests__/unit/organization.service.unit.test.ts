@@ -77,6 +77,7 @@ describe('OrganizationService', () => {
       deleteObject: vi.fn(),
       tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(0),
       assertKeyConfirmed: vi.fn().mockResolvedValue(undefined),
+      assertKeyConfirmedForOwner: vi.fn().mockResolvedValue(undefined),
     } as never);
     vi.mocked(objectStorage.headObject).mockResolvedValue({
       contentLength: 100,
@@ -217,7 +218,7 @@ describe('OrganizationService', () => {
   it('uploadLogo rejects when the upload has not been confirmed', async () => {
     service.wireOffboardingUploadService({
       deleteObject: vi.fn(),
-      assertKeyConfirmed: vi
+      assertKeyConfirmedForOwner: vi
         .fn()
         .mockRejectedValue(new ValidationError('errors:validation.uploadNotConfirmed')),
     } as never);
@@ -306,15 +307,23 @@ describe('OrganizationService', () => {
     expect(result.logo_url).toBeNull();
   });
 
-  it('deleteLogo throws when logo object missing in storage', async () => {
-    vi.mocked(objectStorage.headObject).mockResolvedValueOnce(null);
+  it('route-audit L1: deleteLogo reclaims the object and still clears the column when the object is already gone', async () => {
+    // Pre-fix deleteLogo only HEAD-checked and THREW if the object was missing, orphaning the bytes
+    // on the normal path. Now it best-effort DELETES the object and clears the column regardless.
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(false); // object already gone
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...organizationRow,
       logo_url: `https://cdn.example/organization-logos/${organizationRow.public_id}/logo.png`,
     } as never);
-    await expect(
-      service.deleteLogo(organizationRow.public_id, 'owner_public'),
-    ).rejects.toBeInstanceOf(ValidationError);
+    vi.mocked(repository.update).mockResolvedValue({
+      ...organizationRow,
+      logo_url: null,
+    } as never);
+    const result = await service.deleteLogo(organizationRow.public_id, 'owner_public');
+    expect(result.logo_url).toBeNull();
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith(
+      `organization-logos/${organizationRow.public_id}/logo.png`,
+    );
   });
 
   it('delete throws when soft delete returns null', async () => {
@@ -496,12 +505,9 @@ describe('OrganizationService', () => {
     expect(repository.update).toHaveBeenCalled();
   });
 
-  it('deleteLogo validates storage object when logo url contains extractable key', async () => {
+  it('route-audit L1: deleteLogo reclaims the extractable storage key before clearing the column', async () => {
     const logoPath = `organization-logos/${organizationRow.public_id}/logo.png`;
-    vi.mocked(objectStorage.headObject).mockResolvedValueOnce({
-      contentLength: 100,
-      contentType: undefined,
-    });
+    vi.mocked(objectStorage.deleteObject).mockResolvedValueOnce(true);
     vi.mocked(repository.findByPublicId).mockResolvedValue({
       ...organizationRow,
       logo_url: `https://cdn.example/${logoPath}`,
@@ -511,7 +517,7 @@ describe('OrganizationService', () => {
       logo_url: null,
     } as never);
     const result = await service.deleteLogo(organizationRow.public_id, 'owner_public');
-    expect(objectStorage.headObject).toHaveBeenCalledWith(logoPath);
+    expect(objectStorage.deleteObject).toHaveBeenCalledWith(logoPath);
     expect(result.logo_url).toBeNull();
   });
 

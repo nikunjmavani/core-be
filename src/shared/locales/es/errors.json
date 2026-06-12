@@ -125,6 +125,7 @@
   "invalidUploadInput": "Entrada de subida no válida",
   "uploadOrganizationIdNotAllowed": "organizationId no permitido cuando \"for\" es \"user\"",
   "uploadOrganizationIdRequired": "organizationId requerido cuando \"for\" es \"organization\"",
+  "uploadPurposeTargetMismatch": "El propósito de la subida no coincide con el destino; p. ej. un avatar debe usar \"for\": \"user\" y un logotipo de organización debe usar \"for\": \"organization\".",
   "uploadContentTypeNotAllowed": "El tipo de contenido \"{{contentType}}\" no está permitido para el propósito \"{{purpose}}\". Permitidos: {{allowed}}",
   "uploadFilenameExtensionMismatch": "La extensión del archivo \"{{extension}}\" no coincide con el tipo de contenido \"{{contentType}}\". Extensiones permitidas: {{allowed}}",
   "uploadFilenameUnsafe": "El nombre del archivo contiene separadores de ruta o caracteres de control, lo cual no está permitido",
