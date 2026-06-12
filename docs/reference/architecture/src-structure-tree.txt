@@ -1244,6 +1244,7 @@ src/
     │   ├── generate-postman-collection.ts
     │   ├── generate-project-structure-tree.ts
     │   ├── generate-route-catalog.ts
+    │   ├── generate-route-examples.ts
     │   ├── hosted-docs-upload.util.ts
     │   ├── openapi-enricher.ts
     │   ├── project-structure-tree.constants.ts
@@ -1946,6 +1947,7 @@ src/
     │   │   │   ├── operation-helpers.unit.test.ts
     │   │   │   ├── response-map.unit.test.ts
     │   │   │   ├── responses-builder.unit.test.ts
+    │   │   │   ├── route-examples.unit.test.ts
     │   │   │   ├── route-extractor.unit.test.ts
     │   │   │   ├── route-response-map-statuses.unit.test.ts
     │   │   │   └── schema-enricher.unit.test.ts

@@ -41,12 +41,16 @@ export type RegisteredRouteCapture = {
 /**
  * One routed response reported to {@link BuildAppOptions.observeResponses}:
  * the HTTP method, the registered route pattern (e.g. `/api/v1/users/:userId`),
- * and the final response status code.
+ * and the final response status code. `requestBody` / `responseBody` are only
+ * populated when {@link BuildAppOptions.captureBodies} is set (JSON payloads
+ * only — streams and hijacked replies are skipped).
  */
 export type ObservedRouteResponse = {
   method: string;
   routeUrl: string;
   statusCode: number;
+  requestBody?: unknown;
+  responseBody?: string;
 };
 
 /**
@@ -62,6 +66,11 @@ export type BuildAppOptions = {
    * routes so all encapsulated contexts inherit the hook.
    */
   observeResponses?: (observation: ObservedRouteResponse) => void;
+  /**
+   * Also report request/response bodies to {@link observeResponses} (used by
+   * the OpenAPI example-capture run; see `pnpm routes:examples`).
+   */
+  captureBodies?: boolean;
 };
 
 /**
@@ -89,15 +98,32 @@ export async function buildApp(options?: BuildAppOptions) {
 
   if (options?.observeResponses) {
     const observeResponses = options.observeResponses;
+    const captureBodies = options.captureBodies === true;
+    const capturedResponseBody = Symbol('observedResponseBody');
+
+    if (captureBodies) {
+      app.addHook('onSend', async (request, _reply, payload) => {
+        if (typeof payload === 'string') {
+          (request as unknown as Record<symbol, string>)[capturedResponseBody] = payload;
+        }
+        return payload;
+      });
+    }
+
     app.addHook('onResponse', async (request, reply) => {
       const routeUrl = request.routeOptions.url;
       if (!routeUrl) {
         return;
       }
+      const responseBody = captureBodies
+        ? (request as unknown as Record<symbol, string | undefined>)[capturedResponseBody]
+        : undefined;
       observeResponses({
         method: request.method.toUpperCase(),
         routeUrl,
         statusCode: reply.statusCode,
+        ...(captureBodies && request.body !== undefined ? { requestBody: request.body } : {}),
+        ...(responseBody !== undefined ? { responseBody } : {}),
       });
     });
   }

@@ -378,7 +378,8 @@ Local SonarQube quality gate (pre-push): `pnpm sonar:up` / `sonar:scan` / `sonar
 - `pnpm verify:base` — end-to-end gate: migrate → seed (minimal + full) → API smoke (auto-detects/launches server + worker) → validate
 - `pnpm routes:catalog` / `pnpm routes:catalog:check` — regenerate or verify `docs/routes.txt` (legacy: `route-catalog`, `route-catalog:check`)
 - `pnpm validate:route-success-statuses` — verify `tooling/openapi/route-catalog/route-success-statuses.json` (declared happy-path status per route) stays in sync with `docs/routes.txt`
-- `pnpm validate:route-success-coverage` — observed-status gate after a full `pnpm test`: fails on declared-vs-observed drift; uncovered-routes count ratchets via `tooling/route-coverage/route-success-coverage-budget.json`
+- `pnpm validate:route-success-coverage` — observed-status gate after a full `pnpm test`: fails on declared-vs-observed drift; uncovered-routes count ratchets via `tooling/route-coverage/route-success-coverage-budget.json`; also verifies every observed sub-500 status is documented in the generated OpenAPI spec
+- `pnpm routes:examples` — refresh `tooling/openapi/route-examples/route-examples.json` (sanitized request/response samples per route+status, embedded in OpenAPI as `captured` examples) from a capture run: `ROUTE_EXAMPLE_CAPTURE=1 pnpm test && pnpm routes:examples`
 - `pnpm ci:local` — PR gate: validate + domain + routes + migrate lint + env example + full test
 - `pnpm ci:quality` — static CI quality slice (audit, validate, domain, contract tests, routes, env example, migrate lint)
 - `pnpm validate` — lint + format:check + typecheck

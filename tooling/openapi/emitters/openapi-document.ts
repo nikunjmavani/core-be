@@ -26,8 +26,12 @@ import {
   isMcpOpenApiPath,
 } from '@tooling/openapi/mcp-openapi.js';
 import { buildResponses } from './responses-builder.js';
+import { loadCapturedRouteExamples } from '@tooling/openapi/route-examples/loader.js';
 import { PROJECT_OPENAPI_TITLE } from '@/shared/constants/project-identity.constants.js';
 import { buildTagDefinitions } from './tag-definitions.js';
+
+/** Sanitized request/response samples captured from real test-suite API calls. */
+const capturedExamplesByRouteKey = loadCapturedRouteExamples();
 
 export type OpenApiDocument = {
   openapi: string;
@@ -112,12 +116,23 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
     } else if (['post', 'patch', 'put'].includes(operation)) {
       const schema = getRequestBodySchema(method, openapiPath);
       if (schema) {
+        const capturedRequestBody = capturedExamplesByRouteKey[routeKey]?.request_body;
         operationObject.requestBody = {
           required: true,
           content: {
             'application/json': {
               schema,
               ...(schema.example ? { example: schema.example } : {}),
+              ...(capturedRequestBody !== undefined
+                ? {
+                    examples: {
+                      captured: {
+                        summary: 'Captured from a live API call in the test suite (sanitized)',
+                        value: capturedRequestBody,
+                      },
+                    },
+                  }
+                : {}),
             },
           },
         };
