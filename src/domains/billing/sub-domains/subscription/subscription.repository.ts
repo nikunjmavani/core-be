@@ -214,6 +214,10 @@ export class SubscriptionRepository {
         and(
           eq(subscriptions.public_id, public_id),
           eq(subscriptions.organization_id, organization_id),
+          // Terminal subscriptions are immutable. Refuse to mutate a CANCELED / INCOMPLETE_EXPIRED
+          // row even if a concurrent webhook moved it there AFTER the service's TERMINAL_STATUSES
+          // read-check — a compare-and-set that closes the terminal-guard TOCTOU (route-audit B6).
+          notInArray(subscriptions.status, [...INACTIVE_SUBSCRIPTION_STATUSES]),
         ),
       )
       .returning({ id: subscriptions.id });
@@ -261,6 +265,13 @@ export class SubscriptionRepository {
       .where(
         and(
           eq(subscriptions.provider_subscription_id, provider_subscription_id),
+          // Never RESURRECT a locally-terminal subscription via an in-place `.updated` sync — only
+          // the dedicated `.deleted` handler (markCanceled) writes terminal state. Without this, a
+          // late `.updated` whose Stripe timestamp beats the wall-clock watermark stamped by an
+          // offboarding / immediate-cancel could flip a CANCELED org's sub back to ACTIVE
+          // (route-audit B5). A non-terminal Dashboard cancel (ACTIVE → CANCELED via `.updated`) is
+          // unaffected: the guard checks the CURRENT row status, not the incoming one.
+          notInArray(subscriptions.status, [...INACTIVE_SUBSCRIPTION_STATUSES]),
           or(
             isNull(subscriptions.last_stripe_event_created_at),
             lt(subscriptions.last_stripe_event_created_at, stripe_event_created_at),

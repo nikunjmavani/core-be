@@ -280,4 +280,66 @@ describe('SubscriptionRepository (database)', () => {
     const newActive = await repository.findActiveByOrganization(organization.id);
     expect(newActive?.public_id).toBe(resubscribed.public_id);
   });
+
+  it('route-audit B5: a NEWER .updated event cannot resurrect a locally-terminal subscription', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+    const providerSubscriptionId = `sub_resurrect_${Date.now()}`;
+    const seeded = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      providerSubscriptionId,
+    });
+
+    // Cancel at T1 (e.g. an offboarding / immediate cancel stamps the watermark with wall-clock).
+    const cancelAt = new Date('2026-08-01T00:00:00.000Z');
+    const canceled = await repository.markCanceledByProviderSubscriptionId(
+      providerSubscriptionId,
+      cancelAt,
+    );
+    expect(canceled?.status).toBe('CANCELED');
+
+    // A LATER `.updated(active)` (timestamp AFTER the cancel watermark) must NOT reactivate it.
+    // Pre-fix the `<` watermark let this through; the terminal guard now blocks it.
+    const laterEventAt = new Date('2026-08-01T00:05:00.000Z');
+    const resurrect = await repository.syncFromStripeProviderSubscription(
+      providerSubscriptionId,
+      { status: 'ACTIVE' },
+      laterEventAt,
+    );
+    expect(resurrect).toBeNull();
+    const refetched = await repository.findByPublicId(seeded.public_id, organization.id);
+    expect(refetched?.status).toBe('CANCELED');
+  });
+
+  it('route-audit B6: update() refuses to mutate a terminal subscription (compare-and-set)', async () => {
+    const owner = await createTestUser();
+    const organization = await createTestOrganization({ ownerUserId: owner.id });
+    const plan = await createTestPlan();
+
+    // A row that became terminal (e.g. a concurrent webhook cancel after the service read-check).
+    const terminal = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      status: 'CANCELED',
+      providerSubscriptionId: null,
+    });
+    const blocked = await repository.update(terminal.public_id, organization.id, {
+      cancel_at_period_end: false,
+    });
+    expect(blocked).toBeNull();
+
+    // A non-terminal row still updates normally (slot-occupying ACTIVE; CANCELED released the slot).
+    const active = await createTestSubscription({
+      organizationId: organization.id,
+      planId: plan.id,
+      status: 'ACTIVE',
+      providerSubscriptionId: null,
+    });
+    const updated = await repository.update(active.public_id, organization.id, {
+      cancel_at_period_end: true,
+    });
+    expect(updated?.cancel_at_period_end).toBe(true);
+  });
 });
