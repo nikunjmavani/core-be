@@ -1,6 +1,34 @@
 import { EXTERNAL_ERROR_MESSAGE } from '@/shared/constants/index.js';
 import { loadRouteSuccessStatusMap } from '@/tests/helpers/route-success-status.helper.js';
 import { routeResponseMap } from '@tooling/openapi/response-map/index.js';
+import { loadCapturedRouteExamples } from '@tooling/openapi/route-examples/loader.js';
+
+/** Sanitized request/response samples captured from real test-suite API calls. */
+const capturedExamplesByRouteKey = loadCapturedRouteExamples();
+
+/**
+ * Attaches the captured live-call example for `(routeKey, statusCode)` to a
+ * response object's JSON content when one exists in the committed fixture.
+ */
+function withCapturedExample(
+  routeKey: string,
+  statusCode: number | string,
+  content: Record<string, unknown>,
+): Record<string, unknown> {
+  const captured = capturedExamplesByRouteKey[routeKey]?.responses?.[String(statusCode)];
+  if (captured === undefined) {
+    return content;
+  }
+  return {
+    ...content,
+    examples: {
+      captured: {
+        summary: 'Captured from a live API call in the test suite (sanitized)',
+        value: captured,
+      },
+    },
+  };
+}
 
 /**
  * Declared happy-path status per route from the success-status registry
@@ -77,12 +105,12 @@ export function buildResponses(
       responses[String(statusCode)] = {
         description,
         content: {
-          'application/json': {
+          'application/json': withCapturedExample(routeKey, statusCode, {
             schema,
             ...((schema as Record<string, unknown>).example
               ? { example: (schema as Record<string, unknown>).example }
               : {}),
-          },
+          }),
         },
       };
     }
@@ -100,7 +128,7 @@ export function buildResponses(
   responses['400'] = {
     description: translate('validationError', 'Validation error'),
     content: {
-      'application/json': {
+      'application/json': withCapturedExample(routeKey, 400, {
         schema: errorResponseSchema,
         example: {
           error: {
@@ -110,43 +138,43 @@ export function buildResponses(
           },
           meta: { request_id: 'req_a1b2c3d4e5f6' },
         },
-      },
+      }),
     },
   };
   responses['401'] = {
     description: translate('unauthorized', 'Unauthorized'),
     content: {
-      'application/json': {
+      'application/json': withCapturedExample(routeKey, 401, {
         schema: errorResponseSchema,
         example: {
           error: { code: 'UNAUTHORIZED', message: 'Missing or invalid bearer token' },
           meta: { request_id: 'req_a1b2c3d4e5f6' },
         },
-      },
+      }),
     },
   };
   responses['403'] = {
     description: translate('forbidden', 'Forbidden'),
     content: {
-      'application/json': {
+      'application/json': withCapturedExample(routeKey, 403, {
         schema: errorResponseSchema,
         example: {
           error: { code: 'FORBIDDEN', message: 'Insufficient permissions' },
           meta: { request_id: 'req_a1b2c3d4e5f6' },
         },
-      },
+      }),
     },
   };
   responses['404'] = {
     description: translate('notFound', 'Not Found'),
     content: {
-      'application/json': {
+      'application/json': withCapturedExample(routeKey, 404, {
         schema: errorResponseSchema,
         example: {
           error: { code: 'NOT_FOUND', message: 'Resource not found' },
           meta: { request_id: 'req_a1b2c3d4e5f6' },
         },
-      },
+      }),
     },
   };
   if (routeKey.includes('/api/v1/mcp')) {
@@ -154,13 +182,13 @@ export function buildResponses(
     responses['406'] = {
       description: translate('notAcceptable', 'Not Acceptable'),
       content: {
-        'application/json': {
+        'application/json': withCapturedExample(routeKey, 406, {
           schema: errorResponseSchema,
           example: {
             error: { code: 'NOT_ACCEPTABLE', message: 'Accept header missing or unsupported' },
             meta: { request_id: 'req_a1b2c3d4e5f6' },
           },
-        },
+        }),
       },
     };
   }
@@ -171,13 +199,13 @@ export function buildResponses(
     responses['409'] = {
       description: translate('conflict', 'Conflict'),
       content: {
-        'application/json': {
+        'application/json': withCapturedExample(routeKey, 409, {
           schema: errorResponseSchema,
           example: {
             error: { code: 'CONFLICT', message: 'Resource already exists or state conflict' },
             meta: { request_id: 'req_a1b2c3d4e5f6' },
           },
-        },
+        }),
       },
     };
     // 422 covers business-rule rejections (UnprocessableEntityError) and the
@@ -186,7 +214,7 @@ export function buildResponses(
     responses['422'] = {
       description: translate('unprocessableEntity', 'Unprocessable Entity'),
       content: {
-        'application/json': {
+        'application/json': withCapturedExample(routeKey, 422, {
           schema: errorResponseSchema,
           example: {
             error: {
@@ -195,7 +223,7 @@ export function buildResponses(
             },
             meta: { request_id: 'req_a1b2c3d4e5f6' },
           },
-        },
+        }),
       },
     };
   }
@@ -204,25 +232,25 @@ export function buildResponses(
     responses['413'] = {
       description: translate('payloadTooLarge', 'Payload Too Large'),
       content: {
-        'application/json': {
+        'application/json': withCapturedExample(routeKey, 413, {
           schema: errorResponseSchema,
           example: {
             error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body exceeds the size limit' },
             meta: { request_id: 'req_a1b2c3d4e5f6' },
           },
-        },
+        }),
       },
     };
     responses['415'] = {
       description: translate('unsupportedMediaType', 'Unsupported Media Type'),
       content: {
-        'application/json': {
+        'application/json': withCapturedExample(routeKey, 415, {
           schema: errorResponseSchema,
           example: {
             error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Unsupported content type' },
             meta: { request_id: 'req_a1b2c3d4e5f6' },
           },
-        },
+        }),
       },
     };
   }
@@ -230,25 +258,25 @@ export function buildResponses(
   responses['429'] = {
     description: translate('tooManyRequests', 'Too Many Requests'),
     content: {
-      'application/json': {
+      'application/json': withCapturedExample(routeKey, 429, {
         schema: errorResponseSchema,
         example: {
           error: { code: 'RATE_LIMITED', message: 'Too many requests, retry later' },
           meta: { request_id: 'req_a1b2c3d4e5f6' },
         },
-      },
+      }),
     },
   };
   responses['500'] = {
     description: translate('internalError', 'Internal Server Error'),
     content: {
-      'application/json': {
+      'application/json': withCapturedExample(routeKey, 500, {
         schema: errorResponseSchema,
         example: {
           error: { code: 'internal_error', detail: EXTERNAL_ERROR_MESSAGE },
           meta: { request_id: 'req_a1b2c3d4e5f6' },
         },
-      },
+      }),
     },
   };
 

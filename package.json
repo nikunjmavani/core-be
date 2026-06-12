@@ -138,6 +138,7 @@
     "docs:upload:scalar": "tsx src/scripts/codegen/upload-scalar-registry.ts",
     "docs:upload:hosted": "pnpm docs:upload && pnpm docs:upload:scalar",
     "routes:catalog": "tsx src/scripts/codegen/generate-route-catalog.ts",
+    "routes:examples": "tsx src/scripts/codegen/generate-route-examples.ts",
     "routes:catalog:check": "tsx src/scripts/codegen/generate-route-catalog.ts --check",
     "routes:coverage:audit": "tsx src/scripts/ops/route-coverage-audit.ts",
     "routes:coverage:audit:check": "tsx src/scripts/ops/route-coverage-audit.ts --check",

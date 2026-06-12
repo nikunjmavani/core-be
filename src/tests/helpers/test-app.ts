@@ -1,7 +1,10 @@
 import { buildApp, type RegisteredRouteCapture } from '@/app.js';
 import { connectBullMqRedis } from '@/infrastructure/cache/bullmq-redis.client.js';
 import { connectRedis } from '@/infrastructure/cache/redis.client.js';
-import { createRouteStatusObserver } from '@/tests/helpers/route-status-observer.js';
+import {
+  createRouteStatusObserver,
+  isRouteExampleCaptureEnabled,
+} from '@/tests/helpers/route-status-observer.js';
 import type { FastifyInstance } from 'fastify';
 import type { InjectOptions } from 'light-my-request';
 
@@ -153,6 +156,7 @@ export async function createTestApp(options: CreateTestAppOptions = {}): Promise
   const app = await buildApp({
     captureRegisteredRoutes: registeredRoutes,
     observeResponses: routeStatusObserver.observeResponse,
+    captureBodies: isRouteExampleCaptureEnabled(),
   });
   app.addHook('onClose', async () => {
     routeStatusObserver.flush();
