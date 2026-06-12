@@ -5,7 +5,7 @@
  * session-validation secrets or internal FKs.
  */
 export interface AuthSessionOutput {
-  public_id: string;
+  id: string;
   ip_address: string;
   user_agent: string | null;
   last_active_at: string;
@@ -26,7 +26,7 @@ interface AuthSessionRowLike {
 /** Maps a raw session row to its safe public shape. */
 export function serializeAuthSession(row: AuthSessionRowLike): AuthSessionOutput {
   return {
-    public_id: row.public_id,
+    id: row.public_id,
     ip_address: row.ip_address,
     user_agent: row.user_agent ?? null,
     last_active_at: row.last_active_at.toISOString(),

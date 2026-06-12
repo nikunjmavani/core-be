@@ -934,13 +934,13 @@ describe('Auth Domain — Integration', () => {
         token,
       });
       expect(response.statusCode).toBe(200);
-      const body = response.json() as { data: { public_id?: string; id?: unknown }[] };
+      const body = response.json() as { data: { id?: unknown; public_id?: unknown }[] };
       expect(body.data.length).toBeGreaterThan(0);
       for (const item of body.data) {
-        expect(typeof item.public_id).toBe('string');
-        expect(item.public_id).toMatch(/^am_[a-z0-9]{21}$/);
-        // sec-new-B4: bigserial id must not be returned
-        expect(item.id).toBeUndefined();
+        // sec-new-B4: `id` is the opaque prefixed identifier, never the bigserial
+        expect(typeof item.id).toBe('string');
+        expect(item.id).toMatch(/^am_[a-z0-9]{21}$/);
+        expect(item.public_id).toBeUndefined();
       }
     });
   });

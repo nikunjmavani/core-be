@@ -161,7 +161,9 @@ describe('createUserController', () => {
       mockRequest({ body: { avatarKey: 'avatars/user/avatar.png' } }),
       {} as FastifyReply,
     );
-    await controller.deleteAvatar(mockRequest(), {} as FastifyReply);
+    const deleteAvatarReply = { code: vi.fn().mockReturnThis(), send: vi.fn() };
+    await controller.deleteAvatar(mockRequest(), deleteAvatarReply as unknown as FastifyReply);
+    expect(deleteAvatarReply.code).toHaveBeenCalledWith(204);
     expect(userService.uploadAvatar).toHaveBeenCalled();
     expect(userService.deleteAvatar).toHaveBeenCalled();
   });

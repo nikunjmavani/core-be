@@ -246,7 +246,7 @@ describe('createAuthController', () => {
     expect(deleteReply.code).toHaveBeenCalledWith(204);
   });
 
-  it('verifyMfaLogin returns session_public_id and sets session cookie', async () => {
+  it('verifyMfaLogin returns session_id and sets session cookie', async () => {
     const loginReply = mockReply();
     const responsePayload = await controller.verifyMfaLogin(
       mockRequest({ body: { mfa_session_token: 'session-token', totp_code: '123456' } }),
@@ -254,7 +254,7 @@ describe('createAuthController', () => {
     );
     expect(responsePayload.data).toMatchObject({
       access_token: 'token',
-      session_public_id: 'session',
+      session_id: 'session',
     });
     expect(loginReply.setCookie).toHaveBeenCalledWith(
       'session_id',

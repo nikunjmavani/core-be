@@ -100,3 +100,4 @@ tooling/setup.secrets.json
 
 # Understand Anything — fully regenerable analysis output
 .understand-anything/
+.cache/

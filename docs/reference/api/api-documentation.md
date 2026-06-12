@@ -100,6 +100,8 @@ pnpm docs:upload:hosted        # Postman + Scalar Registry (needs secrets)
 
 **Before merge (PR):** Run `pnpm routes:catalog:check` and `pnpm docs:check` locally when changing routes or OpenAPI; post-merge **API docs** publishes on push. Pre-commit also regenerates `docs/routes.txt` when routes change.
 
+**Breaking-change gate locally:** `pnpm docs:breaking` mirrors the CI oasdiff job — it downloads the same pinned, checksum-verified oasdiff release into `.cache/oasdiff/` (a Go binary; there is no npm package, so it cannot be a devDependency), generates the base spec from `origin/dev` in a temporary worktree, and diffs against the regenerated head spec with `.github/oasdiff/breaking-changes-ignore.txt`. Intentional breaks get narrow entries in that ignore file; everything else must be fixed.
+
 **After merge (push):** CI ([`.github/workflows/reusable-openapi-postman-publish.yml`](../../../.github/workflows/reusable-openapi-postman-publish.yml)) runs `docs:all`, `docs:validate:openapi`, then uploads to Postman and Scalar Registry when environment secrets are set.
 
 ---

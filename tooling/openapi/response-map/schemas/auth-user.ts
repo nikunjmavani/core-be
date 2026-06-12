@@ -93,20 +93,23 @@ export const notificationPreferenceExamples = [
 export const accessTokenSchema = {
   type: 'object',
   properties: {
-    access_token: { type: 'string' },
-    refresh_token: { type: 'string' },
-    expires_in: { type: 'integer' },
-    token_type: { type: 'string' },
+    access_token: {
+      type: 'string',
+      description: 'JWT to send as `Authorization: Bearer <ACCESS_TOKEN>`',
+    },
+    session_id: {
+      type: 'string',
+      pattern: '^ses_[a-z0-9]{21}$',
+      description:
+        'ID of the session this token belongs to (revocable via DELETE /auth/me/sessions/{session_id})',
+    },
   },
 };
 
 export const accessTokenExample = {
   access_token:
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNyX2s3eDltMnBxcjR3OG4xdjMiLCJpYXQiOjE3Mzk1MjAwMDAsImV4cCI6MTczOTUyMzYwMH0.abc123',
-  refresh_token:
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNyX2s3eDltMnBxcjR3OG4xdjMiLCJ0eXBlIjoicmVmcmVzaCJ9.xyz789',
-  expires_in: 3600,
-  token_type: 'Bearer',
+    'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3Jfazd4OW0ycHFyNHc4bjF2M2EiLCJpYXQiOjE3Mzk1MjAwMDAsImV4cCI6MTczOTUyMzYwMH0.abc123',
+  session_id: 'ses_m7n2p5q8w1r4x9k3a1b2c',
 };
 
 // ── Magic Link Sent ──
@@ -168,7 +171,7 @@ export const oauthProvidersSchema = {
 export const authMethodSchema = {
   type: 'object',
   properties: {
-    id: { type: 'integer' },
+    id: { type: 'string', pattern: '^am_[a-z0-9]{21}$' },
     method_type: {
       type: 'string',
       enum: ['PASSWORD', 'MAGIC_LINK', 'OAUTH', 'MFA_TOTP', 'MFA_SMS', 'MFA_EMAIL'],
@@ -183,10 +186,12 @@ export const authMethodSchema = {
 };
 
 export const authMethodExample = {
-  id: 1,
-  method_type: 'password',
+  id: 'am_k7x9m2pqr4w8n1v3a5b6c',
+  method_type: 'PASSWORD',
   provider: null,
   is_primary: true,
+  verified_at: '2026-01-15T10:30:00.000Z',
+  last_used_at: '2026-02-14T08:30:00.000Z',
   created_at: '2026-01-15T10:30:00.000Z',
 };
 
@@ -194,12 +199,12 @@ export const authMethodExample = {
 export const sessionSchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: { type: 'string', pattern: '^ses_[a-z0-9]{21}$' },
     ip_address: { type: 'string' },
-    user_agent: { type: 'string' },
+    user_agent: { type: 'string', nullable: true },
     last_active_at: { type: 'string', format: 'date-time' },
+    expires_at: { type: 'string', format: 'date-time' },
     created_at: { type: 'string', format: 'date-time' },
-    is_current: { type: 'boolean' },
   },
 };
 
@@ -208,8 +213,8 @@ export const sessionExample = {
   ip_address: '203.0.113.42',
   user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
   last_active_at: '2026-02-14T08:30:00.000Z',
+  expires_at: '2026-02-21T08:30:00.000Z',
   created_at: '2026-02-10T10:00:00.000Z',
-  is_current: true,
 };
 
 // ── MFA Method ──

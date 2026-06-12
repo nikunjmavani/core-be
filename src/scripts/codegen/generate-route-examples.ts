@@ -112,10 +112,41 @@ function isSecretFieldName(fieldName: string): boolean {
   return SECRET_FIELD_SUFFIXES.some((suffix) => lower.endsWith(suffix));
 }
 
+const I18N_KEY_PATTERN = /^(errors|success|common|mail):([A-Za-z0-9.]+)$/;
+const I18N_NAMESPACES: Record<string, Record<string, string>> = {};
+for (const namespace of ['errors', 'success', 'common', 'mail']) {
+  try {
+    I18N_NAMESPACES[namespace] = JSON.parse(
+      readFileSync(resolve(process.cwd(), `src/shared/locales/en/${namespace}.json`), 'utf8'),
+    ) as Record<string, string>;
+  } catch {
+    I18N_NAMESPACES[namespace] = {};
+  }
+}
+
+/**
+ * Capture runs can record raw i18n keys (`errors:missingAuthorizationHeader`)
+ * when the inject context has no resolved `request.t`. Documentation must show
+ * what production emits, so resolve keys through the en locale here.
+ */
+function resolveI18nKey(value: string): string {
+  const match = I18N_KEY_PATTERN.exec(value);
+  if (!match) return value;
+  // Support dotted keys (errors:validation.invitationRevoked) by walking the tree.
+  let node: unknown = I18N_NAMESPACES[match[1]!];
+  for (const segment of match[2]!.split('.')) {
+    if (node === null || typeof node !== 'object') return value;
+    node = (node as Record<string, unknown>)[segment];
+  }
+  return typeof node === 'string' ? node : value;
+}
+
 function sanitizeString(value: string): string {
   // Opaque base64-JSON pagination cursors ("eyJ…", no dots) embed timestamps
   // and internal ids — normalize before the JWT check (JWTs have dots).
   if (/^eyJ[A-Za-z0-9+/=_-]{8,}$/.test(value)) return '<opaque-cursor>';
+  const translated = resolveI18nKey(value);
+  if (translated !== value) return translated;
   // Prefixed public ids normalize to a stable per-entity placeholder BEFORE the
   // credential patterns (which would otherwise redact every typed id).
   const prefixedId = PREFIXED_PUBLIC_ID_PATTERN.exec(value);

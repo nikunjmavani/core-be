@@ -115,10 +115,10 @@ describe('User Domain — Integration', () => {
         payload: { code: await generateTotp({ secret: enrollSecret }) },
       });
       expect(confirmResponse.statusCode).toBe(201);
-      // route-#10: the serializer returns `method_public_id` and DELETE /auth/mfa/:mfa_method_id
+      // route-#10: the serializer returns `mfa_method_id` and DELETE /auth/mfa/{mfa_method_id}
       // now accepts that opaque public id directly (the bigserial id is never exposed).
       const methodPublicId = (confirmResponse.json() as { data: Record<string, unknown> }).data
-        .method_public_id as string;
+        .mfa_method_id as string;
       expect(typeof methodPublicId).toBe('string');
       expect(methodPublicId).toMatch(/^am_[a-z0-9]{21}$/);
 
