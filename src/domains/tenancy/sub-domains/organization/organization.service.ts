@@ -115,7 +115,12 @@ export class OrganizationService {
     return keyMatch?.[0] ?? null;
   }
 
-  private async clearOrganizationLogoStorage(
+  /**
+   * Best-effort reclaim of the S3 object backing an owned organization-logo URL. Prefix-guarded
+   * (external URLs are ignored). Does NOT mutate the column — callers decide what to write — so it
+   * is reused by per-asset delete, logo replacement, and offboarding.
+   */
+  private async deleteOwnedOrganizationLogoObject(
     public_id: string,
     logo_url: string | null,
   ): Promise<void> {
@@ -123,11 +128,15 @@ export class OrganizationService {
     if (!storageKey) return;
     const objectDeleted = await this.objectStorage.deleteObject(storageKey);
     if (!objectDeleted) {
-      logger.warn(
-        { publicId: public_id, logoKey: storageKey },
-        'organization.offboarding.logoDeleteFailed',
-      );
+      logger.warn({ publicId: public_id, logoKey: storageKey }, 'organization.logo.deleteFailed');
     }
+  }
+
+  private async clearOrganizationLogoStorage(
+    public_id: string,
+    logo_url: string | null,
+  ): Promise<void> {
+    await this.deleteOwnedOrganizationLogoObject(public_id, logo_url);
     const updated = await withOrganizationDatabaseContext(public_id, () =>
       this.repository.update(public_id, { logo_url: null }, null),
     );
@@ -471,19 +480,34 @@ export class OrganizationService {
       });
     }
     const logoUrl = this.objectStorage.getObjectUrl(parsed.key);
-    return withOrganizationDatabaseContext(public_id, async () => {
-      const organization = await this.repository.findByPublicId(public_id);
-      if (!organization) throw new NotFoundError('Organization');
-      await this.offboardingUploadService!.assertKeyConfirmed(parsed.key);
-      const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
-      const updated = await this.repository.update(
-        public_id,
-        { logo_url: logoUrl },
-        userId ?? null,
-      );
-      if (!updated) throw new NotFoundError('Organization');
-      return serializeOrganization(updated);
-    });
+    const { serialized, previousLogoUrl } = await withOrganizationDatabaseContext(
+      public_id,
+      async () => {
+        const organization = await this.repository.findByPublicId(public_id);
+        if (!organization) throw new NotFoundError('Organization');
+        // Bind the upload row to THIS organization explicitly (route-audit L2) — not only via the
+        // key prefix — so the ownership check holds even for a future caller that doesn't derive it.
+        await this.offboardingUploadService!.assertKeyConfirmedForOwner({
+          fileKey: parsed.key,
+          organizationInternalId: organization.id,
+        });
+        const previous = organization.logo_url;
+        const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
+        const result = await this.repository.update(
+          public_id,
+          { logo_url: logoUrl },
+          userId ?? null,
+        );
+        if (!result) throw new NotFoundError('Organization');
+        return { serialized: serializeOrganization(result), previousLogoUrl: previous };
+      },
+    );
+    // Reclaim the PREVIOUS owned logo object outside the DB context — replacing a logo previously
+    // orphaned the old S3 object (storage leak). Best-effort + prefix-guarded.
+    if (previousLogoUrl && previousLogoUrl !== logoUrl) {
+      await this.deleteOwnedOrganizationLogoObject(public_id, previousLogoUrl);
+    }
+    return serialized;
   }
 
   async deleteLogo(
@@ -495,18 +519,10 @@ export class OrganizationService {
       if (!found) throw new NotFoundError('Organization');
       return found;
     });
-    // External I/O (S3) runs outside the DB context.
-    if (organization.logo_url) {
-      const keyMatch = /organization-logos\/[^?#]+/.exec(organization.logo_url);
-      if (keyMatch) {
-        const metadata = await this.objectStorage.headObject(keyMatch[0]);
-        if (!metadata) {
-          throw new ValidationError('errors:validation.logoNotFound', undefined, {
-            key: ['Object does not exist'],
-          });
-        }
-      }
-    }
+    // Reclaim the backing S3 object before clearing the column (prefix-guarded; external URLs are
+    // left untouched) — previously DELETE left the object orphaned in the bucket (storage leak).
+    // External I/O (S3) runs outside the DB context; best-effort, so a missing object still clears.
+    await this.deleteOwnedOrganizationLogoObject(public_id, organization.logo_url);
     return withOrganizationDatabaseContext(public_id, async () => {
       const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
       const updated = await this.repository.update(public_id, { logo_url: null }, userId ?? null);

@@ -100,6 +100,7 @@ describe('UserService', () => {
       uploadService: {
         tombstoneAllByUserId: vi.fn().mockResolvedValue(0),
         assertKeyConfirmed: vi.fn().mockResolvedValue(undefined),
+        assertKeyConfirmedForOwner: vi.fn().mockResolvedValue(undefined),
       } as never,
       userDataExportService: {
         deleteAllExportsForUser: vi.fn().mockResolvedValue(undefined),
@@ -164,7 +165,7 @@ describe('UserService', () => {
       } as never,
       uploadService: {
         tombstoneAllByUserId: vi.fn().mockResolvedValue(0),
-        assertKeyConfirmed: vi
+        assertKeyConfirmedForOwner: vi
           .fn()
           .mockRejectedValue(new ValidationError('errors:validation.uploadNotConfirmed')),
       } as never,

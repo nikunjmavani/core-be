@@ -127,6 +127,7 @@
   "invalidUploadInput": "Invalid upload input",
   "uploadOrganizationIdNotAllowed": "organizationId is not allowed when \"for\" is \"user\"",
   "uploadOrganizationIdRequired": "organizationId is required when \"for\" is \"organization\"",
+  "uploadPurposeTargetMismatch": "The upload purpose does not match the target; e.g. an avatar must use \"for\": \"user\" and an organization logo must use \"for\": \"organization\".",
   "uploadContentTypeNotAllowed": "Content type \"{{contentType}}\" is not allowed for purpose \"{{purpose}}\". Allowed: {{allowed}}",
   "uploadFilenameExtensionMismatch": "Filename extension \"{{extension}}\" does not match content type \"{{contentType}}\". Allowed extensions: {{allowed}}",
   "uploadFilenameUnsafe": "Filename contains path separators or control characters, which are not allowed",

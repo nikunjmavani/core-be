@@ -137,17 +137,29 @@ export class UserService {
     };
   }
 
-  private async clearAvatarStorage(public_id: string, avatar_url: string | null): Promise<void> {
+  /**
+   * Best-effort reclaim of the S3 object backing an owned avatar key. Prefix-guarded, so an
+   * external OAuth-provider avatar URL is left untouched. Does NOT mutate the DB column — callers
+   * decide what to write — so it can be reused by per-asset delete, replacement, and offboarding.
+   */
+  private async deleteOwnedAvatarObject(
+    public_id: string,
+    avatar_url: string | null,
+  ): Promise<void> {
     if (!avatar_url) return;
     const expectedPrefix = buildUserAvatarKeyPrefix(public_id);
     if (!avatar_url.startsWith(expectedPrefix)) return;
     const objectDeleted = await this.objectStorage.deleteObject(avatar_url);
     if (!objectDeleted) {
-      logger.warn(
-        { publicId: public_id, avatarKey: avatar_url },
-        'user.offboarding.avatarDeleteFailed',
-      );
+      logger.warn({ publicId: public_id, avatarKey: avatar_url }, 'user.avatar.deleteFailed');
     }
+  }
+
+  private async clearAvatarStorage(public_id: string, avatar_url: string | null): Promise<void> {
+    if (!avatar_url) return;
+    const expectedPrefix = buildUserAvatarKeyPrefix(public_id);
+    if (!avatar_url.startsWith(expectedPrefix)) return;
+    await this.deleteOwnedAvatarObject(public_id, avatar_url);
     await withUserDatabaseContext(public_id, () =>
       this.repository.update(public_id, { avatar_url: null }),
     );
@@ -362,8 +374,17 @@ export class UserService {
         `Invalid avatar content type: ${objectInfo.contentType}`,
       );
     }
+    // Bind the upload row to this owner explicitly (not just via the key prefix) so the ownership
+    // check survives any future caller that doesn't derive the key from the prefix convention.
+    const ownerInternalId = await this.resolveInternalIdByPublicId(ownerPublicId);
+    if (ownerInternalId === null) {
+      throw new ValidationError('errors:validation.avatarNotFound');
+    }
     await withUserDatabaseContext(ownerPublicId, () =>
-      this.offboardingUploadService!.assertKeyConfirmed(avatarKey),
+      this.offboardingUploadService!.assertKeyConfirmedForOwner({
+        fileKey: avatarKey,
+        userInternalId: ownerInternalId,
+      }),
     );
   }
 
@@ -382,9 +403,14 @@ export class UserService {
 
     const { avatarKey, ...profileFields } = parsed;
     let avatarUrl: string | undefined;
+    let previousAvatarUrl: string | null = null;
     if (avatarKey) {
       await this.assertAvatarObjectInStorage(avatarKey, publicId);
       avatarUrl = avatarKey;
+      const previous = await withUserDatabaseContext(publicId, () =>
+        this.repository.findByPublicId(publicId),
+      );
+      previousAvatarUrl = previous?.avatar_url ?? null;
     }
     const user = await withUserDatabaseContext(publicId, () =>
       this.repository.update(
@@ -396,6 +422,10 @@ export class UserService {
       ),
     );
     if (!user) throw new NotFoundError('User');
+    // Reclaim the previous owned avatar object when the avatar changed (storage leak / GDPR).
+    if (avatarUrl !== undefined && previousAvatarUrl && previousAvatarUrl !== avatarUrl) {
+      await this.deleteOwnedAvatarObject(publicId, previousAvatarUrl);
+    }
     return UserSerializer.one(user);
   }
 
@@ -406,14 +436,29 @@ export class UserService {
   async uploadAvatar(publicId: string, body: unknown): Promise<UserOutput> {
     const { avatarKey } = validateUploadAvatar(body);
     await this.assertAvatarObjectInStorage(avatarKey, publicId);
+    const previous = await withUserDatabaseContext(publicId, () =>
+      this.repository.findByPublicId(publicId),
+    );
     const user = await withUserDatabaseContext(publicId, () =>
       this.repository.update(publicId, { avatar_url: avatarKey }),
     );
     if (!user) throw new NotFoundError('User');
+    // Reclaim the PREVIOUS owned avatar object now the new one is attached — otherwise replacing an
+    // avatar orphaned the old S3 object indefinitely (storage leak / incomplete GDPR erasure).
+    if (previous?.avatar_url && previous.avatar_url !== avatarKey) {
+      await this.deleteOwnedAvatarObject(publicId, previous.avatar_url);
+    }
     return UserSerializer.one(user);
   }
 
   async deleteAvatar(publicId: string): Promise<UserOutput> {
+    const existing = await withUserDatabaseContext(publicId, () =>
+      this.repository.findByPublicId(publicId),
+    );
+    if (!existing || existing.deleted_at) throw new NotFoundError('User');
+    // Reclaim the backing S3 object before clearing the column — previously `DELETE` left the bytes
+    // in the bucket (storage leak + incomplete GDPR erasure on the per-asset delete path).
+    await this.deleteOwnedAvatarObject(publicId, existing.avatar_url);
     const user = await withUserDatabaseContext(publicId, () =>
       this.repository.update(publicId, { avatar_url: null }),
     );

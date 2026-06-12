@@ -74,6 +74,19 @@ export const UPLOAD_PURPOSE_CONFIG: Record<UploadPurpose, UploadPurposeConfig> =
 } as const;
 
 /**
+ * The required upload target (`for`) for each purpose (route-audit L3). The validator rejects a
+ * mismatched `{ purpose, for }` BEFORE key construction so a request like
+ * `{ purpose: organization-logo, for: user }` can't produce an `organization-logos/undefined/...`
+ * key on a user-scoped row (the key prefix encodes scope, and the attach binding relies on it).
+ */
+export const UPLOAD_PURPOSE_REQUIRED_TARGET: Record<UploadPurpose, UploadTarget> = {
+  [UPLOAD_PURPOSES.AVATAR]: UPLOAD_TARGETS.USER,
+  [UPLOAD_PURPOSES.USER_FILE]: UPLOAD_TARGETS.USER,
+  [UPLOAD_PURPOSES.ORGANIZATION_LOGO]: UPLOAD_TARGETS.ORGANIZATION,
+  [UPLOAD_PURPOSES.ORGANIZATION_FILE]: UPLOAD_TARGETS.ORGANIZATION,
+} as const;
+
+/**
  * Postgres advisory-lock namespace (`classid`) used to serialize per-user PENDING
  * upload-quota reservations. Combined with the user's internal id as the `objid`
  * in the two-key `pg_advisory_xact_lock(classid, objid)` form so it occupies a
