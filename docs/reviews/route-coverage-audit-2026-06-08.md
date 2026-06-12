@@ -26,21 +26,21 @@ Every route in `docs/routes.txt` is referenced by at least one explicit test fil
 | Method | Route | First test reference |
 |---|---|---|
 | GET | `/api/v1/audit/logs` | `src/tests/security/input/payload-dos.security.test.ts:102` |
-| POST | `/api/v1/auth/email/resend-verification` | `src/domains/auth/__tests__/auth.test.ts:706` |
-| POST | `/api/v1/auth/email/verify` | `src/domains/auth/__tests__/auth.test.ts:659` |
+| POST | `/api/v1/auth/email/resend-verification` | `src/domains/auth/__tests__/auth.test.ts:707` |
+| POST | `/api/v1/auth/email/verify` | `src/domains/auth/__tests__/auth.test.ts:660` |
 | POST | `/api/v1/auth/login` | `src/tests/e2e/billing-onboarding.e2e.test.ts:42` |
 | POST | `/api/v1/auth/logout` | `src/tests/integration/empty-body-json-parser.integration.test.ts:42` |
 | POST | `/api/v1/auth/magic-link/send` | `src/tests/chaos/redis-queue-enqueue.chaos.test.ts:63` |
 | POST | `/api/v1/auth/magic-link/verify` | `src/tests/integration/auth/magic-link.integration.test.ts:26` |
 | GET | `/api/v1/auth/me/auth-methods` | `src/tests/security/infrastructure/sensitive-field-leakage.security.test.ts:85` |
 | POST | `/api/v1/auth/me/auth-methods` | `src/tests/security/infrastructure/sensitive-field-leakage.security.test.ts:85` |
-| DELETE | `/api/v1/auth/me/auth-methods/:publicId` | `src/domains/auth/__tests__/auth.test.ts:958` |
+| DELETE | `/api/v1/auth/me/auth-methods/:publicId` | `src/domains/auth/__tests__/auth.test.ts:959` |
 | GET | `/api/v1/auth/me/sessions` | `src/tests/security/auth/jwt-attacks.security.test.ts:24` |
 | DELETE | `/api/v1/auth/me/sessions` | `src/tests/security/auth/jwt-attacks.security.test.ts:24` |
 | DELETE | `/api/v1/auth/me/sessions/:id` | `src/tests/security/auth/session-invalidation.security.test.ts:159` |
-| GET | `/api/v1/auth/mfa` | `src/domains/auth/__tests__/auth.test.ts:819` |
+| GET | `/api/v1/auth/mfa` | `src/domains/auth/__tests__/auth.test.ts:820` |
 | DELETE | `/api/v1/auth/mfa/:mfaMethodId` | `src/tests/security/auth/mfa-security.security.test.ts:61` |
-| POST | `/api/v1/auth/mfa/enroll` | `src/domains/auth/__tests__/auth.test.ts:632` |
+| POST | `/api/v1/auth/mfa/enroll` | `src/domains/auth/__tests__/auth.test.ts:633` |
 | POST | `/api/v1/auth/mfa/enroll/confirm` | `src/domains/auth/sub-domains/auth-mfa/__tests__/integration/auth-mfa.integration.test.ts:122` |
 | POST | `/api/v1/auth/mfa/login` | `src/tests/security/auth/mfa-security.security.test.ts:145` |
 | POST | `/api/v1/auth/mfa/verify` | `src/tests/security/auth/mfa-security.security.test.ts:61` |

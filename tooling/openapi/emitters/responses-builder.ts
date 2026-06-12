@@ -149,7 +149,25 @@ export function buildResponses(
       },
     },
   };
-  if (['POST', 'PATCH', 'PUT'].includes(method)) {
+  if (routeKey.includes('/api/v1/mcp')) {
+    // MCP streamable HTTP requires an Accept header naming a supported type.
+    responses['406'] = {
+      description: translate('notAcceptable', 'Not Acceptable'),
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+          example: {
+            error: { code: 'NOT_ACCEPTABLE', message: 'Accept header missing or unsupported' },
+            meta: { request_id: 'req_a1b2c3d4e5f6' },
+          },
+        },
+      },
+    };
+  }
+  const isMutating = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method);
+  if (isMutating) {
+    // 409 covers resource/state conflicts AND the idempotency middleware's
+    // in-flight duplicate (same Idempotency-Key while the first request runs).
     responses['409'] = {
       description: translate('conflict', 'Conflict'),
       content: {
@@ -162,7 +180,65 @@ export function buildResponses(
         },
       },
     };
+    // 422 covers business-rule rejections (UnprocessableEntityError) and the
+    // idempotency middleware's key-reuse-with-different-payload fingerprint check,
+    // which guards every mutating route accepting Idempotency-Key.
+    responses['422'] = {
+      description: translate('unprocessableEntity', 'Unprocessable Entity'),
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+          example: {
+            error: {
+              code: 'UNPROCESSABLE_ENTITY',
+              message: 'Business rule violation or idempotency key reused with a different payload',
+            },
+            meta: { request_id: 'req_a1b2c3d4e5f6' },
+          },
+        },
+      },
+    };
   }
+  if (['POST', 'PATCH', 'PUT'].includes(method)) {
+    // Fastify-level body rejections on JSON-carrying methods.
+    responses['413'] = {
+      description: translate('payloadTooLarge', 'Payload Too Large'),
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+          example: {
+            error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body exceeds the size limit' },
+            meta: { request_id: 'req_a1b2c3d4e5f6' },
+          },
+        },
+      },
+    };
+    responses['415'] = {
+      description: translate('unsupportedMediaType', 'Unsupported Media Type'),
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+          example: {
+            error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Unsupported content type' },
+            meta: { request_id: 'req_a1b2c3d4e5f6' },
+          },
+        },
+      },
+    };
+  }
+  // Every route sits behind the global + per-route rate limits.
+  responses['429'] = {
+    description: translate('tooManyRequests', 'Too Many Requests'),
+    content: {
+      'application/json': {
+        schema: errorResponseSchema,
+        example: {
+          error: { code: 'RATE_LIMITED', message: 'Too many requests, retry later' },
+          meta: { request_id: 'req_a1b2c3d4e5f6' },
+        },
+      },
+    },
+  };
   responses['500'] = {
     description: translate('internalError', 'Internal Server Error'),
     content: {

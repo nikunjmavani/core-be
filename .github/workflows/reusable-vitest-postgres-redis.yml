@@ -309,6 +309,9 @@ jobs:
           path: route-observed-shards
           merge-multiple: false
 
+      - name: Generate OpenAPI artifact for the error-status documentation check
+        run: pnpm docs:generate
+
       - name: Route success-status coverage gate (merged shards)
         run: |
           set -euo pipefail
