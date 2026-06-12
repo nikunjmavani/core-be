@@ -87,3 +87,16 @@ api post /api/v1/auth/me/auth-methods removed the enum value `oauth` of the requ
 api post /api/v1/auth/me/auth-methods removed the enum value `mfa_totp` of the request property `method_type`
 api post /api/v1/auth/me/auth-methods removed the enum value `mfa_sms` of the request property `method_type`
 api post /api/v1/auth/me/auth-methods removed the enum value `mfa_email` of the request property `method_type`
+
+# 12. Spec-truth correction (PR #575): four operations documented a spurious `200`
+#     success that the API never returned — POST /uploads and POST .../api-keys/
+#     {apiKeyId}/rotate have always replied 201, DELETE /uploads/{publicId} and
+#     DELETE /auth/me/auth-methods/{publicId} reply 204 (the latter's response-map
+#     entry was keyed to the retired `{id}` param, so the generator fell back to a
+#     generic 200). The success statuses now come from the runtime-verified
+#     success-status registry (route-success-statuses.json); pinned by
+#     route-response-map-statuses.unit.test.ts and the observed-status coverage gate.
+api delete /api/v1/auth/me/auth-methods/{publicid} removed the success response with the status `200`
+api post /api/v1/tenancy/organizations/{id}/api-keys/{apikeyid}/rotate removed the success response with the status `200`
+api post /api/v1/uploads removed the success response with the status `200`
+api delete /api/v1/uploads/{publicid} removed the success response with the status `200`
