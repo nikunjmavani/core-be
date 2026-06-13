@@ -8,6 +8,7 @@
   "cannotModifyProtectedAdmin": "This account is a protected super administrator and cannot be suspended or deleted via the admin API; manage super administrators through the GLOBAL_ADMIN_EMAILS configuration instead.",
   "userOwnsOrganizations": "This account still owns one or more team organizations and cannot be deleted; transfer ownership to another member (or delete the organizations) first.",
   "personalOrganizationImmutable": "Your personal organization cannot be deleted or transferred; it is removed only when you delete your account.",
+  "personalOrganizationNoMembers": "Your personal organization cannot have additional members; create a team organization to collaborate with others.",
   "mfaStepUpRequired": "Multi-factor authentication is required for this step-up; verify via the MFA endpoint instead of password.",
   "lastMfaRequiredByOrganization": "Cannot remove your last MFA method while your organization requires MFA. Disable the organization-level MFA requirement first or transfer your membership.",
   "cannotRemoveLastAuthMethod": "Cannot remove your last login method (password, OAuth, or magic link). Add another login method first to avoid being locked out.",

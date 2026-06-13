@@ -1,5 +1,6 @@
 import {
   ConfigurationError,
+  ConflictError,
   ForbiddenError,
   NotFoundError,
   ValidationError,
@@ -153,6 +154,11 @@ export class MemberInvitationService {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
+      // Capability matrix: a PERSONAL organization is single-member by definition — it cannot
+      // issue invitations. Collaboration requires a TEAM organization.
+      if (organization.type === 'PERSONAL') {
+        throw new ConflictError('errors:personalOrganizationNoMembers');
+      }
       const membership = await this.membershipRepository.findByPublicId(
         parsed.membership_id,
         organization.id,
