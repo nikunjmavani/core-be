@@ -147,6 +147,7 @@ Grouped index: **[deployment/README.md](deployment/README.md)** (`setup/`, `ci-c
 | [reviews/production-readiness-2026-05-15.md](reviews/production-readiness-2026-05-15.md)                   | Pre-production checklist (Prometheus/OTel deferred).           |
 | [reviews/full-codebase-review-deliverables.md](reviews/full-codebase-review-deliverables.md)               | Full review deliverables: security, performance, dependencies. |
 | [reviews/architecture-consistency-roadmap-2026-05.md](reviews/architecture-consistency-roadmap-2026-05.md) | Completed domain-layout / route-catalog program (archival).    |
+| [reviews/agent-os-tooling-audit-and-evals-2026-06-14.md](reviews/agent-os-tooling-audit-and-evals-2026-06-14.md) | AI-tooling audit → open/closed-loop strategy → evals harness, enforcement hooks, guard skills (PRs #595–#597). |
 
 ---
 
