@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { Redis } from 'ioredis';
-import { UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util.js';
 import { isDisposableEmailBlocked } from '@/shared/utils/text/email.util.js';
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
@@ -22,7 +27,12 @@ import type { AuthSessionService } from './sub-domains/auth-session/auth-session
 import type { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
 import { validateLogin } from './auth.validator.js';
 import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js';
-import { resolveDefaultActiveOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
+import {
+  resolveDefaultActiveOrganizationPublicId,
+  findUserActiveOrganizationPublicId,
+  resolvePersonalOrganizationPublicId,
+} from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
+import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
 const IP_FAILED_LOGIN_KEY_PREFIX = 'auth:failed_login:ip:';
 
@@ -279,5 +289,67 @@ export class AuthService {
     });
 
     return { access_token: jsonWebToken, refresh_secret: rotated.refresh_secret };
+  }
+
+  /**
+   * Switch the active organization to a TEAM (or any) organization the caller is an active
+   * member of: validate membership, re-mint the access token with the new `org` claim, and
+   * re-bind the session to it. Rejects with 403 when the caller is not an active member.
+   */
+  async switchToOrganization({
+    userPublicId,
+    sessionPublicId,
+    organizationPublicId,
+  }: {
+    userPublicId: string;
+    sessionPublicId: string;
+    organizationPublicId: string;
+  }): Promise<{ access_token: string }> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
+    const resolved = await findUserActiveOrganizationPublicId(user.id, organizationPublicId);
+    if (!resolved) throw new ForbiddenError('errors:insufficientOrganizationPermissions');
+    return this.mintForActiveOrganization(user, sessionPublicId, resolved);
+  }
+
+  /**
+   * Switch the active organization to the caller's own PERSONAL organization. No body — the
+   * server resolves the personal organization from the authenticated user; it can never 403
+   * (you always own your personal organization). 404 only if personal is disabled / missing.
+   */
+  async switchToPersonal({
+    userPublicId,
+    sessionPublicId,
+  }: {
+    userPublicId: string;
+    sessionPublicId: string;
+  }): Promise<{ access_token: string }> {
+    const user = await this.userService.requireUserRecordByPublicId(userPublicId);
+    if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
+    const personal = await resolvePersonalOrganizationPublicId(user.id);
+    if (!personal) throw new NotFoundError('Personal organization');
+    return this.mintForActiveOrganization(user, sessionPublicId, personal);
+  }
+
+  /** Mint an access token scoped to `organizationPublicId` and re-bind the session to it. */
+  private async mintForActiveOrganization(
+    user: UserAuthRecord,
+    sessionPublicId: string,
+    organizationPublicId: string,
+  ): Promise<{ access_token: string }> {
+    const jsonWebToken = await signAccessToken({
+      userId: user.public_id,
+      role: resolveAccessTokenRoleForUser({
+        email: user.email,
+        status: user.status,
+        isEmailVerified: user.is_email_verified,
+      }),
+      organizationPublicId,
+    });
+    await this.authSessionService.rebindAccessToken({
+      sessionPublicId,
+      nextAccessToken: jsonWebToken,
+    });
+    return { access_token: jsonWebToken };
   }
 }
