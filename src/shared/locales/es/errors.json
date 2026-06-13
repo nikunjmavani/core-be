@@ -82,6 +82,7 @@
   "webhookUrlExists": "Ya existe un webhook para \"{{url}}\" en esta organización",
   "webhookMaxReached": "Se alcanzó el número máximo de webhooks ({{max}}) para esta organización. Elimina un webhook existente antes de agregar otro.",
   "webhookSecretRotationTooSoon": "El secreto de firma se rotó recientemente y el secreto anterior aún está dentro de su ventana de doble firma. Rotar de nuevo ahora lo invalidaría para los receptores que todavía no han migrado. Vuelve a intentarlo después de {{retryAfter}}.",
+  "maxTeamOrganizationsReached": "Se alcanzó el número máximo de organizaciones de equipo ({{max}}) para esta cuenta. Elimina o transfiere una organización de equipo existente antes de crear otra.",
   "organizationApiKeyMaxReached": "Se alcanzó el número máximo de claves de API ({{max}}) para esta organización. Elimina una clave existente antes de agregar otra.",
   "memberRoleMaxReached": "Se alcanzó el número máximo de roles personalizados ({{max}}) para esta organización. Elimina un rol existente antes de agregar otro.",
   "organizationNotificationPolicyMaxReached": "Se alcanzó el número máximo de políticas de notificación ({{max}}) para esta organización. Elimina una política existente antes de agregar otra.",

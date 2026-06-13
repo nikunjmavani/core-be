@@ -67,6 +67,7 @@ describe('OrganizationService', () => {
     softDelete: vi.fn().mockResolvedValue(organizationRow),
     markDeletionStarted: vi.fn().mockResolvedValue(organizationRow),
     resolveUserIdByPublicId: vi.fn().mockResolvedValue(10),
+    countActiveOwnedByUser: vi.fn().mockResolvedValue(0),
     updateOwner: vi.fn().mockResolvedValue(organizationRow),
     updateStripeCustomerId: vi.fn().mockResolvedValue(undefined),
     userHasActiveMembership: vi.fn().mockResolvedValue(true),
@@ -296,6 +297,16 @@ describe('OrganizationService', () => {
     await expect(
       service.create({ name: 'Race', slug: 'race-slug' }, 'owner_public'),
     ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it('create rejects when the owner is at the team-organization cap', async () => {
+    // env MAX_TEAM_ORGANIZATIONS_PER_OWNER defaults to 20; simulate the owner already at the cap.
+    vi.mocked(repository.countActiveOwnedByUser).mockResolvedValue(20);
+    await expect(
+      service.create({ name: 'Over Cap', slug: 'over-cap' }, 'owner_public'),
+    ).rejects.toBeInstanceOf(ConflictError);
+    // The provisioning path must not run once the cap is hit.
+    expect(provisionOrganizationWithOwnerMock).not.toHaveBeenCalled();
   });
 
   it('getByPublicId throws when organization missing', async () => {
