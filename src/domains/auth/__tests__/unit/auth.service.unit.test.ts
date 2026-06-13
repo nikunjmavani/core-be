@@ -47,6 +47,11 @@ vi.mock('@/domains/tenancy/sub-domains/organization/resolve-active-organization.
   resolveDefaultActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
   findUserActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
   resolvePersonalOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  // AUTH-14/15/16: org-persistence Ref variants used by refresh + switch.
+  resolveDefaultActiveOrganizationRef: vi.fn().mockResolvedValue(undefined),
+  resolveActiveOrganizationRefForUserByInternalId: vi.fn().mockResolvedValue(undefined),
+  findUserActiveOrganizationRef: vi.fn().mockResolvedValue(undefined),
+  resolvePersonalOrganizationRef: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
@@ -76,6 +81,7 @@ describe('AuthService', () => {
   const userService = {
     findByEmail: vi.fn().mockResolvedValue(user),
     findById: vi.fn().mockResolvedValue(user),
+    requireUserRecordByPublicId: vi.fn().mockResolvedValue(user),
     updateLoginAttempt: vi.fn().mockResolvedValue(undefined),
     registerFailedLoginAttempt: vi.fn().mockResolvedValue(undefined),
     updatePassword: vi.fn().mockResolvedValue(user),
@@ -101,6 +107,7 @@ describe('AuthService', () => {
     }),
     rotateSessionTokenHash: vi.fn().mockResolvedValue(undefined),
     refreshSessionCredentials: vi.fn().mockResolvedValue({ refresh_secret: 'new-refresh-secret' }),
+    rebindAccessToken: vi.fn().mockResolvedValue(undefined),
   } as unknown as AuthSessionService;
 
   const mfaService = {
@@ -304,6 +311,90 @@ describe('AuthService', () => {
     expect(result.access_token).toBe('jwt-access-token');
     expect(result.refresh_secret).toBe('new-refresh-secret');
     expect(authSessionService.refreshSessionCredentials).toHaveBeenCalled();
+  });
+
+  it('AUTH-14: refreshToken preserves the session-selected org (re-validated) instead of resetting to default', async () => {
+    const resolve = await import(
+      '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js'
+    );
+    const jwt = await import('@/shared/utils/security/jwt.util.js');
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: 1,
+      organization_id: 42,
+      expires_at: new Date(Date.now() + 86_400_000),
+      is_revoked: false,
+    } as never);
+    vi.mocked(resolve.resolveActiveOrganizationRefForUserByInternalId).mockResolvedValue({
+      id: 42,
+      public_id: 'org_selected',
+    });
+
+    await service.refreshToken({
+      sessionPublicId: 'session_public',
+      refreshSecret: 'refresh-secret',
+    });
+
+    // The selected org is re-validated by internal id and reused for the token claim.
+    expect(resolve.resolveActiveOrganizationRefForUserByInternalId).toHaveBeenCalledWith(1, 42);
+    expect(resolve.resolveDefaultActiveOrganizationRef).not.toHaveBeenCalled();
+    expect(jwt.signAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationPublicId: 'org_selected' }),
+    );
+    // …and persisted back on the session so the NEXT refresh preserves it too.
+    expect(authSessionService.refreshSessionCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({ nextOrganizationId: 42 }),
+    );
+  });
+
+  it('AUTH-14: refreshToken falls back to the default org when the persisted org is no longer a valid membership', async () => {
+    const resolve = await import(
+      '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js'
+    );
+    vi.mocked(authSessionService.findSessionByPublicIdIncludingRevoked).mockResolvedValue({
+      public_id: 'session_public',
+      user_id: 1,
+      organization_id: 42,
+      expires_at: new Date(Date.now() + 86_400_000),
+      is_revoked: false,
+    } as never);
+    // Membership revoked / org deleted → re-validation returns undefined.
+    vi.mocked(resolve.resolveActiveOrganizationRefForUserByInternalId).mockResolvedValue(undefined);
+    vi.mocked(resolve.resolveDefaultActiveOrganizationRef).mockResolvedValue({
+      id: 7,
+      public_id: 'org_default',
+    });
+
+    await service.refreshToken({
+      sessionPublicId: 'session_public',
+      refreshSecret: 'refresh-secret',
+    });
+
+    expect(resolve.resolveDefaultActiveOrganizationRef).toHaveBeenCalledWith(1);
+    expect(authSessionService.refreshSessionCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({ nextOrganizationId: 7 }),
+    );
+  });
+
+  it('AUTH-15: switchToOrganization persists the selected org on the session for refresh to preserve', async () => {
+    const resolve = await import(
+      '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js'
+    );
+    vi.mocked(resolve.findUserActiveOrganizationRef).mockResolvedValue({
+      id: 9,
+      public_id: 'org_team',
+    });
+
+    const result = await service.switchToOrganization({
+      userPublicId: user.public_id,
+      sessionPublicId: 'session_public',
+      organizationPublicId: 'org_team',
+    });
+
+    expect(result.access_token).toBe('jwt-access-token');
+    expect(authSessionService.rebindAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionPublicId: 'session_public', organizationId: 9 }),
+    );
   });
 
   it('records a failed attempt via the atomic increment (count + lock decided in SQL)', async () => {
