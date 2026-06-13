@@ -15,6 +15,7 @@ import {
   validateUploadLogo,
 } from './organization.validator.js';
 import { serializeOrganization } from './organization.serializer.js';
+import { provisionOrganizationWithOwner } from './organization-provisioning.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { buildOrganizationLogoKeyPrefix } from '@/domains/upload/upload.constants.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
@@ -355,13 +356,16 @@ export class OrganizationService {
           `Organization with slug "${parsed.slug}" already exists`,
         );
       try {
-        const created = await this.repository.create({
+        // Atomically create the organization AND bootstrap the owner's role + full
+        // permissions + membership — without this the creator resolves zero permissions
+        // on their own organization (the permission path is a strict role→membership join).
+        const { organization } = await provisionOrganizationWithOwner({
           name: parsed.name,
           slug: parsed.slug,
-          owner_user_id: ownerId,
-          created_by_user_id: ownerId,
+          type: 'TEAM',
+          ownerUserId: ownerId,
         });
-        return serializeOrganization(created);
+        return serializeOrganization(organization);
       } catch (error) {
         // Two concurrent creates can both pass the findBySlug pre-check; the
         // loser hits the `idx_organizations_slug` unique index. Map the
