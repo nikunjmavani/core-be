@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
   STRICT_AUTHED_RATE_LIMIT,
@@ -25,7 +26,8 @@ export function webhookRoutes(
   const webhookEventController = createWebhookEventController(webhookEventService);
 
   return async (app) => {
-    app.get(
+    const zodApplication = app.withTypeProvider<ZodTypeProvider>();
+    zodApplication.get(
       '/webhook-events',
       {
         onRequest: [app.authenticate],
@@ -39,7 +41,7 @@ export function webhookRoutes(
       },
       webhookEventController.listWebhookEvents,
     );
-    app.get(
+    zodApplication.get(
       '/webhooks',
       {
         schema: {
@@ -55,7 +57,7 @@ export function webhookRoutes(
       },
       webhookController.listWebhooks,
     );
-    app.get<{ Params: { webhook_id: string } }>(
+    zodApplication.get<{ Params: { webhook_id: string } }>(
       '/webhooks/:webhook_id',
       {
         onRequest: [app.authenticate],
@@ -68,7 +70,7 @@ export function webhookRoutes(
       },
       webhookController.getWebhook,
     );
-    app.post(
+    zodApplication.post(
       '/webhooks',
       {
         onRequest: [app.authenticate],
@@ -83,7 +85,7 @@ export function webhookRoutes(
       },
       webhookController.createWebhook,
     );
-    app.patch<{ Params: { webhook_id: string } }>(
+    zodApplication.patch<{ Params: { webhook_id: string } }>(
       '/webhooks/:webhook_id',
       {
         onRequest: [app.authenticate],
@@ -98,7 +100,7 @@ export function webhookRoutes(
       },
       webhookController.updateWebhook,
     );
-    app.delete<{ Params: { webhook_id: string } }>(
+    zodApplication.delete<{ Params: { webhook_id: string } }>(
       '/webhooks/:webhook_id',
       {
         onRequest: [app.authenticate],
@@ -113,7 +115,7 @@ export function webhookRoutes(
       },
       webhookController.deleteWebhook,
     );
-    app.get<{ Params: { webhook_id: string } }>(
+    zodApplication.get<{ Params: { webhook_id: string } }>(
       '/webhooks/:webhook_id/delivery-attempts',
       {
         schema: {
@@ -129,7 +131,7 @@ export function webhookRoutes(
       },
       webhookController.listDeliveryAttempts,
     );
-    app.post<{ Params: { webhook_id: string } }>(
+    zodApplication.post<{ Params: { webhook_id: string } }>(
       '/webhooks/:webhook_id/test',
       {
         onRequest: [app.authenticate],
