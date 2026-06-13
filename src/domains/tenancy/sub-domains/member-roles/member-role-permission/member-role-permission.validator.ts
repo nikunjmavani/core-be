@@ -6,7 +6,7 @@ import {
 } from './member-role-permission.dto.js';
 
 /**
- * Validates a `PUT /organizations/:organization_id/roles/:role_id/permissions` body against
+ * Validates a `PUT /organization/roles/:role_id/permissions` body against
  * {@link putMemberRolePermissionsDto}, throwing `ValidationError` (i18n key
  * `errors:invalidInput`) with per-field details on failure.
  */

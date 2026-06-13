@@ -43,13 +43,15 @@ describe('Tenancy e2e: organization onboarding', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
 
     const membershipsResponse = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/memberships`),
+      url: testApiPath('/tenancy/organization/memberships'),
       token,
-      organizationPublicId: organization.public_id,
     });
     expect(membershipsResponse.statusCode).toBe(200);
   });

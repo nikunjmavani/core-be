@@ -11,9 +11,10 @@ import { serializeMemberRolePermission } from './member-role-permission.serializ
 
 /**
  * Builds the HTTP handler map for role-to-permission assignment endpoints
- * (`GET /organizations/:organization_id/roles/:role_id/permissions` and the matching `PUT`).
- * Resolves the organization and role public ids from path params and forwards
- * to {@link MemberRolePermissionService}.
+ * (`GET /organization/roles/:role_id/permissions` and the matching `PUT`).
+ * Resolves the active organization from the signed JWT `org` claim and the
+ * role public id from the path param, then forwards to
+ * {@link MemberRolePermissionService}.
  */
 export function createMemberRolePermissionController(service: MemberRolePermissionService) {
   return {

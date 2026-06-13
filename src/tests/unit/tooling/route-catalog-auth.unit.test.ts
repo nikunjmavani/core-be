@@ -7,8 +7,8 @@ import {
 describe('route-catalog-auth', () => {
   it('materializeRouteCatalogPath replaces path parameters', () => {
     expect(
-      materializeRouteCatalogPath('/api/v1/tenancy/organizations/:organization_id/settings'),
-    ).toBe('/api/v1/tenancy/organizations/000000000000000000000/settings');
+      materializeRouteCatalogPath('/api/v1/tenancy/organization/memberships/:membership_id'),
+    ).toBe('/api/v1/tenancy/organization/memberships/000000000000000000000');
   });
 
   it('loadProtectedRoutesFromCatalog includes AUTH and PERM routes', () => {
@@ -19,9 +19,7 @@ describe('route-catalog-auth', () => {
     expect(
       routes.some(
         (route) =>
-          route.path.includes('/organizations/') &&
-          route.path.includes('/settings') &&
-          route.access === 'PERM',
+          route.path === '/api/v1/tenancy/organization/settings' && route.access === 'PERM',
       ),
     ).toBe(true);
   });

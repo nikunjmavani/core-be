@@ -111,46 +111,46 @@ Legend:
   POST   /api/v1/tenancy/invitations/:invitation_id/accept       AUTH
   POST   /api/v1/tenancy/invitations/:invitation_id/decline      AUTH
   GET    /api/v1/tenancy/invitations/pending                     AUTH
+  GET    /api/v1/tenancy/organization                            AUTH
+  PATCH  /api/v1/tenancy/organization                            PERM: organization:update
+  DELETE /api/v1/tenancy/organization                            PERM: organization:delete
+  GET    /api/v1/tenancy/organization/api-keys                   PERM: api-key:read
+  POST   /api/v1/tenancy/organization/api-keys                   PERM: api-key:manage
+  GET    /api/v1/tenancy/organization/api-keys/:api_key_id       PERM: api-key:read
+  PATCH  /api/v1/tenancy/organization/api-keys/:api_key_id       PERM: api-key:manage
+  DELETE /api/v1/tenancy/organization/api-keys/:api_key_id       PERM: api-key:manage
+  POST   /api/v1/tenancy/organization/api-keys/:api_key_id/rotate PERM: api-key:manage
+  GET    /api/v1/tenancy/organization/audit-logs                 PERM: audit-log:read
+  GET    /api/v1/tenancy/organization/invitations                PERM: invitation:manage
+  POST   /api/v1/tenancy/organization/invitations                PERM: invitation:manage
+  DELETE /api/v1/tenancy/organization/invitations/:invitation_id PERM: invitation:manage
+  POST   /api/v1/tenancy/organization/invitations/:invitation_id/resend PERM: invitation:manage
+  POST   /api/v1/tenancy/organization/leave                      AUTH
+  PUT    /api/v1/tenancy/organization/logo                       PERM: organization:update
+  DELETE /api/v1/tenancy/organization/logo                       PERM: organization:update
+  GET    /api/v1/tenancy/organization/memberships                PERM: membership:read
+  POST   /api/v1/tenancy/organization/memberships                PERM: membership:manage
+  GET    /api/v1/tenancy/organization/memberships/:membership_id PERM: membership:read
+  PATCH  /api/v1/tenancy/organization/memberships/:membership_id PERM: membership:manage
+  DELETE /api/v1/tenancy/organization/memberships/:membership_id PERM: membership:manage
+  GET    /api/v1/tenancy/organization/memberships/:membership_id/permissions PERM: membership:read
+  GET    /api/v1/tenancy/organization/notification-policies      PERM: notification-policy:read
+  POST   /api/v1/tenancy/organization/notification-policies      PERM: notification-policy:manage
+  GET    /api/v1/tenancy/organization/notification-policies/:policy_id PERM: notification-policy:read
+  PATCH  /api/v1/tenancy/organization/notification-policies/:policy_id PERM: notification-policy:manage
+  DELETE /api/v1/tenancy/organization/notification-policies/:policy_id PERM: notification-policy:manage
+  GET    /api/v1/tenancy/organization/roles                      PERM: role:read
+  POST   /api/v1/tenancy/organization/roles                      PERM: role:manage
+  GET    /api/v1/tenancy/organization/roles/:role_id             PERM: role:read
+  PATCH  /api/v1/tenancy/organization/roles/:role_id             PERM: role:manage
+  DELETE /api/v1/tenancy/organization/roles/:role_id             PERM: role:manage
+  GET    /api/v1/tenancy/organization/roles/:role_id/permissions PERM: role:read
+  PUT    /api/v1/tenancy/organization/roles/:role_id/permissions PERM: role:manage
+  GET    /api/v1/tenancy/organization/settings                   PERM: organization:read
+  PATCH  /api/v1/tenancy/organization/settings                   PERM: organization:update
+  POST   /api/v1/tenancy/organization/transfer-ownership         AUTH
   GET    /api/v1/tenancy/organizations                           AUTH
   POST   /api/v1/tenancy/organizations                           AUTH
-  GET    /api/v1/tenancy/organizations/:organization_id          AUTH
-  PATCH  /api/v1/tenancy/organizations/:organization_id          PERM: organization:update
-  DELETE /api/v1/tenancy/organizations/:organization_id          PERM: organization:delete
-  GET    /api/v1/tenancy/organizations/:organization_id/api-keys PERM: api-key:read
-  POST   /api/v1/tenancy/organizations/:organization_id/api-keys PERM: api-key:manage
-  GET    /api/v1/tenancy/organizations/:organization_id/api-keys/:api_key_id PERM: api-key:read
-  PATCH  /api/v1/tenancy/organizations/:organization_id/api-keys/:api_key_id PERM: api-key:manage
-  DELETE /api/v1/tenancy/organizations/:organization_id/api-keys/:api_key_id PERM: api-key:manage
-  POST   /api/v1/tenancy/organizations/:organization_id/api-keys/:api_key_id/rotate PERM: api-key:manage
-  GET    /api/v1/tenancy/organizations/:organization_id/audit-logs PERM: audit-log:read
-  GET    /api/v1/tenancy/organizations/:organization_id/invitations PERM: invitation:manage
-  POST   /api/v1/tenancy/organizations/:organization_id/invitations PERM: invitation:manage
-  DELETE /api/v1/tenancy/organizations/:organization_id/invitations/:invitation_id PERM: invitation:manage
-  POST   /api/v1/tenancy/organizations/:organization_id/invitations/:invitation_id/resend PERM: invitation:manage
-  POST   /api/v1/tenancy/organizations/:organization_id/leave    AUTH
-  PUT    /api/v1/tenancy/organizations/:organization_id/logo     PERM: organization:update
-  DELETE /api/v1/tenancy/organizations/:organization_id/logo     PERM: organization:update
-  GET    /api/v1/tenancy/organizations/:organization_id/memberships PERM: membership:read
-  POST   /api/v1/tenancy/organizations/:organization_id/memberships PERM: membership:manage
-  GET    /api/v1/tenancy/organizations/:organization_id/memberships/:membership_id PERM: membership:read
-  PATCH  /api/v1/tenancy/organizations/:organization_id/memberships/:membership_id PERM: membership:manage
-  DELETE /api/v1/tenancy/organizations/:organization_id/memberships/:membership_id PERM: membership:manage
-  GET    /api/v1/tenancy/organizations/:organization_id/memberships/:membership_id/permissions PERM: membership:read
-  GET    /api/v1/tenancy/organizations/:organization_id/notification-policies PERM: notification-policy:read
-  POST   /api/v1/tenancy/organizations/:organization_id/notification-policies PERM: notification-policy:manage
-  GET    /api/v1/tenancy/organizations/:organization_id/notification-policies/:policy_id PERM: notification-policy:read
-  PATCH  /api/v1/tenancy/organizations/:organization_id/notification-policies/:policy_id PERM: notification-policy:manage
-  DELETE /api/v1/tenancy/organizations/:organization_id/notification-policies/:policy_id PERM: notification-policy:manage
-  GET    /api/v1/tenancy/organizations/:organization_id/roles    PERM: role:read
-  POST   /api/v1/tenancy/organizations/:organization_id/roles    PERM: role:manage
-  GET    /api/v1/tenancy/organizations/:organization_id/roles/:role_id PERM: role:read
-  PATCH  /api/v1/tenancy/organizations/:organization_id/roles/:role_id PERM: role:manage
-  DELETE /api/v1/tenancy/organizations/:organization_id/roles/:role_id PERM: role:manage
-  GET    /api/v1/tenancy/organizations/:organization_id/roles/:role_id/permissions PERM: role:read
-  PUT    /api/v1/tenancy/organizations/:organization_id/roles/:role_id/permissions PERM: role:manage
-  GET    /api/v1/tenancy/organizations/:organization_id/settings PERM: organization:read
-  PATCH  /api/v1/tenancy/organizations/:organization_id/settings PERM: organization:update
-  POST   /api/v1/tenancy/organizations/:organization_id/transfer-ownership AUTH
   GET    /api/v1/tenancy/organizations/by-slug/:slug             AUTH
   GET    /api/v1/tenancy/permissions                             AUTH
 

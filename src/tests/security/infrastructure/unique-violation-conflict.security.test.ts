@@ -140,22 +140,20 @@ describe('Security: unique-violation conflict handling', () => {
         organizationId: organization.id,
         permissionCodes: ['membership:read'],
       });
-      const token = await generateTestToken({ userId: owner.public_id });
+      // Flat membership routes resolve the organization from the JWT `org` claim.
+      const token = await generateTestToken({
+        userId: owner.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const targetUser = await createTestUser();
       return { organization, token, memberRolePublicId: memberRole.public_id, targetUser };
     }
 
-    function addMember(
-      token: string,
-      organizationPublicId: string,
-      userPublicId: string,
-      rolePublicId: string,
-    ) {
+    function addMember(token: string, userPublicId: string, rolePublicId: string) {
       return injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(`/tenancy/organizations/${organizationPublicId}/memberships`),
+        url: testApiPath('/tenancy/organization/memberships'),
         token,
-        organizationPublicId,
         extraHeaders: { 'idempotency-key': randomUUID() },
         // INVITED keeps joined_at null (chk_memberships_joined allows it); the test
         // targets the (user_id, organization_id) unique constraint, not the activation rule.
@@ -164,35 +162,21 @@ describe('Security: unique-violation conflict handling', () => {
     }
 
     it('adding the same user twice is a clean 409 (not 500)', async () => {
-      const { organization, token, memberRolePublicId, targetUser } =
-        await membershipAdminContext();
+      const { token, memberRolePublicId, targetUser } = await membershipAdminContext();
 
-      const first = await addMember(
-        token,
-        organization.public_id,
-        targetUser.public_id,
-        memberRolePublicId,
-      );
+      const first = await addMember(token, targetUser.public_id, memberRolePublicId);
       expect(first.statusCode).toBe(201);
 
-      const second = await addMember(
-        token,
-        organization.public_id,
-        targetUser.public_id,
-        memberRolePublicId,
-      );
+      const second = await addMember(token, targetUser.public_id, memberRolePublicId);
       expect(second.statusCode).toBe(409);
     });
 
     it('concurrent adds of the same user: exactly one 201, rest 409, no 5xx', async () => {
-      const { organization, token, memberRolePublicId, targetUser } =
-        await membershipAdminContext();
+      const { token, memberRolePublicId, targetUser } = await membershipAdminContext();
 
       const statuses = await Promise.all(
         Array.from({ length: 4 }, () =>
-          addMember(token, organization.public_id, targetUser.public_id, memberRolePublicId).then(
-            (r) => r.statusCode,
-          ),
+          addMember(token, targetUser.public_id, memberRolePublicId).then((r) => r.statusCode),
         ),
       );
       const result = tally(statuses);

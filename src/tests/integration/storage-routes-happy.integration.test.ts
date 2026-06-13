@@ -156,7 +156,7 @@ describe('Storage-backed routes — happy paths (mocked S3 port)', () => {
     expect(response.statusCode, response.body).toBe(200);
   });
 
-  it('PUT /tenancy/organizations/:organization_id/logo attaches a confirmed logo upload', async () => {
+  it('PUT /tenancy/organization/logo attaches a confirmed logo upload', async () => {
     // organization:update gates the logo attach; upload:manage gates creating
     // an organization-target upload in the first place.
     await seedPermissions(['organization:update', 'upload:manage']);
@@ -172,7 +172,10 @@ describe('Storage-backed routes — happy paths (mocked S3 port)', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     const { key } = await createUploadAndConfirm({
       app,
       token,
@@ -183,7 +186,7 @@ describe('Storage-backed routes — happy paths (mocked S3 port)', () => {
 
     const response = await injectAuthenticatedOrganizationMutation(app, {
       method: 'PUT',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/logo`),
+      url: testApiPath('/tenancy/organization/logo'),
       token,
       organizationPublicId: organization.public_id,
       payload: { key },

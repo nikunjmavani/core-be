@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /**
- * Zod schema for the `PUT /organizations/:organization_id/roles/:role_id/permissions` request
+ * Zod schema for the `PUT /organization/roles/:role_id/permissions` request
  * body. The provided `permission_codes` array replaces the role's full permission
  * set (set semantics, not append).
  */

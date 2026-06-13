@@ -19,7 +19,7 @@ import type { MemberRoleService } from './member-role.service.js';
 
 /**
  * Builds the HTTP handler map for the organization role CRUD endpoints under
- * `/organizations/:organization_id/roles`. Mutating handlers also record a scoped audit
+ * `/organization/roles`. Mutating handlers also record a scoped audit
  * event via {@link recordScopedAuditEvent} so role lifecycle changes appear in
  * the audit log.
  */

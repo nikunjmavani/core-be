@@ -49,39 +49,44 @@ describe('Member Roles Sub-Domain — Integration', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat tenancy routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { organization, role, token };
   }
 
-  describe('GET /api/v1/tenancy/organizations/:id/roles', () => {
+  describe('GET /api/v1/tenancy/organization/roles', () => {
     it('should return 403 without role read permission', async () => {
       const { organization } = await createAuthorizedContext([
         TENANCY_PERMISSIONS.ORGANIZATION_READ,
       ]);
       const user = await createTestUser({ email: 'norole@test.com' });
-      const token = await generateTestToken({ userId: user.public_id });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
+        url: testApiPath('/tenancy/organization/roles'),
         token,
-        organizationPublicId: organization.public_id,
       });
       expect(response.statusCode).toBe(403);
     });
 
     it('should return roles with permission', async () => {
-      const { organization, token } = await createAuthorizedContext();
+      const { token } = await createAuthorizedContext();
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
+        url: testApiPath('/tenancy/organization/roles'),
         token,
-        organizationPublicId: organization.public_id,
       });
       expect(response.statusCode).toBe(200);
     });
   });
 
-  describe('PUT /api/v1/tenancy/organizations/:id/roles/:role_id/permissions', () => {
+  describe('PUT /api/v1/tenancy/organization/roles/:role_id/permissions', () => {
     it('should replace role permissions', async () => {
       const { organization, token } = await createAuthorizedContext();
       const targetRole = await createRoleWithPermissions({
@@ -90,11 +95,8 @@ describe('Member Roles Sub-Domain — Integration', () => {
       });
       const response = await injectAuthenticated(app, {
         method: 'PUT',
-        url: testApiPath(
-          `/tenancy/organizations/${organization.public_id}/roles/${targetRole.public_id}/permissions`,
-        ),
+        url: testApiPath(`/tenancy/organization/roles/${targetRole.public_id}/permissions`),
         token,
-        organizationPublicId: organization.public_id,
         payload: { permission_codes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] },
       });
       expect([200, 204]).toContain(response.statusCode);

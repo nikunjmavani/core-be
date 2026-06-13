@@ -3,7 +3,7 @@ import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedString, trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /**
- * Zod schema for the `POST /organizations/:organization_id/roles` request body.
+ * Zod schema for the `POST /organization/roles` request body.
  *
  * @remarks
  * sec-T3: `is_system` is a server-only flag set by the seeds (`tenancy.bulk.seed.ts`)
@@ -20,7 +20,7 @@ export const createMemberRoleDto = z
   .strict();
 
 /**
- * Zod schema for the `PATCH /organizations/:organization_id/roles/:role_id` request body.
+ * Zod schema for the `PATCH /organization/roles/:role_id` request body.
  * Both `name` and `description` are optional so callers can patch one field at
  * a time.
  */
@@ -31,7 +31,7 @@ export const updateMemberRoleDto = z
   })
   .strict();
 
-/** Zod schema for the `GET /organizations/:organization_id/roles` cursor pagination query. */
+/** Zod schema for the `GET /organization/roles` cursor pagination query. */
 export const listMemberRolesQueryDto = cursorPaginationSchema.strict();
 
 /** Validated body inferred from {@link createMemberRoleDto}. */

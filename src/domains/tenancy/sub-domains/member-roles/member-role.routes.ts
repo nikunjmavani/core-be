@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
@@ -6,6 +7,8 @@ import type { MemberRoleService } from './member-role.service.js';
 import type { MemberRolePermissionService } from './member-role-permission/member-role-permission.service.js';
 import { createMemberRoleController } from './member-role.controller.js';
 import { createMemberRolePermissionController } from './member-role-permission/member-role-permission.controller.js';
+import { createMemberRoleDto, updateMemberRoleDto } from './member-role.dto.js';
+import { putMemberRolePermissionsDto } from './member-role-permission/member-role-permission.dto.js';
 
 /** Services required to wire the member-role and role-permission routes. */
 export interface MemberRoleRoutesDeps {
@@ -14,10 +17,10 @@ export interface MemberRoleRoutesDeps {
 }
 
 /**
- * Fastify plugin that registers the organization role CRUD routes plus the
- * nested `:role_id/permissions` listing and replacement endpoints. Every route
- * requires authentication and a `ROLE_READ` or `ROLE_MANAGE` organization
- * permission resolved against the `:id` path param.
+ * Fastify plugin that registers the active-organization role CRUD routes plus
+ * the nested `:role_id/permissions` listing and replacement endpoints. Every
+ * route requires authentication and a `ROLE_READ` or `ROLE_MANAGE` organization
+ * permission resolved against the signed JWT `org` claim.
  */
 export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync {
   const roleController = createMemberRoleController(deps.memberRoleService);
@@ -26,9 +29,10 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
   );
 
   return async (app) => {
+    const zodApplication = app.withTypeProvider<ZodTypeProvider>();
     // Member Role CRUD
-    app.get<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/roles',
+    zodApplication.get(
+      '/organization/roles',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_READ)],
@@ -41,8 +45,8 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
       },
       roleController.listRoles,
     );
-    app.get<{ Params: { organization_id: string; role_id: string } }>(
-      '/organizations/:organization_id/roles/:role_id',
+    zodApplication.get<{ Params: { role_id: string } }>(
+      '/organization/roles/:role_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_READ)],
@@ -54,8 +58,8 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
       },
       roleController.getRole,
     );
-    app.post<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/roles',
+    zodApplication.post(
+      '/organization/roles',
       {
         // sec-r5-ratelimit-dos-2: per (org, actor) cap on custom-role creation
         // so an Admin-role-holder cannot churn unbounded role rows. Parity with
@@ -70,12 +74,13 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
           description:
             'Creates a new custom role in the organization. Requires ROLE_MANAGE permission.',
           tags: ['Role'],
+          body: createMemberRoleDto,
         },
       },
       roleController.createRole,
     );
-    app.patch<{ Params: { organization_id: string; role_id: string } }>(
-      '/organizations/:organization_id/roles/:role_id',
+    zodApplication.patch<{ Params: { role_id: string } }>(
+      '/organization/roles/:role_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE)],
@@ -84,12 +89,13 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
           description:
             'Updates a role name or description. System roles cannot be modified. Requires ROLE_MANAGE permission.',
           tags: ['Role'],
+          body: updateMemberRoleDto,
         },
       },
       roleController.updateRole,
     );
-    app.delete<{ Params: { organization_id: string; role_id: string } }>(
-      '/organizations/:organization_id/roles/:role_id',
+    zodApplication.delete<{ Params: { role_id: string } }>(
+      '/organization/roles/:role_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE)],
@@ -104,8 +110,8 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
     );
 
     // Member Role Permissions
-    app.get<{ Params: { organization_id: string; role_id: string } }>(
-      '/organizations/:organization_id/roles/:role_id/permissions',
+    zodApplication.get<{ Params: { role_id: string } }>(
+      '/organization/roles/:role_id/permissions',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_READ)],
@@ -117,8 +123,8 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
       },
       permissionController.listRolePermissions,
     );
-    app.put<{ Params: { organization_id: string; role_id: string } }>(
-      '/organizations/:organization_id/roles/:role_id/permissions',
+    zodApplication.put<{ Params: { role_id: string } }>(
+      '/organization/roles/:role_id/permissions',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE)],
@@ -127,6 +133,7 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
           description:
             'Replaces all permissions for a role with the provided set. Requires ROLE_MANAGE permission.',
           tags: ['Role', 'Permission'],
+          body: putMemberRolePermissionsDto,
         },
       },
       permissionController.putRolePermissions,

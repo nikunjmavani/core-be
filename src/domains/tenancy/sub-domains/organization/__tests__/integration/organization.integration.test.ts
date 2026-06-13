@@ -51,7 +51,11 @@ describe('Organization Sub-Domain — Integration', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat tenancy routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { organization, token };
   }
 
@@ -76,30 +80,31 @@ describe('Organization Sub-Domain — Integration', () => {
     });
   });
 
-  describe('PATCH /api/v1/tenancy/organizations/:id', () => {
+  describe('PATCH /api/v1/tenancy/organization', () => {
     it('returns 403 without organization update permission', async () => {
       const { organization } = await createAuthorizedContext([
         TENANCY_PERMISSIONS.ORGANIZATION_READ,
       ]);
       const user = await createTestUser({ email: 'no-update@test.com' });
-      const token = await generateTestToken({ userId: user.public_id });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const response = await injectAuthenticated(app, {
         method: 'PATCH',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+        url: testApiPath('/tenancy/organization'),
         token,
-        organizationPublicId: organization.public_id,
         payload: { name: 'Renamed' },
       });
       expect(response.statusCode).toBe(403);
     });
 
     it('returns 400 or 422 for invalid body', async () => {
-      const { organization, token } = await createAuthorizedContext();
+      const { token } = await createAuthorizedContext();
       const response = await injectAuthenticated(app, {
         method: 'PATCH',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+        url: testApiPath('/tenancy/organization'),
         token,
-        organizationPublicId: organization.public_id,
         payload: { unknown_field: true },
       });
       expect([400, 422]).toContain(response.statusCode);
@@ -107,8 +112,10 @@ describe('Organization Sub-Domain — Integration', () => {
 
     it('concurrent slug updates to the same new slug resolve to one 200 + one 409 (no 5xx)', async () => {
       // One admin who owns two organizations races both to the SAME previously-unused slug.
-      // Both requests pass the findBySlug pre-check (neither org holds it yet), so the loser
-      // hits the idx_organizations_slug unique index — which must map to 409, never a 500.
+      // With flat routes each request targets the active organization carried in its token
+      // claim, so we mint a per-organization token for the same user. Both requests pass the
+      // findBySlug pre-check (neither org holds it yet), so the loser hits the
+      // idx_organizations_slug unique index — which must map to 409, never a 500.
       const user = await createTestUser();
       const [organizationA, organizationB] = await Promise.all([
         createTestOrganization({ ownerUserId: user.id }),
@@ -128,21 +135,29 @@ describe('Organization Sub-Domain — Integration', () => {
         createMembership({ userId: user.id, organizationId: organizationA.id, roleId: roleA.id }),
         createMembership({ userId: user.id, organizationId: organizationB.id, roleId: roleB.id }),
       ]);
-      const token = await generateTestToken({ userId: user.public_id });
+      const [tokenA, tokenB] = await Promise.all([
+        generateTestToken({
+          userId: user.public_id,
+          organizationPublicId: organizationA.public_id,
+        }),
+        generateTestToken({
+          userId: user.public_id,
+          organizationPublicId: organizationB.public_id,
+        }),
+      ]);
 
       const sharedSlug = 'race-shared-org-slug';
-      const patchSlug = (organizationPublicId: string) =>
+      const patchSlug = (token: string) =>
         injectAuthenticated(app, {
           method: 'PATCH',
-          url: testApiPath(`/tenancy/organizations/${organizationPublicId}`),
+          url: testApiPath('/tenancy/organization'),
           token,
-          organizationPublicId,
           payload: { slug: sharedSlug },
         });
 
-      const statuses = (
-        await Promise.all([patchSlug(organizationA.public_id), patchSlug(organizationB.public_id)])
-      ).map((response) => response.statusCode);
+      const statuses = (await Promise.all([patchSlug(tokenA), patchSlug(tokenB)])).map(
+        (response) => response.statusCode,
+      );
 
       expect(statuses.filter((status) => status >= 500)).toHaveLength(0);
       expect(statuses.filter((status) => status === 200)).toHaveLength(1);

@@ -49,46 +49,49 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat tenancy routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { user, organization, role, token };
   }
 
-  function notificationPoliciesCollectionPath(organizationPublicId: string) {
-    return `/api/v1/tenancy/organizations/${organizationPublicId}/notification-policies`;
+  const NOTIFICATION_POLICIES_COLLECTION_PATH =
+    '/api/v1/tenancy/organization/notification-policies';
+
+  function notificationPolicyResourcePath(policyId: string) {
+    return `/api/v1/tenancy/organization/notification-policies/${policyId}`;
   }
 
-  function notificationPolicyResourcePath(organizationPublicId: string, policyId: string) {
-    return `/api/v1/tenancy/organizations/${organizationPublicId}/notification-policies/${policyId}`;
-  }
-
-  describe('GET /api/v1/tenancy/organizations/:id/notification-policies', () => {
+  describe('GET /api/v1/tenancy/organization/notification-policies', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: notificationPoliciesCollectionPath('unauthenticated-organization-route'),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
       });
       expect(response.statusCode).toBe(401);
     });
 
     it('should return 403 without notification policy read permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
       });
       expect(response.statusCode).toBe(403);
     });
 
     it('should return notification policies with read permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ,
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -97,24 +100,21 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
   });
 
-  describe('GET /api/v1/tenancy/organizations/:id/notification-policies/:policy_id', () => {
+  describe('GET /api/v1/tenancy/organization/notification-policies/:policy_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: notificationPolicyResourcePath(
-          'unauthenticated-organization-route',
-          'pol_unauth0000000000_',
-        ),
+        url: notificationPolicyResourcePath('pol_unauth0000000000_'),
       });
       expect(response.statusCode).toBe(401);
     });
 
     it('should return 403 without notification policy read permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: notificationPolicyResourcePath(organization.public_id, 'pol_arbitrary000000000000'),
+        url: notificationPolicyResourcePath('pol_arbitrary000000000000'),
         token,
       });
       expect(response.statusCode).toBe(403);
@@ -122,41 +122,41 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
 
     // sec-T5: route validates the policyId as a 21-char public id now.
     it('should return 400 when policy id is not a valid public id', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ,
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: notificationPolicyResourcePath(organization.public_id, 'not-a-public-id'),
+        url: notificationPolicyResourcePath('not-a-public-id'),
         token,
       });
       expect([400, 422]).toContain(response.statusCode);
     });
 
     it('should return 404 when notification policy does not exist', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ,
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticated(app, {
         // sec-T5: 21-char-ish well-formed public id that no row carries.
-        url: notificationPolicyResourcePath(organization.public_id, 'pol_doesnotexist000000000'),
+        url: notificationPolicyResourcePath('pol_doesnotexist000000000'),
         token,
       });
       expect(response.statusCode).toBe(404);
     });
 
     it('should return notification policy by public id (sec-T5)', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ,
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const created = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: { notification_type: 'IN_APP', channel: 'EMAIL', default_enabled: true },
       });
@@ -165,7 +165,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       const policyId = createdBody.data.id;
 
       const response = await injectAuthenticated(app, {
-        url: notificationPolicyResourcePath(organization.public_id, policyId),
+        url: notificationPolicyResourcePath(policyId),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -176,24 +176,24 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
   });
 
-  describe('POST /api/v1/tenancy/organizations/:id/notification-policies', () => {
+  describe('POST /api/v1/tenancy/organization/notification-policies', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath('unauthenticated-organization-route'),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         payload: { notification_type: 'TYPE', channel: 'EMAIL' },
       });
       expect(response.statusCode).toBe(401);
     });
 
     it('should return 403 without notification policy manage permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: { notification_type: 'IN_APP', channel: 'EMAIL' },
       });
@@ -201,13 +201,13 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
 
     it('should return 400 when notification_type is missing', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: { channel: 'EMAIL' },
       });
@@ -215,13 +215,13 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
 
     it('should return 400 when channel is missing', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: { notification_type: 'IN_APP' },
       });
@@ -229,7 +229,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
 
     it('should return 422 (not 500) when channel is outside the allowed set', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
@@ -237,7 +237,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       // chk_org_notif_channel database check and surface as a 500.
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: { notification_type: 'IN_APP', channel: 'CARRIER_PIGEON' },
       });
@@ -246,13 +246,13 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
 
     it('should return 400 when body contains unknown keys', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: {
           notification_type: 'IN_APP',
@@ -264,13 +264,13 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
 
     it('should return 400 when muted_until is not a datetime string', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: {
           notification_type: 'IN_APP',
@@ -282,13 +282,13 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
 
     it('should create notification policy when manage permission is granted', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: {
           notification_type: 'BILLING',
@@ -305,14 +305,11 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
   });
 
-  describe('PATCH /api/v1/tenancy/organizations/:id/notification-policies/:policy_id', () => {
+  describe('PATCH /api/v1/tenancy/organization/notification-policies/:policy_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'PATCH',
-        url: notificationPolicyResourcePath(
-          'unauthenticated-organization-route',
-          'pol_unauth0000000000_',
-        ),
+        url: notificationPolicyResourcePath('pol_unauth0000000000_'),
         payload: { default_enabled: false },
       });
       expect(response.statusCode).toBe(401);
@@ -324,7 +321,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       ]);
       const created = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(manageContext.organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token: manageContext.token,
         payload: { notification_type: 'SECURITY', channel: 'EMAIL' },
       });
@@ -344,11 +341,14 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         organizationId: manageContext.organization.id,
         roleId: readOnlyRole.id,
       });
-      const readOnlyToken = await generateTestToken({ userId: readOnlyUser.public_id });
+      const readOnlyToken = await generateTestToken({
+        userId: readOnlyUser.public_id,
+        organizationPublicId: manageContext.organization.public_id,
+      });
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: notificationPolicyResourcePath(manageContext.organization.public_id, policyId),
+        url: notificationPolicyResourcePath(policyId),
         token: readOnlyToken,
         payload: { default_enabled: false },
       });
@@ -356,13 +356,13 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
 
     it('should return 400 when body contains unknown keys', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const created = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: { notification_type: 'UPDATE_TEST', channel: 'EMAIL' },
       });
@@ -372,7 +372,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: notificationPolicyResourcePath(organization.public_id, policyId),
+        url: notificationPolicyResourcePath(policyId),
         token,
         payload: { default_enabled: true, unexpected: true },
       });
@@ -380,13 +380,13 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
 
     it('should return 400 when muted_until on update is not a datetime string', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const created = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: { notification_type: 'MUTED_TEST', channel: 'SMS' },
       });
@@ -396,7 +396,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: notificationPolicyResourcePath(organization.public_id, policyId),
+        url: notificationPolicyResourcePath(policyId),
         token,
         payload: { muted_until: 'invalid-datetime-value' },
       });
@@ -404,13 +404,13 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
 
     it('should update notification policy when manage permission is granted', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const created = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: {
           notification_type: 'ORIGINAL_POLICY',
@@ -425,7 +425,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
 
       const patched = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: notificationPolicyResourcePath(organization.public_id, policyId),
+        url: notificationPolicyResourcePath(policyId),
         token,
         payload: {
           default_enabled: false,
@@ -441,14 +441,11 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
     });
   });
 
-  describe('DELETE /api/v1/tenancy/organizations/:id/notification-policies/:policy_id', () => {
+  describe('DELETE /api/v1/tenancy/organization/notification-policies/:policy_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: notificationPolicyResourcePath(
-          'unauthenticated-organization-route',
-          'pol_unauth0000000000_',
-        ),
+        url: notificationPolicyResourcePath('pol_unauth0000000000_'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -459,7 +456,7 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
       ]);
       const created = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(manageContext.organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token: manageContext.token,
         payload: { notification_type: 'DELETE_GUARD', channel: 'EMAIL' },
       });
@@ -479,38 +476,41 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
         organizationId: manageContext.organization.id,
         roleId: readOnlyRole.id,
       });
-      const readOnlyToken = await generateTestToken({ userId: readOnlyUser.public_id });
+      const readOnlyToken = await generateTestToken({
+        userId: readOnlyUser.public_id,
+        organizationPublicId: manageContext.organization.public_id,
+      });
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',
-        url: notificationPolicyResourcePath(manageContext.organization.public_id, policyId),
+        url: notificationPolicyResourcePath(policyId),
         token: readOnlyToken,
       });
       expect(response.statusCode).toBe(403);
     });
 
     it('should return 404 when notification policy does not exist', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',
-        url: notificationPolicyResourcePath(organization.public_id, 'pol_doesnotexist000000000'),
+        url: notificationPolicyResourcePath('pol_doesnotexist000000000'),
         token,
       });
       expect(response.statusCode).toBe(404);
     });
 
     it('should delete notification policy when manage permission is granted', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_READ,
         TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE,
       ]);
 
       const created = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: notificationPoliciesCollectionPath(organization.public_id),
+        url: NOTIFICATION_POLICIES_COLLECTION_PATH,
         token,
         payload: {
           notification_type: `TEMPORARY_POLICY_${randomUUID().slice(0, 8)}`,
@@ -527,13 +527,13 @@ describe('Tenancy Organization Notification Policy Sub-Domain — Integration', 
 
       const deleted = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',
-        url: notificationPolicyResourcePath(organization.public_id, policyId),
+        url: notificationPolicyResourcePath(policyId),
         token,
       });
       expect(deleted.statusCode).toBe(204);
 
       const lookup = await injectAuthenticated(app, {
-        url: notificationPolicyResourcePath(organization.public_id, policyId),
+        url: notificationPolicyResourcePath(policyId),
         token,
       });
       expect(lookup.statusCode).toBe(404);

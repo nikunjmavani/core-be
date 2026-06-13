@@ -50,22 +50,23 @@ describe('Tenancy e2e: member role permission', () => {
       organizationId: organization.id,
       roleId: ownerRole.id,
     });
-    const token = await generateTestToken({ userId: owner.public_id });
+    const token = await generateTestToken({
+      userId: owner.public_id,
+      organizationPublicId: organization.public_id,
+    });
 
     const createRoleResponse = await injectAuthenticated(app, {
       method: 'POST',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
+      url: testApiPath('/tenancy/organization/roles'),
       token,
-      organizationPublicId: organization.public_id,
       payload: { name: 'E2E Custom Role', description: 'e2e' },
     });
     expect([201]).toContain(createRoleResponse.statusCode);
 
     const listRolesResponse = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
+      url: testApiPath('/tenancy/organization/roles'),
       token,
-      organizationPublicId: organization.public_id,
     });
     expect(listRolesResponse.statusCode).toBe(200);
   });

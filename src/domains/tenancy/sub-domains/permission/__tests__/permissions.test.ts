@@ -125,11 +125,15 @@ describe('Permission System Validation', () => {
       roleId: readOnlyRole.id,
     });
 
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat tenancy routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
 
     // Attempt to access roles endpoint (requires ROLE_READ)
     const response = await injectAuthenticated(app, {
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
+      url: testApiPath('/tenancy/organization/roles'),
       token,
     });
     expect(response.statusCode).toBe(403);
@@ -156,11 +160,15 @@ describe('Permission System Validation', () => {
       roleId: roleReadRole.id,
     });
 
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat tenancy routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
 
     // Access roles endpoint (requires ROLE_READ) — should succeed
     const response = await injectAuthenticated(app, {
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/roles`),
+      url: testApiPath('/tenancy/organization/roles'),
       token,
     });
     expect(response.statusCode).toBe(200);

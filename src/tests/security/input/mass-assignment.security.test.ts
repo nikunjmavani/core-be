@@ -161,17 +161,16 @@ describe('Security: mass-assignment / over-posting', () => {
     });
   });
 
-  // ─── Organization update (PATCH /tenancy/organizations/:organization_id) ─────────────────
+  // ─── Organization update (PATCH /tenancy/organization) ──────────────────────
 
-  describe('PATCH /api/v1/tenancy/organizations/:organization_id', () => {
+  describe('PATCH /api/v1/tenancy/organization', () => {
     it('rejects an injected owner_user_id (no privilege transfer via update)', async () => {
-      const { organization, token } = await createOrgAdminContext();
+      const { token } = await createOrgAdminContext();
       const otherUser = await createTestUser();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+        url: testApiPath('/tenancy/organization'),
         token,
-        organizationPublicId: organization.public_id,
         payload: { name: 'Renamed', owner_user_id: otherUser.public_id },
         headers: idempotent(),
       });
@@ -179,12 +178,11 @@ describe('Security: mass-assignment / over-posting', () => {
     });
 
     it('rejects an injected public_id (identity is immutable)', async () => {
-      const { organization, token } = await createOrgAdminContext();
+      const { token } = await createOrgAdminContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+        url: testApiPath('/tenancy/organization'),
         token,
-        organizationPublicId: organization.public_id,
         payload: { public_id: 'attacker-controlled' },
         headers: idempotent(),
       });
@@ -192,12 +190,11 @@ describe('Security: mass-assignment / over-posting', () => {
     });
 
     it('rejects an injected stripe_customer_id (billing-owned field)', async () => {
-      const { organization, token } = await createOrgAdminContext();
+      const { token } = await createOrgAdminContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+        url: testApiPath('/tenancy/organization'),
         token,
-        organizationPublicId: organization.public_id,
         payload: { stripe_customer_id: 'cus_attacker' },
         headers: idempotent(),
       });
@@ -205,16 +202,15 @@ describe('Security: mass-assignment / over-posting', () => {
     });
   });
 
-  // ─── Organization settings (PATCH /tenancy/organizations/:organization_id/settings) ──────
+  // ─── Organization settings (PATCH /tenancy/organization/settings) ───────────
 
-  describe('PATCH /api/v1/tenancy/organizations/:organization_id/settings', () => {
-    it('rejects an injected organization_id (tenant binding is from the URL)', async () => {
-      const { organization, token } = await createOrgAdminContext();
+  describe('PATCH /api/v1/tenancy/organization/settings', () => {
+    it('rejects an injected organization_id (tenant binding is from the token claim)', async () => {
+      const { token } = await createOrgAdminContext();
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: testApiPath(`/tenancy/organizations/${organization.public_id}/settings`),
+        url: testApiPath('/tenancy/organization/settings'),
         token,
-        organizationPublicId: organization.public_id,
         payload: { organization_id: 999_999 },
         headers: idempotent(),
       });

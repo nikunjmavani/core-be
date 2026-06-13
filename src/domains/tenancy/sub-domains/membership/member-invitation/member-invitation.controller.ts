@@ -12,7 +12,7 @@ import type { MemberInvitationService } from './member-invitation.service.js';
 
 /**
  * Builds the HTTP handler map for organization-scoped invitation routes
- * (list/create/cancel/resend under `/organizations/:organization_id/invitations`) and the
+ * (list/create/cancel/resend under `/organization/invitations`) and the
  * cross-org user-facing routes (`/invitations/pending`,
  * `/invitations/:invitation_id/accept`, `/invitations/:invitation_id/decline`).
  */

@@ -13,7 +13,7 @@ import {
 } from './member-invitation.dto.js';
 
 /**
- * Validates the `GET /organizations/:organization_id/invitations` query string. Rejects
+ * Validates the `GET /organization/invitations` query string. Rejects
  * legacy page-number pagination first, then parses against
  * {@link listMemberInvitationsQueryDto}.
  */
@@ -31,7 +31,7 @@ export function validateListMemberInvitationsQuery(data: unknown): ListMemberInv
 }
 
 /**
- * Validates a `POST /organizations/:organization_id/invitations` body against
+ * Validates a `POST /organization/invitations` body against
  * {@link createMemberInvitationDto}, throwing
  * `ValidationError('errors:invalidInput')` with per-field details on failure.
  */
@@ -65,7 +65,7 @@ export function validateAcceptMemberInvitation(data: unknown): AcceptMemberInvit
 }
 
 /**
- * Validates a `POST /organizations/:organization_id/invitations/:invitation_id/resend` body
+ * Validates a `POST /organization/invitations/:invitation_id/resend` body
  * against {@link resendMemberInvitationDto}.
  */
 export function validateResendMemberInvitation(data: unknown): ResendMemberInvitationInput {

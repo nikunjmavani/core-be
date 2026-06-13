@@ -10,10 +10,10 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import type { OrganizationNotificationPolicyService } from './organization-notification-policy.service.js';
 
 /**
- * Builds the Fastify handler map for `/organizations/:organization_id/notification-policies`
- * routes — list, get, create, update, delete. Validates BOTH the
- * organization `id` and the `policyId` path params via
- * {@link validatePublicIdParam}.
+ * Builds the Fastify handler map for `/organization/notification-policies`
+ * routes — list, get, create, update, delete. The active organization is
+ * resolved from the signed JWT `org` claim; the `policyId` path param is
+ * validated via {@link validatePublicIdParam}.
  *
  * @remarks
  * sec-T5: this handler used to coerce `policyId` to a positive integer

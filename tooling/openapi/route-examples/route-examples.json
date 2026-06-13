@@ -205,7 +205,7 @@
       }
     }
   },
-  "DELETE /api/v1/tenancy/organizations/:organization_id": {
+  "DELETE /api/v1/tenancy/organization": {
     "responses": {
       "401": {
         "error": {
@@ -231,7 +231,7 @@
       }
     }
   },
-  "DELETE /api/v1/tenancy/organizations/:organization_id/api-keys/:api_key_id": {
+  "DELETE /api/v1/tenancy/organization/api-keys/:api_key_id": {
     "responses": {
       "401": {
         "error": {
@@ -268,7 +268,7 @@
       }
     }
   },
-  "DELETE /api/v1/tenancy/organizations/:organization_id/invitations/:invitation_id": {
+  "DELETE /api/v1/tenancy/organization/invitations/:invitation_id": {
     "responses": {
       "401": {
         "error": {
@@ -305,7 +305,7 @@
       }
     }
   },
-  "DELETE /api/v1/tenancy/organizations/:organization_id/logo": {
+  "DELETE /api/v1/tenancy/organization/logo": {
     "responses": {
       "401": {
         "error": {
@@ -331,7 +331,7 @@
       }
     }
   },
-  "DELETE /api/v1/tenancy/organizations/:organization_id/memberships/:membership_id": {
+  "DELETE /api/v1/tenancy/organization/memberships/:membership_id": {
     "responses": {
       "401": {
         "error": {
@@ -368,7 +368,7 @@
       }
     }
   },
-  "DELETE /api/v1/tenancy/organizations/:organization_id/notification-policies/:policy_id": {
+  "DELETE /api/v1/tenancy/organization/notification-policies/:policy_id": {
     "responses": {
       "401": {
         "error": {
@@ -405,7 +405,7 @@
       }
     }
   },
-  "DELETE /api/v1/tenancy/organizations/:organization_id/roles/:role_id": {
+  "DELETE /api/v1/tenancy/organization/roles/:role_id": {
     "responses": {
       "401": {
         "error": {
@@ -1264,7 +1264,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id": {
+  "GET /api/v1/tenancy/organization": {
     "responses": {
       "200": {
         "data": {
@@ -1321,7 +1321,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/api-keys": {
+  "GET /api/v1/tenancy/organization/api-keys": {
     "responses": {
       "200": {
         "data": [],
@@ -1358,7 +1358,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/api-keys/:api_key_id": {
+  "GET /api/v1/tenancy/organization/api-keys/:api_key_id": {
     "responses": {
       "200": {
         "data": {
@@ -1411,7 +1411,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/audit-logs": {
+  "GET /api/v1/tenancy/organization/audit-logs": {
     "responses": {
       "200": {
         "data": [],
@@ -1448,7 +1448,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/invitations": {
+  "GET /api/v1/tenancy/organization/invitations": {
     "responses": {
       "200": {
         "data": [],
@@ -1502,7 +1502,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/memberships": {
+  "GET /api/v1/tenancy/organization/memberships": {
     "responses": {
       "200": {
         "data": [
@@ -1550,7 +1550,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/memberships/:membership_id": {
+  "GET /api/v1/tenancy/organization/memberships/:membership_id": {
     "responses": {
       "200": {
         "data": {
@@ -1602,7 +1602,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/memberships/:membership_id/permissions": {
+  "GET /api/v1/tenancy/organization/memberships/:membership_id/permissions": {
     "responses": {
       "200": {
         "data": {
@@ -1647,7 +1647,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/notification-policies": {
+  "GET /api/v1/tenancy/organization/notification-policies": {
     "responses": {
       "200": {
         "data": [],
@@ -1679,7 +1679,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/notification-policies/:policy_id": {
+  "GET /api/v1/tenancy/organization/notification-policies/:policy_id": {
     "responses": {
       "200": {
         "data": {
@@ -1749,7 +1749,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/roles": {
+  "GET /api/v1/tenancy/organization/roles": {
     "responses": {
       "200": {
         "data": [
@@ -1795,7 +1795,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/roles/:role_id": {
+  "GET /api/v1/tenancy/organization/roles/:role_id": {
     "responses": {
       "200": {
         "data": {
@@ -1845,7 +1845,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/roles/:role_id/permissions": {
+  "GET /api/v1/tenancy/organization/roles/:role_id/permissions": {
     "responses": {
       "200": {
         "data": [
@@ -1905,7 +1905,7 @@
       }
     }
   },
-  "GET /api/v1/tenancy/organizations/:organization_id/settings": {
+  "GET /api/v1/tenancy/organization/settings": {
     "responses": {
       "200": {
         "data": {
@@ -2525,7 +2525,7 @@
       }
     }
   },
-  "PATCH /api/v1/tenancy/organizations/:organization_id": {
+  "PATCH /api/v1/tenancy/organization": {
     "request_body": {
       "name": "Updated Org"
     },
@@ -2596,7 +2596,7 @@
       }
     }
   },
-  "PATCH /api/v1/tenancy/organizations/:organization_id/api-keys/:api_key_id": {
+  "PATCH /api/v1/tenancy/organization/api-keys/:api_key_id": {
     "request_body": {
       "name": "After Rename",
       "status": "REVOKED"
@@ -2670,7 +2670,7 @@
       }
     }
   },
-  "PATCH /api/v1/tenancy/organizations/:organization_id/memberships/:membership_id": {
+  "PATCH /api/v1/tenancy/organization/memberships/:membership_id": {
     "request_body": {
       "status": "ACTIVE"
     },
@@ -2736,7 +2736,7 @@
       }
     }
   },
-  "PATCH /api/v1/tenancy/organizations/:organization_id/notification-policies/:policy_id": {
+  "PATCH /api/v1/tenancy/organization/notification-policies/:policy_id": {
     "request_body": {
       "default_enabled": false,
       "is_mandatory": true
@@ -2810,7 +2810,7 @@
       }
     }
   },
-  "PATCH /api/v1/tenancy/organizations/:organization_id/roles/:role_id": {
+  "PATCH /api/v1/tenancy/organization/roles/:role_id": {
     "request_body": {
       "name": "Detail Target Role Updated"
     },
@@ -2874,7 +2874,7 @@
       }
     }
   },
-  "PATCH /api/v1/tenancy/organizations/:organization_id/settings": {
+  "PATCH /api/v1/tenancy/organization/settings": {
     "request_body": {
       "is_email_notifications_enabled": false,
       "security_policy": {
@@ -4718,7 +4718,7 @@
       }
     }
   },
-  "POST /api/v1/tenancy/organizations/:organization_id/api-keys": {
+  "POST /api/v1/tenancy/organization/api-keys": {
     "request_body": {
       "name": "Listing Test Key",
       "scopes": ["api-key:read"],
@@ -4789,7 +4789,7 @@
       }
     }
   },
-  "POST /api/v1/tenancy/organizations/:organization_id/api-keys/:api_key_id/rotate": {
+  "POST /api/v1/tenancy/organization/api-keys/:api_key_id/rotate": {
     "responses": {
       "201": {
         "data": {
@@ -4845,7 +4845,7 @@
       }
     }
   },
-  "POST /api/v1/tenancy/organizations/:organization_id/invitations": {
+  "POST /api/v1/tenancy/organization/invitations": {
     "request_body": {
       "membership_id": "rol_example00000000000000",
       "expires_in_days": 7
@@ -4920,7 +4920,7 @@
       }
     }
   },
-  "POST /api/v1/tenancy/organizations/:organization_id/invitations/:invitation_id/resend": {
+  "POST /api/v1/tenancy/organization/invitations/:invitation_id/resend": {
     "request_body": {
       "expires_in_days": 10
     },
@@ -4988,7 +4988,7 @@
       }
     }
   },
-  "POST /api/v1/tenancy/organizations/:organization_id/leave": {
+  "POST /api/v1/tenancy/organization/leave": {
     "responses": {
       "401": {
         "error": {
@@ -5014,7 +5014,7 @@
       }
     }
   },
-  "POST /api/v1/tenancy/organizations/:organization_id/memberships": {
+  "POST /api/v1/tenancy/organization/memberships": {
     "request_body": {
       "user_id": "usr_example00000000000000",
       "role_id": "rol_example00000000000000"
@@ -5102,7 +5102,7 @@
       }
     }
   },
-  "POST /api/v1/tenancy/organizations/:organization_id/notification-policies": {
+  "POST /api/v1/tenancy/organization/notification-policies": {
     "request_body": {
       "notification_type": "IN_APP",
       "channel": "EMAIL",
@@ -5167,7 +5167,7 @@
       }
     }
   },
-  "POST /api/v1/tenancy/organizations/:organization_id/roles": {
+  "POST /api/v1/tenancy/organization/roles": {
     "request_body": {
       "name": "New Role",
       "description": "A test role"
@@ -5238,7 +5238,7 @@
       }
     }
   },
-  "POST /api/v1/tenancy/organizations/:organization_id/transfer-ownership": {
+  "POST /api/v1/tenancy/organization/transfer-ownership": {
     "request_body": {
       "new_owner_user_id": "usr_example00000000000000"
     },
@@ -5558,7 +5558,7 @@
       }
     }
   },
-  "PUT /api/v1/tenancy/organizations/:organization_id/logo": {
+  "PUT /api/v1/tenancy/organization/logo": {
     "request_body": {
       "key": "organization-logos/org_6hdmsko6prwmrzwjdydz2/fd466c1c-7156-4ff9-8009-c56215d43930.png"
     },
@@ -5618,7 +5618,7 @@
       }
     }
   },
-  "PUT /api/v1/tenancy/organizations/:organization_id/roles/:role_id/permissions": {
+  "PUT /api/v1/tenancy/organization/roles/:role_id/permissions": {
     "request_body": {
       "permission_codes": ["organization:read"]
     },

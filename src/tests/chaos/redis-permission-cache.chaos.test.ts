@@ -63,6 +63,7 @@ describe('Chaos resilience: Redis permission-cache miss', () => {
 
     const authenticationTokenWaitingForIsolation = await generateTestToken({
       userId: userWaitingForIsolation.public_id,
+      organizationPublicId: organizationWaitingForIsolation.public_id,
     });
 
     try {
@@ -72,9 +73,7 @@ describe('Chaos resilience: Redis permission-cache miss', () => {
           const membershipsHttpRouteResponseListening =
             await chaosFastifyApplicationInstance.inject({
               method: 'GET',
-              url: testApiPath(
-                `/tenancy/organizations/${organizationWaitingForIsolation.public_id}/memberships`,
-              ),
+              url: testApiPath('/tenancy/organization/memberships'),
               headers: {
                 authorization: `Bearer ${authenticationTokenWaitingForIsolation}`,
                 'x-organization-id': organizationWaitingForIsolation.public_id,

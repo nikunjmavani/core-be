@@ -30,32 +30,30 @@ describe('organization routes rate-limit policy (sec-r4-I2)', () => {
     return match[1] ?? '';
   }
 
-  it('PATCH /organizations/:organization_id has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT', () => {
-    expect(findRouteBlock('patch', '/organizations/:organization_id')).toContain(
+  it('PATCH /organization has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT', () => {
+    expect(findRouteBlock('patch', '/organization')).toContain(
       '...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT',
     );
   });
 
-  it('DELETE /organizations/:organization_id has EXPENSIVE_AUTHED_RATE_LIMIT (irreversible)', () => {
-    expect(findRouteBlock('delete', '/organizations/:organization_id')).toContain(
-      '...EXPENSIVE_AUTHED_RATE_LIMIT',
-    );
+  it('DELETE /organization has EXPENSIVE_AUTHED_RATE_LIMIT (irreversible)', () => {
+    expect(findRouteBlock('delete', '/organization')).toContain('...EXPENSIVE_AUTHED_RATE_LIMIT');
   });
 
-  it('PUT /organizations/:organization_id/logo has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT (S3 write)', () => {
-    expect(findRouteBlock('put', '/organizations/:organization_id/logo')).toContain(
+  it('PUT /organization/logo has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT (S3 write)', () => {
+    expect(findRouteBlock('put', '/organization/logo')).toContain(
       '...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT',
     );
   });
 
-  it('DELETE /organizations/:organization_id/logo has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT (S3 delete)', () => {
-    expect(findRouteBlock('delete', '/organizations/:organization_id/logo')).toContain(
+  it('DELETE /organization/logo has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT (S3 delete)', () => {
+    expect(findRouteBlock('delete', '/organization/logo')).toContain(
       '...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT',
     );
   });
 
-  it('PATCH /organizations/:organization_id/settings has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT', () => {
-    expect(findRouteBlock('patch', '/organizations/:organization_id/settings')).toContain(
+  it('PATCH /organization/settings has ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT', () => {
+    expect(findRouteBlock('patch', '/organization/settings')).toContain(
       '...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT',
     );
   });

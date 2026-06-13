@@ -91,16 +91,25 @@ describe('Security: Session invalidation', () => {
     expect(response.statusCode).toBe(401);
   });
 
-  // NEGATIVE — token for user in org A used against org B resource
-  it('should return 403 when org-A token is used against an org-B endpoint', async () => {
+  // NEGATIVE — a user with no membership in org B cannot reach org B's resources.
+  //
+  // Flat tenancy routes resolve the organization from the JWT `org` claim, so
+  // cross-tenant access is expressed by scoping user A's token to org B's claim:
+  // A holds no membership in B, so the flat settings route resolves to B and the
+  // permission preHandler denies it (403). A forged claim is scope, not authority.
+  it("should return 403 when a user's token claims an organization they don't belong to", async () => {
     const userA = await createActiveUserWithToken();
     const userB = await createActiveUserWithToken();
 
+    const userATokenScopedToB = await generateTestToken({
+      userId: userA.user.public_id,
+      organizationPublicId: userB.organization.public_id,
+    });
+
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${userB.organization.public_id}/settings`),
-      token: userA.token,
-      organizationPublicId: userB.organization.public_id,
+      url: testApiPath('/tenancy/organization/settings'),
+      token: userATokenScopedToB,
     });
 
     expect([403, 404]).toContain(response.statusCode);

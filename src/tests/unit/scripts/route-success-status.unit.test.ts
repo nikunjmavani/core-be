@@ -39,11 +39,9 @@ describe('route success-status map', () => {
     expect(successStatusMap['DELETE /api/v1/auth/me/sessions']).toBe(204);
     expect(successStatusMap['POST /api/v1/tenancy/organizations']).toBe(201);
     expect(successStatusMap['POST /api/v1/uploads']).toBe(201);
-    expect(
-      successStatusMap[
-        'POST /api/v1/tenancy/organizations/:organization_id/api-keys/:api_key_id/rotate'
-      ],
-    ).toBe(201);
+    expect(successStatusMap['POST /api/v1/tenancy/organization/api-keys/:api_key_id/rotate']).toBe(
+      201,
+    );
     expect(successStatusMap['POST /api/v1/users/me/data-export']).toBe(201);
   });
 

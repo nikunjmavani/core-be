@@ -11,7 +11,7 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import type { OrganizationApiKeyService } from './organization-api-key.service.js';
 
 /**
- * Builds the Fastify handler map for `/organizations/:organization_id/api-keys` routes —
+ * Builds the Fastify handler map for `/organization/api-keys` routes —
  * list, get, create (returns the raw key once), update, delete, and rotate.
  * Wraps service calls with principal validation, public-id validation, and the
  * standard response shapers. Create/rotate require a real user principal

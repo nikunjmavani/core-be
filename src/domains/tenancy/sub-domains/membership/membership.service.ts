@@ -29,7 +29,7 @@ import type { OrganizationApiKeyRepository } from '@/domains/tenancy/sub-domains
 
 /**
  * HTTP response shape for `GET
- * /organizations/:organization_id/memberships/:membership_id/permissions` — the resolved
+ * /organization/memberships/:membership_id/permissions` — the resolved
  * permission codes for the membership's current role.
  *
  * @remarks

@@ -3,7 +3,7 @@ import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.j
 import { NOTIFICATION_CHANNELS } from '@/shared/constants/index.js';
 
 /**
- * Zod schema for `POST /api/v1/organizations/:organization_id/notification-policies` —
+ * Zod schema for `POST /api/v1/organization/notification-policies` —
  * binds a `notification_type` to a `channel` (`EMAIL`/`SMS`/`PUSH`/`IN_APP`)
  * with default-on/mandatory toggles and an optional ISO `muted_until`.
  */
@@ -18,7 +18,7 @@ export const createOrganizationNotificationPolicyDto = z
   .strict();
 
 /**
- * Zod schema for `PATCH /api/v1/organizations/:organization_id/notification-policies/:policy_id`.
+ * Zod schema for `PATCH /api/v1/organization/notification-policies/:policy_id`.
  * Notification type and channel are immutable; only delivery flags and the
  * mute window can be updated.
  */
