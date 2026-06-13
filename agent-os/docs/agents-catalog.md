@@ -1,6 +1,6 @@
 # Agent catalog (core-be)
 
-All 8 project agents. Each is read-only and wraps a project skill.
+All 9 project agents. Each is read-only; most wrap a project skill (verifier and changelog-reviewer are inline).
 See [platform-access.md](platform-access.md) for how to invoke on each platform.
 
 | Agent | File | Wraps skill | Use when |
@@ -13,3 +13,4 @@ See [platform-access.md](platform-access.md) for how to invoke on each platform.
 | **sql-design-reviewer** | [`agent-os/agents/sql-design-reviewer.md`](../agents/sql-design-reviewer.md) | sql-design-guard | Schema design review — indexes, constraints, column conventions |
 | **dependency-auditor** | [`agent-os/agents/dependency-auditor.md`](../agents/dependency-auditor.md) | dependency-security | `pnpm audit` — vulnerabilities + prioritized fix plan |
 | **tsdoc-coverage-reviewer** | [`agent-os/agents/tsdoc-coverage-reviewer.md`](../agents/tsdoc-coverage-reviewer.md) | tsdoc-export-guard *(check phase)* | TSDoc gap scan — missing summaries and @remarks |
+| **changelog-reviewer** | [`agent-os/agents/changelog-reviewer.md`](../agents/changelog-reviewer.md) | *(inline)* | Verify CHANGELOG.md vs git log / merged PR titles — gap report |

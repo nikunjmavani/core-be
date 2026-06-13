@@ -128,7 +128,7 @@ Always leave the codebase cleaner, simpler, safer, and easier to maintain than b
 **Generated (do not hand-edit):**
 
 - `src/shared/constants/project-identity.constants.ts` — runtime TypeScript
-- `.github/sync.config.json`, `.github/project-identity.env`, `docker-bake.hcl`
+- `.github/project-identity.env`, `docker-bake.hcl`
 - Workflow `# BEGIN GENERATED project-identity` job `env:` blocks and branch/deploy patches
 
 **After manifest changes:** `pnpm tool:generate-project-identity` (pre-commit runs this when `setup.config.json` is staged). **Drift gate:** `pnpm tool:generate-project-identity:check` (in `pnpm ci:quality`).

@@ -1,0 +1,30 @@
+{
+  "_comment": "Tier-2 trigger evals: for a given changed file, which skill(s) MUST the routing map (agent-os/docs/skill-triggers.md) surface? trigger-eval.ts resolves each file against the trigger table and reports expected skills the map fails to surface. Reported, not gated, until calibrated — see README.md. Add a case whenever you wire a new file-pattern → skill route.",
+  "cases": [
+    {
+      "file": "src/domains/billing/sub-domains/plan/plan.routes.ts",
+      "expectSkills": ["api-contract-guard", "route-schema-doc-guard", "route-catalog", "seed-maintainer"],
+      "why": "Adding/changing a route must run the API-contract chain."
+    },
+    {
+      "file": "src/domains/billing/sub-domains/plan/plan.schema.ts",
+      "expectSkills": ["sql-design-guard", "db-migration-maintainer", "schema-generator"],
+      "why": "schema-generator is glob-triggered on *.schema.ts but is currently missing from the trigger map — this case documents the expected route."
+    },
+    {
+      "file": "src/shared/locales/en/errors.json",
+      "expectSkills": ["i18n-message-guard"],
+      "why": "Editing locale copy must run the i18n guard."
+    },
+    {
+      "file": "src/domains/notify/sub-domains/webhook/workers/webhook-delivery.worker.ts",
+      "expectSkills": ["workers-events"],
+      "why": "Worker changes must run the workers-events skill."
+    },
+    {
+      "file": "migrations/20260614000000_add_plan_index.sql",
+      "expectSkills": ["db-migration-maintainer"],
+      "why": "A new migration must run the migration maintainer."
+    }
+  ]
+}

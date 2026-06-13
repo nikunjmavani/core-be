@@ -16,7 +16,7 @@ REMINDERS=()
   REMINDERS+=("routes → route-schema-doc-guard + route-catalog + seed-maintainer")
 
 [[ "$FILE" == *".schema.ts" ]] && \
-  REMINDERS+=("schema → sql-design-guard + db-migration-maintainer")
+  REMINDERS+=("schema → schema-generator + sql-design-guard + db-migration-maintainer")
 
 [[ "$FILE" == *"env-schema.ts"* || "$FILE" == *".env.example"* ]] && \
   REMINDERS+=("env → env-schema-add")
