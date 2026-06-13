@@ -120,6 +120,17 @@ export async function assertJwtKeyMaterial(): Promise<void> {
 export interface TokenPayload {
   userId: string;
   role?: string;
+  /**
+   * Active organization (`org_…` public id) the token is scoped to — the tenant context for
+   * this request. Absent when the user has no active organization (team-only mode, no team yet).
+   * A signed claim, so it cannot be tampered; membership + RLS are still re-checked per request.
+   */
+  organizationPublicId?: string;
+  /**
+   * Session version — bumped on logout / "sign out everywhere" / credential revocation. Checked
+   * per request against the session's current version so all outstanding tokens die immediately.
+   */
+  sessionVersion?: number;
 }
 
 /**
@@ -127,10 +138,13 @@ export interface TokenPayload {
  * - 15-minute expiry (or shorter for global admin)
  * - No email in payload (security: avoid leaking PII)
  * - iss/aud claims set for validation
+ * - `org` carries the active organization (tenant scope); `sv` the session version.
  */
 export async function signAccessToken(payload: {
   userId: string;
   role?: string | undefined;
+  organizationPublicId?: string | undefined;
+  sessionVersion?: number | undefined;
 }): Promise<string> {
   const userId = payload.userId;
   const role = payload.role;
@@ -142,7 +156,9 @@ export async function signAccessToken(payload: {
       ? environment.GLOBAL_ADMIN_ACCESS_TOKEN_EXPIRY_SECONDS
       : ACCESS_TOKEN_EXPIRY_SECONDS;
 
-  const builder = new SignJWT(omitUndefined({ role }))
+  const builder = new SignJWT(
+    omitUndefined({ role, org: payload.organizationPublicId, sv: payload.sessionVersion }),
+  )
     .setProtectedHeader({ alg: JWT_ALGORITHM, kid: environment.JWT_SIGNING_KID })
     .setSubject(userId)
     .setJti(randomUUID())
@@ -229,6 +245,12 @@ export async function verifyAccessToken(token: string): Promise<TokenPayload> {
   const tokenPayload: TokenPayload = { userId: payload.sub };
   if (typeof payload.role === 'string') {
     tokenPayload.role = payload.role;
+  }
+  if (typeof payload.org === 'string') {
+    tokenPayload.organizationPublicId = payload.org;
+  }
+  if (typeof payload.sv === 'number') {
+    tokenPayload.sessionVersion = payload.sv;
   }
   return tokenPayload;
 }
