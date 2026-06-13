@@ -1,14 +1,14 @@
 # Skill triggers (core-be)
 
 When you edit a file matching a pattern below, invoke the listed skill(s).
-Single source of truth — consult instead of reading all 24 sync rules.
+Single source of truth — consult instead of reading all 26 sync rules.
 Skills live in [`agent-os/skills/`](../skills/).
 
 | File pattern | Invoke skill(s) | Notes |
 | ------------ | --------------- | ----- |
 | `src/domains/**/*.routes.ts` | api-contract-guard → route-schema-doc-guard → route-catalog → seed-maintainer | Also openapi-multilingual if tags changed |
 | Route params / public ids / response statuses / request headers | api-contract-guard | Status policy: `docs/reference/api/response-codes.md` |
-| `src/domains/**/*.schema.ts` | schema-generator → sql-design-guard → db-migration-maintainer | |
+| `src/domains/**/*.schema.ts` | schema-generator → sql-design-guard → db-migration-maintainer → rls-tenant-isolation-guard | |
 | `src/domains/**/*.container.ts`, `src/routes.ts` | domain-generator (check wiring) | |
 | `migrations/*.sql` | db-migration-maintainer | |
 | `src/shared/config/env-schema.ts`, `.env.example` | env-schema-add | |
@@ -29,6 +29,8 @@ Skills live in [`agent-os/skills/`](../skills/).
 | `src/shared/locales/*/openapi.json` | openapi-multilingual | |
 | `CLAUDE.md`, `AGENTS.md`, `agent-os/rules/**`, `agent-os/skills/**`, `agent-os/agents/**` | structure-maintainer | |
 | `tooling/setup/setup.config.json`, `src/shared/constants/project-identity.constants.ts` | project-identity-sync | |
+| `src/infrastructure/database/contexts/**`, `src/domains/**/*.worker.ts`, RLS migrations | rls-tenant-isolation-guard | |
+| `src/shared/middlewares/core/idempotency.middleware.ts`, idempotencyRequired routes, `src/infrastructure/payment/stripe.client.ts` | idempotency-guard | |
 
-> The 24 `agent-os/rules/*-sync.mdc` files remain for Cursor's glob auto-attach.
+> The 26 `agent-os/rules/*-sync.mdc` files remain for Cursor's glob auto-attach.
 > This table is the human-readable cross-platform equivalent.
