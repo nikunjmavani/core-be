@@ -46,6 +46,41 @@ export async function resolveDefaultActiveOrganizationPublicId(
 
 /**
  * Confirm the user holds an ACTIVE membership in the given organization (and the org is
+ * active/not-deleted), returning both the internal `id` and `public_id`. Runs under the
+ * global-admin RLS context (no org context at switch time) but is constrained to the
+ * caller's own `user_id`.
+ *
+ * @remarks
+ * - **Algorithm:** one indexed join (memberships → organizations) filtered to ACTIVE
+ *   membership + active/non-deleted org matching `organizationPublicId`.
+ * - **Side effects:** none (read-only). Returns `undefined` when no such active
+ *   membership exists (caller maps to 403, or falls back to a default org).
+ */
+export async function findUserActiveOrganizationByPublicId(
+  userInternalId: number,
+  organizationPublicId: string,
+): Promise<{ id: number; public_id: string } | undefined> {
+  return withGlobalAdminDatabaseContext(async (databaseHandle) => {
+    const rows = await databaseHandle
+      .select({ id: organizations.id, public_id: organizations.public_id })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
+      .where(
+        and(
+          eq(memberships.user_id, userInternalId),
+          eq(memberships.status, 'ACTIVE'),
+          eq(organizations.public_id, organizationPublicId),
+          isNull(organizations.deleted_at),
+          eq(organizations.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+    return rows[0];
+  });
+}
+
+/**
+ * Confirm the user holds an ACTIVE membership in the given organization (and the org is
  * active/not-deleted) — the membership gate for `switch-to-organization`. Returns the
  * org `public_id` when valid, otherwise `undefined` (caller maps to 403). Runs under the
  * global-admin RLS context (no org context at switch time) but is constrained to the
@@ -54,6 +89,22 @@ export async function resolveDefaultActiveOrganizationPublicId(
 export async function findUserActiveOrganizationPublicId(
   userInternalId: number,
   organizationPublicId: string,
+): Promise<string | undefined> {
+  return (await findUserActiveOrganizationByPublicId(userInternalId, organizationPublicId))
+    ?.public_id;
+}
+
+/**
+ * Refresh-time revalidation of the active organization persisted on a session
+ * (audit-#3). Given the session's stored internal `organization_id`, confirm the
+ * user still holds an ACTIVE membership in that active/non-deleted org and return
+ * its `public_id`; otherwise `undefined` so the caller falls back to the default
+ * active organization. Constrained to the caller's own `user_id` under the
+ * global-admin RLS context (no org context at refresh time).
+ */
+export async function findUserActiveOrganizationPublicIdByInternalId(
+  userInternalId: number,
+  organizationInternalId: number,
 ): Promise<string | undefined> {
   return withGlobalAdminDatabaseContext(async (databaseHandle) => {
     const rows = await databaseHandle
@@ -64,7 +115,7 @@ export async function findUserActiveOrganizationPublicId(
         and(
           eq(memberships.user_id, userInternalId),
           eq(memberships.status, 'ACTIVE'),
-          eq(organizations.public_id, organizationPublicId),
+          eq(organizations.id, organizationInternalId),
           isNull(organizations.deleted_at),
           eq(organizations.status, 'ACTIVE'),
         ),
@@ -82,9 +133,20 @@ export async function findUserActiveOrganizationPublicId(
 export async function resolvePersonalOrganizationPublicId(
   ownerUserInternalId: number,
 ): Promise<string | undefined> {
+  return (await resolvePersonalOrganization(ownerUserInternalId))?.public_id;
+}
+
+/**
+ * Same as {@link resolvePersonalOrganizationPublicId} but returns both the
+ * internal `id` and `public_id` so the switch-to-personal path can persist the
+ * internal id on the session row (audit-#3).
+ */
+export async function resolvePersonalOrganization(
+  ownerUserInternalId: number,
+): Promise<{ id: number; public_id: string } | undefined> {
   return withGlobalAdminDatabaseContext(async (databaseHandle) => {
     const rows = await databaseHandle
-      .select({ public_id: organizations.public_id })
+      .select({ id: organizations.id, public_id: organizations.public_id })
       .from(organizations)
       .where(
         and(
@@ -94,6 +156,6 @@ export async function resolvePersonalOrganizationPublicId(
         ),
       )
       .limit(1);
-    return rows[0]?.public_id;
+    return rows[0];
   });
 }

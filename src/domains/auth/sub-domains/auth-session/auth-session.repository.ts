@@ -104,6 +104,26 @@ export class AuthSessionRepository {
       .where(eq(sessions.public_id, publicId));
   }
 
+  /**
+   * Rotate the session's access-token hash AND persist the active organization
+   * (audit-#3) so `/auth/refresh` can preserve the org the caller switched to
+   * instead of recomputing the default. Used by the organization-switch path.
+   */
+  async rotateTokenHashAndOrganization(
+    publicId: string,
+    tokenHash: string,
+    organizationId: number,
+  ) {
+    await getRequestDatabase()
+      .update(sessions)
+      .set({
+        token_hash: tokenHash,
+        organization_id: organizationId,
+        last_active_at: databaseNowTimestamp,
+      })
+      .where(eq(sessions.public_id, publicId));
+  }
+
   async rotateSessionCredentials(
     publicId: string,
     currentRefreshTokenHash: string,
