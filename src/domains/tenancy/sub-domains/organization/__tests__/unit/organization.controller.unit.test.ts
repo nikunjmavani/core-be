@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { ValidationError } from '@/shared/errors/index.js';
+import { ForbiddenError, ValidationError } from '@/shared/errors/index.js';
 import { createOrganizationController } from '@/domains/tenancy/sub-domains/organization/organization.controller.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
@@ -168,11 +168,8 @@ describe('createOrganizationController', () => {
     });
   });
 
-  it('rejects invalid organization id on each validated handler', async () => {
+  it('rejects a malformed organization id with ValidationError on each validated handler', async () => {
     const invalidId = 'not-a-public-id';
-    await expect(
-      controller.getOrganization(mockRequest({ params: {} }), mockReply()),
-    ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.getOrganization(
         mockRequest({ params: { organization_id: invalidId } }),
@@ -180,16 +177,10 @@ describe('createOrganizationController', () => {
       ),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.updateOrganization(mockRequest({ params: {}, body: { name: 'X' } }), mockReply()),
-    ).rejects.toBeInstanceOf(ValidationError);
-    await expect(
       controller.updateOrganization(
-        mockRequest({ params: { organization_id: '' }, body: { name: 'X' } }),
+        mockRequest({ params: { organization_id: invalidId }, body: { name: 'X' } }),
         mockReply(),
       ),
-    ).rejects.toBeInstanceOf(ValidationError);
-    await expect(
-      controller.deleteOrganization(mockRequest({ params: {} }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.deleteOrganization(
@@ -198,22 +189,13 @@ describe('createOrganizationController', () => {
       ),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.uploadLogo(mockRequest({ params: {}, body: { key: 'k' } }), mockReply()),
-    ).rejects.toBeInstanceOf(ValidationError);
-    await expect(
       controller.uploadLogo(
         mockRequest({ params: { organization_id: invalidId }, body: { key: 'k' } }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.deleteLogo(mockRequest({ params: {} }), mockReply()),
-    ).rejects.toBeInstanceOf(ValidationError);
-    await expect(
-      controller.deleteLogo(mockRequest({ params: { organization_id: '' } }), mockReply()),
-    ).rejects.toBeInstanceOf(ValidationError);
-    await expect(
-      controller.listOrganizationAuditLogs(mockRequest({ params: {} }), mockReply()),
+      controller.deleteLogo(mockRequest({ params: { organization_id: invalidId } }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       controller.listOrganizationAuditLogs(
@@ -221,6 +203,30 @@ describe('createOrganizationController', () => {
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('rejects a missing organization context with ForbiddenError on each validated handler', async () => {
+    // No path param and no `org` token claim → "organization context required" (403), matching
+    // requireOrganizationPermission. On real flattened routes the active org arrives via the signed
+    // claim; the mock principal here carries none, and an empty path segment cannot reach a handler.
+    await expect(
+      controller.getOrganization(mockRequest({ params: {} }), mockReply()),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      controller.updateOrganization(mockRequest({ params: {}, body: { name: 'X' } }), mockReply()),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      controller.deleteOrganization(mockRequest({ params: { organization_id: '' } }), mockReply()),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      controller.uploadLogo(mockRequest({ params: {}, body: { key: 'k' } }), mockReply()),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      controller.deleteLogo(mockRequest({ params: { organization_id: '' } }), mockReply()),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      controller.listOrganizationAuditLogs(mockRequest({ params: {} }), mockReply()),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it('uses empty slug default when params are undefined', async () => {

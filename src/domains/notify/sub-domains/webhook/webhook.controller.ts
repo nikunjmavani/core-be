@@ -4,6 +4,7 @@ import {
   getActingUserPublicId,
   getRequestIdentifier,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -39,10 +40,7 @@ function createListWebhooksHandler(service: WebhookService) {
     const parsed = validateListWebhooksQuery(request.query);
     const result = await service.list(
       omitUndefined({
-        organization_public_id: validatePublicIdParam(
-          request.params.organization_id,
-          'organization_id',
-        ),
+        organization_public_id: resolveActiveOrganizationId(request),
         after: parsed.after,
         limit: parsed.limit,
         include_total: parsed.include_total === 'true',
@@ -65,10 +63,7 @@ function createListDeliveryAttemptsHandler(service: WebhookService) {
     const parsed = validateListWebhookDeliveryAttemptsQuery(request.query);
     const result = await service.listDeliveryAttempts(
       omitUndefined({
-        organization_public_id: validatePublicIdParam(
-          request.params.organization_id,
-          'organization_id',
-        ),
+        organization_public_id: resolveActiveOrganizationId(request),
         // sec-new-N1: reject malformed webhookId before reaching the service layer.
         webhook_public_id: validatePublicIdParam(request.params.webhook_id, 'webhook_id'),
         after: parsed.after,
@@ -99,7 +94,7 @@ export function createWebhookController(service: WebhookService) {
       requirePrincipal(request);
       // sec-new-N1: reject malformed webhookId before reaching the service layer.
       const data = await service.get(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
+        resolveActiveOrganizationId(request),
         validatePublicIdParam(request.params.webhook_id, 'webhook_id'),
       );
       // sec-T #17: service already returns the serialized public shape (id, url,
@@ -113,7 +108,7 @@ export function createWebhookController(service: WebhookService) {
     ) => {
       const auth = requirePrincipal(request);
       const data = await service.create(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
+        resolveActiveOrganizationId(request),
         request.body,
         getActingUserPublicId(auth),
       );
@@ -127,7 +122,7 @@ export function createWebhookController(service: WebhookService) {
       const auth = requirePrincipal(request);
       // sec-new-N1: reject malformed webhookId before reaching the service layer.
       const data = await service.update(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
+        resolveActiveOrganizationId(request),
         validatePublicIdParam(request.params.webhook_id, 'webhook_id'),
         request.body,
         getActingUserPublicId(auth),
@@ -141,7 +136,7 @@ export function createWebhookController(service: WebhookService) {
       requirePrincipal(request);
       // sec-new-N1: reject malformed webhookId before reaching the service layer.
       await service.delete(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
+        resolveActiveOrganizationId(request),
         validatePublicIdParam(request.params.webhook_id, 'webhook_id'),
       );
       return reply.code(204).send();
@@ -154,10 +149,7 @@ export function createWebhookController(service: WebhookService) {
       requirePrincipal(request);
       // sec-new-N1: reject malformed webhookId before reaching the service layer.
       const data = await service.testWebhook({
-        organization_public_id: validatePublicIdParam(
-          request.params.organization_id,
-          'organization_id',
-        ),
+        organization_public_id: resolveActiveOrganizationId(request),
         webhook_public_id: validatePublicIdParam(request.params.webhook_id, 'webhook_id'),
         requestId: getRequestIdentifier(request),
       });

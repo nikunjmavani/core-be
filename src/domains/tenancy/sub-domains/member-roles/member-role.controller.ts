@@ -4,6 +4,7 @@ import {
   getActingUserPublicId,
   getRequestIdentifier,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
 import {
   cursorPaginationSchema,
@@ -25,10 +26,7 @@ import type { MemberRoleService } from './member-role.service.js';
 export function createMemberRoleController(service: MemberRoleService) {
   return {
     listRoles: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       ensureCursorOnlyPagination(request.query);
       const pagination = cursorPaginationSchema.parse(request.query);
       const result = await service.list(organizationId, pagination);
@@ -40,22 +38,18 @@ export function createMemberRoleController(service: MemberRoleService) {
       });
     },
     getRole: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const { organization_id: rawOrgId, role_id: rawRoleId } = (request.params as {
-        organization_id: string;
+      const { role_id: rawRoleId } = (request.params as {
         role_id: string;
-      }) ?? { organization_id: '', role_id: '' };
+      }) ?? { role_id: '' };
       // sec-new-T3: reject malformed path params before reaching the service layer.
-      const organizationId = validatePublicIdParam(rawOrgId ?? '', 'organization_id');
+      const organizationId = resolveActiveOrganizationId(request);
       const roleId = validatePublicIdParam(rawRoleId ?? '', 'role_id');
       const data = await service.getByPublicId(organizationId, roleId);
       return successResponse(data, getRequestIdentifier(request));
     },
     createRole: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
       await recordScopedAuditEvent(request, {
         ...buildAuditActorFields(auth),
@@ -69,12 +63,11 @@ export function createMemberRoleController(service: MemberRoleService) {
     },
     updateRole: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const { organization_id: rawUpdateOrgId, role_id: rawUpdateRoleId } = (request.params as {
-        organization_id: string;
+      const { role_id: rawUpdateRoleId } = (request.params as {
         role_id: string;
-      }) ?? { organization_id: '', role_id: '' };
+      }) ?? { role_id: '' };
       // sec-new-T3: reject malformed path params before reaching the service layer.
-      const organizationId = validatePublicIdParam(rawUpdateOrgId ?? '', 'organization_id');
+      const organizationId = resolveActiveOrganizationId(request);
       const roleId = validatePublicIdParam(rawUpdateRoleId ?? '', 'role_id');
       const data = await service.update(
         organizationId,
@@ -93,12 +86,11 @@ export function createMemberRoleController(service: MemberRoleService) {
     },
     deleteRole: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const { organization_id: rawDeleteOrgId, role_id: rawDeleteRoleId } = (request.params as {
-        organization_id: string;
+      const { role_id: rawDeleteRoleId } = (request.params as {
         role_id: string;
-      }) ?? { organization_id: '', role_id: '' };
+      }) ?? { role_id: '' };
       // sec-new-T3: reject malformed path params before reaching the service layer.
-      const organizationId = validatePublicIdParam(rawDeleteOrgId ?? '', 'organization_id');
+      const organizationId = resolveActiveOrganizationId(request);
       const roleId = validatePublicIdParam(rawDeleteRoleId ?? '', 'role_id');
       await service.delete(organizationId, roleId);
       await recordScopedAuditEvent(request, {

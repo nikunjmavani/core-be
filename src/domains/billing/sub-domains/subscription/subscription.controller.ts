@@ -4,6 +4,7 @@ import {
   getActingUserPublicId,
   getRequestIdentifier,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { SubscriptionService } from './subscription.service.js';
@@ -37,9 +38,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
-      const data = await service.list(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
-      );
+      const data = await service.list(resolveActiveOrganizationId(request));
       return successResponse(SubscriptionSerializer.many(data), getRequestIdentifier(request));
     },
     getSubscription: async (
@@ -48,7 +47,7 @@ export function createSubscriptionController(service: SubscriptionService) {
     ) => {
       requirePrincipal(request);
       const data = await service.get(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
+        resolveActiveOrganizationId(request),
         validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
@@ -60,7 +59,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       const auth = requirePrincipal(request);
       const idempotencyKey = readIdempotencyKey(request);
       const data = await service.create(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
+        resolveActiveOrganizationId(request),
         request.body,
         getActingUserPublicId(auth),
         idempotencyKey,
@@ -74,7 +73,7 @@ export function createSubscriptionController(service: SubscriptionService) {
     ) => {
       requirePrincipal(request);
       const data = await service.update(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
+        resolveActiveOrganizationId(request),
         validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         request.body,
       );
@@ -86,7 +85,7 @@ export function createSubscriptionController(service: SubscriptionService) {
     ) => {
       requirePrincipal(request);
       const data = await service.changePlan(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
+        resolveActiveOrganizationId(request),
         validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         request.body,
         readIdempotencyKey(request),
@@ -99,7 +98,7 @@ export function createSubscriptionController(service: SubscriptionService) {
     ) => {
       requirePrincipal(request);
       const data = await service.cancel(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
+        resolveActiveOrganizationId(request),
         validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         readIdempotencyKey(request),
       );
@@ -111,7 +110,7 @@ export function createSubscriptionController(service: SubscriptionService) {
     ) => {
       requirePrincipal(request);
       const data = await service.resume(
-        validatePublicIdParam(request.params.organization_id, 'organization_id'),
+        resolveActiveOrganizationId(request),
         validatePublicIdParam(request.params.subscription_id, 'subscription_id'),
         readIdempotencyKey(request),
       );

@@ -4,6 +4,7 @@ import {
   getActingUserPublicId,
   getRequestIdentifier,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationNotificationPolicyService } from './organization-notification-policy.service.js';
@@ -30,42 +31,36 @@ export function createOrganizationNotificationPolicyController(
 ) {
   return {
     listPolicies: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.list(organizationId);
       return successResponse(data, getRequestIdentifier(request));
     },
     getPolicy: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const { organization_id: organizationId, policy_id: policyId } = (request.params as {
-        organization_id: string;
+      const { policy_id: policyId } = (request.params as {
         policy_id: string;
-      }) ?? { id: '', policy_id: '' };
+      }) ?? { policy_id: '' };
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.getByPublicId(
-        validatePublicIdParam(organizationId, 'id'),
+        organizationId,
         validatePublicIdParam(policyId, 'policy_id'),
       );
       return successResponse(data, getRequestIdentifier(request));
     },
     createPolicy: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.create(organizationId, request.body, getActingUserPublicId(auth));
       reply.code(201);
       return successResponse(data, getRequestIdentifier(request));
     },
     updatePolicy: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const { organization_id: organizationId, policy_id: policyId } = (request.params as {
-        organization_id: string;
+      const { policy_id: policyId } = (request.params as {
         policy_id: string;
-      }) ?? { id: '', policy_id: '' };
+      }) ?? { policy_id: '' };
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.update(
-        validatePublicIdParam(organizationId, 'id'),
+        organizationId,
         validatePublicIdParam(policyId, 'policy_id'),
         request.body,
         getActingUserPublicId(auth),
@@ -74,14 +69,11 @@ export function createOrganizationNotificationPolicyController(
     },
     deletePolicy: async (request: FastifyRequest, reply: FastifyReply) => {
       requirePrincipal(request);
-      const { organization_id: organizationId, policy_id: policyId } = (request.params as {
-        organization_id: string;
+      const { policy_id: policyId } = (request.params as {
         policy_id: string;
-      }) ?? { id: '', policy_id: '' };
-      await service.delete(
-        validatePublicIdParam(organizationId, 'id'),
-        validatePublicIdParam(policyId, 'policy_id'),
-      );
+      }) ?? { policy_id: '' };
+      const organizationId = resolveActiveOrganizationId(request);
+      await service.delete(organizationId, validatePublicIdParam(policyId, 'policy_id'));
       return reply.code(204).send();
     },
   };

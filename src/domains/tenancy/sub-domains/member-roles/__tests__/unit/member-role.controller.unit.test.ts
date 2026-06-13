@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { ValidationError } from '@/shared/errors/index.js';
+import { ForbiddenError, ValidationError } from '@/shared/errors/index.js';
 import { createMemberRoleController } from '@/domains/tenancy/sub-domains/member-roles/member-role.controller.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { MemberRoleService } from '@/domains/tenancy/sub-domains/member-roles/member-role.service.js';
@@ -129,30 +129,35 @@ describe('createMemberRoleController', () => {
   });
 
   it('createRole rejects missing organization id when params omit id', async () => {
+    // No organization_id path param and no auth.organizationPublicId claim → no org in scope.
     await expect(
       controller.createRole(mockRequest({ params: {}, body: { name: 'X' } }), mockReply()),
-    ).rejects.toBeInstanceOf(ValidationError);
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  it('rejects invalid organization id on listRoles and createRole', async () => {
+  it('rejects missing organization id on listRoles and createRole with ForbiddenError', async () => {
+    // Missing param or empty-string param → no org in scope.
     await expect(
       controller.listRoles(mockRequest({ params: {} }), mockReply()),
-    ).rejects.toBeInstanceOf(ValidationError);
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      controller.listRoles(mockRequest({ params: { organization_id: '' } }), mockReply()),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      controller.createRole(
+        mockRequest({ params: { organization_id: '' }, body: { name: 'X' } }),
+        mockReply(),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('rejects malformed organization id on listRoles and createRole with ValidationError', async () => {
     await expect(
       controller.listRoles(mockRequest({ params: { organization_id: 'invalid' } }), mockReply()),
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      controller.listRoles(mockRequest({ params: { organization_id: '' } }), mockReply()),
-    ).rejects.toBeInstanceOf(ValidationError);
-    await expect(
       controller.createRole(
         mockRequest({ params: { organization_id: 'not-valid' }, body: { name: 'X' } }),
-        mockReply(),
-      ),
-    ).rejects.toBeInstanceOf(ValidationError);
-    await expect(
-      controller.createRole(
-        mockRequest({ params: { organization_id: '' }, body: { name: 'X' } }),
         mockReply(),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -188,10 +193,11 @@ describe('createMemberRoleController', () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
-  it('getRole rejects empty params (sec-new-T3)', async () => {
+  it('getRole rejects empty params with ForbiddenError (sec-new-T3)', async () => {
+    // undefined params → no organization in scope → ForbiddenError.
     await expect(
       controller.getRole(mockRequest({ params: undefined }), mockReply()),
-    ).rejects.toBeInstanceOf(ValidationError);
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it('updateRole rejects malformed roleId (sec-new-T3)', async () => {
@@ -227,9 +233,10 @@ describe('createMemberRoleController', () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
-  it('deleteRole rejects empty params (sec-new-T3)', async () => {
+  it('deleteRole rejects empty params with ForbiddenError (sec-new-T3)', async () => {
+    // undefined params → no organization in scope → ForbiddenError.
     await expect(
       controller.deleteRole(mockRequest({ params: undefined }), mockReply()),
-    ).rejects.toBeInstanceOf(ValidationError);
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
