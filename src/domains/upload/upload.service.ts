@@ -214,13 +214,19 @@ export class UploadService {
     const pendingCap = environment.UPLOAD_MAX_PENDING_PER_USER;
     const orgPendingCap = environment.UPLOAD_MAX_PENDING_PER_ORGANIZATION;
     return withUserDatabaseContext(userPublicId, async () => {
+      // audit-#7: take the ORG-scoped advisory lock BEFORE the per-user lock (a globally
+      // consistent org-then-user order, deadlock-free) so concurrent reservations from
+      // DIFFERENT members of the same org serialize on the org cap. Previously the org count
+      // was checked while holding only the per-user lock, so N members could each pass the
+      // same org count and overshoot UPLOAD_MAX_PENDING_PER_ORGANIZATION by N.
+      if (organizationInternalId !== null) {
+        await this.repository.acquirePendingOrganizationQuotaLock(organizationInternalId);
+      }
       await this.repository.acquirePendingUploadQuotaLock(userInternalId);
       // sec-UP4: enforce the org-level cap BEFORE the per-user cap so a single
       // org with many members cannot pile PENDING uploads across user accounts
-      // and exhaust storage. Race-safe enough for a stability cap (the per-
-      // user advisory lock above bounds per-user concurrency; cross-user
-      // org-level concurrency falls back to "sweeper reconciles" — same
-      // posture as the user cap).
+      // and exhaust storage. The org-scoped lock above now makes this count + insert
+      // atomic across members (not just within a single user).
       if (organizationInternalId !== null) {
         const orgPendingCount =
           await this.repository.countPendingByOrganizationId(organizationInternalId);
