@@ -1,4 +1,9 @@
-import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
 import { env } from '@/shared/config/env.config.js';
 import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.constants.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
@@ -344,6 +349,13 @@ export class OrganizationService {
   }
 
   async create(body: unknown, owner_user_public_id: string): Promise<OrganizationOutput> {
+    // Capability gate: this endpoint only ever provisions a TEAM organization (personal orgs are
+    // auto-provisioned, never created here). Enforce what `/users/me` advertises — in a
+    // personal-only deployment (TEAM_ORGANIZATION_ENABLED=false) team-org creation is rejected
+    // server-side, not merely hidden by the frontend.
+    if (!env.TEAM_ORGANIZATION_ENABLED) {
+      throw new ForbiddenError('errors:teamOrganizationsDisabled');
+    }
     const parsed = validateCreateOrganization(body);
     /**
      * INSERT must pass `organizations_user_discovery` WITH CHECK

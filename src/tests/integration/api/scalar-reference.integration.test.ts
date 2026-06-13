@@ -96,6 +96,7 @@ describe('Integration: Scalar API reference', () => {
       expect(specification?.paths['/api/v1/mcp']).toBeDefined();
       expect(specification?.['x-mcp']?.tools.map((tool) => tool.name)).toEqual(['call_api']);
       expect(specification?.['x-mcp']?.resources.map((resource) => resource.uri).sort()).toEqual([
+        'core-be://client-guide',
         'core-be://openapi',
         'core-be://routes',
       ]);

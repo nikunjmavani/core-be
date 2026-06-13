@@ -1,11 +1,15 @@
 /**
  * Per-operation request-header documentation. Mirrors the runtime middleware
- * truth: tenant resolution (`X-Organization-Id`), idempotency (`Idempotency-Key`,
- * required on the eight writes that register `idempotencyRequired: true`),
- * captcha on the public auth surface (`X-Captcha-Token`), CSRF on the cookie
- * refresh flow (`X-CSRF-Token`), and Stripe's own `Stripe-Signature` on
- * webhook ingestion. `Authorization: Bearer <ACCESS_TOKEN>` is expressed via
- * the OpenAPI security scheme, not a literal parameter.
+ * truth: idempotency (`Idempotency-Key`, required on the eight writes that
+ * register `idempotencyRequired: true`), captcha on the public auth surface
+ * (`X-Captcha-Token`), CSRF on the cookie refresh flow (`X-CSRF-Token`), and
+ * Stripe's own `Stripe-Signature` on webhook ingestion.
+ *
+ * The active organization rides the signed `org` JWT claim (switched via
+ * `/api/v1/auth/switch-to-organization` / `/auth/switch-to-personal`), NOT a
+ * header — so no `X-Organization-Id` parameter is emitted on org-scoped routes.
+ * `Authorization: Bearer <ACCESS_TOKEN>` is expressed via the OpenAPI security
+ * scheme, not a literal parameter.
  */
 
 const IDEMPOTENCY_REQUIRED_ROUTE_KEYS = new Set([
@@ -39,18 +43,6 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Builds the documented request-header parameters for one operation. */
 export function buildHeaderParameters(method: string, routeKey: string): object[] {
   const headers: object[] = [];
-
-  if (routeKey.includes('{organization_id}')) {
-    headers.push({
-      name: 'X-Organization-Id',
-      in: 'header',
-      required: false,
-      description:
-        'Organization context (`org_…` ID). Optional when the path already carries `{organization_id}` — if both are present they must match, otherwise the request is rejected.',
-      schema: { type: 'string', pattern: '^org_[a-z0-9]{21}$' },
-      example: 'org_a1b2c3d4e5f6g7h8i9j0k',
-    });
-  }
 
   if (
     MUTATING_METHODS.has(method) &&

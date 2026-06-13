@@ -29,7 +29,13 @@ vi.mock('@/domains/tenancy/sub-domains/organization/organization-provisioning.js
   OWNER_ROLE_NAME: 'Owner',
 }));
 
-import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/shared/errors/index.js';
+import { env } from '@/shared/config/env.config.js';
 import { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
@@ -307,6 +313,21 @@ describe('OrganizationService', () => {
     ).rejects.toBeInstanceOf(ConflictError);
     // The provisioning path must not run once the cap is hit.
     expect(provisionOrganizationWithOwnerMock).not.toHaveBeenCalled();
+  });
+
+  it('create rejects when team organizations are disabled (capability gate)', async () => {
+    // Personal-only deployment: the server must reject team-org creation, not just hide it.
+    const original = env.TEAM_ORGANIZATION_ENABLED;
+    (env as { TEAM_ORGANIZATION_ENABLED: boolean }).TEAM_ORGANIZATION_ENABLED = false;
+    try {
+      await expect(
+        service.create({ name: 'No Teams', slug: 'no-teams' }, 'owner_public'),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      // The capability gate fires before any validation or provisioning work.
+      expect(provisionOrganizationWithOwnerMock).not.toHaveBeenCalled();
+    } finally {
+      (env as { TEAM_ORGANIZATION_ENABLED: boolean }).TEAM_ORGANIZATION_ENABLED = original;
+    }
   });
 
   it('getByPublicId throws when organization missing', async () => {

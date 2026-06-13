@@ -74,11 +74,14 @@ export async function completeOAuthUserSession(parameters: {
           }),
         );
         logger.info({ email: normalizedEmail, provider }, 'oauth.user.created');
-        // Account-level personal organization: auto-provisioned for every new user when
-        // PERSONAL_ORGANIZATION_ENABLED. Best-effort — provisioning failure must not fail
-        // signup; the partial unique index makes it idempotent and login lazily re-provisions
-        // (PERSONAL_ORGANIZATION_ENABLED off → team-only mode → no personal org; the user
-        // creates their own team organization from the frontend onboarding redirect).
+        // Account-level personal organization: auto-provisioned at signup when
+        // PERSONAL_ORGANIZATION_ENABLED. OAuth is the only user-creation path (magic-link and
+        // password operate on existing users), so this is the single provisioning point.
+        // Best-effort — provisioning failure must not fail signup; the partial unique index makes
+        // a retry idempotent, and a failed provision is recovered by the `tool:backfill-personal-orgs`
+        // admin script (login does NOT re-provision — it only reads the active org). When the flag
+        // is off (team-only mode) the user has no personal org and creates their own team
+        // organization from the frontend onboarding redirect.
         if (env.PERSONAL_ORGANIZATION_ENABLED) {
           try {
             await provisionPersonalOrganization(user.id);

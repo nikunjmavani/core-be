@@ -153,6 +153,12 @@ export class MemberRoleService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
+      // Capability matrix: a PERSONAL organization is single-member by definition, so custom roles
+      // (which exist to grant scoped permissions to OTHER members) are meaningless there. Reject —
+      // role management is a TEAM-organization feature.
+      if (organization.type === 'PERSONAL') {
+        throw new ConflictError('errors:personalOrganizationNoRoles');
+      }
       // sec-r5-followup-ratelimit-dos-2: enforce the per-org custom-role cap
       // before insert. Mirrors `WEBHOOK_MAX_PER_ORG` in webhook.service.ts —
       // a stability cap, not a security boundary; the per-route rate limit
