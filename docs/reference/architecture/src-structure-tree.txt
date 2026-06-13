@@ -117,12 +117,14 @@ src/
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── events/
     │   │   │   │   │       └── auth-method.event-handlers.unit.test.ts
+    │   │   │   │   │   ├── auth-method.change-password.db.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.last-method-guard.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.step-up-mfa.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.unit.test.ts
     │   │   │   │   │   ├── auth-method.validator.unit.test.ts
+    │   │   │   │   │   ├── auth-method.verify-email.db.unit.test.ts
     │   │   │   │   │   └── magic-link.service.unit.test.ts
     │   │   │   ├── events/
     │   │   │   │   ├── auth.event-handlers.ts
