@@ -40,11 +40,22 @@ describe('Security: cross-tenant org rate-limit isolation (audit #14)', () => {
       const actorId = request.headers['x-test-actor'];
       const organizationId = request.headers['x-test-org'];
       const mutableRequest = request as {
-        auth?: { kind: 'user'; userId: string } | undefined;
+        auth?: { kind: 'user'; userId: string; organizationPublicId?: string } | undefined;
         organizationId?: string | null;
       };
+      // Post-flatten the active organization rides the signed `org` token claim
+      // (`auth.organizationPublicId`), not the header — set it there so the per-(org, actor)
+      // rate-limit key is exercised the way real requests resolve it.
       mutableRequest.auth =
-        typeof actorId === 'string' ? { kind: 'user', userId: actorId } : undefined;
+        typeof actorId === 'string'
+          ? {
+              kind: 'user',
+              userId: actorId,
+              ...(typeof organizationId === 'string'
+                ? { organizationPublicId: organizationId }
+                : {}),
+            }
+          : undefined;
       mutableRequest.organizationId = typeof organizationId === 'string' ? organizationId : null;
     });
 
