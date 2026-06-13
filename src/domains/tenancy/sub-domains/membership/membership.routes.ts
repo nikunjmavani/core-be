@@ -14,6 +14,7 @@ import {
   acceptMemberInvitationDto,
   createMemberInvitationDto,
   listMemberInvitationsQueryDto,
+  listPendingMemberInvitationsQueryDto,
   resendMemberInvitationDto,
 } from './member-invitation/member-invitation.dto.js';
 import {
@@ -263,11 +264,13 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       '/invitations/pending',
       {
         onRequest: [app.authenticate],
+        preValidation: [rejectLegacyPagePagination],
         schema: {
           summary: 'List my pending invitations',
           description:
-            'Returns all pending invitations for the authenticated user across all organizations.',
+            'Returns the authenticated user’s pending invitations across all organizations, cursor-paginated (`limit` + opaque `after`). Replaces the previous fixed 100-row cap (R5 / TEN-35).',
           tags: ['Membership', 'Invitation'],
+          querystring: listPendingMemberInvitationsQueryDto,
         },
       },
       invitationController.listPendingInvitations,

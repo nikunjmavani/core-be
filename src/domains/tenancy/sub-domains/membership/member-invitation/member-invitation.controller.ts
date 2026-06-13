@@ -34,12 +34,14 @@ export function createMemberInvitationController(service: MemberInvitationServic
     createMemberInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
       const organizationId = resolveActiveOrganizationId(request);
-      const result = await service.create(organizationId, request.body, auth.userId);
+      // R1 / TEN-32: the raw invitation token is a bearer credential and is NEVER
+      // returned in the HTTP response — it is delivered only via the invitation
+      // email. The response carries the invitation metadata only.
+      const invitation = await service.create(organizationId, request.body, auth.userId, {
+        requestId: getRequestIdentifier(request),
+      });
       reply.code(201);
-      return successResponse(
-        { invitation: result.invitation, token: result.token },
-        getRequestIdentifier(request),
-      );
+      return successResponse({ invitation }, getRequestIdentifier(request));
     },
     acceptMemberInvitation: async (request: FastifyRequest, _reply: FastifyReply) => {
       // sec-T4: route now `app.authenticate`-gated; service binds the
@@ -72,16 +74,20 @@ export function createMemberInvitationController(service: MemberInvitationServic
       // sec-new-T2: reject malformed path params before reaching the service layer.
       const { invitation_id: rawResendId } = request.params as { invitation_id: string };
       const invitationId = validatePublicIdParam(rawResendId ?? '', 'invitation_id');
-      const result = await service.resend(organizationId, invitationId, request.body);
-      return successResponse(
-        { invitation: result.invitation, token: result.token },
-        getRequestIdentifier(request),
-      );
+      // R1 / TEN-34: regenerated token is delivered only via email, never returned.
+      const invitation = await service.resend(organizationId, invitationId, request.body, {
+        requestId: getRequestIdentifier(request),
+      });
+      return successResponse({ invitation }, getRequestIdentifier(request));
     },
     listPendingInvitations: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const data = await service.listPendingInvitations(auth.userId);
-      return successResponse(data, getRequestIdentifier(request));
+      const result = await service.listPendingInvitations(auth.userId, request.query);
+      return paginatedResponse(result.items, getRequestIdentifier(request), {
+        per_page: result.limit,
+        next: result.next_cursor,
+        has_more: result.has_more,
+      });
     },
     declineInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);

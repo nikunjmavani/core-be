@@ -14,6 +14,13 @@ export const listMemberInvitationsQueryDto = cursorPaginationSchema
   .strict();
 
 /**
+ * Zod schema for the `GET /invitations/pending` query string — cursor
+ * pagination (`limit` + opaque `after`) over the caller's cross-organization
+ * pending invitations. Strict so unknown query keys are rejected.
+ */
+export const listPendingMemberInvitationsQueryDto = cursorPaginationSchema.strict();
+
+/**
  * Zod schema for routes whose only path param is `invitationId` (accept and
  * decline, which are not scoped to an organization in the URL).
  */
@@ -73,6 +80,10 @@ export const resendMemberInvitationDto = z
 export type CreateMemberInvitationInput = z.infer<typeof createMemberInvitationDto>;
 /** Validated query inferred from {@link listMemberInvitationsQueryDto}. */
 export type ListMemberInvitationsQueryInput = z.infer<typeof listMemberInvitationsQueryDto>;
+/** Validated query inferred from {@link listPendingMemberInvitationsQueryDto}. */
+export type ListPendingMemberInvitationsQueryInput = z.infer<
+  typeof listPendingMemberInvitationsQueryDto
+>;
 /** Validated body inferred from {@link acceptMemberInvitationDto}. */
 export type AcceptMemberInvitationInput = z.infer<typeof acceptMemberInvitationDto>;
 /** Validated body inferred from {@link resendMemberInvitationDto}. */
