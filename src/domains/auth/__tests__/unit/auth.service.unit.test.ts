@@ -41,6 +41,14 @@ vi.mock('@/shared/utils/security/anti-enumeration.util.js', () => ({
   ANTI_ENUMERATION_MINIMUM_DURATION_MS: 300,
 }));
 
+// login/refresh/switch mint the `org` claim via these tenancy resolvers (their own DB context).
+// Stub them so the AuthService unit tests stay pure (the CI unit lane has no Postgres).
+vi.mock('@/domains/tenancy/sub-domains/organization/resolve-active-organization.js', () => ({
+  resolveDefaultActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  findUserActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  resolvePersonalOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   withUserDatabaseContext: vi.fn((_userPublicId: string, callback: () => Promise<unknown>) =>
     callback(),
