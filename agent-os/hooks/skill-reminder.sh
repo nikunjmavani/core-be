@@ -16,7 +16,7 @@ REMINDERS=()
   REMINDERS+=("routes → route-schema-doc-guard + route-catalog + seed-maintainer")
 
 [[ "$FILE" == *".schema.ts" ]] && \
-  REMINDERS+=("schema → schema-generator + sql-design-guard + db-migration-maintainer")
+  REMINDERS+=("schema → schema-generator + sql-design-guard + db-migration-maintainer + rls-tenant-isolation-guard")
 
 [[ "$FILE" == *"env-schema.ts"* || "$FILE" == *".env.example"* ]] && \
   REMINDERS+=("env → env-schema-add")
@@ -30,6 +30,12 @@ REMINDERS=()
 [[ "$FILE" == *"/events/"*".ts" || "$FILE" == *"/workers/"*".ts" || \
    "$FILE" == *"/queues/"*".ts" ]] && \
   REMINDERS+=("events/workers/queues → workers-events skill")
+
+[[ "$FILE" == *"/database/contexts/"*".ts" || "$FILE" == *".worker.ts" || "$FILE" == *".processor.ts" ]] && \
+  REMINDERS+=("tenant data path → rls-tenant-isolation-guard (RLS + GUC + context wrappers)")
+
+[[ "$FILE" == *"idempotency"* || "$FILE" == *"stripe.client.ts" ]] && \
+  REMINDERS+=("idempotency / stripe writes → idempotency-guard")
 
 [[ "$FILE" == *".container.ts" ]] && \
   REMINDERS+=("container → domain-generator (check DI wiring)")
