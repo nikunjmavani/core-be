@@ -93,6 +93,17 @@ describe('MemberRoleService', () => {
     expect(memberRoleRepository.create).toHaveBeenCalled();
   });
 
+  it('create rejects a PERSONAL organization (no custom roles without members)', async () => {
+    vi.mocked(organizationService.requireOrganizationMembershipByPublicId).mockResolvedValueOnce({
+      ...organization,
+      type: 'PERSONAL',
+    } as never);
+    await expect(
+      service.create(organization.public_id, { name: 'Editor' }, 'creator_public'),
+    ).rejects.toMatchObject({ messageKey: 'errors:personalOrganizationNoRoles' });
+    expect(memberRoleRepository.create).not.toHaveBeenCalled();
+  });
+
   it('create omits optional description and is_system defaults', async () => {
     await service.create(organization.public_id, { name: 'Minimal' }, 'creator_public');
     expect(memberRoleRepository.create).toHaveBeenCalledWith(

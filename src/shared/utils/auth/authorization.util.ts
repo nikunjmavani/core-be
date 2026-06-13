@@ -107,12 +107,14 @@ export function requireRole(
 
 /**
  * Returns a Fastify preHandler that checks the authenticated user has a specific
- * permission within the organization identified by the route param.
+ * permission within the **active organization** — the signed `org` token claim.
  *
  * Looks up: user -> membership -> role -> role_permissions
  *
  * @param permissionCode - The permission code to check (use domain constants, never bare strings)
- * @param paramName - The route param name for org ID (default: 'organization_id')
+ * @param paramName - Vestigial route-param fallback (default: 'organization_id'). After the route
+ *   flatten no route carries an `{organization_id}` segment, so the org is resolved from the token
+ *   claim; the param lookup is retained only as a defensive fallback and is normally a no-op.
  *
  * Usage:
  *   { preHandler: [app.authenticate, requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)] }
@@ -126,10 +128,11 @@ export function requireOrganizationPermission(
     if (!auth) throw new UnauthorizedError();
 
     const params = request.params as Record<string, string>;
-    // Organization scope source: the `{organization_id}` path param when the route carries one
-    // (every org-scoped route does today), otherwise the signed `org` token claim — the bridge
-    // that lets flattened, path-param-free routes resolve their tenant from the access token.
-    // The claim is scope, not authority: membership is still verified below (and RLS per request).
+    // Organization scope source: the signed `org` token claim (`auth.organizationPublicId`) — no
+    // route carries an `{organization_id}` path param post-flatten, so the param lookup below is a
+    // vestigial fallback that is normally undefined. The claim is scope, not authority: membership
+    // is still verified below (and RLS re-checked per request). Kept aligned with
+    // `resolveActiveOrganizationId` so authz and the data/RLS scope can never diverge.
     // eslint-disable-next-line security/detect-object-injection -- paramName is a function argument with a typed default.
     const organizationId = params[paramName] ?? auth.organizationPublicId;
     if (!organizationId) {

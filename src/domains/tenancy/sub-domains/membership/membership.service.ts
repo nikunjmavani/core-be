@@ -234,6 +234,14 @@ export class MembershipService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
+      // Capability matrix: a PERSONAL organization is single-member by definition. The invitation
+      // flow already blocks this, but membership-create is a second entry point (a holder of
+      // MEMBERSHIP_MANAGE — which the personal-org owner has — could otherwise seed a second member
+      // directly). Reject here so the single-member invariant holds at every door. Collaboration
+      // requires a TEAM organization.
+      if (organization.type === 'PERSONAL') {
+        throw new ConflictError('errors:personalOrganizationNoMembers');
+      }
       const role = await this.memberRoleService.requireRoleRecordByPublicId(
         organization_public_id,
         parsed.role_id,

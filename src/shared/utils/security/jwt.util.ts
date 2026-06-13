@@ -127,8 +127,12 @@ export interface TokenPayload {
    */
   organizationPublicId?: string;
   /**
-   * Session version — bumped on logout / "sign out everywhere" / credential revocation. Checked
-   * per request against the session's current version so all outstanding tokens die immediately.
+   * Session version — RESERVED, not yet enforced. The signer/verifier carry it end-to-end, but no
+   * caller currently mints a value and no request path compares it, so it is dropped from the JWT
+   * via `omitUndefined`. Token revocation today is enforced by the server-side session token-hash
+   * path (`verifyActiveAccessToken` → `findActiveByTokenHash` + cache invalidation on logout /
+   * "sign out everywhere" / refresh-reuse). This claim is forward-looking plumbing for a future
+   * stateless second factor; do not assume it is checked per request.
    */
   sessionVersion?: number;
 }
