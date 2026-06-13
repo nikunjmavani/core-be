@@ -280,7 +280,7 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
 
 All `:id` params are **public_id**. Organization **slug** is unique; `getBySlug(slug)` returns same shape as get by id.
 
-**Organization context (HTTP):** Clients should send `X-Organization-Id` with the organization public id on org-scoped routes. Invalid header values are ignored; when the header is absent, the tenant middleware may infer the id from `/organizations/:organization_id/` in the URL. If header and path disagree, the header wins. See **[api-testing.md](../../getting-started/api-testing.md)** (`X-Organization-Id` behavior table). Avatars and logos are attached only via presigned upload keys (`avatarKey` / logo `key`), not arbitrary URLs on PATCH.
+**Organization context (HTTP):** Clients should send `X-Organization-Id` with the organization id (`org_…`) on org-scoped routes. Invalid header values are ignored; when the header is absent, the tenant middleware may infer the id from `/organizations/:organization_id/` in the URL. If header and path disagree, the header wins. See **[api-testing.md](../../getting-started/api-testing.md)** (`X-Organization-Id` behavior table). Avatars and logos are attached only via presigned upload keys (`avatarKey` / logo `key`), not arbitrary URLs on PATCH.
 
 ### 4.3 billing — sub-domains: plans, subscriptions
 

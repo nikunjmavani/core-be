@@ -109,7 +109,7 @@ curl -s http://localhost:3000/api/v1/users/me \
 | #   | Method | Path                                            | Expected                         |
 | --- | ------ | ----------------------------------------------- | -------------------------------- |
 | 4.1 | GET    | `/api/v1/tenancy/organizations`                 | 200, includes demo org           |
-| 4.2 | GET    | `/api/v1/tenancy/organizations/{organization_id}`             | 200 (use org public id + header) |
+| 4.2 | GET    | `/api/v1/tenancy/organizations/{organization_id}`             | 200 (use org id + header) |
 | 4.3 | GET    | `/api/v1/tenancy/organizations/{organization_id}/memberships` | 200                              |
 | 4.4 | GET    | `/api/v1/tenancy/organizations/{organization_id}/roles`       | 200, includes Admin              |
 
