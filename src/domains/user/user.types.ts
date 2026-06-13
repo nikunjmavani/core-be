@@ -39,6 +39,12 @@ export interface UserOutput {
    * omitted from admin user listings.
    */
   capabilities?: OrganizationCapabilities;
+  /**
+   * The caller's personal organization id (`org_…`) — the "Personal" entry in the workspace
+   * switcher. Null when personal organizations are disabled (team-only deployment). Self
+   * projection only.
+   */
+  personal_organization_id?: string | null;
 }
 
 /** Which organization kinds this deployment enables — mirrors the env capability flags. */

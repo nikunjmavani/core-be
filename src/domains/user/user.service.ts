@@ -11,6 +11,7 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { buildUserAvatarKeyPrefix } from '@/domains/upload/upload.constants.js';
 import type { UserRepository } from './user.repository.js';
 import { env } from '@/shared/config/env.config.js';
+import { resolvePersonalOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import { UserSerializer } from './user.serializer.js';
 import {
   validateUpdateMe,
@@ -396,12 +397,16 @@ export class UserService {
       this.repository.findByPublicId(publicId),
     );
     if (!user || user.deleted_at) throw new NotFoundError('User');
+    const personalOrganizationId = env.PERSONAL_ORGANIZATION_ENABLED
+      ? ((await resolvePersonalOrganizationPublicId(user.id)) ?? null)
+      : null;
     return {
       ...UserSerializer.one(user),
       capabilities: {
         personal_organizations: env.PERSONAL_ORGANIZATION_ENABLED,
         team_organizations: env.TEAM_ORGANIZATION_ENABLED,
       },
+      personal_organization_id: personalOrganizationId,
     };
   }
 

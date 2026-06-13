@@ -85,19 +85,24 @@ describe('User Domain — Integration', () => {
       expect(body.data).toHaveProperty('is_mfa_enabled', false);
     });
 
-    it('exposes deployment organization capabilities (personal/team flags)', async () => {
+    it('exposes deployment organization capabilities + personal_organization_id', async () => {
       const user = await createTestUser();
       const token = await generateTestToken({ userId: user.public_id });
       const response = await getMeWithRetry(app, token);
       expect(response.statusCode).toBe(200);
       const body = response.json() as {
-        data: { capabilities: { personal_organizations: boolean; team_organizations: boolean } };
+        data: {
+          capabilities: { personal_organizations: boolean; team_organizations: boolean };
+          personal_organization_id: string | null;
+        };
       };
       // Defaults: both organization kinds enabled.
       expect(body.data.capabilities).toEqual({
         personal_organizations: true,
         team_organizations: true,
       });
+      // A bare createTestUser has no personal organization provisioned → null.
+      expect(body.data.personal_organization_id).toBeNull();
     });
 
     it('should return is_mfa_enabled true after MFA enroll and false after revoke', async () => {
