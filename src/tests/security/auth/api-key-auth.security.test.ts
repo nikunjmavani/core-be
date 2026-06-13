@@ -100,7 +100,7 @@ describe('Security: Organization API key authentication', () => {
   });
 
   it('authenticates an org API key end-to-end on a permission-guarded org route', async () => {
-    const { organization, rawKey, apiKeyPublicId } = await createApiKeyWithPermissions([
+    const { rawKey, apiKeyPublicId } = await createApiKeyWithPermissions([
       TENANCY_PERMISSIONS.API_KEY_READ,
       TENANCY_PERMISSIONS.API_KEY_MANAGE,
     ]);
@@ -113,9 +113,11 @@ describe('Security: Organization API key authentication', () => {
       .set({ scopes: [NOTIFY_PERMISSIONS.WEBHOOK_READ] })
       .where(eq(api_keys.public_id, apiKeyPublicId));
 
+    // Flat webhook route: the organization is resolved from the API-key
+    // principal (the key is pinned to one org), not an organization path segment.
     const response = await injectRoute(app, {
       method: 'GET',
-      url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+      url: testApiPath('/notify/webhooks'),
       headers: { authorization: `ApiKey ${rawKey}` },
     });
     expect(response.statusCode).toBe(200);

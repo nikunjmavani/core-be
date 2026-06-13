@@ -1348,3 +1348,42 @@ api get /api/v1/billing/subscriptions
 api post /api/v1/billing/subscriptions
 api patch /api/v1/billing/subscriptions
 api delete /api/v1/billing/subscriptions
+
+# 16. Notify webhook routes flattened — the `/organizations/{organization_id}`
+#     path segment was dropped (the organization now comes from the signed JWT `org`
+#     claim, not the path). oasdiff sees this as the OLD paths removed and the NEW
+#     flat paths added; both are intentional for this promotion. Each of the 8 routes
+#     is covered explicitly (removed-old + added-new) plus permissive substring
+#     catch-alls so any related finding on these paths is ignored. The route source,
+#     route-success-statuses.json, and OpenAPI registries are all updated together.
+#     Removed old paths:
+api get /api/v1/notify/organizations/{organization_id}/webhook-events api path removed without deprecation
+api get /api/v1/notify/organizations/{organization_id}/webhooks api path removed without deprecation
+api post /api/v1/notify/organizations/{organization_id}/webhooks api path removed without deprecation
+api get /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id} api path removed without deprecation
+api patch /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id} api path removed without deprecation
+api delete /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id} api path removed without deprecation
+api get /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}/delivery-attempts api path removed without deprecation
+api post /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}/test api path removed without deprecation
+#     Added new (flat) paths:
+api get /api/v1/notify/webhook-events api path added
+api get /api/v1/notify/webhooks api path added
+api post /api/v1/notify/webhooks api path added
+api get /api/v1/notify/webhooks/{webhook_id} api path added
+api patch /api/v1/notify/webhooks/{webhook_id} api path added
+api delete /api/v1/notify/webhooks/{webhook_id} api path added
+api get /api/v1/notify/webhooks/{webhook_id}/delivery-attempts api path added
+api post /api/v1/notify/webhooks/{webhook_id}/test api path added
+#     Permissive catch-alls (contiguous-substring match) covering any other finding
+#     emitted for the old removed notify webhook paths or the new flat ones.
+#     Path-scoped on purpose — they only match findings naming these notify webhook
+#     paths, so unrelated future breaking changes still fail the gate. Both placeholder
+#     spellings ({organization_id}/{webhook_id} and the underscore-free
+#     {id}/{webhookid} that older base specs emit) are covered by the literal path
+#     prefixes below (no param token, so they match either form):
+/api/v1/notify/organizations/{organization_id}/webhook
+/api/v1/notify/organizations/{id}/webhook
+api get /api/v1/notify/webhook
+api post /api/v1/notify/webhook
+api patch /api/v1/notify/webhook
+api delete /api/v1/notify/webhook

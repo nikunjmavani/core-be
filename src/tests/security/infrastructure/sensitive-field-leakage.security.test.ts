@@ -125,7 +125,7 @@ describe('Security: sensitive-field leakage sweep', () => {
   });
 
   it('GET org webhooks does not leak the encrypted secret', async () => {
-    const { user, token } = await userWithToken();
+    const { user } = await userWithToken();
     const organization = await createTestOrganization({ ownerUserId: user.id });
     const role = await createRoleWithPermissions({
       organizationId: organization.id,
@@ -134,11 +134,16 @@ describe('Security: sensitive-field leakage sweep', () => {
     await createMembership({ userId: user.id, organizationId: organization.id, roleId: role.id });
     await createTestWebhook({ organizationId: organization.id });
 
+    // Flat webhook route resolves the organization from the JWT `org` claim, so
+    // mint a bearer scoped to this org (the userWithToken bearer carries no claim).
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+      url: testApiPath('/notify/webhooks'),
       token,
-      organizationPublicId: organization.public_id,
     });
     expect(response.statusCode).toBe(200);
     expectNoSensitiveFields(response.body);

@@ -93,14 +93,14 @@ Legend:
   PATCH  /api/v1/notify/notifications/:notification_id/read      AUTH
   POST   /api/v1/notify/notifications/mark-all-read              AUTH
   GET    /api/v1/notify/notifications/unread-count               AUTH
-  GET    /api/v1/notify/organizations/:organization_id/webhook-events PERM: webhook:read
-  GET    /api/v1/notify/organizations/:organization_id/webhooks  PERM: webhook:read
-  POST   /api/v1/notify/organizations/:organization_id/webhooks  PERM: webhook:manage
-  GET    /api/v1/notify/organizations/:organization_id/webhooks/:webhook_id PERM: webhook:read
-  PATCH  /api/v1/notify/organizations/:organization_id/webhooks/:webhook_id PERM: webhook:manage
-  DELETE /api/v1/notify/organizations/:organization_id/webhooks/:webhook_id PERM: webhook:manage
-  GET    /api/v1/notify/organizations/:organization_id/webhooks/:webhook_id/delivery-attempts PERM: webhook:read
-  POST   /api/v1/notify/organizations/:organization_id/webhooks/:webhook_id/test PERM: webhook:manage
+  GET    /api/v1/notify/webhook-events                           PERM: webhook:read
+  GET    /api/v1/notify/webhooks                                 PERM: webhook:read
+  POST   /api/v1/notify/webhooks                                 PERM: webhook:manage
+  GET    /api/v1/notify/webhooks/:webhook_id                     PERM: webhook:read
+  PATCH  /api/v1/notify/webhooks/:webhook_id                     PERM: webhook:manage
+  DELETE /api/v1/notify/webhooks/:webhook_id                     PERM: webhook:manage
+  GET    /api/v1/notify/webhooks/:webhook_id/delivery-attempts   PERM: webhook:read
+  POST   /api/v1/notify/webhooks/:webhook_id/test                PERM: webhook:manage
 
 ================================================================================
   DOMAIN: TENANCY (/api/v1/tenancy)

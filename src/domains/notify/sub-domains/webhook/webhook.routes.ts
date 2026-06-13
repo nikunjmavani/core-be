@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import {
   ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
   STRICT_AUTHED_RATE_LIMIT,
@@ -25,8 +26,9 @@ export function webhookRoutes(
   const webhookEventController = createWebhookEventController(webhookEventService);
 
   return async (app) => {
-    app.get<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/webhook-events',
+    const zodApplication = app.withTypeProvider<ZodTypeProvider>();
+    zodApplication.get(
+      '/webhook-events',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_READ)],
@@ -39,8 +41,8 @@ export function webhookRoutes(
       },
       webhookEventController.listWebhookEvents,
     );
-    app.get<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/webhooks',
+    zodApplication.get(
+      '/webhooks',
       {
         schema: {
           summary: 'List webhooks',
@@ -55,8 +57,8 @@ export function webhookRoutes(
       },
       webhookController.listWebhooks,
     );
-    app.get<{ Params: { organization_id: string; webhook_id: string } }>(
-      '/organizations/:organization_id/webhooks/:webhook_id',
+    zodApplication.get<{ Params: { webhook_id: string } }>(
+      '/webhooks/:webhook_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_READ)],
@@ -68,8 +70,8 @@ export function webhookRoutes(
       },
       webhookController.getWebhook,
     );
-    app.post<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/webhooks',
+    zodApplication.post(
+      '/webhooks',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],
@@ -83,8 +85,8 @@ export function webhookRoutes(
       },
       webhookController.createWebhook,
     );
-    app.patch<{ Params: { organization_id: string; webhook_id: string } }>(
-      '/organizations/:organization_id/webhooks/:webhook_id',
+    zodApplication.patch<{ Params: { webhook_id: string } }>(
+      '/webhooks/:webhook_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],
@@ -98,8 +100,8 @@ export function webhookRoutes(
       },
       webhookController.updateWebhook,
     );
-    app.delete<{ Params: { organization_id: string; webhook_id: string } }>(
-      '/organizations/:organization_id/webhooks/:webhook_id',
+    zodApplication.delete<{ Params: { webhook_id: string } }>(
+      '/webhooks/:webhook_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],
@@ -113,8 +115,8 @@ export function webhookRoutes(
       },
       webhookController.deleteWebhook,
     );
-    app.get<{ Params: { organization_id: string; webhook_id: string } }>(
-      '/organizations/:organization_id/webhooks/:webhook_id/delivery-attempts',
+    zodApplication.get<{ Params: { webhook_id: string } }>(
+      '/webhooks/:webhook_id/delivery-attempts',
       {
         schema: {
           summary: 'List webhook delivery attempts',
@@ -129,8 +131,8 @@ export function webhookRoutes(
       },
       webhookController.listDeliveryAttempts,
     );
-    app.post<{ Params: { organization_id: string; webhook_id: string } }>(
-      '/organizations/:organization_id/webhooks/:webhook_id/test',
+    zodApplication.post<{ Params: { webhook_id: string } }>(
+      '/webhooks/:webhook_id/test',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],

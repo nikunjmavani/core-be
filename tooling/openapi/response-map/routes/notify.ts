@@ -42,7 +42,7 @@ export const notifyRouteResponses: Record<string, ResponseDefinition> = {
   },
 
   // ── Webhook Events ──
-  'GET /api/v1/notify/organizations/{organization_id}/webhook-events': {
+  'GET /api/v1/notify/webhook-events': {
     statusCode: 200,
     schema: wrapSuccess(
       { type: 'array', items: schemas.webhookEventSchema },
@@ -52,39 +52,39 @@ export const notifyRouteResponses: Record<string, ResponseDefinition> = {
   },
 
   // ── Webhooks ──
-  'GET /api/v1/notify/organizations/{organization_id}/webhooks': {
+  'GET /api/v1/notify/webhooks': {
     statusCode: 200,
     schema: wrapSuccess({ type: 'array', items: schemas.webhookSchema }, [schemas.webhookExample]),
     example: null,
   },
-  'GET /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}': {
+  'GET /api/v1/notify/webhooks/{webhook_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.webhookSchema, schemas.webhookExample),
     example: null,
   },
-  'POST /api/v1/notify/organizations/{organization_id}/webhooks': {
+  'POST /api/v1/notify/webhooks': {
     statusCode: 201,
     schema: wrapSuccess(schemas.webhookSchema, schemas.webhookExample),
     example: null,
   },
-  'PATCH /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}': {
+  'PATCH /api/v1/notify/webhooks/{webhook_id}': {
     statusCode: 200,
     schema: wrapSuccess(schemas.webhookSchema, schemas.webhookExample),
     example: null,
   },
-  'DELETE /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}': {
+  'DELETE /api/v1/notify/webhooks/{webhook_id}': {
     statusCode: 204,
     schema: null,
     example: null,
   },
-  'GET /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}/delivery-attempts': {
+  'GET /api/v1/notify/webhooks/{webhook_id}/delivery-attempts': {
     statusCode: 200,
     schema: wrapSuccess({ type: 'array', items: schemas.deliveryAttemptSchema }, [
       schemas.deliveryAttemptExample,
     ]),
     example: null,
   },
-  'POST /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}/test': {
+  'POST /api/v1/notify/webhooks/{webhook_id}/test': {
     statusCode: 201,
     schema: wrapSuccess(schemas.webhookTestSchema, schemas.webhookTestExample),
     example: null,
