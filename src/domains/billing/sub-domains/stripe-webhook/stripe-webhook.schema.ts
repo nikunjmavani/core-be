@@ -46,3 +46,25 @@ export const stripe_webhook_events = billingSchema.table(
     ),
   ],
 );
+
+/**
+ * Deletion watermark for Stripe subscriptions (BILL-03). Records the
+ * `customer.subscription.deleted` event timestamp for a provider subscription id
+ * even when no local `billing.subscriptions` row existed yet (delete arrived
+ * before create). A later out-of-order `customer.subscription.created` /
+ * `.updated` whose event timestamp is at or before the recorded deletion is then
+ * refused, so a stale create cannot resurrect entitlement for a subscription
+ * Stripe has already canceled. A genuinely newer event (resubscription) is
+ * allowed through. No tenant RLS — system ingress only, keyed by the Stripe id.
+ */
+export const stripe_subscription_tombstones = billingSchema.table(
+  'stripe_subscription_tombstones',
+  {
+    provider_subscription_id: varchar('provider_subscription_id', { length: 255 }).primaryKey(),
+    deleted_event_created_at: timestamp('deleted_event_created_at', {
+      withTimezone: true,
+    }).notNull(),
+    created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+);

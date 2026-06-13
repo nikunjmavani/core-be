@@ -29,6 +29,7 @@ TableGroup auth {
 
 TableGroup billing {
   billing.plans
+  billing.stripe_subscription_tombstones
   billing.stripe_webhook_events
   billing.subscriptions
 }
@@ -348,6 +349,17 @@ Table billing.plans {
 
 Note billing.plans {
   'RLS: enabled\nPolicies: plans_deny_all, plans_app_access\nFORCE ROW LEVEL SECURITY'
+}
+
+Table billing.stripe_subscription_tombstones {
+  created_at timestamptz [not null]
+  deleted_event_created_at timestamptz [not null]
+  provider_subscription_id varchar(255) [pk]
+  updated_at timestamptz [not null]
+}
+
+Note billing.stripe_subscription_tombstones {
+  'RLS: enabled\nPolicies: stripe_subscription_tombstones_deny_all, stripe_subscription_tombstones_app_access\nFORCE ROW LEVEL SECURITY'
 }
 
 Table billing.stripe_webhook_events {

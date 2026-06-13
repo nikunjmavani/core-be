@@ -268,6 +268,20 @@ export class StripeWebhookService {
       return;
     }
 
+    // BILL-03: if a deletion tombstone at or after this event's timestamp exists, the
+    // subscription was already deleted at Stripe before this create/update was delivered.
+    // Refuse to recover — a stale create must not resurrect entitlement.
+    const tombstone = await this.stripeWebhookEventRepository.findSubscriptionDeletionTombstone(
+      providerSubscriptionId,
+    );
+    if (tombstone && tombstone.deleted_event_created_at.getTime() >= stripeEventCreatedAt.getTime()) {
+      logger.warn(
+        { providerSubscriptionId, stripeEventCreatedAt, eventType },
+        'stripe.webhook.subscription_event_superseded_by_deletion',
+      );
+      return;
+    }
+
     await this.recoverMissingSubscriptionRowForUpsert({
       eventType,
       providerSubscriptionId,
@@ -484,6 +498,19 @@ export class StripeWebhookService {
       logger.info({ providerSubscriptionId }, 'stripe.webhook.subscription_canceled');
       return;
     }
+
+    // BILL-03: the delete arrived before any local row existed (Stripe delivery reorder).
+    // Record a deletion watermark so a later out-of-order created/updated cannot resurrect
+    // entitlement. The existing tryInsertCancellationTombstone still writes a CANCELED row
+    // in billing.subscriptions as the durable subscription-level guard.
+    await this.stripeWebhookEventRepository.recordSubscriptionDeletionTombstone(
+      providerSubscriptionId,
+      stripeEventCreatedAt,
+    );
+    logger.warn(
+      { providerSubscriptionId, stripeEventCreatedAt },
+      'stripe.webhook.subscription_cancel_stale_or_missing_tombstoned',
+    );
 
     // audit-#1 (CRITICAL): no local row matched the deletion. Previously this only
     // logged `subscription_cancel_stale_or_missing` and let the enclosing handler
