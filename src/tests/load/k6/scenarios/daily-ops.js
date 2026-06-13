@@ -31,8 +31,9 @@ export function dailyOps() {
     return;
   }
 
+  // TEST_TOKEN must be minted scoped to TEST_ORG_ID — the active org rides the
+  // token's `org` claim, so the flat memberships route carries no org path segment.
   const headers = authHeaders(token).headers;
-  const orgId = __ENV.TEST_ORG_ID || 'test-org-id';
 
   // Notifications
   const notifResponse = http.get(`${API_PREFIX}/notify/notifications`, {
@@ -55,7 +56,7 @@ export function dailyOps() {
   sleep(0.3);
 
   // Organization memberships
-  const membersResponse = http.get(`${API_PREFIX}/tenancy/organizations/${orgId}/memberships`, {
+  const membersResponse = http.get(`${API_PREFIX}/tenancy/organization/memberships`, {
     headers,
     tags: { name: 'list-members' },
   });

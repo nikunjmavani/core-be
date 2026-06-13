@@ -29,11 +29,12 @@ export function webhookOps() {
     return;
   }
 
+  // TEST_TOKEN must be minted scoped to TEST_ORG_ID — the active org rides the
+  // token's `org` claim, so the flat webhook routes carry no org path segment.
   const headers = authHeaders(token).headers;
-  const orgId = __ENV.TEST_ORG_ID || 'test-org-id';
 
   // List webhooks
-  const webhooksResponse = http.get(`${API_PREFIX}/notify/organizations/${orgId}/webhooks`, {
+  const webhooksResponse = http.get(`${API_PREFIX}/notify/webhooks`, {
     headers,
     tags: { name: 'list-webhooks' },
   });
@@ -42,7 +43,7 @@ export function webhookOps() {
   sleep(0.5);
 
   // List webhook events
-  const eventsResponse = http.get(`${API_PREFIX}/notify/organizations/${orgId}/webhook-events`, {
+  const eventsResponse = http.get(`${API_PREFIX}/notify/webhook-events`, {
     headers,
     tags: { name: 'list-webhook-events' },
   });

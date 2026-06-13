@@ -3,7 +3,7 @@ import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedString } from '@/shared/utils/validation/validation.util.js';
 
 /**
- * Zod schema for the `GET /organizations/:organization_id/webhooks` query string — extends cursor pagination
+ * Zod schema for the `GET /notify/webhooks` query string — extends cursor pagination
  * with an opt-in `include_total` flag.
  */
 export const listWebhooksQueryDto = cursorPaginationSchema
@@ -13,7 +13,7 @@ export const listWebhooksQueryDto = cursorPaginationSchema
   .strict();
 
 /**
- * Zod schema for the `GET /organizations/:organization_id/webhooks/:webhook_id/delivery-attempts` query string
+ * Zod schema for the `GET /notify/webhooks/:webhook_id/delivery-attempts` query string
  * — extends cursor pagination with an opt-in `include_total` flag.
  */
 export const listWebhookDeliveryAttemptsQueryDto = cursorPaginationSchema
@@ -49,7 +49,7 @@ const httpsUrl = z
 const webhookSecret = trimmedString().min(16).max(255);
 
 /**
- * Zod schema for the `POST /organizations/:organization_id/webhooks` request body — requires at least one event
+ * Zod schema for the `POST /notify/webhooks` request body — requires at least one event
  * and an HTTPS URL (up to 2 KB), with an optional plaintext secret (when omitted, the service
  * auto-generates a strong random secret) and an `is_enabled` flag that defaults to true.
  */
@@ -63,7 +63,7 @@ export const CreateWebhookDto = z
   .strict();
 
 /**
- * Zod schema for the `PATCH /organizations/:organization_id/webhooks/:webhook_id` request body — every field
+ * Zod schema for the `PATCH /notify/webhooks/:webhook_id` request body — every field
  * is optional so callers may toggle `is_enabled`, rotate the secret, or replace the URL/events
  * independently. The optional `secret` follows the same ≥16-char rule as create; omitting it
  * leaves the existing secret unchanged.

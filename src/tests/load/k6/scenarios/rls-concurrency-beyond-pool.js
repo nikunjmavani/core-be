@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX } from '../helpers/config.js';
 import { checkOk, checkResponseTime } from '../helpers/checks.js';
-import { authHeaders } from '../helpers/auth.js';
+import { authHeaders, switchToOrganization } from '../helpers/auth.js';
 
 /**
  * RLS concurrency-beyond-pool scenario.
@@ -49,19 +49,18 @@ export const options = {
 };
 
 export function rlsConcurrencyBeyondPool() {
-  const token = __ENV.TEST_TOKEN;
+  let token = __ENV.TEST_TOKEN;
   const organizationPublicId = __ENV.TEST_ORG_ID;
   if (!(token && organizationPublicId)) return;
 
-  const headers = {
-    ...authHeaders(token).headers,
-    'X-Organization-Id': organizationPublicId,
-  };
+  // The active org rides the token's `org` claim — scope the token to TEST_ORG_ID
+  // so the flat RLS route resolves the right organization.
+  token = switchToOrganization(token, organizationPublicId) || token;
 
-  const response = http.get(
-    `${API_PREFIX}/tenancy/organizations/${organizationPublicId}/memberships`,
-    { headers, tags: { name: 'rls-beyond-pool' } },
-  );
+  const response = http.get(`${API_PREFIX}/tenancy/organization/memberships`, {
+    ...authHeaders(token),
+    tags: { name: 'rls-beyond-pool' },
+  });
   checkOk(response, 'rls-beyond-pool');
   checkResponseTime(response, 800, 'rls-beyond-pool');
 
