@@ -79,6 +79,7 @@ MFA recovery codes (10 single-use) remain under the MFA sub-domain for TOTP back
 
 ## Related
 
+- [frontend-auth-guide.md](../api/frontend-auth-guide.md) — frontend SPA integration (Bearer + reactive refresh, headers, org switching)
 - [csrf-and-session-cookies.md](../security/csrf-and-session-cookies.md)
 - [api-versioning.md](../api/api-versioning.md)
 - [data-lifecycle-deletion.md](../data/data-lifecycle-deletion.md) — session retention
