@@ -126,8 +126,12 @@ export function requireOrganizationPermission(
     if (!auth) throw new UnauthorizedError();
 
     const params = request.params as Record<string, string>;
+    // Organization scope source: the `{organization_id}` path param when the route carries one
+    // (every org-scoped route does today), otherwise the signed `org` token claim — the bridge
+    // that lets flattened, path-param-free routes resolve their tenant from the access token.
+    // The claim is scope, not authority: membership is still verified below (and RLS per request).
     // eslint-disable-next-line security/detect-object-injection -- paramName is a function argument with a typed default.
-    const organizationId = params[paramName];
+    const organizationId = params[paramName] ?? auth.organizationPublicId;
     if (!organizationId) {
       throw new ForbiddenError('errors:organizationContextRequired');
     }

@@ -90,6 +90,27 @@ describe('authorization.util', () => {
       expect(mockedResolvePermissions).not.toHaveBeenCalled();
     });
 
+    it('falls back to the token org claim when the route carries no path param', async () => {
+      mockedResolvePermissions.mockResolvedValue(['membership:read']);
+      const handler = requireOrganizationPermission('membership:read');
+      await expect(
+        handler(
+          mockRequest({
+            params: {},
+            auth: {
+              kind: 'user' as const,
+              userId: 'user-1',
+              role: GLOBAL_ROLES.USER,
+              organizationPublicId: 'org-from-claim',
+            },
+          }),
+          mockReply,
+        ),
+      ).resolves.toBeUndefined();
+      // Resolved against the claim org, not a path param.
+      expect(mockedResolvePermissions).toHaveBeenCalledWith('user-1', 'org-from-claim');
+    });
+
     it('throws UnauthorizedError when not authenticated', async () => {
       const handler = requireOrganizationPermission('membership:read');
       await expect(handler(mockRequest({ auth: null }), mockReply)).rejects.toThrow(
