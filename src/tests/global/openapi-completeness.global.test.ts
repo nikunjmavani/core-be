@@ -66,6 +66,36 @@ describe('OpenAPI completeness', () => {
     expect(violations).toEqual([]);
   });
 
+  it('advertises the bearerAuth security scheme on protected routes and omits it on public routes', () => {
+    // Drift guard for `getRouteSecurity` / `PUBLIC_ROUTE_KEYS`: the active org rides the token claim,
+    // so every authenticated route must require bearerAuth and every PUBLIC route (auth forms,
+    // Stripe-signed webhooks, health, plans) must NOT advertise a JWT requirement. If a NEW public
+    // route is added but not exempted, this fails — preventing the OpenAPI from over-stating auth.
+    const registry = loadRouteRegistryFromCatalog();
+    const securityByKey = spec.paths as unknown as Record<
+      string,
+      Record<string, { security?: unknown[] }>
+    >;
+    const mismatches: string[] = [];
+    for (const route of registry) {
+      if (route.path.startsWith('/mcp')) continue; // MCP transport documented separately
+      const openApiPath = normalizeOpenApiPath(route.path.replace(/:([^/]+)/g, '{$1}'));
+      const operation = securityByKey[openApiPath]?.[route.method.toLowerCase()];
+      if (!operation) continue; // existence is covered by the completeness test above
+      const hasBearer =
+        Array.isArray(operation.security) &&
+        operation.security.some((s) => s && typeof s === 'object' && 'bearerAuth' in s);
+      const isPublic = route.access === 'public';
+      if (isPublic && hasBearer) {
+        mismatches.push(`${route.method} ${openApiPath} is PUBLIC but advertises bearerAuth`);
+      }
+      if (!(isPublic || hasBearer)) {
+        mismatches.push(`${route.method} ${openApiPath} is ${route.access} but has no bearerAuth`);
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
   const isOpenApiCatalogRoute = (route: { access: string; path: string }) =>
     route.access !== 'bearer-token' && !route.path.startsWith('/mcp');
 
