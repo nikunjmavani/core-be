@@ -362,6 +362,8 @@ describe('WebhookService', () => {
       organization.id,
       expect.objectContaining({ encrypted_secret: expect.stringMatching(/^v1:/) }),
       10,
+      // audit-#9: the eligibility cutoff is forwarded so the rotation predicate is enforced atomically.
+      expect.objectContaining({ secretRotationOverlapCutoff: expect.any(Date) }),
     );
   });
 

@@ -206,6 +206,7 @@ export class WebhookService {
       // evicting the still-valid OLD secret — receivers not yet migrated to the most recent key would
       // start failing signature verification, defeating the whole point of zero-downtime rotation.
       // There is only one previous-secret slot, so refuse a re-rotation until the window elapses.
+      const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
       if (parsed.secret !== undefined) {
         const current = await this.webhookRepository.findByPublicId(
           webhook_public_id,
@@ -215,7 +216,6 @@ export class WebhookService {
         const rotatedAtMs = current.secret_rotated_at
           ? new Date(current.secret_rotated_at).getTime()
           : null;
-        const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
         if (rotatedAtMs !== null && Date.now() < rotatedAtMs + overlapWindowMs) {
           throw new ConflictError('errors:webhookSecretRotationTooSoon', {
             retryAfter: new Date(rotatedAtMs + overlapWindowMs).toISOString(),
@@ -232,6 +232,12 @@ export class WebhookService {
         encrypted_secret:
           parsed.secret !== undefined ? encryptFieldSecret(parsed.secret) : undefined,
       });
+      // audit-#9: the eligibility cutoff is also enforced in the repository UPDATE predicate so a
+      // rotation that slipped past the pre-check above (concurrent rotation) cannot clobber the
+      // single previous-secret slot. `now - overlapWindow`: a row is eligible only when its last
+      // rotation is null or older than the overlap window.
+      const secretRotationOverlapCutoff =
+        parsed.secret !== undefined ? new Date(Date.now() - overlapWindowMs) : undefined;
       let updated: Awaited<ReturnType<WebhookRepository['update']>>;
       try {
         updated = await this.webhookRepository.update(
@@ -239,6 +245,7 @@ export class WebhookService {
           organization.id,
           updatePayload,
           userId ?? undefined,
+          omitUndefined({ secretRotationOverlapCutoff }),
         );
       } catch (error) {
         // A URL change that collides with another webhook in the same organization
@@ -251,7 +258,26 @@ export class WebhookService {
         }
         throw error;
       }
-      if (!updated) throw new NotFoundError('Webhook');
+      if (!updated) {
+        // audit-#9: when rotating, a null update means either the webhook is gone (404) OR a
+        // concurrent rotation won the eligibility predicate (409). Re-read to disambiguate so a
+        // race loser gets a retryable 409 with the correct retry-after rather than a misleading 404.
+        if (parsed.secret !== undefined) {
+          const winner = await this.webhookRepository.findByPublicId(
+            webhook_public_id,
+            organization.id,
+          );
+          if (winner) {
+            const winnerRotatedAtMs = winner.secret_rotated_at
+              ? new Date(winner.secret_rotated_at).getTime()
+              : Date.now();
+            throw new ConflictError('errors:webhookSecretRotationTooSoon', {
+              retryAfter: new Date(winnerRotatedAtMs + overlapWindowMs).toISOString(),
+            });
+          }
+        }
+        throw new NotFoundError('Webhook');
+      }
       // Best-effort: drop any cached breaker so a URL/secret change does not reuse stale state.
       // Cross-process delivery workers fall back to the breaker cache's idle TTL.
       invalidateWebhookOutboundCircuit(updated.id);

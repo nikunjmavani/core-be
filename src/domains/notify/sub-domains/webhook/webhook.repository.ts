@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
@@ -213,6 +213,7 @@ export class WebhookRepository {
     organization_id: number,
     data: WebhookUpdateData,
     updated_by_user_id?: number,
+    options?: { secretRotationOverlapCutoff?: Date },
   ) {
     // sec-N8: when the encrypted_secret is being rotated, atomically copy the
     // CURRENT value into encrypted_secret_previous and stamp secret_rotated_at.
@@ -229,16 +230,29 @@ export class WebhookRepository {
       baseSet.encrypted_secret_previous = sql`${webhooks.encrypted_secret}`;
       baseSet.secret_rotated_at = databaseNowTimestamp;
     }
+    const whereClauses: SQL[] = [
+      eq(webhooks.public_id, public_id),
+      eq(webhooks.organization_id, organization_id),
+      isNull(webhooks.deleted_at),
+    ];
+    // audit-#9: enforce rotation eligibility INSIDE the update predicate so concurrent rotations
+    // cannot each pass a separate pre-check and both shift the single previous-secret slot — the
+    // later winner would evict (and immediately invalidate) a key returned to a caller moments
+    // earlier. With the cutoff in the WHERE, exactly one concurrent rotation matches and returns
+    // a row; the losers return null and the service maps that to a 409 (rotate-too-soon).
+    if (rotatingSecret && options?.secretRotationOverlapCutoff) {
+      const eligible = or(
+        isNull(webhooks.secret_rotated_at),
+        lte(webhooks.secret_rotated_at, options.secretRotationOverlapCutoff),
+      );
+      if (eligible) {
+        whereClauses.push(eligible);
+      }
+    }
     const rows = await getRequestDatabase()
       .update(webhooks)
       .set(baseSet)
-      .where(
-        and(
-          eq(webhooks.public_id, public_id),
-          eq(webhooks.organization_id, organization_id),
-          isNull(webhooks.deleted_at),
-        ),
-      )
+      .where(and(...whereClauses))
       .returning();
     return rows[0] ?? null;
   }

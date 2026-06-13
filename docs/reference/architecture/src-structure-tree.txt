@@ -461,6 +461,7 @@ src/
     │   │   │       │   ├── webhook-tombstone-retention.worker.unit.test.ts
     │   │   │       │   ├── webhook.controller.unit.test.ts
     │   │   │       │   ├── webhook.repository.db.unit.test.ts
+    │   │   │       │   ├── webhook.repository.secret-rotation.db.unit.test.ts
     │   │   │       │   ├── webhook.repository.unit.test.ts
     │   │   │       │   ├── webhook.serializer.no-secret.unit.test.ts
     │   │   │       │   ├── webhook.serializer.unit.test.ts
