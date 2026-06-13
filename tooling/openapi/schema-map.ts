@@ -123,38 +123,34 @@ export const routeSchemaMap: Record<string, ZodTypeAny> = {
 
   // ── Organizations ──
   'POST /api/v1/tenancy/organizations': createOrganizationDto,
-  'PATCH /api/v1/tenancy/organizations/{organization_id}': updateOrganizationDto,
-  'PUT /api/v1/tenancy/organizations/{organization_id}/logo': uploadLogoDto,
-  'PATCH /api/v1/tenancy/organizations/{organization_id}/settings': updateOrganizationSettingsDto,
+  'PATCH /api/v1/tenancy/organization': updateOrganizationDto,
+  'PUT /api/v1/tenancy/organization/logo': uploadLogoDto,
+  'PATCH /api/v1/tenancy/organization/settings': updateOrganizationSettingsDto,
 
   // ── Organization: API Keys ──
-  'POST /api/v1/tenancy/organizations/{organization_id}/api-keys': createOrganizationApiKeyDto,
-  'PATCH /api/v1/tenancy/organizations/{organization_id}/api-keys/{api_key_id}':
-    updateOrganizationApiKeyDto,
+  'POST /api/v1/tenancy/organization/api-keys': createOrganizationApiKeyDto,
+  'PATCH /api/v1/tenancy/organization/api-keys/{api_key_id}': updateOrganizationApiKeyDto,
 
   // ── Organization: Notification Policies ──
-  'POST /api/v1/tenancy/organizations/{organization_id}/notification-policies':
+  'POST /api/v1/tenancy/organization/notification-policies':
     createOrganizationNotificationPolicyDto,
-  'PATCH /api/v1/tenancy/organizations/{organization_id}/notification-policies/{policy_id}':
+  'PATCH /api/v1/tenancy/organization/notification-policies/{policy_id}':
     updateOrganizationNotificationPolicyDto,
 
   // ── Memberships ──
-  'POST /api/v1/tenancy/organizations/{organization_id}/memberships': createMembershipDto,
-  'PATCH /api/v1/tenancy/organizations/{organization_id}/memberships/{membership_id}':
-    updateMembershipDto,
-  'POST /api/v1/tenancy/organizations/{organization_id}/transfer-ownership': transferOwnershipDto,
+  'POST /api/v1/tenancy/organization/memberships': createMembershipDto,
+  'PATCH /api/v1/tenancy/organization/memberships/{membership_id}': updateMembershipDto,
+  'POST /api/v1/tenancy/organization/transfer-ownership': transferOwnershipDto,
 
   // ── Invitations ──
-  'POST /api/v1/tenancy/organizations/{organization_id}/invitations': createMemberInvitationDto,
+  'POST /api/v1/tenancy/organization/invitations': createMemberInvitationDto,
   'POST /api/v1/tenancy/invitations/{invitation_id}/accept': acceptMemberInvitationDto,
-  'POST /api/v1/tenancy/organizations/{organization_id}/invitations/{invitation_id}/resend':
-    resendMemberInvitationDto,
+  'POST /api/v1/tenancy/organization/invitations/{invitation_id}/resend': resendMemberInvitationDto,
 
   // ── Roles ──
-  'POST /api/v1/tenancy/organizations/{organization_id}/roles': createMemberRoleDto,
-  'PATCH /api/v1/tenancy/organizations/{organization_id}/roles/{role_id}': updateMemberRoleDto,
-  'PUT /api/v1/tenancy/organizations/{organization_id}/roles/{role_id}/permissions':
-    putMemberRolePermissionsDto,
+  'POST /api/v1/tenancy/organization/roles': createMemberRoleDto,
+  'PATCH /api/v1/tenancy/organization/roles/{role_id}': updateMemberRoleDto,
+  'PUT /api/v1/tenancy/organization/roles/{role_id}/permissions': putMemberRolePermissionsDto,
 
   // ── Billing: Subscriptions ──
   'POST /api/v1/billing/subscriptions': CreateSubscriptionDto,

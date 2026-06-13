@@ -9,7 +9,7 @@ import {
 import type { OrganizationSettingsService } from './organization-settings.service.js';
 
 /**
- * Builds the Fastify handler map for `/organizations/:organization_id/settings` —
+ * Builds the Fastify handler map for `/organization/settings` —
  * exposes a `getSettings` reader and a `updateSettings` writer that
  * upserts the row through {@link OrganizationSettingsService}.
  */

@@ -12,11 +12,12 @@ import type { AuditService } from '@/domains/audit/audit.service.js';
 import { AuditSerializer } from '@/domains/audit/audit.serializer.js';
 
 /**
- * Builds the Fastify handler map for `/organizations` routes (CRUD, logo
- * upload/delete, slug lookup, audit-log listing). Wraps service calls with
- * `requireAuth`, public-id validation, and `successResponse` /
- * `paginatedResponse` shaping. The optional {@link AuditService} is required
- * only by `listOrganizationAuditLogs`.
+ * Builds the Fastify handler map for the organization routes — account-level
+ * `/organizations` (list, create, by-slug lookup) and the active-organization
+ * `/organization` resource (get/update/delete, logo upload/delete, audit-log
+ * listing). Wraps service calls with `requireAuth`, public-id validation, and
+ * `successResponse` / `paginatedResponse` shaping. The optional
+ * {@link AuditService} is required only by `listOrganizationAuditLogs`.
  */
 export function createOrganizationController(
   service: OrganizationService,

@@ -53,11 +53,15 @@ describe('Security: Organization API key authentication', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat api-key routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
 
     const createResponse = await injectAuthenticatedOrganizationMutation(app, {
       method: 'POST',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/api-keys`),
+      url: testApiPath('/tenancy/organization/api-keys'),
       token,
       payload: { name: 'Security test key', scopes: permissionCodes },
     });
@@ -72,16 +76,18 @@ describe('Security: Organization API key authentication', () => {
   }
 
   it('returns 401 for unknown api key', async () => {
+    // Auth runs before tenant resolution, so an unknown key is rejected on the
+    // flat route regardless of organization context.
     const response = await injectRoute(app, {
       method: 'GET',
-      url: testApiPath('/tenancy/organizations/000000000000000000000/api-keys'),
+      url: testApiPath('/tenancy/organization/api-keys'),
       headers: { authorization: 'ApiKey ak_00000000000000000000000000000000' },
     });
     expect(response.statusCode).toBe(401);
   });
 
   it('returns 403 when api key scopes exclude required permission', async () => {
-    const { organization, rawKey, apiKeyPublicId } = await createApiKeyWithPermissions([
+    const { rawKey, apiKeyPublicId } = await createApiKeyWithPermissions([
       TENANCY_PERMISSIONS.API_KEY_READ,
       TENANCY_PERMISSIONS.API_KEY_MANAGE,
     ]);
@@ -91,9 +97,11 @@ describe('Security: Organization API key authentication', () => {
       .set({ scopes: [TENANCY_PERMISSIONS.ORGANIZATION_READ] })
       .where(eq(api_keys.public_id, apiKeyPublicId));
 
+    // The org API-key principal carries its own organization, so the flat route
+    // resolves the tenant from the key — no organization path segment.
     const response = await injectRoute(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/api-keys`),
+      url: testApiPath('/tenancy/organization/api-keys'),
       headers: { authorization: `ApiKey ${rawKey}` },
     });
     expect(response.statusCode).toBe(403);
@@ -124,24 +132,25 @@ describe('Security: Organization API key authentication', () => {
   });
 
   it('rejects an org API key on a user-only route that requires a real user', async () => {
-    const { organization, rawKey } = await createApiKeyWithPermissions([
+    const { rawKey } = await createApiKeyWithPermissions([
       TENANCY_PERMISSIONS.API_KEY_READ,
       TENANCY_PERMISSIONS.API_KEY_MANAGE,
     ]);
 
-    // GET /organizations/:organization_id resolves "my organizations" for the authenticated user and
-    // calls requireAuth (no org-permission preHandler), so an API-key principal must be
-    // rejected with 401 even though it could satisfy an org-permission check elsewhere.
+    // Flat GET /tenancy/organization resolves the active org from the principal
+    // and calls requireAuth (no org-permission preHandler), so an API-key
+    // principal (empty userId) must be rejected with 401 even though it could
+    // satisfy an org-permission check on a permission-guarded route.
     const response = await injectRoute(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}`),
+      url: testApiPath('/tenancy/organization'),
       headers: { authorization: `ApiKey ${rawKey}` },
     });
     expect(response.statusCode).toBe(401);
   });
 
   it('returns 401 when api key is expired', async () => {
-    const { organization, rawKey, apiKeyPublicId } = await createApiKeyWithPermissions([
+    const { rawKey, apiKeyPublicId } = await createApiKeyWithPermissions([
       TENANCY_PERMISSIONS.API_KEY_READ,
       TENANCY_PERMISSIONS.API_KEY_MANAGE,
     ]);
@@ -153,7 +162,7 @@ describe('Security: Organization API key authentication', () => {
 
     const response = await injectRoute(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/api-keys`),
+      url: testApiPath('/tenancy/organization/api-keys'),
       headers: { authorization: `ApiKey ${rawKey}` },
     });
     expect(response.statusCode).toBe(401);

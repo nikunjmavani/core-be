@@ -106,7 +106,7 @@ function requireOrganizationId(): string {
 }
 
 function organizationPath(suffix: string): string {
-  return `${API_PREFIX}/tenancy/organizations/${requireOrganizationId()}${suffix}`;
+  return `${API_PREFIX}/tenancy/organization${suffix}`;
 }
 
 function billingPath(suffix: string): string {
@@ -172,8 +172,6 @@ async function setupOrganization(): Promise<void> {
 }
 
 async function setupPlanAndRoleIds(): Promise<void> {
-  const organizationId = requireOrganizationId();
-
   const plansResponse = await requestJson(`${API_PREFIX}/billing/plans`, {
     headers: authHeaders(true),
     expectedStatus: 200,
@@ -184,10 +182,10 @@ async function setupPlanAndRoleIds(): Promise<void> {
     smokeContext.planId = planId;
   }
 
-  const rolesResponse = await requestJson(
-    `${API_PREFIX}/tenancy/organizations/${organizationId}/roles`,
-    { headers: authHeaders(true), expectedStatus: 200 },
-  );
+  const rolesResponse = await requestJson(`${API_PREFIX}/tenancy/organization/roles`, {
+    headers: authHeaders(true),
+    expectedStatus: 200,
+  });
   const rolesBody = rolesResponse.body as { data?: Array<{ id?: string }> };
   const roleId = rolesBody.data?.[0]?.id;
   if (roleId !== undefined) {
@@ -197,7 +195,6 @@ async function setupPlanAndRoleIds(): Promise<void> {
 
 /** Routes grouped by domain — GET-heavy probes that should not 5xx with seeded demo user. */
 function buildDomainProbes(): RouteProbe[] {
-  const organizationId = () => requireOrganizationId();
   const planId = () => smokeContext.planId ?? 'missing-plan-id';
   const roleId = () => smokeContext.roleId ?? 'missing-role-id';
 
@@ -278,8 +275,8 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:organization_id',
-      path: () => `${API_PREFIX}/tenancy/organizations/${organizationId()}`,
+      name: 'GET /api/v1/tenancy/organization',
+      path: () => `${API_PREFIX}/tenancy/organization`,
       authenticated: true,
       needsOrganization: true,
       expectedStatus: 200,
@@ -292,55 +289,55 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:organization_id/settings',
+      name: 'GET /api/v1/tenancy/organization/settings',
       path: () => organizationPath('/settings'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:organization_id/roles',
+      name: 'GET /api/v1/tenancy/organization/roles',
       path: () => organizationPath('/roles'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:organization_id/roles/:role_id',
+      name: 'GET /api/v1/tenancy/organization/roles/:role_id',
       path: () => organizationPath(`/roles/${roleId()}`),
       needsOrganization: true,
       expectedStatus: [200, 404],
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:organization_id/roles/:role_id/permissions',
+      name: 'GET /api/v1/tenancy/organization/roles/:role_id/permissions',
       path: () => organizationPath(`/roles/${roleId()}/permissions`),
       needsOrganization: true,
       expectedStatus: [200, 404],
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:organization_id/memberships',
+      name: 'GET /api/v1/tenancy/organization/memberships',
       path: () => organizationPath('/memberships'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:organization_id/invitations',
+      name: 'GET /api/v1/tenancy/organization/invitations',
       path: () => organizationPath('/invitations'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:organization_id/api-keys',
+      name: 'GET /api/v1/tenancy/organization/api-keys',
       path: () => organizationPath('/api-keys'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:organization_id/notification-policies',
+      name: 'GET /api/v1/tenancy/organization/notification-policies',
       path: () => organizationPath('/notification-policies'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/tenancy/organizations/:organization_id/audit-logs',
+      name: 'GET /api/v1/tenancy/organization/audit-logs',
       path: () => organizationPath('/audit-logs'),
       needsOrganization: true,
       expectedStatus: 200,

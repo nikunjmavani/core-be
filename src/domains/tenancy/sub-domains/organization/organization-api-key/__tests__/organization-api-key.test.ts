@@ -55,28 +55,26 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat tenancy routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { user, organization, role, token };
   }
 
-  function apiKeysCollectionPath(organizationPublicId: string) {
-    return `/api/v1/tenancy/organizations/${organizationPublicId}/api-keys`;
+  const API_KEYS_COLLECTION_PATH = '/api/v1/tenancy/organization/api-keys';
+
+  function apiKeysResourcePath(apiKeyPublicId: string) {
+    return `/api/v1/tenancy/organization/api-keys/${apiKeyPublicId}`;
   }
 
-  function apiKeysResourcePath(organizationPublicId: string, apiKeyPublicId: string) {
-    return `/api/v1/tenancy/organizations/${organizationPublicId}/api-keys/${apiKeyPublicId}`;
-  }
-
-  async function expectApiKeyNotFound(
-    organizationPublicId: string,
-    apiKeyPublicId: string,
-    token: string,
-  ): Promise<void> {
+  async function expectApiKeyNotFound(apiKeyPublicId: string, token: string): Promise<void> {
     await expect
       .poll(
         async () => {
           const response = await injectAuthenticated(app, {
-            url: apiKeysResourcePath(organizationPublicId, apiKeyPublicId),
+            url: apiKeysResourcePath(apiKeyPublicId),
             token,
           });
           return response.statusCode;
@@ -86,34 +84,34 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       .toBe(404);
   }
 
-  describe('GET /api/v1/tenancy/organizations/:id/api-keys', () => {
+  describe('GET /api/v1/tenancy/organization/api-keys', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: apiKeysCollectionPath('unauthenticated-organization-route'),
+        url: API_KEYS_COLLECTION_PATH,
       });
       expect(response.statusCode).toBe(401);
     });
 
     it('should return 403 without api key read permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
       });
       expect(response.statusCode).toBe(403);
     });
 
     it('should return api keys with read permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_READ,
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -122,48 +120,48 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
   });
 
-  describe('GET /api/v1/tenancy/organizations/:id/api-keys/:api_key_id', () => {
+  describe('GET /api/v1/tenancy/organization/api-keys/:api_key_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
-        url: apiKeysResourcePath('unauthenticated-organization-route', 'some-key-id'),
+        url: apiKeysResourcePath('some-key-id'),
       });
       expect(response.statusCode).toBe(401);
     });
 
     it('should return 403 without api key read permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: apiKeysResourcePath(organization.public_id, 'some-key-id'),
+        url: apiKeysResourcePath('some-key-id'),
         token,
       });
       expect(response.statusCode).toBe(403);
     });
 
     it('should return 404 for non-existent api key', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_READ,
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const response = await injectAuthenticated(app, {
-        url: apiKeysResourcePath(organization.public_id, 'key_yyyyyyyyyyyyyyyyyyyyy'),
+        url: apiKeysResourcePath('key_yyyyyyyyyyyyyyyyyyyyy'),
         token,
       });
       expect(response.statusCode).toBe(404);
     });
 
     it('should return api key by public id', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_READ,
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const created = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: { name: 'Listing Test Key', scopes: ['api-key:read'], expires_in_days: 365 },
       });
@@ -172,7 +170,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       const apiKeyPublicId = createdBody.data.api_key.id;
 
       const response = await injectAuthenticated(app, {
-        url: apiKeysResourcePath(organization.public_id, apiKeyPublicId),
+        url: apiKeysResourcePath(apiKeyPublicId),
         token,
       });
       expect(response.statusCode).toBe(200);
@@ -182,24 +180,24 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
   });
 
-  describe('POST /api/v1/tenancy/organizations/:id/api-keys', () => {
+  describe('POST /api/v1/tenancy/organization/api-keys', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: apiKeysCollectionPath('unauthenticated-organization-route'),
+        url: API_KEYS_COLLECTION_PATH,
         payload: { name: 'Test' },
       });
       expect(response.statusCode).toBe(401);
     });
 
     it('should return 403 without api key manage permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_READ,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: { name: 'Test', scopes: ['organization:read'] },
       });
@@ -207,13 +205,13 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should return 400 when name is missing', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: {},
       });
@@ -221,13 +219,13 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should return 400 when name is empty', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: { name: '' },
       });
@@ -235,13 +233,13 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should return 400 when body contains unknown keys', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: { name: 'Valid Key', unexpected: true },
       });
@@ -249,13 +247,13 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should create api key when manage permission is granted', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: { name: 'New Key', scopes: ['api-key:manage'], expires_in_days: 30 },
       });
@@ -268,11 +266,11 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
   });
 
-  describe('PATCH /api/v1/tenancy/organizations/:id/api-keys/:api_key_id', () => {
+  describe('PATCH /api/v1/tenancy/organization/api-keys/:api_key_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'PATCH',
-        url: apiKeysResourcePath('unauthenticated-organization-route', 'some-key-id'),
+        url: apiKeysResourcePath('some-key-id'),
         payload: { name: 'Renamed' },
       });
       expect(response.statusCode).toBe(401);
@@ -284,7 +282,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       );
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(managerContext.organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token: managerContext.token,
         payload: { name: 'Owned By Manager', scopes: ['api-key:read'] },
       });
@@ -304,11 +302,14 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         organizationId: managerContext.organization.id,
         roleId: readOnlyRole.id,
       });
-      const readOnlyToken = await generateTestToken({ userId: readOnlyUser.public_id });
+      const readOnlyToken = await generateTestToken({
+        userId: readOnlyUser.public_id,
+        organizationPublicId: managerContext.organization.public_id,
+      });
 
       const patchResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: apiKeysResourcePath(managerContext.organization.public_id, apiKeyPublicId),
+        url: apiKeysResourcePath(apiKeyPublicId),
         token: readOnlyToken,
         payload: { name: 'Should Fail' },
       });
@@ -316,13 +317,11 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should return 400 when status value is invalid', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext(
-        API_KEY_MANAGER_WITH_READ_GRANT,
-      );
+      const { token } = await createAuthorizedOrganizationContext(API_KEY_MANAGER_WITH_READ_GRANT);
 
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: { name: 'Patch Status Key', scopes: ['api-key:read'] },
       });
@@ -332,7 +331,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: apiKeysResourcePath(organization.public_id, apiKeyPublicId),
+        url: apiKeysResourcePath(apiKeyPublicId),
         token,
         payload: { status: 'INVALID_STATUS' },
       });
@@ -340,13 +339,11 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
 
     it('should update api key with manage permission', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext(
-        API_KEY_MANAGER_WITH_READ_GRANT,
-      );
+      const { token } = await createAuthorizedOrganizationContext(API_KEY_MANAGER_WITH_READ_GRANT);
 
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: { name: 'Before Rename', scopes: ['api-key:read'] },
       });
@@ -356,7 +353,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
 
       const patchResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: apiKeysResourcePath(organization.public_id, apiKeyPublicId),
+        url: apiKeysResourcePath(apiKeyPublicId),
         token,
         payload: { name: 'After Rename', status: 'REVOKED' },
       });
@@ -367,11 +364,11 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
     });
   });
 
-  describe('DELETE /api/v1/tenancy/organizations/:id/api-keys/:api_key_id', () => {
+  describe('DELETE /api/v1/tenancy/organization/api-keys/:api_key_id', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'DELETE',
-        url: apiKeysResourcePath('unauthenticated-organization-route', 'some-key-id'),
+        url: apiKeysResourcePath('some-key-id'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -382,7 +379,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       );
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(managerContext.organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token: managerContext.token,
         payload: { name: 'Deletion Target', scopes: ['api-key:read'] },
       });
@@ -402,38 +399,41 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         organizationId: managerContext.organization.id,
         roleId: readOnlyRole.id,
       });
-      const readOnlyToken = await generateTestToken({ userId: readOnlyUser.public_id });
+      const readOnlyToken = await generateTestToken({
+        userId: readOnlyUser.public_id,
+        organizationPublicId: managerContext.organization.public_id,
+      });
 
       const deleteResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',
-        url: apiKeysResourcePath(managerContext.organization.public_id, apiKeyPublicId),
+        url: apiKeysResourcePath(apiKeyPublicId),
         token: readOnlyToken,
       });
       expect(deleteResponse.statusCode).toBe(403);
     });
 
     it('should return 404 when api key does not exist', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',
-        url: apiKeysResourcePath(organization.public_id, 'key_yyyyyyyyyyyyyyyyyyyyy'),
+        url: apiKeysResourcePath('key_yyyyyyyyyyyyyyyyyyyyy'),
         token,
       });
       expect(response.statusCode).toBe(404);
     });
 
     it('should delete api key when manage permission is granted', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_READ,
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: { name: 'To Delete', scopes: ['api-key:read'] },
       });
@@ -443,13 +443,13 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
 
       const deleteResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',
-        url: apiKeysResourcePath(organization.public_id, apiKeyPublicId),
+        url: apiKeysResourcePath(apiKeyPublicId),
         token,
       });
       expect(deleteResponse.statusCode).toBe(204);
 
       const listAfterDelete = await injectAuthenticated(app, {
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
       });
       expect(listAfterDelete.statusCode).toBe(200);
@@ -457,15 +457,15 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       const listedIds = listBody.data.map((row) => row.id);
       expect(listedIds).not.toContain(apiKeyPublicId);
 
-      await expectApiKeyNotFound(organization.public_id, apiKeyPublicId, token);
+      await expectApiKeyNotFound(apiKeyPublicId, token);
     });
   });
 
-  describe('POST /api/v1/tenancy/organizations/:id/api-keys/:api_key_id/rotate', () => {
+  describe('POST /api/v1/tenancy/organization/api-keys/:api_key_id/rotate', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: `${apiKeysResourcePath('unauthenticated-organization-route', 'some-key-id')}/rotate`,
+        url: `${apiKeysResourcePath('some-key-id')}/rotate`,
       });
       expect(response.statusCode).toBe(401);
     });
@@ -476,7 +476,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       );
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(managerContext.organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token: managerContext.token,
         payload: { name: 'Rotate Protected', scopes: ['api-key:read'] },
       });
@@ -496,38 +496,41 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
         organizationId: managerContext.organization.id,
         roleId: readOnlyRole.id,
       });
-      const readOnlyToken = await generateTestToken({ userId: readOnlyUser.public_id });
+      const readOnlyToken = await generateTestToken({
+        userId: readOnlyUser.public_id,
+        organizationPublicId: managerContext.organization.public_id,
+      });
 
       const rotateResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: `${apiKeysResourcePath(managerContext.organization.public_id, apiKeyPublicId)}/rotate`,
+        url: `${apiKeysResourcePath(apiKeyPublicId)}/rotate`,
         token: readOnlyToken,
       });
       expect(rotateResponse.statusCode).toBe(403);
     });
 
     it('should return 404 when api key does not exist', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: `${apiKeysResourcePath(organization.public_id, 'key_yyyyyyyyyyyyyyyyyyyyy')}/rotate`,
+        url: `${apiKeysResourcePath('key_yyyyyyyyyyyyyyyyyyyyy')}/rotate`,
         token,
       });
       expect(response.statusCode).toBe(404);
     });
 
     it('should rotate api key and return raw key payload', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_READ,
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: { name: 'Rotation Source', scopes: ['api-key:read'] },
       });
@@ -540,7 +543,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
 
       const rotateResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: `${apiKeysResourcePath(organization.public_id, apiKeyPublicIdBeforeRotation)}/rotate`,
+        url: `${apiKeysResourcePath(apiKeyPublicIdBeforeRotation)}/rotate`,
         token,
       });
       expect(rotateResponse.statusCode).toBe(201);
@@ -555,7 +558,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       expect(apiKeyPublicIdAfterRotation).not.toBe(apiKeyPublicIdBeforeRotation);
 
       const listAfterRotate = await injectAuthenticated(app, {
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
       });
       expect(listAfterRotate.statusCode).toBe(200);
@@ -564,24 +567,24 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       expect(listedIdsAfterRotate).not.toContain(apiKeyPublicIdBeforeRotation);
       expect(listedIdsAfterRotate).toContain(apiKeyPublicIdAfterRotation);
 
-      await expectApiKeyNotFound(organization.public_id, apiKeyPublicIdBeforeRotation, token);
+      await expectApiKeyNotFound(apiKeyPublicIdBeforeRotation, token);
 
       const rotatedKeyLookup = await injectAuthenticated(app, {
-        url: apiKeysResourcePath(organization.public_id, apiKeyPublicIdAfterRotation),
+        url: apiKeysResourcePath(apiKeyPublicIdAfterRotation),
         token,
       });
       expect(rotatedKeyLookup.statusCode).toBe(200);
     });
 
     it('rejects concurrent rotations of the same key: one replacement, rest 409, no 5xx', async () => {
-      const { organization, token } = await createAuthorizedOrganizationContext([
+      const { token } = await createAuthorizedOrganizationContext([
         TENANCY_PERMISSIONS.API_KEY_READ,
         TENANCY_PERMISSIONS.API_KEY_MANAGE,
       ]);
 
       const createResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
         payload: { name: 'Concurrent Rotation Source', scopes: ['api-key:read'] },
       });
@@ -592,7 +595,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       const rotateOnce = () =>
         injectAuthenticatedOrganizationMutation(app, {
           method: 'POST',
-          url: `${apiKeysResourcePath(organization.public_id, apiKeyPublicId)}/rotate`,
+          url: `${apiKeysResourcePath(apiKeyPublicId)}/rotate`,
           token,
         }).then((response) => response.statusCode);
 
@@ -609,7 +612,7 @@ describe('Tenancy Organization API Key Sub-Domain — Integration', () => {
       // Exactly one active key remains (the single replacement); the original is retired. Without
       // the guard this list would hold four replacements.
       const listAfter = await injectAuthenticated(app, {
-        url: apiKeysCollectionPath(organization.public_id),
+        url: API_KEYS_COLLECTION_PATH,
         token,
       });
       expect(listAfter.statusCode).toBe(200);

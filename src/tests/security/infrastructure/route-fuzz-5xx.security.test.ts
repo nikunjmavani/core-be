@@ -31,8 +31,8 @@ const allPermissionCodes = [
  * into a meaningless 401 parade. The never-5xx assertion still applies.
  */
 const DESTRUCTIVE_SELF_TAIL: string[] = [
-  'POST /api/v1/tenancy/organizations/:organization_id/leave',
-  'DELETE /api/v1/tenancy/organizations/:organization_id',
+  'POST /api/v1/tenancy/organization/leave',
+  'DELETE /api/v1/tenancy/organization',
   'DELETE /api/v1/auth/me/sessions/:session_id',
   'DELETE /api/v1/auth/me/sessions',
   'POST /api/v1/auth/logout',

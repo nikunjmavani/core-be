@@ -3,7 +3,7 @@ import { cursorPaginationSchema } from '@/shared/utils/http/pagination.util.js';
 import { trimmedStringMinMax } from '@/shared/utils/validation/validation.util.js';
 
 /**
- * Zod schema for the `POST /organizations/:organization_id/memberships` request body.
+ * Zod schema for the `POST /organization/memberships` request body.
  * Identifies the user and role by public id and optionally pre-sets the
  * lifecycle `status`.
  */
@@ -16,7 +16,7 @@ export const createMembershipDto = z
   .strict();
 
 /**
- * Zod schema for the `PATCH /organizations/:organization_id/memberships/:membership_id`
+ * Zod schema for the `PATCH /organization/memberships/:membership_id`
  * request body. Only the membership `status` is mutable here.
  */
 export const updateMembershipDto = z
@@ -25,11 +25,11 @@ export const updateMembershipDto = z
   })
   .strict();
 
-/** Zod schema for the `GET /organizations/:organization_id/memberships` cursor pagination query. */
+/** Zod schema for the `GET /organization/memberships` cursor pagination query. */
 export const listMembershipsQueryDto = cursorPaginationSchema.strict();
 
 /**
- * Zod schema for the `POST /organizations/:organization_id/transfer-ownership` request
+ * Zod schema for the `POST /organization/transfer-ownership` request
  * body. `new_owner_user_id` is the target user's public id.
  */
 export const transferOwnershipDto = z

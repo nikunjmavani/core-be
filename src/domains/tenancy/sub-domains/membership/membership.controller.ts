@@ -11,10 +11,10 @@ import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.u
 import type { MembershipService } from './membership.service.js';
 
 /**
- * Builds the HTTP handler map for the organization membership routes under
- * `/organizations/:organization_id/memberships` plus the self-service `leave` and
- * `transfer-ownership` actions that take an organization id as the only
- * path param.
+ * Builds the HTTP handler map for the active-organization membership routes
+ * under `/organization/memberships` plus the self-service `leave` and
+ * `transfer-ownership` actions. The active organization is resolved from the
+ * signed JWT `org` claim via {@link resolveActiveOrganizationId}.
  */
 export function createMembershipController(service: MembershipService) {
   return {
@@ -29,8 +29,7 @@ export function createMembershipController(service: MembershipService) {
       });
     },
     getMembership: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const rawParams = (request.params as { organization_id: string; membership_id: string }) ?? {
-        id: '',
+      const rawParams = (request.params as { membership_id: string }) ?? {
         membership_id: '',
       };
       // sec-re-18 (sec-B10 class): bind path params at the boundary so an
@@ -50,8 +49,7 @@ export function createMembershipController(service: MembershipService) {
     },
     updateMembership: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const rawParams = (request.params as { organization_id: string; membership_id: string }) ?? {
-        id: '',
+      const rawParams = (request.params as { membership_id: string }) ?? {
         membership_id: '',
       };
       // sec-re-18 (sec-B10 class): bind path params at the boundary so an
@@ -69,8 +67,7 @@ export function createMembershipController(service: MembershipService) {
     },
     deleteMembership: async (request: FastifyRequest, reply: FastifyReply) => {
       requirePrincipal(request);
-      const rawParams = (request.params as { organization_id: string; membership_id: string }) ?? {
-        id: '',
+      const rawParams = (request.params as { membership_id: string }) ?? {
         membership_id: '',
       };
       // sec-re-18 (sec-B10 class): bind path params at the boundary so an
@@ -82,8 +79,7 @@ export function createMembershipController(service: MembershipService) {
       return reply.code(204).send();
     },
     getMembershipPermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const rawParams = (request.params as { organization_id: string; membership_id: string }) ?? {
-        id: '',
+      const rawParams = (request.params as { membership_id: string }) ?? {
         membership_id: '',
       };
       // sec-re-18 (sec-B10 class): bind path params at the boundary so an

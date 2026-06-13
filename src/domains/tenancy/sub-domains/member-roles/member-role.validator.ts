@@ -13,7 +13,7 @@ import type {
 } from './member-role.dto.js';
 
 /**
- * Validates a `POST /organizations/:organization_id/roles` body against
+ * Validates a `POST /organization/roles` body against
  * {@link createMemberRoleDto}; throws `ValidationError('errors:invalidInput')`
  * with per-field details on failure.
  */
@@ -30,7 +30,7 @@ export function validateCreateMemberRole(data: unknown): CreateMemberRoleInput {
 }
 
 /**
- * Validates a `PATCH /organizations/:organization_id/roles/:role_id` body against
+ * Validates a `PATCH /organization/roles/:role_id` body against
  * {@link updateMemberRoleDto}; throws `ValidationError('errors:invalidInput')`
  * with per-field details on failure.
  */
@@ -47,7 +47,7 @@ export function validateUpdateMemberRole(data: unknown): UpdateMemberRoleInput {
 }
 
 /**
- * Validates the `GET /organizations/:organization_id/roles` query string, rejecting legacy
+ * Validates the `GET /organization/roles` query string, rejecting legacy
  * page-number pagination via {@link ensureCursorOnlyPagination} before parsing
  * against {@link listMemberRolesQueryDto}.
  */

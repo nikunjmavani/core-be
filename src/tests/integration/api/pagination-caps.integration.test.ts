@@ -43,7 +43,7 @@ describe('Pagination caps — integration', () => {
     expect(response.statusCode).toBe(400);
   });
 
-  it('GET /organizations/{organization_id}/invitations rejects limit above 100', async () => {
+  it('GET /organization/invitations rejects limit above 100', async () => {
     const user = await createTestUser();
     const organization = await createTestOrganization({ ownerUserId: user.id });
     const role = await createRoleWithPermissions({
@@ -55,10 +55,13 @@ describe('Pagination caps — integration', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/tenancy/organizations/${organization.public_id}/invitations`),
+      url: testApiPath('/tenancy/organization/invitations'),
       token,
       organizationPublicId: organization.public_id,
       query: { limit: '101' },

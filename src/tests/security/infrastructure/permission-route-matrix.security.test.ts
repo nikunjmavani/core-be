@@ -101,7 +101,7 @@ function payloadForPermissionRoute(
   if (route.path.endsWith('/settings')) {
     return { is_email_notifications_enabled: true };
   }
-  if (route.path.endsWith('/organizations/:organization_id')) {
+  if (route.path.endsWith('/tenancy/organization')) {
     return { name: 'Matrix organization' };
   }
   return {};
@@ -157,7 +157,10 @@ describe('Security: Permission route matrix', () => {
         organizationId: organization.id,
         roleId: role.id,
       });
-      const token = await generateTestToken({ userId: user.public_id });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const materializedPath = materializeOrganizationScopedPath(
         route.path,
         organization.public_id,
@@ -194,7 +197,10 @@ describe('Security: Permission route matrix', () => {
         roleId: role.id,
       });
       await invalidatePermissions(user.public_id, organization.public_id);
-      const token = await generateTestToken({ userId: user.public_id });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const materializedPath = materializeOrganizationScopedPath(
         route.path,
         organization.public_id,

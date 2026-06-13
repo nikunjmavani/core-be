@@ -53,7 +53,11 @@ describe('Tenancy role and membership detail — happy paths', () => {
       organizationId: organization.id,
       roleId: callerRole.id,
     });
-    const token = await generateTestToken({ userId: caller.public_id });
+    // Flat tenancy routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: caller.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { caller, organization, callerRole, token };
   }
 
@@ -65,13 +69,12 @@ describe('Tenancy role and membership detail — happy paths', () => {
       createdByUserId: caller.id,
       name: 'Detail Target Role',
     });
-    const basePath = `/tenancy/organizations/${organization.public_id}/roles/${targetRole.public_id}`;
+    const basePath = `/tenancy/organization/roles/${targetRole.public_id}`;
 
     const get = await injectAuthenticated(app, {
       method: 'GET',
       url: testApiPath(basePath),
       token,
-      organizationPublicId: organization.public_id,
     });
     expect(get.statusCode, get.body).toBe(200);
 
@@ -79,7 +82,6 @@ describe('Tenancy role and membership detail — happy paths', () => {
       method: 'PATCH',
       url: testApiPath(basePath),
       token,
-      organizationPublicId: organization.public_id,
       payload: { name: 'Detail Target Role Updated' },
     });
     expect(patch.statusCode, patch.body).toBe(200);
@@ -88,7 +90,6 @@ describe('Tenancy role and membership detail — happy paths', () => {
       method: 'DELETE',
       url: testApiPath(basePath),
       token,
-      organizationPublicId: organization.public_id,
     });
     expect(remove.statusCode, remove.body).toBe(204);
   });
@@ -107,13 +108,12 @@ describe('Tenancy role and membership detail — happy paths', () => {
       organizationId: organization.id,
       roleId: memberRole.id,
     });
-    const basePath = `/tenancy/organizations/${organization.public_id}/memberships/${membership.public_id}`;
+    const basePath = `/tenancy/organization/memberships/${membership.public_id}`;
 
     const get = await injectAuthenticated(app, {
       method: 'GET',
       url: testApiPath(basePath),
       token,
-      organizationPublicId: organization.public_id,
     });
     expect(get.statusCode, get.body).toBe(200);
 
@@ -121,7 +121,6 @@ describe('Tenancy role and membership detail — happy paths', () => {
       method: 'PATCH',
       url: testApiPath(basePath),
       token,
-      organizationPublicId: organization.public_id,
       payload: { status: 'ACTIVE' },
     });
     expect(patch.statusCode, patch.body).toBe(200);
@@ -130,7 +129,6 @@ describe('Tenancy role and membership detail — happy paths', () => {
       method: 'DELETE',
       url: testApiPath(basePath),
       token,
-      organizationPublicId: organization.public_id,
     });
     expect(remove.statusCode, remove.body).toBe(204);
   });

@@ -26,7 +26,7 @@ function assertSecurityPolicyHasNoPollutionKeys(data: unknown): void {
   }
 }
 
-/** Parses raw `PATCH /organizations/:organization_id/settings` body via {@link updateOrganizationSettingsDto}; throws `ValidationError('errors:invalidInput')` on failure. */
+/** Parses raw `PATCH /organization/settings` body via {@link updateOrganizationSettingsDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateUpdateOrganizationSettings(data: unknown): UpdateOrganizationSettingsInput {
   assertSecurityPolicyHasNoPollutionKeys(data);
   const result = updateOrganizationSettingsDto.safeParse(data);

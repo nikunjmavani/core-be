@@ -15,7 +15,7 @@ import { z } from 'zod';
 export const PROTO_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /**
- * Zod schema for `PATCH /api/v1/organizations/:organization_id/settings`. All fields are
+ * Zod schema for `PATCH /api/v1/organization/settings`. All fields are
  * optional (PATCH semantics); `default_locale` is constrained to the
  * locales the API actually translates (`en`, `es`); `security_policy` is a
  * bounded free-form record persisted as JSONB — max 50 keys, keys ≤ 100 chars

@@ -10,7 +10,17 @@ import {
 import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
 import type { MembershipService } from './membership.service.js';
 import type { MemberInvitationService } from './member-invitation/member-invitation.service.js';
-import { listMemberInvitationsQueryDto } from './member-invitation/member-invitation.dto.js';
+import {
+  acceptMemberInvitationDto,
+  createMemberInvitationDto,
+  listMemberInvitationsQueryDto,
+  resendMemberInvitationDto,
+} from './member-invitation/member-invitation.dto.js';
+import {
+  createMembershipDto,
+  transferOwnershipDto,
+  updateMembershipDto,
+} from './membership.dto.js';
 import { createMembershipController } from './membership.controller.js';
 import { createMemberInvitationController } from './member-invitation/member-invitation.controller.js';
 import { requireOrganizationPermission } from '@/shared/utils/auth/authorization.util.js';
@@ -23,10 +33,10 @@ export interface MembershipRoutesDeps {
 }
 
 /**
- * Fastify plugin that registers organization membership routes (list, get,
- * create, update, delete, plus self-service leave / transfer-ownership) and
- * the member-invitation routes (org-scoped create/list/cancel/resend plus the
- * cross-org `/invitations/...` user-facing pending/accept/decline endpoints).
+ * Fastify plugin that registers active-organization membership routes (list,
+ * get, create, update, delete, plus self-service leave / transfer-ownership)
+ * and the member-invitation routes (org-scoped create/list/cancel/resend plus
+ * the cross-org `/invitations/...` user-facing pending/accept/decline endpoints).
  * Permission-gated routes are protected with
  * `requireOrganizationPermission(MEMBERSHIP_*|INVITATION_MANAGE)`; public
  * accept has only a strict rate limit.
@@ -36,9 +46,10 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
   const invitationController = createMemberInvitationController(deps.memberInvitationService);
 
   return async (app) => {
+    const zodApplication = app.withTypeProvider<ZodTypeProvider>();
     // Membership CRUD
-    app.get<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/memberships',
+    zodApplication.get(
+      '/organization/memberships',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_READ)],
@@ -51,8 +62,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       },
       membershipController.listMemberships,
     );
-    app.get<{ Params: { organization_id: string; membership_id: string } }>(
-      '/organizations/:organization_id/memberships/:membership_id',
+    zodApplication.get<{ Params: { membership_id: string } }>(
+      '/organization/memberships/:membership_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_READ)],
@@ -65,8 +76,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       },
       membershipController.getMembership,
     );
-    app.get<{ Params: { organization_id: string; membership_id: string } }>(
-      '/organizations/:organization_id/memberships/:membership_id/permissions',
+    zodApplication.get<{ Params: { membership_id: string } }>(
+      '/organization/memberships/:membership_id/permissions',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_READ)],
@@ -79,8 +90,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       },
       membershipController.getMembershipPermissions,
     );
-    app.post<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/memberships',
+    zodApplication.post(
+      '/organization/memberships',
       {
         config: { idempotencyRequired: true },
         onRequest: [app.authenticate],
@@ -90,12 +101,13 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             'Adds a user as a member of the organization with a specific role. Requires MEMBERSHIP_MANAGE permission.',
           tags: ['Membership'],
+          body: createMembershipDto,
         },
       },
       membershipController.createMembership,
     );
-    app.patch<{ Params: { organization_id: string; membership_id: string } }>(
-      '/organizations/:organization_id/memberships/:membership_id',
+    zodApplication.patch<{ Params: { membership_id: string } }>(
+      '/organization/memberships/:membership_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)],
@@ -104,12 +116,13 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             'Updates a membership status (e.g. suspend or activate). Requires MEMBERSHIP_MANAGE permission.',
           tags: ['Membership'],
+          body: updateMembershipDto,
         },
       },
       membershipController.updateMembership,
     );
-    app.delete<{ Params: { organization_id: string; membership_id: string } }>(
-      '/organizations/:organization_id/memberships/:membership_id',
+    zodApplication.delete<{ Params: { membership_id: string } }>(
+      '/organization/memberships/:membership_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)],
@@ -122,8 +135,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       },
       membershipController.deleteMembership,
     );
-    app.post<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/leave',
+    zodApplication.post(
+      '/organization/leave',
       {
         // sec-r4-I3: self-service exit revokes the caller's membership row.
         // Without a cap, a session-token holder (or compromised script) could
@@ -140,8 +153,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       },
       membershipController.leaveOrganization,
     );
-    app.post<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/transfer-ownership',
+    zodApplication.post(
+      '/organization/transfer-ownership',
       {
         // sec-r4-I3: ownership transfer is effectively irreversible (no
         // automatic recovery if the new owner is malicious). Cap at the
@@ -155,15 +168,15 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             'Transfers ownership of the organization to another member. Only the current owner can perform this action.',
           tags: ['Membership'],
+          body: transferOwnershipDto,
         },
       },
       membershipController.transferOwnership,
     );
 
     // Member Invitations
-    const zodApplication = app.withTypeProvider<ZodTypeProvider>();
     zodApplication.get(
-      '/organizations/:organization_id/invitations',
+      '/organization/invitations',
       {
         schema: {
           summary: 'List invitations',
@@ -178,8 +191,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       },
       invitationController.listMemberInvitations,
     );
-    app.post<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/invitations',
+    zodApplication.post(
+      '/organization/invitations',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE)],
@@ -189,11 +202,12 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             'Sends an invitation email to join the organization. Requires INVITATION_MANAGE permission.',
           tags: ['Membership', 'Invitation'],
+          body: createMemberInvitationDto,
         },
       },
       invitationController.createMemberInvitation,
     );
-    app.post<{ Params: { invitation_id: string } }>(
+    zodApplication.post<{ Params: { invitation_id: string } }>(
       '/invitations/:invitation_id/accept',
       {
         // sec-T4: accept now requires authentication and (in the service)
@@ -207,12 +221,13 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             "Accepts a pending invitation using the invitation token. Requires authentication; the authenticated user's email must match the invitee email on the invitation. Creates a membership for the user.",
           tags: ['Membership', 'Invitation'],
+          body: acceptMemberInvitationDto,
         },
       },
       invitationController.acceptMemberInvitation,
     );
-    app.delete<{ Params: { organization_id: string; invitation_id: string } }>(
-      '/organizations/:organization_id/invitations/:invitation_id',
+    zodApplication.delete<{ Params: { invitation_id: string } }>(
+      '/organization/invitations/:invitation_id',
       {
         // sec-r4-I3: invitation revocation is an org-scoped admin mutation.
         // Cap per (org, actor) so a single admin cannot churn invitations and
@@ -228,8 +243,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       },
       invitationController.revokeMemberInvitation,
     );
-    app.post<{ Params: { organization_id: string; invitation_id: string } }>(
-      '/organizations/:organization_id/invitations/:invitation_id/resend',
+    zodApplication.post<{ Params: { invitation_id: string } }>(
+      '/organization/invitations/:invitation_id/resend',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.INVITATION_MANAGE)],
@@ -239,11 +254,12 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
           description:
             'Resends the invitation email with a new expiry. Requires INVITATION_MANAGE permission.',
           tags: ['Membership', 'Invitation'],
+          body: resendMemberInvitationDto,
         },
       },
       invitationController.resendInvitation,
     );
-    app.get(
+    zodApplication.get(
       '/invitations/pending',
       {
         onRequest: [app.authenticate],
@@ -256,7 +272,7 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       },
       invitationController.listPendingInvitations,
     );
-    app.post<{ Params: { invitation_id: string } }>(
+    zodApplication.post<{ Params: { invitation_id: string } }>(
       '/invitations/:invitation_id/decline',
       {
         // sec-r4-I3: decline targets a single invitation row by id; without a

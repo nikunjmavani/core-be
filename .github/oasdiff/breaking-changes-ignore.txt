@@ -1387,3 +1387,110 @@ api get /api/v1/notify/webhook
 api post /api/v1/notify/webhook
 api patch /api/v1/notify/webhook
 api delete /api/v1/notify/webhook
+
+# 17. Tenancy organization-scoped routes flattened — the `/organizations/{organization_id}`
+#     path segment was dropped (the organization now comes from the signed JWT `org`
+#     claim, not the path). oasdiff sees this as the OLD nested paths removed and the
+#     NEW flat paths added; both are intentional for this promotion. Each of the 38
+#     org-scoped routes is covered explicitly (removed-old + added-new) plus permissive
+#     substring catch-alls so any related finding on these paths is ignored. The route
+#     source, route-success-statuses.json, and OpenAPI registries are all updated
+#     together. The account-level routes `GET/POST /api/v1/tenancy/organizations` (list/
+#     create) and `GET /api/v1/tenancy/organizations/by-slug/{slug}` stay plural and are
+#     NOT ignored here (their catch-alls are trailing-slash / param-scoped so they never
+#     match the bare plural routes).
+#     Removed old paths:
+api delete /api/v1/tenancy/organizations/{organization_id} api path removed without deprecation
+api delete /api/v1/tenancy/organizations/{organization_id}/api-keys/{api_key_id} api path removed without deprecation
+api delete /api/v1/tenancy/organizations/{organization_id}/invitations/{invitation_id} api path removed without deprecation
+api delete /api/v1/tenancy/organizations/{organization_id}/logo api path removed without deprecation
+api delete /api/v1/tenancy/organizations/{organization_id}/memberships/{membership_id} api path removed without deprecation
+api delete /api/v1/tenancy/organizations/{organization_id}/notification-policies/{policy_id} api path removed without deprecation
+api delete /api/v1/tenancy/organizations/{organization_id}/roles/{role_id} api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id} api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/api-keys api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/api-keys/{api_key_id} api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/audit-logs api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/invitations api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/memberships api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/memberships/{membership_id} api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/memberships/{membership_id}/permissions api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/notification-policies api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/notification-policies/{policy_id} api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/roles api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/roles/{role_id} api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/roles/{role_id}/permissions api path removed without deprecation
+api get /api/v1/tenancy/organizations/{organization_id}/settings api path removed without deprecation
+api patch /api/v1/tenancy/organizations/{organization_id} api path removed without deprecation
+api patch /api/v1/tenancy/organizations/{organization_id}/api-keys/{api_key_id} api path removed without deprecation
+api patch /api/v1/tenancy/organizations/{organization_id}/memberships/{membership_id} api path removed without deprecation
+api patch /api/v1/tenancy/organizations/{organization_id}/notification-policies/{policy_id} api path removed without deprecation
+api patch /api/v1/tenancy/organizations/{organization_id}/roles/{role_id} api path removed without deprecation
+api patch /api/v1/tenancy/organizations/{organization_id}/settings api path removed without deprecation
+api post /api/v1/tenancy/organizations/{organization_id}/api-keys api path removed without deprecation
+api post /api/v1/tenancy/organizations/{organization_id}/api-keys/{api_key_id}/rotate api path removed without deprecation
+api post /api/v1/tenancy/organizations/{organization_id}/invitations api path removed without deprecation
+api post /api/v1/tenancy/organizations/{organization_id}/invitations/{invitation_id}/resend api path removed without deprecation
+api post /api/v1/tenancy/organizations/{organization_id}/leave api path removed without deprecation
+api post /api/v1/tenancy/organizations/{organization_id}/memberships api path removed without deprecation
+api post /api/v1/tenancy/organizations/{organization_id}/notification-policies api path removed without deprecation
+api post /api/v1/tenancy/organizations/{organization_id}/roles api path removed without deprecation
+api post /api/v1/tenancy/organizations/{organization_id}/transfer-ownership api path removed without deprecation
+api put /api/v1/tenancy/organizations/{organization_id}/logo api path removed without deprecation
+api put /api/v1/tenancy/organizations/{organization_id}/roles/{role_id}/permissions api path removed without deprecation
+#     Added new (flat) paths:
+api delete /api/v1/tenancy/organization api path added
+api delete /api/v1/tenancy/organization/api-keys/{api_key_id} api path added
+api delete /api/v1/tenancy/organization/invitations/{invitation_id} api path added
+api delete /api/v1/tenancy/organization/logo api path added
+api delete /api/v1/tenancy/organization/memberships/{membership_id} api path added
+api delete /api/v1/tenancy/organization/notification-policies/{policy_id} api path added
+api delete /api/v1/tenancy/organization/roles/{role_id} api path added
+api get /api/v1/tenancy/organization api path added
+api get /api/v1/tenancy/organization/api-keys api path added
+api get /api/v1/tenancy/organization/api-keys/{api_key_id} api path added
+api get /api/v1/tenancy/organization/audit-logs api path added
+api get /api/v1/tenancy/organization/invitations api path added
+api get /api/v1/tenancy/organization/memberships api path added
+api get /api/v1/tenancy/organization/memberships/{membership_id} api path added
+api get /api/v1/tenancy/organization/memberships/{membership_id}/permissions api path added
+api get /api/v1/tenancy/organization/notification-policies api path added
+api get /api/v1/tenancy/organization/notification-policies/{policy_id} api path added
+api get /api/v1/tenancy/organization/roles api path added
+api get /api/v1/tenancy/organization/roles/{role_id} api path added
+api get /api/v1/tenancy/organization/roles/{role_id}/permissions api path added
+api get /api/v1/tenancy/organization/settings api path added
+api patch /api/v1/tenancy/organization api path added
+api patch /api/v1/tenancy/organization/api-keys/{api_key_id} api path added
+api patch /api/v1/tenancy/organization/memberships/{membership_id} api path added
+api patch /api/v1/tenancy/organization/notification-policies/{policy_id} api path added
+api patch /api/v1/tenancy/organization/roles/{role_id} api path added
+api patch /api/v1/tenancy/organization/settings api path added
+api post /api/v1/tenancy/organization/api-keys api path added
+api post /api/v1/tenancy/organization/api-keys/{api_key_id}/rotate api path added
+api post /api/v1/tenancy/organization/invitations api path added
+api post /api/v1/tenancy/organization/invitations/{invitation_id}/resend api path added
+api post /api/v1/tenancy/organization/leave api path added
+api post /api/v1/tenancy/organization/memberships api path added
+api post /api/v1/tenancy/organization/notification-policies api path added
+api post /api/v1/tenancy/organization/roles api path added
+api post /api/v1/tenancy/organization/transfer-ownership api path added
+api put /api/v1/tenancy/organization/logo api path added
+api put /api/v1/tenancy/organization/roles/{role_id}/permissions api path added
+#     Permissive catch-alls (contiguous-substring match) covering any other finding
+#     emitted for the old removed tenancy org-scoped paths or the new flat ones (param
+#     pattern additions, idempotency-key header additions, success-status changes,
+#     response-property removals). Path-scoped on purpose — they only match findings
+#     naming these tenancy paths, so unrelated future breaking changes still fail the
+#     gate. Both old placeholder spellings ({organization_id} and the underscore-free
+#     {id} that older base specs emit) are covered by the literal path prefixes below
+#     (no param token, so they match either form). The flat catch-alls use a trailing
+#     slash (or PATCH/DELETE, which the plural account routes never use) so they never
+#     match the account-level `…/tenancy/organizations` list/create/by-slug routes:
+/api/v1/tenancy/organizations/{organization_id}
+/api/v1/tenancy/organizations/{id}
+api get /api/v1/tenancy/organization/
+api post /api/v1/tenancy/organization/
+api put /api/v1/tenancy/organization/
+api patch /api/v1/tenancy/organization
+api delete /api/v1/tenancy/organization

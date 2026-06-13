@@ -7,7 +7,7 @@ import {
   type UpdateOrganizationNotificationPolicyInput,
 } from './organization-notification-policy.dto.js';
 
-/** Parses raw `POST /organizations/:organization_id/notification-policies` body via {@link createOrganizationNotificationPolicyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
+/** Parses raw `POST /organization/notification-policies` body via {@link createOrganizationNotificationPolicyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateCreateOrganizationNotificationPolicy(
   data: unknown,
 ): CreateOrganizationNotificationPolicyInput {
@@ -22,7 +22,7 @@ export function validateCreateOrganizationNotificationPolicy(
   return result.data;
 }
 
-/** Parses raw `PATCH /organizations/:organization_id/notification-policies/:policy_id` body via {@link updateOrganizationNotificationPolicyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
+/** Parses raw `PATCH /organization/notification-policies/:policy_id` body via {@link updateOrganizationNotificationPolicyDto}; throws `ValidationError('errors:invalidInput')` on failure. */
 export function validateUpdateOrganizationNotificationPolicy(
   data: unknown,
 ): UpdateOrganizationNotificationPolicyInput {
