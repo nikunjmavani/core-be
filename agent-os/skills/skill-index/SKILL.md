@@ -5,11 +5,11 @@ description: Master index of all project skills with trigger conditions. Use thi
 
 # Skill index (core-be)
 
-Master directory of all **36 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
+Master directory of all **37 project skills**. **Consult this skill first** to determine which skill(s) to invoke based on what you just changed or are about to change.
 
 For **Cursor-built-in** skills (`~/.cursor/skills-cursor/`), see **cursor-global-skills**.
 
-## Project skills (36)
+## Project skills (37)
 
 | Skill                          | Path                                                                      |
 | ------------------------------ | ------------------------------------------------------------------------- |
@@ -202,7 +202,7 @@ After completing any task, scan the changes and invoke matching skills:
 
 ### Setup infra (third-party providers)
 
-- **Trigger**: added, removed, or changed a third-party provider in the setup:infra flow (e.g. new provider in `tooling/setup/config.ts`, new `tooling/setup/providers/*.provider.ts`, or changes to PREVIEW_PROVIDERS, guide steps, or token instructions)
+- **Trigger**: added, removed, or changed a third-party provider in the setup:infra flow (e.g. new provider in `tooling/setup/setup.config.json`, new `tooling/setup/providers/*.provider.ts`, or changes to PREVIEW_PROVIDERS, guide steps, or token instructions)
 - **Action**: read and follow `setup-infra-maintainer` — run the full checklist so config schema, init defaults, secrets/env-secrets, orchestrator (preview, provision, check, status, rollback), guide, prerequisites, provider module, state, build-env-vars, and `docs/deployment/setup/setup-token-instructions.md` all stay in sync. Then run `pnpm typecheck` and `pnpm setup:infra:preview` to verify.
 - **Follow-up**: if `docs/deployment/setup/setup-token-instructions.md` or other deployment docs were updated, invoke **docs-maintainer** to keep the docs index and cross-links correct.
 
@@ -299,7 +299,7 @@ The following `agent-os/rules/*.mdc` files auto-invoke skills based on file glob
 | `openapi-multilingual-sync.mdc`           | `src/shared/locales/*/openapi.json`, OpenAPI generator scripts                                                                                                                      | openapi-multilingual                                                       |
 | `contract-test-maintainer-sync.mdc`       | `src/tests/contract/**`, payment/mail/storage infra, `tooling/vitest/contract.config.ts`                                                                                            | contract-test-maintainer                                                   |
 | `chaos-test-maintainer-sync.mdc`          | `src/tests/chaos/**`, `tooling/vitest/chaos.config.ts`, chaos provision, `docker-compose.yml`                                                                                       | chaos-test-maintainer                                                      |
-| `setup-infra-maintainer-sync.mdc`         | `tooling/setup/**/*.ts`, `tooling/setup.config.json`, `docs/deployment/setup/setup-token-instructions.md`                                                                           | setup-infra-maintainer                                                     |
+| `setup-infra-maintainer-sync.mdc`         | `tooling/setup/**/*.ts`, `tooling/setup/setup.config.json`, `docs/deployment/setup/setup-token-instructions.md`                                                                           | setup-infra-maintainer                                                     |
 
 **supabase-porting** = manual only (Supabase Edge Functions → core-be).
 

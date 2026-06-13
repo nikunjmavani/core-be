@@ -1,6 +1,6 @@
 ---
 description: When changing project identity (manifest, generated constants, workflows, OpenAPI locales, identity codegen), regenerate artifacts and use constants from project-identity.constants.ts — never duplicate slug or image names.
-globs: tooling/setup/setup.config.json, tooling/setup/codegen/**, src/shared/constants/project-identity.constants.ts, .github/workflows/**/*.yml, .github/sync.config.json, docker-bake.hcl, src/shared/locales/*/openapi.json
+globs: tooling/setup/setup.config.json, tooling/setup/codegen/**, src/shared/constants/project-identity.constants.ts, .github/workflows/**/*.yml, docker-bake.hcl, src/shared/locales/*/openapi.json
 alwaysApply: false
 ---
 
@@ -16,4 +16,4 @@ When you change any matched file:
 
 **In TypeScript** added or touched by your change: import from `@/shared/constants/project-identity.constants.js` per the table in `project-identity.mdc`. Do not introduce new `'core-be'`, `'core-be-api'`, or `'main'/'dev'` branch logic unless the constant already exists for that purpose.
 
-**Do not** hand-edit `project-identity.constants.ts` or `.github/sync.config.json`.
+**Do not** hand-edit `project-identity.constants.ts` or `.github/project-identity.env`.

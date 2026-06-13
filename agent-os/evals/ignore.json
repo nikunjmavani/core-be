@@ -1,0 +1,19 @@
+{
+  "_comment": "Allowlist for the referenced-path integrity check (check.ts, Check 9). These tokens look like repo paths but are intentionally absent from disk — gitignored, generated, or per-environment templates. Add an entry (exact token or path prefix) ONLY when a path is deliberately not committed; a real dead reference should be fixed, not ignored.",
+  "paths": [
+    ".env.development",
+    ".env.production",
+    ".env.local",
+    ".env.setup",
+    ".env.test",
+    "agent-os/mcp/mcp.json",
+    ".cursor/mcp.json",
+    ".mcp.json",
+    "docs/openapi/openapi.json",
+    "docs/postman-collection.json",
+    "src/shared/locales/fr/openapi.json",
+    "docs/openapi/openapi.fr.json",
+    "docs/reference/load-testing.md",
+    ".vscode/vitest.workspace.ts"
+  ]
+}
