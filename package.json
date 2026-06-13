@@ -151,6 +151,7 @@
     "tool:generate-project-identity:check": "tsx tooling/setup/codegen/generate-project-identity.ts --check",
     "tool:load-test-credentials": "tsx src/scripts/admin/load-test-credentials.ts",
     "tool:load-test-credential-pool": "tsx src/scripts/admin/load-test-credential-pool.ts",
+    "tool:backfill-personal-orgs": "tsx src/scripts/admin/backfill-personal-organizations.ts",
     "tool:admin-token": "tsx src/scripts/admin/admin-token.ts",
     "tool:worker-readiness": "tsx src/scripts/admin/worker-readiness.ts",
     "tool:project-structure-tree": "tsx src/scripts/codegen/generate-project-structure-tree.ts",

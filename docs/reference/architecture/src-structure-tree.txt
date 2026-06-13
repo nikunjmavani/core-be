@@ -683,7 +683,8 @@ src/
     │   │   │   │   │   ├── organization.routes.unit.test.ts
     │   │   │   │   │   ├── organization.serializer.unit.test.ts
     │   │   │   │   │   ├── organization.service.unit.test.ts
-    │   │   │   │   │   └── organization.validator.unit.test.ts
+    │   │   │   │   │   ├── organization.validator.unit.test.ts
+    │   │   │   │   │   └── personal-organization-provisioning.db.unit.test.ts
     │   │   │   ├── organization-api-key/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   ├── unit/
@@ -1228,6 +1229,7 @@ src/
     ├── admin/
     │   ├── admin-token.ts
     │   ├── audit-bcrypt-password-hashes.ts
+    │   ├── backfill-personal-organizations.ts
     │   ├── dlq-replay.ts
     │   ├── load-test-credential-pool.ts
     │   ├── load-test-credentials.ts
