@@ -188,6 +188,36 @@ export class WebhookRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * Like {@link findByPublicId} but takes a `FOR UPDATE` row lock so concurrent
+   * secret rotations serialize on the row (NOTIFY-11).
+   *
+   * @remarks
+   * - **Algorithm:** identical projection to `findByPublicId` plus `.for('update')`;
+   *   must run inside the org transaction opened by `withOrganizationDatabaseContext`.
+   * - **Failure modes:** none beyond Postgres errors; returns `null` when absent.
+   * - **Side effects:** acquires a row-level write lock held until the surrounding
+   *   transaction commits — a second rotation blocks here, then re-reads the
+   *   freshly-stamped `secret_rotated_at` and is correctly rejected by the gate.
+   * - **Notes:** the overlap window has a single previous-secret slot, so the lock
+   *   prevents two parallel rotations from both passing a stale read and clobbering it.
+   */
+  async findByPublicIdForUpdate(public_id: string, organization_id: number) {
+    const rows = await getRequestDatabase()
+      .select()
+      .from(webhooks)
+      .where(
+        and(
+          eq(webhooks.public_id, public_id),
+          eq(webhooks.organization_id, organization_id),
+          isNull(webhooks.deleted_at),
+        ),
+      )
+      .limit(1)
+      .for('update');
+    return rows[0] ?? null;
+  }
+
   async create(data: WebhookCreateData) {
     return runInsertWithPublicIdentifierRetry(async () => {
       const public_id = generatePublicId('webhook');
