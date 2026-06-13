@@ -1,16 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const headObjectMock = vi.fn();
+const headObjectResultMock = vi.fn();
 const getObjectMock = vi.fn();
 const deleteObjectMock = vi.fn();
 const copyObjectMock = vi.fn();
 
+// audit-#5: the sweep now consumes the discriminated `headObjectResult` so a transient outage
+// is never mistaken for an absent object. Test fixtures return `{ kind: 'found' | 'not_found' |
+// 'transient_error' }`.
 vi.mock('@/infrastructure/storage/storage.service.js', () => ({
-  headObject: (...arguments_: unknown[]) => headObjectMock(...arguments_),
+  headObjectResult: (...arguments_: unknown[]) => headObjectResultMock(...arguments_),
   getObjectLeadingBytes: (...arguments_: unknown[]) => getObjectMock(...arguments_),
   deleteObject: (...arguments_: unknown[]) => deleteObjectMock(...arguments_),
   copyObject: (...arguments_: unknown[]) => copyObjectMock(...arguments_),
 }));
+
+/** Build a discriminated `found` head result from legacy `{ contentType, contentLength }` shape. */
+function foundHead(metadata: {
+  contentType: string | undefined;
+  contentLength: number | undefined;
+}) {
+  return { kind: 'found', metadata } as const;
+}
 
 const findPendingUploadsOlderThanMock = vi.fn();
 const setUploadStatusByInternalIdMock = vi.fn();
@@ -71,7 +82,7 @@ const validPngBody = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
 
 describe('upload-pending-sweep.processor', () => {
   beforeEach(() => {
-    headObjectMock.mockReset();
+    headObjectResultMock.mockReset();
     getObjectMock.mockReset();
     deleteObjectMock.mockReset();
     copyObjectMock.mockReset().mockResolvedValue(undefined);
@@ -95,8 +106,9 @@ describe('upload-pending-sweep.processor', () => {
       autoConfirmedCount: 0,
       failedCount: 0,
       deletedCount: 0,
+      transientCount: 0,
     });
-    expect(headObjectMock).not.toHaveBeenCalled();
+    expect(headObjectResultMock).not.toHaveBeenCalled();
     expect(setUploadStatusByInternalIdMock).not.toHaveBeenCalled();
   });
 
@@ -107,7 +119,9 @@ describe('upload-pending-sweep.processor', () => {
       file_size: 2048,
     });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
-    headObjectMock.mockResolvedValueOnce({ contentType: 'image/png', contentLength: 2048 });
+    headObjectResultMock.mockResolvedValueOnce(
+      foundHead({ contentType: 'image/png', contentLength: 2048 }),
+    );
     getObjectMock.mockResolvedValueOnce({ body: validPngBody });
     deleteObjectMock.mockResolvedValueOnce(true);
     const databaseHandle = {} as never;
@@ -141,7 +155,9 @@ describe('upload-pending-sweep.processor', () => {
   it('auto-confirms when S3 omits the Content-Type but length matches', async () => {
     const row = makeRow({ id: 5, file_size: 999 });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
-    headObjectMock.mockResolvedValueOnce({ contentType: undefined, contentLength: 999 });
+    headObjectResultMock.mockResolvedValueOnce(
+      foundHead({ contentType: undefined, contentLength: 999 }),
+    );
     getObjectMock.mockResolvedValueOnce({ body: validPngBody });
     deleteObjectMock.mockResolvedValueOnce(true);
 
@@ -164,7 +180,7 @@ describe('upload-pending-sweep.processor', () => {
 
     const result = await runUploadPendingSweepJob({} as never);
 
-    expect(headObjectMock).not.toHaveBeenCalled();
+    expect(headObjectResultMock).not.toHaveBeenCalled();
     expect(copyObjectMock).not.toHaveBeenCalled();
     expect(markConfirmedByInternalIdMock).not.toHaveBeenCalled();
     expect(setUploadStatusByInternalIdMock).toHaveBeenCalledWith(expect.anything(), 99, 'FAILED');
@@ -175,7 +191,9 @@ describe('upload-pending-sweep.processor', () => {
   it('marks rows FAILED when magic bytes do not match declared content type', async () => {
     const row = makeRow({ id: 6, file_key: 'avatars/owner/spoof.png', file_size: 100 });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
-    headObjectMock.mockResolvedValueOnce({ contentType: 'image/png', contentLength: 100 });
+    headObjectResultMock.mockResolvedValueOnce(
+      foundHead({ contentType: 'image/png', contentLength: 100 }),
+    );
     getObjectMock.mockResolvedValueOnce({ body: Buffer.from('%PDF-1.4') });
     const databaseHandle = {} as never;
 
@@ -189,7 +207,9 @@ describe('upload-pending-sweep.processor', () => {
   it('marks rows FAILED when the S3 object content length does not match', async () => {
     const row = makeRow({ id: 2, file_key: 'avatars/owner/mismatch.png', file_size: 100 });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
-    headObjectMock.mockResolvedValueOnce({ contentType: 'image/png', contentLength: 50 });
+    headObjectResultMock.mockResolvedValueOnce(
+      foundHead({ contentType: 'image/png', contentLength: 50 }),
+    );
     const databaseHandle = {} as never;
 
     const result = await runUploadPendingSweepJob(databaseHandle);
@@ -202,7 +222,7 @@ describe('upload-pending-sweep.processor', () => {
   it('hard-deletes rows whose S3 object is missing', async () => {
     const row = makeRow({ id: 3, file_key: 'pending/avatars/owner/orphan.png' });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
-    headObjectMock.mockResolvedValueOnce(null);
+    headObjectResultMock.mockResolvedValueOnce({ kind: 'not_found' });
     deleteObjectMock.mockResolvedValueOnce(true);
     hardDeleteUploadsByInternalIdsMock.mockResolvedValueOnce(1);
     const databaseHandle = {} as never;
@@ -219,7 +239,7 @@ describe('upload-pending-sweep.processor', () => {
   it('still records the verdict when S3 delete reports failure (defensive log)', async () => {
     const row = makeRow({ id: 4 });
     findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
-    headObjectMock.mockResolvedValueOnce(null);
+    headObjectResultMock.mockResolvedValueOnce({ kind: 'not_found' });
     deleteObjectMock.mockResolvedValueOnce(false);
     hardDeleteUploadsByInternalIdsMock.mockResolvedValueOnce(1);
 
@@ -239,10 +259,10 @@ describe('upload-pending-sweep.processor', () => {
       makeRow({ id: 13, file_size: 300 }),
     ];
     findPendingUploadsOlderThanMock.mockResolvedValueOnce(rows);
-    headObjectMock
-      .mockResolvedValueOnce({ contentType: undefined, contentLength: 100 })
-      .mockResolvedValueOnce({ contentType: undefined, contentLength: 999 })
-      .mockResolvedValueOnce(null);
+    headObjectResultMock
+      .mockResolvedValueOnce(foundHead({ contentType: undefined, contentLength: 100 }))
+      .mockResolvedValueOnce(foundHead({ contentType: undefined, contentLength: 999 }))
+      .mockResolvedValueOnce({ kind: 'not_found' });
     getObjectMock.mockResolvedValueOnce({ body: validPngBody });
     // First delete: post-publish pending cleanup for the auto-confirmed row.
     // Second delete: orphan removal for the missing-object row.
@@ -256,7 +276,33 @@ describe('upload-pending-sweep.processor', () => {
       autoConfirmedCount: 1,
       failedCount: 1,
       deletedCount: 1,
+      transientCount: 0,
     });
+  });
+
+  // audit-#5: a transient HEAD failure must NOT hard-delete the row. The row is left PENDING
+  // (no S3 delete, no DB delete, not marked FAILED) for the next scheduled sweep.
+  it('leaves a row PENDING when the HEAD fails transiently (never orphan-deletes on an outage)', async () => {
+    const row = makeRow({ id: 21, file_key: 'pending/avatars/owner/outage.png' });
+    findPendingUploadsOlderThanMock.mockResolvedValueOnce([row]);
+    headObjectResultMock.mockResolvedValueOnce({
+      kind: 'transient_error',
+      cause: new Error('s3 timeout'),
+    });
+    const databaseHandle = {} as never;
+
+    const result = await runUploadPendingSweepJob(databaseHandle);
+
+    expect(deleteObjectMock).not.toHaveBeenCalled();
+    expect(hardDeleteUploadsByInternalIdsMock).toHaveBeenCalledWith(databaseHandle, []);
+    expect(setUploadStatusByInternalIdMock).not.toHaveBeenCalled();
+    expect(result.transientCount).toBe(1);
+    expect(result.deletedCount).toBe(0);
+    expect(result.failedCount).toBe(0);
+    expect(loggerMocks.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ uploadId: 21 }),
+      'upload-pending-sweep.transientHeadSkipped',
+    );
   });
 
   it('uses presign expiry + grace as the cutoff passed to the repository', async () => {

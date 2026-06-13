@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
+import { ExternalServiceError } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import {
@@ -478,6 +479,17 @@ export class UploadService {
         verified = await this.publishConfirmedObject(sourceKey, finalKey, row.mime_type);
       }
     } catch (error) {
+      // audit-#5: a transient storage failure (timeout / throttle / circuit-open / IAM) must NOT
+      // mark a valid upload FAILED. Re-throw it (surfaces as 503) so the client can retry confirm;
+      // the row stays PENDING and the sweeper / a retry reconciles it. Only genuine verification
+      // failures (not-found, type/size mismatch, magic-byte rejection) fall through to FAILED.
+      if (error instanceof ExternalServiceError) {
+        logger.warn(
+          { id: validatedPublicId, fileKey: sourceKey, error },
+          'upload.confirm.transientStorageError',
+        );
+        throw error;
+      }
       logger.warn(
         { id: validatedPublicId, fileKey: sourceKey, error },
         'upload.confirm.verifyFailed',

@@ -10,6 +10,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '@/shared/config/env.config.js';
 import { outboundCall } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { type S3HeadResult, isS3NotFoundError } from '@/infrastructure/storage/s3-error.util.js';
 
 const S3_BUCKET_NOT_CONFIGURED_MESSAGE = 'S3_BUCKET is not configured';
 
@@ -136,6 +137,48 @@ export async function headObject(
   } catch (error) {
     logger.error({ error, key, bucket }, 's3.headObject.failed');
     return null;
+  }
+}
+
+/**
+ * Discriminated `HeadObject` (audit-#5) used by destructive callers (the pending-upload sweep)
+ * so a transient outage is never mistaken for an absent object.
+ *
+ * @remarks
+ * - **Algorithm:** issues `HeadObjectCommand` via {@link outboundCall}; maps an explicit
+ *   `NoSuchKey`/404 to `not_found` and every other failure (timeout, throttle, circuit-open,
+ *   IAM denial, 5xx) to `transient_error` with the original cause.
+ * - **Failure modes:** never returns a `found` result for a failed call; throws only when
+ *   `S3_BUCKET` is unconfigured.
+ * - **Side effects:** single S3 HEAD; no writes.
+ */
+export async function headObjectResult(
+  key: string,
+): Promise<S3HeadResult<{ contentType: string | undefined; contentLength: number | undefined }>> {
+  const bucket = env.S3_BUCKET;
+  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
+
+  try {
+    const metadata = await outboundCall({
+      name: 's3',
+      operation: async (signal) => {
+        const response = await getS3Client().send(
+          new HeadObjectCommand({ Bucket: bucket, Key: key }),
+          { abortSignal: signal },
+        );
+        return {
+          contentType: response.ContentType,
+          contentLength: response.ContentLength,
+        };
+      },
+    });
+    return { kind: 'found', metadata };
+  } catch (error) {
+    if (isS3NotFoundError(error)) {
+      return { kind: 'not_found' };
+    }
+    logger.error({ error, key, bucket }, 's3.headObject.transient');
+    return { kind: 'transient_error', cause: error };
   }
 }
 
