@@ -732,7 +732,7 @@
       }
     }
   },
-  "GET /api/v1/billing/organizations/:organization_id/subscriptions": {
+  "GET /api/v1/billing/subscriptions": {
     "responses": {
       "200": {
         "data": [],
@@ -764,7 +764,7 @@
       }
     }
   },
-  "GET /api/v1/billing/organizations/:organization_id/subscriptions/:subscription_id": {
+  "GET /api/v1/billing/subscriptions/:subscription_id": {
     "responses": {
       "200": {
         "data": {
@@ -2332,7 +2332,7 @@
       }
     }
   },
-  "PATCH /api/v1/billing/organizations/:organization_id/subscriptions/:subscription_id": {
+  "PATCH /api/v1/billing/subscriptions/:subscription_id": {
     "request_body": {},
     "responses": {
       "200": {
@@ -3999,7 +3999,7 @@
       }
     }
   },
-  "POST /api/v1/billing/organizations/:organization_id/subscriptions": {
+  "POST /api/v1/billing/subscriptions": {
     "request_body": {
       "plan_id": "pln_example00000000000000",
       "billing_cycle": "monthly"
@@ -4069,7 +4069,7 @@
       }
     }
   },
-  "POST /api/v1/billing/organizations/:organization_id/subscriptions/:subscription_id/cancel": {
+  "POST /api/v1/billing/subscriptions/:subscription_id/cancel": {
     "responses": {
       "201": {
         "data": {
@@ -4136,7 +4136,7 @@
       }
     }
   },
-  "POST /api/v1/billing/organizations/:organization_id/subscriptions/:subscription_id/change-plan": {
+  "POST /api/v1/billing/subscriptions/:subscription_id/change-plan": {
     "request_body": {
       "plan_id": "pln_example00000000000000"
     },
@@ -4227,7 +4227,7 @@
       }
     }
   },
-  "POST /api/v1/billing/organizations/:organization_id/subscriptions/:subscription_id/resume": {
+  "POST /api/v1/billing/subscriptions/:subscription_id/resume": {
     "responses": {
       "201": {
         "data": {

@@ -83,26 +83,28 @@ describe('Billing subscription — happy paths (mocked payment provider)', () =>
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { user, organization, token };
   }
 
-  it('POST /billing/organizations/:id/subscriptions creates a subscription (201)', async () => {
-    const { organization, token } = await createAuthorizedBillingContext();
+  it('POST /billing/subscriptions creates a subscription (201)', async () => {
+    const { token } = await createAuthorizedBillingContext();
     const plan = await createTestPlan();
 
     const response = await injectAuthenticatedOrganizationMutation(app, {
       method: 'POST',
-      url: testApiPath(`/billing/organizations/${organization.public_id}/subscriptions`),
+      url: testApiPath('/billing/subscriptions'),
       token,
-      organizationPublicId: organization.public_id,
       headers: { 'idempotency-key': `subscription-happy-${randomUUID()}` },
       payload: { plan_id: plan.public_id, billing_cycle: 'monthly' },
     });
     expect(response.statusCode, response.body).toBe(201);
   });
 
-  it('PATCH /billing/organizations/:id/subscriptions/:subscription_id returns the subscription (200)', async () => {
+  it('PATCH /billing/subscriptions/:subscription_id returns the subscription (200)', async () => {
     const { organization, token } = await createAuthorizedBillingContext();
     const plan = await createTestPlan();
     const subscription = await createTestSubscription({
@@ -113,11 +115,8 @@ describe('Billing subscription — happy paths (mocked payment provider)', () =>
 
     const response = await injectAuthenticatedOrganizationMutation(app, {
       method: 'PATCH',
-      url: testApiPath(
-        `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}`,
-      ),
+      url: testApiPath(`/billing/subscriptions/${subscription.public_id}`),
       token,
-      organizationPublicId: organization.public_id,
       payload: {},
     });
     expect(response.statusCode, response.body).toBe(200);

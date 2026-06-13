@@ -61,16 +61,16 @@ Legend:
 ================================================================================
 
   — Sub Domains —
-  GET    /api/v1/billing/organizations/:organization_id/subscriptions PERM: subscription:read
-  POST   /api/v1/billing/organizations/:organization_id/subscriptions PERM: subscription:manage
-  GET    /api/v1/billing/organizations/:organization_id/subscriptions/:subscription_id PERM: subscription:read
-  PATCH  /api/v1/billing/organizations/:organization_id/subscriptions/:subscription_id PERM: subscription:manage
-  POST   /api/v1/billing/organizations/:organization_id/subscriptions/:subscription_id/cancel PERM: subscription:manage
-  POST   /api/v1/billing/organizations/:organization_id/subscriptions/:subscription_id/change-plan PERM: subscription:manage
-  POST   /api/v1/billing/organizations/:organization_id/subscriptions/:subscription_id/resume PERM: subscription:manage
   GET    /api/v1/billing/plans                                   PUBLIC
   GET    /api/v1/billing/plans/:plan_id                          PUBLIC
   POST   /api/v1/billing/stripe/webhook                          PUBLIC
+  GET    /api/v1/billing/subscriptions                           PERM: subscription:read
+  POST   /api/v1/billing/subscriptions                           PERM: subscription:manage
+  GET    /api/v1/billing/subscriptions/:subscription_id          PERM: subscription:read
+  PATCH  /api/v1/billing/subscriptions/:subscription_id          PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions/:subscription_id/cancel   PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions/:subscription_id/change-plan PERM: subscription:manage
+  POST   /api/v1/billing/subscriptions/:subscription_id/resume   PERM: subscription:manage
   POST   /api/v1/billing/webhook                                 PUBLIC
 
 ================================================================================
@@ -227,7 +227,7 @@ Legend:
 
   Optional on all POST/PUT/PATCH/DELETE when header is present (24h Redis cache).
   Strongly recommended (forwarded to Stripe) on:
-    POST /api/v1/billing/organizations/{organization_id}/subscriptions
+    POST /api/v1/billing/subscriptions
 
   See docs/reference/reliability/idempotency.md and OpenAPI operation descriptions.
 

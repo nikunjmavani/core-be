@@ -157,11 +157,9 @@ export const routeSchemaMap: Record<string, ZodTypeAny> = {
     putMemberRolePermissionsDto,
 
   // ── Billing: Subscriptions ──
-  'POST /api/v1/billing/organizations/{organization_id}/subscriptions': CreateSubscriptionDto,
-  'PATCH /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}':
-    UpdateSubscriptionDto,
-  'POST /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/change-plan':
-    ChangePlanDto,
+  'POST /api/v1/billing/subscriptions': CreateSubscriptionDto,
+  'PATCH /api/v1/billing/subscriptions/{subscription_id}': UpdateSubscriptionDto,
+  'POST /api/v1/billing/subscriptions/{subscription_id}/change-plan': ChangePlanDto,
 
   // ── Webhooks ──
   'POST /api/v1/notify/organizations/{organization_id}/webhooks': CreateWebhookDto,

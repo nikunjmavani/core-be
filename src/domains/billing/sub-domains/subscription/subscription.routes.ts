@@ -19,8 +19,8 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
 
   return async (app) => {
     const zodApplication = app.withTypeProvider<ZodTypeProvider>();
-    zodApplication.get<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/subscriptions',
+    zodApplication.get(
+      '/subscriptions',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
@@ -33,8 +33,8 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       },
       controller.listSubscriptions,
     );
-    zodApplication.get<{ Params: { organization_id: string; subscription_id: string } }>(
-      '/organizations/:organization_id/subscriptions/:subscription_id',
+    zodApplication.get<{ Params: { subscription_id: string } }>(
+      '/subscriptions/:subscription_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(BILLING_PERMISSIONS.SUBSCRIPTION_READ)],
@@ -47,8 +47,8 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       },
       controller.getSubscription,
     );
-    zodApplication.post<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/subscriptions',
+    zodApplication.post(
+      '/subscriptions',
       {
         config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
@@ -63,8 +63,8 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       },
       controller.createSubscription,
     );
-    zodApplication.patch<{ Params: { organization_id: string; subscription_id: string } }>(
-      '/organizations/:organization_id/subscriptions/:subscription_id',
+    zodApplication.patch<{ Params: { subscription_id: string } }>(
+      '/subscriptions/:subscription_id',
       {
         config: { ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
@@ -79,8 +79,8 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       },
       controller.updateSubscription,
     );
-    zodApplication.post<{ Params: { organization_id: string; subscription_id: string } }>(
-      '/organizations/:organization_id/subscriptions/:subscription_id/change-plan',
+    zodApplication.post<{ Params: { subscription_id: string } }>(
+      '/subscriptions/:subscription_id/change-plan',
       {
         config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         schema: {
@@ -95,8 +95,8 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       },
       controller.changePlan,
     );
-    zodApplication.post<{ Params: { organization_id: string; subscription_id: string } }>(
-      '/organizations/:organization_id/subscriptions/:subscription_id/cancel',
+    zodApplication.post<{ Params: { subscription_id: string } }>(
+      '/subscriptions/:subscription_id/cancel',
       {
         config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         onRequest: [app.authenticate],
@@ -110,8 +110,8 @@ export function subscriptionRoutes(service: SubscriptionService): FastifyPluginA
       },
       controller.cancelSubscription,
     );
-    zodApplication.post<{ Params: { organization_id: string; subscription_id: string } }>(
-      '/organizations/:organization_id/subscriptions/:subscription_id/resume',
+    zodApplication.post<{ Params: { subscription_id: string } }>(
+      '/subscriptions/:subscription_id/resume',
       {
         config: { idempotencyRequired: true, ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config },
         onRequest: [app.authenticate],

@@ -109,8 +109,8 @@ function organizationPath(suffix: string): string {
   return `${API_PREFIX}/tenancy/organizations/${requireOrganizationId()}${suffix}`;
 }
 
-function billingOrganizationPath(suffix: string): string {
-  return `${API_PREFIX}/billing/organizations/${requireOrganizationId()}${suffix}`;
+function billingPath(suffix: string): string {
+  return `${API_PREFIX}/billing${suffix}`;
 }
 
 function notifyOrganizationPath(suffix: string): string {
@@ -361,8 +361,8 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: [200, 404],
     },
     {
-      name: 'GET /api/v1/billing/organizations/:organization_id/subscriptions',
-      path: () => billingOrganizationPath('/subscriptions'),
+      name: 'GET /api/v1/billing/subscriptions',
+      path: () => billingPath('/subscriptions'),
       needsOrganization: true,
       expectedStatus: 200,
     },

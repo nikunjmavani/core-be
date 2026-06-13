@@ -81,10 +81,12 @@ async function alignUserWithSuperAdminAllowlist(userPublicId: string): Promise<v
 export async function generateTestToken(options: {
   userId: string;
   role?: string;
+  organizationPublicId?: string;
 }): Promise<string> {
   const token = await signAccessToken({
     userId: options.userId,
     role: options.role ?? 'user',
+    ...(options.organizationPublicId ? { organizationPublicId: options.organizationPublicId } : {}),
   });
   await persistActiveSessionForToken(options.userId, token);
   return token;
@@ -100,10 +102,12 @@ export async function generateTestToken(options: {
 export async function generateTestTokenAndSession(options: {
   userId: string;
   role?: string;
+  organizationPublicId?: string;
 }): Promise<{ token: string; sessionPublicId: string }> {
   const token = await signAccessToken({
     userId: options.userId,
     role: options.role ?? 'user',
+    ...(options.organizationPublicId ? { organizationPublicId: options.organizationPublicId } : {}),
   });
   const sessionPublicId = await persistActiveSessionForToken(options.userId, token);
   if (!sessionPublicId) {
@@ -139,11 +143,14 @@ export async function generateUserToken(userId = 'test-user'): Promise<string> {
 export async function generateTestTokenWithActiveSession(
   application: FastifyInstance,
   userPublicId: string,
-  options?: { role?: string },
+  options?: { role?: string; organizationPublicId?: string },
 ): Promise<{ token: string; sessionPublicId: string }> {
   const token = await signAccessToken({
     userId: userPublicId,
     role: options?.role ?? 'user',
+    ...(options?.organizationPublicId
+      ? { organizationPublicId: options.organizationPublicId }
+      : {}),
   });
   const tokenHash = createHash('sha256').update(token).digest('hex');
   const expiresAt = new Date(Date.now() + env.AUTH_SESSION_MAX_AGE_DAYS * MILLISECONDS_PER_DAY);
