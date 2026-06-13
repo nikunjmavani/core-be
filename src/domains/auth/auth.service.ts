@@ -22,6 +22,7 @@ import type { AuthSessionService } from './sub-domains/auth-session/auth-session
 import type { MfaService } from './sub-domains/auth-mfa/auth-mfa.service.js';
 import { validateLogin } from './auth.validator.js';
 import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js';
+import { resolveDefaultActiveOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 
 const IP_FAILED_LOGIN_KEY_PREFIX = 'auth:failed_login:ip:';
 
@@ -259,6 +260,8 @@ export class AuthService {
       throw new UnauthorizedError('errors:accountNotActive');
     }
 
+    const organizationPublicId = await resolveDefaultActiveOrganizationPublicId(user.id);
+
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
       role: resolveAccessTokenRoleForUser({
@@ -266,6 +269,7 @@ export class AuthService {
         status: user.status,
         isEmailVerified: user.is_email_verified,
       }),
+      organizationPublicId,
     });
 
     const rotated = await this.authSessionService.refreshSessionCredentials({
