@@ -196,7 +196,10 @@ export class OrganizationRepository extends BaseRepository {
 
   async create(data: {
     name: string;
-    slug: string;
+    /** Null for a personal organization (no human handle); kebab string for a team. */
+    slug: string | null;
+    /** `PERSONAL` or `TEAM` (defaults to `TEAM` for the public create endpoint). */
+    type?: string;
     owner_user_id: number;
     created_by_user_id: number | null;
   }) {
@@ -206,6 +209,7 @@ export class OrganizationRepository extends BaseRepository {
         public_id,
         name: data.name,
         slug: data.slug,
+        type: data.type ?? 'TEAM',
         owner_user_id: data.owner_user_id,
         created_by_user_id: data.created_by_user_id ?? undefined,
         updated_by_user_id: data.created_by_user_id ?? undefined,
