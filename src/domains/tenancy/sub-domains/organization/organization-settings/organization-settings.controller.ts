@@ -4,8 +4,8 @@ import {
   getActingUserPublicId,
   getRequestIdentifier,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
-import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationSettingsService } from './organization-settings.service.js';
 
 /**
@@ -16,19 +16,13 @@ import type { OrganizationSettingsService } from './organization-settings.servic
 export function createOrganizationSettingsController(service: OrganizationSettingsService) {
   return {
     getSettings: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.get(organizationId);
       return successResponse(data, getRequestIdentifier(request));
     },
     updateSettings: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const data = await service.update(organizationId, request.body, getActingUserPublicId(auth));
       return successResponse(data, getRequestIdentifier(request));
     },

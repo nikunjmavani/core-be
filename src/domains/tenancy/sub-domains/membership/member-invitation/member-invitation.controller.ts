@@ -5,6 +5,7 @@ import {
   getRequestIdentifier,
   requireAuth,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
 import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MemberInvitationService } from './member-invitation.service.js';
@@ -18,10 +19,7 @@ import type { MemberInvitationService } from './member-invitation.service.js';
 export function createMemberInvitationController(service: MemberInvitationService) {
   return {
     listMemberInvitations: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const result = await service.list({
         organization_public_id: organizationId,
         query: request.query,
@@ -35,10 +33,7 @@ export function createMemberInvitationController(service: MemberInvitationServic
     },
     createMemberInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const result = await service.create(organizationId, request.body, auth.userId);
       reply.code(201);
       return successResponse(
@@ -65,10 +60,7 @@ export function createMemberInvitationController(service: MemberInvitationServic
     },
     revokeMemberInvitation: async (request: FastifyRequest, reply: FastifyReply) => {
       requirePrincipal(request);
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       // sec-new-T2: reject malformed path params before reaching the service layer.
       const { invitation_id: rawRevokeId } = request.params as { invitation_id: string };
       const invitationId = validatePublicIdParam(rawRevokeId ?? '', 'invitation_id');
@@ -76,10 +68,7 @@ export function createMemberInvitationController(service: MemberInvitationServic
       return reply.code(204).send();
     },
     resendInvitation: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       // sec-new-T2: reject malformed path params before reaching the service layer.
       const { invitation_id: rawResendId } = request.params as { invitation_id: string };
       const invitationId = validatePublicIdParam(rawResendId ?? '', 'invitation_id');

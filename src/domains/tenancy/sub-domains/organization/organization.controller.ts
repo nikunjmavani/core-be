@@ -5,8 +5,8 @@ import {
   getRequestIdentifier,
   requireAuth,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
-import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { OrganizationService } from './organization.service.js';
 import type { AuditService } from '@/domains/audit/audit.service.js';
 import { AuditSerializer } from '@/domains/audit/audit.serializer.js';
@@ -35,10 +35,7 @@ export function createOrganizationController(
     },
     getOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requireAuth(request);
-      const id = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'organization_id',
-      );
+      const id = resolveActiveOrganizationId(request);
       const data = await service.getByPublicId(id, auth.userId, auth.role);
       return successResponse(data, getRequestIdentifier(request));
     },
@@ -56,46 +53,31 @@ export function createOrganizationController(
     },
     updateOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const id = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'organization_id',
-      );
+      const id = resolveActiveOrganizationId(request);
       const data = await service.update(id, request.body, getActingUserPublicId(auth));
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteOrganization: async (request: FastifyRequest, reply: FastifyReply) => {
       requirePrincipal(request);
-      const id = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'organization_id',
-      );
+      const id = resolveActiveOrganizationId(request);
       await service.delete(id);
       return reply.code(204).send();
     },
     uploadLogo: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const id = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'organization_id',
-      );
+      const id = resolveActiveOrganizationId(request);
       const data = await service.uploadLogo(id, request.body, getActingUserPublicId(auth));
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteLogo: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const id = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'organization_id',
-      );
+      const id = resolveActiveOrganizationId(request);
       await service.deleteLogo(id, getActingUserPublicId(auth));
       return reply.code(204).send();
     },
     listOrganizationAuditLogs: async (request: FastifyRequest, _reply: FastifyReply) => {
       if (!auditService) throw new Error('Audit service not configured');
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const query = {
         ...(request.query as Record<string, unknown>),
         organization_id: organizationId,

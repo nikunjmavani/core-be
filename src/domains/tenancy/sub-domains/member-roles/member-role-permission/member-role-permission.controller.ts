@@ -4,8 +4,8 @@ import {
   getActingUserPublicId,
   getRequestIdentifier,
   requirePrincipal,
+  resolveActiveOrganizationId,
 } from '@/shared/utils/http/request.util.js';
-import { validatePublicIdParam } from '@/shared/utils/identity/public-id-param.util.js';
 import type { MemberRolePermissionService } from './member-role-permission.service.js';
 import { serializeMemberRolePermission } from './member-role-permission.serializer.js';
 
@@ -18,10 +18,7 @@ import { serializeMemberRolePermission } from './member-role-permission.serializ
 export function createMemberRolePermissionController(service: MemberRolePermissionService) {
   return {
     listRolePermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'organization_id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const { role_id: roleId } = request.params as { role_id: string };
       const rows = await service.list(organizationId, roleId);
       const data = rows.map((row) => serializeMemberRolePermission(row, roleId));
@@ -34,10 +31,7 @@ export function createMemberRolePermissionController(service: MemberRolePermissi
     },
     putRolePermissions: async (request: FastifyRequest, _reply: FastifyReply) => {
       const auth = requirePrincipal(request);
-      const organizationId = validatePublicIdParam(
-        (request.params as { organization_id: string }).organization_id ?? '',
-        'organization_id',
-      );
+      const organizationId = resolveActiveOrganizationId(request);
       const { role_id: roleId } = request.params as { role_id: string };
       const rows = await service.put(
         organizationId,
