@@ -151,6 +151,7 @@ export class OrganizationService {
       public_id: organization.public_id,
       name: organization.name,
       slug: organization.slug,
+      type: organization.type,
       stripe_customer_id: organization.stripe_customer_id,
     };
   }
@@ -179,6 +180,7 @@ export class OrganizationService {
       public_id: organization.public_id,
       name: organization.name,
       slug: organization.slug,
+      type: organization.type,
       stripe_customer_id: organization.stripe_customer_id,
       owner_user_id: organization.owner_user_id,
     };
@@ -207,6 +209,7 @@ export class OrganizationService {
       public_id: organization.public_id,
       name: organization.name,
       slug: organization.slug,
+      type: organization.type,
       stripe_customer_id: organization.stripe_customer_id,
     };
   }
@@ -219,6 +222,7 @@ export class OrganizationService {
       public_id: organization.public_id,
       name: organization.name,
       slug: organization.slug,
+      type: organization.type,
       stripe_customer_id: organization.stripe_customer_id,
     };
   }
@@ -428,6 +432,11 @@ export class OrganizationService {
     const organization = await withOrganizationDatabaseContext(public_id, async () => {
       const found = await this.repository.findByPublicId(public_id);
       if (!found) throw new NotFoundError('Organization');
+      // A PERSONAL organization is the user's own account-level workspace — it is never
+      // deletable on its own; it cascades only when the account itself is deleted.
+      if (found.type === 'PERSONAL') {
+        throw new ConflictError('errors:personalOrganizationImmutable');
+      }
       const marked = await this.repository.markDeletionStarted(public_id);
       if (!(marked || found.deletion_started_at)) {
         throw new NotFoundError('Organization');

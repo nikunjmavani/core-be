@@ -36,6 +36,7 @@ export interface OrganizationBillingContext {
   public_id: string;
   name: string;
   slug: string | null;
+  type: string;
   stripe_customer_id: string | null;
 }
 
