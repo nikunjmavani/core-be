@@ -77,7 +77,13 @@ describe('Notify Domain — Integration', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat webhook routes resolve the organization from the JWT `org` claim, so
+    // the bearer must embed `organizationPublicId` to reach (and pass) the
+    // webhook permission preHandler and the org-scoped controller.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { user, organization, role, token };
   }
 
@@ -167,11 +173,11 @@ describe('Notify Domain — Integration', () => {
 
   // ─── Webhooks ─────────────────────────────────────────────────
 
-  describe('GET /api/v1/notify/organizations/:id/webhooks', () => {
+  describe('GET /api/v1/notify/webhooks', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'GET',
-        url: testApiPath('/notify/organizations/some-id/webhooks'),
+        url: testApiPath('/notify/webhooks'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -179,32 +185,37 @@ describe('Notify Domain — Integration', () => {
     it('should return 403 without webhook read permission', async () => {
       const { organization } = await createAuthorizedNotifyContext();
       const user = await createTestUser({ email: 'noperm@test.com' });
-      const token = await generateTestToken({ userId: user.public_id });
+      // Scope the bearer to the org via the `org` claim so the request reaches
+      // the webhook permission check; the user has no membership → 403.
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+        url: testApiPath('/notify/webhooks'),
         token: token,
       });
       expect(response.statusCode).toBe(403);
     });
 
     it('should return webhooks with permission', async () => {
-      const { organization, token } = await createAuthorizedNotifyContext();
+      const { token } = await createAuthorizedNotifyContext();
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+        url: testApiPath('/notify/webhooks'),
         token: token,
       });
       expect(response.statusCode).toBe(200);
     });
   });
 
-  describe('POST /api/v1/notify/organizations/:id/webhooks', () => {
+  describe('POST /api/v1/notify/webhooks', () => {
     it('should return 400 or 422 for invalid webhook payload', async () => {
-      const { organization, token } = await createAuthorizedNotifyContext();
+      const { token } = await createAuthorizedNotifyContext();
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+        url: testApiPath('/notify/webhooks'),
         token: token,
         payload: { url: 'not-a-url', events: [] },
       });
@@ -225,10 +236,13 @@ describe('Notify Domain — Integration', () => {
         organizationId: organization.id,
         roleId: readRole.id,
       });
-      const token = await generateTestToken({ userId: user.public_id });
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+        url: testApiPath('/notify/webhooks'),
         token: token,
         payload: {},
       });
@@ -238,11 +252,11 @@ describe('Notify Domain — Integration', () => {
 
   // ─── Webhook Test Delivery ──────────────────────────────────
 
-  describe('POST /api/v1/notify/organizations/:id/webhooks/:webhook_id/test', () => {
+  describe('POST /api/v1/notify/webhooks/:webhook_id/test', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath('/notify/organizations/some-id/webhooks/some-webhook-id/test'),
+        url: testApiPath('/notify/webhooks/some-webhook-id/test'),
       });
       expect(response.statusCode).toBe(401);
     });
@@ -260,7 +274,10 @@ describe('Notify Domain — Integration', () => {
         organizationId: organization.id,
         roleId: readRole.id,
       });
-      const readToken = await generateTestToken({ userId: readUser.public_id });
+      const readToken = await generateTestToken({
+        userId: readUser.public_id,
+        organizationPublicId: organization.public_id,
+      });
 
       const webhook = await createTestWebhook({
         organizationId: organization.id,
@@ -269,9 +286,7 @@ describe('Notify Domain — Integration', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/test`,
-        ),
+        url: testApiPath(`/notify/webhooks/${webhook.public_id}/test`),
         token: readToken,
       });
       expect(response.statusCode).toBe(403);
@@ -289,9 +304,7 @@ describe('Notify Domain — Integration', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/notify/organizations/${organization.public_id}/webhooks/${webhook.public_id}/test`,
-        ),
+        url: testApiPath(`/notify/webhooks/${webhook.public_id}/test`),
         token: token,
       });
 
@@ -305,12 +318,10 @@ describe('Notify Domain — Integration', () => {
     });
 
     it('should return 404 for non-existent webhook', async () => {
-      const { organization, token } = await createAuthorizedNotifyContext();
+      const { token } = await createAuthorizedNotifyContext();
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/notify/organizations/${organization.public_id}/webhooks/whk_wwwwwwwwwwwwwwwwwwwww/test`,
-        ),
+        url: testApiPath('/notify/webhooks/whk_wwwwwwwwwwwwwwwwwwwww/test'),
         token: token,
       });
       expect(response.statusCode).toBe(404);
@@ -319,20 +330,20 @@ describe('Notify Domain — Integration', () => {
 
   // ─── Webhook Events ───────────────────────────────────────────
 
-  describe('GET /api/v1/notify/organizations/:id/webhook-events', () => {
+  describe('GET /api/v1/notify/webhook-events', () => {
     it('should return 401 without authentication', async () => {
       const response = await injectUnauthenticated(app, {
         method: 'GET',
-        url: testApiPath('/notify/organizations/some-id/webhook-events'),
+        url: testApiPath('/notify/webhook-events'),
       });
       expect(response.statusCode).toBe(401);
     });
 
     it('should return webhook events with permission', async () => {
-      const { organization, token } = await createAuthorizedNotifyContext();
+      const { token } = await createAuthorizedNotifyContext();
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/notify/organizations/${organization.public_id}/webhook-events`),
+        url: testApiPath('/notify/webhook-events'),
         token: token,
       });
       expect(response.statusCode).toBe(200);

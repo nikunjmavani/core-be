@@ -26,8 +26,7 @@ export const routeQuerySchemaMap: Record<string, ZodTypeAny> = {
   'GET /api/v1/tenancy/organizations/{organization_id}/roles': listMemberRolesQueryDto,
   'GET /api/v1/notify/notifications': listNotificationsQueryDto,
   'GET /api/v1/tenancy/organizations/{organization_id}/invitations': listMemberInvitationsQueryDto,
-  'GET /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}/delivery-attempts':
-    listLimitQuerySchema,
+  'GET /api/v1/notify/webhooks/{webhook_id}/delivery-attempts': listLimitQuerySchema,
   'GET /api/v1/auth/oauth/{provider}/callback': OauthCallbackQueryDto,
 };
 

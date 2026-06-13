@@ -113,8 +113,8 @@ function billingPath(suffix: string): string {
   return `${API_PREFIX}/billing${suffix}`;
 }
 
-function notifyOrganizationPath(suffix: string): string {
-  return `${API_PREFIX}/notify/organizations/${requireOrganizationId()}${suffix}`;
+function notifyPath(suffix: string): string {
+  return `${API_PREFIX}/notify${suffix}`;
 }
 
 async function runProbe(probe: RouteProbe): Promise<void> {
@@ -380,14 +380,14 @@ function buildDomainProbes(): RouteProbe[] {
       expectedStatus: [200, 403],
     },
     {
-      name: 'GET /api/v1/notify/organizations/:organization_id/webhooks',
-      path: () => notifyOrganizationPath('/webhooks'),
+      name: 'GET /api/v1/notify/webhooks',
+      path: () => notifyPath('/webhooks'),
       needsOrganization: true,
       expectedStatus: 200,
     },
     {
-      name: 'GET /api/v1/notify/organizations/:organization_id/webhook-events',
-      path: () => notifyOrganizationPath('/webhook-events'),
+      name: 'GET /api/v1/notify/webhook-events',
+      path: () => notifyPath('/webhook-events'),
       needsOrganization: true,
       expectedStatus: 200,
     },

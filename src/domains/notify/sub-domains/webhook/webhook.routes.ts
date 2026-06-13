@@ -25,8 +25,8 @@ export function webhookRoutes(
   const webhookEventController = createWebhookEventController(webhookEventService);
 
   return async (app) => {
-    app.get<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/webhook-events',
+    app.get(
+      '/webhook-events',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_READ)],
@@ -39,8 +39,8 @@ export function webhookRoutes(
       },
       webhookEventController.listWebhookEvents,
     );
-    app.get<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/webhooks',
+    app.get(
+      '/webhooks',
       {
         schema: {
           summary: 'List webhooks',
@@ -55,8 +55,8 @@ export function webhookRoutes(
       },
       webhookController.listWebhooks,
     );
-    app.get<{ Params: { organization_id: string; webhook_id: string } }>(
-      '/organizations/:organization_id/webhooks/:webhook_id',
+    app.get<{ Params: { webhook_id: string } }>(
+      '/webhooks/:webhook_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_READ)],
@@ -68,8 +68,8 @@ export function webhookRoutes(
       },
       webhookController.getWebhook,
     );
-    app.post<{ Params: { organization_id: string } }>(
-      '/organizations/:organization_id/webhooks',
+    app.post(
+      '/webhooks',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],
@@ -83,8 +83,8 @@ export function webhookRoutes(
       },
       webhookController.createWebhook,
     );
-    app.patch<{ Params: { organization_id: string; webhook_id: string } }>(
-      '/organizations/:organization_id/webhooks/:webhook_id',
+    app.patch<{ Params: { webhook_id: string } }>(
+      '/webhooks/:webhook_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],
@@ -98,8 +98,8 @@ export function webhookRoutes(
       },
       webhookController.updateWebhook,
     );
-    app.delete<{ Params: { organization_id: string; webhook_id: string } }>(
-      '/organizations/:organization_id/webhooks/:webhook_id',
+    app.delete<{ Params: { webhook_id: string } }>(
+      '/webhooks/:webhook_id',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],
@@ -113,8 +113,8 @@ export function webhookRoutes(
       },
       webhookController.deleteWebhook,
     );
-    app.get<{ Params: { organization_id: string; webhook_id: string } }>(
-      '/organizations/:organization_id/webhooks/:webhook_id/delivery-attempts',
+    app.get<{ Params: { webhook_id: string } }>(
+      '/webhooks/:webhook_id/delivery-attempts',
       {
         schema: {
           summary: 'List webhook delivery attempts',
@@ -129,8 +129,8 @@ export function webhookRoutes(
       },
       webhookController.listDeliveryAttempts,
     );
-    app.post<{ Params: { organization_id: string; webhook_id: string } }>(
-      '/organizations/:organization_id/webhooks/:webhook_id/test',
+    app.post<{ Params: { webhook_id: string } }>(
+      '/webhooks/:webhook_id/test',
       {
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(NOTIFY_PERMISSIONS.WEBHOOK_MANAGE)],

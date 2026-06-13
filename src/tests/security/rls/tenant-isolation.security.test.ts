@@ -3,6 +3,7 @@ import { createTestApp } from '@/tests/helpers/test-app.js';
 import { cleanupDatabase } from '@/tests/helpers/test-database.js';
 import { createTestUser } from '@/tests/factories/user.factory.js';
 import { createTestOrganization } from '@/tests/factories/organization.factory.js';
+import { createTestWebhook } from '@/tests/factories/webhook.factory.js';
 import { generateTestToken } from '@/tests/helpers/test-auth.js';
 import {
   seedPermissions,
@@ -98,18 +99,30 @@ describe('Security: Tenant isolation', () => {
     expect(response.statusCode).toBe(403);
   });
 
-  it('should return 403 when reading webhooks of another organization', async () => {
+  it('returns 404 when reading a specific webhook in another organization', async () => {
+    // Flat webhook routes resolve the organization from the JWT `org` claim, so
+    // an actor scoped to org A can only ever address org A's webhook collection
+    // — there is no path to "list org B's webhooks". Isolation is therefore a
+    // specific-resource concern: org A's actor (token scoped to A) puts org B's
+    // webhook id in the flat route; the RLS-scoped lookup runs in org A and B's
+    // row is invisible (404).
     const orgA = await createOrganizationWithMember([NOTIFY_PERMISSIONS.WEBHOOK_READ]);
     const orgB = await createOrganizationWithMember([NOTIFY_PERMISSIONS.WEBHOOK_READ]);
+    const webhookInB = await createTestWebhook({ organizationId: orgB.organization.id });
+
+    const tokenScopedToA = await generateTestToken({
+      userId: orgA.user.public_id,
+      organizationPublicId: orgA.organization.public_id,
+    });
 
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/notify/organizations/${orgB.organization.public_id}/webhooks`),
-      token: orgA.token,
-      organizationPublicId: orgB.organization.public_id,
+      url: testApiPath(`/notify/webhooks/${webhookInB.public_id}`),
+      token: tokenScopedToA,
     });
 
-    expect(response.statusCode).toBe(403);
+    expect([403, 404]).toContain(response.statusCode);
+    expect(response.statusCode).not.toBe(200);
   });
 
   it('should allow access to own organization settings with membership', async () => {
@@ -333,18 +346,26 @@ describe('Security: Tenant isolation', () => {
       expect(response.statusCode).toBe(403);
     });
 
-    it('returns 403 when listing webhook events of another organization', async () => {
+    it('lets an org actor read the webhook-events catalog (static, not org data)', async () => {
+      // Webhook-events is a flat, static catalog of subscribable event types with
+      // no per-organization rows, so a cross-org variant is meaningless. With the
+      // organization resolved from the JWT `org` claim, an actor scoped to org A
+      // simply reads the catalog with WEBHOOK_READ — proving the flattened route is
+      // reachable and gated by permission, not by an org path param.
       const orgA = await createOrganizationWithMember([NOTIFY_PERMISSIONS.WEBHOOK_READ]);
-      const orgB = await createOrganizationWithMember([NOTIFY_PERMISSIONS.WEBHOOK_READ]);
+
+      const tokenScopedToA = await generateTestToken({
+        userId: orgA.user.public_id,
+        organizationPublicId: orgA.organization.public_id,
+      });
 
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/notify/organizations/${orgB.organization.public_id}/webhook-events`),
-        token: orgA.token,
-        organizationPublicId: orgB.organization.public_id,
+        url: testApiPath('/notify/webhook-events'),
+        token: tokenScopedToA,
       });
 
-      expect(response.statusCode).toBe(403);
+      expect(response.statusCode).toBe(200);
     });
   });
 

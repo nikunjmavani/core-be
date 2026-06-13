@@ -66,23 +66,19 @@ describe('Security: unique-violation conflict handling', () => {
         permissionCodes: ['webhook:read', 'webhook:manage'],
       });
       await createMembership({ userId: user.id, organizationId: organization.id, roleId: role.id });
-      const token = await generateTestToken({ userId: user.public_id });
+      // Flat webhook routes resolve the organization from the JWT `org` claim.
+      const token = await generateTestToken({
+        userId: user.public_id,
+        organizationPublicId: organization.public_id,
+      });
       return { organization, token };
     }
 
-    function patchWebhookUrl(
-      token: string,
-      organizationPublicId: string,
-      webhookPublicId: string,
-      url: string,
-    ) {
+    function patchWebhookUrl(token: string, webhookPublicId: string, url: string) {
       return injectAuthenticatedOrganizationMutation(app, {
         method: 'PATCH',
-        url: testApiPath(
-          `/notify/organizations/${organizationPublicId}/webhooks/${webhookPublicId}`,
-        ),
+        url: testApiPath(`/notify/webhooks/${webhookPublicId}`),
         token,
-        organizationPublicId,
         payload: { url },
       });
     }
@@ -100,7 +96,6 @@ describe('Security: unique-violation conflict handling', () => {
 
       const response = await patchWebhookUrl(
         token,
-        organization.public_id,
         first.public_id,
         'https://beta.example.com/hook',
       );
@@ -116,7 +111,6 @@ describe('Security: unique-violation conflict handling', () => {
 
       const response = await patchWebhookUrl(
         token,
-        organization.public_id,
         first.public_id,
         'https://unique-target.example.com/hook',
       );

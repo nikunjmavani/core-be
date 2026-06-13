@@ -162,8 +162,8 @@ export const routeSchemaMap: Record<string, ZodTypeAny> = {
   'POST /api/v1/billing/subscriptions/{subscription_id}/change-plan': ChangePlanDto,
 
   // ── Webhooks ──
-  'POST /api/v1/notify/organizations/{organization_id}/webhooks': CreateWebhookDto,
-  'PATCH /api/v1/notify/organizations/{organization_id}/webhooks/{webhook_id}': UpdateWebhookDto,
+  'POST /api/v1/notify/webhooks': CreateWebhookDto,
+  'PATCH /api/v1/notify/webhooks/{webhook_id}': UpdateWebhookDto,
 
   // ── Upload ──
   'POST /api/v1/uploads': createUploadDto,

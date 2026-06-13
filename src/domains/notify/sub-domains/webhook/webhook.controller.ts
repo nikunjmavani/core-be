@@ -32,10 +32,7 @@ function buildCursorPaginationMetadata(result: CursorPaginationResult) {
 }
 
 function createListWebhooksHandler(service: WebhookService) {
-  return async (
-    request: FastifyRequest<{ Params: { organization_id: string } }>,
-    _reply: FastifyReply,
-  ) => {
+  return async (request: FastifyRequest, _reply: FastifyReply) => {
     requirePrincipal(request);
     const parsed = validateListWebhooksQuery(request.query);
     const result = await service.list(
@@ -56,7 +53,7 @@ function createListWebhooksHandler(service: WebhookService) {
 
 function createListDeliveryAttemptsHandler(service: WebhookService) {
   return async (
-    request: FastifyRequest<{ Params: { organization_id: string; webhook_id: string } }>,
+    request: FastifyRequest<{ Params: { webhook_id: string } }>,
     _reply: FastifyReply,
   ) => {
     requirePrincipal(request);
@@ -80,15 +77,15 @@ function createListDeliveryAttemptsHandler(service: WebhookService) {
 }
 
 /**
- * Build the Fastify handler map for `/organizations/:organization_id/webhooks` — coordinates organization
- * scoping, validation, {@link WebhookService} calls, and {@link WebhookSerializer} output (which
+ * Build the Fastify handler map for `/webhooks` (active organization from the `org` token claim) —
+ * coordinates organization scoping, validation, {@link WebhookService} calls, and {@link WebhookSerializer} output (which
  * also strips encrypted-secret fields from responses).
  */
 export function createWebhookController(service: WebhookService) {
   return {
     listWebhooks: createListWebhooksHandler(service),
     getWebhook: async (
-      request: FastifyRequest<{ Params: { organization_id: string; webhook_id: string } }>,
+      request: FastifyRequest<{ Params: { webhook_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
@@ -102,10 +99,7 @@ export function createWebhookController(service: WebhookService) {
       // double-serialize and (with the typed projection) reject the input shape.
       return successResponse(data, getRequestIdentifier(request));
     },
-    createWebhook: async (
-      request: FastifyRequest<{ Params: { organization_id: string } }>,
-      reply: FastifyReply,
-    ) => {
+    createWebhook: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const data = await service.create(
         resolveActiveOrganizationId(request),
@@ -116,7 +110,7 @@ export function createWebhookController(service: WebhookService) {
       return successResponse(data, getRequestIdentifier(request));
     },
     updateWebhook: async (
-      request: FastifyRequest<{ Params: { organization_id: string; webhook_id: string } }>,
+      request: FastifyRequest<{ Params: { webhook_id: string } }>,
       _reply: FastifyReply,
     ) => {
       const auth = requirePrincipal(request);
@@ -130,7 +124,7 @@ export function createWebhookController(service: WebhookService) {
       return successResponse(data, getRequestIdentifier(request));
     },
     deleteWebhook: async (
-      request: FastifyRequest<{ Params: { organization_id: string; webhook_id: string } }>,
+      request: FastifyRequest<{ Params: { webhook_id: string } }>,
       reply: FastifyReply,
     ) => {
       requirePrincipal(request);
@@ -143,7 +137,7 @@ export function createWebhookController(service: WebhookService) {
     },
     listDeliveryAttempts: createListDeliveryAttemptsHandler(service),
     testWebhook: async (
-      request: FastifyRequest<{ Params: { organization_id: string; webhook_id: string } }>,
+      request: FastifyRequest<{ Params: { webhook_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);

@@ -168,7 +168,7 @@
       }
     }
   },
-  "DELETE /api/v1/notify/organizations/:organization_id/webhooks/:webhook_id": {
+  "DELETE /api/v1/notify/webhooks/:webhook_id": {
     "responses": {
       "401": {
         "error": {
@@ -1002,7 +1002,7 @@
       }
     }
   },
-  "GET /api/v1/notify/organizations/:organization_id/webhook-events": {
+  "GET /api/v1/notify/webhook-events": {
     "responses": {
       "200": {
         "data": [
@@ -1043,7 +1043,7 @@
       }
     }
   },
-  "GET /api/v1/notify/organizations/:organization_id/webhooks": {
+  "GET /api/v1/notify/webhooks": {
     "responses": {
       "200": {
         "data": [],
@@ -1080,7 +1080,7 @@
       }
     }
   },
-  "GET /api/v1/notify/organizations/:organization_id/webhooks/:webhook_id": {
+  "GET /api/v1/notify/webhooks/:webhook_id": {
     "responses": {
       "200": {
         "data": {
@@ -1131,7 +1131,7 @@
       }
     }
   },
-  "GET /api/v1/notify/organizations/:organization_id/webhooks/:webhook_id/delivery-attempts": {
+  "GET /api/v1/notify/webhooks/:webhook_id/delivery-attempts": {
     "responses": {
       "200": {
         "data": [
@@ -2449,7 +2449,7 @@
       }
     }
   },
-  "PATCH /api/v1/notify/organizations/:organization_id/webhooks/:webhook_id": {
+  "PATCH /api/v1/notify/webhooks/:webhook_id": {
     "request_body": {
       "url": "https://example.com/resource"
     },
@@ -4451,7 +4451,7 @@
       }
     }
   },
-  "POST /api/v1/notify/organizations/:organization_id/webhooks": {
+  "POST /api/v1/notify/webhooks": {
     "request_body": {
       "url": "https://example.com/resource",
       "events": ["subscription.created"]
@@ -4516,7 +4516,7 @@
       }
     }
   },
-  "POST /api/v1/notify/organizations/:organization_id/webhooks/:webhook_id/test": {
+  "POST /api/v1/notify/webhooks/:webhook_id/test": {
     "responses": {
       "201": {
         "data": {

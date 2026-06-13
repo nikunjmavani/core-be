@@ -58,13 +58,16 @@ describe('Notify e2e: webhook delivery', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    // Flat webhook routes resolve the organization from the JWT `org` claim.
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
 
     const createResponse = await injectAuthenticated(app, {
       method: 'POST',
-      url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+      url: testApiPath('/notify/webhooks'),
       token,
-      organizationPublicId: organization.public_id,
       payload: {
         url: 'https://example.com/webhook',
         events: ['subscription.created'],
@@ -74,9 +77,8 @@ describe('Notify e2e: webhook delivery', () => {
 
     const listResponse = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(`/notify/organizations/${organization.public_id}/webhooks`),
+      url: testApiPath('/notify/webhooks'),
       token,
-      organizationPublicId: organization.public_id,
     });
     expect(listResponse.statusCode).toBe(200);
     const listBody = listResponse.json() as {

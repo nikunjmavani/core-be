@@ -91,15 +91,16 @@ describe('Security: BOLA / IDOR cross-tenant (by-id)', () => {
       roleId: roleB.id,
     });
 
-    return { attackerToken, orgA, orgB, webhookB, roleB, membershipB };
+    return { attacker, attackerToken, orgA, orgB, webhookB, roleB, membershipB };
   }
 
   // Each tuple: a by-id resource path builder for a given org + resource id.
+  // Webhook is intentionally NOT in this list: its routes were flattened
+  // (`/notify/webhooks/:id`, organization from the JWT `org` claim) so there is
+  // no organization path param to point at org B. The webhook isolation vector
+  // (foreign-resource-id in the actor's own org context) is covered by the
+  // dedicated flat-route tests below, mirroring the billing by-id pattern.
   const RESOURCES = [
-    {
-      name: 'webhook',
-      path: (org: string, id: string) => `/notify/organizations/${org}/webhooks/${id}`,
-    },
     {
       name: 'role',
       path: (org: string, id: string) => `/tenancy/organizations/${org}/roles/${id}`,
@@ -111,7 +112,6 @@ describe('Security: BOLA / IDOR cross-tenant (by-id)', () => {
   ] as const;
 
   function resourceId(name: string, resources: Awaited<ReturnType<typeof setup>>): string {
-    if (name === 'webhook') return resources.webhookB.public_id;
     if (name === 'role') return resources.roleB.public_id;
     return resources.membershipB.public_id;
   }
@@ -151,15 +151,33 @@ describe('Security: BOLA / IDOR cross-tenant (by-id)', () => {
       });
     }
 
+    it("GET org B's webhook via org A → not found (flat route, org from claim)", async () => {
+      const ctx = await setup();
+      // Attacker IS authorized in org A (token scoped to A via the `org` claim),
+      // so the flat webhook route resolves to org A and the org-scoped lookup must
+      // not find org B's webhook.
+      const tokenScopedToA = await generateTestToken({
+        userId: ctx.attacker.public_id,
+        organizationPublicId: ctx.orgA.public_id,
+      });
+      const response = await injectAuthenticated(app, {
+        method: 'GET',
+        url: testApiPath(`/notify/webhooks/${ctx.webhookB.public_id}`),
+        token: tokenScopedToA,
+      });
+      expect(response.statusCode).toBe(404);
+    });
+
     it("DELETE org B's webhook via org A → not found (no cross-tenant mutation)", async () => {
       const ctx = await setup();
+      const tokenScopedToA = await generateTestToken({
+        userId: ctx.attacker.public_id,
+        organizationPublicId: ctx.orgA.public_id,
+      });
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'DELETE',
-        url: testApiPath(
-          `/notify/organizations/${ctx.orgA.public_id}/webhooks/${ctx.webhookB.public_id}`,
-        ),
-        token: ctx.attackerToken,
-        organizationPublicId: ctx.orgA.public_id,
+        url: testApiPath(`/notify/webhooks/${ctx.webhookB.public_id}`),
+        token: tokenScopedToA,
       });
       expect(response.statusCode).toBe(404);
     });
@@ -170,13 +188,15 @@ describe('Security: BOLA / IDOR cross-tenant (by-id)', () => {
   it('baseline: a user can GET a webhook in their OWN org (200)', async () => {
     const ctx = await setup();
     const ownWebhook = await createTestWebhook({ organizationId: ctx.orgA.id });
+    // Flat route: org A resolved from the `org` claim, webhook owned by org A.
+    const tokenScopedToA = await generateTestToken({
+      userId: ctx.attacker.public_id,
+      organizationPublicId: ctx.orgA.public_id,
+    });
     const response = await injectAuthenticated(app, {
       method: 'GET',
-      url: testApiPath(
-        `/notify/organizations/${ctx.orgA.public_id}/webhooks/${ownWebhook.public_id}`,
-      ),
-      token: ctx.attackerToken,
-      organizationPublicId: ctx.orgA.public_id,
+      url: testApiPath(`/notify/webhooks/${ownWebhook.public_id}`),
+      token: tokenScopedToA,
     });
     expect(response.statusCode).toBe(200);
   });
