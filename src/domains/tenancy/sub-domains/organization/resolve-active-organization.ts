@@ -1,47 +1,38 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { withGlobalAdminDatabaseContext } from '@/infrastructure/database/contexts/global-admin-database.context.js';
 import { env } from '@/shared/config/env.config.js';
-import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
-import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
+import { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
+
+/**
+ * Orchestrates the login/active-organization lookups under the global-admin RLS context. The SQL
+ * lives in {@link OrganizationRepository}; these helpers only choose the context and map the
+ * repository's `null` to `undefined` for their callers.
+ *
+ * @remarks
+ * - **RLS:** every lookup runs under {@link withGlobalAdminDatabaseContext} because the auth flows
+ *   that call them (login, MFA, organization switch) have no `app.current_organization_id` yet —
+ *   the memberships/organizations policies are keyed on it. The context pins a handle in ALS so the
+ *   repository's request-scoped reads resolve to the admin transaction. Each query is constrained
+ *   to the authenticated user's own `user_id`, so the bypass never reads cross-user data.
+ * - **Side effects:** none (read-only).
+ */
+const organizationRepository = new OrganizationRepository();
 
 /**
  * Resolve the default active organization for a user at login: the PERSONAL organization
  * (when `PERSONAL_ORGANIZATION_ENABLED`), otherwise the most-recently-joined active TEAM
  * membership. Returns the organization `public_id`, or `undefined` when the user belongs to
  * no eligible organization (team-only mode, no team yet → the frontend redirects to onboarding).
- *
- * @remarks
- * - **Algorithm:** one indexed join (memberships → organizations) filtered to ACTIVE
- *   membership + non-deleted ACTIVE org, ordered personal-first then most-recent join.
- *   When personal is disabled, PERSONAL organizations are excluded from candidates.
- * - **RLS:** runs under {@link withGlobalAdminDatabaseContext} because login has no
- *   organization context yet (the memberships/organizations policies are keyed on
- *   `app.current_organization_id`). The query is constrained to the authenticated user's
- *   own `user_id`, so the bypass reads only that user's memberships — never cross-user.
- * - **Side effects:** none (read-only).
  */
 export async function resolveDefaultActiveOrganizationPublicId(
   userInternalId: number,
 ): Promise<string | undefined> {
-  const personalEnabled = env.PERSONAL_ORGANIZATION_ENABLED;
-  return withGlobalAdminDatabaseContext(async (databaseHandle) => {
-    const rows = await databaseHandle
-      .select({ public_id: organizations.public_id })
-      .from(memberships)
-      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
-      .where(
-        and(
-          eq(memberships.user_id, userInternalId),
-          eq(memberships.status, 'ACTIVE'),
-          isNull(organizations.deleted_at),
-          eq(organizations.status, 'ACTIVE'),
-          personalEnabled ? undefined : sql`${organizations.type} <> 'PERSONAL'`,
-        ),
-      )
-      .orderBy(desc(sql`(${organizations.type} = 'PERSONAL')`), desc(memberships.joined_at))
-      .limit(1);
-    return rows[0]?.public_id;
-  });
+  const resolved = await withGlobalAdminDatabaseContext(() =>
+    organizationRepository.findDefaultActiveOrganizationPublicId(
+      userInternalId,
+      env.PERSONAL_ORGANIZATION_ENABLED,
+    ),
+  );
+  return resolved ?? undefined;
 }
 
 /**
@@ -60,23 +51,13 @@ export async function findUserActiveOrganizationByPublicId(
   userInternalId: number,
   organizationPublicId: string,
 ): Promise<{ id: number; public_id: string } | undefined> {
-  return withGlobalAdminDatabaseContext(async (databaseHandle) => {
-    const rows = await databaseHandle
-      .select({ id: organizations.id, public_id: organizations.public_id })
-      .from(memberships)
-      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
-      .where(
-        and(
-          eq(memberships.user_id, userInternalId),
-          eq(memberships.status, 'ACTIVE'),
-          eq(organizations.public_id, organizationPublicId),
-          isNull(organizations.deleted_at),
-          eq(organizations.status, 'ACTIVE'),
-        ),
-      )
-      .limit(1);
-    return rows[0];
-  });
+  const resolved = await withGlobalAdminDatabaseContext(() =>
+    organizationRepository.findActiveMembershipOrganizationByPublicId(
+      userInternalId,
+      organizationPublicId,
+    ),
+  );
+  return resolved ?? undefined;
 }
 
 /**
@@ -106,23 +87,13 @@ export async function findUserActiveOrganizationPublicIdByInternalId(
   userInternalId: number,
   organizationInternalId: number,
 ): Promise<string | undefined> {
-  return withGlobalAdminDatabaseContext(async (databaseHandle) => {
-    const rows = await databaseHandle
-      .select({ public_id: organizations.public_id })
-      .from(memberships)
-      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
-      .where(
-        and(
-          eq(memberships.user_id, userInternalId),
-          eq(memberships.status, 'ACTIVE'),
-          eq(organizations.id, organizationInternalId),
-          isNull(organizations.deleted_at),
-          eq(organizations.status, 'ACTIVE'),
-        ),
-      )
-      .limit(1);
-    return rows[0]?.public_id;
-  });
+  const resolved = await withGlobalAdminDatabaseContext(() =>
+    organizationRepository.findActiveMembershipOrganizationPublicIdByInternalId(
+      userInternalId,
+      organizationInternalId,
+    ),
+  );
+  return resolved ?? undefined;
 }
 
 /**
@@ -144,18 +115,8 @@ export async function resolvePersonalOrganizationPublicId(
 export async function resolvePersonalOrganization(
   ownerUserInternalId: number,
 ): Promise<{ id: number; public_id: string } | undefined> {
-  return withGlobalAdminDatabaseContext(async (databaseHandle) => {
-    const rows = await databaseHandle
-      .select({ id: organizations.id, public_id: organizations.public_id })
-      .from(organizations)
-      .where(
-        and(
-          eq(organizations.owner_user_id, ownerUserInternalId),
-          eq(organizations.type, 'PERSONAL'),
-          isNull(organizations.deleted_at),
-        ),
-      )
-      .limit(1);
-    return rows[0];
-  });
+  const resolved = await withGlobalAdminDatabaseContext(() =>
+    organizationRepository.findPersonalOrganization(ownerUserInternalId),
+  );
+  return resolved ?? undefined;
 }
