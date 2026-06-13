@@ -192,7 +192,20 @@ export async function markMailOutboxSent(
 export async function markMailOutboxFailed(mailOutboxId: number): Promise<void> {
   await mailOutboxDatabase()
     .update(mail_outbox)
-    .set({ status: 'failed', updated_at: new Date() })
+    .set({
+      status: 'failed',
+      updated_at: new Date(),
+      // audit-#10: scrub the secret-bearing rendered body on TERMINAL failure too — not only on
+      // success. A `failed` row still embedded the live single-use token (password-reset /
+      // magic-link / invitation / email-verification); previously only `markMailOutboxSent`
+      // cleared it, so a permanently-failed delivery left the token recoverable from a PITR
+      // snapshot, leaked operator console, SQLi, or compromised app credential until token
+      // expiry (and invitation/verification tokens can be long-lived). The row is retained for
+      // the audit trail (recipient, subject, status, timestamps); a manual resend must mint a
+      // fresh token rather than replaying stored HTML.
+      html: '',
+      text_body: null,
+    })
     .where(eq(mail_outbox.id, mailOutboxId));
 }
 
