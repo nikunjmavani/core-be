@@ -43,3 +43,57 @@ export async function resolveDefaultActiveOrganizationPublicId(
     return rows[0]?.public_id;
   });
 }
+
+/**
+ * Confirm the user holds an ACTIVE membership in the given organization (and the org is
+ * active/not-deleted) — the membership gate for `switch-to-organization`. Returns the
+ * org `public_id` when valid, otherwise `undefined` (caller maps to 403). Runs under the
+ * global-admin RLS context (no org context at switch time) but is constrained to the
+ * caller's own `user_id`.
+ */
+export async function findUserActiveOrganizationPublicId(
+  userInternalId: number,
+  organizationPublicId: string,
+): Promise<string | undefined> {
+  return withGlobalAdminDatabaseContext(async (databaseHandle) => {
+    const rows = await databaseHandle
+      .select({ public_id: organizations.public_id })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
+      .where(
+        and(
+          eq(memberships.user_id, userInternalId),
+          eq(memberships.status, 'ACTIVE'),
+          eq(organizations.public_id, organizationPublicId),
+          isNull(organizations.deleted_at),
+          eq(organizations.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.public_id;
+  });
+}
+
+/**
+ * Resolve the caller's own PERSONAL organization `public_id` — the target for
+ * `switch-to-personal` (no body; the server resolves it). Returns `undefined` when the
+ * user has no personal organization (e.g. personal disabled), which the caller maps to 409.
+ */
+export async function resolvePersonalOrganizationPublicId(
+  ownerUserInternalId: number,
+): Promise<string | undefined> {
+  return withGlobalAdminDatabaseContext(async (databaseHandle) => {
+    const rows = await databaseHandle
+      .select({ public_id: organizations.public_id })
+      .from(organizations)
+      .where(
+        and(
+          eq(organizations.owner_user_id, ownerUserInternalId),
+          eq(organizations.type, 'PERSONAL'),
+          isNull(organizations.deleted_at),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.public_id;
+  });
+}

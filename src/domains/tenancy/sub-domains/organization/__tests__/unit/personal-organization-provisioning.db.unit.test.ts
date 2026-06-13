@@ -4,7 +4,11 @@ import { createTestUser } from '@/tests/factories/user.factory.js';
 import { seedPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
-import { resolveDefaultActiveOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
+import {
+  resolveDefaultActiveOrganizationPublicId,
+  findUserActiveOrganizationPublicId,
+  resolvePersonalOrganizationPublicId,
+} from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 
 describe('personal organization provisioning (database)', () => {
   beforeEach(async () => {
@@ -61,6 +65,40 @@ describe('personal organization provisioning (database)', () => {
       const resolved = await resolveDefaultActiveOrganizationPublicId(user.id);
 
       expect(resolved).toBeUndefined();
+    });
+  });
+
+  describe('switch-target resolvers', () => {
+    it('resolvePersonalOrganizationPublicId returns the user personal org', async () => {
+      const user = await createTestUser();
+      const { organization } = await provisionPersonalOrganization(user.id);
+
+      expect(await resolvePersonalOrganizationPublicId(user.id)).toBe(organization.public_id);
+    });
+
+    it('resolvePersonalOrganizationPublicId returns undefined without a personal org', async () => {
+      const user = await createTestUser();
+      expect(await resolvePersonalOrganizationPublicId(user.id)).toBeUndefined();
+    });
+
+    it('findUserActiveOrganizationPublicId confirms the owner active membership', async () => {
+      const user = await createTestUser();
+      const { organization } = await provisionPersonalOrganization(user.id);
+
+      expect(await findUserActiveOrganizationPublicId(user.id, organization.public_id)).toBe(
+        organization.public_id,
+      );
+    });
+
+    it('findUserActiveOrganizationPublicId rejects a non-member organization', async () => {
+      const member = await createTestUser();
+      const stranger = await createTestUser();
+      const { organization } = await provisionPersonalOrganization(member.id);
+
+      // The stranger has no membership in the member's personal org → undefined (→ 403).
+      expect(
+        await findUserActiveOrganizationPublicId(stranger.id, organization.public_id),
+      ).toBeUndefined();
     });
   });
 });
