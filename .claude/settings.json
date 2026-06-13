@@ -25,6 +25,17 @@
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/guard-edits.sh\""
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
@@ -42,6 +53,16 @@
           {
             "type": "command",
             "command": "echo '\n📋 Done. Quick checks: pnpm validate:domain --strict && pnpm tsdoc:check\n   Skill map: agent-os/docs/skill-triggers.md'"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/agent-os/hooks/session-start.sh\""
           }
         ]
       }

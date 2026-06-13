@@ -156,13 +156,26 @@ for (const file of agentFiles) {
     warn('agent-model', `agents/${file} pins model "${model}" — prefer \`inherit\` unless deliberately overridden`)
 }
 
-// ── Check 8: hook commands in the tracked settings.json must be portable ──
+// ── Check 8: hook commands must be portable and reference scripts that exist ──
 const settingsFile = join(repositoryRoot, '.claude', 'settings.json')
 if (existsSync(settingsFile)) {
-  for (const match of readText(settingsFile).matchAll(/"command"\s*:\s*"([^"]+)"/g)) {
-    const command = match[1]
+  let settings: { hooks?: Record<string, Array<{ hooks?: Array<{ command?: string }> }>> } | null = null
+  try {
+    settings = JSON.parse(readText(settingsFile))
+  } catch {
+    error('hook-portability', '.claude/settings.json is not valid JSON')
+  }
+  const commands = Object.values(settings?.hooks ?? {})
+    .flat()
+    .flatMap((entry) => entry.hooks ?? [])
+    .map((hook) => hook.command)
+    .filter((command): command is string => typeof command === 'string')
+  for (const command of commands) {
     if (/\/Users\/|\/home\/|\/root\//.test(command))
       error('hook-portability', `.claude/settings.json hook hardcodes an absolute home path — use "$CLAUDE_PROJECT_DIR": ${command}`)
+    const scriptReference = command.match(/agent-os\/hooks\/[A-Za-z0-9._-]+\.sh/)?.[0]
+    if (scriptReference && !existsSync(join(repositoryRoot, scriptReference)))
+      error('hook-script', `.claude/settings.json references hook script ${scriptReference} which does not exist`)
   }
 }
 
@@ -213,6 +226,7 @@ const checkLabels: Record<string, string> = {
   'agent-catalog-coverage': 'Agent catalog coverage',
   'agent-frontmatter': 'Agent frontmatter',
   'hook-portability': 'Hook portability',
+  'hook-script': 'Hook scripts exist',
   'referenced-path': 'Referenced paths exist',
 }
 
