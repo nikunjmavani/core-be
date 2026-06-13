@@ -8,7 +8,7 @@ globs:
 alwaysApply: false
 ---
 
-- Path params: snake_case + semantic (`{organization_id}`, never `{id}`), registered in PARAM_NAME_TO_ENTITY; Zod params keys identical to the param name.
+- Path params: snake_case + semantic (`{plan_id}`, `{subscription_id}`, never `{id}`), registered in PARAM_NAME_TO_ENTITY; Zod params keys identical to the param name. The active organization is carried by the signed `org` JWT claim — routes do NOT take an `{organization_id}` path segment; the active-org resource is singular `/tenancy/organization` (sub-resources nest under it).
 - Public ids: `<prefix>_<21 [a-z0-9]>` via generatePublicId(entity); external field name is always `id`; never write "public id" in docs.
 - Status policy (middleware-enforced): GET 200, POST 201, PUT/PATCH 200, DELETE 204; webhooks + MCP stay 200. Update route-success-statuses.json with any route change.
 - Error codes (full guide docs/reference/api/response-codes.md): 400 malformed shape only — every POST/PATCH/PUT has it; omit only on param-less query-less GET/DELETE; 401 token problems (recovery hint in message); 403 permission; 404 not-exists incl. cross-org; 409 state conflict (mutating); 422 business rule / idempotency payload mismatch (mutating); 413/415 body size/content-type (POST/PATCH/PUT); 429 everywhere with Retry-After + X-RateLimit-*; 500 never intentional. Never invent statuses outside this list.

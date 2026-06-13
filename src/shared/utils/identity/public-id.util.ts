@@ -83,7 +83,6 @@ export function generatePublicId(entity: PublicIdEntity): string {
  * OpenAPI documentation (description, `^pfx_[a-z0-9]{21}$` pattern, example).
  */
 export const PARAM_NAME_TO_ENTITY = {
-  organization_id: 'organization',
   user_id: 'user',
   membership_id: 'membership',
   invitation_id: 'memberInvitation',
