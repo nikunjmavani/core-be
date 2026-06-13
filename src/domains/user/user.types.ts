@@ -33,4 +33,16 @@ export interface UserOutput {
   status: string;
   created_at: string;
   updated_at: string;
+  /**
+   * Deployment organization capabilities (from the env flags), surfaced on `/users/me` so the
+   * frontend can hide the disabled organization kind. Present only on the self projection;
+   * omitted from admin user listings.
+   */
+  capabilities?: OrganizationCapabilities;
+}
+
+/** Which organization kinds this deployment enables — mirrors the env capability flags. */
+export interface OrganizationCapabilities {
+  personal_organizations: boolean;
+  team_organizations: boolean;
 }
