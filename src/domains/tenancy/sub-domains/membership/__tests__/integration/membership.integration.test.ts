@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
 import { createTestApp } from '@/tests/helpers/test-app.js';
 import {
@@ -25,9 +25,15 @@ import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { MemberInvitationRepository } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.repository.js';
 import { member_invitations } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.schema.js';
 import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
+import { roles } from '@/domains/tenancy/sub-domains/member-roles/member-role.schema.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
 import { hashInvitationToken } from '@/domains/tenancy/sub-domains/membership/member-invitation/member-invitation.token.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import {
+  provisionPersonalOrganization,
+  provisionOrganizationWithOwner,
+} from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
+import enErrors from '@/shared/locales/en/errors.json' with { type: 'json' };
 import type { FastifyInstance } from 'fastify';
 
 const MEMBERSHIP_PERMISSIONS = [
@@ -1064,6 +1070,187 @@ describe('Membership Sub-Domain — Integration', () => {
         .from(memberships)
         .where(eq(memberships.id, ownerMembership.id));
       expect(stillActive!.deleted_at).toBeNull();
+    });
+  });
+
+  // A PERSONAL organization is single-member by definition. The service-layer guard rejects
+  // every people-sharing entry point with a 409 ConflictError. This is unit-tested in
+  // membership.service.unit.test.ts; these tests prove the rejection survives over real HTTP —
+  // i.e. the guard is reached (not short-circuited by a route-level 400/403) and the wire
+  // payload carries the documented conflict. The owner provisioned below holds the full tenancy
+  // permission set (MEMBERSHIP_MANAGE + INVITATION_MANAGE included), so the request passes RBAC
+  // and lands squarely on the single-member guard rather than a 403.
+  describe('PERSONAL organization single-member guard (HTTP-level coverage)', () => {
+    // provisionPersonalOrganization / provisionOrganizationWithOwner insert a role_permissions
+    // row per tenancy code (FK → permissions.code, ON DELETE RESTRICT), so every code must exist
+    // before provisioning — the suite-level beforeEach only seeds the membership subset.
+    async function seedAllTenancyPermissions() {
+      await seedPermissions(Object.values(TENANCY_PERMISSIONS));
+    }
+
+    // The error handler translates `error.messageKey` via `request.t`. The standard test app does
+    // not initialize i18next resources, so the wire `detail` is the raw key; but if a sibling
+    // integration test initialized i18next first (same worker), it is the English string. Accept
+    // either form so the assertion is robust to test-ordering — the 409 + `code: 'conflict'` are
+    // the load-bearing contract, and either detail value uniquely identifies this guard.
+    function expectPersonalNoMembersConflict(response: {
+      statusCode: number;
+      json: () => unknown;
+    }) {
+      expect(response.statusCode).toBe(409);
+      const body = response.json() as { error?: { code?: string; detail?: string } };
+      expect(body.error?.code).toBe('conflict');
+      expect([
+        'errors:personalOrganizationNoMembers',
+        enErrors.personalOrganizationNoMembers,
+      ]).toContain(body.error?.detail);
+    }
+
+    async function rolePublicId(roleInternalId: number): Promise<string> {
+      const [role] = await database
+        .select()
+        .from(roles)
+        .where(eq(roles.id, roleInternalId))
+        .limit(1);
+      expect(role).toBeDefined();
+      return role!.public_id;
+    }
+
+    async function membershipPublicIdForUser(
+      organizationId: number,
+      userId: number,
+    ): Promise<string> {
+      const [membership] = await database
+        .select()
+        .from(memberships)
+        .where(
+          and(eq(memberships.organization_id, organizationId), eq(memberships.user_id, userId)),
+        )
+        .limit(1);
+      expect(membership).toBeDefined();
+      return membership!.public_id;
+    }
+
+    async function setupPersonalOrganizationOwner() {
+      await seedAllTenancyPermissions();
+      const owner = await createTestUser();
+      const provisioned = await provisionPersonalOrganization(owner.id);
+      const token = await generateTestToken({
+        userId: owner.public_id,
+        organizationPublicId: provisioned.organization.public_id,
+      });
+      return {
+        owner,
+        organization: provisioned.organization,
+        ownerRoleId: provisioned.roleId,
+        token,
+      };
+    }
+
+    async function countMemberships(organizationId: number): Promise<number> {
+      const [row] = await database
+        .select({ value: count() })
+        .from(memberships)
+        .where(
+          and(eq(memberships.organization_id, organizationId), isNull(memberships.deleted_at)),
+        );
+      return row?.value ?? 0;
+    }
+
+    it('rejects POST /memberships on a PERSONAL org with 409 (errors:personalOrganizationNoMembers) and creates no row', async () => {
+      const { owner, organization, ownerRoleId, token } = await setupPersonalOrganizationOwner();
+      // A valid body that PASSES validation and reaches the guard: a real second user + the real
+      // owner role's public id. The single-member guard runs before role resolution, so the 409
+      // is the guard, not a 400/404 over the body.
+      const newMember = await createTestUser({ email: `personal-member-${randomUUID()}@test.com` });
+      const ownerRolePublicId = await rolePublicId(ownerRoleId);
+
+      const membershipsBefore = await countMemberships(organization.id);
+      expect(membershipsBefore).toBe(1); // only the owner
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organization/memberships'),
+        token,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: {
+          user_id: newMember.public_id,
+          role_id: ownerRolePublicId,
+        },
+      });
+
+      expectPersonalNoMembersConflict(response);
+
+      // No second membership was created — the personal org is still single-member.
+      const membershipsAfter = await countMemberships(organization.id);
+      expect(membershipsAfter).toBe(1);
+      const [intruder] = await database
+        .select()
+        .from(memberships)
+        .where(eq(memberships.user_id, newMember.id));
+      expect(intruder).toBeUndefined();
+      // Sanity: the owner provisioned with the full set is unaffected.
+      expect(owner.id).toBeDefined();
+    });
+
+    it('rejects POST /invitations on a PERSONAL org with 409 (errors:personalOrganizationNoMembers) and creates no invitation', async () => {
+      const { owner, organization, token } = await setupPersonalOrganizationOwner();
+      // The owner's own membership is the only membership_id available — supply it so the body is
+      // valid and the request reaches the single-member guard rather than a 404 for the membership.
+      const ownerMembershipPublicId = await membershipPublicIdForUser(organization.id, owner.id);
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organization/invitations'),
+        token,
+        organizationPublicId: organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: {
+          membership_id: ownerMembershipPublicId,
+          expires_in_days: 7,
+        },
+      });
+
+      expectPersonalNoMembersConflict(response);
+
+      const invitations = await database.select({ value: count() }).from(member_invitations);
+      expect(invitations[0]?.value ?? 0).toBe(0);
+    });
+
+    it('positive contrast: the SAME POST /memberships succeeds (201) on a TEAM org — the guard is type-specific, not a blanket block', async () => {
+      await seedAllTenancyPermissions();
+      const owner = await createTestUser();
+      const team = await provisionOrganizationWithOwner({
+        name: 'Personal-Guard Contrast Team',
+        slug: `pg-contrast-${generatePublicId('organization').slice(4, 14)}`,
+        type: 'TEAM',
+        ownerUserId: owner.id,
+      });
+      const token = await generateTestToken({
+        userId: owner.public_id,
+        organizationPublicId: team.organization.public_id,
+      });
+      const newMember = await createTestUser({ email: `team-member-${randomUUID()}@test.com` });
+      // Reuse the owner role (full permission set) so the privilege-escalation guard also passes.
+      const ownerRolePublicId = await rolePublicId(team.roleId);
+
+      const response = await injectAuthenticatedOrganizationMutation(app, {
+        method: 'POST',
+        url: testApiPath('/tenancy/organization/memberships'),
+        token,
+        organizationPublicId: team.organization.public_id,
+        headers: { 'idempotency-key': `idem-${randomUUID()}` },
+        payload: {
+          user_id: newMember.public_id,
+          role_id: ownerRolePublicId,
+          status: 'INVITED',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const membershipsAfter = await countMemberships(team.organization.id);
+      expect(membershipsAfter).toBe(2); // owner + the newly-invited member
     });
   });
 });

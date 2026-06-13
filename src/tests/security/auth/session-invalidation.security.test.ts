@@ -17,6 +17,12 @@ import {
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { testApiPath } from '@/tests/helpers/test-api-prefix.helper.js';
+import { provisionOrganizationWithOwner } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
+import { invalidatePermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
+import { database } from '@/infrastructure/database/connection.js';
+import { memberships } from '@/domains/tenancy/sub-domains/membership/membership.schema.js';
+import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 
 /**
@@ -277,6 +283,56 @@ describe('Security: Session invalidation', () => {
     });
 
     expect(response.statusCode).toBe(401);
+  });
+
+  // M3 — TRUST GUARANTEE: a removed member's still-valid `org`-claim token must lose
+  // access on its NEXT request. The claim is SCOPE, not AUTHORITY: requireOrganizationPermission
+  // re-checks membership per request, and a membership change invalidates the permission cache.
+  // This proves that revoking someone's membership takes effect immediately even though their
+  // bearer token (claim still = the org) is otherwise unexpired.
+  it('should return 403 on the next request after a member is removed (stale org-claim token loses access)', async () => {
+    // An ACTIVE owner-member of org A holds role:read (the owner role grants all tenancy perms).
+    const user = await createTestUser();
+    const orgA = await provisionOrganizationWithOwner({
+      name: 'M3 Org A',
+      slug: `m3-org-a-${generatePublicId('organization').slice(4, 14)}`,
+      type: 'TEAM',
+      ownerUserId: user.id,
+    });
+    const { token } = await generateTestTokenAndSession({
+      userId: user.public_id,
+      organizationPublicId: orgA.organization.public_id,
+    });
+
+    // Pre-condition: the org-scoped role:read route resolves the org from the claim and allows it.
+    const before = await injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath('/tenancy/organization/roles'),
+      token,
+    });
+    expect(before.statusCode).toBe(200);
+
+    // Remove the user's membership in org A, exactly as the membership service does: soft-delete
+    // the row, then invalidate the per-(user, org) permission cache so the change is immediate.
+    await database
+      .update(memberships)
+      .set({ deleted_at: new Date() })
+      .where(
+        and(
+          eq(memberships.user_id, user.id),
+          eq(memberships.organization_id, orgA.organization.id),
+        ),
+      );
+    await invalidatePermissions(user.public_id, orgA.organization.public_id);
+
+    // The SAME token (claim still = org A) now resolves zero permissions for a non-member →
+    // requireOrganizationPermission denies role:read with 403. The token was never re-minted.
+    const after = await injectAuthenticated(app, {
+      method: 'GET',
+      url: testApiPath('/tenancy/organization/roles'),
+      token,
+    });
+    expect(after.statusCode).toBe(403);
   });
 
   // NEGATIVE — token with role claim tampered to super_admin must not bypass session check

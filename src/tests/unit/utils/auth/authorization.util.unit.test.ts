@@ -131,7 +131,11 @@ describe('authorization.util', () => {
       await expect(handler(request, mockReply)).resolves.toBeUndefined();
     });
 
-    it('rejects an API key bound to a different organization', async () => {
+    it('defensive fallback: rejects an API key when a legacy {organization_id} path param disagrees with the key org', async () => {
+      // NOTE: post-flatten NO production route carries an `{organization_id}` path param, so this
+      // mismatch cannot occur in production — the key's org IS the active org. This exercises the
+      // belt-and-suspenders `params[paramName] ?? claim` fallback only; the mockRequest default
+      // injects `params.organization_id: 'org-public'`, which differs from the key's `other-org`.
       const handler = requireOrganizationPermission('membership:read');
       const request = mockRequest({
         auth: {
@@ -139,6 +143,36 @@ describe('authorization.util', () => {
           apiKeyPublicId: 'key-1',
           apiKeyScopes: ['membership:read'],
           organizationPublicId: 'other-org',
+        },
+      } as Partial<FastifyRequest>);
+      await expect(handler(request, mockReply)).rejects.toThrow(ForbiddenError);
+    });
+
+    it('production path: an API key with no path param is scoped to its own claim org and passes when scoped', async () => {
+      // The real post-flatten shape: no `organization_id` path param, so the org resolves to the
+      // key's pinned `organizationPublicId` (the claim). A correctly-scoped key is authorized.
+      const handler = requireOrganizationPermission('membership:read');
+      const request = mockRequest({
+        params: {} as Record<string, string>,
+        auth: {
+          kind: 'apiKey' as const,
+          apiKeyPublicId: 'key-1',
+          apiKeyScopes: ['membership:read'],
+          organizationPublicId: 'org-keypinned00000000z',
+        },
+      } as Partial<FastifyRequest>);
+      await expect(handler(request, mockReply)).resolves.toBeUndefined();
+    });
+
+    it('production path: an API key with no path param is rejected when its scope lacks the permission', async () => {
+      const handler = requireOrganizationPermission('membership:manage');
+      const request = mockRequest({
+        params: {} as Record<string, string>,
+        auth: {
+          kind: 'apiKey' as const,
+          apiKeyPublicId: 'key-1',
+          apiKeyScopes: ['membership:read'], // read only — lacks manage
+          organizationPublicId: 'org-keypinned00000000z',
         },
       } as Partial<FastifyRequest>);
       await expect(handler(request, mockReply)).rejects.toThrow(ForbiddenError);
