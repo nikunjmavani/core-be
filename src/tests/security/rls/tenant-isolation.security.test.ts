@@ -147,48 +147,70 @@ describe('Security: Tenant isolation', () => {
       ]);
     });
 
-    it('returns 403 when listing subscriptions for another organization', async () => {
+    /**
+     * Flat subscription routes resolve the organization from the JWT `org`
+     * claim — there is no longer an organization path param. Cross-tenant
+     * isolation is therefore expressed as: org A's actor (token scoped to A)
+     * cannot see or mutate org B's subscription because the RLS-scoped lookup
+     * runs in org A and B's row is invisible (404), not because the path
+     * carries B's id.
+     */
+    async function mintOrganizationAScopedTokenA(
+      fixture: Awaited<ReturnType<typeof seedTwoOrganizationsWithSubscriptions>>,
+    ): Promise<string> {
+      return generateTestToken({
+        userId: fixture.userA.public_id,
+        organizationPublicId: fixture.organizationA.public_id,
+      });
+    }
+
+    it("does not expose another organization's subscription when listing", async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
+      const tokenScopedToA = await mintOrganizationAScopedTokenA(fixture);
 
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(`/billing/organizations/${fixture.organizationB.public_id}/subscriptions`),
-        token: fixture.userA.token,
-        organizationPublicId: fixture.organizationB.public_id,
+        url: testApiPath('/billing/subscriptions'),
+        token: tokenScopedToA,
       });
 
-      expect(response.statusCode).toBe(403);
+      // Org A's actor only ever lists org A's subscriptions; B's row is invisible.
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { data?: Array<{ id?: string }> };
+      const visibleIds = (body.data ?? []).map((subscription) => subscription.id);
+      expect(visibleIds).toContain(fixture.subscriptionInA.public_id);
+      expect(visibleIds).not.toContain(fixture.subscriptionInB.public_id);
     });
 
-    it('returns 403 or 404 when reading a subscription in another organization', async () => {
+    it('returns 404 when reading a subscription in another organization', async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
+      const tokenScopedToA = await mintOrganizationAScopedTokenA(fixture);
 
       const response = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(
-          `/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}`,
-        ),
-        token: fixture.userA.token,
-        organizationPublicId: fixture.organizationB.public_id,
+        url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}`),
+        token: tokenScopedToA,
       });
 
       expect([403, 404]).toContain(response.statusCode);
+      expect(response.statusCode).not.toBe(200);
     });
 
-    it('returns 403 when patching a subscription in another organization', async () => {
+    it('returns 404 when patching a subscription in another organization', async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
+      const tokenScopedToA = await mintOrganizationAScopedTokenA(fixture);
 
+      // Empty body passes UpdateSubscriptionDto (`.strict()` rejects unknown keys
+      // with a 400 before the org-scoped lookup runs) so the request reaches the
+      // isolation boundary and the lookup in org A cannot find B's row → 404.
       const response = await injectAuthenticated(app, {
         method: 'PATCH',
-        url: testApiPath(
-          `/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}`,
-        ),
-        token: fixture.userA.token,
-        organizationPublicId: fixture.organizationB.public_id,
-        payload: { cancel_at_period_end: true },
+        url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}`),
+        token: tokenScopedToA,
+        payload: {},
       });
 
-      expect([403, 400]).toContain(response.statusCode);
+      expect([403, 404]).toContain(response.statusCode);
       expect(response.statusCode).not.toBe(200);
 
       const [row] = await database
@@ -198,71 +220,58 @@ describe('Security: Tenant isolation', () => {
       expect(row?.status).toBe(fixture.subscriptionInB.status);
     });
 
-    it('returns 403 when canceling a subscription in another organization', async () => {
+    it('returns 404 when canceling a subscription in another organization', async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
+      const tokenScopedToA = await mintOrganizationAScopedTokenA(fixture);
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}/cancel`,
-        ),
-        token: fixture.userA.token,
-        organizationPublicId: fixture.organizationB.public_id,
+        url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}/cancel`),
+        token: tokenScopedToA,
         headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: {},
       });
 
-      expect(response.statusCode).toBe(403);
+      expect([403, 404]).toContain(response.statusCode);
+      expect(response.statusCode).not.toBe(200);
+
+      const [row] = await database
+        .select({ status: subscriptions.status })
+        .from(subscriptions)
+        .where(eq(subscriptions.id, fixture.subscriptionInB.id));
+      expect(row?.status).toBe(fixture.subscriptionInB.status);
     });
 
-    it('returns 403 when changing plan on a subscription in another organization', async () => {
+    it('returns 404 when changing plan on a subscription in another organization', async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
+      const tokenScopedToA = await mintOrganizationAScopedTokenA(fixture);
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}/change-plan`,
-        ),
-        token: fixture.userA.token,
-        organizationPublicId: fixture.organizationB.public_id,
+        url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}/change-plan`),
+        token: tokenScopedToA,
         headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: { plan_id: fixture.plan.public_id },
       });
 
-      expect([403, 400]).toContain(response.statusCode);
+      expect([403, 404]).toContain(response.statusCode);
       expect(response.statusCode).not.toBe(200);
     });
 
-    it('returns 403 when resuming a subscription in another organization', async () => {
+    it('returns 404 when resuming a subscription in another organization', async () => {
       const fixture = await seedTwoOrganizationsWithSubscriptions();
+      const tokenScopedToA = await mintOrganizationAScopedTokenA(fixture);
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${fixture.organizationB.public_id}/subscriptions/${fixture.subscriptionInB.public_id}/resume`,
-        ),
-        token: fixture.userA.token,
-        organizationPublicId: fixture.organizationB.public_id,
+        url: testApiPath(`/billing/subscriptions/${fixture.subscriptionInB.public_id}/resume`),
+        token: tokenScopedToA,
         headers: { 'idempotency-key': SUBSCRIPTION_MUTATION_IDEMPOTENCY_KEY },
         payload: {},
       });
 
-      expect(response.statusCode).toBe(403);
-    });
-
-    it('returns 403 when creating a subscription with mismatched organization header', async () => {
-      const fixture = await seedTwoOrganizationsWithSubscriptions();
-
-      const response = await injectAuthenticated(app, {
-        method: 'POST',
-        url: testApiPath(`/billing/organizations/${fixture.organizationB.public_id}/subscriptions`),
-        token: fixture.userA.token,
-        organizationPublicId: fixture.organizationA.public_id,
-        payload: { plan_id: fixture.plan.public_id, billing_cycle: 'monthly' },
-      });
-
-      expect([403, 422]).toContain(response.statusCode);
-      expect(response.statusCode).not.toBe(201);
+      expect([403, 404]).toContain(response.statusCode);
+      expect(response.statusCode).not.toBe(200);
     });
   });
 

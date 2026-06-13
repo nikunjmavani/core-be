@@ -13,10 +13,10 @@ const IDEMPOTENCY_REQUIRED_ROUTE_KEYS = new Set([
   'POST /api/v1/tenancy/organizations/{organization_id}/memberships',
   'POST /api/v1/tenancy/organizations/{organization_id}/transfer-ownership',
   'POST /api/v1/tenancy/organizations/{organization_id}/invitations',
-  'POST /api/v1/billing/organizations/{organization_id}/subscriptions',
-  'POST /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/change-plan',
-  'POST /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/cancel',
-  'POST /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/resume',
+  'POST /api/v1/billing/subscriptions',
+  'POST /api/v1/billing/subscriptions/{subscription_id}/change-plan',
+  'POST /api/v1/billing/subscriptions/{subscription_id}/cancel',
+  'POST /api/v1/billing/subscriptions/{subscription_id}/resume',
 ]);
 
 const CAPTCHA_ROUTE_KEYS = new Set([

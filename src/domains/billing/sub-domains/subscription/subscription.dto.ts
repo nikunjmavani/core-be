@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { trimmedString } from '@/shared/utils/validation/validation.util.js';
 
-/** Zod schema for `POST /api/v1/organizations/:organization_id/subscriptions` request body. */
+/** Zod schema for `POST /api/v1/billing/subscriptions` request body. */
 export const CreateSubscriptionDto = z
   .object({
     plan_id: trimmedString().max(255),
@@ -13,7 +13,7 @@ export const CreateSubscriptionDto = z
 export type CreateSubscriptionInput = z.infer<typeof CreateSubscriptionDto>;
 
 /**
- * Zod schema for `PATCH /api/v1/organizations/:organization_id/subscriptions/:subscription_id`.
+ * Zod schema for `PATCH /api/v1/billing/subscriptions/:subscription_id`.
  *
  * @remarks
  * As of sec-B1, the schema is intentionally empty: `cancel_at_period_end` USED to be
@@ -31,7 +31,7 @@ export const UpdateSubscriptionDto = z.object({}).strict();
 export type UpdateSubscriptionInput = z.infer<typeof UpdateSubscriptionDto>;
 
 /**
- * Zod schema for `POST /api/v1/organizations/:organization_id/subscriptions/:subscription_id/change-plan`
+ * Zod schema for `POST /api/v1/billing/subscriptions/:subscription_id/change-plan`
  * — accepts the target plan's `public_id`.
  */
 export const ChangePlanDto = z

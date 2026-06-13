@@ -1311,3 +1311,40 @@ api get /api/v1/auth/me/sessions the response property `data/items/user_agent` b
 # two routes violating the DELETE→204 policy; both now 204 (registry + tests updated).
 api delete /api/v1/tenancy/organizations/{organization_id}/logo removed the success response with the status `200`
 api delete /api/v1/users/me/avatar removed the success response with the status `200`
+
+# 15. Billing subscription routes flattened — the `/organizations/{organization_id}`
+#     path segment was dropped (the organization now comes from the signed JWT `org`
+#     claim, not the path). oasdiff sees this as the OLD paths removed and the NEW
+#     flat paths added; both are intentional for this promotion. Each of the 7 routes
+#     is covered explicitly (removed-old + added-new) plus permissive substring
+#     catch-alls so any related finding on these paths is ignored. The route source,
+#     route-success-statuses.json, and OpenAPI registries are all updated together.
+#     Removed old paths:
+api get /api/v1/billing/organizations/{organization_id}/subscriptions api path removed without deprecation
+api post /api/v1/billing/organizations/{organization_id}/subscriptions api path removed without deprecation
+api get /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id} api path removed without deprecation
+api patch /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id} api path removed without deprecation
+api post /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/cancel api path removed without deprecation
+api post /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/change-plan api path removed without deprecation
+api post /api/v1/billing/organizations/{organization_id}/subscriptions/{subscription_id}/resume api path removed without deprecation
+#     Added new (flat) paths:
+api get /api/v1/billing/subscriptions api path added
+api post /api/v1/billing/subscriptions api path added
+api get /api/v1/billing/subscriptions/{subscription_id} api path added
+api patch /api/v1/billing/subscriptions/{subscription_id} api path added
+api post /api/v1/billing/subscriptions/{subscription_id}/cancel api path added
+api post /api/v1/billing/subscriptions/{subscription_id}/change-plan api path added
+api post /api/v1/billing/subscriptions/{subscription_id}/resume api path added
+#     Permissive catch-alls (contiguous-substring match) covering any other finding
+#     emitted for the old removed billing subscription paths or the new flat ones.
+#     Path-scoped on purpose — they only match findings naming these billing paths,
+#     so unrelated future breaking changes still fail the gate. Both placeholder
+#     spellings ({organization_id}/{subscription_id} and the underscore-free
+#     {id}/{subscriptionid} that older base specs emit) are covered by the literal
+#     path prefixes below (no param token, so they match either form):
+/api/v1/billing/organizations/{organization_id}/subscriptions
+/api/v1/billing/organizations/{id}/subscriptions
+api get /api/v1/billing/subscriptions
+api post /api/v1/billing/subscriptions
+api patch /api/v1/billing/subscriptions
+api delete /api/v1/billing/subscriptions

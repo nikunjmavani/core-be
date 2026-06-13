@@ -18,31 +18,30 @@ function readIdempotencyKey(request: FastifyRequest): string | undefined {
 
 /**
  * Builds organization-scoped subscription handlers (list / get / create /
- * update / change-plan / cancel / resume). Each handler validates the
- * organization `id` AND the `subscriptionId` path params (sec-B10); externally
+ * update / change-plan / cancel / resume). The active organization is resolved
+ * from the signed `org` token claim via `resolveActiveOrganizationId`; handlers
+ * that take a `subscription_id` path param validate it (sec-B10); externally
  * mutating routes also require the `Idempotency-Key` header before delegating
  * to {@link SubscriptionService}.
  *
  * @remarks
- * sec-B10: every handler used to validate the organization `id` but threaded
- * `request.params.subscription_id` to the service unchecked. Not an IDOR (the
- * service uses an exact-match WHERE), but unbounded attacker-supplied input
+ * sec-B10: every handler resolves the organization from the token claim and
+ * validates `request.params.subscription_id` rather than threading it to the
+ * service unchecked. Not an IDOR (the service uses an exact-match WHERE, scoped
+ * by RLS to the active organization), but unbounded attacker-supplied input
  * would otherwise flow into Sentry breadcrumbs, log payloads, and route-tagged
  * metric labels — a small cardinality + content-exfiltration foot-gun.
- * Validate both ids at the boundary so observability cannot be poisoned.
+ * Validate the subscription id at the boundary so observability cannot be poisoned.
  */
 export function createSubscriptionController(service: SubscriptionService) {
   return {
-    listSubscriptions: async (
-      request: FastifyRequest<{ Params: { organization_id: string } }>,
-      _reply: FastifyReply,
-    ) => {
+    listSubscriptions: async (request: FastifyRequest, _reply: FastifyReply) => {
       requirePrincipal(request);
       const data = await service.list(resolveActiveOrganizationId(request));
       return successResponse(SubscriptionSerializer.many(data), getRequestIdentifier(request));
     },
     getSubscription: async (
-      request: FastifyRequest<{ Params: { organization_id: string; subscription_id: string } }>,
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
@@ -52,10 +51,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       );
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
-    createSubscription: async (
-      request: FastifyRequest<{ Params: { organization_id: string } }>,
-      reply: FastifyReply,
-    ) => {
+    createSubscription: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requirePrincipal(request);
       const idempotencyKey = readIdempotencyKey(request);
       const data = await service.create(
@@ -68,7 +64,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     updateSubscription: async (
-      request: FastifyRequest<{ Params: { organization_id: string; subscription_id: string } }>,
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
@@ -80,7 +76,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     changePlan: async (
-      request: FastifyRequest<{ Params: { organization_id: string; subscription_id: string } }>,
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
@@ -93,7 +89,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     cancelSubscription: async (
-      request: FastifyRequest<{ Params: { organization_id: string; subscription_id: string } }>,
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);
@@ -105,7 +101,7 @@ export function createSubscriptionController(service: SubscriptionService) {
       return successResponse(SubscriptionSerializer.one(data), getRequestIdentifier(request));
     },
     resumeSubscription: async (
-      request: FastifyRequest<{ Params: { organization_id: string; subscription_id: string } }>,
+      request: FastifyRequest<{ Params: { subscription_id: string } }>,
       _reply: FastifyReply,
     ) => {
       requirePrincipal(request);

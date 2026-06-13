@@ -32,9 +32,9 @@ const ALL_BILLING_PERMISSIONS = Object.values(BILLING_PERMISSIONS);
 
 /**
  * Integration tests for subscription mutation endpoints:
- * - POST /billing/organizations/:id/subscriptions/:subscription_id/change-plan
- * - POST /billing/organizations/:id/subscriptions/:subscription_id/cancel
- * - POST /billing/organizations/:id/subscriptions/:subscription_id/resume
+ * - POST /billing/subscriptions/:subscription_id/change-plan
+ * - POST /billing/subscriptions/:subscription_id/cancel
+ * - POST /billing/subscriptions/:subscription_id/resume
  *
  * Covers positive paths, negative auth/permission/404 paths, idempotency enforcement,
  * and a full cancel → resume lifecycle.
@@ -90,22 +90,23 @@ describe('Billing Subscription Mutations — Integration', () => {
       organizationId: organization.id,
       roleId: role.id,
     });
-    const token = await generateTestToken({ userId: user.public_id });
+    const token = await generateTestToken({
+      userId: user.public_id,
+      organizationPublicId: organization.public_id,
+    });
     return { user, organization, plan, subscription, role, token };
   }
 
   // ─── POST change-plan ──────────────────────────────────────────────────────
 
-  describe('POST /api/v1/billing/organizations/:id/subscriptions/:subscription_id/change-plan', () => {
+  describe('POST /api/v1/billing/subscriptions/:subscription_id/change-plan', () => {
     it('should change the plan and return 200 with a valid Idempotency-Key', async () => {
       const { organization, subscription, token } = await createBillingMutationContext();
       const newPlan = await createTestPlan({ name: 'New Plan' });
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/change-plan`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/change-plan`),
         token,
         organizationPublicId: organization.public_id,
         payload: { plan_id: newPlan.public_id },
@@ -118,14 +119,12 @@ describe('Billing Subscription Mutations — Integration', () => {
     });
 
     it('should return 401 when no auth header is provided', async () => {
-      const { organization, subscription } = await createBillingMutationContext();
+      const { subscription } = await createBillingMutationContext();
       const newPlan = await createTestPlan();
 
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/change-plan`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/change-plan`),
         payload: { plan_id: newPlan.public_id },
         headers: { 'idempotency-key': generatePublicId('subscription') },
       });
@@ -139,13 +138,14 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       // New user with no role in this organization.
       const unprivilegedUser = await createTestUser();
-      const unprivilegedToken = await generateTestToken({ userId: unprivilegedUser.public_id });
+      const unprivilegedToken = await generateTestToken({
+        userId: unprivilegedUser.public_id,
+        organizationPublicId: organization.public_id,
+      });
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/change-plan`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/change-plan`),
         token: unprivilegedToken,
         organizationPublicId: organization.public_id,
         payload: { plan_id: newPlan.public_id },
@@ -162,9 +162,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${nonExistentSubscriptionId}/change-plan`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${nonExistentSubscriptionId}/change-plan`),
         token,
         organizationPublicId: organization.public_id,
         payload: { plan_id: newPlan.public_id },
@@ -180,9 +178,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/change-plan`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/change-plan`),
         token,
         organizationPublicId: organization.public_id,
         payload: { plan_id: newPlan.public_id },
@@ -194,7 +190,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
   // ─── POST cancel ──────────────────────────────────────────────────────────
 
-  describe('POST /api/v1/billing/organizations/:id/subscriptions/:subscription_id/cancel', () => {
+  describe('POST /api/v1/billing/subscriptions/:subscription_id/cancel', () => {
     it('should cancel an active subscription and return 200 with a valid Idempotency-Key', async () => {
       const { organization, subscription, token } = await createBillingMutationContext({
         status: 'ACTIVE',
@@ -202,9 +198,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/cancel`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -216,13 +210,11 @@ describe('Billing Subscription Mutations — Integration', () => {
     });
 
     it('should return 401 when no auth header is provided', async () => {
-      const { organization, subscription } = await createBillingMutationContext();
+      const { subscription } = await createBillingMutationContext();
 
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/cancel`),
         headers: { 'idempotency-key': generatePublicId('subscription') },
       });
 
@@ -232,13 +224,14 @@ describe('Billing Subscription Mutations — Integration', () => {
     it('should return 403 when the user lacks subscription:manage permission', async () => {
       const { organization, subscription } = await createBillingMutationContext();
       const unprivilegedUser = await createTestUser();
-      const unprivilegedToken = await generateTestToken({ userId: unprivilegedUser.public_id });
+      const unprivilegedToken = await generateTestToken({
+        userId: unprivilegedUser.public_id,
+        organizationPublicId: organization.public_id,
+      });
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/cancel`),
         token: unprivilegedToken,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -253,9 +246,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${nonExistentSubscriptionId}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${nonExistentSubscriptionId}/cancel`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -269,9 +260,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/cancel`),
         token,
         organizationPublicId: organization.public_id,
       });
@@ -290,9 +279,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       // First cancel — sets cancel_at_period_end=true
       await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/cancel`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -302,9 +289,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       // so the service can fetch it and set cancel_at_period_end=true again → 200.
       const secondCancelResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/cancel`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -316,7 +301,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
   // ─── POST resume ──────────────────────────────────────────────────────────
 
-  describe('POST /api/v1/billing/organizations/:id/subscriptions/:subscription_id/resume', () => {
+  describe('POST /api/v1/billing/subscriptions/:subscription_id/resume', () => {
     it('should resume a cancelled (cancel_at_period_end) subscription and return 200 with a valid Idempotency-Key', async () => {
       const { organization, subscription, token } = await createBillingMutationContext({
         status: 'ACTIVE',
@@ -325,9 +310,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       // First cancel to set cancel_at_period_end=true
       await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/cancel`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -335,9 +318,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/resume`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/resume`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -352,13 +333,11 @@ describe('Billing Subscription Mutations — Integration', () => {
     });
 
     it('should return 401 when no auth header is provided', async () => {
-      const { organization, subscription } = await createBillingMutationContext();
+      const { subscription } = await createBillingMutationContext();
 
       const response = await injectUnauthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/resume`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/resume`),
         headers: { 'idempotency-key': generatePublicId('subscription') },
       });
 
@@ -368,13 +347,14 @@ describe('Billing Subscription Mutations — Integration', () => {
     it('should return 403 when the user lacks subscription:manage permission', async () => {
       const { organization, subscription } = await createBillingMutationContext();
       const unprivilegedUser = await createTestUser();
-      const unprivilegedToken = await generateTestToken({ userId: unprivilegedUser.public_id });
+      const unprivilegedToken = await generateTestToken({
+        userId: unprivilegedUser.public_id,
+        organizationPublicId: organization.public_id,
+      });
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/resume`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/resume`),
         token: unprivilegedToken,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -389,9 +369,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${nonExistentSubscriptionId}/resume`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${nonExistentSubscriptionId}/resume`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -405,9 +383,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticated(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/resume`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/resume`),
         token,
         organizationPublicId: organization.public_id,
       });
@@ -426,9 +402,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/resume`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/resume`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -455,9 +429,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       // 1. Confirm initial state via GET.
       const getResponse = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(
-          `/billing/organizations/${organizationId}/subscriptions/${subscriptionId}`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscriptionId}`),
         token,
         organizationPublicId: organizationId,
       });
@@ -471,9 +443,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       // 2. Cancel — sets cancel_at_period_end=true.
       const cancelResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organizationId}/subscriptions/${subscriptionId}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscriptionId}/cancel`),
         token,
         organizationPublicId: organizationId,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -487,9 +457,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       // 3. Verify cancelled state via GET.
       const getAfterCancelResponse = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(
-          `/billing/organizations/${organizationId}/subscriptions/${subscriptionId}`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscriptionId}`),
         token,
         organizationPublicId: organizationId,
       });
@@ -502,9 +470,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       // 4. Resume — sets cancel_at_period_end=false and status=ACTIVE.
       const resumeResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organizationId}/subscriptions/${subscriptionId}/resume`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscriptionId}/resume`),
         token,
         organizationPublicId: organizationId,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -519,9 +485,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       // 5. Verify final state via GET.
       const getAfterResumeResponse = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(
-          `/billing/organizations/${organizationId}/subscriptions/${subscriptionId}`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscriptionId}`),
         token,
         organizationPublicId: organizationId,
       });
@@ -550,9 +514,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/cancel`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -569,9 +531,7 @@ describe('Billing Subscription Mutations — Integration', () => {
 
       const response = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/resume`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/resume`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -589,9 +549,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       // Stripe-backed cancel fails closed → 503.
       const cancelResponse = await injectAuthenticatedOrganizationMutation(app, {
         method: 'POST',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}/cancel`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}/cancel`),
         token,
         organizationPublicId: organization.public_id,
         headers: { 'idempotency-key': generatePublicId('subscription') },
@@ -601,9 +559,7 @@ describe('Billing Subscription Mutations — Integration', () => {
       // The local subscription row must remain unchanged: cancel_at_period_end=false.
       const getResponse = await injectAuthenticated(app, {
         method: 'GET',
-        url: testApiPath(
-          `/billing/organizations/${organization.public_id}/subscriptions/${subscription.public_id}`,
-        ),
+        url: testApiPath(`/billing/subscriptions/${subscription.public_id}`),
         token,
         organizationPublicId: organization.public_id,
       });
