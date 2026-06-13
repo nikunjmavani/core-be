@@ -10,6 +10,7 @@ import { assertUserAccountActive } from '@/shared/utils/auth/account-status.util
 import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-role.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
+import { resolveDefaultActiveOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
 import type { UserService } from '@/domains/user/user.service.js';
@@ -227,10 +228,21 @@ export class MfaService {
   }
 
   private async issueAccessTokenAndSession(
-    user: { public_id: string; email: string; status: string; is_email_verified: boolean },
+    user: {
+      id: number;
+      public_id: string;
+      email: string;
+      status: string;
+      is_email_verified: boolean;
+    },
     ipAddress: string,
     userAgent?: string,
   ): Promise<{ access_token: string; session_public_id: string; session_refresh_secret: string }> {
+    // Bake the active-organization `org` claim into the token, mirroring the first-factor path
+    // (`complete-first-factor-auth.ts`). Without this an MFA login mints an org-less token and the
+    // user is locked out of every org-scoped route (which resolve the active org from the claim
+    // post-flatten) until they call a switch endpoint — a regression that hit MFA-enforcing tenants.
+    const organizationPublicId = await resolveDefaultActiveOrganizationPublicId(user.id);
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
       role: resolveAccessTokenRoleForUser({
@@ -238,6 +250,7 @@ export class MfaService {
         status: user.status,
         isEmailVerified: user.is_email_verified,
       }),
+      organizationPublicId,
     });
     const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');
     const sessionMaxAgeDays = env.AUTH_SESSION_MAX_AGE_DAYS;

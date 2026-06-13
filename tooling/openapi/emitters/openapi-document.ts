@@ -110,7 +110,7 @@ export function buildOpenApiDocument(localeStrings: OpenApiLocaleStrings): OpenA
       description,
       operationId: generateOperationId(method, openapiPath),
       parameters: allParameters.length > 0 ? allParameters : undefined,
-      security: getRouteSecurity(tags),
+      security: getRouteSecurity(tags, routeKey),
       responses: buildResponses(method, routeKey, responseStrings),
     };
 

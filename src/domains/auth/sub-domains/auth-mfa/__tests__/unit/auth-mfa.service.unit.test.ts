@@ -4,6 +4,7 @@ import { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service
 import type { UserService } from '@/domains/user/user.service.js';
 import type { AuthMethodService } from '@/domains/auth/sub-domains/auth-method/auth-method.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
+import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 
 vi.mock('otplib', () => ({
   generateSecret: () => 'TESTSECRET',
@@ -13,6 +14,13 @@ vi.mock('otplib', () => ({
 
 vi.mock('@/shared/utils/security/jwt.util.js', () => ({
   signAccessToken: vi.fn().mockReturnValue('access-token'),
+}));
+
+// H1: the MFA login path now bakes the active-org `org` claim into the token (mirroring the
+// first-factor path). Mock the resolver — without this the unit lane (no Postgres) would hit a
+// real DB call. The verifyLoginMfa test below asserts the resolved org reaches signAccessToken.
+vi.mock('@/domains/tenancy/sub-domains/organization/resolve-active-organization.js', () => ({
+  resolveDefaultActiveOrganizationPublicId: vi.fn().mockResolvedValue('org_mfaactive0000000000'),
 }));
 
 vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({
@@ -125,6 +133,12 @@ describe('MfaService', () => {
     );
     expect(result.access_token).toBe('access-token');
     expect(authSessionService.createSessionForUser).toHaveBeenCalled();
+    // H1 regression guard: the MFA-login token MUST carry the active-org `org` claim, exactly like
+    // the first-factor path. Without it an MFA user gets an org-less token and is locked out of
+    // every org-scoped route (which resolve the active org from the claim post-flatten).
+    expect(vi.mocked(signAccessToken)).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationPublicId: 'org_mfaactive0000000000' }),
+    );
   });
 
   it('verifyLoginMfa issues session after valid recovery code', async () => {

@@ -195,6 +195,8 @@ api post /api/v1/auth/logout removed the success response with the status `204`
 api post /api/v1/auth/magic-link/send added the new required `header` request parameter `x-captcha-token`
 api post /api/v1/auth/magic-link/send removed the success response with the status `200`
 api post /api/v1/auth/magic-link/verify removed the success response with the status `200`
+# mfa/login already enforces captchaPreHandler at runtime (auth.routes.ts); now documented (audit fix).
+api post /api/v1/auth/mfa/login added the new required `header` request parameter `x-captcha-token`
 api post /api/v1/auth/mfa/enroll removed the success response with the status `200`
 api post /api/v1/auth/mfa/enroll/confirm removed the success response with the status `200`
 api post /api/v1/auth/mfa/login removed the success response with the status `200`
