@@ -813,4 +813,38 @@ describe('env-schema', () => {
       expect(issue).toBeDefined();
     });
   });
+
+  describe('retention upper bounds (audit-#14)', () => {
+    it.each([
+      ['NOTIFICATION_RETENTION_DAYS', '90000'],
+      ['AUTH_SESSION_RETENTION_DAYS', '90000'],
+      ['TOMBSTONE_RETENTION_DAYS', '90000'],
+      ['STRIPE_WEBHOOK_EVENT_RETENTION_DAYS', '90000'],
+      ['WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS', '36500'],
+    ])('rejects an over-cap %s so a typo cannot disable cleanup', (key, value) => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        [key]: value,
+      });
+      expect(parsed.success).toBe(false);
+      const issue = parsed.success
+        ? undefined
+        : parsed.error.issues.find((i) => i.path.includes(key));
+      expect(issue).toBeDefined();
+    });
+
+    it('accepts retention values within the new bounds', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NODE_ENV: 'test',
+        NOTIFICATION_RETENTION_DAYS: '365',
+        AUTH_SESSION_RETENTION_DAYS: '730',
+        TOMBSTONE_RETENTION_DAYS: '730',
+        STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: '730',
+        WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: '180',
+      });
+      expect(parsed.success).toBe(true);
+    });
+  });
 });

@@ -427,18 +427,27 @@ const envSchemaBase = z.object({
    * largest in the DB and trips autovacuum / search-path bloat thresholds.
    */
   AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(365),
-  NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
-  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1),
+  /**
+   * audit-#14: every retention knob carries a defensible MAX as well as a min. Without an
+   * upper bound a deployment typo (e.g. `90` → `90000`) silently disables cleanup, so the
+   * high-volume tables (notifications, sessions, tombstones, Stripe ledger, webhook attempts)
+   * grow unbounded, retain PII far beyond policy, and eventually degrade autovacuum + query
+   * performance. Exceptional longer retention must be a reviewed policy/migration change, not
+   * an arbitrary env value.
+   */
+  NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(90),
+  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(730),
   /** Tombstoned-row TTL before purge workers hard-delete (default avoids mandatory deploy secret). */
-  TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   /** Terminal Stripe webhook ledger rows older than this are purged (failed rows kept for replay). */
-  STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   /**
    * Webhook delivery-attempt rows older than this are purged (audit-#3). These rows retain the
    * full event payload + response body, so a shorter default than tombstone retention bounds both
-   * storage growth and PII retention for long-lived active webhooks.
+   * storage growth and PII retention for long-lived active webhooks. Capped at 180 days
+   * (audit-#14) so a misconfiguration cannot retain payloads/response bodies indefinitely.
    */
-  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
+  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(1).max(180).default(30),
 
   // BullMQ repeatable jobs (retention / cleanup schedules)
   SCHEDULER_ENABLED: z
