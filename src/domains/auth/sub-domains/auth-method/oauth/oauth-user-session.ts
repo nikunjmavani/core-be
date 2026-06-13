@@ -18,6 +18,8 @@ import {
   completeFirstFactorAuth,
   type FirstFactorAuthResult,
 } from '@/domains/auth/shared/complete-first-factor-auth.js';
+import { env } from '@/shared/config/env.config.js';
+import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
 import type { OAuthProfile, OAuthProvider } from './oauth.types.js';
 import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
@@ -72,6 +74,25 @@ export async function completeOAuthUserSession(parameters: {
           }),
         );
         logger.info({ email: normalizedEmail, provider }, 'oauth.user.created');
+        // Account-level personal organization: auto-provisioned for every new user when
+        // PERSONAL_ORGANIZATION_ENABLED. Best-effort — provisioning failure must not fail
+        // signup; the partial unique index makes it idempotent and login lazily re-provisions
+        // (PERSONAL_ORGANIZATION_ENABLED off → team-only mode → no personal org; the user
+        // creates their own team organization from the frontend onboarding redirect).
+        if (env.PERSONAL_ORGANIZATION_ENABLED) {
+          try {
+            await provisionPersonalOrganization(user.id);
+            logger.info(
+              { userId: user.public_id, provider },
+              'oauth.user.personal_org_provisioned',
+            );
+          } catch (error) {
+            logger.error(
+              { err: error, userId: user.public_id },
+              'oauth.user.personal_org_provision_failed',
+            );
+          }
+        }
       } else {
         // Account-takeover guard: a pre-existing account (e.g. created by password)
         // must not be silently merged into via find-or-link. Only auto-link when this

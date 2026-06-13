@@ -18,6 +18,17 @@ vi.mock('@/domains/tenancy/sub-domains/permission/permission-cache.service.js', 
     invalidateOrganizationPermissionsMock(...parameters),
 }));
 
+// create() now bootstraps the org atomically via provisionOrganizationWithOwner (org + owner
+// role + permissions + membership), not repository.create — mock that boundary here.
+const provisionOrganizationWithOwnerMock = vi.fn();
+vi.mock('@/domains/tenancy/sub-domains/organization/organization-provisioning.js', () => ({
+  provisionOrganizationWithOwner: (...parameters: unknown[]) =>
+    provisionOrganizationWithOwnerMock(...parameters),
+  provisionPersonalOrganization: vi.fn(),
+  PERSONAL_ORGANIZATION_NAME: 'Personal',
+  OWNER_ROLE_NAME: 'Owner',
+}));
+
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
 import { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { OrganizationRepository } from '@/domains/tenancy/sub-domains/organization/organization.repository.js';
@@ -29,6 +40,7 @@ const organizationRow = {
   public_id: generatePublicId('organization'),
   name: 'Acme',
   slug: 'acme',
+  type: 'TEAM',
   status: 'ACTIVE',
   stripe_customer_id: null,
   owner_user_id: 10,
@@ -73,6 +85,11 @@ describe('OrganizationService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    provisionOrganizationWithOwnerMock.mockResolvedValue({
+      organization: organizationRow,
+      roleId: 1,
+      membershipPublicId: generatePublicId('membership'),
+    });
     service.wireOffboardingUploadService({
       deleteObject: vi.fn(),
       tombstoneAllByOrganizationId: vi.fn().mockResolvedValue(0),
@@ -112,7 +129,9 @@ describe('OrganizationService', () => {
 
   it('create persists organization for owner', async () => {
     const result = await service.create({ name: 'New Org', slug: 'new-org' }, 'owner_public');
-    expect(repository.create).toHaveBeenCalled();
+    expect(provisionOrganizationWithOwnerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'New Org', slug: 'new-org', type: 'TEAM' }),
+    );
     expect(result.name).toBe('Acme');
   });
 
@@ -271,7 +290,7 @@ describe('OrganizationService', () => {
 
   it('create maps a slug unique_violation race to ConflictError instead of 500', async () => {
     vi.mocked(repository.findBySlug).mockResolvedValue(null);
-    vi.mocked(repository.create).mockRejectedValueOnce(
+    provisionOrganizationWithOwnerMock.mockRejectedValueOnce(
       Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' }),
     );
     await expect(

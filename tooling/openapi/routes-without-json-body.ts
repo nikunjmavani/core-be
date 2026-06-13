@@ -5,6 +5,7 @@
 export const ROUTES_WITHOUT_JSON_BODY = new Set([
   'POST /api/v1/auth/logout',
   'POST /api/v1/auth/refresh',
+  'POST /api/v1/auth/switch-to-personal',
   'POST /api/v1/auth/email/resend-verification',
   'POST /api/v1/auth/webauthn/register/options',
   'DELETE /api/v1/auth/me/sessions',

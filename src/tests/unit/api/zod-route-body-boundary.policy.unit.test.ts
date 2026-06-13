@@ -13,6 +13,7 @@ const DOMAINS_ROOT = join(PROJECT_ROOT, 'src/domains');
 const NO_BODY_ROUTE_PATH_ALLOWLIST = [
   '/logout',
   '/refresh',
+  '/switch-to-personal',
   '/resend-verification',
   '/webauthn/register/options',
   '/me/sessions',

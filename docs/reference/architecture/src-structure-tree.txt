@@ -68,6 +68,7 @@ src/
     │   ├── __tests__/
     │   │   ├── e2e/
     │   │   │   ├── magic-link-flow.e2e.test.ts
+    │   │   │   ├── organization-switch.e2e.test.ts
     │   │   │   └── webauthn-passkey-flow.e2e.test.ts
     │   │   ├── factories/
     │   │   │   └── magic-link-token.factory.ts
@@ -683,7 +684,8 @@ src/
     │   │   │   │   │   ├── organization.routes.unit.test.ts
     │   │   │   │   │   ├── organization.serializer.unit.test.ts
     │   │   │   │   │   ├── organization.service.unit.test.ts
-    │   │   │   │   │   └── organization.validator.unit.test.ts
+    │   │   │   │   │   ├── organization.validator.unit.test.ts
+    │   │   │   │   │   └── personal-organization-provisioning.db.unit.test.ts
     │   │   │   ├── organization-api-key/
     │   │   │   │   ├── __tests__/
     │   │   │   │   │   ├── unit/
@@ -763,6 +765,7 @@ src/
     │   │   │   │   ├── organization-tombstone-retention.constants.ts
     │   │   │   │   ├── organization-tombstone-retention.processor.ts
     │   │   │   │   └── organization-tombstone-retention.worker.ts
+    │   │   │   ├── organization-provisioning.ts
     │   │   │   ├── organization.controller.ts
     │   │   │   ├── organization.dto.ts
     │   │   │   ├── organization.repository.ts
@@ -772,7 +775,8 @@ src/
     │   │   │   ├── organization.service.ts
     │   │   │   ├── organization.types.ts
     │   │   │   ├── organization.validator.ts
-    │   │   │   └── OVERVIEW.md
+    │   │   │   ├── OVERVIEW.md
+    │   │   │   └── resolve-active-organization.ts
     │   │   └── permission/
     │   │   │   ├── __tests__/
     │   │   │       ├── integration/
@@ -1227,6 +1231,7 @@ src/
     ├── admin/
     │   ├── admin-token.ts
     │   ├── audit-bcrypt-password-hashes.ts
+    │   ├── backfill-personal-organizations.ts
     │   ├── dlq-replay.ts
     │   ├── load-test-credential-pool.ts
     │   ├── load-test-credentials.ts

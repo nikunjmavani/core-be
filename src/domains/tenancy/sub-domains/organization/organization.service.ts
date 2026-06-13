@@ -15,6 +15,7 @@ import {
   validateUploadLogo,
 } from './organization.validator.js';
 import { serializeOrganization } from './organization.serializer.js';
+import { provisionOrganizationWithOwner } from './organization-provisioning.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { buildOrganizationLogoKeyPrefix } from '@/domains/upload/upload.constants.js';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
@@ -150,6 +151,7 @@ export class OrganizationService {
       public_id: organization.public_id,
       name: organization.name,
       slug: organization.slug,
+      type: organization.type,
       stripe_customer_id: organization.stripe_customer_id,
     };
   }
@@ -178,6 +180,7 @@ export class OrganizationService {
       public_id: organization.public_id,
       name: organization.name,
       slug: organization.slug,
+      type: organization.type,
       stripe_customer_id: organization.stripe_customer_id,
       owner_user_id: organization.owner_user_id,
     };
@@ -206,6 +209,7 @@ export class OrganizationService {
       public_id: organization.public_id,
       name: organization.name,
       slug: organization.slug,
+      type: organization.type,
       stripe_customer_id: organization.stripe_customer_id,
     };
   }
@@ -218,6 +222,7 @@ export class OrganizationService {
       public_id: organization.public_id,
       name: organization.name,
       slug: organization.slug,
+      type: organization.type,
       stripe_customer_id: organization.stripe_customer_id,
     };
   }
@@ -355,13 +360,16 @@ export class OrganizationService {
           `Organization with slug "${parsed.slug}" already exists`,
         );
       try {
-        const created = await this.repository.create({
+        // Atomically create the organization AND bootstrap the owner's role + full
+        // permissions + membership — without this the creator resolves zero permissions
+        // on their own organization (the permission path is a strict role→membership join).
+        const { organization } = await provisionOrganizationWithOwner({
           name: parsed.name,
           slug: parsed.slug,
-          owner_user_id: ownerId,
-          created_by_user_id: ownerId,
+          type: 'TEAM',
+          ownerUserId: ownerId,
         });
-        return serializeOrganization(created);
+        return serializeOrganization(organization);
       } catch (error) {
         // Two concurrent creates can both pass the findBySlug pre-check; the
         // loser hits the `idx_organizations_slug` unique index. Map the
@@ -424,6 +432,11 @@ export class OrganizationService {
     const organization = await withOrganizationDatabaseContext(public_id, async () => {
       const found = await this.repository.findByPublicId(public_id);
       if (!found) throw new NotFoundError('Organization');
+      // A PERSONAL organization is the user's own account-level workspace — it is never
+      // deletable on its own; it cascades only when the account itself is deleted.
+      if (found.type === 'PERSONAL') {
+        throw new ConflictError('errors:personalOrganizationImmutable');
+      }
       const marked = await this.repository.markDeletionStarted(public_id);
       if (!(marked || found.deletion_started_at)) {
         throw new NotFoundError('Organization');

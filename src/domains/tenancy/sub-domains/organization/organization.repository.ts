@@ -196,7 +196,10 @@ export class OrganizationRepository extends BaseRepository {
 
   async create(data: {
     name: string;
-    slug: string;
+    /** Null for a personal organization (no human handle); kebab string for a team. */
+    slug: string | null;
+    /** `PERSONAL` or `TEAM` (defaults to `TEAM` for the public create endpoint). */
+    type?: string;
     owner_user_id: number;
     created_by_user_id: number | null;
   }) {
@@ -206,6 +209,7 @@ export class OrganizationRepository extends BaseRepository {
         public_id,
         name: data.name,
         slug: data.slug,
+        type: data.type ?? 'TEAM',
         owner_user_id: data.owner_user_id,
         created_by_user_id: data.created_by_user_id ?? undefined,
         updated_by_user_id: data.created_by_user_id ?? undefined,
@@ -262,14 +266,24 @@ export class OrganizationRepository extends BaseRepository {
   }
 
   /**
-   * Counts the active (not soft-deleted) organizations owned by a user (route-audit-#2 follow-up).
-   * Used to block deleting a user who still owns organizations (require ownership transfer first).
+   * Counts the active (not soft-deleted) **TEAM** organizations owned by a user
+   * (route-audit-#2 follow-up). Used to block deleting a user who still owns team
+   * organizations (require ownership transfer first).
+   *
+   * @remarks PERSONAL organizations are excluded: every user owns exactly one, and it
+   * cascade-deletes with the account — counting it would make account deletion impossible.
    */
   async countActiveOwnedByUser(owner_user_id: number): Promise<number> {
     const rows = await getRequestDatabase()
       .select({ value: sql<number>`count(*)::int` })
       .from(organizations)
-      .where(and(eq(organizations.owner_user_id, owner_user_id), isNull(organizations.deleted_at)));
+      .where(
+        and(
+          eq(organizations.owner_user_id, owner_user_id),
+          eq(organizations.type, 'TEAM'),
+          isNull(organizations.deleted_at),
+        ),
+      );
     return rows[0]?.value ?? 0;
   }
 

@@ -101,6 +101,9 @@ async function authenticate(request: FastifyRequest, _reply: FastifyReply): Prom
       userId: payload.userId,
       role: effectiveRole,
       sessionPublicId,
+      // Active organization (tenant scope) carried as a signed claim. Membership + RLS are
+      // still re-checked per request — the claim is scope, not authority.
+      organizationPublicId: payload.organizationPublicId,
     }) as AuthContext;
   } catch (error) {
     if (error instanceof UnauthorizedError) {

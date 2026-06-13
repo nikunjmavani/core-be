@@ -442,6 +442,10 @@ export class MembershipService {
         await this.organizationService.requireOrganizationMembershipByPublicId(
           organization_public_id,
         );
+      // A PERSONAL organization belongs solely to its owner and cannot be handed off.
+      if (organization.type === 'PERSONAL') {
+        throw new ConflictError('errors:personalOrganizationImmutable');
+      }
       const currentUserId =
         await this.organizationService.resolveUserInternalIdByPublicId(current_user_public_id);
       if (currentUserId === null) throw new NotFoundError('User');

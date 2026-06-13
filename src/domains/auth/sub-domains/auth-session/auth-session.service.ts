@@ -323,6 +323,40 @@ export class AuthSessionService {
   }
 
   /**
+   * Re-bind the session's active access token to a freshly minted one — used by the
+   * organization-switch endpoints, which re-mint the token with a different `org` claim.
+   *
+   * @remarks
+   * - **Algorithm:** under the session's RLS context, confirm the session is present and not
+   *   revoked, invalidate the previous token's Redis cache entry, then point `token_hash` at
+   *   the new token. Unlike refresh, the refresh secret is NOT rotated — the caller is already
+   *   authenticated via a valid access token for this session; only the access token moves.
+   *   The previously held token immediately fails `verifyActiveAccessToken` (hash drift).
+   * - **Failure modes:** `UnauthorizedError` when the session is gone or revoked.
+   * - **Side effects:** one UPDATE on `auth.sessions`; two Redis cache invalidations.
+   */
+  async rebindAccessToken({
+    sessionPublicId,
+    nextAccessToken,
+  }: {
+    sessionPublicId: string;
+    nextAccessToken: string;
+  }): Promise<void> {
+    const nextTokenHash = hashAccessToken(nextAccessToken);
+    await withSessionPublicIdDatabaseContext(sessionPublicId, async (_databaseHandle) => {
+      const existing = await this.sessionRepository.findByPublicId(sessionPublicId);
+      if (!existing) {
+        throw new UnauthorizedError('errors:invalidOrExpiredSession');
+      }
+      if (existing.token_hash) {
+        await invalidateCachedSessionToken(existing.token_hash);
+      }
+      await this.sessionRepository.rotateTokenHash(sessionPublicId, nextTokenHash);
+      await invalidateCachedSessionToken(nextTokenHash);
+    });
+  }
+
+  /**
    * Revokes every session for the owner of a replayed refresh secret.
    *
    * @remarks

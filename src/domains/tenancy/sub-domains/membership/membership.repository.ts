@@ -23,7 +23,7 @@ interface MembershipListPagination {
 /** Row shape returned by {@link MembershipRepository.listOrganizationsForUserDataExport}. */
 export interface MembershipOrganizationUserDataExportRow {
   name: string;
-  slug: string;
+  slug: string | null;
   status: string;
   created_at: Date;
 }

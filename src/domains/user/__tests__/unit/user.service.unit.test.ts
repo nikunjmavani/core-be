@@ -33,6 +33,14 @@ vi.mock('@/shared/utils/infrastructure/postgres-error.util.js', () => ({
   runInsertWithPublicIdentifierRetry: async (operation: () => Promise<unknown>) => operation(),
 }));
 
+// getMe resolves the caller's personal organization via this tenancy helper (its own DB context);
+// stub it so the pure unit test does not touch Postgres.
+vi.mock('@/domains/tenancy/sub-domains/organization/resolve-active-organization.js', () => ({
+  resolvePersonalOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  resolveDefaultActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  findUserActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+}));
+
 // route-#1: control whether the admin-mutation target resolves as a protected super-admin.
 const resolveGlobalRoleForEmailMock = vi.fn().mockReturnValue(undefined);
 vi.mock('@/shared/utils/auth/global-admin-role.util.js', () => ({

@@ -96,6 +96,31 @@ export function createAuthSessionHandlers({
       setSessionCookie(reply, parsedSession.sessionPublicId, data.refresh_secret);
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
     },
+    switchToPersonalOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      if (auth.kind !== 'user' || !auth.sessionPublicId) {
+        throw new UnauthorizedError('errors:invalidOrExpiredSession');
+      }
+      const data = await authService.switchToPersonal({
+        userPublicId: auth.userId,
+        sessionPublicId: auth.sessionPublicId,
+      });
+      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
+    },
+    switchToOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      if (auth.kind !== 'user' || !auth.sessionPublicId) {
+        throw new UnauthorizedError('errors:invalidOrExpiredSession');
+      }
+      // The route's zod `body` schema has already validated organization_id (400 otherwise).
+      const { organization_id: organizationId } = request.body as { organization_id: string };
+      const data = await authService.switchToOrganization({
+        userPublicId: auth.userId,
+        sessionPublicId: auth.sessionPublicId,
+        organizationPublicId: organizationId,
+      });
+      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
+    },
     revokeAllSessions: async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = requireAuth(request);
       // sec-new-A3: preserve the caller's own session so the client is not
