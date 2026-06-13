@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
 import { checkOk, checkResponseTime } from '../helpers/checks.js';
-import { authHeaders } from '../helpers/auth.js';
+import { authHeaders, switchToOrganization } from '../helpers/auth.js';
 
 /**
  * k6 Scenario: Permission write paths
@@ -25,22 +25,23 @@ export const options = {
 };
 
 export function permissionWriteOps() {
-  const token = __ENV.TEST_TOKEN;
+  let token = __ENV.TEST_TOKEN;
   const organizationPublicId = __ENV.TEST_ORG_ID;
   if (!(token && organizationPublicId)) {
     return;
   }
 
+  // The active org rides the token's `org` claim — scope the token to TEST_ORG_ID
+  // so the flat route resolves the right organization.
+  token = switchToOrganization(token, organizationPublicId) || token;
+
   const headers = authHeaders(token).headers;
   const jsonHeaders = { ...headers, 'Content-Type': 'application/json' };
 
-  const rolesResponse = http.get(
-    `${API_PREFIX}/tenancy/organizations/${organizationPublicId}/roles`,
-    {
-      headers,
-      tags: { name: 'list-roles' },
-    },
-  );
+  const rolesResponse = http.get(`${API_PREFIX}/tenancy/organization/roles`, {
+    headers,
+    tags: { name: 'list-roles' },
+  });
   checkOk(rolesResponse, 'list-roles');
   checkResponseTime(rolesResponse, 500, 'list-roles');
 
@@ -60,7 +61,7 @@ export function permissionWriteOps() {
   sleep(0.3);
 
   const permissionsResponse = http.get(
-    `${API_PREFIX}/tenancy/organizations/${organizationPublicId}/roles/${firstRole.id}/permissions`,
+    `${API_PREFIX}/tenancy/organization/roles/${firstRole.id}/permissions`,
     {
       headers,
       tags: { name: 'get-role-permissions' },
@@ -82,7 +83,7 @@ export function permissionWriteOps() {
   sleep(0.3);
 
   const putResponse = http.put(
-    `${API_PREFIX}/tenancy/organizations/${organizationPublicId}/roles/${firstRole.id}/permissions`,
+    `${API_PREFIX}/tenancy/organization/roles/${firstRole.id}/permissions`,
     JSON.stringify({ permission_codes: permissionCodes }),
     {
       headers: jsonHeaders,

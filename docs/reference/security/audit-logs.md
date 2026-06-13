@@ -4,7 +4,7 @@ Core-be records security-relevant mutations in `audit.logs` via `recordScopedAud
 
 ## Query API
 
-- `GET /api/v1/tenancy/organizations/:organization_id/audit-logs` — requires `audit-log:read`, scoped by organization (`withOrganizationDatabaseContext`).
+- `GET /api/v1/tenancy/organization/audit-logs` — requires `audit-log:read`, scoped to the active organization carried by the access token's `org` claim (`withOrganizationDatabaseContext`).
 - `GET /api/v1/audit/logs` — global admin only (`SUPER_ADMIN` / `ADMIN`); cross-tenant listing runs under `withGlobalAdminDatabaseContext` (`app.global_admin = true`) so FORCE RLS / `core_be_app` see all tenants explicitly.
 
 ## Action naming
@@ -53,7 +53,7 @@ Actions use dot-separated names: `<domain>.<resource>.<verb>`.
 ## Row shape
 
 - `actor_user_id` — resolved from JWT `userId` (public id).
-- `organization_id` — set when the mutation is org-scoped (resolved from `X-Organization-Id` path param).
+- `organization_id` — set when the mutation is org-scoped (resolved from the access token's `org` claim).
 - `metadata` — public ids and non-PII context (no passwords or tokens). The list API runs `sanitizeAuditLogMetadata` so internal numeric `*_id` keys (except `*_public_id`), underscore-prefixed keys, and credential-like fields are stripped from responses.
 
 ## Storage & partitioning

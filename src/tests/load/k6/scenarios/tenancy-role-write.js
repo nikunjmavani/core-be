@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { sleep } from 'k6';
 import { API_PREFIX, THRESHOLDS, SCENARIOS } from '../helpers/config.js';
 import { checkOk, checkResponseTime } from '../helpers/checks.js';
-import { authHeaders } from '../helpers/auth.js';
+import { authHeaders, switchToOrganization } from '../helpers/auth.js';
 
 /**
  * k6 Scenario: Tenancy role write paths
@@ -23,18 +23,22 @@ export const options = {
 };
 
 export function tenancyRoleWriteOps() {
-  const token = __ENV.TEST_TOKEN;
+  let token = __ENV.TEST_TOKEN;
   const organizationPublicId = __ENV.TEST_ORG_ID;
   if (!(token && organizationPublicId)) {
     return;
   }
+
+  // The active org rides the token's `org` claim — scope the token to TEST_ORG_ID
+  // so the flat route resolves the right organization.
+  token = switchToOrganization(token, organizationPublicId) || token;
 
   const headers = authHeaders(token).headers;
   const jsonHeaders = { ...headers, 'Content-Type': 'application/json' };
 
   const roleName = `Load Test Role ${__VU}-${__ITER}`;
   const createResponse = http.post(
-    `${API_PREFIX}/tenancy/organizations/${organizationPublicId}/roles`,
+    `${API_PREFIX}/tenancy/organization/roles`,
     JSON.stringify({
       name: roleName,
       description: 'k6 load test role',
@@ -61,7 +65,7 @@ export function tenancyRoleWriteOps() {
   sleep(0.3);
 
   const patchResponse = http.patch(
-    `${API_PREFIX}/tenancy/organizations/${organizationPublicId}/roles/${roleId}`,
+    `${API_PREFIX}/tenancy/organization/roles/${roleId}`,
     JSON.stringify({ description: 'k6 load test role (updated)' }),
     {
       headers: jsonHeaders,

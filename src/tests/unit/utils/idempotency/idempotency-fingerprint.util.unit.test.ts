@@ -19,7 +19,7 @@ describe('buildIdempotencyRequestFingerprint', () => {
     });
     const differentRoute = buildIdempotencyRequestFingerprint({
       method: 'POST',
-      routePath: '/organizations/:organization_id/memberships',
+      routePath: '/api/v1/tenancy/organization/memberships',
       body: { name: 'A' },
     });
     const differentBody = buildIdempotencyRequestFingerprint({
@@ -34,12 +34,22 @@ describe('buildIdempotencyRequestFingerprint', () => {
 });
 
 describe('isIdempotencyRouteExcluded', () => {
+  // Matched against the full prefixed Fastify route template (request.routeOptions.url), e.g.
+  // `/api/v1/auth/login` — the patterns are suffix-anchored so the /api/v{n} prefix is irrelevant.
   it('excludes auth token issuance and api-key creation routes', () => {
-    expect(isIdempotencyRouteExcluded('/login')).toBe(true);
-    expect(isIdempotencyRouteExcluded('/magic-link/verify')).toBe(true);
-    expect(isIdempotencyRouteExcluded('/oauth/google/callback')).toBe(true);
-    expect(isIdempotencyRouteExcluded('/organizations/:organization_id/api-keys')).toBe(true);
-    expect(isIdempotencyRouteExcluded('/tenancy/organizations')).toBe(false);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/login')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/magic-link/verify')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/mfa/login')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/oauth/google/callback')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/webauthn/authenticate/verify')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/auth/refresh')).toBe(true);
+    expect(isIdempotencyRouteExcluded('/api/v1/tenancy/organization/api-keys')).toBe(true);
+  });
+
+  it('does not exclude account-level or non-issuance routes', () => {
+    expect(isIdempotencyRouteExcluded('/api/v1/tenancy/organizations')).toBe(false);
+    expect(isIdempotencyRouteExcluded('/api/v1/tenancy/organization/memberships')).toBe(false);
+    expect(isIdempotencyRouteExcluded('/api/v1/billing/subscriptions')).toBe(false);
   });
 });
 

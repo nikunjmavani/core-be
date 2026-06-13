@@ -99,13 +99,12 @@ Nested sub-domains use the same layer files and optional `events/`, `queues/`, `
 
 ```ts
 app.get(
-  '/api/v1/tenancy/organizations/:organization_id',
+  '/api/v1/tenancy/organization',
   {
     schema: {
-      summary: 'Get organization',
-      description: 'Returns the organization identified by `organizationId` if the caller is a member.',
+      summary: 'Get the active organization',
+      description: 'Returns the active organization (from the token `org` claim) if the caller is a member.',
       tags: ['Tenancy / Organization'],
-      params: GetOrganizationParamsDto,
       response: { 200: OrganizationResponseDto },
     },
     preHandler: [requireOrganizationPermission('organization:read')],
@@ -269,28 +268,29 @@ Domain folder = DB schema; each **sub-domain** is a folder with its own controll
 ### 4.2 tenancy — sub-domains: organizations, roles, permissions, membership
 
 - **Paths:** `src/domains/tenancy/sub-domains/organization/`, `sub-domains/membership/`, etc. (each with controller, service, repository, etc.).
-- **Routes (prefix `/api/v1/tenancy`):**
-  - Organizations: `GET|POST /api/v1/tenancy/organizations`, `GET|PATCH|DELETE /api/v1/tenancy/organizations/:organization_id`, `GET /api/v1/tenancy/organizations/by-slug/:slug`.
-  - Settings: `GET|PATCH /api/v1/tenancy/organizations/:organization_id/settings` (can live under organizations sub-domain or a separate sub-domain).
-  - Notification policies: `GET|POST /api/v1/tenancy/organizations/:organization_id/notification-policies`, `PATCH|DELETE .../notification-policies/:policy_id`.
-  - Roles: `GET|POST /api/v1/tenancy/organizations/:organization_id/roles`, `GET|PATCH|DELETE .../roles/:role_id`; role permissions `GET|PUT .../roles/:role_id/permissions`.
-  - Memberships: `GET|POST /api/v1/tenancy/organizations/:organization_id/memberships`, `GET|PATCH|DELETE .../memberships/:membership_id`.
-  - Member invitations: `GET|POST .../member-invitations`, `POST .../member-invitations/:invitation_id/accept`, `.../revoke`.
+- **Routes (prefix `/api/v1/tenancy`):** The active organization is the signed `org` token claim, so org-scoped sub-resources hang off the **singular** `/tenancy/organization` resource — there is no per-organization path segment. Account-level list/create stays **plural**.
+  - Organizations (account-level): `GET|POST /api/v1/tenancy/organizations` (list / create a team org), `GET /api/v1/tenancy/organizations/by-slug/:slug`.
+  - Active organization: `GET|PATCH|DELETE /api/v1/tenancy/organization`.
+  - Settings: `GET|PATCH /api/v1/tenancy/organization/settings`.
+  - Notification policies: `GET|POST /api/v1/tenancy/organization/notification-policies`, `PATCH|DELETE .../notification-policies/:policy_id`.
+  - Roles: `GET|POST /api/v1/tenancy/organization/roles`, `GET|PATCH|DELETE .../roles/:role_id`; role permissions `GET|PUT .../roles/:role_id/permissions`.
+  - Memberships: `GET|POST /api/v1/tenancy/organization/memberships`, `GET|PATCH|DELETE .../memberships/:membership_id`; `POST /api/v1/tenancy/organization/leave`, `POST /api/v1/tenancy/organization/transfer-ownership`.
+  - Invitations: `GET|POST /api/v1/tenancy/organization/invitations`, `.../invitations/:invitation_id/revoke`; cross-org accept/decline are account-level: `POST /api/v1/tenancy/invitations/:invitation_id/accept|decline`.
   - Permissions (global): `GET /api/v1/tenancy/permissions`.
 
-All `:id` params are **public_id**. Organization **slug** is unique; `getBySlug(slug)` returns same shape as get by id.
+All `:id` params are **public_id**. Organization **slug** is unique; `getBySlug(slug)` returns same shape as the active-org get.
 
-**Organization context (HTTP):** Clients should send `X-Organization-Id` with the organization id (`org_…`) on org-scoped routes. Invalid header values are ignored; when the header is absent, the tenant middleware may infer the id from `/organizations/:organization_id/` in the URL. If header and path disagree, the header wins. See **[api-testing.md](../../getting-started/api-testing.md)** (`X-Organization-Id` behavior table). Avatars and logos are attached only via presigned upload keys (`avatarKey` / logo `key`), not arbitrary URLs on PATCH.
+**Organization context (HTTP):** The active organization rides the signed `org` token claim — not a path parameter or header. The tenant middleware resolves it post-auth and re-checks membership + RLS per request; switch with `POST /api/v1/auth/switch-to-personal` or `POST /api/v1/auth/switch-to-organization { organization_id }` (both re-mint the access token). `X-Organization-Id` is legacy (upload domain only). See **[api-testing.md](../../getting-started/api-testing.md)** (active-organization section). Avatars and logos are attached only via presigned upload keys (`avatarKey` / logo `key`), not arbitrary URLs on PATCH.
 
 ### 4.3 billing — sub-domains: plans, subscriptions
 
 - **Paths:** `src/domains/billing/sub-domains/plan/`, `sub-domains/subscription/`, `sub-domains/stripe-webhook/`.
-- **Routes:** Plans `GET /api/v1/billing/plans`, `GET /api/v1/billing/plans/:plan_id`. Org-scoped subscriptions under `/api/v1/billing/organizations/:organization_id/subscriptions` (and lifecycle actions: change-plan, cancel, resume).
+- **Routes:** Plans `GET /api/v1/billing/plans`, `GET /api/v1/billing/plans/:plan_id`. Subscriptions are top-level under the token `org` claim: `/api/v1/billing/subscriptions` (and lifecycle actions: change-plan, cancel, resume).
 
 ### 4.4 notify — sub-domains: notifications, webhooks
 
 - **Paths:** `src/domains/notify/sub-domains/notification/`, `sub-domains/webhook/`.
-- **Routes:** User notifications `GET /api/v1/notify/notifications`, `GET .../notifications/:notification_id`, `PATCH .../notifications/:notification_id/read`. Webhooks `GET|POST /api/v1/tenancy/organizations/:organization_id/webhooks`, `GET|PATCH|DELETE .../webhooks/:webhook_id`; delivery attempts `GET .../webhooks/:webhook_id/delivery-attempts`.
+- **Routes:** User notifications `GET /api/v1/notify/notifications`, `GET .../notifications/:notification_id`, `PATCH .../notifications/:notification_id/read`. Webhooks are top-level under the token `org` claim: `GET|POST /api/v1/notify/webhooks`, `GET|PATCH|DELETE .../webhooks/:webhook_id`; delivery attempts `GET .../webhooks/:webhook_id/delivery-attempts`.
 
 ### 4.5 audit — sub-domain: logs
 

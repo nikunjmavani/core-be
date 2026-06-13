@@ -42,7 +42,7 @@ The header is **optional** on all writes, but **strongly recommended** where dup
 
 | Method | Path | Notes |
 | ------ | ---- | ----- |
-| `POST` | `/api/v1/billing/organizations/{organization_id}/subscriptions` | Key forwarded to Stripe `subscriptions.create` when Stripe is configured |
+| `POST` | `/api/v1/billing/subscriptions` | Key forwarded to Stripe `subscriptions.create` when Stripe is configured |
 
 The generated route catalog (`docs/routes.txt`) lists this under **IDEMPOTENCY**. OpenAPI descriptions for subscription create reference this page.
 

@@ -58,14 +58,30 @@ account deletion (transfer or delete the team first); the personal org cascades 
 - `pnpm tool:backfill-personal-orgs` — provisions the personal org for existing users lacking one
   (idempotent), for when `PERSONAL_ORGANIZATION_ENABLED` is turned on after launch.
 
+## Route shape (active org = token claim)
+
+The org-scoped routes are **flat**: they no longer carry a per-organization
+path segment. The active organization rides the signed `org` token claim, so the active-org
+resource is **singular** — `/api/v1/tenancy/organization` — with its sub-resources nested under it
+(settings, logo, audit-logs, api-keys, notification-policies, memberships, roles, invitations,
+leave, transfer-ownership). Other domains hang directly off the claim: `/api/v1/billing/subscriptions`,
+`/api/v1/notify/webhooks`.
+
+Account-level routes stay **plural** because they are not scoped to one active org:
+`GET|POST /api/v1/tenancy/organizations` (list / create a team org),
+`GET /api/v1/tenancy/organizations/by-slug/{slug}`, and the cross-org invitation actions
+`POST /api/v1/tenancy/invitations/{invitation_id}/accept|decline`.
+
 ## Implementation status
 
 Delivered: schema (`type`, nullable slug, partial index) · capability flags · personal-org
 auto-provisioning (OAuth signup) · deletion guard · `/users/me` capabilities +
 `personal_organization_id` · personal-org immutability · backfill · JWT `org`/`sv` claims · login
 & refresh org-claim minting · `switch-to-personal` / `switch-to-organization` endpoints (e2e
-tested).
+tested) · **route flatten** — org-scoped routes dropped the per-organization path
+segment in favour of the singular `/tenancy/organization` resource sourced from the `org` claim ·
+permission layer + RLS sourced from the claim (per-request membership recheck, super-admin audited
+bypass).
 
-Planned (subsequent PRs): permission layer + RLS sourced from the claim (per-request membership
-recheck, super-admin audited bypass) · flatten the `/organizations/{organization_id}/…` sub-resource
-routes to the active-org token claim · per-org-type capability matrix · `sv` revocation wiring.
+Planned (subsequent PRs): per-org-type capability matrix (enforce which capabilities each
+`organizations.type` may use) · `sv` revocation wiring.

@@ -1090,6 +1090,7 @@ src/
     │   │   └── unit/
     │   │   │   └── mcp-blocked-headers.policy.unit.test.ts
     │   ├── mcp-capabilities.ts
+    │   ├── mcp-client-guide.ts
     │   ├── mcp-server.ts
     │   └── OVERVIEW.md
     ├── observability/
