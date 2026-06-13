@@ -3,6 +3,7 @@ import { resolveAccessTokenRoleForUser } from '@/shared/utils/auth/global-admin-
 import { signAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { env } from '@/shared/config/env.config.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
+import { resolveDefaultActiveOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
@@ -44,6 +45,10 @@ export async function completeFirstFactorAuth(options: {
     return { mfa_required: true, mfa_session_token: mfaSessionToken };
   }
 
+  // Default active organization for this login: personal (when enabled) else most-recent team,
+  // else undefined (team-only mode with no team yet → the frontend redirects to onboarding).
+  const organizationPublicId = await resolveDefaultActiveOrganizationPublicId(options.user.id);
+
   const jsonWebToken = await signAccessToken({
     userId: options.user.public_id,
     role: resolveAccessTokenRoleForUser({
@@ -51,6 +56,7 @@ export async function completeFirstFactorAuth(options: {
       status: options.user.status,
       isEmailVerified: options.user.is_email_verified,
     }),
+    organizationPublicId,
   });
 
   const tokenHash = createHash('sha256').update(jsonWebToken).digest('hex');

@@ -4,6 +4,7 @@ import { createTestUser } from '@/tests/factories/user.factory.js';
 import { seedPermissions } from '@/domains/tenancy/__tests__/factories/permission.factory.js';
 import { TENANCY_PERMISSIONS } from '@/domains/tenancy/tenancy.permissions.js';
 import { provisionPersonalOrganization } from '@/domains/tenancy/sub-domains/organization/organization-provisioning.js';
+import { resolveDefaultActiveOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 
 describe('personal organization provisioning (database)', () => {
   beforeEach(async () => {
@@ -42,5 +43,24 @@ describe('personal organization provisioning (database)', () => {
     expect(a.organization.public_id).not.toBe(b.organization.public_id);
     expect(a.organization.owner_user_id).toBe(userA.id);
     expect(b.organization.owner_user_id).toBe(userB.id);
+  });
+
+  describe('resolveDefaultActiveOrganizationPublicId (login selection)', () => {
+    it('returns the personal organization for a freshly provisioned user', async () => {
+      const user = await createTestUser();
+      const { organization } = await provisionPersonalOrganization(user.id);
+
+      const resolved = await resolveDefaultActiveOrganizationPublicId(user.id);
+
+      expect(resolved).toBe(organization.public_id);
+    });
+
+    it('returns undefined when the user belongs to no organization', async () => {
+      const user = await createTestUser();
+
+      const resolved = await resolveDefaultActiveOrganizationPublicId(user.id);
+
+      expect(resolved).toBeUndefined();
+    });
   });
 });

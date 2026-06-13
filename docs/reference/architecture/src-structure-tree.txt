@@ -774,7 +774,8 @@ src/
     │   │   │   ├── organization.service.ts
     │   │   │   ├── organization.types.ts
     │   │   │   ├── organization.validator.ts
-    │   │   │   └── OVERVIEW.md
+    │   │   │   ├── OVERVIEW.md
+    │   │   │   └── resolve-active-organization.ts
     │   │   └── permission/
     │   │   │   ├── __tests__/
     │   │   │       ├── integration/
