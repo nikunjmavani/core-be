@@ -1,4 +1,5 @@
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { env } from '@/shared/config/env.config.js';
 import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.constants.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
@@ -352,6 +353,16 @@ export class OrganizationService {
     return withUserDatabaseContext(owner_user_public_id, async () => {
       const ownerId = await this.repository.resolveUserIdByPublicId(owner_user_public_id);
       if (ownerId === null) throw new NotFoundError('User');
+      // Anti-abuse: cap the number of TEAM organizations a single account may own (personal is
+      // exempt — countActiveOwnedByUser already counts only type='TEAM').
+      const ownedTeamCount = await this.repository.countActiveOwnedByUser(ownerId);
+      if (ownedTeamCount >= env.MAX_TEAM_ORGANIZATIONS_PER_OWNER) {
+        throw new ConflictError(
+          'errors:maxTeamOrganizationsReached',
+          { max: env.MAX_TEAM_ORGANIZATIONS_PER_OWNER },
+          `Maximum number of team organizations (${env.MAX_TEAM_ORGANIZATIONS_PER_OWNER}) reached for this account`,
+        );
+      }
       const existing = await this.repository.findBySlug(parsed.slug);
       if (existing)
         throw new ConflictError(
