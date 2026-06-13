@@ -279,6 +279,7 @@ Table auth.users {
   is_email_verified boolean [not null]
   is_mfa_enabled boolean [not null]
   last_active_at timestamptz
+  last_active_organization_id bigint
   last_name varchar(100)
   last_password_change_at timestamptz
   password_hash varchar(255)
@@ -556,9 +557,10 @@ Table tenancy.organizations {
   name varchar(255) [not null]
   owner_user_id bigint [not null]
   public_id varchar(28) [not null]
-  slug varchar(100) [not null]
+  slug varchar(100)
   status varchar(20) [not null]
   stripe_customer_id varchar(255)
+  type varchar(20) [not null]
   updated_at timestamptz [not null]
   updated_by_user_id bigint
 }

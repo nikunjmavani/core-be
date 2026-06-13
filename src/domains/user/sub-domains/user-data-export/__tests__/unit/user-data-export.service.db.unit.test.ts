@@ -74,7 +74,7 @@ describe('UserDataExportService (database)', () => {
     expect(exported.sessions).toEqual([]);
     expect(
       exported.organizations.some(
-        (membership: { slug: string }) => membership.slug === organization.slug,
+        (membership: { slug: string | null }) => membership.slug === organization.slug,
       ),
     ).toBe(true);
     expect(exported.notifications).toHaveLength(1);

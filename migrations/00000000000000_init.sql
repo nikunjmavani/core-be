@@ -383,7 +383,8 @@ CREATE TABLE "tenancy"."organizations" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"public_id" varchar(28) NOT NULL,
 	"name" varchar(255) NOT NULL,
-	"slug" varchar(100) NOT NULL,
+	"slug" varchar(100),
+	"type" varchar(20) DEFAULT 'TEAM' NOT NULL,
 	"owner_user_id" bigint NOT NULL,
 	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
 	"logo_url" varchar(512),
@@ -394,6 +395,7 @@ CREATE TABLE "tenancy"."organizations" (
 	"created_by_user_id" bigint,
 	"updated_by_user_id" bigint,
 	CONSTRAINT "chk_organizations_status" CHECK ("tenancy"."organizations"."status" IN ('ACTIVE', 'SUSPENDED', 'ARCHIVED')),
+	CONSTRAINT "chk_organizations_type" CHECK ("tenancy"."organizations"."type" IN ('PERSONAL', 'TEAM')),
 	CONSTRAINT "chk_organizations_slug" CHECK ("tenancy"."organizations"."slug" ~ '^[a-z0-9-]+$'),
 	CONSTRAINT "chk_organizations_updated" CHECK ("tenancy"."organizations"."updated_at" >= "tenancy"."organizations"."created_at")
 );
@@ -489,6 +491,7 @@ CREATE TABLE "auth"."users" (
 	"is_mfa_enabled" boolean DEFAULT false NOT NULL,
 	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
 	"last_active_at" timestamp with time zone,
+	"last_active_organization_id" bigint,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -625,6 +628,7 @@ CREATE INDEX "idx_org_notif_policy_mandatory" ON "tenancy"."organization_notific
 CREATE INDEX "idx_org_notif_policy_muted" ON "tenancy"."organization_notification_policies" USING btree ("muted_until");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_organizations_public_id" ON "tenancy"."organizations" USING btree ("public_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_organizations_slug" ON "tenancy"."organizations" USING btree ("slug");--> statement-breakpoint
+CREATE UNIQUE INDEX "idx_org_one_personal_per_owner" ON "tenancy"."organizations" USING btree ("owner_user_id") WHERE "tenancy"."organizations"."type" = 'PERSONAL';--> statement-breakpoint
 CREATE INDEX "idx_organizations_owner" ON "tenancy"."organizations" USING btree ("owner_user_id");--> statement-breakpoint
 CREATE INDEX "idx_organizations_status_deleted" ON "tenancy"."organizations" USING btree ("status","deleted_at");--> statement-breakpoint
 CREATE INDEX "idx_organizations_created_at" ON "tenancy"."organizations" USING btree ("created_at");--> statement-breakpoint

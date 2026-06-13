@@ -604,6 +604,16 @@ const envSchemaBase = z.object({
     .transform((v) => v === 'true' || v === '1'),
   OPENAPI_SPEC_PATH: z.string().min(1).optional(),
 
+  // Organization capability flags — toggle the two organization kinds independently so one
+  // codebase serves a B2C (personal-only), B2B (team-only), or hybrid product. At least one
+  // MUST be enabled (enforced in the cross-field refine on envSchema). They gate route
+  // registration, signup auto-provisioning, and the organization switcher — never the core
+  // scoping path (token claim → RLS), which is identical in every mode.
+  PERSONAL_ORGANIZATION_ENABLED: booleanString('true'),
+  TEAM_ORGANIZATION_ENABLED: booleanString('true'),
+  /** Per-owner cap on TEAM organizations a single user may create (anti-abuse). Personal exempt. */
+  MAX_TEAM_ORGANIZATIONS_PER_OWNER: z.coerce.number().int().min(1).max(1000).default(20),
+
   // Response encryption (obfuscation layer — AES-256-GCM; hides JSON from DevTools Network tab)
   ENABLE_RESPONSE_ENCRYPTION: z
     .string()
@@ -667,6 +677,11 @@ export const envSchema = envSchemaBase
   .refine((data) => data.REDIS_MEMORY_CRITICAL_RATIO >= data.REDIS_MEMORY_WARN_RATIO, {
     message: 'REDIS_MEMORY_CRITICAL_RATIO must be >= REDIS_MEMORY_WARN_RATIO',
     path: ['REDIS_MEMORY_CRITICAL_RATIO'],
+  })
+  .refine((data) => data.PERSONAL_ORGANIZATION_ENABLED || data.TEAM_ORGANIZATION_ENABLED, {
+    message:
+      'At least one of PERSONAL_ORGANIZATION_ENABLED or TEAM_ORGANIZATION_ENABLED must be true — a deployment needs at least one organization kind.',
+    path: ['PERSONAL_ORGANIZATION_ENABLED'],
   })
   .refine(
     (data) => {
