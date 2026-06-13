@@ -25,7 +25,7 @@ Claude Code reads `agent-os/` directly via `.claude/` symlinks.
 
 See **`agent-os/skills/api-contract-guard/SKILL.md`** (rule: `agent-os/rules/api-contract.mdc`):
 
-- Route params: snake_case + semantic (`{organization_id}`, never `{id}`); registered in `PARAM_NAME_TO_ENTITY`
+- Route params: snake_case + semantic (`{plan_id}`, `{subscription_id}`, never `{id}`); registered in `PARAM_NAME_TO_ENTITY`. The active organization is the signed `org` JWT claim — routes carry NO `{organization_id}` path segment; the active-org resource is singular `/tenancy/organization` (sub-resources nest under it); switch active org via `/auth/switch-to-personal` / `/auth/switch-to-organization`
 - Public ids: Paddle-style `<prefix>_<21 [a-z0-9]>` via `generatePublicId(entity)`; external field is always `id`
 - Method→status policy (middleware-enforced): GET 200 · POST 201 · PUT/PATCH 200 · DELETE 204; webhooks + MCP stay 200
 - Error codes: when to set 400/401/403/404/406/409/413/415/422/429 — see **`docs/reference/api/response-codes.md`** (400 on all POST/PATCH/PUT, omitted only when truly nothing to validate; 409/422 mutating only; never invent statuses)

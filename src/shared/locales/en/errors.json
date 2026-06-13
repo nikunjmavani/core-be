@@ -20,7 +20,6 @@
   "originNotAllowed": "Request origin is not allowed for this operation.",
   "invalidRefererOrigin": "Referer header is missing or invalid for this operation.",
   "invalidCsrfToken": "CSRF token is missing or invalid for this operation.",
-  "organizationHeaderPathMismatch": "Organization context from the request does not match the organization in the URL.",
   "conflict": "Conflict",
   "idempotencyKeyConflict": "Concurrent request with same idempotency key",
   "idempotencyKeyInFlight": "A request with this idempotency key is still in flight. Retry once the original request completes.",

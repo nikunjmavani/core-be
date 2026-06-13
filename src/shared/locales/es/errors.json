@@ -20,7 +20,6 @@
   "originNotAllowed": "Origen de la solicitud no permitido para esta operación.",
   "invalidRefererOrigin": "El encabezado Referer falta o no es válido para esta operación.",
   "invalidCsrfToken": "El token CSRF falta o no es válido para esta operación.",
-  "organizationHeaderPathMismatch": "El contexto de organización de la solicitud no coincide con la organización en la URL.",
   "conflict": "Conflicto",
   "idempotencyKeyConflict": "Solicitud simultánea con la misma clave de idempotencia",
   "idempotencyKeyInFlight": "Una solicitud con esta clave de idempotencia aún está en curso. Vuelve a intentarlo cuando se complete la solicitud original.",

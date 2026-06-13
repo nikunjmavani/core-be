@@ -1,46 +1,31 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
-import { ValidationError } from '@/shared/errors/index.js';
 import { PUBLIC_ID_REGEX } from '@/shared/utils/identity/public-id.util.js';
 
-const ORGANIZATION_PATH_PUBLIC_ID_PATTERN = /\/organizations\/(org_[a-z0-9]{21})(?:\/|$)/;
-
 /**
- * Extracts a 21-char NanoID-shaped organization public id from `/organizations/:organization_id/...`
- * route paths. Returned value is used as a fallback when the `X-Organization-Id` header
- * is missing and as a consistency check when both header and path are present (mismatch
- * is rejected to prevent permission/RLS-GUC divergence).
- */
-export function parseOrganizationPublicIdFromUrl(url: string): string | null {
-  const pathWithoutQuery = url.split('?')[0] ?? url;
-  const match = ORGANIZATION_PATH_PUBLIC_ID_PATTERN.exec(pathWithoutQuery);
-  if (!match?.[1]) {
-    return null;
-  }
-  return match[1];
-}
-
-/**
- * Tenant middleware: reads X-Organization-Id header and attaches
- * request.organizationId for organization-scoped routes.
- * Validates the format to prevent injection attacks.
- *
- * When the header is absent, infers organization id from `/organizations/:organization_id/` in the URL.
- * If header and path disagree, the request is rejected (prevents permission check on
- * one org while RLS GUC is set to another).
- *
- * Row-Level Security for Postgres uses `SET LOCAL app.current_organization_id` inside a
- * single request-scoped transaction — see `organization-rls-transaction.middleware.ts`.
+ * Tenant middleware: reads the `X-Organization-Id` header and attaches
+ * `request.organizationId`. Validates the format to prevent injection attacks.
  *
  * @remarks
+ * The active organization for organization-scoped routes now flows from the
+ * signed `org` JWT claim (resolved post-auth by `resolveActiveOrganizationId` /
+ * `requireOrganizationPermission`), NOT from the URL — routes no longer carry an
+ * `{organization_id}` path segment. This header remains the org source only for
+ * the few consumers that read `request.organizationId` directly (e.g. the upload
+ * domain); it is not the authority for permission checks or the RLS GUC.
+ *
+ * Row-Level Security for Postgres uses `SET LOCAL app.current_organization_id`
+ * inside the short-lived `withOrganizationDatabaseContext` transaction opened at
+ * each org-scoped call site, keyed by the claim-resolved organization id.
+ *
  * **sec-M7 foot-gun**: `request.organizationId` is set on the **`onRequest`**
- * hook — BEFORE authentication runs. The value comes from
- * attacker-controllable inputs (`X-Organization-Id` header, URL path) and is
- * NOT a proof of membership. The membership check happens later in
- * `requireOrganizationPermission`. Downstream middlewares MUST NOT trust
- * this field pre-auth — any DB lookup / cache key / RLS GUC keyed on it
- * before authentication is an enumeration / amplification vector
- * (see sec-M1 for an active exploitation of the same pattern).
+ * hook — BEFORE authentication runs. The value comes from an
+ * attacker-controllable input (the `X-Organization-Id` header) and is NOT a
+ * proof of membership. The membership check happens later in
+ * `requireOrganizationPermission` (against the token claim). Downstream
+ * middlewares MUST NOT trust this field pre-auth — any DB lookup / cache key /
+ * RLS GUC keyed on it before authentication is an enumeration / amplification
+ * vector (see sec-M1 for an active exploitation of the same pattern).
  *
  * If your middleware or handler needs an organization id that is guaranteed
  * to have been authenticated, use {@link getAuthorizedOrganizationId} —
@@ -56,25 +41,12 @@ const tenantMiddleware: FastifyPluginAsync = async (app) => {
     };
 
     const headerValue = request.headers['x-organization-id'];
-    let headerOrganizationId: string | null = null;
     if (
       typeof headerValue === 'string' &&
       headerValue.length > 0 &&
       PUBLIC_ID_REGEX.test(headerValue)
     ) {
-      headerOrganizationId = headerValue;
-    }
-
-    const pathOrganizationId = parseOrganizationPublicIdFromUrl(request.url);
-
-    if (headerOrganizationId && pathOrganizationId && headerOrganizationId !== pathOrganizationId) {
-      throw new ValidationError('errors:organizationHeaderPathMismatch');
-    }
-
-    if (headerOrganizationId) {
-      requestWithOrganization.organizationId = headerOrganizationId;
-    } else if (pathOrganizationId) {
-      requestWithOrganization.organizationId = pathOrganizationId;
+      requestWithOrganization.organizationId = headerValue;
     }
   });
 };
