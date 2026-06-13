@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { successResponse } from '@/shared/utils/http/response.util.js';
 import { getRequestIdentifier, requireAuth } from '@/shared/utils/http/request.util.js';
-import { ConflictError, UnauthorizedError } from '@/shared/errors/index.js';
+import { ConflictError, UnauthorizedError, ValidationError } from '@/shared/errors/index.js';
 import { requireAllowedSourceOriginForCookieSessionRoute } from '@/shared/middlewares/session/cookie-session-origin.pre-handler.js';
 import { recordScopedAuditEvent } from '@/shared/utils/infrastructure/audit-request-context.util.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
@@ -94,6 +94,36 @@ export function createAuthSessionHandlers({
         refreshSecret: parsedSession.refreshSecret,
       });
       setSessionCookie(reply, parsedSession.sessionPublicId, data.refresh_secret);
+      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
+    },
+    switchToPersonalOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      if (auth.kind !== 'user' || !auth.sessionPublicId) {
+        throw new UnauthorizedError('errors:invalidOrExpiredSession');
+      }
+      const data = await authService.switchToPersonal({
+        userPublicId: auth.userId,
+        sessionPublicId: auth.sessionPublicId,
+      });
+      return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
+    },
+    switchToOrganization: async (request: FastifyRequest, _reply: FastifyReply) => {
+      const auth = requireAuth(request);
+      if (auth.kind !== 'user' || !auth.sessionPublicId) {
+        throw new UnauthorizedError('errors:invalidOrExpiredSession');
+      }
+      const body = request.body as { organization_id?: unknown } | undefined;
+      const organizationId = typeof body?.organization_id === 'string' ? body.organization_id : '';
+      if (!organizationId) {
+        throw new ValidationError('errors:invalidInput', undefined, 'Invalid input', [
+          { field: 'body.organization_id', message: 'organization_id is required' },
+        ]);
+      }
+      const data = await authService.switchToOrganization({
+        userPublicId: auth.userId,
+        sessionPublicId: auth.sessionPublicId,
+        organizationPublicId: organizationId,
+      });
       return successResponse(AuthSerializer.accessToken(data), getRequestIdentifier(request));
     },
     revokeAllSessions: async (request: FastifyRequest, reply: FastifyReply) => {

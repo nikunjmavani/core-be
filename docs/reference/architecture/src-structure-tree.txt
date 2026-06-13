@@ -68,6 +68,7 @@ src/
     │   ├── __tests__/
     │   │   ├── e2e/
     │   │   │   ├── magic-link-flow.e2e.test.ts
+    │   │   │   ├── organization-switch.e2e.test.ts
     │   │   │   └── webauthn-passkey-flow.e2e.test.ts
     │   │   ├── factories/
     │   │   │   └── magic-link-token.factory.ts
