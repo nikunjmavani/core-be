@@ -304,6 +304,7 @@ src/
     │   │   │   ├── __tests__/
     │   │   │   │   ├── integration/
     │   │   │   │   │   ├── stripe-webhook-correlation.integration.test.ts
+    │   │   │   │   │   ├── stripe-webhook-out-of-order-cancellation.integration.test.ts
     │   │   │   │   │   ├── stripe-webhook-payload-shrink.integration.test.ts
     │   │   │   │   │   ├── stripe-webhook-reclaim.integration.test.ts
     │   │   │   │   │   └── stripe-webhook.integration.test.ts
@@ -1830,7 +1831,6 @@ src/
     │   ├── config/
     │   │   ├── env-schema-boolean-coerce.unit.test.ts
     │   │   ├── env-schema.unit.test.ts
-    │   │   ├── env-schema.unit.test.ts.bak
     │   │   └── env.config.unit.test.ts
     │   ├── database/
     │   │   └── role-least-privilege-migration.policy.unit.test.ts

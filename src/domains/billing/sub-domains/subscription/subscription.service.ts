@@ -166,6 +166,61 @@ export class SubscriptionService {
     });
   }
 
+  /**
+   * Insert a terminal CANCELED tombstone row for a Stripe
+   * `customer.subscription.deleted` event whose local subscription row never
+   * existed (audit-#1).
+   *
+   * @remarks
+   * - **Algorithm:** resolves the internal organization id from the active
+   *   webhook RLS context (set by the tenancy resolver before dispatch), then
+   *   inserts a `CANCELED` row keyed by `provider_subscription_id` with the
+   *   deletion event's `created` timestamp stamped on `last_stripe_event_created_at`.
+   *   The partial unique index `idx_subscriptions_provider_subscription_id_unique`
+   *   plus the terminal-status guard in {@link syncFromStripeProviderSubscription}
+   *   then make any later out-of-order `.created` / `.updated` for the same id a
+   *   no-op, closing the resurrection gap.
+   * - **Failure modes:** returns `null` when the organization cannot be resolved
+   *   (defensive — the tenancy resolver already throws earlier) so the caller can
+   *   fall back to a retryable error instead of silently advancing the ledger. A
+   *   concurrent insert that loses the `provider_subscription_id` unique race
+   *   surfaces as a Postgres unique violation; the caller catches it and treats
+   *   the now-present row as the winner.
+   * - **Side effects:** one INSERT into `billing.subscriptions`.
+   */
+  async insertCanceledTombstoneFromStripeWebhookEvent(input: {
+    providerSubscriptionId: string;
+    providerCustomerId: string | null;
+    planId: number;
+    billingCycle: string;
+    currentPeriodStart: Date;
+    currentPeriodEnd: Date;
+    canceledAt: Date;
+    stripeEventCreatedAt: Date;
+    repositoryOverride: SubscriptionRepository;
+  }) {
+    const organizationId = await input.repositoryOverride.findOrganizationIdFromCurrentContext();
+    if (organizationId === null) {
+      return null;
+    }
+    return input.repositoryOverride.create({
+      organization_id: organizationId,
+      plan_id: input.planId,
+      billing_cycle: input.billingCycle,
+      status: 'CANCELED',
+      canceled_at: input.canceledAt,
+      cancel_at_period_end: false,
+      current_period_start: input.currentPeriodStart,
+      current_period_end: input.currentPeriodEnd,
+      provider: 'stripe',
+      provider_subscription_id: input.providerSubscriptionId,
+      ...(input.providerCustomerId !== null
+        ? { provider_customer_id: input.providerCustomerId }
+        : {}),
+      last_stripe_event_created_at: input.stripeEventCreatedAt,
+    });
+  }
+
   async list(organization_public_id: string) {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization =
