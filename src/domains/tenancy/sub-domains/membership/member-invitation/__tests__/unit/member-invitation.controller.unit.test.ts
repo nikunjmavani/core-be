@@ -36,11 +36,13 @@ describe('createMemberInvitationController (cursor pagination)', () => {
       has_more: false,
       next_cursor: null,
     }),
-    create: vi.fn().mockResolvedValue({ invitation, token: 'tok' }),
+    create: vi.fn().mockResolvedValue(invitation),
     accept: vi.fn().mockResolvedValue(invitation),
     revoke: vi.fn().mockResolvedValue(undefined),
-    resend: vi.fn().mockResolvedValue({ invitation, token: 'tok' }),
-    listPendingInvitations: vi.fn().mockResolvedValue([invitation]),
+    resend: vi.fn().mockResolvedValue(invitation),
+    listPendingInvitations: vi
+      .fn()
+      .mockResolvedValue({ items: [invitation], limit: 25, has_more: false, next_cursor: null }),
     decline: vi.fn().mockResolvedValue(undefined),
   };
 
@@ -141,11 +143,13 @@ describe('createMemberInvitationController — invitationId path-param validatio
     list: vi
       .fn()
       .mockResolvedValue({ items: [], total: null, limit: 25, has_more: false, next_cursor: null }),
-    create: vi.fn().mockResolvedValue({ invitation, token: 'tok' }),
+    create: vi.fn().mockResolvedValue(invitation),
     accept: vi.fn().mockResolvedValue(invitation),
     revoke: vi.fn().mockResolvedValue(undefined),
-    resend: vi.fn().mockResolvedValue({ invitation, token: 'tok' }),
-    listPendingInvitations: vi.fn().mockResolvedValue([invitation]),
+    resend: vi.fn().mockResolvedValue(invitation),
+    listPendingInvitations: vi
+      .fn()
+      .mockResolvedValue({ items: [invitation], limit: 25, has_more: false, next_cursor: null }),
     decline: vi.fn().mockResolvedValue(undefined),
   };
 
@@ -231,6 +235,7 @@ describe('createMemberInvitationController — invitationId path-param validatio
       organizationPublicId,
       invitationPublicId,
       expect.anything(),
+      expect.objectContaining({ requestId: expect.any(String) }),
     );
   });
 

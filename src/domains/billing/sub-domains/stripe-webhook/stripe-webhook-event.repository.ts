@@ -9,6 +9,7 @@ import {
   STRIPE_WEBHOOK_STUCK_PROCESSING_LEASE_MINUTES,
 } from '@/shared/constants/index.js';
 import {
+  stripe_subscription_tombstones,
   stripe_webhook_events,
   type StripeWebhookProcessingStatus,
 } from './stripe-webhook.schema.js';
@@ -29,6 +30,20 @@ export type StripeWebhookEventClaimResult =
 function stripeWebhookLedgerDatabase() {
   if (isWorkerRuntime()) {
     assertWorkerDatabaseContext(['system_table']);
+  }
+  return getRequestDatabase();
+}
+
+/**
+ * Database handle for the RLS-free `billing.stripe_subscription_tombstones`
+ * system table. Allows both the `system_table` and `organization` worker
+ * contexts because the tombstone is written/read from inside the per-event
+ * organization dispatch (BILL-03) as well as standalone system flows; the table
+ * has no RLS policy, so neither context can leak across tenants.
+ */
+function stripeSubscriptionTombstoneDatabase() {
+  if (isWorkerRuntime()) {
+    assertWorkerDatabaseContext(['system_table', 'organization']);
   }
   return getRequestDatabase();
 }
@@ -279,5 +294,59 @@ export class StripeWebhookEventRepository {
     }>;
     const organizationPublicId = resultRows[0]?.public_id;
     return organizationPublicId ?? undefined;
+  }
+
+  /**
+   * Records (or advances) the deletion watermark for a Stripe subscription id
+   * (BILL-03). Idempotent: keeps the latest `deleted_event_created_at` via
+   * `GREATEST` so an out-of-order older delete cannot lower the watermark.
+   *
+   * @remarks
+   * - **Algorithm:** `INSERT ... ON CONFLICT (provider_subscription_id) DO UPDATE`
+   *   with `GREATEST(existing, incoming)`.
+   * - **Failure modes:** propagates Postgres errors.
+   * - **Side effects:** writes the RLS-free `billing.stripe_subscription_tombstones`
+   *   table; safe to call from the per-event organization dispatch.
+   * - **Notes:** called only when a `customer.subscription.deleted` finds no local
+   *   subscription row to cancel (delete arrived before create).
+   */
+  async recordSubscriptionDeletionTombstone(
+    provider_subscription_id: string,
+    deleted_event_created_at: Date,
+  ): Promise<void> {
+    await stripeSubscriptionTombstoneDatabase()
+      .insert(stripe_subscription_tombstones)
+      .values({ provider_subscription_id, deleted_event_created_at })
+      .onConflictDoUpdate({
+        target: stripe_subscription_tombstones.provider_subscription_id,
+        set: {
+          deleted_event_created_at: sql`GREATEST(${stripe_subscription_tombstones.deleted_event_created_at}, ${deleted_event_created_at}::timestamptz)`,
+          updated_at: sql`NOW()`,
+        },
+      });
+  }
+
+  /**
+   * Returns the recorded deletion watermark for a Stripe subscription id, or
+   * `null` when none exists (BILL-03).
+   *
+   * @remarks
+   * - **Algorithm:** single-row primary-key lookup.
+   * - **Failure modes:** propagates Postgres errors.
+   * - **Side effects:** none — read-only.
+   * - **Notes:** the create/update handler compares this against the incoming
+   *   event timestamp to refuse a stale create that would resurrect entitlement.
+   */
+  async findSubscriptionDeletionTombstone(
+    provider_subscription_id: string,
+  ): Promise<{ deleted_event_created_at: Date } | null> {
+    const rows = await stripeSubscriptionTombstoneDatabase()
+      .select({
+        deleted_event_created_at: stripe_subscription_tombstones.deleted_event_created_at,
+      })
+      .from(stripe_subscription_tombstones)
+      .where(eq(stripe_subscription_tombstones.provider_subscription_id, provider_subscription_id))
+      .limit(1);
+    return rows[0] ?? null;
   }
 }

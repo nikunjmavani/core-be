@@ -57,6 +57,9 @@ describe('StripeWebhookService', () => {
     tryClaimEvent: vi.fn(),
     markProcessed: vi.fn(),
     markFailed: vi.fn(),
+    // BILL-03: deletion-watermark tombstone methods.
+    findSubscriptionDeletionTombstone: vi.fn().mockResolvedValue(null),
+    recordSubscriptionDeletionTombstone: vi.fn().mockResolvedValue(undefined),
   } as unknown as StripeWebhookEventRepository;
 
   const planRepository = {
@@ -119,6 +122,12 @@ describe('StripeWebhookService', () => {
     vi.mocked(subscriptionService.markCanceledByStripeProviderSubscriptionId).mockResolvedValue({
       id: 9,
     } as never);
+    vi.mocked(stripeWebhookEventRepository.findSubscriptionDeletionTombstone).mockResolvedValue(
+      null as never,
+    );
+    vi.mocked(stripeWebhookEventRepository.recordSubscriptionDeletionTombstone).mockResolvedValue(
+      undefined as never,
+    );
     infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => logger as never);
     warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => logger as never);
   });
@@ -563,10 +572,10 @@ describe('StripeWebhookService', () => {
       );
     });
 
-    // audit-#1 (CRITICAL): a deletion with no local row must NOT be silently marked
-    // processed. It now writes a terminal CANCELED tombstone so a later out-of-order
-    // `customer.subscription.created` cannot resurrect the subscription as ACTIVE.
-    it('inserts a CANCELED tombstone when no row matched the deletion (audit-#1)', async () => {
+    // BILL-03 + audit-#1: a deletion with no local row records a deletion watermark
+    // in stripe_subscription_tombstones AND writes a CANCELED tombstone in billing.subscriptions
+    // so any later out-of-order created/updated cannot resurrect the subscription as ACTIVE.
+    it('records a deletion tombstone and inserts a CANCELED subscription row when no row matched (delete-before-create)', async () => {
       vi.mocked(subscriptionService.markCanceledByStripeProviderSubscriptionId).mockResolvedValue(
         null as never,
       );
@@ -581,6 +590,14 @@ describe('StripeWebhookService', () => {
 
       await service.handleEvent(deletedEvent());
 
+      expect(stripeWebhookEventRepository.recordSubscriptionDeletionTombstone).toHaveBeenCalledWith(
+        'sub_456',
+        new Date(stripeEventCreatedAtSeconds * 1000),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ providerSubscriptionId: 'sub_456' }),
+        'stripe.webhook.subscription_cancel_stale_or_missing_tombstoned',
+      );
       expect(
         subscriptionService.insertCanceledTombstoneFromStripeWebhookEvent,
       ).toHaveBeenCalledWith(
@@ -649,6 +666,57 @@ describe('StripeWebhookService', () => {
         'stripe.webhook.subscription_canceled',
       );
       expect(stripeWebhookEventRepository.markProcessed).toHaveBeenCalledWith('evt_del');
+    });
+
+    it('BILL-03: does not record a tombstone when the deletion canceled an existing row', async () => {
+      await service.handleEvent(deletedEvent());
+      expect(
+        stripeWebhookEventRepository.recordSubscriptionDeletionTombstone,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  // BILL-03: a stale customer.subscription.created/.updated arriving after a
+  // delete-before-create tombstone must NOT resurrect entitlement.
+  describe('subscription create/update superseded by deletion tombstone (BILL-03)', () => {
+    it('refuses the .created fallback INSERT when a tombstone covers the event timestamp', async () => {
+      vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockResolvedValueOnce(
+        null as never,
+      );
+      // Deletion watermark is at-or-after this create event (delete arrived first at Stripe).
+      vi.mocked(
+        stripeWebhookEventRepository.findSubscriptionDeletionTombstone,
+      ).mockResolvedValueOnce({
+        deleted_event_created_at: new Date(stripeEventCreatedAtSeconds * 1000),
+      } as never);
+
+      await service.handleEvent(buildEvent({ type: 'customer.subscription.created' }));
+
+      expect(subscriptionService.createFromStripeWebhookEvent).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ providerSubscriptionId: 'sub_123' }),
+        'stripe.webhook.subscription_event_superseded_by_deletion',
+      );
+      // It is handled (not a processing failure): ledger advances to processed.
+      expect(stripeWebhookEventRepository.markProcessed).toHaveBeenCalledWith('evt_1');
+      expect(stripeWebhookEventRepository.markFailed).not.toHaveBeenCalled();
+    });
+
+    it('does NOT block a strictly-newer event than the tombstone (genuine later state)', async () => {
+      vi.mocked(subscriptionService.syncFromStripeProviderSubscription).mockResolvedValueOnce(
+        null as never,
+      );
+      // Tombstone is OLDER than this event → must not block; falls through to the
+      // normal not-found/retry path (existsByStripeProviderSubscriptionId=false).
+      vi.mocked(
+        stripeWebhookEventRepository.findSubscriptionDeletionTombstone,
+      ).mockResolvedValueOnce({
+        deleted_event_created_at: new Date((stripeEventCreatedAtSeconds - 60) * 1000),
+      } as never);
+
+      await expect(
+        service.handleEvent(buildEvent({ type: 'customer.subscription.updated' })),
+      ).rejects.toThrow(/subscription_local_row_missing/);
     });
   });
 

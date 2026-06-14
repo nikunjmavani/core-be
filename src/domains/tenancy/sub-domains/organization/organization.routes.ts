@@ -311,6 +311,8 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.patch<{ Params: { api_key_id: string } }>(
       '/organization/api-keys/:api_key_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Update API key',
           description: 'Updates an API key (name or status). Requires API_KEY_MANAGE permission.',
@@ -325,6 +327,8 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.delete<{ Params: { api_key_id: string } }>(
       '/organization/api-keys/:api_key_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.API_KEY_MANAGE)],
         schema: {
@@ -404,6 +408,8 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.patch<{ Params: { policy_id: string } }>(
       '/organization/notification-policies/:policy_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         schema: {
           summary: 'Update notification policy',
           description:
@@ -419,6 +425,8 @@ export function organizationRoutes(deps: OrganizationRoutesDeps): FastifyPluginA
     zodApplication.delete<{ Params: { policy_id: string } }>(
       '/organization/notification-policies/:policy_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.NOTIFICATION_POLICY_MANAGE)],
         schema: {

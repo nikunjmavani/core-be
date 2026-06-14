@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+vi.mock('@/infrastructure/database/resource-cap-lock.js', () => ({
+  RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES: {
+    OWNED_ORGANIZATION: 1,
+    ORGANIZATION_API_KEY: 2,
+    ORGANIZATION_NOTIFICATION_POLICY: 3,
+    MEMBER_ROLE: 4,
+  },
+  acquireResourceCapAdvisoryLock: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/infrastructure/database/contexts/organization-database.context.js', () => ({
   withOrganizationDatabaseContext: vi.fn(
     async (_organizationPublicId: string, callback: () => Promise<unknown>) => callback(),
@@ -215,10 +225,18 @@ describe('OrganizationService', () => {
     expect(invalidateOrganizationPermissionsMock).not.toHaveBeenCalled();
   });
 
-  it('uploadLogo validates key prefix and updates logo url', async () => {
+  it('uploadLogo stores the object KEY, not a permanent public URL (TEN-07)', async () => {
     const key = `organization-logos/${organizationRow.public_id}/logo.png`;
     const result = await service.uploadLogo(organizationRow.public_id, { key }, 'owner_public');
     expect(result).toBeDefined();
+    // TEN-07: the private object KEY is persisted (signed-on-read), never an unsigned
+    // permanent S3 URL via getObjectUrl.
+    expect(repository.update).toHaveBeenCalledWith(
+      organizationRow.public_id,
+      { logo_url: key },
+      expect.anything(),
+    );
+    expect(objectStorage.getObjectUrl).not.toHaveBeenCalled();
   });
 
   it('uploadLogo throws when object is missing in storage', async () => {
@@ -305,6 +323,17 @@ describe('OrganizationService', () => {
     await expect(
       service.create({ name: 'Race', slug: 'race-slug' }, 'owner_public'),
     ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it('TEN-02: create takes the owned-organization advisory lock before counting', async () => {
+    const { acquireResourceCapAdvisoryLock, RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES } = await import(
+      '@/infrastructure/database/resource-cap-lock.js'
+    );
+    await service.create({ name: 'Locked Co', slug: 'locked-co' }, 'owner_public');
+    expect(acquireResourceCapAdvisoryLock).toHaveBeenCalledWith(
+      RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES.OWNED_ORGANIZATION,
+      expect.any(Number),
+    );
   });
 
   it('create rejects when the owner is at the team-organization cap', async () => {

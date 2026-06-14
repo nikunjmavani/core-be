@@ -5,10 +5,12 @@ import {
   acceptMemberInvitationDto,
   createMemberInvitationDto,
   listMemberInvitationsQueryDto,
+  listPendingMemberInvitationsQueryDto,
   resendMemberInvitationDto,
   type AcceptMemberInvitationInput,
   type CreateMemberInvitationInput,
   type ListMemberInvitationsQueryInput,
+  type ListPendingMemberInvitationsQueryInput,
   type ResendMemberInvitationInput,
 } from './member-invitation.dto.js';
 
@@ -20,6 +22,26 @@ import {
 export function validateListMemberInvitationsQuery(data: unknown): ListMemberInvitationsQueryInput {
   ensureCursorOnlyPagination(data);
   const result = listMemberInvitationsQueryDto.safeParse(data);
+  if (!result.success) {
+    throw new ValidationError(
+      'errors:invalidInput',
+      undefined,
+      z.flattenError(result.error).fieldErrors,
+    );
+  }
+  return result.data;
+}
+
+/**
+ * Validates the `GET /invitations/pending` query string. Rejects legacy
+ * page-number pagination first, then parses against
+ * {@link listPendingMemberInvitationsQueryDto}.
+ */
+export function validateListPendingMemberInvitationsQuery(
+  data: unknown,
+): ListPendingMemberInvitationsQueryInput {
+  ensureCursorOnlyPagination(data);
+  const result = listPendingMemberInvitationsQueryDto.safeParse(data);
   if (!result.success) {
     throw new ValidationError(
       'errors:invalidInput',

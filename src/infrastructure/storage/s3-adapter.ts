@@ -215,9 +215,8 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
   async headObject(
     key: string,
   ): Promise<{ contentType: string | undefined; contentLength: number | undefined } | null> {
-    // Backward-compatible null-on-miss wrapper for non-critical sanity checks (avatar/logo
-    // content-type). Destructive callers (confirm, sweep) must use the discriminated result.
     const result = await this.headObjectResult(key);
+    if (result.kind === 'transient_error') throw result.cause;
     return result.kind === 'found' ? result.metadata : null;
   }
 
@@ -294,8 +293,12 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
         },
       });
     } catch (error) {
-      logger.error({ error, key, bucket }, 's3.getObjectFirstBytes.failed');
-      return null;
+      if (isS3NotFoundError(error)) {
+        logger.warn({ key, bucket }, 's3.getObjectFirstBytes.not_found');
+        return null;
+      }
+      logger.error({ error, key, bucket }, 's3.getObjectFirstBytes.transient_failure');
+      throw error;
     }
   }
 

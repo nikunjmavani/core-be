@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { MODERATE_AUTHED_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { rejectLegacyPagePagination } from '@/shared/utils/http/pagination.util.js';
 import type { NotificationService } from './notification.service.js';
 import { createNotificationController } from './notification.controller.js';
@@ -60,6 +61,9 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
     zodApplication.patch<{ Params: { notification_id: string } }>(
       '/notifications/:notification_id/read',
       {
+        // R4: user-scoped mutation — cap per user/IP so a compromised principal
+        // cannot churn read-state/cache writes at the global default.
+        ...MODERATE_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         schema: {
           summary: 'Mark notification as read',
@@ -73,6 +77,8 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
     zodApplication.post(
       '/notifications/mark-all-read',
       {
+        // R4: bulk user-scoped mutation — cap per user/IP.
+        ...MODERATE_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         schema: {
           summary: 'Mark all notifications as read',
@@ -86,6 +92,8 @@ export function notificationRoutes(service: NotificationService): FastifyPluginA
     zodApplication.delete<{ Params: { notification_id: string } }>(
       '/notifications/:notification_id',
       {
+        // R4: user-scoped destructive mutation — cap per user/IP.
+        ...MODERATE_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         schema: {
           summary: 'Delete notification',

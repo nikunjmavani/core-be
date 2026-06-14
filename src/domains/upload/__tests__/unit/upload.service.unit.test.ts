@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors/index.js';
+import { ExternalServiceError } from '@/infrastructure/outbound/index.js';
 import { UploadService } from '@/domains/upload/upload.service.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import type { UploadRepository } from '@/domains/upload/upload.repository.js';
@@ -516,6 +517,25 @@ describe('UploadService', () => {
       ValidationError,
     );
     expect(repository.markStatusByPublicId).toHaveBeenCalledWith(uploadPublicId, 'FAILED');
+  });
+
+  it('UPLOAD-03: confirmUpload rethrows a transient storage error WITHOUT marking FAILED', async () => {
+    // sec-UP1: pending-keyed so we reach the verify step rather than the legacy refusal.
+    vi.mocked(repository.findByPublicId).mockResolvedValue({
+      ...uploadRow,
+      file_key: `pending/${uploadRow.file_key}`,
+      status: 'PENDING',
+    } as never);
+    // A transient S3 blip surfaces as ExternalServiceError (503), not a verification miss.
+    vi.mocked(objectStorage.verifyUploadedObject).mockRejectedValueOnce(
+      new ExternalServiceError({ integration: 's3', category: 'timeout' }),
+    );
+
+    await expect(service.confirmUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
+      ExternalServiceError,
+    );
+    // The upload must stay PENDING for retry — never permanently FAILED on a blip.
+    expect(repository.markStatusByPublicId).not.toHaveBeenCalledWith(uploadPublicId, 'FAILED');
   });
 
   it('confirmUpload sanitizes a stored SVG before marking UPLOADED', async () => {

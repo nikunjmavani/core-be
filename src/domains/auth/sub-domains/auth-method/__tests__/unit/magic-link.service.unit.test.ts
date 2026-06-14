@@ -8,6 +8,18 @@ vi.mock('@/domains/auth/shared/complete-first-factor-auth.js', () => ({
   }),
 }));
 
+// AUTH-04: verify() now consumes + completes inside withTransaction +
+// runWithPinnedDatabaseHandle; invoke the callbacks directly so the unit test
+// exercises the flow without a real database/transaction.
+vi.mock('@/infrastructure/database/transaction.js', () => ({
+  withTransaction: vi.fn((callback: (transaction: unknown) => unknown) => callback({})),
+}));
+
+vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => ({
+  runWithPinnedDatabaseHandle: vi.fn((_handle: unknown, callback: () => unknown) => callback()),
+  getRequestDatabase: vi.fn(() => ({})),
+}));
+
 import type { OrganizationSettingsService } from '@/domains/tenancy/sub-domains/organization/organization-settings/organization-settings.service.js';
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session/auth-session.service.js';
@@ -172,6 +184,26 @@ describe('MagicLinkService', () => {
 
     expect(result.access_token).toBe('jwt-token');
     expect(result.session_public_id).toBe('session_public');
+  });
+
+  it('AUTH-04: verify propagates a downstream session/MFA failure so the token consume rolls back', async () => {
+    const { completeFirstFactorAuth } = await import(
+      '@/domains/auth/shared/complete-first-factor-auth.js'
+    );
+    vi.mocked(verificationTokenRepository.consumeIfValid).mockResolvedValue({
+      token_type: 'MAGIC_LINK',
+      user_id: user.id,
+    } as never);
+    vi.mocked(userService.findById).mockResolvedValue({ ...user, status: 'ACTIVE' } as never);
+    // Transient downstream failure (e.g. session insert / Redis MFA-session error).
+    vi.mocked(completeFirstFactorAuth).mockRejectedValueOnce(new Error('session insert failed'));
+
+    await expect(service.verify({ token: 'raw-magic-token' }, '127.0.0.1')).rejects.toThrow(
+      'session insert failed',
+    );
+    // consume + completion ran in the same transaction, so a real DB rolls the consume
+    // back and the magic link stays usable for a retry.
+    expect(verificationTokenRepository.consumeIfValid).toHaveBeenCalled();
   });
 
   it('verify rejects when user record is missing after token consume', async () => {

@@ -46,12 +46,14 @@ describe('infrastructure queue scheduler', () => {
   it('getScheduledJobs returns audit, session, stripe retention, audit export, tombstone retention, idempotency, dlq depth, mail sweeper, upload pending sweep, stripe reclaim, and audit-outbox drain jobs', async () => {
     const { getScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
     const scheduledJobs = getScheduledJobs();
-    expect(scheduledJobs).toHaveLength(24);
+    expect(scheduledJobs).toHaveLength(26);
     expect(scheduledJobs.map((job) => job.queueName)).toEqual([
       'audit-retention',
       'audit-outbox-drain',
       'notification-retention',
       'session-cleanup',
+      'user-offboarding-reconcile',
+      'organization-offboarding-reconcile',
       'stripe-webhook-event-retention',
       'audit-export',
       'user-data-export-retention',
@@ -136,12 +138,12 @@ describe('infrastructure queue scheduler', () => {
   it('registerScheduledJobs registers one repeatable job per cleanup queue when enabled', async () => {
     const { registerScheduledJobs } = await import('@/infrastructure/queue/scheduler.js');
     const schedulerHandle = await registerScheduledJobs();
-    expect(upsertJobSchedulerMock).toHaveBeenCalledTimes(24);
+    expect(upsertJobSchedulerMock).toHaveBeenCalledTimes(26);
     await schedulerHandle.close();
-    // Each scheduled job opens one Queue for upsert (24) + the reconcile pass opens one
-    // Queue per unique queue name (24) which is closed inside its own loop iteration.
-    // handle.close() then closes the 24 upsert queues, so the mock observes 48 close calls.
-    expect(queueCloseMock).toHaveBeenCalledTimes(48);
+    // Each scheduled job opens one Queue for upsert (26) + the reconcile pass opens one
+    // Queue per unique queue name (26) which is closed inside its own loop iteration.
+    // handle.close() then closes the 26 upsert queues, so the mock observes 52 close calls.
+    expect(queueCloseMock).toHaveBeenCalledTimes(52);
   });
 
   it('registerScheduledJobs does not instantiate queues when SCHEDULER_ENABLED is false', async () => {

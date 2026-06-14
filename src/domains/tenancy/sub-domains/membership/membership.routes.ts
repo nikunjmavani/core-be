@@ -14,6 +14,7 @@ import {
   acceptMemberInvitationDto,
   createMemberInvitationDto,
   listMemberInvitationsQueryDto,
+  listPendingMemberInvitationsQueryDto,
   resendMemberInvitationDto,
 } from './member-invitation/member-invitation.dto.js';
 import {
@@ -93,7 +94,9 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     zodApplication.post(
       '/organization/memberships',
       {
-        config: { idempotencyRequired: true },
+        // R4: org-scoped admin mutation — cap per (org, actor) alongside the
+        // required idempotency key. Mirrors the invitation-create pattern.
+        config: { ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config, idempotencyRequired: true },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)],
         schema: {
@@ -109,6 +112,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     zodApplication.patch<{ Params: { membership_id: string } }>(
       '/organization/memberships/:membership_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)],
         schema: {
@@ -124,6 +129,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     zodApplication.delete<{ Params: { membership_id: string } }>(
       '/organization/memberships/:membership_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)],
         schema: {
@@ -263,11 +270,13 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
       '/invitations/pending',
       {
         onRequest: [app.authenticate],
+        preValidation: [rejectLegacyPagePagination],
         schema: {
           summary: 'List my pending invitations',
           description:
-            'Returns all pending invitations for the authenticated user across all organizations.',
+            'Returns the authenticated user’s pending invitations across all organizations, cursor-paginated (`limit` + opaque `after`). Replaces the previous fixed 100-row cap (R5 / TEN-35).',
           tags: ['Membership', 'Invitation'],
+          querystring: listPendingMemberInvitationsQueryDto,
         },
       },
       invitationController.listPendingInvitations,

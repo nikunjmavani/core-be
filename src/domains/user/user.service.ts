@@ -13,6 +13,7 @@ import type { UserRepository } from './user.repository.js';
 import { env } from '@/shared/config/env.config.js';
 import { resolvePersonalOrganizationPublicId } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import { UserSerializer } from './user.serializer.js';
+import { resolveStoredMediaReadUrl } from '@/shared/utils/infrastructure/media-url.util.js';
 import {
   validateUpdateMe,
   validateListUsers,
@@ -390,6 +391,20 @@ export class UserService {
     );
   }
 
+  /**
+   * Serializes a user row to {@link UserOutput} with `avatar_url` resolved to a
+   * short-lived signed read URL (USER-10: private bucket + signed-on-read). The
+   * presign is a network-free local signature, so it is safe to call from within a
+   * database context.
+   */
+  private async toUserOutput(user: Parameters<typeof UserSerializer.one>[0]): Promise<UserOutput> {
+    const serialized = UserSerializer.one(user);
+    return {
+      ...serialized,
+      avatar_url: await resolveStoredMediaReadUrl(this.objectStorage, user.avatar_url),
+    };
+  }
+
   // ── Self-service ────────────────────────────────────────────
 
   async getMe(publicId: string): Promise<UserOutput> {
@@ -401,7 +416,7 @@ export class UserService {
       ? ((await resolvePersonalOrganizationPublicId(user.id)) ?? null)
       : null;
     return {
-      ...UserSerializer.one(user),
+      ...(await this.toUserOutput(user)),
       capabilities: {
         personal_organizations: env.PERSONAL_ORGANIZATION_ENABLED,
         team_organizations: env.TEAM_ORGANIZATION_ENABLED,
@@ -438,11 +453,30 @@ export class UserService {
     if (avatarUrl !== undefined && previousAvatarUrl && previousAvatarUrl !== avatarUrl) {
       await this.deleteOwnedAvatarObject(publicId, previousAvatarUrl);
     }
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 
   async deleteMe(publicId: string): Promise<void> {
     await this.softDeleteUserWithOffboarding(publicId);
+  }
+
+  /**
+   * Re-drives a STUCK user offboarding (USER-04 / USER-09 reconciler entry point).
+   *
+   * @remarks
+   * - **Algorithm:** delegates to the same idempotent `softDeleteUserWithOffboarding`
+   *   sequence used by self/admin delete; `deletion_started_at` makes every step
+   *   safe to re-run, so a partial offboarding resumes from where it stalled.
+   * - **Failure modes:** propagates so the reconciler can count + alert and retry on
+   *   the next tick.
+   * - **Side effects:** same as the original offboarding (session/credential revoke,
+   *   upload/export purge, soft-delete, S3 avatar cleanup).
+   * - **Notes:** deliberately skips the admin-entry `assertTargetNotProtectedAdmin`
+   *   guard — the offboarding has ALREADY been authorized and started; this only
+   *   completes it.
+   */
+  async resumeOffboarding(public_id: string): Promise<void> {
+    await this.softDeleteUserWithOffboarding(public_id);
   }
 
   async uploadAvatar(publicId: string, body: unknown): Promise<UserOutput> {
@@ -460,7 +494,7 @@ export class UserService {
     if (previous?.avatar_url && previous.avatar_url !== avatarKey) {
       await this.deleteOwnedAvatarObject(publicId, previous.avatar_url);
     }
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 
   async deleteAvatar(publicId: string): Promise<UserOutput> {
@@ -475,7 +509,7 @@ export class UserService {
       this.repository.update(publicId, { avatar_url: null }),
     );
     if (!user) throw new NotFoundError('User');
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 
   // ── Admin operations ────────────────────────────────────────
@@ -496,7 +530,7 @@ export class UserService {
       ),
     );
     return {
-      items: result.items.map(UserSerializer.one),
+      items: await Promise.all(result.items.map((user) => this.toUserOutput(user))),
       limit: result.limit,
       total: result.total,
       has_more: result.has_more,
@@ -510,7 +544,7 @@ export class UserService {
       this.repository.findByPublicId(publicId),
     );
     if (!user) throw new NotFoundError('User');
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 
   /**
@@ -546,7 +580,7 @@ export class UserService {
     if (parsed.status !== undefined && parsed.status !== 'ACTIVE') {
       await this.revokeAllSessionsForDeactivatedUser(publicId);
     }
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 
   async deleteUser(publicId: string): Promise<void> {
@@ -559,7 +593,7 @@ export class UserService {
     const user = await withGlobalAdminDatabaseContext(() => this.repository.suspend(publicId));
     if (!user) throw new NotFoundError('User');
     await this.revokeAllSessionsForDeactivatedUser(publicId);
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 
   /**
@@ -577,6 +611,6 @@ export class UserService {
   async unsuspendUser(publicId: string): Promise<UserOutput> {
     const user = await withGlobalAdminDatabaseContext(() => this.repository.unsuspend(publicId));
     if (!user) throw new NotFoundError('User');
-    return UserSerializer.one(user);
+    return this.toUserOutput(user);
   }
 }

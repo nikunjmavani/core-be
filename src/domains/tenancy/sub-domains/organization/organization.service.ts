@@ -8,6 +8,10 @@ import { env } from '@/shared/config/env.config.js';
 import { GLOBAL_ROLES, type GlobalRole } from '@/shared/constants/roles.constants.js';
 import { withOrganizationDatabaseContext } from '@/infrastructure/database/contexts/organization-database.context.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
+import {
+  RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES,
+  acquireResourceCapAdvisoryLock,
+} from '@/infrastructure/database/resource-cap-lock.js';
 import type { OrganizationRepository } from './organization.repository.js';
 import type {
   OrganizationBillingContext,
@@ -21,6 +25,7 @@ import {
   validateUploadLogo,
 } from './organization.validator.js';
 import { serializeOrganization } from './organization.serializer.js';
+import { resolveStoredMediaReadUrl } from '@/shared/utils/infrastructure/media-url.util.js';
 import { provisionOrganizationWithOwner } from './organization-provisioning.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { buildOrganizationLogoKeyPrefix } from '@/domains/upload/upload.constants.js';
@@ -109,6 +114,23 @@ export class OrganizationService {
   ): void {
     this.offboardingDependencies = { uploadService, subscriptionService };
     this.offboardingUploadService = uploadService;
+  }
+
+  /**
+   * Serializes an organization row to {@link OrganizationOutput} with `logo_url`
+   * resolved to a short-lived signed read URL (TEN-07: private bucket +
+   * signed-on-read). The presign is a network-free local signature, so it is safe
+   * to call from within a database context. Legacy rows that stored an absolute
+   * public URL are returned as-is.
+   */
+  private async toOrganizationOutput(
+    row: Parameters<typeof serializeOrganization>[0],
+  ): Promise<OrganizationOutput> {
+    const serialized = serializeOrganization(row);
+    return {
+      ...serialized,
+      logo_url: await resolveStoredMediaReadUrl(this.objectStorage, row.logo_url),
+    };
   }
 
   private extractOrganizationLogoStorageKey(
@@ -313,7 +335,7 @@ export class OrganizationService {
         : await this.repository.findAllForUser(user_public_id, pagination);
       return {
         ...result,
-        items: result.items.map(serializeOrganization),
+        items: await Promise.all(result.items.map((row) => this.toOrganizationOutput(row))),
       };
     });
   }
@@ -327,7 +349,7 @@ export class OrganizationService {
       await this.assertUserCanAccessOrganization(user_public_id, public_id, global_role);
       const organization = await this.repository.findByPublicId(public_id);
       if (!organization) throw new NotFoundError('Organization');
-      return serializeOrganization(organization);
+      return this.toOrganizationOutput(organization);
     });
   }
 
@@ -344,7 +366,7 @@ export class OrganizationService {
         organization.public_id,
         global_role,
       );
-      return serializeOrganization(organization);
+      return this.toOrganizationOutput(organization);
     });
   }
 
@@ -365,6 +387,13 @@ export class OrganizationService {
     return withUserDatabaseContext(owner_user_public_id, async () => {
       const ownerId = await this.repository.resolveUserIdByPublicId(owner_user_public_id);
       if (ownerId === null) throw new NotFoundError('User');
+      // TEN-02: serialize concurrent org creates by the same owner so the cap is
+      // transactionally strict (no count-then-insert race past the limit). The
+      // transaction-scoped advisory lock releases at COMMIT.
+      await acquireResourceCapAdvisoryLock(
+        RESOURCE_CAP_ADVISORY_LOCK_NAMESPACES.OWNED_ORGANIZATION,
+        ownerId,
+      );
       // Anti-abuse: cap the number of TEAM organizations a single account may own (personal is
       // exempt — countActiveOwnedByUser already counts only type='TEAM').
       // audit-#8: serialize the count + insert with a per-owner transaction-scoped advisory lock
@@ -395,7 +424,7 @@ export class OrganizationService {
           type: 'TEAM',
           ownerUserId: ownerId,
         });
-        return serializeOrganization(organization);
+        return this.toOrganizationOutput(organization);
       } catch (error) {
         // Two concurrent creates can both pass the findBySlug pre-check; the
         // loser hits the `idx_organizations_slug` unique index. Map the
@@ -450,8 +479,27 @@ export class OrganizationService {
         throw error;
       }
       if (!updated) throw new NotFoundError('Organization');
-      return serializeOrganization(updated);
+      return this.toOrganizationOutput(updated);
     });
+  }
+
+  /**
+   * Re-drives a STUCK organization offboarding (TEN-06 reconciler entry point).
+   *
+   * @remarks
+   * - **Algorithm:** delegates to the idempotent {@link OrganizationService.delete}
+   *   sequence; `deletion_started_at` makes each step safe to re-run, so a partial
+   *   offboarding resumes (logo/upload cleanup, subscription cancel, soft-delete,
+   *   permission-cache purge) and completes.
+   * - **Failure modes:** propagates so the reconciler can count + alert and retry on
+   *   the next tick; a PERSONAL org (never deletable standalone, and excluded by the
+   *   reconciler scan) would surface `ConflictError`.
+   * - **Side effects:** same as `delete`.
+   * - **Notes:** thin alias kept distinct from `delete` so the reconciler's intent is
+   *   explicit at the call site.
+   */
+  async resumeOffboarding(public_id: string): Promise<void> {
+    await this.delete(public_id);
   }
 
   async delete(public_id: string): Promise<void> {
@@ -518,7 +566,9 @@ export class OrganizationService {
         key: ['SVG logos are not allowed for security reasons'],
       });
     }
-    const logoUrl = this.objectStorage.getObjectUrl(parsed.key);
+    // TEN-07: store the object KEY (private bucket + signed-on-read), not a permanent
+    // unsigned public URL. Reads mint a short-lived signed URL via toOrganizationOutput.
+    const logoStorageKey = parsed.key;
     const { serialized, previousLogoUrl } = await withOrganizationDatabaseContext(
       public_id,
       async () => {
@@ -534,16 +584,16 @@ export class OrganizationService {
         const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
         const result = await this.repository.update(
           public_id,
-          { logo_url: logoUrl },
+          { logo_url: logoStorageKey },
           userId ?? null,
         );
         if (!result) throw new NotFoundError('Organization');
-        return { serialized: serializeOrganization(result), previousLogoUrl: previous };
+        return { serialized: await this.toOrganizationOutput(result), previousLogoUrl: previous };
       },
     );
     // Reclaim the PREVIOUS owned logo object outside the DB context — replacing a logo previously
     // orphaned the old S3 object (storage leak). Best-effort + prefix-guarded.
-    if (previousLogoUrl && previousLogoUrl !== logoUrl) {
+    if (previousLogoUrl && previousLogoUrl !== logoStorageKey) {
       await this.deleteOwnedOrganizationLogoObject(public_id, previousLogoUrl);
     }
     return serialized;
@@ -566,7 +616,7 @@ export class OrganizationService {
       const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
       const updated = await this.repository.update(public_id, { logo_url: null }, userId ?? null);
       if (!updated) throw new NotFoundError('Organization');
-      return serializeOrganization(updated);
+      return this.toOrganizationOutput(updated);
     });
   }
 }

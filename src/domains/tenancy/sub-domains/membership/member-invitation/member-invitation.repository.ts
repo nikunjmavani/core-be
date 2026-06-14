@@ -34,6 +34,8 @@ export interface MemberInvitationOrganizationLookupRow {
  * hashes and inviter ids are intentionally omitted.
  */
 export interface PendingMemberInvitationLookupRow {
+  /** Internal numeric invitation id — used only to mint the keyset cursor; never serialized. */
+  invitation_id: number;
   invitation_public_id: string;
   organization_public_id: string;
   organization_id: number;
@@ -42,6 +44,27 @@ export interface PendingMemberInvitationLookupRow {
   invitation_email: string;
   invitation_expires_at: Date;
   invitation_created_at: Date;
+}
+
+/**
+ * Cursor-pagination options for
+ * {@link MemberInvitationRepository.findByEmailPending}. `after` is the opaque
+ * cursor minted from the previous page's last row.
+ */
+export interface PendingMemberInvitationListPagination {
+  after?: string;
+  limit: number;
+}
+
+/**
+ * One page of cross-organization pending invitations plus the keyset cursor
+ * metadata required to fetch the next page.
+ */
+export interface PendingMemberInvitationListPage {
+  items: PendingMemberInvitationLookupRow[];
+  limit: number;
+  has_more: boolean;
+  next_cursor: string | null;
 }
 
 /**
@@ -117,19 +140,35 @@ export class MemberInvitationRepository {
   }
 
   /**
-   * Cross-organization lookup of pending invitations by recipient email.
+   * Cross-organization, cursor-paginated lookup of pending invitations by
+   * recipient email.
    *
    * Bypasses tenant RLS via the SECURITY DEFINER function
    * `tenancy.list_pending_member_invitations_for_email` so the route can be served
    * without an `app.current_organization_id` GUC. The function returns minimal
    * non-sensitive metadata; the secret token hash and inviter id are not exposed.
+   *
+   * @remarks
+   * - **Algorithm:** decodes the opaque `after` cursor to a `(created_at, id)`
+   *   keyset, fetches `limit + 1` rows ordered by `(created_at, id)` ASC, and
+   *   derives `has_more` / `next_cursor` from the surplus row.
+   * - **Failure modes:** propagates Postgres errors; a malformed cursor decodes
+   *   to the first page rather than throwing.
+   * - **Side effects:** none — read-only via the SECURITY DEFINER function.
+   * - **Notes:** previously capped at a fixed 100 rows with no pagination
+   *   (R5 / TEN-35), silently hiding older invitations from heavily-invited users.
    */
   async findByEmailPending(
     email: string,
-    limit: number,
-  ): Promise<PendingMemberInvitationLookupRow[]> {
-    const rows = await sql<
+    pagination: PendingMemberInvitationListPagination,
+  ): Promise<PendingMemberInvitationListPage> {
+    const { limit } = pagination;
+    const cursor = parseListCursor(pagination.after);
+    const afterCreatedAt = cursor?.created_at ?? null;
+    const afterId = cursor?.id ?? null;
+    const fetchedRows = await sql<
       Array<{
+        invitation_id: string | number;
         invitation_public_id: string;
         organization_public_id: string;
         organization_id: string | number;
@@ -141,6 +180,7 @@ export class MemberInvitationRepository {
       }>
     >`
       SELECT
+        invitation_id,
         invitation_public_id,
         organization_public_id,
         organization_id,
@@ -149,9 +189,15 @@ export class MemberInvitationRepository {
         invitation_email,
         invitation_expires_at,
         invitation_created_at
-      FROM tenancy.list_pending_member_invitations_for_email(${email}, ${limit})
+      FROM tenancy.list_pending_member_invitations_for_email(
+        ${email},
+        ${limit + 1},
+        ${afterCreatedAt}::timestamptz,
+        ${afterId}::bigint
+      )
     `;
-    return rows.map((row) => ({
+    const mapped = fetchedRows.map((row) => ({
+      invitation_id: Number(row.invitation_id),
       invitation_public_id: row.invitation_public_id,
       organization_public_id: row.organization_public_id,
       organization_id: Number(row.organization_id),
@@ -161,6 +207,21 @@ export class MemberInvitationRepository {
       invitation_expires_at: new Date(row.invitation_expires_at),
       invitation_created_at: new Date(row.invitation_created_at),
     }));
+    const hasMore = mapped.length > limit;
+    const items = hasMore ? mapped.slice(0, limit) : mapped;
+    const lastItem = items.at(-1);
+    return {
+      items,
+      limit,
+      has_more: hasMore,
+      next_cursor:
+        hasMore && lastItem !== undefined
+          ? createOpaqueCursorFromRow({
+              created_at: lastItem.invitation_created_at,
+              id: lastItem.invitation_id,
+            })
+          : null,
+    };
   }
 
   async findByPublicId(public_id: string): Promise<MemberInvitationRow | null> {
