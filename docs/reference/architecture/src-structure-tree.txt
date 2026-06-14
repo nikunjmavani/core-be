@@ -1231,12 +1231,14 @@ src/
     └── storage/
     │   ├── __tests__/
     │       └── unit/
+    │       │   ├── public-media-url.util.unit.test.ts
     │       │   ├── s3-adapter.unit.test.ts
     │       │   ├── s3-error.util.unit.test.ts
     │       │   ├── storage.service.presigned-put.unit.test.ts
     │       │   └── storage.service.put-object-buffer.unit.test.ts
     │   ├── object-storage.port.ts
     │   ├── OVERVIEW.md
+    │   ├── public-media-url.util.ts
     │   ├── s3-adapter.ts
     │   ├── s3-error.util.ts
     │   └── storage.service.ts

@@ -102,6 +102,19 @@ Additional bucket hardening:
 - Server-side encryption (`AES256` or KMS) default.
 - CORS allows `PUT`/`POST` from the API client origin only; `*` is acceptable for development only.
 
+### Public media vs private files (audit-#13)
+
+The bucket holds both PUBLIC media (`avatars/`, `organization-logos/`) and PRIVATE files
+(`user-files/`, `organization-files/`). With "Block all public access" enabled (required above),
+the raw `https://<bucket>.s3.<region>.amazonaws.com/<key>` form is NOT fetchable — so **do not**
+disable the public-access block to make logos load. Instead, serve public media through a
+distribution (e.g. CloudFront) restricted to the `avatars/` and `organization-logos/` prefixes and
+set `PUBLIC_MEDIA_BASE_URL` to that distribution's base URL. `getObjectUrl` then builds public-media
+links from that base while the bucket stays fully private; private files are only ever served via
+short-lived presigned download URLs. `getObjectUrl` additionally **refuses** to mint a URL for any
+key outside the public-media prefixes, so a private object can never be handed out as a public link.
+Leave `PUBLIC_MEDIA_BASE_URL` unset only in local/dev (falls back to the direct S3 URL).
+
 ## Configuration reference
 
 | Variable                             | Default      | Purpose                                                                                                                         |
@@ -109,6 +122,7 @@ Additional bucket hardening:
 | `S3_BUCKET`                          | *required*   | Object storage bucket name.                                                                                                     |
 | `S3_REGION`                          | `us-east-1`  | AWS region.                                                                                                                     |
 | `S3_MAX_ATTEMPTS`                    | `3`          | AWS SDK retry attempts.                                                                                                         |
+| `PUBLIC_MEDIA_BASE_URL`              | *(unset)*    | Public-media distribution base (e.g. CloudFront) for `avatars/` + `organization-logos/`; lets the bucket keep Block-Public-Access on. Unset → direct S3 URL (dev only). |
 | `UPLOAD_USE_PRESIGNED_POST`          | `true`       | When `true`, return a presigned POST with `content-length-range` instead of a presigned PUT URL.                                |
 | `UPLOAD_ALLOW_SVG`                   | `false`      | Allow `image/svg+xml` uploads (sanitized via DOMPurify on confirm).                                                             |
 | `UPLOAD_MAX_PENDING_PER_USER`        | `100`        | Per-user cap on concurrent PENDING uploads. New `createUpload` calls return `400 errors:uploadPendingQuotaExceeded` at the cap. |

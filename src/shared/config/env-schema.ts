@@ -330,6 +330,16 @@ const envSchemaBase = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   /** AWS SDK maxAttempts for S3 (each attempt bounded by service/client timeouts). */
   S3_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  /**
+   * audit-#13: public base URL (e.g. a CloudFront distribution) for PUBLIC media only
+   * (avatars, organization logos). When set, `getObjectUrl` builds links from this base instead
+   * of the raw `https://<bucket>.s3.<region>.amazonaws.com/<key>` form, so the S3 bucket can keep
+   * "Block all public access" enabled (the documented production posture) while public media is
+   * still reachable through a distribution scoped to the public prefixes. Leave unset in local/dev
+   * to fall back to the direct S3 URL. NEVER point this at a base that exposes private prefixes
+   * (`user-files/`, `organization-files/`) — `getObjectUrl` additionally refuses non-public keys.
+   */
+  PUBLIC_MEDIA_BASE_URL: z.string().url().optional(),
 
   // Ops knobs
   /** BullMQ worker concurrency fallback when per-queue overrides are unset (default 4). */

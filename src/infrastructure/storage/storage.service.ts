@@ -11,6 +11,7 @@ import { env } from '@/shared/config/env.config.js';
 import { outboundCall } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { type S3HeadResult, isS3NotFoundError } from '@/infrastructure/storage/s3-error.util.js';
+import { buildPublicMediaUrl } from '@/infrastructure/storage/public-media-url.util.js';
 
 const S3_BUCKET_NOT_CONFIGURED_MESSAGE = 'S3_BUCKET is not configured';
 
@@ -90,10 +91,12 @@ export async function createPresignedUploadUrl(options: {
  *   For private downloads use `createPresignedDownloadUrl` on the adapter instead.
  */
 export function getObjectUrl(key: string): string {
-  const bucket = env.S3_BUCKET;
-  const region = env.S3_REGION ?? 'us-east-1';
-  if (!bucket) throw new Error(S3_BUCKET_NOT_CONFIGURED_MESSAGE);
-  return `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+  // audit-#13: only PUBLIC-media keys may receive an unauthenticated URL, and prefer the
+  // PUBLIC_MEDIA_BASE_URL distribution so the bucket can keep Block-Public-Access enabled.
+  return buildPublicMediaUrl(key, {
+    bucket: env.S3_BUCKET,
+    region: env.S3_REGION ?? 'us-east-1',
+  });
 }
 
 /**

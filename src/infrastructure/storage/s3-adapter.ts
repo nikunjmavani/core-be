@@ -12,6 +12,7 @@ import { env } from '@/shared/config/env.config.js';
 import { outboundCall } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { type S3HeadResult, isS3NotFoundError } from '@/infrastructure/storage/s3-error.util.js';
+import { buildPublicMediaUrl } from '@/infrastructure/storage/public-media-url.util.js';
 import type {
   ObjectStoragePort,
   PresignedUploadPost,
@@ -159,9 +160,12 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
   }
 
   getObjectUrl(key: string): string {
-    const bucket = requireBucket();
-    const region = env.S3_REGION ?? 'us-east-1';
-    return `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+    // audit-#13: refuse public URLs for non-public-media keys and prefer the PUBLIC_MEDIA_BASE_URL
+    // distribution so the bucket can keep Block-Public-Access on (private files stay presigned-only).
+    return buildPublicMediaUrl(key, {
+      bucket: env.S3_BUCKET,
+      region: env.S3_REGION ?? 'us-east-1',
+    });
   }
 
   async createPresignedDownloadUrl(options: {
