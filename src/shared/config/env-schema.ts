@@ -673,6 +673,10 @@ const envSchemaBase = z.object({
   POSTMAN_API_KEY: z.string().min(1).optional(),
   /** Postman workspace ID where the API documentation collection is published. GitHub Environment secret via `pnpm github:sync`. */
   POSTMAN_WORKSPACE_ID: z.string().min(1).optional(),
+
+  // Release automation (GitHub Actions only — consumed by .github/workflows/post-merge-ci.yml)
+  /** PAT (classic `repo` + `workflow` scopes) release-please uses to create the dev/main GitHub Releases; the default GITHUB_TOKEN cannot — the create-a-release API path requires the `workflow` scope. GitHub Environment secret via `pnpm github:sync`. */
+  RELEASE_PLEASE_TOKEN: z.string().min(1).optional(),
 });
 
 /**
