@@ -59,6 +59,17 @@ vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
   ),
 }));
 
+// audit-#11: issueMagicLinkIfUserExists now wraps invalidate+create+emit in
+// withTransaction + runWithPinnedDatabaseHandle so the outbox insert is atomic with the token
+// writes. Mock both to simply run the callback (no real DB needed for these unit tests).
+vi.mock('@/infrastructure/database/transaction.js', () => ({
+  withTransaction: vi.fn((callback: (transaction: unknown) => unknown) => callback({})),
+}));
+
+vi.mock('@/infrastructure/database/contexts/request-database.context.js', () => ({
+  runWithPinnedDatabaseHandle: vi.fn((_handle: unknown, callback: () => unknown) => callback()),
+}));
+
 const user = {
   id: 1,
   public_id: 'abcdefghijklmnopqrstu',

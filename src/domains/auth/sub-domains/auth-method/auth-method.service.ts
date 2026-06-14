@@ -279,31 +279,36 @@ export class AuthMethodService {
     const user = await this.userService.findByEmail(email);
     if (!user) return;
 
-    // Invalidate any existing password reset tokens
-    await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
-
-    // Create new token
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRES_IN_MINUTES * 60_000);
 
-    await this.verificationTokenRepository.create(
-      'PASSWORD_RESET',
-      user.id,
-      user.email,
-      tokenHash,
-      expiresAt,
+    // audit-#11: invalidate prior tokens, persist the new token, and record the outbound
+    // mail-outbox row (done inside the PASSWORD_RESET_REQUESTED handler) as ONE atomic unit.
+    // Otherwise a handler/Redis/process failure could invalidate the old link and leave a new
+    // valid token that was never delivered — the user has no usable recovery email. Queue dispatch
+    // stays post-commit (handler schedules it via scheduleCommitDispatch, backed by the sweeper).
+    await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
+        await this.verificationTokenRepository.create(
+          'PASSWORD_RESET',
+          user.id,
+          user.email,
+          tokenHash,
+          expiresAt,
+        );
+        await eventBus.emitStrict({
+          type: AUTH_EVENT.PASSWORD_RESET_REQUESTED,
+          payload: {
+            email: user.email,
+            reset_token: rawToken,
+            expires_in_minutes: PASSWORD_RESET_EXPIRES_IN_MINUTES,
+          } satisfies PasswordResetEmailPayload,
+          timestamp: new Date(),
+        });
+      }),
     );
-
-    await eventBus.emitStrict({
-      type: AUTH_EVENT.PASSWORD_RESET_REQUESTED,
-      payload: {
-        email: user.email,
-        reset_token: rawToken,
-        expires_in_minutes: PASSWORD_RESET_EXPIRES_IN_MINUTES,
-      } satisfies PasswordResetEmailPayload,
-      timestamp: new Date(),
-    });
   }
 
   async resetPassword(body: unknown): Promise<void> {
@@ -456,31 +461,35 @@ export class AuthMethodService {
       return { messageKey: 'success:emailAlreadyVerified' };
     }
 
-    // Invalidate existing verification tokens
-    await this.verificationTokenRepository.invalidateAllForUser(user.id, 'EMAIL_VERIFICATION');
-
-    // Create new token
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRES_IN_HOURS * 3_600_000);
 
-    await this.verificationTokenRepository.create(
-      'EMAIL_VERIFICATION',
-      user.id,
-      user.email,
-      tokenHash,
-      expiresAt,
+    // audit-#11: invalidate prior tokens, persist the new token, and record the outbound
+    // mail-outbox row (done inside the EMAIL_VERIFICATION_REQUESTED handler) as ONE atomic unit so
+    // a handler/Redis/process failure cannot invalidate the old link and leave a new valid token
+    // that was never delivered. Queue dispatch stays post-commit (handler schedules it).
+    await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        await this.verificationTokenRepository.invalidateAllForUser(user.id, 'EMAIL_VERIFICATION');
+        await this.verificationTokenRepository.create(
+          'EMAIL_VERIFICATION',
+          user.id,
+          user.email,
+          tokenHash,
+          expiresAt,
+        );
+        await eventBus.emitStrict({
+          type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
+          payload: {
+            email: user.email,
+            verification_token: rawToken,
+            expires_in_hours: EMAIL_VERIFICATION_EXPIRES_IN_HOURS,
+          } satisfies EmailVerificationEmailPayload,
+          timestamp: new Date(),
+        });
+      }),
     );
-
-    await eventBus.emitStrict({
-      type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
-      payload: {
-        email: user.email,
-        verification_token: rawToken,
-        expires_in_hours: EMAIL_VERIFICATION_EXPIRES_IN_HOURS,
-      } satisfies EmailVerificationEmailPayload,
-      timestamp: new Date(),
-    });
 
     return { messageKey: 'success:verificationEmailSent' };
   }

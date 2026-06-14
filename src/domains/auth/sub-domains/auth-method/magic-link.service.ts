@@ -10,6 +10,11 @@ import type { AuthSessionService } from '@/domains/auth/sub-domains/auth-session
 import type { MfaService } from '@/domains/auth/sub-domains/auth-mfa/auth-mfa.service.js';
 import type { VerificationTokenRepository } from './verification-token/verification-token.repository.js';
 import { eventBus } from '@/core/events/event-bus.js';
+import { withTransaction } from '@/infrastructure/database/transaction.js';
+import {
+  runWithPinnedDatabaseHandle,
+  type RequestScopedPostgresDatabase,
+} from '@/infrastructure/database/contexts/request-database.context.js';
 import { validateMagicLinkSend, validateMagicLinkVerify } from '@/domains/auth/auth.validator.js';
 import {
   AUTH_EVENT,
@@ -102,29 +107,39 @@ export class MagicLinkService {
     if (!user) {
       return;
     }
-    await this.verificationTokenRepository.invalidateAllForUser(user.id, 'MAGIC_LINK');
 
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRES_IN_MINUTES * 60_000);
 
-    await this.verificationTokenRepository.create(
-      'MAGIC_LINK',
-      user.id,
-      user.email,
-      tokenHash,
-      expiresAt,
+    // audit-#11: invalidating prior links, persisting the new token, and recording the outbound
+    // mail-outbox row (done inside the MAGIC_LINK_REQUESTED handler via recordOutboxEmail) must be
+    // ONE atomic unit. Previously they were separate autocommitted writes, so a handler / Redis /
+    // process failure could invalidate the user's old link AND leave a new valid token that was
+    // never delivered — stranding the user with no usable link. The pinned transaction makes the
+    // handler's outbox insert enrol in the same tx; queue dispatch stays post-commit (the handler
+    // schedules it via scheduleCommitDispatch, backed by the outbox sweeper).
+    await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        await this.verificationTokenRepository.invalidateAllForUser(user.id, 'MAGIC_LINK');
+        await this.verificationTokenRepository.create(
+          'MAGIC_LINK',
+          user.id,
+          user.email,
+          tokenHash,
+          expiresAt,
+        );
+        await eventBus.emitStrict({
+          type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
+          payload: {
+            email: user.email,
+            magic_link_token: rawToken,
+            expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
+          } satisfies MagicLinkEmailPayload,
+          timestamp: new Date(),
+        });
+      }),
     );
-
-    await eventBus.emitStrict({
-      type: AUTH_EVENT.MAGIC_LINK_REQUESTED,
-      payload: {
-        email: user.email,
-        magic_link_token: rawToken,
-        expires_in_minutes: MAGIC_LINK_EXPIRES_IN_MINUTES,
-      } satisfies MagicLinkEmailPayload,
-      timestamp: new Date(),
-    });
   }
 
   /** Verify magic link token; returns MFA challenge or access token + session. */
