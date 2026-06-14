@@ -1652,6 +1652,7 @@ src/
     │   │   ├── metrics-red.integration.test.ts
     │   │   └── trace-bullmq-propagation.integration.test.ts
     │   ├── queue/
+    │   │   ├── audit-outbox-drain.integration.test.ts
     │   │   ├── bullmq-metrics.integration.test.ts
     │   │   ├── bullmq-noop-smoke.integration.test.ts
     │   │   ├── transactional-outbox.integration.test.ts
