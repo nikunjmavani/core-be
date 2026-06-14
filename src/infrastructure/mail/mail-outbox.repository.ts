@@ -192,7 +192,18 @@ export async function markMailOutboxSent(
 export async function markMailOutboxFailed(mailOutboxId: number): Promise<void> {
   await mailOutboxDatabase()
     .update(mail_outbox)
-    .set({ status: 'failed', updated_at: new Date() })
+    .set({
+      status: 'failed',
+      updated_at: new Date(),
+      // sec-audit-#10: scrub the rendered body on TERMINAL failure too, not just on success.
+      // magic-link / invitation / password-reset / email-verification templates embed the live
+      // single-use token in the HTML, and a `failed` row is just as readable from a PITR snapshot,
+      // leaked operator console, SQLi, or a compromised core_be_app credential. This row is
+      // terminal (BullMQ has exhausted retries — no further send reads the body); a manual resend
+      // must mint a NEW token, never replay stored secret-bearing HTML.
+      html: '',
+      text_body: null,
+    })
     .where(eq(mail_outbox.id, mailOutboxId));
 }
 

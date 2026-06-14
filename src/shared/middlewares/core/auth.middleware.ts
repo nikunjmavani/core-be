@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { UnauthorizedError } from '@/shared/errors/index.js';
+import { env } from '@/shared/config/env.config.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { AuthContext } from '@/shared/types/index.js';
@@ -38,7 +39,13 @@ async function rederiveSuperAdminRole(
 ): Promise<GlobalRole | undefined> {
   const userService = request.server.userDomain?.userService;
   if (!userService) {
-    return GLOBAL_ROLES.SUPER_ADMIN;
+    // sec-audit-#16: fail CLOSED. The production composition root always wires `userDomain`; a
+    // missing one is a misconfiguration, and silently preserving a signed SUPER_ADMIN claim
+    // without re-checking the live allowlist + account state would let a stale privileged token
+    // through (e.g. after the email is removed from GLOBAL_ADMIN_EMAILS or the account is
+    // suspended). Returning `undefined` denies the re-grant, consistent with the other deny paths
+    // below. Test servers may register auth without the full user domain, so keep the seam there.
+    return env.NODE_ENV === 'test' ? GLOBAL_ROLES.SUPER_ADMIN : undefined;
   }
   const user = await userService.findUserRecordByPublicId(userPublicId);
   if (!user) return undefined;

@@ -1053,6 +1053,7 @@ src/
     │   │   └── unit/
     │   │   │   ├── mail-outbox-sweeper.processor.unit.test.ts
     │   │   │   ├── mail-outbox.dedupe.db.unit.test.ts
+    │   │   │   ├── mail-outbox.scrub.db.unit.test.ts
     │   │   │   └── mail.processor.unit.test.ts
     │   ├── queues/
     │   │   ├── __tests__/
@@ -1868,6 +1869,7 @@ src/
     │   ├── middleware/
     │   │   ├── api-key-auth.middleware.unit.test.ts
     │   │   ├── api-versioning.middleware.unit.test.ts
+    │   │   ├── auth.middleware.super-admin-failclosed.unit.test.ts
     │   │   ├── auth.middleware.super-admin-rederive.unit.test.ts
     │   │   ├── auth.middleware.unit.test.ts
     │   │   ├── captcha.middleware.unit.test.ts

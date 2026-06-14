@@ -238,6 +238,22 @@ describe('AuthMethodService', () => {
     expect(authSessionService.revokeAllSessions).toHaveBeenCalledWith(user.public_id);
   });
 
+  it('sec-audit-#4: a session-revocation failure rejects so the password change rolls back (atomic)', async () => {
+    // The password update + revocation run in ONE pinned transaction. If revocation throws, the
+    // operation MUST reject so the transaction rolls back the password change — never leaving the
+    // new password committed while a (possibly attacker) session stays live. With the passthrough
+    // transaction mock the literal rollback isn't simulated, but the load-bearing property — the
+    // revoke failure is NOT swallowed and surfaces to the caller — is what makes the real
+    // transaction roll back.
+    vi.mocked(authSessionService.revokeAllSessions).mockRejectedValueOnce(new Error('redis down'));
+    await expect(
+      service.changePassword('user_public', {
+        current_password: 'old',
+        new_password: 'NewPassword123!',
+      }),
+    ).rejects.toThrow('redis down');
+  });
+
   it('changePassword rejects when password auth disabled', async () => {
     vi.mocked(userService.requireUserRecordByPublicId).mockResolvedValue({
       ...user,

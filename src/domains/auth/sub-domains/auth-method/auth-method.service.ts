@@ -352,21 +352,35 @@ export class AuthMethodService {
     if (!user.password_hash) throw new UnauthorizedError('errors:passwordAuthNotEnabled');
     const { valid } = await verifyPassword(parsed.current_password, user.password_hash);
     if (!valid) throw new UnauthorizedError('errors:currentPasswordIncorrect');
+    // Hash BEFORE opening the transaction: argon2 is CPU-bound (~100ms) and must not hold a
+    // pooled connection open inside the transaction (same rule as resetPassword).
     const passwordHash = await hashPassword(parsed.new_password);
-    const updatedUser = await this.userService.updatePassword(user.public_id, passwordHash);
-    if (!updatedUser) throw new NotFoundError('User');
 
-    // An authenticated change keeps the caller's current session and terminates
-    // every other device. Without a current token we cannot single one out, so
-    // fall back to revoking all sessions.
-    if (options?.currentAccessToken) {
-      await this.authSessionService.revokeAllSessionsExceptCurrent({
-        userPublicId: user.public_id,
-        currentAccessToken: options.currentAccessToken,
-      });
-    } else {
-      await this.authSessionService.revokeAllSessions(user.public_id);
-    }
+    // sec-audit-#4: the password update AND session revocation must be ONE atomic unit, exactly
+    // like resetPassword. A partial apply (password committed, revocation then fails on a DB/Redis/
+    // pool hiccup) would leave a potentially-compromised account's other sessions live after the
+    // user changed their password to evict an attacker — they'd believe the account is secured
+    // while the stolen bearer token still works. One pinned transaction makes the nested
+    // `withUserDatabaseContext` calls reuse it (all-or-nothing); a mid-operation failure rolls the
+    // password change back rather than committing it alone. Redis token-cache invalidation inside
+    // the revoke path is a sub-ms local call; on rollback it merely causes a cache miss, never a leak.
+    await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        const updatedUser = await this.userService.updatePassword(user.public_id, passwordHash);
+        if (!updatedUser) throw new NotFoundError('User');
+
+        // An authenticated change keeps the caller's current session and terminates every other
+        // device. Without a current token we cannot single one out, so fall back to revoking all.
+        if (options?.currentAccessToken) {
+          await this.authSessionService.revokeAllSessionsExceptCurrent({
+            userPublicId: user.public_id,
+            currentAccessToken: options.currentAccessToken,
+          });
+        } else {
+          await this.authSessionService.revokeAllSessions(user.public_id);
+        }
+      }),
+    );
   }
 
   /**

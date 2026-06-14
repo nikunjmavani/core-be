@@ -427,18 +427,21 @@ const envSchemaBase = z.object({
    * largest in the DB and trips autovacuum / search-path bloat thresholds.
    */
   AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(365),
-  NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
-  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1),
+  // sec-audit-#14: every retention knob carries an upper bound so a deploy typo (e.g. `90000`)
+  // cannot silently disable cleanup → unbounded table/index growth, PII over-retention, and
+  // autovacuum degradation. Genuinely longer retention is a reviewed policy change, not an env value.
+  NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(90),
+  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(730),
   /** Tombstoned-row TTL before purge workers hard-delete (default avoids mandatory deploy secret). */
-  TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   /** Terminal Stripe webhook ledger rows older than this are purged (failed rows kept for replay). */
-  STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   /**
    * Webhook delivery-attempt rows older than this are purged (audit-#3). These rows retain the
    * full event payload + response body, so a shorter default than tombstone retention bounds both
    * storage growth and PII retention for long-lived active webhooks.
    */
-  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
+  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(1).max(180).default(30),
 
   // BullMQ repeatable jobs (retention / cleanup schedules)
   SCHEDULER_ENABLED: z

@@ -813,4 +813,72 @@ describe('env-schema', () => {
       expect(issue).toBeDefined();
     });
   });
+
+  describe('sec-audit-#14: retention vars have upper bounds (unbounded values risk full-table bloat)', () => {
+    // Previously only AUDIT_RETENTION_DAYS had a .max() — the others could be set to arbitrarily
+    // large values (e.g. 99999) that would bloat tables indefinitely and overwhelm the sweeper.
+    it('rejects NOTIFICATION_RETENTION_DAYS above 365', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NOTIFICATION_RETENTION_DAYS: '366',
+      });
+      expect(parsed.success).toBe(false);
+    });
+
+    it('accepts NOTIFICATION_RETENTION_DAYS at the maximum allowed value (365)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        NOTIFICATION_RETENTION_DAYS: '365',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('rejects AUTH_SESSION_RETENTION_DAYS above 730', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        AUTH_SESSION_RETENTION_DAYS: '731',
+      });
+      expect(parsed.success).toBe(false);
+    });
+
+    it('accepts AUTH_SESSION_RETENTION_DAYS at the maximum allowed value (730)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        AUTH_SESSION_RETENTION_DAYS: '730',
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('rejects TOMBSTONE_RETENTION_DAYS above 730', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        TOMBSTONE_RETENTION_DAYS: '731',
+      });
+      expect(parsed.success).toBe(false);
+    });
+
+    it('rejects STRIPE_WEBHOOK_EVENT_RETENTION_DAYS above 730', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: '731',
+      });
+      expect(parsed.success).toBe(false);
+    });
+
+    it('rejects WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS above 180', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: '181',
+      });
+      expect(parsed.success).toBe(false);
+    });
+
+    it('accepts WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS at the maximum allowed value (180)', () => {
+      const parsed = envSchema.safeParse({
+        ...commonRequiredBase,
+        WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: '180',
+      });
+      expect(parsed.success).toBe(true);
+    });
+  });
 });
