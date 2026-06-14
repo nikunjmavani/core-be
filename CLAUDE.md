@@ -34,7 +34,7 @@ See **`agent-os/skills/api-contract-guard/SKILL.md`** (rule: `agent-os/rules/api
 ## Architecture Rules (Non-Negotiable)
 
 - HTTP controllers **coordinate**, never enforce invariants
-- Services express **intent**, never manage transactions
+- Services express **intent**; they may wrap a unit of work in `withTransaction` for atomicity, but issue no raw SQL and own no DB connection — repositories own the SQL
 - Postgres is the **only source of truth**
 - Workers are **pull-based**, never push-based
 - Cross-domain service imports are **allowed** for READ/WRITE where needed
