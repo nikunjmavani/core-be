@@ -219,6 +219,13 @@ jobs:
       (needs.matrix-tests.result == 'success' || needs.matrix-tests.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # release-please creates GitHub Releases with RELEASE_PLEASE_TOKEN (a PAT with
+    # the `workflow` scope; the default GITHUB_TOKEN cannot create releases here —
+    # the create-a-release API path requires that scope). The token is a GitHub
+    # Environment secret synced via `pnpm github:sync`, so this job selects the
+    # matching environment to read it: dev → development, main → production. Both
+    # environments have no protection rules, so this does not gate the run.
+    environment: ${{ github.ref_name == 'dev' && 'development' || 'production' }}
     permissions:
       contents: write
       pull-requests: write
@@ -247,7 +254,11 @@ jobs:
         id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
-          token: ${{ github.token }}
+          # PAT (repo + workflow scopes) read from the GitHub Environment secret
+          # selected by the job `environment:` above. Falls back to github.token
+          # until RELEASE_PLEASE_TOKEN is provisioned (github.token cannot create
+          # releases, but the fallback keeps release-PR creation working meanwhile).
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           target-branch: ${{ github.ref_name }}
           config-file: .github/release-please/config${{ env.CHANNEL_SUFFIX }}.json
           manifest-file: .github/release-please/manifest${{ env.CHANNEL_SUFFIX }}.json
