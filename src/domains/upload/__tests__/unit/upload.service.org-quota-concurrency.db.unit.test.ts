@@ -11,12 +11,7 @@ import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user
 import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
-
-// audit-#7: the org pending-upload cap must be strict across members. Stub only the permission
-// resolution so the test focuses on the org-scoped advisory lock + count + insert atomicity.
-vi.mock('@/domains/tenancy/sub-domains/permission/authorization.service.js', () => ({
-  resolveUserOrganizationPermissions: vi.fn(async () => [UPLOAD_PERMISSIONS.UPLOAD_MANAGE]),
-}));
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 
 const ORG_CAP = 3;
 const REQUESTS_PER_USER = 4;
@@ -74,7 +69,16 @@ describe('UploadService org pending-quota concurrency (database)', () => {
     const organizationService = {
       requireOrganizationByPublicId: async () => organization,
     } as unknown as OrganizationService;
-    const service = new UploadService(repository, userService, organizationService, objectStorage);
+    const authorizationService = {
+      resolveUserOrganizationPermissions: vi.fn().mockResolvedValue([UPLOAD_PERMISSIONS.UPLOAD_MANAGE]),
+    } as unknown as AuthorizationService;
+    const service = new UploadService(
+      repository,
+      userService,
+      organizationService,
+      objectStorage,
+      authorizationService,
+    );
 
     const launchFor = (memberPublicId: string) =>
       Array.from({ length: REQUESTS_PER_USER }, () =>
