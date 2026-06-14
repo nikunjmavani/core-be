@@ -17,7 +17,6 @@ import { WEBHOOK_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-dom
 import { WEBHOOK_DELIVERY_ATTEMPT_RETENTION_QUEUE_NAME } from '@/domains/notify/sub-domains/webhook/workers/webhook-delivery-attempt-retention.constants.js';
 import { ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/workers/organization-notification-policy-tombstone-retention.constants.js';
 import { USER_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/user/workers/user-tombstone-retention.constants.js';
-import { OFFBOARDING_RECONCILER_QUEUE_NAME } from '@/domains/user/workers/offboarding-reconciler.constants.js';
 import { USER_OFFBOARDING_RECONCILE_QUEUE_NAME } from '@/domains/user/workers/user-offboarding-reconcile.constants.js';
 import { ORGANIZATION_OFFBOARDING_RECONCILE_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/workers/organization-offboarding-reconcile.constants.js';
 import { ORGANIZATION_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/workers/organization-tombstone-retention.constants.js';
@@ -84,8 +83,6 @@ const DEFAULT_MEMBERSHIP_TOMBSTONE_RETENTION_CRON = '50 5 * * *';
 const DEFAULT_MEMBER_ROLE_TOMBSTONE_RETENTION_CRON = '51 5 * * *';
 const DEFAULT_ORGANIZATION_API_KEY_TOMBSTONE_RETENTION_CRON = '52 5 * * *';
 const DEFAULT_USER_TOMBSTONE_RETENTION_CRON = '53 5 * * *';
-/** audit-#15: stuck-offboarding detection runs hourly (offboarding normally completes in seconds). */
-const DEFAULT_OFFBOARDING_RECONCILER_CRON = '7 * * * *';
 const DEFAULT_IDEMPOTENCY_CARDINALITY_CRON = '*/15 * * * *';
 const DEFAULT_DLQ_DEPTH_CRON = '*/15 * * * *';
 const DEFAULT_MAIL_OUTBOX_SWEEPER_CRON = '*/10 * * * *';
@@ -166,14 +163,6 @@ function getTombstoneRetentionScheduledJobs(timezone: string | undefined): Sched
       schedulerId: 'daily-user-tombstone-cleanup',
       jobName: 'purge-old-deleted-users',
       cronPattern: env.USER_TOMBSTONE_RETENTION_CRON ?? DEFAULT_USER_TOMBSTONE_RETENTION_CRON,
-    }),
-    // audit-#15: hourly scan for stuck user-offboarding workflows (deletion_started_at stamped but
-    // never soft-deleted) so a partially-applied deletion is surfaced for operator follow-up.
-    withSchedulerTimezone(timezone, {
-      queueName: OFFBOARDING_RECONCILER_QUEUE_NAME,
-      schedulerId: 'hourly-offboarding-reconciler',
-      jobName: 'detect-stuck-offboarding',
-      cronPattern: env.OFFBOARDING_RECONCILER_CRON ?? DEFAULT_OFFBOARDING_RECONCILER_CRON,
     }),
     // audit-#3: time-based purge of webhook delivery attempts (not a tombstone cascade).
     withSchedulerTimezone(timezone, {

@@ -983,12 +983,6 @@ src/
     │   │   │   ├── user-settings.types.ts
     │   │   │   └── user-settings.validator.ts
     │   ├── workers/
-    │   │   ├── __tests__/
-    │   │   │   └── unit/
-    │   │   │   │   └── offboarding-reconciler.processor.db.unit.test.ts
-    │   │   ├── offboarding-reconciler.constants.ts
-    │   │   ├── offboarding-reconciler.processor.ts
-    │   │   ├── offboarding-reconciler.worker.ts
     │   │   ├── user-offboarding-reconcile.constants.ts
     │   │   ├── user-offboarding-reconcile.processor.ts
     │   │   ├── user-offboarding-reconcile.worker.ts
@@ -2054,7 +2048,6 @@ src/
     │   │   ├── subdomain-integration.policy.unit.test.ts
     │   │   └── uuid-schema.property.unit.test.ts
     │   ├── workers/
-    │   │   ├── tenant-scoped-job-data.policy.test.ts
     │   │   ├── tenant-scoped-job-data.policy.unit.test.ts
     │   │   └── webhook-worker-no-schema-import.policy.unit.test.ts
     │   ├── OVERVIEW.md
