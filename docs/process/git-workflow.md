@@ -106,6 +106,8 @@ git add .
 git commit -m "feat: add AI streaming response"
 ```
 
+> The commit **type** also drives the release version — `fix:` → patch, `feat:` → minor, `feat!:` (or a `BREAKING CHANGE:` footer) → major. See [release-versioning.md](release-versioning.md) for the full cheat-sheet.
+
 ### 3. Push branch
 
 ```bash
