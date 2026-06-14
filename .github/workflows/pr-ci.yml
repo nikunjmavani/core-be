@@ -30,6 +30,7 @@ jobs:
       src-code: ${{ steps.filter.outputs.src-code }}
       docker: ${{ steps.filter.outputs.docker }}
       ci-config: ${{ steps.filter.outputs.ci-config }}
+      agent-os: ${{ steps.filter.outputs.agent-os }}
       docs-only-md: ${{ steps.filter.outputs.docs-only-md == 'true' && steps.filter.outputs.src-code == 'false' && steps.filter.outputs.docker == 'false' && steps.filter.outputs.ci-config == 'false' }}
 
     steps:
@@ -58,9 +59,28 @@ jobs:
               - 'tooling/ci/check-dockerfile-sync.mjs'
             ci-config:
               - '.github/**'
+            agent-os:
+              - 'agent-os/**'
+              - '.claude/**'
             docs-only-md:
               - '**/*.md'
               - 'docs/**'
+
+  agent-os-gate:
+    name: agent-os evals
+    needs: [changes]
+    if: needs.changes.outputs.agent-os == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 1
+      - uses: ./.github/actions/setup-node-pnpm
+      - name: Integrity gate (counts, frontmatter, paths, hooks)
+        run: pnpm agent-os:check
+      - name: Trigger evals (routing map)
+        run: pnpm agent-os:triggers:strict
 
   lint:
     name: Lint
