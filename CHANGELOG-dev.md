@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.6.3-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.2-dev.0...v4.6.3-dev.0) (2026-06-14)
+
+
+### Documentation
+
+* **process:** document "watch CI -&gt; merge when green" in git flow + pr-babysit ([#616](https://github.com/nikunjmavani/core-be/issues/616)) ([0537a8e](https://github.com/nikunjmavani/core-be/commit/0537a8e86fc135038585d78b523e648cbc289e69))
+
 ## [4.6.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.1-dev.0...v4.6.2-dev.0) (2026-06-14)
 
 
