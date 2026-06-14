@@ -31,6 +31,7 @@ export const EXPECTED_FORCE_RLS_TABLES: ForceRlsTableRef[] = [
   { schemaName: 'auth', tableName: 'verification_tokens' },
   { schemaName: 'auth', tableName: 'webauthn_credentials' },
   { schemaName: 'billing', tableName: 'plans' },
+  { schemaName: 'billing', tableName: 'stripe_subscription_tombstones' },
   { schemaName: 'billing', tableName: 'stripe_webhook_events' },
   { schemaName: 'billing', tableName: 'subscriptions' },
   { schemaName: 'notify', tableName: 'notifications' },

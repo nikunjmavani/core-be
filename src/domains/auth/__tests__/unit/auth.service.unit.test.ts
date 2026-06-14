@@ -46,12 +46,10 @@ vi.mock('@/shared/utils/security/anti-enumeration.util.js', () => ({
 vi.mock('@/domains/tenancy/sub-domains/organization/resolve-active-organization.js', () => ({
   resolveDefaultActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
   findUserActiveOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
+  findUserActiveOrganizationPublicIdByInternalId: vi.fn().mockResolvedValue(undefined),
+  findUserActiveOrganizationByPublicId: vi.fn().mockResolvedValue(undefined),
   resolvePersonalOrganizationPublicId: vi.fn().mockResolvedValue(undefined),
-  // AUTH-14/15/16: org-persistence Ref variants used by refresh + switch.
-  resolveDefaultActiveOrganizationRef: vi.fn().mockResolvedValue(undefined),
-  resolveActiveOrganizationRefForUserByInternalId: vi.fn().mockResolvedValue(undefined),
-  findUserActiveOrganizationRef: vi.fn().mockResolvedValue(undefined),
-  resolvePersonalOrganizationRef: vi.fn().mockResolvedValue(undefined),
+  resolvePersonalOrganization: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/infrastructure/database/contexts/user-database.context.js', () => ({
@@ -325,10 +323,9 @@ describe('AuthService', () => {
       expires_at: new Date(Date.now() + 86_400_000),
       is_revoked: false,
     } as never);
-    vi.mocked(resolve.resolveActiveOrganizationRefForUserByInternalId).mockResolvedValue({
-      id: 42,
-      public_id: 'org_selected',
-    });
+    vi.mocked(resolve.findUserActiveOrganizationPublicIdByInternalId).mockResolvedValue(
+      'org_selected',
+    );
 
     await service.refreshToken({
       sessionPublicId: 'session_public',
@@ -336,14 +333,10 @@ describe('AuthService', () => {
     });
 
     // The selected org is re-validated by internal id and reused for the token claim.
-    expect(resolve.resolveActiveOrganizationRefForUserByInternalId).toHaveBeenCalledWith(1, 42);
-    expect(resolve.resolveDefaultActiveOrganizationRef).not.toHaveBeenCalled();
+    expect(resolve.findUserActiveOrganizationPublicIdByInternalId).toHaveBeenCalledWith(1, 42);
+    expect(resolve.resolveDefaultActiveOrganizationPublicId).not.toHaveBeenCalled();
     expect(jwt.signAccessToken).toHaveBeenCalledWith(
       expect.objectContaining({ organizationPublicId: 'org_selected' }),
-    );
-    // …and persisted back on the session so the NEXT refresh preserves it too.
-    expect(authSessionService.refreshSessionCredentials).toHaveBeenCalledWith(
-      expect.objectContaining({ nextOrganizationId: 42 }),
     );
   });
 
@@ -359,28 +352,22 @@ describe('AuthService', () => {
       is_revoked: false,
     } as never);
     // Membership revoked / org deleted → re-validation returns undefined.
-    vi.mocked(resolve.resolveActiveOrganizationRefForUserByInternalId).mockResolvedValue(undefined);
-    vi.mocked(resolve.resolveDefaultActiveOrganizationRef).mockResolvedValue({
-      id: 7,
-      public_id: 'org_default',
-    });
+    vi.mocked(resolve.findUserActiveOrganizationPublicIdByInternalId).mockResolvedValue(undefined);
+    vi.mocked(resolve.resolveDefaultActiveOrganizationPublicId).mockResolvedValue('org_default');
 
     await service.refreshToken({
       sessionPublicId: 'session_public',
       refreshSecret: 'refresh-secret',
     });
 
-    expect(resolve.resolveDefaultActiveOrganizationRef).toHaveBeenCalledWith(1);
-    expect(authSessionService.refreshSessionCredentials).toHaveBeenCalledWith(
-      expect.objectContaining({ nextOrganizationId: 7 }),
-    );
+    expect(resolve.resolveDefaultActiveOrganizationPublicId).toHaveBeenCalledWith(1);
   });
 
   it('AUTH-15: switchToOrganization persists the selected org on the session for refresh to preserve', async () => {
     const resolve = await import(
       '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js'
     );
-    vi.mocked(resolve.findUserActiveOrganizationRef).mockResolvedValue({
+    vi.mocked(resolve.findUserActiveOrganizationByPublicId).mockResolvedValue({
       id: 9,
       public_id: 'org_team',
     });
@@ -393,7 +380,7 @@ describe('AuthService', () => {
 
     expect(result.access_token).toBe('jwt-access-token');
     expect(authSessionService.rebindAccessToken).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionPublicId: 'session_public', organizationId: 9 }),
+      expect.objectContaining({ sessionPublicId: 'session_public', activeOrganizationId: 9 }),
     );
   });
 

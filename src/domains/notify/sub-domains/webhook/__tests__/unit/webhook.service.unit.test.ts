@@ -376,7 +376,7 @@ describe('WebhookService', () => {
     // secret_rotated_at 1h ago is well within the 24h default dual-sign overlap; rotating again now
     // would evict the still-valid previous secret, so refuse with a conflict and no write. The gate
     // reads under FOR UPDATE so concurrent rotations serialize.
-    vi.mocked(webhookRepository.findByPublicIdForUpdate).mockResolvedValueOnce({
+    vi.mocked(webhookRepository.findByPublicId).mockResolvedValueOnce({
       ...webhook,
       secret_rotated_at: new Date(Date.now() - 60 * 60 * 1000),
     } as never);
@@ -387,7 +387,7 @@ describe('WebhookService', () => {
   });
 
   it('route-audit/NOTIFY-11: allows a re-rotation once the previous overlap window has elapsed', async () => {
-    vi.mocked(webhookRepository.findByPublicIdForUpdate).mockResolvedValueOnce({
+    vi.mocked(webhookRepository.findByPublicId).mockResolvedValueOnce({
       ...webhook,
       secret_rotated_at: new Date(Date.now() - 48 * 60 * 60 * 1000), // past the 24h window
     } as never);

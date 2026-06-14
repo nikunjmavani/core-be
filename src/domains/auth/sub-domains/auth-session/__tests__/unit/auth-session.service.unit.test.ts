@@ -270,7 +270,6 @@ describe('AuthSessionService', () => {
       sessionPublicId: 'session_public',
       refreshSecret: 'presented-secret',
       nextAccessToken: 'next-access-token',
-      nextOrganizationId: null,
     });
 
     expect(result.refresh_secret).toMatch(/.+/);
@@ -303,7 +302,6 @@ describe('AuthSessionService', () => {
         sessionPublicId: 'session_public',
         refreshSecret: 'stolen-old-secret',
         nextAccessToken: 'next-access-token',
-        nextOrganizationId: null,
       }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
 
@@ -332,7 +330,6 @@ describe('AuthSessionService', () => {
         sessionPublicId: 'session_public',
         refreshSecret: 'stolen-old-secret',
         nextAccessToken: 'next-access-token',
-        nextOrganizationId: null,
       }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
 
