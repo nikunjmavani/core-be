@@ -40,6 +40,15 @@ DROP POLICY IF EXISTS "user_notification_preferences_user_org_access"
   ON auth.user_notification_preferences;
 --> statement-breakpoint
 
+-- The consolidated baseline (migrations/00000000000000_init.sql) already creates
+-- the user-only policy, so the CREATE POLICY below would collide with
+-- 42710 duplicate_object on any DB that has the baseline applied. Postgres has
+-- no CREATE POLICY IF NOT EXISTS, so drop any prior copy of the new policy first
+-- to keep this migration idempotent and re-runnable.
+DROP POLICY IF EXISTS "user_notification_preferences_user_access"
+  ON auth.user_notification_preferences;
+--> statement-breakpoint
+
 CREATE POLICY "user_notification_preferences_user_access"
   ON auth.user_notification_preferences
   AS PERMISSIVE
