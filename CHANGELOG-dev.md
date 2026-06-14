@@ -6,6 +6,13 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.6.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.0-dev.0...v4.6.1-dev.0) (2026-06-14)
+
+
+### Changed
+
+* **queue:** remove redundant alert-only offboarding reconciler ([#611](https://github.com/nikunjmavani/core-be/issues/611)) ([55e979e](https://github.com/nikunjmavani/core-be/commit/55e979e10528a3b6c794aaea1595e7feeedbc7b6))
+
 ## [4.6.0-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.5.7-dev.0...v4.6.0-dev.0) (2026-06-14)
 
 
