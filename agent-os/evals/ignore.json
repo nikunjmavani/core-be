@@ -10,6 +10,8 @@
     ".cursor/mcp.json",
     ".mcp.json",
     "docs/openapi/openapi.json",
+    "docs/openapi/openapi.en.json",
+    "docs/openapi/openapi.es.json",
     "docs/postman-collection.json",
     "src/shared/locales/fr/openapi.json",
     "docs/openapi/openapi.fr.json",
