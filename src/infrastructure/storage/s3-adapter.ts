@@ -11,6 +11,8 @@ import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { env } from '@/shared/config/env.config.js';
 import { outboundCall } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
+import { type S3HeadResult, isS3NotFoundError } from '@/infrastructure/storage/s3-error.util.js';
+import { buildPublicMediaUrl } from '@/infrastructure/storage/public-media-url.util.js';
 import type {
   ObjectStoragePort,
   PresignedUploadPost,
@@ -132,26 +134,38 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
     key: string,
     expected: { contentType: string; contentLength: number },
   ): Promise<UploadedObjectMetadata> {
-    const head = await this.headObject(key);
-    if (!head) {
+    const head = await this.headObjectResult(key);
+    // audit-#5: a transient storage failure must NOT look like a verification failure. Re-throw
+    // the underlying ExternalServiceError (503, retryable) so the confirm path leaves the upload
+    // PENDING/retryable instead of marking a perfectly valid object FAILED.
+    if (head.kind === 'transient_error') {
+      throw head.cause instanceof Error
+        ? head.cause
+        : new Error('upload object head transient error');
+    }
+    if (head.kind === 'not_found') {
       throw new Error('upload object not found in storage');
     }
 
-    if (head.contentType && head.contentType !== expected.contentType) {
+    const metadata = head.metadata;
+    if (metadata.contentType && metadata.contentType !== expected.contentType) {
       throw new Error('upload object content type mismatch');
     }
 
-    if (head.contentLength !== undefined && head.contentLength !== expected.contentLength) {
+    if (metadata.contentLength !== undefined && metadata.contentLength !== expected.contentLength) {
       throw new Error('upload object content length mismatch');
     }
 
-    return head;
+    return metadata;
   }
 
   getObjectUrl(key: string): string {
-    const bucket = requireBucket();
-    const region = env.S3_REGION ?? 'us-east-1';
-    return `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+    // audit-#13: refuse public URLs for non-public-media keys and prefer the PUBLIC_MEDIA_BASE_URL
+    // distribution so the bucket can keep Block-Public-Access on (private files stay presigned-only).
+    return buildPublicMediaUrl(key, {
+      bucket: env.S3_BUCKET,
+      region: env.S3_REGION ?? 'us-east-1',
+    });
   }
 
   async createPresignedDownloadUrl(options: {
@@ -166,20 +180,20 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
     return getSignedUrl(getS3Client(), command, { expiresIn: options.expiresInSeconds });
   }
 
-  async headObject(
-    key: string,
-  ): Promise<{ contentType: string | undefined; contentLength: number | undefined } | null> {
+  /**
+   * Discriminated `HeadObject` (audit-#5): distinguishes `found` / `not_found` /
+   * `transient_error` so callers never treat an outage as object absence. Only an explicit
+   * `NoSuchKey`/404 maps to `not_found`; every other failure (timeout, throttle, circuit-open,
+   * IAM denial, 5xx) is a `transient_error` carrying the original cause for the caller to retry.
+   */
+  async headObjectResult(key: string): Promise<S3HeadResult<UploadedObjectMetadata>> {
     const bucket = requireBucket();
-
     try {
-      return await outboundCall({
+      const metadata = await outboundCall({
         name: 's3',
         operation: async (signal) => {
           const response = await getS3Client().send(
-            new HeadObjectCommand({
-              Bucket: bucket,
-              Key: key,
-            }),
+            new HeadObjectCommand({ Bucket: bucket, Key: key }),
             { abortSignal: signal },
           );
           return {
@@ -188,10 +202,23 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
           };
         },
       });
+      return { kind: 'found', metadata };
     } catch (error) {
-      logger.error({ error, key, bucket }, 's3.headObject.failed');
-      return null;
+      if (isS3NotFoundError(error)) {
+        return { kind: 'not_found' };
+      }
+      logger.error({ error, key, bucket }, 's3.headObject.transient');
+      return { kind: 'transient_error', cause: error };
     }
+  }
+
+  async headObject(
+    key: string,
+  ): Promise<{ contentType: string | undefined; contentLength: number | undefined } | null> {
+    // Backward-compatible null-on-miss wrapper for non-critical sanity checks (avatar/logo
+    // content-type). Destructive callers (confirm, sweep) must use the discriminated result.
+    const result = await this.headObjectResult(key);
+    return result.kind === 'found' ? result.metadata : null;
   }
 
   async getObject(key: string): Promise<{ body: Buffer; contentType: string | undefined }> {

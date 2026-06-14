@@ -16,6 +16,9 @@ const TENANT_SCOPING_EXEMPT_QUEUE_NAME_PATTERNS = [
   /audit-outbox-drain/i,
   /user-data-export/i,
   /pending-sweep/i,
+  // audit-#15: the offboarding reconciler is a cross-tenant maintenance scan (runs under the
+  // global-retention context), so it has no per-tenant job payload — exempt like the others.
+  /reconciler/i,
 ] as const;
 
 function collectWorkerFiles(directory: string, collected: string[] = []): string[] {

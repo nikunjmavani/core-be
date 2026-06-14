@@ -114,11 +114,10 @@ export class OrganizationApiKeyService {
     return withOrganizationDatabaseContext(organization_public_id, async () => {
       const organization = await this.organizationRepository.findByPublicId(organization_public_id);
       if (!organization) throw new NotFoundError('Organization');
-      // sec-r5-followup-ratelimit-dos-1: enforce the per-org count cap before
-      // insert. Race-safe enough for a stability cap (the per-route rate limit
-      // bounds concurrency); the failure mode of two parallel inserts at N-1
-      // is "one extra row," not security-critical. Mirrors the
-      // `WEBHOOK_MAX_PER_ORG` check in webhook.service.ts.
+      // sec-r5-followup-ratelimit-dos-1 + audit-#8: serialize the per-org count + insert with a
+      // transaction-scoped advisory lock so concurrent creates cannot both pass the same count
+      // and overshoot ORGANIZATION_API_KEY_MAX_PER_ORG. The lock auto-releases at commit.
+      await this.apiKeyRepository.acquireCreationQuotaLock(organization.id);
       const activeCount = await this.apiKeyRepository.countActiveByOrganization(organization.id);
       if (activeCount >= env.ORGANIZATION_API_KEY_MAX_PER_ORG) {
         throw new ConflictError('errors:organizationApiKeyMaxReached', {

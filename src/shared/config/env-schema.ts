@@ -330,6 +330,16 @@ const envSchemaBase = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   /** AWS SDK maxAttempts for S3 (each attempt bounded by service/client timeouts). */
   S3_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  /**
+   * audit-#13: public base URL (e.g. a CloudFront distribution) for PUBLIC media only
+   * (avatars, organization logos). When set, `getObjectUrl` builds links from this base instead
+   * of the raw `https://<bucket>.s3.<region>.amazonaws.com/<key>` form, so the S3 bucket can keep
+   * "Block all public access" enabled (the documented production posture) while public media is
+   * still reachable through a distribution scoped to the public prefixes. Leave unset in local/dev
+   * to fall back to the direct S3 URL. NEVER point this at a base that exposes private prefixes
+   * (`user-files/`, `organization-files/`) — `getObjectUrl` additionally refuses non-public keys.
+   */
+  PUBLIC_MEDIA_BASE_URL: z.string().url().optional(),
 
   // Ops knobs
   /** BullMQ worker concurrency fallback when per-queue overrides are unset (default 4). */
@@ -427,18 +437,27 @@ const envSchemaBase = z.object({
    * largest in the DB and trips autovacuum / search-path bloat thresholds.
    */
   AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(365),
-  NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
-  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1),
+  /**
+   * audit-#14: every retention knob carries a defensible MAX as well as a min. Without an
+   * upper bound a deployment typo (e.g. `90` → `90000`) silently disables cleanup, so the
+   * high-volume tables (notifications, sessions, tombstones, Stripe ledger, webhook attempts)
+   * grow unbounded, retain PII far beyond policy, and eventually degrade autovacuum + query
+   * performance. Exceptional longer retention must be a reviewed policy/migration change, not
+   * an arbitrary env value.
+   */
+  NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(90),
+  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(730),
   /** Tombstoned-row TTL before purge workers hard-delete (default avoids mandatory deploy secret). */
-  TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   /** Terminal Stripe webhook ledger rows older than this are purged (failed rows kept for replay). */
-  STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  STRIPE_WEBHOOK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   /**
    * Webhook delivery-attempt rows older than this are purged (audit-#3). These rows retain the
    * full event payload + response body, so a shorter default than tombstone retention bounds both
-   * storage growth and PII retention for long-lived active webhooks.
+   * storage growth and PII retention for long-lived active webhooks. Capped at 180 days
+   * (audit-#14) so a misconfiguration cannot retain payloads/response bodies indefinitely.
    */
-  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
+  WEBHOOK_DELIVERY_ATTEMPT_RETENTION_DAYS: z.coerce.number().int().min(1).max(180).default(30),
 
   // BullMQ repeatable jobs (retention / cleanup schedules)
   SCHEDULER_ENABLED: z
@@ -478,6 +497,8 @@ const envSchemaBase = z.object({
   WEBHOOK_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   USER_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
+  /** audit-#15: cron for the stuck-offboarding detection/alert reconciler (default hourly). */
+  OFFBOARDING_RECONCILER_CRON: z.string().min(1).optional(),
   ORGANIZATION_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   MEMBERSHIP_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   MEMBER_ROLE_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),

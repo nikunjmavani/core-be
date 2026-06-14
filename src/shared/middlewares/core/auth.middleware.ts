@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
-import { UnauthorizedError } from '@/shared/errors/index.js';
+import { ConfigurationError, UnauthorizedError } from '@/shared/errors/index.js';
+import { env } from '@/shared/config/env.config.js';
 import { verifyAccessToken } from '@/shared/utils/security/jwt.util.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { AuthContext } from '@/shared/types/index.js';
@@ -29,8 +30,14 @@ function getBearerToken(request: FastifyRequest): string {
  * Hot-path safe: only fires when the JWT actually claims SUPER_ADMIN (rare in production),
  * and reuses the existing `findUserRecordByPublicId` resolver. On any failure to resolve
  * the user, fails closed (downgrades to no role) so a missing user record cannot retain
- * admin privileges. When the user-domain is not wired (minimal test harness without
- * `userDomain` decoration), the role is preserved — production always wires it.
+ * admin privileges.
+ *
+ * audit-#16: when the user-domain is not wired this now **fails closed** outside the test
+ * harness — a privileged claim can no longer be accepted without live allowlist/account-state
+ * verification just because an alternate/minimal entrypoint forgot to decorate `userDomain`.
+ * Production composition always wires it, so a missing service there is a configuration error
+ * (raised loudly) rather than a silent privilege grant. The `test` seam is preserved because
+ * several middleware-only test harnesses intentionally omit the user domain.
  */
 async function rederiveSuperAdminRole(
   request: FastifyRequest,
@@ -38,7 +45,12 @@ async function rederiveSuperAdminRole(
 ): Promise<GlobalRole | undefined> {
   const userService = request.server.userDomain?.userService;
   if (!userService) {
-    return GLOBAL_ROLES.SUPER_ADMIN;
+    if (env.NODE_ENV === 'test') {
+      return GLOBAL_ROLES.SUPER_ADMIN;
+    }
+    throw new ConfigurationError(
+      'userDomain.userService is required to re-derive a privileged role; refusing to trust a SUPER_ADMIN claim without it',
+    );
   }
   const user = await userService.findUserRecordByPublicId(userPublicId);
   if (!user) return undefined;

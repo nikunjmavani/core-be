@@ -25,6 +25,8 @@ import { createOrganizationNotificationPolicyTombstoneRetentionWorker } from '@/
 import { ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/organization-notification-policy/workers/organization-notification-policy-tombstone-retention.constants.js';
 import { createUserTombstoneRetentionWorker } from '@/domains/user/workers/user-tombstone-retention.worker.js';
 import { USER_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/user/workers/user-tombstone-retention.constants.js';
+import { createOffboardingReconcilerWorker } from '@/domains/user/workers/offboarding-reconciler.worker.js';
+import { OFFBOARDING_RECONCILER_QUEUE_NAME } from '@/domains/user/workers/offboarding-reconciler.constants.js';
 import { createOrganizationTombstoneRetentionWorker } from '@/domains/tenancy/sub-domains/organization/workers/organization-tombstone-retention.worker.js';
 import { ORGANIZATION_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/workers/organization-tombstone-retention.constants.js';
 import { createMembershipTombstoneRetentionWorker } from '@/domains/tenancy/sub-domains/membership/workers/membership-tombstone-retention.worker.js';
@@ -289,6 +291,12 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     family: 'retention',
     logLabel: 'user tombstone retention worker',
     create: () => createUserTombstoneRetentionWorker(),
+  }),
+  retentionDefinition({
+    queueName: OFFBOARDING_RECONCILER_QUEUE_NAME,
+    family: 'retention',
+    logLabel: 'offboarding reconciler worker',
+    create: () => createOffboardingReconcilerWorker(),
   }),
   retentionDefinition({
     queueName: ORGANIZATION_TOMBSTONE_RETENTION_QUEUE_NAME,

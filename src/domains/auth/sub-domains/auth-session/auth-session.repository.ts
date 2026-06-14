@@ -1,6 +1,7 @@
-import { and, desc, eq, gt, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, ne, or, sql } from 'drizzle-orm';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.constants.js';
+import { REFRESH_TOKEN_REUSE_GRACE_MS } from '@/shared/constants/security.constants.js';
 import { capListWithWarning } from '@/shared/utils/infrastructure/list-cap.util.js';
 import { sessions } from '@/domains/auth/sub-domains/auth-session/auth-session.schema.js';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
@@ -104,15 +105,46 @@ export class AuthSessionRepository {
       .where(eq(sessions.public_id, publicId));
   }
 
+  /**
+   * Rotate the session's access-token hash AND persist the active organization
+   * (audit-#3) so `/auth/refresh` can preserve the org the caller switched to
+   * instead of recomputing the default. Used by the organization-switch path.
+   */
+  async rotateTokenHashAndOrganization(
+    publicId: string,
+    tokenHash: string,
+    organizationId: number,
+  ) {
+    await getRequestDatabase()
+      .update(sessions)
+      .set({
+        token_hash: tokenHash,
+        organization_id: organizationId,
+        last_active_at: databaseNowTimestamp,
+      })
+      .where(eq(sessions.public_id, publicId));
+  }
+
   async rotateSessionCredentials(
     publicId: string,
     currentRefreshTokenHash: string,
     nextTokenHash: string,
     nextRefreshTokenHash: string,
   ) {
+    // audit-#2: accept either the CURRENT refresh hash or the immediately-PREVIOUS one within a
+    // short grace window. Two concurrent legitimate refreshes presenting the same cookie race on
+    // this single-row compare-and-swap; the loser previously saw the already-rotated hash and was
+    // misclassified as stolen-token reuse, revoking the user's entire session family. The grace
+    // branch lets the loser rotate from the just-superseded hash instead, so both succeed; a replay
+    // AFTER the window finds neither hash and still falls through to reuse detection.
+    const reuseGraceCutoff = new Date(Date.now() - REFRESH_TOKEN_REUSE_GRACE_MS);
     const rows = await getRequestDatabase()
       .update(sessions)
       .set({
+        // Shift the consumed CURRENT hash into the previous slot and stamp the rotation time so the
+        // next concurrent duplicate can match the grace branch above.
+        previous_refresh_token_hash: sql`${sessions.refresh_token_hash}`,
+        refresh_token_rotated_at: databaseNowTimestamp,
         token_hash: nextTokenHash,
         refresh_token_hash: nextRefreshTokenHash,
         last_active_at: databaseNowTimestamp,
@@ -120,9 +152,15 @@ export class AuthSessionRepository {
       .where(
         and(
           eq(sessions.public_id, publicId),
-          eq(sessions.refresh_token_hash, currentRefreshTokenHash),
           eq(sessions.is_revoked, false),
           gt(sessions.expires_at, databaseNowTimestamp),
+          or(
+            eq(sessions.refresh_token_hash, currentRefreshTokenHash),
+            and(
+              eq(sessions.previous_refresh_token_hash, currentRefreshTokenHash),
+              gt(sessions.refresh_token_rotated_at, reuseGraceCutoff),
+            ),
+          ),
         ),
       )
       .returning();

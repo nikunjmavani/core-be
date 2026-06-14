@@ -279,31 +279,36 @@ export class AuthMethodService {
     const user = await this.userService.findByEmail(email);
     if (!user) return;
 
-    // Invalidate any existing password reset tokens
-    await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
-
-    // Create new token
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRES_IN_MINUTES * 60_000);
 
-    await this.verificationTokenRepository.create(
-      'PASSWORD_RESET',
-      user.id,
-      user.email,
-      tokenHash,
-      expiresAt,
+    // audit-#11: invalidate prior tokens, persist the new token, and record the outbound
+    // mail-outbox row (done inside the PASSWORD_RESET_REQUESTED handler) as ONE atomic unit.
+    // Otherwise a handler/Redis/process failure could invalidate the old link and leave a new
+    // valid token that was never delivered — the user has no usable recovery email. Queue dispatch
+    // stays post-commit (handler schedules it via scheduleCommitDispatch, backed by the sweeper).
+    await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        await this.verificationTokenRepository.invalidateAllForUser(user.id, 'PASSWORD_RESET');
+        await this.verificationTokenRepository.create(
+          'PASSWORD_RESET',
+          user.id,
+          user.email,
+          tokenHash,
+          expiresAt,
+        );
+        await eventBus.emitStrict({
+          type: AUTH_EVENT.PASSWORD_RESET_REQUESTED,
+          payload: {
+            email: user.email,
+            reset_token: rawToken,
+            expires_in_minutes: PASSWORD_RESET_EXPIRES_IN_MINUTES,
+          } satisfies PasswordResetEmailPayload,
+          timestamp: new Date(),
+        });
+      }),
     );
-
-    await eventBus.emitStrict({
-      type: AUTH_EVENT.PASSWORD_RESET_REQUESTED,
-      payload: {
-        email: user.email,
-        reset_token: rawToken,
-        expires_in_minutes: PASSWORD_RESET_EXPIRES_IN_MINUTES,
-      } satisfies PasswordResetEmailPayload,
-      timestamp: new Date(),
-    });
   }
 
   async resetPassword(body: unknown): Promise<void> {
@@ -352,21 +357,36 @@ export class AuthMethodService {
     if (!user.password_hash) throw new UnauthorizedError('errors:passwordAuthNotEnabled');
     const { valid } = await verifyPassword(parsed.current_password, user.password_hash);
     if (!valid) throw new UnauthorizedError('errors:currentPasswordIncorrect');
+    // Hash BEFORE the transaction: argon2 is CPU-bound (~100 ms) and must not hold a pooled
+    // connection open inside the transaction.
     const passwordHash = await hashPassword(parsed.new_password);
-    const updatedUser = await this.userService.updatePassword(user.public_id, passwordHash);
-    if (!updatedUser) throw new NotFoundError('User');
 
-    // An authenticated change keeps the caller's current session and terminates
-    // every other device. Without a current token we cannot single one out, so
-    // fall back to revoking all sessions.
-    if (options?.currentAccessToken) {
-      await this.authSessionService.revokeAllSessionsExceptCurrent({
-        userPublicId: user.public_id,
-        currentAccessToken: options.currentAccessToken,
-      });
-    } else {
-      await this.authSessionService.revokeAllSessions(user.public_id);
-    }
+    // audit-#4: the password update and the session revocation MUST be one atomic unit (the same
+    // pinned-transaction pattern `resetPassword` already uses). Previously the password committed
+    // first and session revocation ran afterward as a separate operation — a DB/Redis/process
+    // failure in between left the new password in place while every existing (potentially
+    // attacker-held) session stayed live, so a user changing their password to evict an attacker
+    // could believe the account was secured while the stolen bearer token remained usable. The
+    // pinned transaction makes nested `withUserDatabaseContext` calls reuse it, so a mid-operation
+    // failure rolls the password change back rather than committing it alone.
+    await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        const updatedUser = await this.userService.updatePassword(user.public_id, passwordHash);
+        if (!updatedUser) throw new NotFoundError('User');
+
+        // An authenticated change keeps the caller's current session and terminates
+        // every other device. Without a current token we cannot single one out, so
+        // fall back to revoking all sessions.
+        if (options?.currentAccessToken) {
+          await this.authSessionService.revokeAllSessionsExceptCurrent({
+            userPublicId: user.public_id,
+            currentAccessToken: options.currentAccessToken,
+          });
+        } else {
+          await this.authSessionService.revokeAllSessions(user.public_id);
+        }
+      }),
+    );
   }
 
   /**
@@ -407,16 +427,26 @@ export class AuthMethodService {
     const parsed = validateVerifyEmail(body);
     const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
 
-    /** Atomic UPDATE prevents two concurrent verifies from both succeeding. */
-    const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-    if (record?.token_type !== 'EMAIL_VERIFICATION') {
-      throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
-    }
+    // audit-#12: the token consumption and the verified-flag update must be ONE atomic unit.
+    // Previously the token was consumed first and the user update ran separately, so a
+    // transient failure after consumption permanently burned a valid single-use link and
+    // forced the user to request another email (stranding onboarding during a provider
+    // outage). The pinned transaction makes `consumeIfValid` roll back if the downstream
+    // update fails, leaving the link retryable. The atomic UPDATE in `consumeIfValid` still
+    // prevents two concurrent verifies from both succeeding.
+    await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
+        if (record?.token_type !== 'EMAIL_VERIFICATION') {
+          throw new UnauthorizedError('errors:invalidOrExpiredVerificationToken');
+        }
 
-    const user = await this.userService.findById(record.user_id);
-    if (!user) throw new NotFoundError('User');
+        const user = await this.userService.findById(record.user_id);
+        if (!user) throw new NotFoundError('User');
 
-    await this.userService.updateEmailVerified(user.public_id);
+        await this.userService.updateEmailVerified(user.public_id);
+      }),
+    );
 
     return { messageKey: 'success:emailVerified' };
   }
@@ -431,31 +461,35 @@ export class AuthMethodService {
       return { messageKey: 'success:emailAlreadyVerified' };
     }
 
-    // Invalidate existing verification tokens
-    await this.verificationTokenRepository.invalidateAllForUser(user.id, 'EMAIL_VERIFICATION');
-
-    // Create new token
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRES_IN_HOURS * 3_600_000);
 
-    await this.verificationTokenRepository.create(
-      'EMAIL_VERIFICATION',
-      user.id,
-      user.email,
-      tokenHash,
-      expiresAt,
+    // audit-#11: invalidate prior tokens, persist the new token, and record the outbound
+    // mail-outbox row (done inside the EMAIL_VERIFICATION_REQUESTED handler) as ONE atomic unit so
+    // a handler/Redis/process failure cannot invalidate the old link and leave a new valid token
+    // that was never delivered. Queue dispatch stays post-commit (handler schedules it).
+    await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        await this.verificationTokenRepository.invalidateAllForUser(user.id, 'EMAIL_VERIFICATION');
+        await this.verificationTokenRepository.create(
+          'EMAIL_VERIFICATION',
+          user.id,
+          user.email,
+          tokenHash,
+          expiresAt,
+        );
+        await eventBus.emitStrict({
+          type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
+          payload: {
+            email: user.email,
+            verification_token: rawToken,
+            expires_in_hours: EMAIL_VERIFICATION_EXPIRES_IN_HOURS,
+          } satisfies EmailVerificationEmailPayload,
+          timestamp: new Date(),
+        });
+      }),
     );
-
-    await eventBus.emitStrict({
-      type: AUTH_EVENT.EMAIL_VERIFICATION_REQUESTED,
-      payload: {
-        email: user.email,
-        verification_token: rawToken,
-        expires_in_hours: EMAIL_VERIFICATION_EXPIRES_IN_HOURS,
-      } satisfies EmailVerificationEmailPayload,
-      timestamp: new Date(),
-    });
 
     return { messageKey: 'success:verificationEmailSent' };
   }

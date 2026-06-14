@@ -177,6 +177,12 @@ export class SubscriptionRepository {
           current_period_start: data.current_period_start,
           current_period_end: data.current_period_end,
           trial_end: data.trial_end,
+          // audit-#1: the deletion-tombstone path persists a terminal CANCELED row
+          // (with canceled_at / cancel_at_period_end) so a later out-of-order
+          // `customer.subscription.created` cannot resurrect it. Every other path
+          // leaves these at their column defaults (NULL / false).
+          canceled_at: data.canceled_at,
+          cancel_at_period_end: data.cancel_at_period_end,
           provider: data.provider,
           provider_subscription_id: data.provider_subscription_id,
           provider_customer_id: data.provider_customer_id,

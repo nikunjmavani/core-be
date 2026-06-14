@@ -73,6 +73,8 @@ describe('UploadService', () => {
     countPendingByUserId: vi.fn().mockResolvedValue(0),
     countPendingByOrganizationId: vi.fn().mockResolvedValue(0),
     acquirePendingUploadQuotaLock: vi.fn().mockResolvedValue(undefined),
+    // audit-#7: org-scoped pending-upload quota lock (no-op in unit tests).
+    acquirePendingOrganizationQuotaLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as UploadRepository;
 
   const userService = {

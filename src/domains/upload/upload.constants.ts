@@ -97,6 +97,18 @@ export const UPLOAD_PURPOSE_REQUIRED_TARGET: Record<UploadPurpose, UploadTarget>
 export const UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE = 0x55_50_4c_44;
 
 /**
+ * Postgres advisory-lock namespace (`classid`) used to serialize per-ORGANIZATION PENDING
+ * upload-quota reservations (audit-#7). Distinct from
+ * {@link UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE} so the org lock and the per-user lock
+ * occupy separate lock spaces; combined with the organization's internal id as the `objid`.
+ * The reservation path always takes the org lock BEFORE the user lock (a globally consistent
+ * order) so concurrent reservations from different members of the same org serialize on the
+ * org cap without any deadlock risk. The value is the ASCII for `UPLO` and is otherwise
+ * arbitrary — only its stability and distinctness matter.
+ */
+export const UPLOAD_PENDING_ORGANIZATION_QUOTA_ADVISORY_LOCK_NAMESPACE = 0x55_50_4c_4f;
+
+/**
  * Page size for streaming a user's active uploads during offboarding. Bounds the
  * number of rows (and S3 keys) held in memory per iteration so an account with a
  * large upload footprint cannot materialize an unbounded result set.

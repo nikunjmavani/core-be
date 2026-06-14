@@ -367,6 +367,9 @@ export class OrganizationService {
       if (ownerId === null) throw new NotFoundError('User');
       // Anti-abuse: cap the number of TEAM organizations a single account may own (personal is
       // exempt — countActiveOwnedByUser already counts only type='TEAM').
+      // audit-#8: serialize the count + insert with a per-owner transaction-scoped advisory lock
+      // so concurrent creates cannot both pass the same count and overshoot the cap.
+      await this.repository.acquireOwnedOrganizationQuotaLock(ownerId);
       const ownedTeamCount = await this.repository.countActiveOwnedByUser(ownerId);
       if (ownedTeamCount >= env.MAX_TEAM_ORGANIZATIONS_PER_OWNER) {
         throw new ConflictError(

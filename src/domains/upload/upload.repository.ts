@@ -4,6 +4,7 @@ import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-tim
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { uploads } from '@/domains/upload/upload.schema.js';
 import {
+  UPLOAD_PENDING_ORGANIZATION_QUOTA_ADVISORY_LOCK_NAMESPACE,
   UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE,
   UPLOAD_STATUS,
 } from '@/domains/upload/upload.constants.js';
@@ -169,6 +170,20 @@ export class UploadRepository {
   async acquirePendingUploadQuotaLock(user_id: number): Promise<void> {
     await getRequestDatabase().execute(
       drizzleSql`SELECT pg_advisory_xact_lock(${UPLOAD_PENDING_QUOTA_ADVISORY_LOCK_NAMESPACE}::int, ${user_id}::int)`,
+    );
+  }
+
+  /**
+   * Transaction-scoped advisory lock that serializes concurrent PENDING-quota reservations
+   * across ALL members of one organization (audit-#7). Must be acquired in the same
+   * transaction as {@link UploadRepository.countPendingByOrganizationId} + the subsequent
+   * {@link UploadRepository.create}, and BEFORE {@link acquirePendingUploadQuotaLock} (a
+   * globally consistent org-then-user order) so distinct users in the same org cannot each
+   * pass the org count check before any row is inserted and burst past the org cap.
+   */
+  async acquirePendingOrganizationQuotaLock(organization_id: number): Promise<void> {
+    await getRequestDatabase().execute(
+      drizzleSql`SELECT pg_advisory_xact_lock(${UPLOAD_PENDING_ORGANIZATION_QUOTA_ADVISORY_LOCK_NAMESPACE}::int, ${organization_id}::int)`,
     );
   }
 

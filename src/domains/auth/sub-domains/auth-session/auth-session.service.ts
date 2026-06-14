@@ -329,18 +329,22 @@ export class AuthSessionService {
    * @remarks
    * - **Algorithm:** under the session's RLS context, confirm the session is present and not
    *   revoked, invalidate the previous token's Redis cache entry, then point `token_hash` at
-   *   the new token. Unlike refresh, the refresh secret is NOT rotated — the caller is already
-   *   authenticated via a valid access token for this session; only the access token moves.
-   *   The previously held token immediately fails `verifyActiveAccessToken` (hash drift).
+   *   the new token AND persist `activeOrganizationId` on the session (audit-#3) so a later
+   *   `/auth/refresh` preserves the switched organization instead of recomputing the default.
+   *   Unlike refresh, the refresh secret is NOT rotated — the caller is already authenticated
+   *   via a valid access token for this session; only the access token moves. The previously
+   *   held token immediately fails `verifyActiveAccessToken` (hash drift).
    * - **Failure modes:** `UnauthorizedError` when the session is gone or revoked.
    * - **Side effects:** one UPDATE on `auth.sessions`; two Redis cache invalidations.
    */
   async rebindAccessToken({
     sessionPublicId,
     nextAccessToken,
+    activeOrganizationId,
   }: {
     sessionPublicId: string;
     nextAccessToken: string;
+    activeOrganizationId: number;
   }): Promise<void> {
     const nextTokenHash = hashAccessToken(nextAccessToken);
     await withSessionPublicIdDatabaseContext(sessionPublicId, async (_databaseHandle) => {
@@ -351,7 +355,11 @@ export class AuthSessionService {
       if (existing.token_hash) {
         await invalidateCachedSessionToken(existing.token_hash);
       }
-      await this.sessionRepository.rotateTokenHash(sessionPublicId, nextTokenHash);
+      await this.sessionRepository.rotateTokenHashAndOrganization(
+        sessionPublicId,
+        nextTokenHash,
+        activeOrganizationId,
+      );
       await invalidateCachedSessionToken(nextTokenHash);
     });
   }

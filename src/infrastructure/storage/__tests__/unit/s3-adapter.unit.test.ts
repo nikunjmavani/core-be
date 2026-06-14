@@ -41,13 +41,20 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: (...arguments_: unknown[]) => getSignedUrlMock(...arguments_),
 }));
 
-vi.mock('@/shared/config/env.config.js', () => ({
-  env: {
+const { mockEnv } = vi.hoisted(() => ({
+  mockEnv: {
     S3_BUCKET: 'test-bucket',
     S3_REGION: 'eu-west-1',
     S3_MAX_ATTEMPTS: 3,
     LOG_LEVEL: 'silent',
+    // audit-#13: unset → getObjectUrl falls back to the virtual-hosted S3 URL.
+    PUBLIC_MEDIA_BASE_URL: undefined as string | undefined,
   },
+}));
+vi.mock('@/shared/config/env.config.js', () => ({
+  env: mockEnv,
+  // audit-#13: buildPublicMediaUrl reads PUBLIC_MEDIA_BASE_URL via getEnv() (re-read-friendly).
+  getEnv: () => mockEnv,
 }));
 
 vi.mock('@/shared/utils/infrastructure/logger.util.js', () => ({

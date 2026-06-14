@@ -6,6 +6,10 @@ import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
+import {
   buildAscendingCreatedAtIdCursorCondition,
   createOpaqueCursorFromRow,
   parseListCursor,
@@ -60,6 +64,19 @@ export class OrganizationApiKeyRepository extends BaseRepository {
       .from(api_keys)
       .where(and(eq(api_keys.organization_id, organization_id), isNull(api_keys.deleted_at)));
     return rows[0]?.value ?? 0;
+  }
+
+  /**
+   * audit-#8: transaction-scoped advisory lock that serializes the per-org API-key creation
+   * quota check + insert, so concurrent creates cannot both pass the count and overshoot
+   * `ORGANIZATION_API_KEY_MAX_PER_ORG`. Must be called inside the create transaction before
+   * {@link countActiveByOrganization}.
+   */
+  async acquireCreationQuotaLock(organization_id: number): Promise<void> {
+    await acquireResourceQuotaLock(
+      RESOURCE_QUOTA_LOCK_NAMESPACE.ORGANIZATION_API_KEY,
+      organization_id,
+    );
   }
 
   async findByOrganizationId(

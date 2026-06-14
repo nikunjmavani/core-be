@@ -159,10 +159,10 @@ export class MemberRoleService {
       if (organization.type === 'PERSONAL') {
         throw new ConflictError('errors:personalOrganizationNoRoles');
       }
-      // sec-r5-followup-ratelimit-dos-2: enforce the per-org custom-role cap
-      // before insert. Mirrors `WEBHOOK_MAX_PER_ORG` in webhook.service.ts —
-      // a stability cap, not a security boundary; the per-route rate limit
-      // bounds concurrency so the inherent race ("one extra row") is acceptable.
+      // sec-r5-followup-ratelimit-dos-2 + audit-#8: serialize the per-org count + insert with a
+      // transaction-scoped advisory lock so concurrent creates cannot both pass the same count
+      // and overshoot MEMBER_ROLE_MAX_PER_ORG. The lock auto-releases at commit.
+      await this.memberRoleRepository.acquireCreationQuotaLock(organization.id);
       const activeCount = await this.memberRoleRepository.countActiveByOrganization(
         organization.id,
       );

@@ -77,6 +77,7 @@ src/
     │   │   │   ├── auth-route-smoke.integration.test.ts
     │   │   │   ├── auth.integration.test.ts
     │   │   │   ├── logout-revokes-token.integration.test.ts
+    │   │   │   ├── refresh-preserves-active-organization.integration.test.ts
     │   │   │   └── refresh-rotates-token-hash.integration.test.ts
     │   │   ├── unit/
     │   │   │   ├── auth-mfa.validator.unit.test.ts
@@ -116,13 +117,16 @@ src/
     │   │   │   │   └── unit/
     │   │   │   │   │   ├── events/
     │   │   │   │   │       └── auth-method.event-handlers.unit.test.ts
+    │   │   │   │   │   ├── auth-method.change-password.db.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-method.repository.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.last-method-guard.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.step-up-mfa.unit.test.ts
     │   │   │   │   │   ├── auth-method.service.unit.test.ts
     │   │   │   │   │   ├── auth-method.validator.unit.test.ts
-    │   │   │   │   │   └── magic-link.service.unit.test.ts
+    │   │   │   │   │   ├── auth-method.verify-email.db.unit.test.ts
+    │   │   │   │   │   ├── magic-link.service.unit.test.ts
+    │   │   │   │   │   └── magic-link.verify-atomicity.db.unit.test.ts
     │   │   │   ├── events/
     │   │   │   │   ├── auth.event-handlers.ts
     │   │   │   │   ├── auth.events.ts
@@ -204,6 +208,7 @@ src/
     │   │   │   │   ├── integration/
     │   │   │   │   │   └── auth-session.integration.test.ts
     │   │   │   │   └── unit/
+    │   │   │   │   │   ├── auth-session.refresh-concurrency.db.unit.test.ts
     │   │   │   │   │   ├── auth-session.repository.db.unit.test.ts
     │   │   │   │   │   ├── auth-session.repository.expired.db.unit.test.ts
     │   │   │   │   │   ├── auth-session.repository.unit.test.ts
@@ -304,6 +309,7 @@ src/
     │   │   │   ├── __tests__/
     │   │   │   │   ├── integration/
     │   │   │   │   │   ├── stripe-webhook-correlation.integration.test.ts
+    │   │   │   │   │   ├── stripe-webhook-out-of-order-cancellation.integration.test.ts
     │   │   │   │   │   ├── stripe-webhook-payload-shrink.integration.test.ts
     │   │   │   │   │   ├── stripe-webhook-reclaim.integration.test.ts
     │   │   │   │   │   └── stripe-webhook.integration.test.ts
@@ -456,7 +462,9 @@ src/
     │   │   │       │   ├── webhook-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │       │   ├── webhook-tombstone-retention.worker.unit.test.ts
     │   │   │       │   ├── webhook.controller.unit.test.ts
+    │   │   │       │   ├── webhook.repository.creation-quota-concurrency.db.unit.test.ts
     │   │   │       │   ├── webhook.repository.db.unit.test.ts
+    │   │   │       │   ├── webhook.repository.secret-rotation.db.unit.test.ts
     │   │   │       │   ├── webhook.repository.unit.test.ts
     │   │   │       │   ├── webhook.serializer.no-secret.unit.test.ts
     │   │   │       │   ├── webhook.serializer.unit.test.ts
@@ -828,6 +836,7 @@ src/
     │   │   │   ├── upload.repository.unit.test.ts
     │   │   │   ├── upload.repository.user-isolation.db.unit.test.ts
     │   │   │   ├── upload.serializer.unit.test.ts
+    │   │   │   ├── upload.service.org-quota-concurrency.db.unit.test.ts
     │   │   │   ├── upload.service.quota-concurrency.db.unit.test.ts
     │   │   │   ├── upload.service.unit.test.ts
     │   │   │   ├── upload.validator.mime-and-size.unit.test.ts
@@ -970,6 +979,12 @@ src/
     │   │   │   ├── user-settings.types.ts
     │   │   │   └── user-settings.validator.ts
     │   ├── workers/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── offboarding-reconciler.processor.db.unit.test.ts
+    │   │   ├── offboarding-reconciler.constants.ts
+    │   │   ├── offboarding-reconciler.processor.ts
+    │   │   ├── offboarding-reconciler.worker.ts
     │   │   ├── user-tombstone-retention.constants.ts
     │   │   ├── user-tombstone-retention.processor.ts
     │   │   └── user-tombstone-retention.worker.ts
@@ -1047,12 +1062,14 @@ src/
     │   ├── connection.ts
     │   ├── OVERVIEW.md
     │   ├── pg-schemas.ts
+    │   ├── resource-quota-lock.util.ts
     │   └── transaction.ts
     ├── mail/
     │   ├── __tests__/
     │   │   └── unit/
     │   │   │   ├── mail-outbox-sweeper.processor.unit.test.ts
     │   │   │   ├── mail-outbox.dedupe.db.unit.test.ts
+    │   │   │   ├── mail-outbox.scrub.db.unit.test.ts
     │   │   │   └── mail.processor.unit.test.ts
     │   ├── queues/
     │   │   ├── __tests__/
@@ -1221,12 +1238,16 @@ src/
     └── storage/
     │   ├── __tests__/
     │       └── unit/
+    │       │   ├── public-media-url.util.unit.test.ts
     │       │   ├── s3-adapter.unit.test.ts
+    │       │   ├── s3-error.util.unit.test.ts
     │       │   ├── storage.service.presigned-put.unit.test.ts
     │       │   └── storage.service.put-object-buffer.unit.test.ts
     │   ├── object-storage.port.ts
     │   ├── OVERVIEW.md
+    │   ├── public-media-url.util.ts
     │   ├── s3-adapter.ts
+    │   ├── s3-error.util.ts
     │   └── storage.service.ts
 ├── scripts/
     ├── admin/
@@ -1830,7 +1851,6 @@ src/
     │   ├── config/
     │   │   ├── env-schema-boolean-coerce.unit.test.ts
     │   │   ├── env-schema.unit.test.ts
-    │   │   ├── env-schema.unit.test.ts.bak
     │   │   └── env.config.unit.test.ts
     │   ├── database/
     │   │   └── role-least-privilege-migration.policy.unit.test.ts

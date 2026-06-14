@@ -3,6 +3,7 @@ import type { SubscriptionRepository } from '@/domains/billing/sub-domains/subsc
 import { createWorkerSubscriptionRepository } from '@/domains/billing/sub-domains/subscription/subscription.repository.js';
 import type { SubscriptionService } from '@/domains/billing/sub-domains/subscription/subscription.service.js';
 import { ConflictError } from '@/shared/errors/index.js';
+import { isPostgresUniqueViolation } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
@@ -259,58 +260,130 @@ export class StripeWebhookService {
       subscriptionRepository,
     );
 
-    if (!row) {
-      const recovered =
-        eventType === 'customer.subscription.created'
-          ? await this.tryFallbackInsertForCreated({
-              stripeSubscription,
-              stripeEventCreatedAt,
-              subscriptionRepository,
-              resolvedPlanId,
-              matchedPlanForCreate,
-              stripePriceId,
-              periodStart,
-              periodEnd,
-              mappedStatus,
-              providerSubscriptionId,
-            })
-          : false;
-      if (!recovered) {
-        // sec-B finding #5: distinguish stale-event from race-condition. The sync UPDATE
-        // returns null both when the row does not exist (Stripe outran our HTTP create
-        // for `.updated`-before-`.created`) and when the row exists but the watermark
-        // already covers a newer event (stale). The prior code conflated the two and
-        // silently dropped both, which shadowed newer state when an `.updated` event
-        // reordered ahead of `.created`. We now do a separate existence check:
-        //   - row exists → stale event, no-op (the newer watermark already wins)
-        //   - row missing for a non-`.created` event → throw to retry; BullMQ's
-        //     exponential backoff carries the event past the race, and the
-        //     `attempts: 5` budget drains genuinely orphan events to the DLQ.
-        const rowExists = await this.subscriptionService.existsByStripeProviderSubscriptionId(
-          providerSubscriptionId,
-          subscriptionRepository,
-        );
-        if (rowExists) {
-          logger.info(
-            { providerSubscriptionId, stripeEventCreatedAt, eventType },
-            'stripe.webhook.subscription_event_stale_skipped',
-          );
-        } else {
-          logger.warn(
-            { providerSubscriptionId, stripeEventCreatedAt, eventType },
-            'stripe.webhook.subscription_not_found_will_retry',
-          );
-          throw new Error(
-            `stripe.webhook.subscription_local_row_missing:${eventType}:${providerSubscriptionId}`,
-          );
-        }
-      }
-    } else {
+    if (row) {
       logger.info(
         { providerSubscriptionId, status: mappedStatus },
         'stripe.webhook.subscription_synced',
       );
+      return;
     }
+
+    await this.recoverMissingSubscriptionRowForUpsert({
+      eventType,
+      providerSubscriptionId,
+      stripeEventCreatedAt,
+      subscriptionRepository,
+      stripeSubscription,
+      resolvedPlanId,
+      matchedPlanForCreate,
+      stripePriceId,
+      periodStart,
+      periodEnd,
+      mappedStatus,
+    });
+  }
+
+  /**
+   * Handles a `customer.subscription.{created,updated}` event whose in-place sync
+   * UPDATE matched no row.
+   *
+   * @remarks
+   * - **Algorithm:** A null sync has three non-error causes that must be told
+   *   apart (sec-B finding #5 + audit-#1): (a) the row exists but is **terminal**
+   *   — a CANCELED tombstone written by the deletion path — or already at a newer
+   *   watermark (stale); both must be left untouched, never resurrected; (b) no
+   *   row exists yet and the event is `.created`, so we can safely materialise one
+   *   from the payload; (c) no row exists for a `.updated` event, which is a true
+   *   race that must retry. We therefore existence-check **first** (covers (a)),
+   *   attempt the `.created` fallback INSERT (covers (b)), then re-check existence
+   *   to absorb a concurrent insert (tombstone / `.created`) before deciding to
+   *   throw.
+   * - **Failure modes:** throws a retryable error for case (c) so BullMQ's
+   *   exponential backoff carries the event past the race; the `attempts: 5`
+   *   budget drains genuinely orphan events to the DLQ.
+   * - **Side effects:** may INSERT one `billing.subscriptions` row via the
+   *   `.created` fallback.
+   */
+  private async recoverMissingSubscriptionRowForUpsert(input: {
+    eventType: 'customer.subscription.created' | 'customer.subscription.updated';
+    providerSubscriptionId: string;
+    stripeEventCreatedAt: Date;
+    subscriptionRepository: SubscriptionRepository;
+    stripeSubscription: Stripe.Subscription;
+    resolvedPlanId: number | undefined;
+    matchedPlanForCreate: MatchedPlanForCreate;
+    stripePriceId: string | undefined;
+    periodStart: Date;
+    periodEnd: Date;
+    mappedStatus: string;
+  }): Promise<void> {
+    const { eventType, providerSubscriptionId, stripeEventCreatedAt, subscriptionRepository } =
+      input;
+
+    // (a) The row is present but not updatable in place: a terminal CANCELED
+    // tombstone (audit-#1) or a newer watermark already wins (stale). Either way
+    // the in-place sync correctly refused — skip without resurrecting.
+    if (
+      await this.rowExistsForProviderSubscription(providerSubscriptionId, subscriptionRepository)
+    ) {
+      logger.info(
+        { providerSubscriptionId, stripeEventCreatedAt, eventType },
+        'stripe.webhook.subscription_event_stale_skipped',
+      );
+      return;
+    }
+
+    // (b) No row exists; only `.created` carries enough fields to materialise one.
+    const recovered =
+      eventType === 'customer.subscription.created'
+        ? await this.tryFallbackInsertForCreated({
+            stripeSubscription: input.stripeSubscription,
+            stripeEventCreatedAt,
+            subscriptionRepository,
+            resolvedPlanId: input.resolvedPlanId,
+            matchedPlanForCreate: input.matchedPlanForCreate,
+            stripePriceId: input.stripePriceId,
+            periodStart: input.periodStart,
+            periodEnd: input.periodEnd,
+            mappedStatus: input.mappedStatus,
+            providerSubscriptionId,
+          })
+        : false;
+    if (recovered) return;
+
+    // A concurrent `.created` fallback or a deletion tombstone may have inserted
+    // the row between the first existence check and the failed fallback — re-check
+    // before declaring an orphan so we do not needlessly retry/DLQ.
+    if (
+      await this.rowExistsForProviderSubscription(providerSubscriptionId, subscriptionRepository)
+    ) {
+      logger.info(
+        { providerSubscriptionId, stripeEventCreatedAt, eventType },
+        'stripe.webhook.subscription_event_stale_skipped',
+      );
+      return;
+    }
+
+    // (c) Genuinely no row for a non-`.created` event (or `.created` could not
+    // insert, e.g. catalog drift). Throw so BullMQ retries; the late `.created`
+    // will INSERT the row and the next event applies correctly.
+    logger.warn(
+      { providerSubscriptionId, stripeEventCreatedAt, eventType },
+      'stripe.webhook.subscription_not_found_will_retry',
+    );
+    throw new Error(
+      `stripe.webhook.subscription_local_row_missing:${eventType}:${providerSubscriptionId}`,
+    );
+  }
+
+  private async rowExistsForProviderSubscription(
+    providerSubscriptionId: string,
+    subscriptionRepository: SubscriptionRepository,
+  ): Promise<boolean> {
+    return this.subscriptionService.existsByStripeProviderSubscriptionId(
+      providerSubscriptionId,
+      subscriptionRepository,
+    );
   }
 
   /**
@@ -346,31 +419,52 @@ export class StripeWebhookService {
       );
       return false;
     }
-    const billingCycle = resolveBillingCycleForStripePrice(stripePriceId, matchedPlanForCreate);
-    const inserted = await this.subscriptionService.createFromStripeWebhookEvent({
-      providerSubscriptionId,
-      providerCustomerId:
-        typeof input.stripeSubscription.customer === 'string'
-          ? input.stripeSubscription.customer
+    // audit-#1: `billing.subscriptions.billing_cycle` is constrained to
+    // ('MONTHLY','YEARLY') by `chk_subs_cycle`; the resolver returns lower-case,
+    // so normalise before the INSERT (the prior code inserted 'monthly' and would
+    // have failed the CHECK on the real DB).
+    const billingCycle = resolveBillingCycleForStripePrice(
+      stripePriceId,
+      matchedPlanForCreate,
+    ).toUpperCase();
+    try {
+      const inserted = await this.subscriptionService.createFromStripeWebhookEvent({
+        providerSubscriptionId,
+        providerCustomerId:
+          typeof input.stripeSubscription.customer === 'string'
+            ? input.stripeSubscription.customer
+            : null,
+        planId: resolvedPlanId,
+        status: input.mappedStatus,
+        cancelAtPeriodEnd: input.stripeSubscription.cancel_at_period_end,
+        canceledAt: input.stripeSubscription.canceled_at
+          ? new Date(input.stripeSubscription.canceled_at * 1000)
           : null,
-      planId: resolvedPlanId,
-      status: input.mappedStatus,
-      cancelAtPeriodEnd: input.stripeSubscription.cancel_at_period_end,
-      canceledAt: input.stripeSubscription.canceled_at
-        ? new Date(input.stripeSubscription.canceled_at * 1000)
-        : null,
-      currentPeriodStart: input.periodStart,
-      currentPeriodEnd: input.periodEnd,
-      billingCycle,
-      stripeEventCreatedAt: input.stripeEventCreatedAt,
-      repositoryOverride: input.subscriptionRepository,
-    });
-    if (!inserted) return false;
-    logger.info(
-      { providerSubscriptionId, planId: resolvedPlanId, billingCycle },
-      'stripe.webhook.subscription_inserted_on_created',
-    );
-    return true;
+        currentPeriodStart: input.periodStart,
+        currentPeriodEnd: input.periodEnd,
+        billingCycle,
+        stripeEventCreatedAt: input.stripeEventCreatedAt,
+        repositoryOverride: input.subscriptionRepository,
+      });
+      if (!inserted) return false;
+      logger.info(
+        { providerSubscriptionId, planId: resolvedPlanId, billingCycle },
+        'stripe.webhook.subscription_inserted_on_created',
+      );
+      return true;
+    } catch (error) {
+      // A concurrent `.deleted` tombstone or duplicate `.created` won the
+      // `provider_subscription_id` unique race. Treat the now-present row as the
+      // winner; the caller re-checks existence and skips instead of retrying.
+      if (isPostgresUniqueViolation(error)) {
+        logger.info(
+          { providerSubscriptionId },
+          'stripe.webhook.subscription_created_insert_lost_race',
+        );
+        return false;
+      }
+      throw error;
+    }
   }
 
   private async handleSubscriptionDeleted(
@@ -386,13 +480,141 @@ export class StripeWebhookService {
       subscriptionRepository,
     );
 
-    if (!row) {
-      logger.warn(
-        { providerSubscriptionId, stripeEventCreatedAt },
-        'stripe.webhook.subscription_cancel_stale_or_missing',
-      );
-    } else {
+    if (row) {
       logger.info({ providerSubscriptionId }, 'stripe.webhook.subscription_canceled');
+      return;
+    }
+
+    // audit-#1 (CRITICAL): no local row matched the deletion. Previously this only
+    // logged `subscription_cancel_stale_or_missing` and let the enclosing handler
+    // mark the event `processed` — so a later out-of-order
+    // `customer.subscription.created` (delivered after `.deleted` during a Stripe
+    // ordering delay) would INSERT an ACTIVE row that the now-terminal deletion
+    // event could never replay against. Close the gap by writing a terminal
+    // CANCELED **tombstone** keyed by `provider_subscription_id`; the unique index
+    // + the terminal-status guard on `syncFromStripeProviderSubscription` then make
+    // any future `.created` / `.updated` for this id a no-op.
+    const tombstoned = await this.tryInsertCancellationTombstone({
+      stripeSubscription,
+      stripeEventCreatedAt,
+      subscriptionRepository,
+      providerSubscriptionId,
+    });
+    if (tombstoned) {
+      logger.info(
+        { providerSubscriptionId, stripeEventCreatedAt },
+        'stripe.webhook.subscription_cancel_tombstone_inserted',
+      );
+      return;
+    }
+
+    // The tombstone could not be written because a concurrent `.created` inserted
+    // the row first (lost the unique race). Re-run the cancel against that row.
+    const recovered = await this.subscriptionService.markCanceledByStripeProviderSubscriptionId(
+      providerSubscriptionId,
+      stripeEventCreatedAt,
+      subscriptionRepository,
+    );
+    if (recovered) {
+      logger.info({ providerSubscriptionId }, 'stripe.webhook.subscription_canceled');
+      return;
+    }
+
+    // Nothing durable could be written (no resolvable plan for the tombstone and no
+    // row to cancel). Do NOT silently advance the ledger to `processed`: throw so
+    // BullMQ retries with backoff — a late `.created` will materialise the row and a
+    // retry of this deletion will then cancel it.
+    logger.warn(
+      { providerSubscriptionId, stripeEventCreatedAt },
+      'stripe.webhook.subscription_cancel_no_row_will_retry',
+    );
+    throw new Error(
+      `stripe.webhook.subscription_cancel_local_row_missing:${providerSubscriptionId}`,
+    );
+  }
+
+  /**
+   * Materialises a terminal CANCELED tombstone row for a deletion event whose
+   * local subscription row was absent (audit-#1).
+   *
+   * @remarks
+   * - **Algorithm:** resolves the local plan id from the deleted subscription's
+   *   `items.data[0].price.id` (the tombstone still needs a NOT-NULL `plan_id`),
+   *   derives `billing_cycle` + period boundaries from the payload, and inserts a
+   *   CANCELED row via {@link SubscriptionService.insertCanceledTombstoneFromStripeWebhookEvent}.
+   * - **Failure modes:** returns `false` when no price/plan can be resolved (the
+   *   caller then throws to retry rather than silently dropping the cancellation),
+   *   or when a concurrent insert wins the `provider_subscription_id` unique race
+   *   (the caller re-runs the cancel against the now-present row).
+   * - **Side effects:** at most one INSERT into `billing.subscriptions`.
+   */
+  private async tryInsertCancellationTombstone(input: {
+    stripeSubscription: Stripe.Subscription;
+    stripeEventCreatedAt: Date;
+    subscriptionRepository: SubscriptionRepository;
+    providerSubscriptionId: string;
+  }): Promise<boolean> {
+    const {
+      stripeSubscription,
+      stripeEventCreatedAt,
+      subscriptionRepository,
+      providerSubscriptionId,
+    } = input;
+
+    const firstItem = stripeSubscription.items.data[0];
+    const stripePriceId = firstItem?.price?.id;
+    if (!stripePriceId) {
+      logger.warn(
+        { providerSubscriptionId },
+        'stripe.webhook.subscription_cancel_tombstone_skipped_no_price',
+      );
+      return false;
+    }
+
+    const matchedPlan = await this.planRepository.findByStripePriceId(stripePriceId);
+    if (!matchedPlan) {
+      logger.warn(
+        { providerSubscriptionId, stripePriceId },
+        'stripe.webhook.subscription_cancel_tombstone_skipped_no_plan',
+      );
+      return false;
+    }
+
+    const billingCycle = resolveBillingCycleForStripePrice(
+      stripePriceId,
+      matchedPlan,
+    ).toUpperCase();
+    const periodStart = new Date(firstItem.current_period_start * 1000);
+    const periodEnd = new Date(firstItem.current_period_end * 1000);
+    const canceledAt = stripeSubscription.canceled_at
+      ? new Date(stripeSubscription.canceled_at * 1000)
+      : stripeEventCreatedAt;
+
+    try {
+      const inserted = await this.subscriptionService.insertCanceledTombstoneFromStripeWebhookEvent(
+        {
+          providerSubscriptionId,
+          providerCustomerId:
+            typeof stripeSubscription.customer === 'string' ? stripeSubscription.customer : null,
+          planId: matchedPlan.id,
+          billingCycle,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          canceledAt,
+          stripeEventCreatedAt,
+          repositoryOverride: subscriptionRepository,
+        },
+      );
+      return inserted !== null;
+    } catch (error) {
+      if (isPostgresUniqueViolation(error)) {
+        logger.info(
+          { providerSubscriptionId },
+          'stripe.webhook.subscription_cancel_tombstone_lost_race',
+        );
+        return false;
+      }
+      throw error;
     }
   }
 }

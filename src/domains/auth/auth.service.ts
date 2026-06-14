@@ -29,8 +29,9 @@ import { validateLogin } from './auth.validator.js';
 import { completeFirstFactorAuth } from './shared/complete-first-factor-auth.js';
 import {
   resolveDefaultActiveOrganizationPublicId,
-  findUserActiveOrganizationPublicId,
-  resolvePersonalOrganizationPublicId,
+  findUserActiveOrganizationByPublicId,
+  findUserActiveOrganizationPublicIdByInternalId,
+  resolvePersonalOrganization,
 } from '@/domains/tenancy/sub-domains/organization/resolve-active-organization.js';
 import type { UserAuthRecord } from '@/domains/user/user.types.js';
 
@@ -270,7 +271,17 @@ export class AuthService {
       throw new UnauthorizedError('errors:accountNotActive');
     }
 
-    const organizationPublicId = await resolveDefaultActiveOrganizationPublicId(user.id);
+    // audit-#3: preserve the organization the caller switched to. The selected org is
+    // persisted on the session (`organization_id`) by `rebindAccessToken`; refresh must
+    // revalidate it (the user could have lost membership, or the org could have been
+    // deleted/suspended) and only fall back to the default when it is no longer valid —
+    // never silently move the caller to a different tenant while the UI still shows A.
+    const persistedOrganizationPublicId =
+      session.organization_id != null
+        ? await findUserActiveOrganizationPublicIdByInternalId(user.id, session.organization_id)
+        : undefined;
+    const organizationPublicId =
+      persistedOrganizationPublicId ?? (await resolveDefaultActiveOrganizationPublicId(user.id));
 
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
@@ -307,7 +318,7 @@ export class AuthService {
   }): Promise<{ access_token: string }> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
-    const resolved = await findUserActiveOrganizationPublicId(user.id, organizationPublicId);
+    const resolved = await findUserActiveOrganizationByPublicId(user.id, organizationPublicId);
     if (!resolved) throw new ForbiddenError('errors:insufficientOrganizationPermissions');
     return this.mintForActiveOrganization(user, sessionPublicId, resolved);
   }
@@ -326,16 +337,20 @@ export class AuthService {
   }): Promise<{ access_token: string }> {
     const user = await this.userService.requireUserRecordByPublicId(userPublicId);
     if (user.status !== 'ACTIVE') throw new UnauthorizedError('errors:accountNotActive');
-    const personal = await resolvePersonalOrganizationPublicId(user.id);
+    const personal = await resolvePersonalOrganization(user.id);
     if (!personal) throw new NotFoundError('Personal organization');
     return this.mintForActiveOrganization(user, sessionPublicId, personal);
   }
 
-  /** Mint an access token scoped to `organizationPublicId` and re-bind the session to it. */
+  /**
+   * Mint an access token scoped to the given organization and re-bind the session
+   * to it, persisting the active organization's internal id on the session so a
+   * later `/auth/refresh` preserves the selection (audit-#3).
+   */
   private async mintForActiveOrganization(
     user: UserAuthRecord,
     sessionPublicId: string,
-    organizationPublicId: string,
+    organization: { id: number; public_id: string },
   ): Promise<{ access_token: string }> {
     const jsonWebToken = await signAccessToken({
       userId: user.public_id,
@@ -344,11 +359,12 @@ export class AuthService {
         status: user.status,
         isEmailVerified: user.is_email_verified,
       }),
-      organizationPublicId,
+      organizationPublicId: organization.public_id,
     });
     await this.authSessionService.rebindAccessToken({
       sessionPublicId,
       nextAccessToken: jsonWebToken,
+      activeOrganizationId: organization.id,
     });
     return { access_token: jsonWebToken };
   }

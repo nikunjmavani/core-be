@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ObjectStoragePort } from '@/infrastructure/storage/object-storage.port.js';
+import { ExternalServiceError } from '@/infrastructure/outbound/index.js';
 import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { getEnv } from '@/shared/config/env.config.js';
 import {
@@ -213,13 +214,19 @@ export class UploadService {
     const pendingCap = environment.UPLOAD_MAX_PENDING_PER_USER;
     const orgPendingCap = environment.UPLOAD_MAX_PENDING_PER_ORGANIZATION;
     return withUserDatabaseContext(userPublicId, async () => {
+      // audit-#7: take the ORG-scoped advisory lock BEFORE the per-user lock (a globally
+      // consistent org-then-user order, deadlock-free) so concurrent reservations from
+      // DIFFERENT members of the same org serialize on the org cap. Previously the org count
+      // was checked while holding only the per-user lock, so N members could each pass the
+      // same org count and overshoot UPLOAD_MAX_PENDING_PER_ORGANIZATION by N.
+      if (organizationInternalId !== null) {
+        await this.repository.acquirePendingOrganizationQuotaLock(organizationInternalId);
+      }
       await this.repository.acquirePendingUploadQuotaLock(userInternalId);
       // sec-UP4: enforce the org-level cap BEFORE the per-user cap so a single
       // org with many members cannot pile PENDING uploads across user accounts
-      // and exhaust storage. Race-safe enough for a stability cap (the per-
-      // user advisory lock above bounds per-user concurrency; cross-user
-      // org-level concurrency falls back to "sweeper reconciles" — same
-      // posture as the user cap).
+      // and exhaust storage. The org-scoped lock above now makes this count + insert
+      // atomic across members (not just within a single user).
       if (organizationInternalId !== null) {
         const orgPendingCount =
           await this.repository.countPendingByOrganizationId(organizationInternalId);
@@ -478,6 +485,17 @@ export class UploadService {
         verified = await this.publishConfirmedObject(sourceKey, finalKey, row.mime_type);
       }
     } catch (error) {
+      // audit-#5: a transient storage failure (timeout / throttle / circuit-open / IAM) must NOT
+      // mark a valid upload FAILED. Re-throw it (surfaces as 503) so the client can retry confirm;
+      // the row stays PENDING and the sweeper / a retry reconciles it. Only genuine verification
+      // failures (not-found, type/size mismatch, magic-byte rejection) fall through to FAILED.
+      if (error instanceof ExternalServiceError) {
+        logger.warn(
+          { id: validatedPublicId, fileKey: sourceKey, error },
+          'upload.confirm.transientStorageError',
+        );
+        throw error;
+      }
       logger.warn(
         { id: validatedPublicId, fileKey: sourceKey, error },
         'upload.confirm.verifyFailed',

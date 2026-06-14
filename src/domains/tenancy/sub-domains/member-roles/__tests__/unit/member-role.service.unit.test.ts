@@ -45,6 +45,8 @@ describe('MemberRoleService', () => {
     // before insert. Default to 0 so the lifecycle tests still reach create;
     // the cap regression lives in `per-org-row-caps.unit.test.ts`.
     countActiveByOrganization: vi.fn().mockResolvedValue(0),
+    // audit-#8: per-org creation quota advisory lock (no-op in unit tests).
+    acquireCreationQuotaLock: vi.fn().mockResolvedValue(undefined),
     create: vi.fn().mockResolvedValue(roleRow),
     update: vi.fn().mockResolvedValue(roleRow),
     softDeleteIfNoActiveMembers: vi.fn().mockResolvedValue(roleRow),

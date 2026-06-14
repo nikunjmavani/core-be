@@ -32,3 +32,16 @@ export const IP_FAILED_LOGIN_THRESHOLD = 50;
 
 /** Sliding window duration for the per-IP failed-login counter (seconds). */
 export const IP_FAILED_LOGIN_WINDOW_SECONDS = 15 * 60;
+
+/**
+ * Grace window (ms) during which the refresh compare-and-swap also accepts the immediately-previous
+ * refresh hash (audit-#2).
+ *
+ * @remarks
+ * Two concurrent legitimate refreshes presenting the same cookie can race: one rotates the stored
+ * hash and the loser would otherwise observe a different hash and be misclassified as stolen-token
+ * reuse — revoking the user's whole session family. Accepting the just-rotated previous hash for a
+ * few seconds lets the concurrent duplicate succeed; a replay AFTER this window still falls through
+ * to reuse detection / family revocation. Kept short to bound the relaxation of reuse detection.
+ */
+export const REFRESH_TOKEN_REUSE_GRACE_MS = 10_000;

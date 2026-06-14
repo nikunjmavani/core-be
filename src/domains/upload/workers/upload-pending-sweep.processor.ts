@@ -10,7 +10,7 @@ import {
   copyObject,
   deleteObject,
   getObjectLeadingBytes,
-  headObject,
+  headObjectResult,
 } from '@/infrastructure/storage/storage.service.js';
 import { PRESIGNED_URL_EXPIRY_SECONDS } from '@/shared/constants/ttl.constants.js';
 import { env } from '@/shared/config/env.config.js';
@@ -35,14 +35,17 @@ import {
  *   length/content-type and were transitioned to `UPLOADED`.
  * - **failedCount:** rows whose S3 object existed but with metadata mismatch;
  *   transitioned to `FAILED` so they can never be attached.
- * - **deletedCount:** orphan rows whose S3 object was missing; hard-deleted
+ * - **deletedCount:** orphan rows whose S3 object was explicitly not found; hard-deleted
  *   after a best-effort S3 delete.
+ * - **transientCount:** rows skipped because the S3 HEAD failed transiently (audit-#5);
+ *   left PENDING for the next scheduled sweep rather than destructively orphaned.
  */
 export type UploadPendingSweepResult = {
   scannedCount: number;
   autoConfirmedCount: number;
   failedCount: number;
   deletedCount: number;
+  transientCount: number;
 };
 
 /**
@@ -96,6 +99,7 @@ export async function runUploadPendingSweepJob(
 
   let autoConfirmedCount = 0;
   let failedCount = 0;
+  let transientCount = 0;
   const idsToHardDelete: number[] = [];
 
   for (const row of rows) {
@@ -144,8 +148,17 @@ export async function runUploadPendingSweepJob(
         { uploadId: row.id, fileKey: row.file_key },
         'upload-pending-sweep.metadataMismatch',
       );
+    } else if (verdict === 'transient') {
+      // audit-#5: a transient HEAD failure (timeout / throttle / circuit-open / IAM) is NOT
+      // proof the object is missing. Leave the row PENDING so the next scheduled sweep
+      // re-evaluates it; never hard-delete on an outage.
+      transientCount += 1;
+      logger.warn(
+        { uploadId: row.id, fileKey: row.file_key },
+        'upload-pending-sweep.transientHeadSkipped',
+      );
     } else {
-      // Object missing — remove any leftover S3 byte (idempotent) and queue the DB delete.
+      // Object explicitly not found — remove any leftover S3 byte (idempotent) and queue the DB delete.
       const deleted = await deleteObject(row.file_key);
       if (!deleted) {
         logger.warn(
@@ -160,7 +173,7 @@ export async function runUploadPendingSweepJob(
   const deletedCount = await hardDeleteUploadsByInternalIds(databaseHandle, idsToHardDelete);
 
   logger.info(
-    { scannedCount: rows.length, autoConfirmedCount, failedCount, deletedCount },
+    { scannedCount: rows.length, autoConfirmedCount, failedCount, deletedCount, transientCount },
     'upload-pending-sweep.completed',
   );
 
@@ -169,10 +182,11 @@ export async function runUploadPendingSweepJob(
     autoConfirmedCount,
     failedCount,
     deletedCount,
+    transientCount,
   };
 }
 
-type PendingUploadVerdict = 'auto_confirm' | 'fail' | 'orphan';
+type PendingUploadVerdict = 'auto_confirm' | 'fail' | 'orphan' | 'transient';
 
 async function resolvePendingUploadVerdict(
   row: PendingUploadSweepRow,
@@ -197,10 +211,19 @@ async function resolvePendingUploadVerdict(
   if (isSvgContentType(row.mime_type)) {
     return 'fail';
   }
-  const metadata = await headObject(row.file_key);
-  if (metadata?.contentLength === undefined) {
+  // audit-#5: distinguish an explicit not-found (safe to orphan-delete) from a transient
+  // storage outage. The prior `headObject(...) ?? null → orphan` mapping let a timeout /
+  // throttle / circuit-open hard-delete a perfectly valid pending row (and its S3 bytes)
+  // across an entire sweep batch. A transient result leaves the row PENDING for the next
+  // scheduled sweep instead.
+  const head = await headObjectResult(row.file_key);
+  if (head.kind === 'transient_error') {
+    return 'transient';
+  }
+  if (head.kind === 'not_found' || head.metadata.contentLength === undefined) {
     return 'orphan';
   }
+  const metadata = head.metadata;
   const lengthMatches = metadata.contentLength === row.file_size;
   // S3 may not echo a content-type; only fail on type when one is reported.
   const typeMatches = metadata.contentType === undefined || metadata.contentType === row.mime_type;

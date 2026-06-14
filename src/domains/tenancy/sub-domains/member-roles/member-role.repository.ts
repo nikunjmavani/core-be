@@ -7,6 +7,10 @@ import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
+import {
   buildAscendingTextIdCursorCondition,
   createOpaqueCursorFromRow,
   parseListCursor,
@@ -39,6 +43,16 @@ export class MemberRoleRepository extends BaseRepository {
       .from(roles)
       .where(and(eq(roles.organization_id, organization_id), isNull(roles.deleted_at)));
     return rows[0]?.value ?? 0;
+  }
+
+  /**
+   * audit-#8: transaction-scoped advisory lock serializing the per-org custom-role creation quota
+   * check + insert so concurrent creates cannot both pass the count and overshoot
+   * `MEMBER_ROLE_MAX_PER_ORG`. Call inside the create transaction before
+   * {@link countActiveByOrganization}.
+   */
+  async acquireCreationQuotaLock(organization_id: number): Promise<void> {
+    await acquireResourceQuotaLock(RESOURCE_QUOTA_LOCK_NAMESPACE.MEMBER_ROLE, organization_id);
   }
 
   async findByOrganizationId(organization_id: number, pagination: MemberRoleListPagination) {
