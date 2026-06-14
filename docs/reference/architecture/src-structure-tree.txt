@@ -1288,6 +1288,9 @@ src/
     │   ├── secrets-key-rotate.ts
     │   ├── send-load-test-results-email.ts
     │   ├── send-test-report-email.ts
+    │   ├── settle-check.config.ts
+    │   ├── settle-check.evaluate.ts
+    │   ├── settle-check.ts
     │   ├── stripe-subscription-reconcile.ts
     │   ├── verify-base.ts
     │   └── worker-drain.ts
@@ -1670,6 +1673,7 @@ src/
     │   │   ├── metrics-red.integration.test.ts
     │   │   └── trace-bullmq-propagation.integration.test.ts
     │   ├── queue/
+    │   │   ├── audit-outbox-drain.integration.test.ts
     │   │   ├── bullmq-metrics.integration.test.ts
     │   │   ├── bullmq-noop-smoke.integration.test.ts
     │   │   ├── transactional-outbox.integration.test.ts
@@ -1959,6 +1963,8 @@ src/
     │   │   ├── route-success-status.unit.test.ts
     │   │   ├── run-ci-local-guard.unit.test.ts
     │   │   ├── run-pre-commit-guard.unit.test.ts
+    │   │   ├── settle-check.config.unit.test.ts
+    │   │   ├── settle-check.evaluate.unit.test.ts
     │   │   └── validate-test-naming.unit.test.ts
     │   ├── services/
     │   │   ├── event-bus.unit.test.ts

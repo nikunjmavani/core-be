@@ -101,6 +101,24 @@ If **load:stress** and **load:stress:api** both pass, the system is under load-t
 
 3. **Optional — longer-lived token for long runs:** JWT from login expires in 15 minutes. For runs under 15 minutes you don't need to change anything. For longer API stress runs, use a token with longer expiry (e.g. from `pnpm tool:admin-token` if your scenario allows admin role, or a dedicated load-test token with extended expiry).
 
+## Post-run settle check (drain + assert clean)
+
+After a load (or e2e) batch, `pnpm load:settle-check` proves the async fabric finished every job the run started — nothing stuck in a queue, the event-bus / outbox side effects flushed, and nothing dead-lettered. Run it against the **same** API + worker the load test hit (workers must be running so the backlog can drain):
+
+```bash
+pnpm load:settle-check
+```
+
+It polls the throughput queues (`mail`, `webhook-delivery`, `notification`, `stripe-webhook`) until `waiting + active + delayed = 0` and the mail outbox has no pending rows, then asserts — once — that **no** queue and **no** `<queue>-dlq` is holding a failed job. Exit code `0` = clean, `1` = did not settle within the timeout or a failure remains (CI-gateable). Scheduled retention/tombstone queues are intentionally excluded: their next repeatable run always sits in `delayed`, so they never reach zero — their health is covered instead by the cluster-wide dead-letter assertion.
+
+| Env | Default | Purpose |
+| --- | ------- | ------- |
+| `SETTLE_CHECK_TIMEOUT_MS` | `120000` | Max wait for the backlog to drain before reporting a timeout |
+| `SETTLE_CHECK_POLL_INTERVAL_MS` | `2000` | Poll cadence while waiting |
+| `SETTLE_CHECK_QUEUES` | throughput queues | Comma-separated queue-name override |
+
+The same signals are observable live via `GET /readyz` (verbose), `GET /metrics` (`bullmq_queue_*`, `mail_outbox_pending`, `dlq_depth`), and Bull Board — see the [observability runbook](../../deployment/runbooks/observability.md). The settle check turns those gauges into a single pass/fail gate.
+
 ## Prerequisites
 
 - **Server**: Run the API with `pnpm dev` (and optionally `pnpm dev:worker` for background jobs).

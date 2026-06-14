@@ -117,6 +117,7 @@
     "load:user-journey": "k6 run src/tests/load/k6/scenarios/user-journey.js",
     "load:coverage": "node tooling/ci/check-load-coverage.mjs",
     "load:coverage:report": "node tooling/ci/check-load-coverage.mjs --report-only",
+    "load:settle-check": "tsx src/scripts/ops/settle-check.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "tsx src/infrastructure/database/migration/migrate.ts",
