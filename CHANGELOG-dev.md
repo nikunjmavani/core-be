@@ -6,6 +6,18 @@
 > channel publishes proper `vX.Y.Z-dev.N` prereleases; the matching stable
 > `vX.Y.Z` tag is cut on `main` when the prerelease cycle is promoted.
 
+## [4.6.2-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.1-dev.0...v4.6.2-dev.0) (2026-06-14)
+
+
+### Fixed
+
+* three pre-existing dev post-merge CI failures (migration idempotency, Stripe Date bind, permission seed) ([#614](https://github.com/nikunjmavani/core-be/issues/614)) ([798cefe](https://github.com/nikunjmavani/core-be/commit/798cefe26f59b8f56c3987f437772d707a42e364))
+
+
+### Documentation
+
+* **process:** add release-versioning cheat-sheet (commit prefix → bump) ([#612](https://github.com/nikunjmavani/core-be/issues/612)) ([6e58397](https://github.com/nikunjmavani/core-be/commit/6e58397013279da347bf5a56305e150ea1cc8e26))
+
 ## [4.6.1-dev.0](https://github.com/nikunjmavani/core-be/compare/v4.6.0-dev.0...v4.6.1-dev.0) (2026-06-14)
 
 
