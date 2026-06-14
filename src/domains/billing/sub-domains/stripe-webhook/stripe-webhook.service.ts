@@ -271,10 +271,14 @@ export class StripeWebhookService {
     // BILL-03: if a deletion tombstone at or after this event's timestamp exists, the
     // subscription was already deleted at Stripe before this create/update was delivered.
     // Refuse to recover — a stale create must not resurrect entitlement.
-    const tombstone = await this.stripeWebhookEventRepository.findSubscriptionDeletionTombstone(
-      providerSubscriptionId,
-    );
-    if (tombstone && tombstone.deleted_event_created_at.getTime() >= stripeEventCreatedAt.getTime()) {
+    const tombstone =
+      await this.stripeWebhookEventRepository.findSubscriptionDeletionTombstone(
+        providerSubscriptionId,
+      );
+    if (
+      tombstone &&
+      tombstone.deleted_event_created_at.getTime() >= stripeEventCreatedAt.getTime()
+    ) {
       logger.warn(
         { providerSubscriptionId, stripeEventCreatedAt, eventType },
         'stripe.webhook.subscription_event_superseded_by_deletion',
