@@ -125,7 +125,8 @@ src/
     │   │   │   │   │   ├── auth-method.service.unit.test.ts
     │   │   │   │   │   ├── auth-method.validator.unit.test.ts
     │   │   │   │   │   ├── auth-method.verify-email.db.unit.test.ts
-    │   │   │   │   │   └── magic-link.service.unit.test.ts
+    │   │   │   │   │   ├── magic-link.service.unit.test.ts
+    │   │   │   │   │   └── magic-link.verify-atomicity.db.unit.test.ts
     │   │   │   ├── events/
     │   │   │   │   ├── auth.event-handlers.ts
     │   │   │   │   ├── auth.events.ts

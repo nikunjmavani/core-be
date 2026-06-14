@@ -150,32 +150,47 @@ export class MagicLinkService {
   ): Promise<FirstFactorAuthResult> {
     const parsed = validateMagicLinkVerify(body);
     const tokenHash = createHash('sha256').update(parsed.token).digest('hex');
-    /** Atomic UPDATE prevents two concurrent verifies from both producing a session. */
-    const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
-    if (record?.token_type !== 'MAGIC_LINK') {
-      throw new UnauthorizedError('errors:invalidOrExpiredMagicLink');
-    }
-    const user = await this.userService.findById(record.user_id);
-    if (!user) throw new UnauthorizedError('errors:userNotFound');
-    // sec-U1: pass the row so the assertion rejects soft-deleted users (the resolver
-    // also filters `deleted_at IS NULL`, so the user would already be null; this is
-    // belt-and-suspenders against a regression in either layer).
-    assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
 
-    return completeFirstFactorAuth({
-      user: {
-        id: user.id,
-        public_id: user.public_id,
-        email: user.email,
-        status: user.status,
-        is_email_verified: user.is_email_verified,
-        is_mfa_enabled: user.is_mfa_enabled,
-      },
-      ipAddress,
-      userAgent,
-      organizationSettingsService: this.organizationSettingsService,
-      mfaService: this.mfaService,
-      authSessionService: this.authSessionService,
-    });
+    // audit-#12: consume the one-time token AND complete first-factor auth (session creation, or
+    // the MFA-challenge decision) in ONE pinned transaction. Previously the token was consumed
+    // first and the downstream work ran outside that transaction, so a transient failure after
+    // consumption permanently burned a valid single-use link ("invalid or expired" on retry).
+    // The atomic `consumeIfValid` UPDATE still prevents two concurrent verifies from both
+    // producing a session; on a downstream failure the pinned transaction rolls the consumption
+    // back, leaving the link redeemable. `completeFirstFactorAuth`'s admin-scoped policy reads run
+    // in their own transactions (separate connection), while `createSessionForUser` reuses this
+    // pinned transaction — so the session insert commits atomically with the token consumption.
+    const result = await withTransaction((transaction) =>
+      runWithPinnedDatabaseHandle(transaction as RequestScopedPostgresDatabase, async () => {
+        /** Atomic UPDATE prevents two concurrent verifies from both producing a session. */
+        const record = await this.verificationTokenRepository.consumeIfValid(tokenHash);
+        if (record?.token_type !== 'MAGIC_LINK') {
+          throw new UnauthorizedError('errors:invalidOrExpiredMagicLink');
+        }
+        const user = await this.userService.findById(record.user_id);
+        if (!user) throw new UnauthorizedError('errors:userNotFound');
+        // sec-U1: pass the row so the assertion rejects soft-deleted users (the resolver
+        // also filters `deleted_at IS NULL`, so the user would already be null; this is
+        // belt-and-suspenders against a regression in either layer).
+        assertUserAccountActive({ status: user.status, deleted_at: user.deleted_at });
+
+        return completeFirstFactorAuth({
+          user: {
+            id: user.id,
+            public_id: user.public_id,
+            email: user.email,
+            status: user.status,
+            is_email_verified: user.is_email_verified,
+            is_mfa_enabled: user.is_mfa_enabled,
+          },
+          ipAddress,
+          userAgent,
+          organizationSettingsService: this.organizationSettingsService,
+          mfaService: this.mfaService,
+          authSessionService: this.authSessionService,
+        });
+      }),
+    );
+    return result;
   }
 }
