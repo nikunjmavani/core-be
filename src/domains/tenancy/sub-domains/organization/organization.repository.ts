@@ -8,6 +8,10 @@ import { BaseRepository } from '@/infrastructure/database/base-repository.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
 import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
+import {
   buildAscendingCreatedAtIdCursorCondition,
   createOpaqueCursorFromRow,
   parseListCursor,
@@ -285,6 +289,16 @@ export class OrganizationRepository extends BaseRepository {
         ),
       );
     return rows[0]?.value ?? 0;
+  }
+
+  /**
+   * audit-#8: transaction-scoped advisory lock serializing the owned-TEAM-organization creation
+   * quota check + insert for one owner, so concurrent creates cannot both pass the count and
+   * overshoot `MAX_TEAM_ORGANIZATIONS_PER_OWNER`. Keyed by the owner user id; call inside the
+   * create transaction before {@link countActiveOwnedByUser}.
+   */
+  async acquireOwnedOrganizationQuotaLock(owner_user_id: number): Promise<void> {
+    await acquireResourceQuotaLock(RESOURCE_QUOTA_LOCK_NAMESPACE.OWNED_ORGANIZATION, owner_user_id);
   }
 
   async updateStripeCustomerId(

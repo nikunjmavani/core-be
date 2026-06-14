@@ -74,6 +74,8 @@ describe('OrganizationService', () => {
     markDeletionStarted: vi.fn().mockResolvedValue(organizationRow),
     resolveUserIdByPublicId: vi.fn().mockResolvedValue(10),
     countActiveOwnedByUser: vi.fn().mockResolvedValue(0),
+    // audit-#8: per-owner owned-organization quota advisory lock (no-op in unit tests).
+    acquireOwnedOrganizationQuotaLock: vi.fn().mockResolvedValue(undefined),
     updateOwner: vi.fn().mockResolvedValue(organizationRow),
     updateStripeCustomerId: vi.fn().mockResolvedValue(undefined),
     userHasActiveMembership: vi.fn().mockResolvedValue(true),

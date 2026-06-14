@@ -66,6 +66,8 @@ describe('WebhookService.create — per-organization cap (sec-N4)', () => {
   const webhookRepository = {
     create: vi.fn().mockResolvedValue(webhook),
     countActiveByOrganization: vi.fn().mockResolvedValue(0),
+    // audit-#8: per-org creation quota advisory lock (no-op in unit tests).
+    acquireCreationQuotaLock: vi.fn().mockResolvedValue(undefined),
   } as unknown as WebhookRepository;
 
   const deliveryAttemptRepository = {} as unknown as WebhookDeliveryAttemptRepository;

@@ -155,11 +155,10 @@ export class WebhookService {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
       // sec-N4: enforce the per-organization webhook cap before insert. Race-
-      // safe enough for a stability cap (the per-route rate limit bounds
-      // concurrency); intentionally not a DB constraint because the failure
-      // mode of two parallel inserts both passing at N-1 is "one extra row,"
-      // not security-critical. A future hardening could add a partial
-      // composite unique to make this transactional.
+      // audit-#8: serialize the per-org count + insert with a transaction-scoped advisory lock
+      // so concurrent creates cannot both pass the same count and overshoot WEBHOOK_MAX_PER_ORG.
+      // The lock auto-releases at commit.
+      await this.webhookRepository.acquireCreationQuotaLock(organization.id);
       const activeCount = await this.webhookRepository.countActiveByOrganization(organization.id);
       if (activeCount >= env.WEBHOOK_MAX_PER_ORG) {
         throw new ConflictError('errors:webhookMaxReached', {
@@ -201,26 +200,14 @@ export class WebhookService {
       const organization =
         await this.organizationService.requireOrganizationByPublicId(organization_public_id);
 
-      // route-audit: rotating the signing secret AGAIN while a PRIOR rotation is still inside its
-      // dual-sign overlap window would overwrite `encrypted_secret_previous` with the CURRENT secret,
-      // evicting the still-valid OLD secret — receivers not yet migrated to the most recent key would
-      // start failing signature verification, defeating the whole point of zero-downtime rotation.
-      // There is only one previous-secret slot, so refuse a re-rotation until the window elapses.
       const overlapWindowMs = env.WEBHOOK_SECRET_ROTATION_OVERLAP_HOURS * 60 * 60 * 1000;
-      if (parsed.secret !== undefined) {
-        const current = await this.webhookRepository.findByPublicId(
+      const rotatingSecret = parsed.secret !== undefined;
+      if (rotatingSecret) {
+        await this.assertSecretRotationEligible(
           webhook_public_id,
           organization.id,
+          overlapWindowMs,
         );
-        if (!current) throw new NotFoundError('Webhook');
-        const rotatedAtMs = current.secret_rotated_at
-          ? new Date(current.secret_rotated_at).getTime()
-          : null;
-        if (rotatedAtMs !== null && Date.now() < rotatedAtMs + overlapWindowMs) {
-          throw new ConflictError('errors:webhookSecretRotationTooSoon', {
-            retryAfter: new Date(rotatedAtMs + overlapWindowMs).toISOString(),
-          });
-        }
       }
 
       const userId =
@@ -229,15 +216,15 @@ export class WebhookService {
         url: parsed.url,
         events: parsed.events,
         is_enabled: parsed.is_enabled,
-        encrypted_secret:
-          parsed.secret !== undefined ? encryptFieldSecret(parsed.secret) : undefined,
+        encrypted_secret: rotatingSecret ? encryptFieldSecret(parsed.secret!) : undefined,
       });
-      // audit-#9: the eligibility cutoff is also enforced in the repository UPDATE predicate so a
+      // audit-#9: the eligibility cutoff is ALSO enforced in the repository UPDATE predicate so a
       // rotation that slipped past the pre-check above (concurrent rotation) cannot clobber the
       // single previous-secret slot. `now - overlapWindow`: a row is eligible only when its last
       // rotation is null or older than the overlap window.
-      const secretRotationOverlapCutoff =
-        parsed.secret !== undefined ? new Date(Date.now() - overlapWindowMs) : undefined;
+      const secretRotationOverlapCutoff = rotatingSecret
+        ? new Date(Date.now() - overlapWindowMs)
+        : undefined;
       let updated: Awaited<ReturnType<WebhookRepository['update']>>;
       try {
         updated = await this.webhookRepository.update(
@@ -259,30 +246,68 @@ export class WebhookService {
         throw error;
       }
       if (!updated) {
-        // audit-#9: when rotating, a null update means either the webhook is gone (404) OR a
-        // concurrent rotation won the eligibility predicate (409). Re-read to disambiguate so a
-        // race loser gets a retryable 409 with the correct retry-after rather than a misleading 404.
-        if (parsed.secret !== undefined) {
-          const winner = await this.webhookRepository.findByPublicId(
-            webhook_public_id,
-            organization.id,
-          );
-          if (winner) {
-            const winnerRotatedAtMs = winner.secret_rotated_at
-              ? new Date(winner.secret_rotated_at).getTime()
-              : Date.now();
-            throw new ConflictError('errors:webhookSecretRotationTooSoon', {
-              retryAfter: new Date(winnerRotatedAtMs + overlapWindowMs).toISOString(),
-            });
-          }
-        }
-        throw new NotFoundError('Webhook');
+        throw await this.buildUnmatchedWebhookUpdateError(
+          webhook_public_id,
+          organization.id,
+          rotatingSecret,
+          overlapWindowMs,
+        );
       }
       // Best-effort: drop any cached breaker so a URL/secret change does not reuse stale state.
       // Cross-process delivery workers fall back to the breaker cache's idle TTL.
       invalidateWebhookOutboundCircuit(updated.id);
       return WebhookSerializer.one(updated);
     });
+  }
+
+  /**
+   * Pre-check (route-audit) that refuses re-rotating the signing secret while a prior rotation is
+   * still inside its dual-sign overlap window — re-rotating would overwrite the single
+   * `encrypted_secret_previous` slot and evict the still-valid old secret, breaking zero-downtime
+   * rotation. The same cutoff is enforced atomically in the repository UPDATE predicate (audit-#9);
+   * this pre-check just yields a clear 409 with a retry-after on the common (non-racing) path.
+   */
+  private async assertSecretRotationEligible(
+    webhook_public_id: string,
+    organizationId: number,
+    overlapWindowMs: number,
+  ): Promise<void> {
+    const current = await this.webhookRepository.findByPublicId(webhook_public_id, organizationId);
+    if (!current) throw new NotFoundError('Webhook');
+    const rotatedAtMs = current.secret_rotated_at
+      ? new Date(current.secret_rotated_at).getTime()
+      : null;
+    if (rotatedAtMs !== null && Date.now() < rotatedAtMs + overlapWindowMs) {
+      throw new ConflictError('errors:webhookSecretRotationTooSoon', {
+        retryAfter: new Date(rotatedAtMs + overlapWindowMs).toISOString(),
+      });
+    }
+  }
+
+  /**
+   * Maps a zero-row webhook UPDATE to the right error (audit-#9). When rotating, a null result can
+   * mean the webhook is gone (404) OR a concurrent rotation won the eligibility predicate (409); we
+   * re-read to disambiguate so a race loser gets a retryable 409 with the correct retry-after rather
+   * than a misleading 404. Returns the error for the caller to `throw`.
+   */
+  private async buildUnmatchedWebhookUpdateError(
+    webhook_public_id: string,
+    organizationId: number,
+    rotatingSecret: boolean,
+    overlapWindowMs: number,
+  ): Promise<ConflictError | NotFoundError> {
+    if (rotatingSecret) {
+      const winner = await this.webhookRepository.findByPublicId(webhook_public_id, organizationId);
+      if (winner) {
+        const winnerRotatedAtMs = winner.secret_rotated_at
+          ? new Date(winner.secret_rotated_at).getTime()
+          : Date.now();
+        return new ConflictError('errors:webhookSecretRotationTooSoon', {
+          retryAfter: new Date(winnerRotatedAtMs + overlapWindowMs).toISOString(),
+        });
+      }
+    }
+    return new NotFoundError('Webhook');
   }
 
   async delete(organization_public_id: string, webhook_public_id: string) {

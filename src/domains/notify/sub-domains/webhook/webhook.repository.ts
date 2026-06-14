@@ -5,6 +5,10 @@ import { DEFAULT_REPOSITORY_LIST_LIMIT } from '@/shared/constants/query-limits.c
 import { webhooks } from '@/domains/notify/sub-domains/webhook/webhook.schema.js';
 import { generatePublicId } from '@/shared/utils/identity/public-id.util.js';
 import { runInsertWithPublicIdentifierRetry } from '@/shared/utils/infrastructure/postgres-error.util.js';
+import {
+  RESOURCE_QUOTA_LOCK_NAMESPACE,
+  acquireResourceQuotaLock,
+} from '@/infrastructure/database/resource-quota-lock.util.js';
 import type { WebhookCreateData, WebhookUpdateData } from './webhook.types.js';
 import {
   buildAscendingCreatedAtIdCursorCondition,
@@ -97,6 +101,16 @@ export class WebhookRepository {
       .from(webhooks)
       .where(and(eq(webhooks.organization_id, organization_id), isNull(webhooks.deleted_at)));
     return Number(rows[0]?.count ?? 0);
+  }
+
+  /**
+   * audit-#8: transaction-scoped advisory lock serializing the per-org webhook creation quota
+   * check + insert so concurrent creates cannot both pass the count and overshoot
+   * `WEBHOOK_MAX_PER_ORG`. Call inside the create transaction before
+   * {@link countActiveByOrganization}.
+   */
+  async acquireCreationQuotaLock(organization_id: number): Promise<void> {
+    await acquireResourceQuotaLock(RESOURCE_QUOTA_LOCK_NAMESPACE.WEBHOOK, organization_id);
   }
 
   async listEnabledSubscribedToEvent(
