@@ -205,8 +205,10 @@ Table auth.sessions {
   is_revoked boolean [not null]
   last_active_at timestamptz [not null]
   organization_id bigint
+  previous_refresh_token_hash varchar(64)
   public_id varchar(28) [not null, unique]
   refresh_token_hash varchar(64)
+  refresh_token_rotated_at timestamptz
   token_hash varchar(64) [not null, unique]
   user_agent text
   user_id bigint [not null]
