@@ -9,7 +9,7 @@ import { stripeWebhookRoutes } from './sub-domains/stripe-webhook/stripe-webhook
  */
 export const billingRoutesPlugin: FastifyPluginAsync = async (app) => {
   const { billingDomain } = app;
-  await app.register(stripeWebhookRoutes());
+  await app.register(stripeWebhookRoutes(billingDomain.stripeWebhookService));
   await app.register(planRoutes(billingDomain.planService));
   await app.register(subscriptionRoutes(billingDomain.subscriptionService));
 };

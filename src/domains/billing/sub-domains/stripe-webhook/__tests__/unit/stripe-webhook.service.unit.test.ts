@@ -7,6 +7,14 @@ import type { SubscriptionService } from '@/domains/billing/sub-domains/subscrip
 import type { StripeWebhookEventRepository } from '@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-event.repository.js';
 import type { PlanRepository } from '@/domains/billing/sub-domains/plan/plan.repository.js';
 
+const queueMocks = vi.hoisted(() => ({
+  enqueueStripeWebhook: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/domains/billing/sub-domains/stripe-webhook/queues/stripe-webhook.queue.js', () => ({
+  enqueueStripeWebhook: queueMocks.enqueueStripeWebhook,
+}));
+
 vi.mock('@/domains/billing/sub-domains/stripe-webhook/stripe-webhook-organization.util.js', () => ({
   runStripeWebhookHandlerWithOrganizationContext: vi.fn(
     async (
@@ -704,5 +712,90 @@ describe('StripeWebhookService', () => {
         'stripe.webhook.mark_failed.no_row',
       );
     });
+  });
+});
+
+describe('StripeWebhookService.ingestEvent', () => {
+  const tryClaimEvent = vi.fn();
+  const repository = { tryClaimEvent } as unknown as StripeWebhookEventRepository;
+  const service = new StripeWebhookService(
+    {} as SubscriptionService,
+    repository,
+    {} as PlanRepository,
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tryClaimEvent.mockResolvedValue('claimed');
+    queueMocks.enqueueStripeWebhook.mockResolvedValue(undefined);
+  });
+
+  function buildIngressEvent(overrides: Record<string, unknown> = {}): Stripe.Event {
+    return {
+      id: 'evt_ingress',
+      type: 'customer.subscription.updated',
+      created: 1_750_000_000,
+      ...overrides,
+    } as unknown as Stripe.Event;
+  }
+
+  it('claims durably to Postgres FIRST, then enqueues to BullMQ (ordering invariant)', async () => {
+    // sec-B finding #6: the ledger row is the durability commit; it MUST land before the BullMQ
+    // enqueue so a Redis-side loss between ingress and worker pickup cannot drop the event.
+    const event = buildIngressEvent({ id: 'evt_1' });
+    const result = await service.ingestEvent(event, { requestId: 'req-1' });
+
+    expect(tryClaimEvent).toHaveBeenCalledWith({
+      stripe_event_id: 'evt_1',
+      event_type: 'customer.subscription.updated',
+      stripe_created_at: new Date(1_750_000_000 * 1000),
+      request_id: 'req-1',
+    });
+    expect(queueMocks.enqueueStripeWebhook).toHaveBeenCalledWith(event, 'req-1');
+    expect(tryClaimEvent.mock.invocationCallOrder[0]!).toBeLessThan(
+      queueMocks.enqueueStripeWebhook.mock.invocationCallOrder[0]!,
+    );
+    expect(result).toBe('claimed');
+  });
+
+  it('enqueues when a previously failed/stuck row is reclaimed', async () => {
+    tryClaimEvent.mockResolvedValueOnce('reclaimed');
+    await service.ingestEvent(buildIngressEvent({ id: 'evt_reclaimed' }), { requestId: 'req-2' });
+    expect(queueMocks.enqueueStripeWebhook).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the enqueue when the event is already processed (processed_duplicate)', async () => {
+    tryClaimEvent.mockResolvedValueOnce('processed_duplicate');
+    const result = await service.ingestEvent(buildIngressEvent({ id: 'evt_dup' }), {
+      requestId: 'req-3',
+    });
+    expect(queueMocks.enqueueStripeWebhook).not.toHaveBeenCalled();
+    expect(result).toBe('processed_duplicate');
+  });
+
+  it('skips the enqueue when another worker is still processing within the lease', async () => {
+    tryClaimEvent.mockResolvedValueOnce('still_processing_within_lease');
+    await service.ingestEvent(buildIngressEvent({ id: 'evt_inflight' }), { requestId: 'req-4' });
+    expect(queueMocks.enqueueStripeWebhook).not.toHaveBeenCalled();
+  });
+
+  it('rethrows enqueue failures so Stripe retries the delivery (no swallowing)', async () => {
+    queueMocks.enqueueStripeWebhook.mockRejectedValueOnce(new Error('redis unavailable'));
+    await expect(
+      service.ingestEvent(buildIngressEvent({ id: 'evt_fail' }), { requestId: 'req-5' }),
+    ).rejects.toThrow('redis unavailable');
+  });
+
+  it('forwards the request id to the queue helper for replay correlation', async () => {
+    const event = buildIngressEvent({ id: 'evt_corr' });
+    await service.ingestEvent(event, { requestId: 'correlate-me' });
+    expect(queueMocks.enqueueStripeWebhook).toHaveBeenCalledWith(event, 'correlate-me');
+  });
+
+  it('passes the verified event through to the queue without mutation', async () => {
+    const event = buildIngressEvent({ id: 'evt_identity', type: 'customer.subscription.deleted' });
+    await service.ingestEvent(event, { requestId: 'req-6' });
+    const [passedEvent] = queueMocks.enqueueStripeWebhook.mock.calls[0]!;
+    expect(passedEvent).toBe(event);
   });
 });
