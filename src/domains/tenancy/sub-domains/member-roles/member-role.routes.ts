@@ -82,6 +82,8 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
     zodApplication.patch<{ Params: { role_id: string } }>(
       '/organization/roles/:role_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE)],
         schema: {
@@ -97,6 +99,8 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
     zodApplication.delete<{ Params: { role_id: string } }>(
       '/organization/roles/:role_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE)],
         schema: {
@@ -126,6 +130,8 @@ export function memberRoleRoutes(deps: MemberRoleRoutesDeps): FastifyPluginAsync
     zodApplication.put<{ Params: { role_id: string } }>(
       '/organization/roles/:role_id/permissions',
       {
+        // R4: org-scoped admin mutation (full permission-set replace) — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.ROLE_MANAGE)],
         schema: {

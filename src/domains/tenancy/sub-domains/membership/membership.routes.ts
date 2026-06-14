@@ -94,7 +94,9 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     zodApplication.post(
       '/organization/memberships',
       {
-        config: { idempotencyRequired: true },
+        // R4: org-scoped admin mutation — cap per (org, actor) alongside the
+        // required idempotency key. Mirrors the invitation-create pattern.
+        config: { ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT.config, idempotencyRequired: true },
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)],
         schema: {
@@ -110,6 +112,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     zodApplication.patch<{ Params: { membership_id: string } }>(
       '/organization/memberships/:membership_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)],
         schema: {
@@ -125,6 +129,8 @@ export function membershipRoutes(deps: MembershipRoutesDeps): FastifyPluginAsync
     zodApplication.delete<{ Params: { membership_id: string } }>(
       '/organization/memberships/:membership_id',
       {
+        // R4: org-scoped admin mutation — cap per (org, actor).
+        ...ORGANIZATION_SCOPED_AUTHED_RATE_LIMIT,
         onRequest: [app.authenticate],
         preHandler: [requireOrganizationPermission(TENANCY_PERMISSIONS.MEMBERSHIP_MANAGE)],
         schema: {
