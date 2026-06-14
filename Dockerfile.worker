@@ -56,7 +56,11 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN apk upgrade --no-cache
+# Refresh the apk index before upgrading so published security patches actually
+# install: the pinned alpine base ships a stale cached index, so a bare `apk upgrade`
+# can miss already-fixed CVEs (e.g. openssl CVE-2026-45447). `apk update` pulls the
+# current index first so the upgrade picks up the patched packages.
+RUN apk update && apk upgrade --no-cache
 
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
