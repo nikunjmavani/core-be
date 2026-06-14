@@ -47,6 +47,16 @@ type/ticket-description
 - fix/API-205-login-error
 - refactor/SYS-88-clean-architecture
 
+### Accepted type prefixes (enforced)
+
+`feature` · `feat` · `fix` · `hotfix` · `refactor` · `docs` · `test` · `chore` · `ci` · `perf` · `build` · `style` · `revert` (`feat` and `feature` are both accepted; the set mirrors the conventional-commit types).
+
+[`.husky/pre-push`](../../.husky/pre-push) rejects any branch whose name is not `dev`, `main`, `claude/*`, or `<type>/<description>` using a type above. Bypass a single push with `SKIP_BRANCH_CHECK=1 git push` (prefer renaming the branch instead). Canonical AI rule: [`agent-os/rules/git-branch-naming.mdc`](../../agent-os/rules/git-branch-naming.mdc).
+
+### AI / automation branches (`claude/*`)
+
+Claude Code **web/cloud** sessions run on a platform-assigned `claude/<slug>` branch (e.g. `claude/vigilant-hopper-cbl23b`) — **not** a `feature/`/`fix/` branch. The name is created by the platform **before** the sandbox starts, and the cloud git proxy restricts each session to pushing only that working branch, so repo skills, rules, and hooks cannot rename it. `claude/*` is therefore allowlisted by the pre-push policy by design (blocking it would break every web session's push). To land that work under a `feature/`/`fix/` name, rename at the PR/merge layer or teleport the session to a local checkout — do not switch branches from inside the session without explicit permission.
+
 ---
 
 ## Full workflow: merge flow

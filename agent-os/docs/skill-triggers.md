@@ -20,7 +20,7 @@ Skills live in [`agent-os/skills/`](../skills/).
 | `docs/**/*.md` | docs-maintainer | |
 | `src/**/OVERVIEW.md` | overview-doc-maintainer | |
 | `src/OVERVIEW.md`, `src/PATTERNS.md`, `src/FLOWS.md`, `src/POLICIES.md` | system-narrative-maintainer | |
-| `biome.json`, `.husky/pre-commit` | code-quality-guard | |
+| `biome.json`, `.husky/pre-commit`, `.husky/pre-push` | code-quality-guard | Pre-push includes the branch-name policy (`agent-os/rules/git-branch-naming.mdc`) |
 | `package.json`, `pnpm-lock.yaml` | dependency-security | |
 | `src/tests/chaos/**` | chaos-test-maintainer | |
 | `src/tests/contract/**` | contract-test-maintainer | |
