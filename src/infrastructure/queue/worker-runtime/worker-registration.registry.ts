@@ -27,6 +27,10 @@ import { createUserTombstoneRetentionWorker } from '@/domains/user/workers/user-
 import { USER_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/user/workers/user-tombstone-retention.constants.js';
 import { createOffboardingReconcilerWorker } from '@/domains/user/workers/offboarding-reconciler.worker.js';
 import { OFFBOARDING_RECONCILER_QUEUE_NAME } from '@/domains/user/workers/offboarding-reconciler.constants.js';
+import { createUserOffboardingReconcileWorker } from '@/domains/user/workers/user-offboarding-reconcile.worker.js';
+import { USER_OFFBOARDING_RECONCILE_QUEUE_NAME } from '@/domains/user/workers/user-offboarding-reconcile.constants.js';
+import { createOrganizationOffboardingReconcileWorker } from '@/domains/tenancy/sub-domains/organization/workers/organization-offboarding-reconcile.worker.js';
+import { ORGANIZATION_OFFBOARDING_RECONCILE_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/workers/organization-offboarding-reconcile.constants.js';
 import { createOrganizationTombstoneRetentionWorker } from '@/domains/tenancy/sub-domains/organization/workers/organization-tombstone-retention.worker.js';
 import { ORGANIZATION_TOMBSTONE_RETENTION_QUEUE_NAME } from '@/domains/tenancy/sub-domains/organization/workers/organization-tombstone-retention.constants.js';
 import { createMembershipTombstoneRetentionWorker } from '@/domains/tenancy/sub-domains/membership/workers/membership-tombstone-retention.worker.js';
@@ -255,6 +259,22 @@ const WORKER_QUEUE_REGISTRATION_DEFINITIONS: WorkerQueueRegistrationDefinition[]
     family: 'retention',
     logLabel: 'notification retention worker',
     create: () => createNotificationRetentionWorker(),
+  }),
+  retentionDefinition({
+    queueName: USER_OFFBOARDING_RECONCILE_QUEUE_NAME,
+    family: 'retention',
+    logLabel: 'user offboarding reconcile worker',
+    create: (workerContainers) =>
+      createUserOffboardingReconcileWorker(workerContainers.userDomain.userService),
+  }),
+  retentionDefinition({
+    queueName: ORGANIZATION_OFFBOARDING_RECONCILE_QUEUE_NAME,
+    family: 'retention',
+    logLabel: 'organization offboarding reconcile worker',
+    create: (workerContainers) =>
+      createOrganizationOffboardingReconcileWorker(
+        workerContainers.tenancyDomain.organizationService,
+      ),
   }),
   retentionDefinition({
     queueName: STRIPE_WEBHOOK_EVENT_RETENTION_QUEUE_NAME,

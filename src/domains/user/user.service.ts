@@ -460,6 +460,25 @@ export class UserService {
     await this.softDeleteUserWithOffboarding(publicId);
   }
 
+  /**
+   * Re-drives a STUCK user offboarding (USER-04 / USER-09 reconciler entry point).
+   *
+   * @remarks
+   * - **Algorithm:** delegates to the same idempotent `softDeleteUserWithOffboarding`
+   *   sequence used by self/admin delete; `deletion_started_at` makes every step
+   *   safe to re-run, so a partial offboarding resumes from where it stalled.
+   * - **Failure modes:** propagates so the reconciler can count + alert and retry on
+   *   the next tick.
+   * - **Side effects:** same as the original offboarding (session/credential revoke,
+   *   upload/export purge, soft-delete, S3 avatar cleanup).
+   * - **Notes:** deliberately skips the admin-entry `assertTargetNotProtectedAdmin`
+   *   guard — the offboarding has ALREADY been authorized and started; this only
+   *   completes it.
+   */
+  async resumeOffboarding(public_id: string): Promise<void> {
+    await this.softDeleteUserWithOffboarding(public_id);
+  }
+
   async uploadAvatar(publicId: string, body: unknown): Promise<UserOutput> {
     const { avatarKey } = validateUploadAvatar(body);
     await this.assertAvatarObjectInStorage(avatarKey, publicId);

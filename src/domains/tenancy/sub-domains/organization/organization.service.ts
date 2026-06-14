@@ -483,6 +483,25 @@ export class OrganizationService {
     });
   }
 
+  /**
+   * Re-drives a STUCK organization offboarding (TEN-06 reconciler entry point).
+   *
+   * @remarks
+   * - **Algorithm:** delegates to the idempotent {@link OrganizationService.delete}
+   *   sequence; `deletion_started_at` makes each step safe to re-run, so a partial
+   *   offboarding resumes (logo/upload cleanup, subscription cancel, soft-delete,
+   *   permission-cache purge) and completes.
+   * - **Failure modes:** propagates so the reconciler can count + alert and retry on
+   *   the next tick; a PERSONAL org (never deletable standalone, and excluded by the
+   *   reconciler scan) would surface `ConflictError`.
+   * - **Side effects:** same as `delete`.
+   * - **Notes:** thin alias kept distinct from `delete` so the reconciler's intent is
+   *   explicit at the call site.
+   */
+  async resumeOffboarding(public_id: string): Promise<void> {
+    await this.delete(public_id);
+  }
+
   async delete(public_id: string): Promise<void> {
     const organization = await withOrganizationDatabaseContext(public_id, async () => {
       const found = await this.repository.findByPublicId(public_id);

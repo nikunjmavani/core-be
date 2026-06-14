@@ -684,6 +684,7 @@ src/
     │   │   │   │   ├── integration/
     │   │   │   │   │   └── organization.integration.test.ts
     │   │   │   │   └── unit/
+    │   │   │   │   │   ├── organization-offboarding-reconcile.processor.unit.test.ts
     │   │   │   │   │   ├── organization-routes-rate-limit.policy.unit.test.ts
     │   │   │   │   │   ├── organization-tombstone-retention.processor.boundary.unit.test.ts
     │   │   │   │   │   ├── organization-tombstone-retention.worker.unit.test.ts
@@ -770,6 +771,9 @@ src/
     │   │   │   │   ├── organization-settings.types.ts
     │   │   │   │   └── organization-settings.validator.ts
     │   │   │   ├── workers/
+    │   │   │   │   ├── organization-offboarding-reconcile.constants.ts
+    │   │   │   │   ├── organization-offboarding-reconcile.processor.ts
+    │   │   │   │   ├── organization-offboarding-reconcile.worker.ts
     │   │   │   │   ├── organization-tombstone-retention.constants.ts
     │   │   │   │   ├── organization-tombstone-retention.processor.ts
     │   │   │   │   └── organization-tombstone-retention.worker.ts
@@ -880,6 +884,7 @@ src/
     │   │   │   │   └── worker/
     │   │   │   │   │   └── user-tombstone-retention.worker.unit.test.ts
     │   │   │   ├── tombstone-repository-reads.unit.test.ts
+    │   │   │   ├── user-offboarding-reconcile.processor.unit.test.ts
     │   │   │   ├── user-routes-rate-limit.policy.unit.test.ts
     │   │   │   ├── user.controller.admin-audit.unit.test.ts
     │   │   │   ├── user.controller.unit.test.ts
@@ -985,6 +990,9 @@ src/
     │   │   ├── offboarding-reconciler.constants.ts
     │   │   ├── offboarding-reconciler.processor.ts
     │   │   ├── offboarding-reconciler.worker.ts
+    │   │   ├── user-offboarding-reconcile.constants.ts
+    │   │   ├── user-offboarding-reconcile.processor.ts
+    │   │   ├── user-offboarding-reconcile.worker.ts
     │   │   ├── user-tombstone-retention.constants.ts
     │   │   ├── user-tombstone-retention.processor.ts
     │   │   └── user-tombstone-retention.worker.ts
