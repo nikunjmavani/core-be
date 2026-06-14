@@ -8,7 +8,11 @@ import { logger } from '@/shared/utils/infrastructure/logger.util.js';
 import { captureMessage } from '@/infrastructure/observability/sentry/sentry.js';
 import { omitUndefined } from '@/shared/utils/validation/omit-undefined.util.js';
 import type { PlanRepository } from '@/domains/billing/sub-domains/plan/plan.repository.js';
-import type { StripeWebhookEventRepository } from './stripe-webhook-event.repository.js';
+import type {
+  StripeWebhookEventClaimResult,
+  StripeWebhookEventRepository,
+} from './stripe-webhook-event.repository.js';
+import { enqueueStripeWebhook } from './queues/stripe-webhook.queue.js';
 import { runStripeWebhookHandlerWithOrganizationContext } from './stripe-webhook-organization.util.js';
 import { withSystemTableWorkerContext } from '@/infrastructure/database/contexts/worker-database.context.js';
 
@@ -80,6 +84,48 @@ export class StripeWebhookService {
      */
     private readonly planRepository: PlanRepository,
   ) {}
+
+  /**
+   * HTTP-ingress durability commit for a verified Stripe event. Persists the event to the
+   * Postgres ledger via {@link StripeWebhookEventRepository.tryClaimEvent} BEFORE the caller
+   * ACKs Stripe (sec-B finding #6), then enqueues asynchronous BullMQ processing — but only
+   * when the ledger transition was `claimed` or `reclaimed`. Returns the claim result.
+   *
+   * @remarks
+   * - **Algorithm:** claims the event id under {@link withSystemTableWorkerContext} (no org GUC),
+   *   then enqueues on `claimed`/`reclaimed`. `processed_duplicate` (already terminal) and
+   *   `still_processing_within_lease` (an in-flight worker will finish) skip the enqueue and log.
+   * - **Failure modes:** an enqueue failure propagates so the caller returns non-2xx and Stripe
+   *   retries the delivery; the ledger row is already durable, and the reclaim cron re-enqueues
+   *   stuck rows if the enqueue was lost.
+   * - **Side effects:** writes `billing.stripe_webhook_events`; enqueues a `stripe-webhook` job.
+   */
+  async ingestEvent(
+    event: Stripe.Event,
+    context?: { requestId?: string },
+  ): Promise<StripeWebhookEventClaimResult> {
+    const claimResult = await withSystemTableWorkerContext(() =>
+      this.stripeWebhookEventRepository.tryClaimEvent(
+        omitUndefined({
+          stripe_event_id: event.id,
+          event_type: event.type,
+          stripe_created_at: new Date(event.created * 1000),
+          request_id: context?.requestId,
+        }),
+      ),
+    );
+
+    if (claimResult === 'claimed' || claimResult === 'reclaimed') {
+      await enqueueStripeWebhook(event, context?.requestId);
+    } else {
+      logger.info(
+        { stripeEventId: event.id, eventType: event.type, claimResult },
+        'stripe.webhook.ingress.skip_enqueue',
+      );
+    }
+
+    return claimResult;
+  }
 
   /**
    * Dispatch a Stripe event to the appropriate handler (idempotent by event id).

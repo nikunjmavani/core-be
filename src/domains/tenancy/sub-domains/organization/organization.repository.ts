@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { databaseNowTimestamp } from '@/shared/utils/infrastructure/database-timestamp.util.js';
 import { getRequestDatabase } from '@/infrastructure/database/contexts/request-database.context.js';
 import { organizations } from '@/domains/tenancy/sub-domains/organization/organization.schema.js';
@@ -196,6 +196,155 @@ export class OrganizationRepository extends BaseRepository {
       )
       .limit(1);
     return rows.length > 0;
+  }
+
+  /**
+   * Resolve the login-default organization `public_id` for a user: the PERSONAL organization
+   * first (when {@link includePersonalOrganizations}), otherwise the most-recently-joined ACTIVE
+   * TEAM membership. Returns `null` when the user has no eligible active membership. One indexed
+   * memberships → organizations join, ordered personal-first then most-recent join.
+   */
+  async findDefaultActiveOrganizationPublicId(
+    user_id: number,
+    includePersonalOrganizations: boolean,
+  ): Promise<string | null> {
+    const rows = await getRequestDatabase()
+      .select({ public_id: organizations.public_id })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
+      .where(
+        and(
+          eq(memberships.user_id, user_id),
+          eq(memberships.status, 'ACTIVE'),
+          isNull(organizations.deleted_at),
+          eq(organizations.status, 'ACTIVE'),
+          includePersonalOrganizations ? undefined : sql`${organizations.type} <> 'PERSONAL'`,
+        ),
+      )
+      .orderBy(desc(sql`(${organizations.type} = 'PERSONAL')`), desc(memberships.joined_at))
+      .limit(1);
+    return rows[0]?.public_id ?? null;
+  }
+
+  /**
+   * Confirm the user holds an ACTIVE membership in the given (active, non-deleted) organization and
+   * return its `public_id`, or `null` when the membership does not exist — the gate for
+   * `switch-to-organization`. Constrained to the caller's own `user_id`.
+   */
+  async findActiveMembershipOrganizationPublicId(
+    user_id: number,
+    organization_public_id: string,
+  ): Promise<string | null> {
+    const rows = await getRequestDatabase()
+      .select({ public_id: organizations.public_id })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
+      .where(
+        and(
+          eq(memberships.user_id, user_id),
+          eq(memberships.status, 'ACTIVE'),
+          eq(organizations.public_id, organization_public_id),
+          isNull(organizations.deleted_at),
+          eq(organizations.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.public_id ?? null;
+  }
+
+  /**
+   * Resolve the user's own PERSONAL organization `public_id` — the `switch-to-personal` target —
+   * or `null` when the user has no personal organization. Constrained to `owner_user_id`.
+   */
+  async findPersonalOrganizationPublicId(owner_user_id: number): Promise<string | null> {
+    const rows = await getRequestDatabase()
+      .select({ public_id: organizations.public_id })
+      .from(organizations)
+      .where(
+        and(
+          eq(organizations.owner_user_id, owner_user_id),
+          eq(organizations.type, 'PERSONAL'),
+          isNull(organizations.deleted_at),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.public_id ?? null;
+  }
+
+  /**
+   * Confirm the user holds an ACTIVE membership in the given (active, non-deleted) organization
+   * and return both its internal `id` and `public_id`, or `null` when no such active membership
+   * exists. Used when the caller needs the internal id (e.g. persisting it on the session row at
+   * switch time — audit-#3). Constrained to the caller's own `user_id`.
+   */
+  async findActiveMembershipOrganizationByPublicId(
+    user_id: number,
+    organization_public_id: string,
+  ): Promise<{ id: number; public_id: string } | null> {
+    const rows = await getRequestDatabase()
+      .select({ id: organizations.id, public_id: organizations.public_id })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
+      .where(
+        and(
+          eq(memberships.user_id, user_id),
+          eq(memberships.status, 'ACTIVE'),
+          eq(organizations.public_id, organization_public_id),
+          isNull(organizations.deleted_at),
+          eq(organizations.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Confirm the user holds an ACTIVE membership in the organization identified by its internal
+   * `id` and return the org's `public_id`, or `null` — refresh-time revalidation of the org
+   * persisted on a session (audit-#3). Constrained to the caller's own `user_id`.
+   */
+  async findActiveMembershipOrganizationPublicIdByInternalId(
+    user_id: number,
+    organization_id: number,
+  ): Promise<string | null> {
+    const rows = await getRequestDatabase()
+      .select({ public_id: organizations.public_id })
+      .from(memberships)
+      .innerJoin(organizations, eq(organizations.id, memberships.organization_id))
+      .where(
+        and(
+          eq(memberships.user_id, user_id),
+          eq(memberships.status, 'ACTIVE'),
+          eq(organizations.id, organization_id),
+          isNull(organizations.deleted_at),
+          eq(organizations.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.public_id ?? null;
+  }
+
+  /**
+   * Resolve the user's own PERSONAL organization `id` and `public_id` — the `switch-to-personal`
+   * target — or `null` when the user has no personal organization. Returns both identifiers so
+   * callers that need to persist the internal id on the session row (audit-#3) avoid a second
+   * query. Constrained to `owner_user_id`.
+   */
+  async findPersonalOrganization(
+    owner_user_id: number,
+  ): Promise<{ id: number; public_id: string } | null> {
+    const rows = await getRequestDatabase()
+      .select({ id: organizations.id, public_id: organizations.public_id })
+      .from(organizations)
+      .where(
+        and(
+          eq(organizations.owner_user_id, owner_user_id),
+          eq(organizations.type, 'PERSONAL'),
+          isNull(organizations.deleted_at),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
   }
 
   async create(data: {

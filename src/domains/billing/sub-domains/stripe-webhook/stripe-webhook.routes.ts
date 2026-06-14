@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { WEBHOOK_RATE_LIMIT } from '@/shared/middlewares/rate-limit/rate-limit-presets.constants.js';
 import { applyDeprecatedEndpointHeaders } from '@/shared/utils/http/api-versioning.util.js';
 import { createStripeWebhookController } from './stripe-webhook.controller.js';
+import type { StripeWebhookService } from './stripe-webhook.service.js';
 import { stripeWebhookIngressPlugin } from './stripe-webhook-ingress.plugin.js';
 import { registerStripeWebhookRawBodyRoute } from './stripe-webhook-raw-body.registry.js';
 
@@ -31,8 +32,10 @@ import { registerStripeWebhookRawBodyRoute } from './stripe-webhook-raw-body.reg
  * the duplicate route schema literal below (alias `app.register({ prefix: '/stripe' })`),
  * integration tests, k6 load scenarios, and Sentry transaction-name sampling.
  */
-export function stripeWebhookRoutes(): FastifyPluginAsync {
-  const controller = createStripeWebhookController();
+export function stripeWebhookRoutes(
+  stripeWebhookService: StripeWebhookService,
+): FastifyPluginAsync {
+  const controller = createStripeWebhookController(stripeWebhookService);
 
   return async (app) => {
     const zodApplication = app.withTypeProvider<ZodTypeProvider>();
