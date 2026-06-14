@@ -979,6 +979,12 @@ src/
     │   │   │   ├── user-settings.types.ts
     │   │   │   └── user-settings.validator.ts
     │   ├── workers/
+    │   │   ├── __tests__/
+    │   │   │   └── unit/
+    │   │   │   │   └── offboarding-reconciler.processor.db.unit.test.ts
+    │   │   ├── offboarding-reconciler.constants.ts
+    │   │   ├── offboarding-reconciler.processor.ts
+    │   │   ├── offboarding-reconciler.worker.ts
     │   │   ├── user-tombstone-retention.constants.ts
     │   │   ├── user-tombstone-retention.processor.ts
     │   │   └── user-tombstone-retention.worker.ts

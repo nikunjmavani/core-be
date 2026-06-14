@@ -497,6 +497,8 @@ const envSchemaBase = z.object({
   WEBHOOK_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   ORGANIZATION_NOTIFICATION_POLICY_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   USER_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
+  /** audit-#15: cron for the stuck-offboarding detection/alert reconciler (default hourly). */
+  OFFBOARDING_RECONCILER_CRON: z.string().min(1).optional(),
   ORGANIZATION_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   MEMBERSHIP_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
   MEMBER_ROLE_TOMBSTONE_RETENTION_CRON: z.string().min(1).optional(),
