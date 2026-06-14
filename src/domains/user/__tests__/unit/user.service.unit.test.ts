@@ -151,11 +151,14 @@ describe('UserService', () => {
     expect(repository.update).toHaveBeenCalled();
   });
 
-  it('uploadAvatar validates storage key and updates avatar', async () => {
+  it('uploadAvatar stores the key and returns a signed read URL (USER-10)', async () => {
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
     vi.mocked(repository.update).mockResolvedValue({ ...userRow, avatar_url: avatarKey } as never);
     const result = await service.uploadAvatar(userRow.public_id, { avatarKey });
-    expect(result.avatar_url).toBe(avatarKey);
+    // The raw object KEY is persisted…
+    expect(repository.update).toHaveBeenCalledWith(userRow.public_id, { avatar_url: avatarKey });
+    // …but the response carries a short-lived signed read URL, never the raw key.
+    expect(result.avatar_url).toBe('https://presigned.example/download');
   });
 
   it('uploadAvatar rejects keys outside avatars prefix', async () => {
@@ -354,11 +357,11 @@ describe('UserService', () => {
     );
   });
 
-  it('updateMe can set avatar from storage key', async () => {
+  it('updateMe can set avatar from storage key (stored as key, returned as signed URL)', async () => {
     const avatarKey = `avatars/${userRow.public_id}/avatar.png`;
     vi.mocked(repository.update).mockResolvedValue({ ...userRow, avatar_url: avatarKey } as never);
     const result = await service.updateMe(userRow.public_id, { avatarKey, first_name: 'New' });
-    expect(result.avatar_url).toBe(avatarKey);
+    expect(result.avatar_url).toBe('https://presigned.example/download');
   });
 
   it('updateMe throws when repository update returns null', async () => {

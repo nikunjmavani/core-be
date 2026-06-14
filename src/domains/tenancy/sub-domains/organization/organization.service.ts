@@ -25,6 +25,7 @@ import {
   validateUploadLogo,
 } from './organization.validator.js';
 import { serializeOrganization } from './organization.serializer.js';
+import { resolveStoredMediaReadUrl } from '@/shared/utils/infrastructure/media-url.util.js';
 import { provisionOrganizationWithOwner } from './organization-provisioning.js';
 import { invalidateOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/permission-cache.service.js';
 import { buildOrganizationLogoKeyPrefix } from '@/domains/upload/upload.constants.js';
@@ -113,6 +114,23 @@ export class OrganizationService {
   ): void {
     this.offboardingDependencies = { uploadService, subscriptionService };
     this.offboardingUploadService = uploadService;
+  }
+
+  /**
+   * Serializes an organization row to {@link OrganizationOutput} with `logo_url`
+   * resolved to a short-lived signed read URL (TEN-07: private bucket +
+   * signed-on-read). The presign is a network-free local signature, so it is safe
+   * to call from within a database context. Legacy rows that stored an absolute
+   * public URL are returned as-is.
+   */
+  private async toOrganizationOutput(
+    row: Parameters<typeof serializeOrganization>[0],
+  ): Promise<OrganizationOutput> {
+    const serialized = serializeOrganization(row);
+    return {
+      ...serialized,
+      logo_url: await resolveStoredMediaReadUrl(this.objectStorage, row.logo_url),
+    };
   }
 
   private extractOrganizationLogoStorageKey(
@@ -317,7 +335,7 @@ export class OrganizationService {
         : await this.repository.findAllForUser(user_public_id, pagination);
       return {
         ...result,
-        items: result.items.map(serializeOrganization),
+        items: await Promise.all(result.items.map((row) => this.toOrganizationOutput(row))),
       };
     });
   }
@@ -331,7 +349,7 @@ export class OrganizationService {
       await this.assertUserCanAccessOrganization(user_public_id, public_id, global_role);
       const organization = await this.repository.findByPublicId(public_id);
       if (!organization) throw new NotFoundError('Organization');
-      return serializeOrganization(organization);
+      return this.toOrganizationOutput(organization);
     });
   }
 
@@ -348,7 +366,7 @@ export class OrganizationService {
         organization.public_id,
         global_role,
       );
-      return serializeOrganization(organization);
+      return this.toOrganizationOutput(organization);
     });
   }
 
@@ -406,7 +424,7 @@ export class OrganizationService {
           type: 'TEAM',
           ownerUserId: ownerId,
         });
-        return serializeOrganization(organization);
+        return this.toOrganizationOutput(organization);
       } catch (error) {
         // Two concurrent creates can both pass the findBySlug pre-check; the
         // loser hits the `idx_organizations_slug` unique index. Map the
@@ -461,7 +479,7 @@ export class OrganizationService {
         throw error;
       }
       if (!updated) throw new NotFoundError('Organization');
-      return serializeOrganization(updated);
+      return this.toOrganizationOutput(updated);
     });
   }
 
@@ -529,7 +547,9 @@ export class OrganizationService {
         key: ['SVG logos are not allowed for security reasons'],
       });
     }
-    const logoUrl = this.objectStorage.getObjectUrl(parsed.key);
+    // TEN-07: store the object KEY (private bucket + signed-on-read), not a permanent
+    // unsigned public URL. Reads mint a short-lived signed URL via toOrganizationOutput.
+    const logoStorageKey = parsed.key;
     const { serialized, previousLogoUrl } = await withOrganizationDatabaseContext(
       public_id,
       async () => {
@@ -545,16 +565,16 @@ export class OrganizationService {
         const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
         const result = await this.repository.update(
           public_id,
-          { logo_url: logoUrl },
+          { logo_url: logoStorageKey },
           userId ?? null,
         );
         if (!result) throw new NotFoundError('Organization');
-        return { serialized: serializeOrganization(result), previousLogoUrl: previous };
+        return { serialized: await this.toOrganizationOutput(result), previousLogoUrl: previous };
       },
     );
     // Reclaim the PREVIOUS owned logo object outside the DB context — replacing a logo previously
     // orphaned the old S3 object (storage leak). Best-effort + prefix-guarded.
-    if (previousLogoUrl && previousLogoUrl !== logoUrl) {
+    if (previousLogoUrl && previousLogoUrl !== logoStorageKey) {
       await this.deleteOwnedOrganizationLogoObject(public_id, previousLogoUrl);
     }
     return serialized;
@@ -577,7 +597,7 @@ export class OrganizationService {
       const userId = await this.repository.resolveUserIdByPublicId(updated_by_user_public_id);
       const updated = await this.repository.update(public_id, { logo_url: null }, userId ?? null);
       if (!updated) throw new NotFoundError('Organization');
-      return serializeOrganization(updated);
+      return this.toOrganizationOutput(updated);
     });
   }
 }

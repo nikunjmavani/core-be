@@ -225,10 +225,18 @@ describe('OrganizationService', () => {
     expect(invalidateOrganizationPermissionsMock).not.toHaveBeenCalled();
   });
 
-  it('uploadLogo validates key prefix and updates logo url', async () => {
+  it('uploadLogo stores the object KEY, not a permanent public URL (TEN-07)', async () => {
     const key = `organization-logos/${organizationRow.public_id}/logo.png`;
     const result = await service.uploadLogo(organizationRow.public_id, { key }, 'owner_public');
     expect(result).toBeDefined();
+    // TEN-07: the private object KEY is persisted (signed-on-read), never an unsigned
+    // permanent S3 URL via getObjectUrl.
+    expect(repository.update).toHaveBeenCalledWith(
+      organizationRow.public_id,
+      { logo_url: key },
+      expect.anything(),
+    );
+    expect(objectStorage.getObjectUrl).not.toHaveBeenCalled();
   });
 
   it('uploadLogo throws when object is missing in storage', async () => {

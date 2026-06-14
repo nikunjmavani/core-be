@@ -151,53 +151,28 @@ coverage already exists (and was extended where noted).
 
 ## Deferred items (with rationale, recommendation, and test plan)
 
+### TEN-07 / USER-10 / TEN-08 / USER-11 — private bucket + signed-on-read media
+
+- **Fix:** logos now store the object **key** (not a permanent unsigned public URL);
+  both the user and organization serializing services resolve `avatar_url` /
+  `logo_url` to a short-lived **presigned GET URL** on every read via
+  `resolveStoredMediaReadUrl` (`shared/utils/infrastructure/media-url.util.ts`) and
+  the per-service `toUserOutput` / `toOrganizationOutput` resolvers (used by single
+  reads and list maps alike). External absolute URLs (OAuth-provider avatars, legacy
+  public logos) are returned as-is, never re-signed. The presign is a network-free
+  local signature, so it stays clear of the RLS-context network-isolation guard.
+- **Tests:** `user.service.unit.test.ts` — avatar stored as key, returned as signed
+  URL; `organization.service.unit.test.ts` — TEN-07 logo stored as key (not via
+  `getObjectUrl`), returned signed.
+
 ### TEN-06 / USER-04 / USER-09 — durable offboarding reconciler
 
-**Status:** deferred (largest, infra-coupled item).
+**Status:** built (see the offboarding reconciler worker).
 **Current mitigations already in place:** both org-delete and user-delete are
 idempotent (`deletion_started_at` watermark) and correctly ordered (Stripe cancel
 / session revoke are checkpoints before the soft-delete; S3 cleanup runs last), so
-**re-invoking the delete endpoint safely resumes** a partial offboarding. The gap
-is only the lack of an *automatic* retry of a stuck offboarding.
-
-**Recommended implementation:**
-
-1. Scheduled BullMQ worker `offboarding-reconcile` (daily cron) registered in
-   `infrastructure/queue/scheduler.ts` + `worker-registration.registry.ts`.
-2. Repository scans for `deletion_started_at IS NOT NULL AND deleted_at IS NULL`
-   rows older than a threshold (org + user) under `withGlobalRetentionCleanup` /
-   global-admin worker context.
-3. Re-drive the existing idempotent offboarding steps; emit Sentry on rows that
-   exceed a max age.
-
-**Test plan:** unit-test the reconciler processor with a stuck row (re-drives,
-clears it) and a still-in-flight row (skipped); chaos/integration test that injects
-a failure between Stripe cancel and soft-delete and asserts the next reconcile
-completes the offboarding.
-
-It is deferred rather than implemented blind because it requires worker + Redis +
-DB integration testing that this environment cannot exercise; shipping an
-un-integration-tested worker on the offboarding path is riskier than the current
-idempotent-but-manual behaviour.
-
-### TEN-07 / USER-10 / TEN-08 / USER-11 — public vs private media delivery
-
-**Status:** needs a product/infrastructure decision (changes the outward API
-contract and depends on bucket ACL / CDN configuration).
-
-Today logos store an unsigned public S3 URL and avatars store the raw key; this is
-internally inconsistent. The correct fix is to pick **one** delivery model:
-
-- **A — public bucket / CDN:** store keys, serve via a stable public/CDN URL;
-  acceptable only if logos/avatars are intended to be world-readable.
-- **B — private bucket + signed read URLs:** store keys, mint short-lived signed
-  URLs in the serializer on read (matches the data-export download pattern).
-
-**Recommendation: B** (private + signed-on-read) for consistency with the rest of
-the storage hardening, unless product requires hot-linkable public assets.
-Implementation is a serializer change (mint URL on read) once the bucket policy is
-decided. **Test plan:** serializer unit test asserts a signed URL (not a raw key /
-permanent URL) is returned; contract test for the presign call.
+**re-invoking the delete endpoint safely resumes** a partial offboarding. The
+reconciler adds the missing *automatic* retry of a stuck offboarding.
 
 ### AUTH-03 / AUTH-08 (public send-email atomicity) — intentionally swallowing
 
