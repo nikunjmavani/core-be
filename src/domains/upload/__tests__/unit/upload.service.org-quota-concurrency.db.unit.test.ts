@@ -70,7 +70,9 @@ describe('UploadService org pending-quota concurrency (database)', () => {
       requireOrganizationByPublicId: async () => organization,
     } as unknown as OrganizationService;
     const authorizationService = {
-      resolveUserOrganizationPermissions: vi.fn().mockResolvedValue([UPLOAD_PERMISSIONS.UPLOAD_MANAGE]),
+      resolveUserOrganizationPermissions: vi
+        .fn()
+        .mockResolvedValue([UPLOAD_PERMISSIONS.UPLOAD_MANAGE]),
     } as unknown as AuthorizationService;
     const service = new UploadService(
       repository,
