@@ -7,11 +7,7 @@ import type { UserService } from '@/domains/user/user.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 
 import { createObjectStoragePortMock } from '@/tests/helpers/object-storage-mock.helper.js';
-import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
-
-vi.mock('@/domains/tenancy/sub-domains/permission/authorization.service.js', () => ({
-  resolveUserOrganizationPermissions: vi.fn().mockResolvedValue(['upload:manage']),
-}));
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 
 vi.mock('@/shared/config/env.config.js', () => ({
   getEnv: vi.fn(() => ({
@@ -87,10 +83,21 @@ describe('UploadService', () => {
   } as unknown as OrganizationService;
 
   const objectStorage = createObjectStoragePortMock();
-  const service = new UploadService(repository, userService, organizationService, objectStorage);
+  const resolveUserOrganizationPermissions = vi.fn().mockResolvedValue(['upload:manage']);
+  const authorizationService = {
+    resolveUserOrganizationPermissions,
+  } as unknown as AuthorizationService;
+  const service = new UploadService(
+    repository,
+    userService,
+    organizationService,
+    objectStorage,
+    authorizationService,
+  );
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    resolveUserOrganizationPermissions.mockResolvedValue(['upload:manage']);
     const { getEnv } = await import('@/shared/config/env.config.js');
     vi.mocked(getEnv).mockReturnValue({
       S3_BUCKET: 'test-bucket',
@@ -156,10 +163,7 @@ describe('UploadService', () => {
   });
 
   it('createUpload rejects organization upload without manage permission', async () => {
-    const { resolveUserOrganizationPermissions } = await import(
-      '@/domains/tenancy/sub-domains/permission/authorization.service.js'
-    );
-    vi.mocked(resolveUserOrganizationPermissions).mockResolvedValueOnce([]);
+    resolveUserOrganizationPermissions.mockResolvedValueOnce([]);
 
     await expect(
       service.createUpload(
@@ -218,7 +222,7 @@ describe('UploadService', () => {
       ...uploadRow,
       organization_id: 10,
     } as never);
-    vi.mocked(resolveUserOrganizationPermissions).mockResolvedValueOnce([]);
+    resolveUserOrganizationPermissions.mockResolvedValueOnce([]);
 
     await expect(service.deleteUpload(uploadPublicId, userPublicId)).rejects.toBeInstanceOf(
       ForbiddenError,

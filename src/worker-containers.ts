@@ -54,6 +54,7 @@ export function createDomainContainers(
     userBase.userService,
     tenancyDomain.organizationService,
     objectStorage,
+    tenancyDomain.authorizationService,
   );
 
   const userDataExportRepository = new UserDataExportRepository();

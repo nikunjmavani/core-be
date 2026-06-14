@@ -10,7 +10,7 @@ import {
   ValidationError,
 } from '@/shared/errors/index.js';
 import { withUserDatabaseContext } from '@/infrastructure/database/contexts/user-database.context.js';
-import { resolveUserOrganizationPermissions } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
+import type { AuthorizationService } from '@/domains/tenancy/sub-domains/permission/authorization.service.js';
 import type { OrganizationService } from '@/domains/tenancy/sub-domains/organization/organization.service.js';
 import type { UserService } from '@/domains/user/user.service.js';
 import {
@@ -96,6 +96,7 @@ export class UploadService {
     private readonly userService: UserService,
     private readonly organizationService: OrganizationService,
     private readonly objectStorage: ObjectStoragePort,
+    private readonly authorizationService: AuthorizationService,
   ) {}
 
   async createUpload(input: CreateUploadInput, userPublicId: string): Promise<UploadCreateOutput> {
@@ -280,7 +281,7 @@ export class UploadService {
     userPublicId: string,
   ): Promise<number | null> {
     if (input.for === UPLOAD_TARGETS.ORGANIZATION && input.organizationId) {
-      const permissions = await resolveUserOrganizationPermissions(
+      const permissions = await this.authorizationService.resolveUserOrganizationPermissions(
         userPublicId,
         input.organizationId,
       );
@@ -373,7 +374,7 @@ export class UploadService {
       throw new NotFoundError('Upload');
     }
 
-    const permissions = await resolveUserOrganizationPermissions(
+    const permissions = await this.authorizationService.resolveUserOrganizationPermissions(
       userPublicId,
       organization.public_id,
     );
