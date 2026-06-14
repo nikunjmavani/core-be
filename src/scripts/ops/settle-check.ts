@@ -35,6 +35,7 @@ import {
   readWorkerQueueHeartbeats,
   WORKER_THROUGHPUT_QUEUE_NAMES,
 } from '@/infrastructure/queue/worker-runtime/worker-queue-heartbeat.js';
+import { parsePositiveIntegerEnv, resolveQueueNames } from './settle-check.config.js';
 import {
   evaluateSettleCheck,
   formatSettleCheckReport,
@@ -49,25 +50,6 @@ const DEFAULT_TIMEOUT_MILLISECONDS = 120_000;
 
 /** Default interval between drain polls (milliseconds). */
 const DEFAULT_POLL_INTERVAL_MILLISECONDS = 2_000;
-
-function parsePositiveIntegerEnv(rawValue: string | undefined, fallback: number): number {
-  if (rawValue === undefined) {
-    return fallback;
-  }
-  const parsed = Number.parseInt(rawValue, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function resolveQueueNames(): string[] {
-  const override = process.env.SETTLE_CHECK_QUEUES;
-  if (override === undefined || override.trim() === '') {
-    return [...WORKER_THROUGHPUT_QUEUE_NAMES];
-  }
-  return override
-    .split(',')
-    .map((name) => name.trim())
-    .filter((name) => name.length > 0);
-}
 
 async function sleep(milliseconds: number): Promise<void> {
   await new Promise((resolve) => {
@@ -103,7 +85,10 @@ async function main(): Promise<void> {
     process.env.SETTLE_CHECK_POLL_INTERVAL_MS,
     DEFAULT_POLL_INTERVAL_MILLISECONDS,
   );
-  const queueNames = resolveQueueNames();
+  const queueNames = resolveQueueNames(
+    process.env.SETTLE_CHECK_QUEUES,
+    WORKER_THROUGHPUT_QUEUE_NAMES,
+  );
 
   let queues: Queue[] = [];
   try {
