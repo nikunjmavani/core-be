@@ -65,12 +65,14 @@ Paste into the **Setup script** field (runs as root, cached):
 
 ```bash
 bash tooling/setup/agent/install-node.sh
-bash tooling/setup/agent/install-gh.sh   # optional: GitHub CLI fallback
+bash tooling/setup/agent/install-gh.sh              # optional: GitHub CLI (in-session GitHub fallback)
+bash tooling/setup/agent/install-docker-images.sh   # optional: Docker Hub mirror + pre-pull compose images
+bash tooling/setup/agent/install-codegraph.sh       # optional: CodeGraph CLI + semantic index (MCP)
 ```
 
 On the first session the cached Node 24 is already on disk, [`session-start.sh`](../../agent-os/hooks/session-start.sh) switches `PATH` to `/opt/node24`, and runs `pnpm install`. Do **not** start Postgres / Redis here — setup-script processes do not persist; start them per session (below).
 
-**GitHub CLI (optional).** [`install-gh.sh`](../../tooling/setup/agent/install-gh.sh) adds `gh` as an in-session fallback for reading Actions logs, checking CI, and merging (the GitHub MCP tools already cover this). It belongs in the cached **setup script**, not `session-start.sh` — a per-session `apt install` would not cache and would slow every startup. Set `GH_TOKEN` in the environment's **Variables** (least-privilege: `contents` + `pull_requests` + `actions:read`; env vars are not a secrets store). Its apt-repo fallback needs `cli.github.com` on the network allowlist.
+**GitHub CLI (optional).** [`install-gh.sh`](../../tooling/setup/agent/install-gh.sh) adds `gh` as an in-session fallback for reading Actions logs, checking CI, and merging (the GitHub MCP tools already cover this). It belongs in the cached **setup script**, not `session-start.sh` — a per-session `apt install` would not cache and would slow every startup. Set `GH_TOKEN` in the environment's **Variables** (least-privilege: `contents` + `pull_requests` + `actions:read`; env vars are not a secrets store). The script first installs the **github.com release binary** (reachable on the default Trusted allowlist, so no extra allowlist entry is normally needed); its `cli.github.com` apt-repo path is only a last resort.
 
 ---
 
@@ -112,7 +114,19 @@ pnpm db:seed         # or pnpm db:seed:full
 
 `pnpm compose:up` also starts the local SonarQube container unless you set `SONAR=0`; a cloud session rarely needs it, so `SONAR=0 pnpm compose:up` brings up just Postgres + Redis. Stop everything with `pnpm compose:down`.
 
+> **Docker image pulls in the cloud.** Docker Hub serves image *blobs* from a CDN (`production.cloudfront.docker.com`) that is **not** on the default allowlist, so a bare `pnpm compose:up` fails with `403 Forbidden` while pulling `postgres:<v>-alpine` / `redis:<v>-alpine` (AWS ECR Public has the same `*.cloudfront.net` problem). Run [`install-docker-images.sh`](../../tooling/setup/agent/install-docker-images.sh) in the Setup script: it points the Docker daemon at Google's Docker Hub pull-through mirror (`https://mirror.gcr.io` — reachable on the default allowlist, byte-identical images / same digests) and pre-pulls the compose images, so `pnpm compose:up` runs the **same** pinned images you use locally with no compose changes. Alternatively add `production.cloudfront.docker.com` to the Custom network allowlist to pull straight from Docker Hub. Note Postgres **17+** is required by `pnpm db:migrate`, so the cloud image's native Postgres 16 is not a substitute.
+
 ---
+
+### One-command bring-up + verify
+
+To run the whole in-session flow at once — tool installs (gh, Docker mirror, CodeGraph), `compose:up`, `db:migrate`, `db:seed`, then an app healthcheck — use the orchestrator, which logs a ✓/✗ status after each step:
+
+```bash
+bash tooling/setup/agent/bootstrap.sh        # KEEP_APP=1 to leave `pnpm dev` running afterwards
+```
+
+It leaves Postgres + Redis up and starts the app only transiently for the check. To verify health on its own (after the app is up), run [`healthcheck.sh`](../../tooling/setup/agent/healthcheck.sh): it polls `GET /livez` then `GET /readyz` and exits non-zero unless Postgres + Redis + BullMQ are all reachable. Neither belongs in the Setup-script *field* (that runs before any app is listening).
 
 ## Tiers — what to enable for which goal
 
@@ -162,6 +176,10 @@ flowchart TD
 - **Pushes are pinned to the session's `claude/*` branch** by the git proxy; the branch-naming policy allowlists `claude/*` for exactly this reason.
 
 ---
+
+## MCP servers
+
+In Claude Code on the web the live MCP server set is loaded by the **platform at session start** from your account / environment MCP settings — **not** the repo's [`.mcp.json`](../../.mcp.example.json). Installing a server's CLI in-session (e.g. CodeGraph) does not make its tools appear until a fresh session starts with that server configured. [`.mcp.example.json`](../../.mcp.example.json) lists the full local set (`context7`, `neon`, `sentry`, `github`, `slack`, `railway`, `aws`, `stripe`, `semgrep`, `sonarqube`, `redis`, `postman`, `resend`, `codegraph`, `core-be:api`); most need provider tokens (put them in the environment **Variables**) and several need `uvx` / `docker`, so connect only the subset a task needs.
 
 ## Related documentation
 
