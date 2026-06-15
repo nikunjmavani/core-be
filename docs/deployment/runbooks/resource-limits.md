@@ -85,19 +85,19 @@ Each entry in [`worker-registration.registry.ts`](../../../src/infrastructure/qu
 | `criticality`                     | `throughput` / `maintenance` / `observability` — surfaced in `worker.queue_families.selected` and pool alerts so operators can correlate latency-critical workloads with pool pressure                                         |
 | `holdsConnectionDuringExternalIo` | `true` when the Postgres checkout is held during an outbound HTTP/S3/Resend call — these workers turn slow externals into pool starvation, so their concurrency is also reported as `peakPostgresConcurrencyHoldingExternalIo` |
 
-#### Per-family registry breakdown (25 workers; 23 use Postgres)
+#### Per-family registry breakdown (30 workers; 27 use Postgres)
 
 With default concurrency (`WORKER_CONCURRENCY=4`):
 
-| Family                 | Workers                                                                                                                                           | Postgres | Peak demand     | External-IO holding                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------- | -------------------------------------------------------------------------------------- |
-| `mail`                 | `mail` (throughput), `mail-outbox-sweeper` (1)                                                                                                    | 2 / 2    | `4 + 1 = 5`     | `0`                                                                                    |
-| `notify`               | `notification` (throughput), `user-data-export` (throughput)                                                                                      | 2 / 2    | `4 + 4 = 8`     | `4` (user-data-export → S3)                                                            |
-| `webhook`              | `webhook-delivery` (throughput)                                                                                                                   | 1 / 1    | `4`             | `4` (tenant transaction wraps outbound HTTP)                                           |
-| `stripe`               | `stripe-webhook` (throughput), `stripe-webhook-event-retention` (1), `stripe-webhook-event-reclaim` (1)                                           | 3 / 3    | `4 + 1 + 1 = 6` | `0`                                                                                    |
-| `retention`            | 15 single-concurrency workers (audit retention/export, session cleanup, partition maintenance, notification retention, 9 tombstone/sweep workers) | 15 / 15  | `15 × 1 = 15`   | `4` (audit-export, upload-tombstone, upload-pending-sweep, user-data-export-retention) |
-| `observability`        | `idempotency-cardinality`, `dlq-depth` (both Redis-only)                                                                                          | 0 / 2    | `0`             | `0`                                                                                    |
-| **Total (monolithic)** | **25**                                                                                                                                            | **23**   | **`38`**        | **`12`**                                                                               |
+| Family                 | Workers                                                                                                                                                                | Postgres | Peak demand     | External-IO holding                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------- | -------------------------------------------------------------------------------------- |
+| `mail`                 | `mail` (throughput), `mail-outbox-sweeper` (1), `commit-dispatch-recovery` (Redis-only)                                                                                | 2 / 3    | `4 + 1 = 5`     | `0`                                                                                    |
+| `notify`               | `notification` (throughput), `user-data-export` (throughput)                                                                                                           | 2 / 2    | `4 + 4 = 8`     | `4` (user-data-export → S3)                                                            |
+| `webhook`              | `webhook-delivery` (throughput)                                                                                                                                        | 1 / 1    | `4`             | `0` (short transactions around the POST, not across it)                                |
+| `stripe`               | `stripe-webhook` (throughput), `stripe-webhook-event-retention` (1), `stripe-webhook-event-reclaim` (1)                                                                | 3 / 3    | `4 + 1 + 1 = 6` | `0`                                                                                    |
+| `retention`            | 18 single-concurrency workers (audit retention/export/drain, session cleanup, notification retention, 2 offboarding reconcilers, 11 tombstone/retention/sweep workers) | 18 / 18  | `18 × 1 = 18`   | `4` (audit-export, upload-tombstone, upload-pending-sweep, user-data-export-retention) |
+| `observability`        | `idempotency-cardinality`, `dlq-depth` (Redis-only), `dlq-auto-retry` (1)                                                                                              | 1 / 3    | `1`             | `0`                                                                                    |
+| **Total (monolithic)** | **30**                                                                                                                                                                 | **27**   | **`42`**        | **`8`**                                                                                |
 
 The `External-IO holding` column is the **at-risk slice** of the Postgres budget — these are the slots that can starve when Stripe, Resend, or S3 latency spikes. Watch the `workerPeakPostgresConcurrencyHoldingExternalIo` extra in the `database.pool.exhaustion.*` Sentry alerts.
 
@@ -105,16 +105,16 @@ The `External-IO holding` column is the **at-risk slice** of the Postgres budget
 
 | Mode                                                 | Trigger                                | Enforcement                                                                                                                                                                                              |
 | ---------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Monolithic**                                       | `WORKER_QUEUE_FAMILIES` unset or `all` | **Warns** (`database.connection_budget.worker_pool_pressure`) when peak Postgres demand exceeds `DATABASE_POOL_MAX`. Default 38 > pool 10 → tune `DATABASE_POOL_MAX` higher (e.g. 40) or split services. |
+| **Monolithic**                                       | `WORKER_QUEUE_FAMILIES` unset or `all` | **Warns** (`database.connection_budget.worker_pool_pressure`) when peak Postgres demand exceeds `DATABASE_POOL_MAX`. Default 42 > pool 10 → tune `DATABASE_POOL_MAX` higher (e.g. 45) or split services. |
 | **Split** (e.g. `WORKER_QUEUE_FAMILIES=mail,notify`) | Explicit subset                        | **Fails fast** at startup when the subset's computed Postgres demand exceeds `DATABASE_POOL_MAX`.                                                                                                        |
 
 #### Example Railway split (same image, different env per service)
 
-| Service              | `WORKER_QUEUE_FAMILIES`      | `SCHEDULER_ENABLED` | Postgres demand      | Suggested `DATABASE_POOL_MAX`                                |
-| -------------------- | ---------------------------- | ------------------- | -------------------- | ------------------------------------------------------------ |
-| Worker throughput    | `mail,notify,webhook,stripe` | `false`             | `5 + 8 + 4 + 6 = 23` | `24`–`28`                                                    |
-| Worker retention     | `retention`                  | `true`              | `15`                 | `16`–`20`                                                    |
-| Worker observability | `observability`              | `true`              | `0`                  | `4` (Redis-only, but keep a small pool for shared utilities) |
+| Service              | `WORKER_QUEUE_FAMILIES`      | `SCHEDULER_ENABLED` | Postgres demand      | Suggested `DATABASE_POOL_MAX`                           |
+| -------------------- | ---------------------------- | ------------------- | -------------------- | ------------------------------------------------------- |
+| Worker throughput    | `mail,notify,webhook,stripe` | `false`             | `5 + 8 + 4 + 6 = 23` | `24`–`28`                                               |
+| Worker retention     | `retention`                  | `true`              | `18`                 | `19`–`24`                                               |
+| Worker observability | `observability`              | `true`              | `1`                  | `4` (mostly Redis-only; `dlq-auto-retry` uses Postgres) |
 
 Enable **`SCHEDULER_ENABLED=true` on only one service** per environment so repeatable cron jobs are not duplicated across processes (the scheduler filters its registry to active queues in the process, so duplication is bounded — but exactly one scheduler-bearing service is the cleanest contract).
 
